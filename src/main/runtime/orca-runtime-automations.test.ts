@@ -102,6 +102,84 @@ describe('OrcaRuntimeService automation methods', () => {
     expect(automation.id).toBe('auto-1')
   })
 
+  it('rejects a run context that names a different repo path', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.createAutomation({
+        name: 'Mismatched review',
+        prompt: 'Review changes',
+        agentId: 'codex',
+        repo: 'id:repo-1',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'project-1',
+          hostId: 'local',
+          projectHostSetupId: 'setup-1',
+          repoId: 'repo-1',
+          path: '/other/repo'
+        },
+        workspaceMode: 'new_per_run',
+        setupDecision: 'skip',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    ).rejects.toThrow('Automation project does not match its run context.')
+    expect(store.createAutomation).not.toHaveBeenCalled()
+  })
+
+  it('rejects a mismatched run context when the workspace is the machine selector', async () => {
+    const store = makeStore()
+    const runtime = new OrcaRuntimeService(store as never)
+    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
+      id: 'repo-1::/tmp/orca',
+      repoId: 'repo-1',
+      path: '/tmp/orca'
+    } as never)
+
+    await expect(
+      runtime.createAutomation({
+        name: 'Workspace review',
+        prompt: 'Review changes',
+        agentId: 'codex',
+        workspace: 'id:repo-1::/tmp/orca',
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'project-1',
+          hostId: 'local',
+          projectHostSetupId: 'setup-1',
+          repoId: 'repo-1',
+          path: '/other/repo'
+        },
+        workspaceMode: 'existing',
+        setupDecision: 'skip',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1
+      })
+    ).rejects.toThrow('Automation project does not match its run context.')
+    expect(store.createAutomation).not.toHaveBeenCalled()
+  })
+
+  it('rejects a run-context-only update that names a different repo path', async () => {
+    const store = makeStore([existingAutomation])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(
+      runtime.updateAutomation('auto-1', {
+        runContext: {
+          kind: 'workspace-run',
+          projectId: 'project-1',
+          hostId: 'local',
+          projectHostSetupId: 'setup-1',
+          repoId: 'repo-1',
+          path: '/other/repo'
+        }
+      })
+    ).rejects.toThrow('Automation project does not match its run context.')
+    expect(store.updateAutomation).not.toHaveBeenCalled()
+  })
+
   it('updates and deletes existing automations through the shared store', async () => {
     const store = makeStore([existingAutomation])
     const runtime = new OrcaRuntimeService(store as never)

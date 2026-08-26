@@ -62,7 +62,12 @@ import {
 } from './automation-setup-decision'
 import type { AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
+import { getAutomationCreateAvailability } from './automation-create-admission'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
+import {
+  repoMatchesExternalAutomationTarget,
+  getExternalAutomationTargetForRepo
+} from './automation-external-target-match'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -85,6 +90,7 @@ import {
   runAutomationNowForTarget,
   updateAutomationForTarget
 } from './automation-host-client'
+import { getAutomationCreateRepos } from './automation-create-projects'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
 import {
   AUTOMATION_DEFAULT_TIME,
@@ -753,19 +759,46 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [activePaneTab, selected, selectedExternal])
 
   const getDefaultTarget = useCallback(() => {
+    const destinationTarget = getAutomationListTarget(settings)
+    const eligibleRepos = getAutomationCreateRepos(repos, destinationTarget)
     const activeWorktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
     const activeRepo = activeWorktree ? (repoMap.get(activeWorktree.repoId) ?? null) : null
-    const fallbackRepo = activeRepo ?? repos[0] ?? null
+    const fallbackRepo =
+      (activeRepo &&
+      eligibleRepos.some(
+        (repo) =>
+          repo.id === activeRepo.id &&
+          getRepoExecutionHostId(repo) === getRepoExecutionHostId(activeRepo)
+      )
+        ? activeRepo
+        : null) ??
+      eligibleRepos[0] ??
+      null
     const fallbackWorktrees = fallbackRepo ? (worktreesByRepo[fallbackRepo.id] ?? []) : []
     // Why: automation-created workspaces can be active; new automations should start from
     // the repo's stable main worktree unless the user explicitly chooses otherwise.
-    const targetWorktree = getDefaultWorktree(fallbackWorktrees) ?? activeWorktree
-    const targetProjectId = fallbackRepo?.id ?? targetWorktree?.repoId ?? ''
+    const targetWorktree = fallbackRepo ? getDefaultWorktree(fallbackWorktrees) : null
+    const targetProjectId = fallbackRepo?.id ?? ''
     return {
       projectId: targetProjectId,
       workspaceId: targetWorktree?.id ?? ''
     }
-  }, [activeWorktreeId, repoMap, repos, worktreeMap, worktreesByRepo])
+  }, [activeWorktreeId, repoMap, repos, settings, worktreeMap, worktreesByRepo])
+
+  const canCreateAutomation = getAutomationCreateAvailability({
+    automationHostTarget: getAutomationListTarget(settings),
+    runtimeStatusByEnvironmentId
+  }).canRunNow
+  const editingAutomation = editingAutomationId
+    ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
+    : null
+  const automationDialogTarget = editingAutomation
+    ? getAutomationOwnerTarget(editingAutomation, automationHostTarget)
+    : getAutomationListTarget(settings)
+  const isOrcaForm = createTarget === 'orca' && editingExternalTarget === null
+  const dialogRepos = isOrcaForm
+    ? getAutomationCreateRepos(repos, automationDialogTarget)
+    : getAutomationCreateRepos(repos, { kind: 'local' })
 
   const refresh = useCallback(async () => {
     setIsLoading(true)
@@ -1046,18 +1079,38 @@ export default function AutomationsPage(): React.JSX.Element {
     }))
   }, [])
 
-  const handleCreateTargetChange = useCallback((target: AutomationCreateTarget): void => {
-    setCreateTarget(target)
-    if (target === 'hermes') {
-      setDraft((current) => ({
-        ...current,
-        agentId: 'hermes',
-        workspaceMode: 'existing',
-        setupDecision: undefined,
-        reuseSession: false
-      }))
-    }
-  }, [])
+  const handleCreateTargetChange = useCallback(
+    (target: AutomationCreateTarget): void => {
+      setCreateTarget(target)
+      if (target === 'hermes') {
+        const localRepos = getAutomationCreateRepos(repos, { kind: 'local' })
+        setDraft((current) => {
+          const currentRepo = repos.find((repo) => repo.id === current.projectId)
+          const currentRepoIsLocal =
+            currentRepo !== undefined &&
+            localRepos.some(
+              (repo) =>
+                repo.id === currentRepo.id &&
+                getRepoExecutionHostId(repo) === getRepoExecutionHostId(currentRepo)
+            )
+          const nextRepo = currentRepoIsLocal ? currentRepo : localRepos[0]
+          const nextWorkspace = nextRepo
+            ? getDefaultWorktree(worktreesByRepo[nextRepo.id] ?? [])
+            : null
+          return {
+            ...current,
+            agentId: 'hermes',
+            projectId: nextRepo?.id ?? '',
+            workspaceId: nextWorkspace?.id ?? '',
+            workspaceMode: 'existing',
+            setupDecision: undefined,
+            reuseSession: false
+          }
+        })
+      }
+    },
+    [repos, worktreesByRepo]
+  )
 
   const openCreateDialog = (template?: AutomationTemplate): void => {
     editRequestRef.current += 1
@@ -1163,14 +1216,19 @@ export default function AutomationsPage(): React.JSX.Element {
         .find((worktree) => {
           const repo = repoMap.get(worktree.repoId)
           const repoTargetMatches =
-            manager.target.type === 'local'
-              ? !repo?.connectionId
-              : repo?.connectionId === manager.target.connectionId
+            repo !== undefined && repoMatchesExternalAutomationTarget(repo, manager.target)
           return repoTargetMatches && job.workdir !== null && worktree.path === job.workdir
         }) ?? null
-    const fallbackTarget = getDefaultTarget()
-    const projectId = targetWorktree?.repoId ?? fallbackTarget.projectId
-    const workspaceId = targetWorktree?.id ?? fallbackTarget.workspaceId
+    const localRepos = getAutomationCreateRepos(repos, { kind: 'local' })
+    const fallbackRepo =
+      localRepos.find((repo) => repoMatchesExternalAutomationTarget(repo, manager.target)) ??
+      localRepos[0] ??
+      null
+    const fallbackWorktree = fallbackRepo
+      ? getDefaultWorktree(worktreesByRepo[fallbackRepo.id] ?? [])
+      : null
+    const projectId = targetWorktree?.repoId ?? fallbackRepo?.id ?? ''
+    const workspaceId = targetWorktree?.id ?? fallbackWorktree?.id ?? ''
     const nextDraft: AutomationDraft = {
       name: job.name,
       prompt: job.prompt ?? job.promptPreview,
@@ -1269,6 +1327,20 @@ export default function AutomationsPage(): React.JSX.Element {
     }
     if (
       editingAutomationId === null &&
+      editingExternalTarget === null &&
+      createTarget === 'orca' &&
+      !canCreateAutomation
+    ) {
+      toast.error(
+        translate(
+          'auto.components.automations.AutomationsPage.destinationUnavailable',
+          'The selected automation destination is not ready. Reconnect it and try again.'
+        )
+      )
+      return
+    }
+    if (
+      editingAutomationId === null &&
       !isHermesSave &&
       !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
     ) {
@@ -1307,12 +1379,8 @@ export default function AutomationsPage(): React.JSX.Element {
           return
         }
         const target =
-          editingExternalTarget?.manager.target ??
-          (repo.connectionId
-            ? { type: 'ssh' as const, connectionId: repo.connectionId }
-            : { type: 'local' as const })
-        const repoTargetMatches =
-          target.type === 'local' ? !repo.connectionId : repo.connectionId === target.connectionId
+          editingExternalTarget?.manager.target ?? getExternalAutomationTargetForRepo(repo)
+        const repoTargetMatches = repoMatchesExternalAutomationTarget(repo, target)
         if (!repoTargetMatches) {
           toast.error(
             translate(
@@ -1362,6 +1430,15 @@ export default function AutomationsPage(): React.JSX.Element {
                 'auto.components.automations.AutomationsPage.77b81bc4ac',
                 'Hermes automation created.'
               )
+        )
+        return
+      }
+      if (isOrcaForm && !dialogRepos.some((repo) => repo.id === draft.projectId)) {
+        toast.error(
+          translate(
+            'auto.components.automations.AutomationsPage.destinationProjectUnavailable',
+            'Choose a project owned by the selected automation destination.'
+          )
         )
         return
       }
@@ -1927,7 +2004,7 @@ export default function AutomationsPage(): React.JSX.Element {
         canSave={canSaveDraft}
         isEditingExternal={editingExternalTarget !== null}
         createTarget={createTarget}
-        repos={repos}
+        repos={dialogRepos}
         projectHostSetups={projectHostSetups}
         automationYamlHooksByRepoKey={automationYamlHooksByRepoKey}
         getAutomationHooksCacheKey={getAutomationHooksCacheKey}
@@ -1937,6 +2014,7 @@ export default function AutomationsPage(): React.JSX.Element {
         draft={draft}
         onProjectChange={handleProjectChange}
         getRepoHostLabel={getAutomationRepoHostLabel}
+        allowAddProject={!isOrcaForm || automationDialogTarget.kind === 'local'}
         onCreateTargetChange={handleCreateTargetChange}
         onOpenChange={setCreateOpen}
         onDraftChange={setDraft}
@@ -2071,6 +2149,7 @@ export default function AutomationsPage(): React.JSX.Element {
           requestExternalAction={requestExternalAction}
           openEditExternalDialog={openEditExternalDialog}
           openCreateDialog={openCreateDialog}
+          canCreateAutomation={canCreateAutomation}
           onOpenDetail={() => setIsDetailOpen(true)}
           onRefresh={() => void refresh()}
           isRefreshing={isLoading}
