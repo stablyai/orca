@@ -13,6 +13,10 @@ describe('media-file-extensions', () => {
     expect(MEDIA_FILE_MIME_TYPES['.webm']).toBe('video/webm')
   })
 
+  it('covers the Ogg audio container', () => {
+    expect(MEDIA_FILE_MIME_TYPES['.ogg']).toBe('audio/ogg')
+  })
+
   it('rejects image, pdf, and missing mime types', () => {
     expect(isMediaPreviewMimeType('image/png')).toBe(false)
     expect(isMediaPreviewMimeType('application/pdf')).toBe(false)
