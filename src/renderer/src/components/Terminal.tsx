@@ -79,6 +79,7 @@ import {
 import TabGroupSplitLayout from './tab-group/TabGroupSplitLayout'
 import AiVaultSessionDropLayer from './tab-group/AiVaultSessionDropLayer'
 import { shouldAutoCreateInitialTerminal } from './terminal/initial-terminal'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { useActiveTerminalRepair } from './terminal/use-active-terminal-repair'
 import { scheduleBackgroundTerminalWorktreeMeasure } from './terminal/background-terminal-worktree-visibility'
 import {
@@ -1531,13 +1532,13 @@ function Terminal(): React.JSX.Element | null {
     if (!shouldAutoCreateInitialTerminal(renderableTabCount, activeWorktreeHasTerminalState)) {
       return
     }
-    // Why: tag this never-visited-worktree tab so its PTY spawn doesn't count as activity and reshuffle the sidebar (explicit New Tab still bumps).
-    createTab(activeWorktreeId, undefined, undefined, { pendingActivationSpawn: true })
+    // Why: same seeding as sidebar activation so a never-visited worktree opens
+    // the default agent instead of a bare shell when Settings has one.
+    ensureWorktreeHasInitialTerminal(useAppStore.getState(), activeWorktreeId)
   }, [
     workspaceSessionReady,
     activeWorktreeId,
     activeWorktreeHasTerminalState,
-    createTab,
     reconcileWorktreeTabModel
   ])
 

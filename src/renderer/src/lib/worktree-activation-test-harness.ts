@@ -11,6 +11,8 @@ const initialWorktreesByRepo = useAppStore.getState().worktreesByRepo
 const initialGetKnownWorktreeById = useAppStore.getState().getKnownWorktreeById
 const initialPendingIssueCommandSplitByTabId =
   useAppStore.getState().pendingIssueCommandSplitByTabId
+const initialDefaultTuiAgent = useAppStore.getState().settings?.defaultTuiAgent
+const initialDetectedAgentIds = useAppStore.getState().detectedAgentIds
 
 export function setSetupScriptLaunchMode(mode: SetupScriptLaunchMode | null): void {
   useAppStore.setState((state) => ({
@@ -28,8 +30,16 @@ export function registerWorktreeActivationReset(): void {
     delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
     useAppStore.setState((state) => ({
       settings: state.settings
-        ? { ...state.settings, activeRuntimeEnvironmentId: null }
-        : ({ activeRuntimeEnvironmentId: null } as unknown as typeof state.settings)
+        ? {
+            ...state.settings,
+            activeRuntimeEnvironmentId: null,
+            defaultTuiAgent: initialDefaultTuiAgent ?? null
+          }
+        : ({
+            activeRuntimeEnvironmentId: null,
+            defaultTuiAgent: initialDefaultTuiAgent ?? null
+          } as unknown as typeof state.settings),
+      detectedAgentIds: initialDetectedAgentIds
     }))
     setSetupScriptLaunchMode('new-tab')
     resetHookCommandDelayedDeliveryForTests()

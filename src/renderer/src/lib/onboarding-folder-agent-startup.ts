@@ -1,18 +1,12 @@
-import { buildAgentStartupPlan } from '@/lib/tui-agent-startup'
-import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
+import { buildDefaultAgentStartupPayload } from '@/lib/default-agent-startup-payload'
 
 export type OnboardingFolderAgentStartup = {
   command: string
@@ -45,38 +39,17 @@ export function buildOnboardingFolderAgentStartup(
     return undefined
   }
 
-  const startupPlan = buildAgentStartupPlan({
+  const startup = buildDefaultAgentStartupPayload({
     agent,
-    prompt: '',
-    cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
-    sessionOptions: resolveInitialNativeChatSessionOptions(settings, {
-      agent,
-      nativeChatTranscriptIsLocalReadable
-    }),
-    platform: getClientPlatform(),
-    allowEmptyPromptLaunch: true
+    settings,
+    launchSource: 'onboarding',
+    nativeChatTranscriptIsLocalReadable,
+    platform: getClientPlatform()
   })
-  if (!startupPlan) {
+  if (!startup?.telemetry) {
     return undefined
   }
-
-  return {
-    command: startupPlan.launchCommand,
-    ...(startupPlan.env ? { env: startupPlan.env } : {}),
-    launchConfig: startupPlan.launchConfig,
-    launchAgent: agent,
-    ...(startupPlan.sessionOptions ? { sessionOptions: startupPlan.sessionOptions } : {}),
-    ...(startupPlan.startupCommandDelivery
-      ? { startupCommandDelivery: startupPlan.startupCommandDelivery }
-      : {}),
-    telemetry: {
-      agent_kind: tuiAgentToAgentKind(agent),
-      launch_source: 'onboarding',
-      request_kind: 'new'
-    }
-  }
+  return { ...startup, telemetry: startup.telemetry }
 }
 
 export function shouldSeedFolderAgentAfterDismissedOnboarding(

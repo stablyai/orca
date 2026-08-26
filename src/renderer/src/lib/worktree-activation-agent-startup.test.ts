@@ -4,6 +4,7 @@ import {
   createMockStore,
   registerWorktreeActivationReset
 } from './worktree-activation-test-harness'
+import { useAppStore } from '@/store'
 
 registerWorktreeActivationReset()
 
@@ -245,5 +246,49 @@ describe('ensureWorktreeHasInitialTerminal', () => {
       command: 'codex',
       launchAgent: 'codex'
     })
+  })
+
+  it('seeds the global default agent when activation has no startup payload', () => {
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, defaultTuiAgent: 'codex' }
+        : ({ defaultTuiAgent: 'codex' } as unknown as typeof state.settings)
+    }))
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      launchAgent: 'codex'
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({
+        command: expect.stringContaining('codex'),
+        launchAgent: 'codex',
+        telemetry: expect.objectContaining({
+          agent_kind: 'codex',
+          launch_source: 'sidebar',
+          request_kind: 'new'
+        })
+      })
+    )
+  })
+
+  it('keeps a blank terminal when the default agent is blank', () => {
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, defaultTuiAgent: 'blank' }
+        : ({ defaultTuiAgent: 'blank' } as unknown as typeof state.settings)
+    }))
+    const store = createMockStore()
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1')
+
+    expect(store.createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true
+    })
+    expect(store.queueTabStartupCommand).not.toHaveBeenCalled()
   })
 })

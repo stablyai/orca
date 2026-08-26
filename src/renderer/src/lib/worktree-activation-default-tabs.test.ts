@@ -4,6 +4,7 @@ import {
   createMockStore,
   registerWorktreeActivationReset
 } from './worktree-activation-test-harness'
+import { useAppStore } from '@/store'
 
 registerWorktreeActivationReset()
 
@@ -188,5 +189,32 @@ describe('ensureWorktreeHasInitialTerminal', () => {
 
     expect(store.createTab).not.toHaveBeenCalled()
     expect(store.setActiveTab).not.toHaveBeenCalled()
+  })
+
+  it('does not replace configured default tabs with the global default agent', () => {
+    useAppStore.setState((state) => ({
+      settings: state.settings
+        ? { ...state.settings, defaultTuiAgent: 'codex' }
+        : ({ defaultTuiAgent: 'codex' } as unknown as typeof state.settings)
+    }))
+    let createdIndex = 0
+    const createTab = vi.fn(() => ({ id: `tab-${++createdIndex}` }))
+    const store = createMockStore({ createTab })
+
+    ensureWorktreeHasInitialTerminal(store, 'wt-1', undefined, undefined, undefined, {
+      runCommands: true,
+      tabs: [{ title: 'Dev', command: 'pnpm dev' }]
+    })
+
+    expect(createTab).toHaveBeenCalledTimes(1)
+    expect(createTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
+      pendingActivationSpawn: true,
+      recordInteraction: false
+    })
+    expect(store.queueTabStartupCommand).toHaveBeenCalledWith('tab-1', { command: 'pnpm dev' })
+    expect(store.queueTabStartupCommand).not.toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ launchAgent: 'codex' })
+    )
   })
 })
