@@ -117,8 +117,50 @@ describe('orchestration.collaborationAck', () => {
     const otherTaskId = db.createTask({ spec: 'other', runId }).id
     insertCollaborationMessage('other', otherTaskId)
 
-    await expect(call(ackParams({ messageIds: ['other'] }))).rejects.toThrow()
+    await expect(call(ackParams({ messageIds: ['other'] }))).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
     expect(db.getMessageById('other')?.read).toBe(0)
+  })
+
+  it('rejects a missing message id as invalid_argument', async () => {
+    setup()
+
+    await expect(call(ackParams({ messageIds: ['missing'] }))).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+  })
+
+  it('rejects a message without a valid collaboration payload as invalid_argument', async () => {
+    setup()
+    db.insertMessage({
+      id: 'invalid-payload',
+      from: 'producer',
+      to: buildCollaborationTaskMailboxAddress(taskId),
+      subject: 't',
+      body: 'bad',
+      type: 'status',
+      priority: 'normal',
+      payload: 'not-collaboration-json'
+    })
+
+    await expect(call(ackParams({ messageIds: ['invalid-payload'] }))).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(db.getMessageById('invalid-payload')?.read).toBe(0)
+  })
+
+  it('rejects a mixed read/unread batch as invalid_argument', async () => {
+    setup()
+    insertCollaborationMessage('m0')
+    insertCollaborationMessage('m1')
+    await call(ackParams({ messageIds: ['m0'] }))
+
+    await expect(call(ackParams({ messageIds: ['m0', 'm1'] }))).rejects.toMatchObject({
+      code: 'invalid_argument'
+    })
+    expect(db.getMessageById('m0')?.read).toBe(1)
+    expect(db.getMessageById('m1')?.read).toBe(0)
   })
 
   it('rejects a wrong orchestration capability', async () => {

@@ -26,20 +26,24 @@ const PRIORITY_RANK: Record<MessagePriority, number> = {
   urgent: 2
 }
 
+export function isCollaborationMessageAdmitted(
+  message: CollaborationMessage,
+  policy: AdmissionPolicy
+): boolean {
+  return (
+    policy.acceptedTypes.includes(message.type) &&
+    PRIORITY_RANK[message.priority] >= PRIORITY_RANK[policy.minPriority]
+  )
+}
+
 export function admitCandidates(
   candidates: readonly CollaborationCandidate[],
   policy: AdmissionPolicy
 ): AdmissionResult {
-  if (policy.acceptedTypes.length === 0) {
-    return { admitted: [], filtered: candidates.map((c) => c.id) }
-  }
-  const accepted = new Set(policy.acceptedTypes)
-  const minRank = PRIORITY_RANK[policy.minPriority]
   const admitted: CollaborationCandidate[] = []
   const filtered: string[] = []
   for (const candidate of candidates) {
-    const { type, priority } = candidate.message
-    if (accepted.has(type) && PRIORITY_RANK[priority] >= minRank) {
+    if (isCollaborationMessageAdmitted(candidate.message, policy)) {
       admitted.push(candidate)
     } else {
       filtered.push(candidate.id)

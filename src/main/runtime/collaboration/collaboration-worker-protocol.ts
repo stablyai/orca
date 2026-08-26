@@ -3,6 +3,9 @@
 // in, a self-contained publish/subscribe playbook out; no I/O, so the
 // emitted text is unit-testable word-for-word.
 
+import type { OrchestrationCliCommand } from '../orchestration/cli-command'
+import type { CollaborationTopology } from './collaboration-topology'
+
 export type CollaborationWorkerProtocolInput = {
   cli: string
   workerHandle: string
@@ -12,11 +15,40 @@ export type CollaborationWorkerProtocolInput = {
   subscribesTo: readonly string[]
 }
 
+export type CollaborationWorkerTaskProtocolInput = {
+  topology: CollaborationTopology | undefined
+  taskId: string
+  workerHandle: string
+  dispatchCapability?: string
+  devMode?: boolean
+  // Runtime-selected command for Orca-managed terminals. Managed PTY envs pin
+  // this to the current bundled/dev CLI across local, WSL, and SSH execution.
+  cliCommand?: OrchestrationCliCommand
+}
+
 export function buildCollaborationWorkerProtocol(input: CollaborationWorkerProtocolInput): string {
   const sections = [buildPublisherSection(input), buildSubscriberSection(input)].filter(
     (section): section is string => section !== null
   )
   return sections.length === 0 ? '' : sections.join('\n\n')
+}
+
+export function buildCollaborationWorkerProtocolForTask(
+  input: CollaborationWorkerTaskProtocolInput
+): string | undefined {
+  const step = input.topology?.steps.find((candidate) => candidate.taskId === input.taskId)
+  if (!step) {
+    return undefined
+  }
+  const protocol = buildCollaborationWorkerProtocol({
+    cli: input.devMode ? 'orca-dev' : (input.cliCommand ?? 'orca'),
+    workerHandle: input.workerHandle,
+    dispatchCapability: input.dispatchCapability,
+    publishesTo: step.publishesTo ?? [],
+    requiredPublishesTo: step.requiredPublishesTo ?? [],
+    subscribesTo: step.subscribesTo ?? []
+  })
+  return protocol === '' ? undefined : protocol
 }
 
 function buildPublisherSection(input: CollaborationWorkerProtocolInput): string | null {
@@ -36,7 +68,9 @@ ${topicList(publishesTo)}`
 ${topicList(requiredPublishesTo)}
 
 Required topics gate completion: every required topic above must successfully
-return "Published <id> to N subscriber(s)." before you send worker_done.`
+return "Published <id> to N subscriber(s)." with N >= 1 before you send worker_done.
+"Published <id> to 0 subscriber(s)." does not satisfy a required topic; retry with
+a task-appropriate semantic type/priority or escalate to the coordinator.`
       : ''
   return `=== COLLABORATION: PUBLISHER ===
 

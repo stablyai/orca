@@ -9,6 +9,8 @@ import {
 } from '../../../../orchestration/task-dispatch-refusal'
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
+import { getCollaborationRuntimeTopology } from '../../../../collaboration/collaboration-runtime-registry'
+import { buildCollaborationWorkerProtocolForTask } from '../../../../collaboration/collaboration-worker-protocol'
 
 export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
@@ -50,17 +52,27 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
           resolveDispatchCreator(runtime, params.from),
           maxDepth
         )
+        const workerHandle = params.to ?? 'worker'
+        const cliCommand = params.to
+          ? runtime.getTerminalOrchestrationCliCommand(params.to)
+          : undefined
+        const preCompletionProtocol = buildCollaborationWorkerProtocolForTask({
+          topology: getCollaborationRuntimeTopology(runtime, run.id),
+          taskId: task.id,
+          workerHandle,
+          devMode: params.devMode,
+          cliCommand
+        })
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
           canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
-          workerHandle: params.to ?? 'worker',
+          workerHandle,
           devMode: params.devMode,
-          ...(params.to
-            ? { cliCommand: runtime.getTerminalOrchestrationCliCommand(params.to) }
-            : {})
+          cliCommand,
+          preCompletionProtocol
         })
         return { dispatch: null, injected: false, dryRun: true, preamble }
       }
@@ -140,6 +152,15 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         : undefined
 
       // Why: built after ctx so dispatchId is the real ctx.id, letting heartbeats attribute liveness to a specific dispatch context, not just a task.
+      const cliCommand = runtime.getTerminalOrchestrationCliCommand(to)
+      const preCompletionProtocol = buildCollaborationWorkerProtocolForTask({
+        topology: getCollaborationRuntimeTopology(runtime, run.id),
+        taskId: task.id,
+        workerHandle: to,
+        dispatchCapability,
+        devMode: params.devMode,
+        cliCommand
+      })
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
@@ -149,7 +170,8 @@ export const ORCHESTRATION_DISPATCH_METHODS = [
         workerHandle: to,
         dispatchCapability,
         devMode: params.devMode,
-        cliCommand: runtime.getTerminalOrchestrationCliCommand(to)
+        cliCommand,
+        preCompletionProtocol
       })
 
       let injected = false
