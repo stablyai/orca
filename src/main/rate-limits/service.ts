@@ -1315,6 +1315,13 @@ export class RateLimitService {
     return left.runtime === right.runtime && left.wslDistro === right.wslDistro
   }
 
+  private isSameAntigravityTarget(
+    left: LocalAccountRuntimeTarget | undefined,
+    right: LocalAccountRuntimeTarget | undefined
+  ): boolean {
+    return left?.runtime === right?.runtime && left?.wslDistro === right?.wslDistro
+  }
+
   private getCodexProvenance(
     target: NormalizedCodexAccountSelectionTarget,
     codexHomePath: string | null
@@ -1695,6 +1702,7 @@ export class RateLimitService {
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
+    const antigravityTarget = this.antigravityRuntimeTargetResolver?.()
 
     const [
       claudeResult,
@@ -1737,7 +1745,7 @@ export class RateLimitService {
             models: miniMaxModels
           }),
       fetchAntigravityRateLimits({
-        target: this.antigravityRuntimeTargetResolver?.(),
+        target: antigravityTarget,
         signal
       })
     ])
@@ -1789,9 +1797,19 @@ export class RateLimitService {
     // describes real Antigravity quota. The Gemini mirror stays as the fallback for machines
     // where the Antigravity CLI is not installed; a signed-out CLI still answers for itself,
     // because blaming a missing Gemini sign-in would send the user to a dead product.
-    const antigravityCli = antigravityResult.status === 'fulfilled' ? antigravityResult.value : null
-    const antigravity =
-      antigravityCli && antigravityCli.usageMetadata?.failureKind !== 'cli-unavailable'
+    // A mid-flight runtime switch means this answer describes the runtime we left; keep the
+    // previous reading and let the next refresh ask the runtime that is current now.
+    const antigravityTargetStale = !this.isSameAntigravityTarget(
+      antigravityTarget,
+      this.antigravityRuntimeTargetResolver?.()
+    )
+    const antigravityCli =
+      !antigravityTargetStale && antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
+        : null
+    const antigravity = antigravityTargetStale
+      ? (previousState.antigravity ?? deriveAntigravityRateLimits(gemini))
+      : antigravityCli && antigravityCli.usageMetadata?.failureKind !== 'cli-unavailable'
         ? antigravityCli
         : deriveAntigravityRateLimits(gemini)
 
