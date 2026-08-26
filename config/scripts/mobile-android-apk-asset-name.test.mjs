@@ -34,8 +34,12 @@ describe('Orca Android release APK asset name', () => {
     expect(upload).toBeGreaterThan(rename)
 
     const run = stepNamed(RENAME_STEP).run
-    expect(run).toContain(`cd ${APK_OUTPUT_DIR}`)
-    expect(run).toContain(`mv ${GRADLE_APK_NAME} ${ORCA_APK_NAME}`)
+    const lines = run.split('\n').map((line) => line.trim())
+    const cdLine = lines.indexOf(`cd ${APK_OUTPUT_DIR}`)
+    const mvLine = lines.indexOf(`mv ${GRADLE_APK_NAME} ${ORCA_APK_NAME}`)
+
+    expect(cdLine).toBeGreaterThanOrEqual(0)
+    expect(mvLine).toBeGreaterThan(cdLine)
   })
 
   // `upload-artifact` resolves `path` from the workspace root, while `run` steps
