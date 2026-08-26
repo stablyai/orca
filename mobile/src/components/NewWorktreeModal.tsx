@@ -7,7 +7,10 @@ import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-mo
 import { deriveRepoSlug, type PasteRepoCandidate } from '../tasks/smart-source-paste-intent'
 import { useMobileComposerSource } from '../tasks/use-mobile-composer-source'
 import { useNewWorktreeRuntimeCapabilities } from '../tasks/worktree-create-capability'
-import { useRetiredWorktreeNames } from '../worktree/use-retired-worktree-names'
+import {
+  buildRetiredWorktreeNamesRefreshKey,
+  useRetiredWorktreeNames
+} from '../worktree/use-retired-worktree-names'
 import { BottomDrawerModalHost } from './bottom-drawer-modal-host'
 import {
   getMobileWorkspaceRepoBadgeColor,
@@ -89,7 +92,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     detectedAgentIds: executionTarget.detectedAgentIds
   })
   const retiredNamesRefreshKey = useMemo(
-    () => (existingWorktreePaths ?? []).toSorted().join('\0'),
+    () => buildRetiredWorktreeNamesRefreshKey(existingWorktreePaths),
     [existingWorktreePaths]
   )
   const retiredWorktreeNames = useRetiredWorktreeNames(
