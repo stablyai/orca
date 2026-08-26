@@ -346,10 +346,11 @@ describe('orchestration RPC methods', () => {
       expect(db.getActiveDispatchForTerminal('term_a')).toBeUndefined()
     })
 
-    it('uses caller-provided dev mode for injected preamble', async () => {
+    it('prefers the target runtime CLI over caller dev mode for injected preamble', async () => {
       setup()
       provideInjectIdentity()
       const task = db.createTask({ spec: 'work' })
+      vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
       vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
       const send = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_a',
@@ -366,8 +367,9 @@ describe('orchestration RPC methods', () => {
 
       expect(send).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('orca-dev orchestration send')
+        expect.stringContaining('orca orchestration send')
       )
+      expect(send.mock.calls[0]![1]).not.toContain('orca-dev orchestration')
     })
 
     it('uses the target pane CLI command for the returned preamble', async () => {

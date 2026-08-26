@@ -56,4 +56,23 @@ describe('resolveTerminalOrchestrationCliCommand', () => {
       })
     ).toBe('orca')
   })
+
+  it('uses orca-dev only for terminals owned by the local dev runtime', () => {
+    expect(
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: null,
+        isWsl: false,
+        worktreeId: 'repo::/home/alice/repo',
+        devMode: true
+      })
+    ).toBe('orca-dev')
+    expect(
+      resolveTerminalOrchestrationCliCommand({
+        connectionId: 'ssh-1',
+        isWsl: false,
+        worktreeId: 'repo::/home/alice/repo',
+        devMode: true
+      })
+    ).toBe('orca')
+  })
 })

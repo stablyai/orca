@@ -91,6 +91,35 @@ describe('buildCollaborationWorkerProtocol', () => {
       expect(out).toMatch(/escalate/i)
     })
 
+    it('does not reference admission guidance when the direct builder received none', () => {
+      const out = buildCollaborationWorkerProtocol(
+        protocol({ requiredPublishesTo: ['release-notes'] })
+      )
+      expect(out).not.toMatch(/combinations shown above/i)
+    })
+
+    it('prefers a runtime-selected SSH CLI over the caller devMode fallback', () => {
+      const topology = createCollaborationTopology([
+        { taskId: 'producer', publishesTo: ['gate'], requiredPublishesTo: ['gate'] },
+        {
+          taskId: 'subscriber',
+          subscribesTo: ['gate'],
+          admission: { acceptedTypes: ['finding'], minPriority: 'normal' }
+        }
+      ])
+
+      const out = buildCollaborationWorkerProtocolForTask({
+        topology,
+        taskId: 'producer',
+        workerHandle: 'worker-1',
+        devMode: true,
+        cliCommand: 'orca'
+      })!
+
+      expect(out).toContain('orca orchestration collaboration-publish')
+      expect(out).not.toContain('orca-dev orchestration collaboration-publish')
+    })
+
     it('states subscribers are topology-derived and never named by the publisher', () => {
       const out = buildCollaborationWorkerProtocol(protocol({ publishesTo: ['alpha'] }))
       expect(out).toMatch(/topology-derived/i)

@@ -217,15 +217,19 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain('orca orchestration ask')
   })
 
-  it('uses orca-dev CLI when devMode is true', () => {
-    const result = buildDispatchPreamble(baseParams({ devMode: true, cliCommand: 'orca-ide' }))
+  it('uses orca-dev CLI when devMode is true and no runtime-selected command is available', () => {
+    const result = buildDispatchPreamble(baseParams({ devMode: true }))
     expect(result).toContain('orca-dev orchestration send')
     expect(result).toContain('orca-dev orchestration check')
     expect(result).toContain('orca-dev orchestration ask')
-    const fragments = result.split('orca-dev')
-    for (const fragment of fragments) {
-      expect(fragment).not.toMatch(/orca orchestration/)
-    }
+  })
+
+  it('prefers the runtime-selected worker CLI over the caller devMode fallback', () => {
+    const result = buildDispatchPreamble(baseParams({ devMode: true, cliCommand: 'orca-ide' }))
+    expect(result).toContain('orca-ide orchestration send')
+    expect(result).toContain('orca-ide orchestration check')
+    expect(result).toContain('orca-ide orchestration ask')
+    expect(result).not.toContain('orca-dev orchestration')
   })
 
   it('uses orca CLI when devMode is false', () => {

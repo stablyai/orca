@@ -13,8 +13,8 @@ export type PreambleParams = {
   coordinatorHandle: string
   workerHandle: string
   devMode?: boolean
-  // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
-  // other execution hosts keep their existing bare `orca` bridge.
+  // Why: when the target runtime resolved a worker CLI, that execution-host
+  // choice is authoritative over the caller-side dev fallback.
   cliCommand?: OrchestrationCliCommand
   // Why: populated by the coordinator's dispatch pre-flight (§3.1) only
   // when the target worktree is behind its tracking remote. When absent
@@ -52,10 +52,9 @@ const HEARTBEAT_INTERVAL_MIN = 5
 // not as a separate prose block — LLM readers anchor on examples and skim
 // trailing prose, so rules must land at the point of use.
 export function buildDispatchPreamble(params: PreambleParams): string {
-  // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
-  // socket. Without this, agents inside the dev Electron app would call the
-  // production CLI and talk to the wrong Orca instance (Section 6.4).
-  const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  // Why: target-aware runtime selection wins; devMode is only a fallback for
+  // previews/callers that have no concrete worker terminal to resolve.
+  const cli = params.cliCommand ?? (params.devMode ? 'orca-dev' : 'orca')
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
