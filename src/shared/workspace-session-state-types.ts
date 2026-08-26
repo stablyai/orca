@@ -124,6 +124,11 @@ export type WorkspaceSessionState = {
       retiredAt: number
     }
   >
+  /** Explicit user-close markers for terminal tabs, keyed by tab id. The
+   *  direct-SSH pull merge consults these so a tab the user closed is not
+   *  re-inserted from a stale remote snapshot (the resurrection loop in
+   *  #10342). TTL/cap pruning lives in shared/closed-terminal-tab-tombstones. */
+  closedTerminalTabTombstonesByTabId?: Record<string, { closedAt: number; worktreeId: string }>
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

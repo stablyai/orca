@@ -4,6 +4,11 @@ export type RemoteWorkspaceTerminalTab = Omit<TerminalTab, 'worktreeId'> & {
   worktreePath: string
 }
 
+export type RemoteClosedTabTombstone = {
+  closedAt: number
+  worktreePath: string
+}
+
 export type RemoteWorkspaceSession = {
   activeWorktreePath: string | null
   activeTabId: string | null
@@ -14,6 +19,9 @@ export type RemoteWorkspaceSession = {
   remoteSessionIdsByTabId?: Record<string, string>
   lastVisitedAtByWorktreePath?: Record<string, number>
   defaultTerminalTabsAppliedByWorktreePath?: Record<string, true>
+  /** Explicit close markers so pull merges can tell "closed" from "never
+   *  uploaded"; absent in snapshots written by older builds. */
+  closedTabTombstonesByTabId?: Record<string, RemoteClosedTabTombstone>
 }
 
 export type RemoteWorkspaceSnapshot = {
