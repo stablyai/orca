@@ -102,7 +102,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     [targetRootPath]
   )
   const serverCount = useMemo(() => countServers(configs), [configs])
-  const canCreateStarter = detectedCount === 0 && !inspectionUnavailable
+  const canCreateStarter =
+    !inspectionUnavailable && configs.every((config) => config.status === 'missing')
 
   const loadConfigs = useCallback(async (): Promise<void> => {
     if (!mountedRef.current) {

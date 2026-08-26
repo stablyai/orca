@@ -153,6 +153,24 @@ describe('McpConfigSection Parallel preset', () => {
     expect(mocks.writeFile).not.toHaveBeenCalled()
   })
 
+  it.each(['.mcp.json', '.cursor'])(
+    'does not offer a preset when %s cannot be inspected',
+    async (name) => {
+      const error = new Error('EACCES: permission denied')
+      mocks.readDir.mockResolvedValueOnce([{ name, isDirectory: name === '.cursor' }])
+      if (name === '.cursor') {
+        mocks.readDir.mockRejectedValueOnce(error)
+      } else {
+        mocks.readFile.mockRejectedValueOnce(error)
+      }
+      await renderSection()
+      await screen.findByText(error.message)
+      expect(screen.queryByRole('button', { name: 'Add Parallel Search' })).not.toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Add MCP config' })).not.toBeInTheDocument()
+      expect(mocks.writeFile).not.toHaveBeenCalled()
+    }
+  )
+
   it('does not write while an existing config is still being inspected', async () => {
     let finishInspection: ((entries: { name: string; isDirectory: boolean }[]) => void) | undefined
     mocks.readDir.mockReturnValue(
