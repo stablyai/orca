@@ -115,6 +115,7 @@ export function buildWindowApi(args: {
       },
       ssh: {
         listTargets: () => Promise.resolve([]),
+        listRemovedTargetLabels: () => Promise.resolve({}),
         listPortForwards: () => Promise.resolve([]),
         listDetectedPorts: () => Promise.resolve([]),
         getState: () => Promise.resolve(null),
