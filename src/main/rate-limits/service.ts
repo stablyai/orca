@@ -110,6 +110,7 @@ type InternalRateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  cursor: ProviderRateLimits | null
 }
 
 function normalizePollingInterval(ms: number): number {
@@ -176,7 +177,8 @@ export class RateLimitService {
     kimi: null,
     antigravity: null,
     minimax: null,
-    grok: null
+    grok: null,
+    cursor: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
   private pollInterval: number = DEFAULT_POLL_MS
@@ -191,7 +193,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    cursor: 0
   }
   // Why: consecutive failures drive exponential backoff of the fast activation-retry lane; reset on any success/unavailable result.
   private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
@@ -202,7 +205,8 @@ export class RateLimitService {
     kimi: 0,
     minimax: 0,
     grok: 0,
-    antigravity: 0
+    antigravity: 0,
+    cursor: 0
   }
   private mainWindow: BrowserWindow | null = null
   private detachWindowListeners: (() => void) | null = null
@@ -389,6 +393,7 @@ export class RateLimitService {
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
+      cursorAuthConfigured: false,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -872,7 +877,8 @@ export class RateLimitService {
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
-      antigravity: this.state.antigravity
+      antigravity: this.state.antigravity,
+      cursor: this.state.cursor
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({
       provider: provider as ActiveRateLimitProvider,
