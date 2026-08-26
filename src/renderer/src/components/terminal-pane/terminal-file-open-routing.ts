@@ -1,6 +1,7 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
 import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
+import { findWorkspaceFileRoute } from '@/lib/runtime-workspace-file-route'
 import { isPathInsideWorktree, toWorktreeRelativePath } from '@/lib/terminal-links'
 import {
   isRemoteRuntimeFileOperation,
@@ -9,9 +10,15 @@ import {
 } from '@/runtime/runtime-file-client'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { activateAndRevealWorkspace, activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveKnownWorktreeRootPathLink } from './terminal-worktree-path-link'
 import { parseWslUncPath, toWindowsWslPath } from '../../../../shared/wsl-paths'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  toRuntimeExecutionHostId,
+  toSshExecutionHostId,
+  type ExecutionHostId
+} from '../../../../shared/execution-host'
 
 type TerminalFileOpenDeps = {
   worktreeId: string
@@ -199,19 +206,42 @@ export function openDetectedFilePath(
       return
     }
 
+    const store = useAppStore.getState()
+    let targetWorktreeId = worktreeId
+    let targetExecutionHostId: ExecutionHostId | undefined
     let relativePath = mappedFilePath
     if (worktreePath && isPathInsideWorktree(mappedFilePath, worktreePath)) {
       const maybeRelative = toWorktreeRelativePath(mappedFilePath, worktreePath)
       if (maybeRelative !== null && maybeRelative.length > 0) {
         relativePath = maybeRelative
       }
+    } else if (
+      store.openFiles.some(
+        (openFile) => openFile.filePath === mappedFilePath && openFile.worktreeId !== worktreeId
+      )
+    ) {
+      // Why: early resolution is only needed to avoid an existing sibling-tab collision.
+      const runtimeOwnerId = fileContext.settings?.activeRuntimeEnvironmentId?.trim()
+      const executionHostId = runtimeOwnerId
+        ? toRuntimeExecutionHostId(runtimeOwnerId)
+        : fileContext.connectionId
+          ? toSshExecutionHostId(fileContext.connectionId)
+          : LOCAL_EXECUTION_HOST_ID
+      const siblingRoute = findWorkspaceFileRoute(store, executionHostId, mappedFilePath)
+      if (siblingRoute) {
+        targetWorktreeId = siblingRoute.worktreeId
+        targetExecutionHostId = siblingRoute.executionHostId
+        relativePath = siblingRoute.relativePath
+      }
     }
 
-    const store = useAppStore.getState()
-    if (worktreeId) {
-      // Why: cross-worktree file links share the activation history stack with sidebar and
-      // palette navigation, but the editor file is the surface — don't seed a shell.
-      activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
+    if (targetWorktreeId) {
+      // Why: the route may name a folder-workspace key, and the same worktree id can exist
+      // on several hosts — dispatch by workspace shape and keep the resolved host.
+      activateAndRevealWorkspace(targetWorktreeId, {
+        providesInitialSurface: true,
+        ...(targetExecutionHostId ? { executionHostId: targetExecutionHostId } : {})
+      })
     }
 
     const language = detectLanguage(mappedFilePath)
@@ -219,7 +249,7 @@ export function openDetectedFilePath(
       {
         filePath: mappedFilePath,
         relativePath,
-        worktreeId: worktreeId || '',
+        worktreeId: targetWorktreeId || '',
         language,
         mode: 'edit',
         runtimeEnvironmentId,
@@ -238,7 +268,7 @@ export function openDetectedFilePath(
       const openedStore = useAppStore.getState()
       // Why: scope the reveal to the opened editor tab id so owner-qualified tabs
       // across local/SSH/runtime contexts get it instead of an ambiguous path key.
-      const fileId = openedStore.activeFileIdByWorktree[worktreeId] ?? mappedFilePath
+      const fileId = openedStore.activeFileIdByWorktree[targetWorktreeId] ?? mappedFilePath
       if (language === 'markdown') {
         // Why: rich Markdown has no line-based reveal consumer; line links must mount Monaco.
         openedStore.setMarkdownViewMode(fileId, 'source')
