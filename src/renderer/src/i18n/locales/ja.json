@@ -3888,7 +3888,7 @@
           "35b9a724a0": "利用可能",
           "c13b82793c": "インストールを管理",
           "aee7b99cc6": "リンクからインストール",
-          "filterProvider": "エージェントで絞り込み",
+          "filterProvider": "Agent で絞り込み",
           "filterSource": "ソースで絞り込み",
           "allSources": "すべて",
           "clearFilters": "フィルターをクリア",
@@ -3914,13 +3914,43 @@
           "deleteSkill": "削除…"
         },
         "SkillsList": { "listLabel": "スキル" },
-        "sourceStatus": { "missing": "フォルダーが見つかりません", "remoteRepo": "リモートリポジトリ — 未スキャン", "unavailable": "未スキャン" },
+        "sourceStatus": {
+          "missing": "フォルダーが見つかりません",
+          "remoteRepo": "リモートリポジトリ — 未スキャン",
+          "unavailable": "未スキャン"
+        },
         "sources": { "heading": "スキルフォルダー" },
-        "sourceKind": { "home": "ホーム", "workspace": "ワークスペース", "bundled": "バンドル済み", "plugin": "プラグイン" },
-        "count": { "skillOne": "{{count}} 件のスキル", "skillOther": "{{count}} 件のスキル", "sourceOne": "{{count}} 件のソース", "sourceOther": "{{count}} 件のソース", "fileOne": "{{count}} 個のファイル", "fileOther": "{{count}} 個のファイル", "resultOne": "{{count}} 件の結果", "resultOther": "{{count}} 件の結果", "selected": "{{count}} 件を選択", "shareOne": "{{count}} 件のスキルを共有", "shareOther": "{{count}} 件のスキルを共有", "linkOne": "{{count}} 件のリンク", "linkOther": "{{count}} 件のリンク" },
-        "filter": { "allAgents": "すべてのエージェント", "sharedAgent": "共有 (.agents)" },
-        "SkillsSelectionHeader": { "exit": "選択を終了", "exitTooltip": "選択を終了 · Esc", "title": "共有するスキルを選択", "selectAll": "対象の {{count}} 件をすべて選択", "clear": "クリア", "deleteTitle": "削除するスキルを選択" },
-        "SkillDetailDialog": { "agents": "エージェント", "updated": "更新日", "copy": "コピー" },
+        "sourceKind": {
+          "home": "ホーム",
+          "workspace": "ワークスペース",
+          "bundled": "バンドル済み",
+          "plugin": "プラグイン"
+        },
+        "count": {
+          "skillOne": "{{count}} 件のスキル",
+          "skillOther": "{{count}} 件のスキル",
+          "sourceOne": "{{count}} 件のソース",
+          "sourceOther": "{{count}} 件のソース",
+          "fileOne": "{{count}} 個のファイル",
+          "fileOther": "{{count}} 個のファイル",
+          "resultOne": "{{count}} 件の結果",
+          "resultOther": "{{count}} 件の結果",
+          "selected": "{{count}} 件を選択",
+          "shareOne": "{{count}} 件のスキルを共有",
+          "shareOther": "{{count}} 件のスキルを共有",
+          "linkOne": "{{count}} 件のリンク",
+          "linkOther": "{{count}} 件のリンク"
+        },
+        "filter": { "allAgents": "すべての Agent", "sharedAgent": "共有 (.agents)" },
+        "SkillsSelectionHeader": {
+          "exit": "選択を終了",
+          "exitTooltip": "選択を終了 · Esc",
+          "title": "共有するスキルを選択",
+          "selectAll": "対象の {{count}} 件をすべて選択",
+          "clear": "クリア",
+          "deleteTitle": "削除するスキルを選択"
+        },
+        "SkillDetailDialog": { "agents": "Agent", "updated": "更新日", "copy": "コピー" },
         "SkillFreshnessNudge": {
           "titleOne": "インストール済みの Orca スキルが古くなっています",
           "titleMany": "インストール済みの Orca スキル {{value0}} 件が古くなっています",
