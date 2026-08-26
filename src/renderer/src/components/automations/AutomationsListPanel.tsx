@@ -360,7 +360,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
         className={cn('scrollbar-sleek min-h-0 flex-1 overflow-auto', LIST_TABLE_CONTAINER_CLASS)}
       >
         {hasFilteredListItems ? (
-          <>
+          <div className="min-w-full w-fit">
             <AutomationListTableHeader />
             <div className="divide-y divide-border/50">
               <AutomationListLocalRows {...rowProps} rows={filteredRows} />
@@ -380,7 +380,7 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
                 onEdit={openEditExternalDialog}
               />
             </div>
-          </>
+          </div>
         ) : (
           <AutomationListEmptyView
             {...emptyStateInput}

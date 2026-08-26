@@ -49,7 +49,11 @@ import {
   type AutomationUsageSummary
 } from './automation-usage-model'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
-import { LIST_TABLE_ROW_CLASS, LIST_TABLE_ROW_SELECTED_CLASS } from '@/lib/list-table-layout'
+import {
+  LIST_TABLE_ROW_CLASS,
+  LIST_TABLE_ROW_SELECTED_CLASS,
+  LIST_TABLE_STICKY_ROW_CELL_CLASS
+} from '@/lib/list-table-layout'
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
@@ -246,7 +250,9 @@ export function AutomationListLocalRows({
                   isSelected && LIST_TABLE_ROW_SELECTED_CLASS
                 )}
               >
-                <span className="min-w-0 truncate font-medium">{automation.name}</span>
+                <span className={LIST_TABLE_STICKY_ROW_CELL_CLASS}>
+                  <span className="min-w-0 truncate font-medium">{automation.name}</span>
+                </span>
                 <span className="min-w-0 truncate text-muted-foreground" title={scheduleLabel}>
                   {scheduleLabel}
                 </span>

@@ -32,7 +32,11 @@ import {
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
 import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
-import { LIST_TABLE_ROW_CLASS, LIST_TABLE_ROW_SELECTED_CLASS } from '@/lib/list-table-layout'
+import {
+  LIST_TABLE_ROW_CLASS,
+  LIST_TABLE_ROW_SELECTED_CLASS,
+  LIST_TABLE_STICKY_ROW_CELL_CLASS
+} from '@/lib/list-table-layout'
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
@@ -121,7 +125,9 @@ export function AutomationListExternalRows({
                   isSelected && LIST_TABLE_ROW_SELECTED_CLASS
                 )}
               >
-                <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
+                <span className={LIST_TABLE_STICKY_ROW_CELL_CLASS}>
+                  <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
+                </span>
                 <span className="min-w-0 truncate text-muted-foreground" title={scheduleLabel}>
                   {scheduleLabel}
                 </span>

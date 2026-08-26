@@ -1446,20 +1446,6 @@ export default function AutomationsPage(): React.JSX.Element {
     }
     if (
       editingAutomationId === null &&
-      editingExternalTarget === null &&
-      createTarget === 'orca' &&
-      !canCreateAutomation
-    ) {
-      toast.error(
-        translate(
-          'auto.components.automations.AutomationsPage.destinationUnavailable',
-          'The selected automation destination is not ready. Reconnect it and try again.'
-        )
-      )
-      return
-    }
-    if (
-      editingAutomationId === null &&
       !isHermesSave &&
       !isTuiAgentEnabled(draft.agentId, settings?.disabledTuiAgents)
     ) {

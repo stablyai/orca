@@ -71,6 +71,7 @@ function renderPanel(
             searchActive: query !== ''
           }}
           hostCatalog={HOST_CATALOG}
+          canCreateAutomation={true}
           externalManagersUncheckedNotice={uncheckedNotice}
           onSelectHost={() => undefined}
           onRecoverHost={() => undefined}
@@ -98,7 +99,6 @@ function renderPanel(
           requestExternalAction={() => undefined}
           openEditExternalDialog={() => undefined}
           openCreateDialog={() => undefined}
-          canCreateAutomation
           onOpenDetail={() => undefined}
           onRefresh={() => undefined}
           isRefreshing={false}
