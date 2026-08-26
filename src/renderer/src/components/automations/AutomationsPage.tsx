@@ -992,9 +992,6 @@ export default function AutomationsPage(): React.JSX.Element {
     ? getAutomationOwnerTarget(editingAutomation, automationHostTarget)
     : getAutomationListTarget(settings)
   const isOrcaForm = createTarget === 'orca' && editingExternalTarget === null
-  const dialogRepos = isOrcaForm
-    ? getAutomationCreateRepos(repos, automationDialogTarget)
-    : getAutomationCreateRepos(repos, { kind: 'local' })
 
   const destinationForProject = useCallback(
     (projectId: string): AutomationCreateDestination | null => {
@@ -1554,7 +1551,7 @@ export default function AutomationsPage(): React.JSX.Element {
         )
         return
       }
-      if (isOrcaForm && !dialogRepos.some((repo) => repo.id === draft.projectId)) {
+      if (isOrcaForm && !editorProjects.some((repo) => repo.id === draft.projectId)) {
         toast.error(
           translate(
             'auto.components.automations.AutomationsPage.destinationProjectUnavailable',

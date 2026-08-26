@@ -159,7 +159,7 @@ describe('owner-fenced mutations', () => {
     )
     expect(callRuntimeRpc.mock.calls[0]?.[2]).toEqual({
       id: 'a1',
-      updates: { repo: 'repo-ssh' },
+      updates: { repo: 'id:repo-ssh' },
       expectedOwner: { selector: { kind: 'self' } },
       destination: { selector: { kind: 'ssh', targetId: 'ssh-1', targetGeneration: 7 } }
     })

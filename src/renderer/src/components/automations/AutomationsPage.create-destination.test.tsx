@@ -152,7 +152,7 @@ describe('AutomationsPage create destination', () => {
 
     expect(api.automations.create).not.toHaveBeenCalled()
     expect(runtimeCreateCalls()).toHaveLength(0)
-    expect(mocks.editorDialog?.notice?.message).toBeTruthy()
+    expect(mocks.toastError).toHaveBeenCalled()
     expect(mocks.editorDialog?.open).toBe(true)
   })
 
@@ -169,7 +169,7 @@ describe('AutomationsPage create destination', () => {
     // A repo with no connection ID is not evidence of local: this one is the
     // runtime's, and the desktop's Self host cannot hold an automation for it.
     expect(api.automations.create).not.toHaveBeenCalled()
-    expect(mocks.editorDialog?.notice?.message).toBeTruthy()
+    expect(mocks.toastError).toHaveBeenCalled()
     expect(mocks.editorDialog?.open).toBe(true)
   })
 
