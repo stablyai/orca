@@ -6742,6 +6742,16 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
   }
 
+  // Why: structural catalog changes require a fresh Git scan; renderer metadata edits do not.
+  notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
+    this.invalidateWorktreeScanCacheForRepo(repoId)
+    const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
+    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
+      return
+    }
+    this.notifyWorktreesChangedForRemoteClients(repoId)
+  }
+
   // Why: host-local repo IPC mutations never enter runtime methods, so paired
   // clients need an explicit catalog invalidation; the local renderer already
   // got its own repos:changed and must not be re-notified (#11994).
@@ -32556,7 +32566,11 @@ export class OrcaRuntimeService {
     }
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
-      return (await inFlight.promise).result
+      const refresh = await inFlight.promise
+      if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
+        return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+      }
+      return refresh.result
     }
     const reusableCached =
       cached?.generation === generation && cached.runtimeKey === runtimeKey ? cached : null
@@ -32564,10 +32578,13 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
     try {
       const refresh = await promise
+      // Why: fence the caller as well as cache writeback, or an event refresh can consume a stale scan.
+      if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
+        return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+      }
       // Why: back off local spawn failures under resource pressure while disconnected SSH can recover on the next poll.
       if (
         (refresh.result.ok || !repo.connectionId) &&
-        generation === (this.worktreeScanGenerations.get(scanScopeKey) ?? 0) &&
         this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise
       ) {
         const entry: RuntimeWorktreeScanCache = {
