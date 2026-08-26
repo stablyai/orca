@@ -121,6 +121,12 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   terminalSurfaceTombstonesByPaneKey: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
+  },
+  // Residue: keyed by tab id and pruned by neither path, like remoteSessionIdsByTabId. Bounded
+  // regardless: the tombstone helpers TTL- and cap-prune the map on every write and merge.
+  closedTerminalTabTombstonesByTabId: {
+    onRepoRemoval: 'notRepoScoped',
+    onTransfer: 'notTransferred'
   }
 } as const satisfies Record<keyof WorkspaceSessionState, SessionFieldDisposition>
 
