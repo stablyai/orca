@@ -8,6 +8,11 @@ const projectDir = resolve(import.meta.dirname, '../..')
 const ORCA_APK_NAME = 'orca-app-release.apk'
 const GRADLE_APK_NAME = 'app-release.apk'
 const RENAME_STEP = 'Name the release APK for Orca'
+// Gradle's own output directory. The rename writes here and every publish reads
+// from here, so pinning it once is what keeps those two ends pointing at the
+// same file.
+const APK_OUTPUT_DIR = 'android/app/build/outputs/apk/release'
+const ORCA_APK_PATH = `${APK_OUTPUT_DIR}/${ORCA_APK_NAME}`
 
 const workflow = () =>
   parse(readFileSync(join(projectDir, '.github/workflows/mobile-android-release.yml'), 'utf8'))
@@ -27,22 +32,30 @@ describe('Orca Android release APK asset name', () => {
     expect(build).toBeGreaterThanOrEqual(0)
     expect(rename).toBeGreaterThan(build)
     expect(upload).toBeGreaterThan(rename)
-    expect(stepNamed(RENAME_STEP).run).toContain(`mv ${GRADLE_APK_NAME} ${ORCA_APK_NAME}`)
+
+    const run = stepNamed(RENAME_STEP).run
+    expect(run).toContain(`cd ${APK_OUTPUT_DIR}`)
+    expect(run).toContain(`mv ${GRADLE_APK_NAME} ${ORCA_APK_NAME}`)
   })
 
-  // Why not a glob: `*.apk` keeps passing while publishing whatever Gradle
-  // emitted, so a rename that silently stopped running would ship the generic
-  // name again with every check still green.
-  it('publishes the renamed APK by exact path rather than a glob', () => {
-    const published = [
-      stepNamed('Upload APK artifact').with.path,
-      stepNamed('Create GitHub Release').run
-    ]
+  // `upload-artifact` resolves `path` from the workspace root, while `run` steps
+  // inherit the job's `mobile` working directory. Both spellings of the one file
+  // are pinned so a future edit cannot "correct" either into the other, and so a
+  // publish cannot drift to a directory the rename never wrote to.
+  it('publishes the renamed APK from the directory the rename wrote it to', () => {
+    expect(stepNamed('Upload APK artifact').with.path).toBe(`mobile/${ORCA_APK_PATH}`)
+  })
 
-    for (const reference of published) {
-      expect(reference).toContain(ORCA_APK_NAME)
-      expect(reference).not.toContain('*.apk')
-    }
+  // Why the count: the step publishes through `gh release upload` for a tag that
+  // already exists and `gh release create` for one that does not. Asserting the
+  // path appears twice catches a branch that kept a glob or was left behind.
+  it('publishes the same exact path from both release branches', () => {
+    const run = stepNamed('Create GitHub Release').run
+
+    expect(run.split(ORCA_APK_PATH).length - 1).toBe(2)
+    expect(run).toContain('gh release upload')
+    expect(run).toContain('gh release create')
+    expect(run).not.toContain('*.apk')
   })
 
   // The rename is the one legitimate mention of the Gradle name. Anywhere else
