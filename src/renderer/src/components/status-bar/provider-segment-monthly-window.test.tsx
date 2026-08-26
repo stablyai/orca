@@ -43,12 +43,40 @@ function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLi
   }
 }
 
+// Cursor's monthly plan usage is also a monthly-only window, like Grok.
+function cursorMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
+  return {
+    provider: 'cursor',
+    session: null,
+    weekly: null,
+    monthly: windowOf(25, 43200),
+    updatedAt: Date.now(),
+    error: null,
+    status
+  }
+}
+
 describe('ProviderSegment monthly window', () => {
   it('renders a monthly-only snapshot in the chip instead of a bare icon', async () => {
     const { ProviderSegment } = await import('./StatusBar')
 
     const markup = renderToStaticMarkup(
       <ProviderSegment p={grokMonthlyLimits('ok')} compact={false} display="used" mode="compact" />
+    )
+
+    expect(markup).toContain('25% used 30d')
+  })
+
+  it('renders a monthly-only Cursor snapshot in the chip instead of a bare icon', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment
+        p={cursorMonthlyLimits('ok')}
+        compact={false}
+        display="used"
+        mode="compact"
+      />
     )
 
     expect(markup).toContain('25% used 30d')

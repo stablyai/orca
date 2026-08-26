@@ -43,4 +43,17 @@ describe('getStatusBarToggles', () => {
       expect.arrayContaining(['status bar', 'minimax', 'usage', 'subscription', 'cookie'])
     )
   })
+
+  it('includes Cursor usage so Appearance can toggle the status item', () => {
+    const cursorToggle = getStatusBarToggles().find((entry) => entry.id === 'cursor')
+
+    expect(cursorToggle).toMatchObject({
+      title: 'Cursor Usage',
+      description: 'Show Cursor monthly plan usage from cursor-agent or Cursor IDE sign-in.',
+      toggleDescription: 'Show Cursor monthly plan usage from cursor-agent or Cursor IDE sign-in.'
+    })
+    expect(cursorToggle?.keywords).toEqual(
+      expect.arrayContaining(['status bar', 'cursor', 'usage', 'subscription'])
+    )
+  })
 })

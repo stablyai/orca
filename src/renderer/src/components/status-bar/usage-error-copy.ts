@@ -26,6 +26,9 @@ export function getProviderDisplayName(provider: ProviderRateLimits['provider'])
   if (provider === 'grok') {
     return 'Grok'
   }
+  if (provider === 'cursor') {
+    return 'Cursor'
+  }
   return provider
 }
 
@@ -83,6 +86,18 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   if (delegatedCliProvider === 'kimi') {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
+  if (p.provider === 'cursor') {
+    switch (p.usageMetadata?.failureKind) {
+      case 'missing-credentials':
+      case 'stale-token':
+        return translate(
+          'auto.components.status.bar.tooltip.cursorSignInRequired',
+          'Sign in required'
+        )
+      default:
+        break
+    }
+  }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
       case 'deferred-by-live-session':
@@ -137,6 +152,22 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
       'auto.components.status.bar.tooltip.a37e8c15d4',
       'Run kimi in a terminal on the computer running Orca and wait for it to start, then retry usage.'
     )
+  }
+  if (p.provider === 'cursor') {
+    switch (p.usageMetadata?.failureKind) {
+      case 'missing-credentials':
+        return translate(
+          'auto.components.status.bar.tooltip.cursorMissingCredentials',
+          'Sign in to Cursor from cursor-agent or the Cursor IDE, then retry usage.'
+        )
+      case 'stale-token':
+        return translate(
+          'auto.components.status.bar.tooltip.cursorStaleToken',
+          'Cursor sign-in expired. Sign in again from cursor-agent or the Cursor IDE, then retry usage.'
+        )
+      default:
+        break
+    }
   }
   if (p.provider === 'claude') {
     switch (p.usageMetadata?.failureKind) {
