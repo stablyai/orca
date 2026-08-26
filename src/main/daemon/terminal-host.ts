@@ -266,9 +266,10 @@ export class TerminalHost {
       return null
     }
     await session.settleShellOwnershipConfirmation()
-    return this.sessions.get(sessionId) === session && session.isAlive
-      ? session.getSnapshot(opts)
-      : null
+    // Why no liveness recheck: the sync path returned the pre-exit snapshot when
+    // a session died a beat after the call; a disposal during the settle yields
+    // null naturally from the plane's own guard.
+    return session.getSnapshot(opts)
   }
 
   // Why: scan-authority handoff seed (null-not-throw like getSnapshot) — emulator's dangling incomplete escape at the stream position.

@@ -4,6 +4,7 @@ import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createSubprocess() {
   let onData: ((data: string) => void) | null = null
+  let onExit: ((code: number) => void) | null = null
   let resolveConfirm: ((confirmed: boolean) => void) | undefined
   const confirmShellForeground = vi.fn(
     () => new Promise<boolean>((resolve) => void (resolveConfirm = resolve))
@@ -23,13 +24,16 @@ function createSubprocess() {
     onData(cb: (data: string) => void) {
       onData = cb
     },
-    onExit() {},
+    onExit(cb: (code: number) => void) {
+      onExit = cb
+    },
     dispose: () => {}
   } as unknown as SubprocessHandle
   return {
     handle,
     confirmShellForeground,
     emit: (data: string) => onData?.(data),
+    exit: (code: number) => onExit?.(code),
     confirm: (v: boolean) => resolveConfirm?.(v)
   }
 }
@@ -90,5 +94,35 @@ describe('Session shell-owned recovery through the output barrier', () => {
     expect(after.terminalOwner).toBeUndefined()
     expect(after.snapshotAnsi).not.toContain('49h')
     session.dispose()
+  })
+
+  it('flushes queued bytes to clients when the shell exits mid-proof instead of dropping them', async () => {
+    const sub = createSubprocess()
+    // Models TerminalHost.reapSession: exit and disposal are one synchronous chain.
+    const session: Session = new Session({
+      sessionId: 's3',
+      cols: 80,
+      rows: 24,
+      subprocess: sub.handle,
+      shellReadySupported: false,
+      onExit: () => session.dispose()
+    } as never)
+    const received: string[] = []
+    const exits: number[] = []
+    session.attachClient({
+      onData: (data: string) => received.push(data),
+      onExit: (code: number) => exits.push(code)
+    })
+
+    sub.emit('\x1b[?1049hTUI\x1b]133;D;137\x07\r\nprompt-after-death')
+    await vi.waitFor(() => expect(sub.confirmShellForeground).toHaveBeenCalledTimes(1))
+    // The shell exits before the proof settles — sub-millisecond in production,
+    // so it essentially always wins the race against the ps fork.
+    sub.exit(0)
+
+    expect(received.join('')).toContain('prompt-after-death')
+    expect(exits).toEqual([0])
+    // No injection either: an unproven episode flushes unmodified.
+    expect(received.join('')).not.toContain('\x1b[?1049l')
   })
 })

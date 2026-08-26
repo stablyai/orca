@@ -146,7 +146,8 @@ export class TerminalShellRecoveryBarrier {
       clearTimeout(this.bailTimer)
       this.bailTimer = null
     }
-    // Session teardown: downstream is gone, queued bytes are moot.
+    // Callers flush first (exit, dispose, prepareForFinalSnapshot); anything
+    // still queued here has no live downstream left to receive it.
     this.queue = []
     this.queuedBytes = 0
     this.pending = false

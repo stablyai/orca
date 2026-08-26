@@ -87,7 +87,11 @@ export class Session {
       onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
     this.shellReady.startPromptReadinessProbe()
-    this.subprocess.onData((data) => this.handleSubprocessData(data))
+    this.subprocess.onData((data) => {
+      if (!this._disposed) {
+        this.shellReady.ingestSubprocessData(data)
+      }
+    })
     this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
@@ -283,6 +287,9 @@ export class Session {
       return
     }
 
+    // Why first: a dispose mid-episode must deliver the barrier's queued bytes
+    // while clients are still attached and the emulator still accepts writes.
+    this.recoveryBarrier.flushPending()
     // Why: `wasTerminating` below must be read BEFORE the `_state = 'exited'` flip — it guards the
     // "dispose while kill() in flight" case and the invariant needs the pre-flip `_state`; do NOT move it down.
     this.shellReady.releaseDeviceAttributes()
@@ -345,19 +352,16 @@ export class Session {
     this.termination.disposeSubprocessHandle()
   }
 
-  private handleSubprocessData(data: string): void {
-    if (this._disposed) {
-      return
-    }
-    this.shellReady.ingestSubprocessData(data)
-  }
-
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     this.termination.markPhysicalExit()
     if (this._disposed) {
       return
     }
 
+    // Why first: a shell exiting mid-proof must not strand the barrier's queued
+    // bytes — the post-133;D prompt and exit banner belong to clients, records,
+    // and history; the reaper's dispose() runs synchronously from onSessionExit.
+    this.recoveryBarrier.flushPending()
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()

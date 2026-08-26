@@ -5072,6 +5072,8 @@
         "Visible Electron evidence is macOS-only.",
         "Direct SSH intentionally fails closed to current-main behavior because foreground proof would inherit transport timeout and enumeration ambiguity.",
         "WSL and Windows ConPTY process-membership behavior has no physical-host proof yet.",
+        "Any stopped (Ctrl-Z) descendant in the shell's tree refutes the proof, so a suspended unrelated job silently disables recovery for that pane (fails closed to incumbent behavior).",
+        "Attach, snapshot RPC, and remote serialize paths each inherit a bounded (750ms) settle wait while a proof is in flight; a remote attach immediately after a TUI exit can stack the daemon and mirror budgets to roughly 1.5s worst case.",
         "Paired headed and headless remote-runtime topologies have not yet run the full pointer-input oracle."
       ],
       "demotionRule": "Keep experimental or demote if missing ownership proof changes incumbent behavior, a live TUI loses mouse/focus modes, foreground inspection enters ordinary output/reveal paths, or the focused Electron journey flakes without an identified product or harness fault."
