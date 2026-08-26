@@ -13,6 +13,10 @@ export type RuntimeTransportMetadata =
       kind: 'websocket'
       endpoint: string
     }
+  | {
+      kind: 'local-tcp'
+      endpoint: string
+    }
 
 export type RuntimeMetadata = {
   runtimeId: string

@@ -1177,32 +1177,47 @@ export class OrcaRuntimeRpcServer {
       keepaliveIntervalMs: this.keepaliveIntervalMs
     })
 
-    // Why: the `.catch` guarantees reply() always fires so a throw can't strand the client or leak the AbortController.
-    socketTransport.onMessage((msg, reply, context) => {
-      void this.handleMessage(msg, context)
-        .then((response) => {
-          reply(JSON.stringify(response))
-        })
-        .catch((error) => {
-          const message = error instanceof Error ? error.message : String(error)
-          // Why: best-effort id recovery so the client can correlate the error frame to its pending request.
-          let id = 'unknown'
-          try {
-            const parsed = JSON.parse(msg) as { id?: unknown }
-            if (typeof parsed.id === 'string' && parsed.id.length > 0) {
-              id = parsed.id
+    const attachLocalHandler = (transport: UnixSocketTransport): void => {
+      transport.onMessage((msg, reply, context) => {
+        void this.handleMessage(msg, context)
+          .then((response) => reply(JSON.stringify(response)))
+          .catch((error) => {
+            const message = error instanceof Error ? error.message : String(error)
+            let id = 'unknown'
+            try {
+              const parsed = JSON.parse(msg) as { id?: unknown }
+              if (typeof parsed.id === 'string' && parsed.id.length > 0) {
+                id = parsed.id
+              }
+            } catch {
+              // Best-effort id recovery.
             }
-          } catch {
-            // ignore — fall through with id='unknown'
-          }
-          reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
-        })
-    })
+            reply(JSON.stringify(this.buildError(id, 'internal_error', message)))
+          })
+      })
+    }
+    attachLocalHandler(socketTransport)
 
     await socketTransport.start()
 
     const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
+
+    if (this.platform === 'win32') {
+      const tcpTransport = new UnixSocketTransport({
+        endpoint: { host: '127.0.0.1', port: 0 },
+        kind: 'local-tcp',
+        keepaliveIntervalMs: this.keepaliveIntervalMs
+      })
+      attachLocalHandler(tcpTransport)
+      try {
+        await tcpTransport.start()
+        activeTransports.push(tcpTransport)
+        transportsMeta.push({ kind: 'local-tcp', endpoint: tcpTransport.resolvedEndpoint })
+      } catch (error) {
+        console.error('[runtime] Failed to start local TCP fallback transport:', error)
+      }
+    }
 
     // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {

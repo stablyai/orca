@@ -1,5 +1,5 @@
-// Why: this is the original Unix socket / named pipe transport extracted from
-// runtime-rpc.ts. It preserves the exact same behavior: newline-delimited JSON,
+// Why: local Unix, named-pipe, and loopback TCP endpoints share one authenticated
+// newline-delimited RPC lifecycle instead of drifting across fallback transports:
 // 30s idle timeout, 1MB max message, 32 max connections, chmod 0o600 on Unix.
 // It also owns the keepalive timer and per-connection abort signal so the
 // server-side handler can cancel long-poll dispatches when the client goes
@@ -14,8 +14,8 @@ const MAX_RUNTIME_RPC_CONNECTIONS = 32
 const DEFAULT_KEEPALIVE_INTERVAL_MS = 10_000
 
 export type UnixSocketTransportOptions = {
-  endpoint: string
-  kind: 'unix' | 'named-pipe'
+  endpoint: string | { host: '127.0.0.1'; port: number }
+  kind: 'unix' | 'named-pipe' | 'local-tcp'
   // Why: how often to write `{"_keepalive":true}\n` frames while a dispatch
   // is pending. Each write resets both the server-side idle timer and, once
   // the client honours them, the client-side idle timer. Tests override this
@@ -30,8 +30,8 @@ type MessageHandler = (
 ) => void
 
 export class UnixSocketTransport implements RpcTransport {
-  private readonly endpoint: string
-  private readonly kind: 'unix' | 'named-pipe'
+  private readonly endpoint: string | { host: '127.0.0.1'; port: number }
+  private readonly kind: 'unix' | 'named-pipe' | 'local-tcp'
   private readonly keepaliveIntervalMs: number
   private server: Server | null = null
   private messageHandler: MessageHandler | null = null
@@ -47,12 +47,23 @@ export class UnixSocketTransport implements RpcTransport {
     this.messageHandler = handler
   }
 
+  get resolvedEndpoint(): string {
+    if (this.kind !== 'local-tcp') {
+      return String(this.endpoint)
+    }
+    const address = this.server?.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Loopback TCP transport is not listening.')
+    }
+    return `tcp://127.0.0.1:${address.port}`
+  }
+
   async start(): Promise<void> {
     if (this.server) {
       return
     }
 
-    if (this.kind === 'unix' && existsSync(this.endpoint)) {
+    if (this.kind === 'unix' && typeof this.endpoint === 'string' && existsSync(this.endpoint)) {
       rmSync(this.endpoint, { force: true })
     }
 
@@ -63,13 +74,17 @@ export class UnixSocketTransport implements RpcTransport {
 
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject)
-      server.listen(this.endpoint, () => {
+      const listenTarget =
+        this.kind === 'local-tcp' && typeof this.endpoint !== 'string'
+          ? this.endpoint
+          : String(this.endpoint)
+      server.listen(listenTarget, () => {
         server.off('error', reject)
         resolve()
       })
     })
 
-    if (this.kind === 'unix') {
+    if (this.kind === 'unix' && typeof this.endpoint === 'string') {
       chmodSync(this.endpoint, 0o600)
     }
 
@@ -97,7 +112,7 @@ export class UnixSocketTransport implements RpcTransport {
       socket.destroy()
     }
     await closePromise
-    if (this.kind === 'unix' && existsSync(this.endpoint)) {
+    if (this.kind === 'unix' && typeof this.endpoint === 'string' && existsSync(this.endpoint)) {
       rmSync(this.endpoint, { force: true })
     }
   }

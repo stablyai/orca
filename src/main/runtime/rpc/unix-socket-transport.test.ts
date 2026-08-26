@@ -75,3 +75,16 @@ describe('UnixSocketTransport', () => {
     expect(socket.writes).toHaveLength(1)
   })
 })
+
+describe('loopback TCP transport', () => {
+  it('binds an OS-assigned port only on IPv4 loopback', async () => {
+    const transport = new UnixSocketTransport({
+      endpoint: { host: '127.0.0.1', port: 0 },
+      kind: 'local-tcp'
+    })
+
+    await transport.start()
+    expect(transport.resolvedEndpoint).toMatch(/^tcp:\/\/127\.0\.0\.1:\d+$/)
+    await transport.stop()
+  })
+})

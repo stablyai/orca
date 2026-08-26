@@ -5,7 +5,8 @@ import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
-import { sendRequest } from './transport'
+import { mapRuntimeConnectError, sendRequest, shouldUseLocalTcpFallback } from './transport'
+import { RuntimeClientError } from './types'
 
 const servers = new Set<ReturnType<typeof createServer>>()
 const sockets = new Set<Socket>()
@@ -45,6 +46,61 @@ describe('runtime transport timeout validation', () => {
       )
     }
   )
+})
+
+describe('runtime transport connection errors', () => {
+  it.each(['EPERM', 'EACCES'] as const)(
+    'preserves %s instead of recommending a restart',
+    (code) => {
+      const failure = mapRuntimeConnectError(
+        Object.assign(new Error('denied'), { code, errno: -4048, syscall: 'connect' }),
+        'named-pipe'
+      )
+
+      expect(failure).toBeInstanceOf(RuntimeClientError)
+      expect(failure).toMatchObject({
+        code: 'runtime_permission_denied',
+        data: {
+          transportKind: 'named-pipe',
+          osErrorCode: code,
+          osErrorNumber: -4048,
+          syscall: 'connect'
+        }
+      })
+      expect(failure.message).not.toContain('Restart Orca and try again')
+    }
+  )
+
+  it('keeps a missing endpoint in the generic unavailable class', () => {
+    const failure = mapRuntimeConnectError(
+      Object.assign(new Error('missing'), { code: 'ENOENT', syscall: 'connect' }),
+      'named-pipe'
+    )
+
+    expect(failure).toMatchObject({ code: 'runtime_unavailable' })
+  })
+})
+
+describe('local TCP fallback admission', () => {
+  const denied = new RuntimeClientError('runtime_permission_denied', 'denied')
+
+  it('admits only a loopback fallback after named-pipe permission denial', () => {
+    expect(shouldUseLocalTcpFallback(denied, 'named-pipe', 'tcp://127.0.0.1:54321')).toBe(true)
+  })
+
+  it.each([
+    [
+      new RuntimeClientError('runtime_unavailable', 'missing'),
+      'named-pipe',
+      'tcp://127.0.0.1:54321'
+    ],
+    [denied, 'unix', 'tcp://127.0.0.1:54321'],
+    [denied, 'named-pipe', 'tcp://0.0.0.0:54321'],
+    [denied, 'named-pipe', 'tcp://127.0.0.1:0'],
+    [denied, 'named-pipe', undefined]
+  ] as const)('rejects a non-permission or non-loopback fallback', (error, kind, endpoint) => {
+    expect(shouldUseLocalTcpFallback(error, kind, endpoint)).toBe(false)
+  })
 })
 
 // Why: these tests create Unix domain socket servers in temp directories.
