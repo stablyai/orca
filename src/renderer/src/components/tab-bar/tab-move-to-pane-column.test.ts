@@ -209,6 +209,20 @@ describe('tab-move-to-pane-column', () => {
     expect(dropUnifiedTab).not.toHaveBeenCalled()
   })
 
+  it('falls back to the first layout group when no active group is recorded', () => {
+    const dropUnifiedTab = vi.fn(() => true)
+    useAppStore.setState({
+      dropUnifiedTab,
+      activeGroupIdByWorktree: {}
+    } as Partial<ReturnType<typeof useAppStore.getState>>)
+
+    expect(moveActiveTabToNextPaneColumn('right')).toBe(true)
+    expect(dropUnifiedTab).toHaveBeenCalledWith('tab-a', {
+      groupId: 'group-1',
+      splitDirection: 'right'
+    })
+  })
+
   it('is a no-op without an active worktree', () => {
     const dropUnifiedTab = vi.fn(() => true)
     useAppStore.setState({

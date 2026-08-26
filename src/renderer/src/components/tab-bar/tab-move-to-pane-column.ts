@@ -58,7 +58,13 @@ export function moveActiveTabToNextPaneColumn(direction: TabSplitDirection): boo
   if (!worktreeId) {
     return false
   }
-  const groupId = state.activeGroupIdByWorktree[worktreeId]
+  const leaves = flattenLayoutLeaves(state.layoutByWorktree[worktreeId])
+  // Why: activeGroupIdByWorktree is only populated once a group interaction happened;
+  // a fresh single-group window has no entry, so fall back to the layout's first leaf.
+  const groupId =
+    state.activeGroupIdByWorktree[worktreeId] ??
+    leaves[0] ??
+    (state.groupsByWorktree[worktreeId] ?? [])[0]?.id
   if (!groupId) {
     return false
   }
@@ -69,7 +75,6 @@ export function moveActiveTabToNextPaneColumn(direction: TabSplitDirection): boo
   if (!unifiedTabId) {
     return false
   }
-  const leaves = flattenLayoutLeaves(state.layoutByWorktree[worktreeId])
   const activeLeafIndex = leaves.indexOf(groupId)
   const nextGroupId = activeLeafIndex === -1 ? undefined : leaves[activeLeafIndex + 1]
   if (nextGroupId) {
