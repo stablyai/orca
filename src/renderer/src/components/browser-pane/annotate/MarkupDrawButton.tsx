@@ -12,6 +12,8 @@ export type MarkupDrawButtonProps = {
   onClick: () => void
   disabled?: boolean
   active?: boolean
+  /** While a recorder session is active, the icon signals log-instead-of-copy. */
+  recordActive?: boolean
   /**
    * The browser pane's isActive. Required (no default) so every caller must
    * decide explicitly — inactive/hidden tabs cannot force-open a portaled
@@ -27,6 +29,7 @@ export function MarkupDrawButton({
   onClick,
   disabled,
   active,
+  recordActive,
   surfaceActive,
   className
 }: MarkupDrawButtonProps): React.JSX.Element {
@@ -72,7 +75,7 @@ export function MarkupDrawButton({
       aria-label={label}
       aria-pressed={active}
     >
-      <PenTool className="size-4" />
+      <PenTool className={cn('size-4', recordActive && !active && 'text-destructive')} />
     </Button>
   )
 
@@ -130,8 +133,12 @@ export function MarkupDrawButton({
             </div>
             <p className="text-xs leading-5 text-muted-foreground">
               {translate(
-                'auto.components.browser-pane.markup.drawHint',
-                'Draw on the page, then copy the markup to paste into your agent.'
+                recordActive
+                  ? 'auto.components.browser-pane.markup.hintRecording'
+                  : 'auto.components.browser-pane.markup.hint',
+                recordActive
+                  ? 'Draw on the page, then add it to the recording log.'
+                  : 'Draw on the page, then copy the markup to paste into your agent.'
               )}
             </p>
           </div>

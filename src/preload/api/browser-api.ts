@@ -28,6 +28,10 @@ import type {
   BrowserPopupEvent
 } from '../../shared/browser-guest-events'
 import type {
+  BrowserRecorderOptions,
+  BrowserRecorderStreamEvent
+} from '../../shared/browser-recorder-automation'
+import type {
   BrowserCertificateFailure,
   BrowserCertificateProceedResult,
   BrowserCookieImportResult,
@@ -128,6 +132,14 @@ export type BrowserApi = {
   onGrabActionShortcut: (
     callback: (args: { browserPageId: string; key: 'c' | 's' }) => void
   ) => () => void
+  setRecorderEnabled: (args: {
+    enabled: boolean
+    browserPageId?: string
+    worktreeId?: string
+    options?: Partial<BrowserRecorderOptions>
+  }) => Promise<boolean>
+  setRecorderOptions: (args: { options: Partial<BrowserRecorderOptions> }) => Promise<boolean>
+  onRecorderEvent: (callback: (event: BrowserRecorderStreamEvent) => void) => () => void
   sessionListProfiles: () => Promise<BrowserSessionProfile[]>
   /** Resolves once the SSH workspace's partition is bound and proxy-verified; the webview must wait for it. */
   prepareSshWorkspacePartition: (args: {

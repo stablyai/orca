@@ -1,7 +1,12 @@
-import { ipcMain, webContents } from 'electron'
+import { BrowserWindow, ipcMain, webContents } from 'electron'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserActionRecorder } from '../browser/browser-action-recorder'
+import {
+  normalizeRecorderOptions,
+  type BrowserRecorderOptions
+} from '../../shared/browser-recorder-automation'
 import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 import {
   isLiveBrowserWebContentsId,
@@ -41,9 +46,46 @@ export function registerBrowserHandlers(): void {
   ipcMain.removeHandler('browser:isGuestRegistered')
   ipcMain.removeHandler('browser:repairGuestRegistration')
   ipcMain.removeHandler('browser:unregisterGuest')
+  ipcMain.removeHandler('browser:setRecorderEnabled')
+  ipcMain.removeHandler('browser:setRecorderOptions')
   ipcMain.removeHandler('browser:activeTabChanged')
   ipcMain.removeHandler('browser:proceedCertificate')
   ipcMain.removeHandler('browser:respondWebAuthnAccount')
+
+  // Why: the renderer's recorder toggle owns the session; main only captures
+  // while enabled and streams action records back over browser:recorder-action.
+  ipcMain.handle(
+    'browser:setRecorderEnabled',
+    (
+      _event,
+      args: {
+        enabled?: boolean
+        browserPageId?: string
+        worktreeId?: string
+        options?: Partial<BrowserRecorderOptions>
+      }
+    ) => {
+      return browserActionRecorder.setEnabled(
+        args?.enabled === true,
+        { worktreeId: args?.worktreeId, browserPageId: args?.browserPageId },
+        {
+          getBridge: () => agentBrowserBridgeRef,
+          getWindow: () => BrowserWindow.fromWebContents(_event.sender) ?? undefined
+        },
+        normalizeRecorderOptions(args?.options)
+      )
+    }
+  )
+
+  // Why: the checkbox menu toggles streams mid-session — a separate channel
+  // so the recording keeps running while options change.
+  ipcMain.handle(
+    'browser:setRecorderOptions',
+    (_event, args: { options?: Partial<BrowserRecorderOptions> }) => {
+      browserActionRecorder.setOptions(normalizeRecorderOptions(args?.options))
+      return true
+    }
+  )
 
   const registerGuest = (
     event: Electron.IpcMainInvokeEvent,

@@ -24,6 +24,13 @@ import {
 } from '../describe-page/browser-annotation-geometry'
 import { runBrowserGrabActionShortcut } from './browser-page-grab-action'
 import type { BrowserPageGrabToastState, GrabIntent } from '../describe-page/browser-page-types'
+import {
+  logGrabAnnotationAdded,
+  logGrabElementSelected,
+  type BrowserGrabRecorder
+} from './browser-grab-recorder'
+import { useBrowserPageOverlayViewportSync } from './use-browser-page-overlay-viewport-sync'
+import { useBrowserPageGrabToast } from './use-browser-page-grab-toast'
 
 const copiedGrabToastMessage = (): string =>
   translate(
@@ -49,7 +56,8 @@ export function useBrowserPageGrabAnnotations({
   webviewRef,
   setBrowserOverlayViewport,
   browserAnnotationsLength,
-  setBrowserAnnotationTrayOpen
+  setBrowserAnnotationTrayOpen,
+  recorder
 }: {
   browserTabId: string
   isActive: boolean
@@ -59,6 +67,7 @@ export function useBrowserPageGrabAnnotations({
   setBrowserOverlayViewport: Dispatch<SetStateAction<BrowserOverlayViewport>>
   browserAnnotationsLength: number
   setBrowserAnnotationTrayOpen: Dispatch<SetStateAction<boolean>>
+  recorder?: BrowserGrabRecorder
 }): {
   grabIntent: GrabIntent
   startGrabIntent: (nextIntent: GrabIntent) => void
@@ -76,16 +85,25 @@ export function useBrowserPageGrabAnnotations({
   handleGrabActionShortcut: (key: 'c' | 's') => void
 } {
   const browserTabIdRef = useRef(browserTabId)
-  const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
   const [pendingAnnotationPayload, setPendingAnnotationPayload] =
     useState<BrowserGrabPayload | null>(null)
   const pendingAnnotationPayloadRef = useRef<BrowserGrabPayload | null>(null)
-  // Inline toast near the grabbed element (below, or above near the viewport bottom) so it doesn't occlude the selection.
-  const [grabToast, setGrabToast] = useState<BrowserPageGrabToastState | null>(null)
   const grabRef = useRef(grab)
   const grabPayloadRef = useRef(grab.payload)
+  // Why: callers build the recorder object inline (new reference per render);
+  // the confirming effect must not re-fire on identity churn.
+  const recorderRef = useRef(recorder)
+  recorderRef.current = recorder
+  const toast = useBrowserPageGrabToast({
+    containerRef,
+    webviewRef,
+    grabRef,
+    grabIntentRef,
+    pendingAnnotationPayloadRef
+  })
+  const { showGrabToast, dismissGrabToast } = toast
 
   useLayoutEffect(() => {
     browserTabIdRef.current = browserTabId
@@ -99,53 +117,13 @@ export function useBrowserPageGrabAnnotations({
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const addBrowserPageAnnotation = useAppStore((s) => s.addBrowserPageAnnotation)
 
-  useEffect(() => {
-    return () => {
-      clearTimeout(grabToastTimerRef.current)
-    }
-  }, [])
-
-  const dismissGrabToast = useCallback(() => {
-    clearTimeout(grabToastTimerRef.current)
-    setGrabToast(null)
-    // Why: only rearm while 'confirming'; if a C/S shortcut already rearmed (state 'armed'), skip to avoid a double-rearm race.
-    if (
-      grabRef.current.state === 'confirming' &&
-      !(grabIntentRef.current === 'annotate' && pendingAnnotationPayloadRef.current)
-    ) {
-      grabRef.current.rearm()
-    }
-  }, [])
-
-  const showGrabToast = useCallback(
-    (message: string, type: 'success' | 'error', payload?: BrowserGrabPayload | null) => {
-      let x = 0
-      let y = 0
-      let below = true
-      const containerRect = containerRef.current?.getBoundingClientRect()
-      if (payload) {
-        const rect = payload.target.rectViewport
-        const webview = webviewRef.current
-        const webviewRect = webview?.getBoundingClientRect()
-        const offsetX = (webviewRect?.left ?? 0) - (containerRect?.left ?? 0)
-        const offsetY = (webviewRect?.top ?? 0) - (containerRect?.top ?? 0)
-        x = offsetX + rect.x + rect.width / 2
-        const elementBottom = offsetY + rect.y + rect.height
-        const elementTop = offsetY + rect.y
-        const containerHeight = containerRect?.height ?? 0
-        // Show below the element unless it's too close to the bottom edge
-        below = elementBottom + 52 < containerHeight
-        y = below ? elementBottom : elementTop
-      } else if (containerRect) {
-        x = containerRect.width / 2
-        y = containerRect.height / 2
-      }
-      clearTimeout(grabToastTimerRef.current)
-      setGrabToast({ message, type, x, y, below, payload: payload ?? null })
-      grabToastTimerRef.current = setTimeout(() => dismissGrabToast(), 2000)
-    },
-    [containerRef, dismissGrabToast, webviewRef]
-  )
+  useBrowserPageOverlayViewportSync({
+    isActive,
+    pendingAnnotationPayload,
+    browserAnnotationsLength,
+    containerRef,
+    setBrowserOverlayViewport
+  })
 
   // Why: the same in-guest picker powers two flows — Cmd/Ctrl+C copies, the toolbar action creates a pending annotation.
   useEffect(() => {
@@ -153,14 +131,26 @@ export function useBrowserPageGrabAnnotations({
       return
     }
     if (grabIntent === 'annotate') {
+      // Why: the annotate flow skips the copy path below, but the pick itself
+      // is still a user action — log it so pick → comment reads as one story.
+      logGrabElementSelected(recorderRef.current, grab.payload)
       setPendingAnnotationPayload(grab.payload)
       return
     }
+    // Why: log every picked element while recording — the requirement is "where
+    // did the user click", so right-click picks are logged too, before the
+    // context-menu action (copy/screenshot) runs.
+    logGrabElementSelected(recorderRef.current, grab.payload)
     if (!grab.contextMenu) {
-      const text = formatGrabPayloadAsText(grab.payload)
-      void window.api.ui.writeClipboardText(text)
-      recordFeatureInteraction('browser-grab')
-      showGrabToast(copiedGrabToastMessage(), 'success', grab.payload)
+      if (recorderRef.current?.recordingRef.current) {
+        // Why: while recording the pick is logged (above) but not copied.
+        showGrabToast('Added to recording log', 'success', grab.payload)
+      } else {
+        const text = formatGrabPayloadAsText(grab.payload)
+        void window.api.ui.writeClipboardText(text)
+        recordFeatureInteraction('browser-grab')
+        showGrabToast(copiedGrabToastMessage(), 'success', grab.payload)
+      }
     }
   }, [
     grab.state,
@@ -169,33 +159,6 @@ export function useBrowserPageGrabAnnotations({
     grabIntent,
     recordFeatureInteraction,
     showGrabToast
-  ])
-
-  useEffect(() => {
-    if (!isActive || (!pendingAnnotationPayload && browserAnnotationsLength === 0)) {
-      return
-    }
-
-    const observedContainer = containerRef.current
-    const resizeObserver =
-      typeof ResizeObserver === 'undefined' || !observedContainer
-        ? null
-        : new ResizeObserver(() => {
-            setBrowserOverlayViewport((current) => ({ ...current, version: current.version + 1 }))
-          })
-    if (resizeObserver && observedContainer) {
-      resizeObserver.observe(observedContainer)
-    }
-
-    return () => {
-      resizeObserver?.disconnect()
-    }
-  }, [
-    browserAnnotationsLength,
-    containerRef,
-    isActive,
-    pendingAnnotationPayload,
-    setBrowserOverlayViewport
   ])
 
   const startGrabIntent = useCallback(
@@ -207,6 +170,10 @@ export function useBrowserPageGrabAnnotations({
       setGrabIntent(nextIntent)
       if (nextIntent === 'copy') {
         setPendingAnnotationPayload(null)
+      } else if (recorder?.recordingRef.current) {
+        // Why: while recording annotations land in the session log — keep the
+        // annotations tray closed through the whole annotate flow.
+        setBrowserAnnotationTrayOpen(false)
       } else {
         setBrowserAnnotationTrayOpen(true)
       }
@@ -214,7 +181,7 @@ export function useBrowserPageGrabAnnotations({
         grab.toggle()
       }
     },
-    [grab, grabIntent, recordFeatureInteraction, setBrowserAnnotationTrayOpen]
+    [grab, grabIntent, recordFeatureInteraction, recorder, setBrowserAnnotationTrayOpen]
   )
 
   // C / S copy the hovered element without clicking: extract via IPC while armed/awaiting, else use the captured payload.
@@ -227,10 +194,11 @@ export function useBrowserPageGrabAnnotations({
         grabPayloadRef,
         browserTabIdRef,
         recordFeatureInteraction,
-        showGrabToast
+        showGrabToast,
+        recorder
       })
     },
-    [grab, grabIntent, recordFeatureInteraction, showGrabToast]
+    [grab, grabIntent, recordFeatureInteraction, recorder, showGrabToast]
   )
 
   const handleGrabCopy = useCallback(() => {
@@ -239,17 +207,27 @@ export function useBrowserPageGrabAnnotations({
     if (!payload) {
       return
     }
+    if (recorder?.recordingRef.current) {
+      showGrabToast('Added to recording log', 'success', payload)
+      grab.rearm()
+      return
+    }
     const text = formatGrabPayloadAsText(payload)
     void window.api.ui.writeClipboardText(text)
     recordFeatureInteraction('browser-grab')
     showGrabToast(copiedGrabToastMessage(), 'success', payload)
     grab.rearm()
-  }, [grab, recordFeatureInteraction, showGrabToast])
+  }, [grab, recordFeatureInteraction, recorder, showGrabToast])
 
   const handleGrabCopyScreenshot = useCallback(() => {
     grabMenuActionTakenRef.current = true
     const payload = grabPayloadRef.current
     if (!payload) {
+      return
+    }
+    if (recorder?.recordingRef.current) {
+      showGrabToast('Added to recording log', 'success', payload)
+      grab.rearm()
       return
     }
     const dataUrl = payload.screenshot?.dataUrl
@@ -260,7 +238,7 @@ export function useBrowserPageGrabAnnotations({
     recordFeatureInteraction('browser-grab')
     showGrabToast(screenshottedGrabToastMessage(), 'success', payload)
     grab.rearm()
-  }, [grab, recordFeatureInteraction, showGrabToast])
+  }, [grab, recordFeatureInteraction, recorder, showGrabToast])
 
   const handleAddBrowserAnnotation = useCallback(
     (comment: string, intent: BrowserAnnotationIntent): void => {
@@ -278,9 +256,19 @@ export function useBrowserPageGrabAnnotations({
         payload: createBrowserAnnotationPayload(payload)
       })
       recordFeatureInteraction('browser-annotations')
+      logGrabAnnotationAdded(recorder, payload, comment, intent)
       setPendingAnnotationPayload(null)
-      setBrowserAnnotationTrayOpen(true)
-      showGrabToast(annotationAddedGrabToastMessage(), 'success', payload)
+      if (recorder?.recordingRef.current) {
+        // Why: while recording the annotation already lands in the session
+        // log — keep the tray closed (it may have been open before) and
+        // confirm via toast instead.
+        setBrowserAnnotationTrayOpen(false)
+        showGrabToast('Annotation added to recording log', 'success', payload)
+      } else {
+        setBrowserAnnotationTrayOpen(true)
+        recordFeatureInteraction('browser-annotations')
+        showGrabToast(annotationAddedGrabToastMessage(), 'success', payload)
+      }
       grab.rearm()
     },
     [
@@ -289,6 +277,7 @@ export function useBrowserPageGrabAnnotations({
       grab,
       pendingAnnotationPayload,
       recordFeatureInteraction,
+      recorder,
       setBrowserAnnotationTrayOpen,
       showGrabToast
     ]
@@ -306,9 +295,9 @@ export function useBrowserPageGrabAnnotations({
     startGrabIntent,
     pendingAnnotationPayload,
     setPendingAnnotationPayload,
-    grabToast,
-    setGrabToast,
-    grabToastTimerRef,
+    grabToast: toast.grabToast,
+    setGrabToast: toast.setGrabToast,
+    grabToastTimerRef: toast.grabToastTimerRef,
     dismissGrabToast,
     handleGrabCopy,
     handleGrabCopyScreenshot,

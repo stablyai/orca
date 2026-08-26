@@ -38,6 +38,7 @@ import { useBrowserPageWebviewLifecycle } from '../host-guest/use-browser-page-w
 import { useBrowserPageWebviewPartition } from '../host-guest/use-browser-page-webview-partition'
 import { useBrowserPageWebviewUrlSync } from '../navigate/use-browser-page-webview-url-sync'
 import { useBrowserPageZoomFeedback } from '../host-guest/use-browser-page-zoom-feedback'
+import { useBrowserPageRecorderSession } from './use-browser-page-recorder-session'
 
 export function BrowserPagePane({
   browserTab,
@@ -135,12 +136,33 @@ export function BrowserPagePane({
     addressBarInputRef,
     guestFocus
   })
+  const recorderSession = useBrowserPageRecorderSession(browserTab)
+  const {
+    recorder,
+    recorderCopied,
+    recorderRecordingRef,
+    recordRecorderStep,
+    handleToggleBrowserRecorder,
+    handleCopyBrowserRecorderLog,
+    handleClearBrowserRecorderLog
+  } = recorderSession
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,
-    worktreeId
+    worktreeId,
+    recorder: {
+      recordingRef: recorderRecordingRef,
+      recordStep: recordRecorderStep,
+      pageUrl: browserTab.url,
+      pageTitle: browserTab.title
+    }
   })
   const grab = useGrabMode(browserTab.id)
-  const markup = useBrowserPageMarkupCapture(webviewRef, containerRef)
+  const markup = useBrowserPageMarkupCapture(webviewRef, containerRef, {
+    recordingRef: recorderRecordingRef,
+    recordStep: recordRecorderStep,
+    pageUrl: browserTab.url,
+    pageTitle: browserTab.title
+  })
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: browserTab.id,
     isActive,
@@ -149,7 +171,11 @@ export function BrowserPagePane({
     webviewRef,
     setBrowserOverlayViewport,
     browserAnnotationsLength: annotationSend.browserAnnotations.length,
-    setBrowserAnnotationTrayOpen: annotationSend.setBrowserAnnotationTrayOpen
+    setBrowserAnnotationTrayOpen: annotationSend.setBrowserAnnotationTrayOpen,
+    recorder: {
+      recordingRef: recorderRecordingRef,
+      recordStep: recordRecorderStep
+    }
   })
   const nav = useBrowserPageNavigationDownloads({
     browserTabId: browserTab.id,
@@ -339,6 +365,8 @@ export function BrowserPagePane({
         isBlankTab={isBlankTab}
         resourceNotice={resourceNotice}
         setResourceNotice={setResourceNotice}
+        recorder={recorder}
+        onToggleRecorder={handleToggleBrowserRecorder}
       />
       {pageViewport?.container
         ? createPortal(
@@ -366,6 +394,10 @@ export function BrowserPagePane({
               grab={grab}
               annotationSend={annotationSend}
               grabAnnotations={grabAnnotations}
+              recorder={recorder}
+              recorderCopied={recorderCopied}
+              onCopyRecorderLog={handleCopyBrowserRecorderLog}
+              onClearRecorderLog={handleClearBrowserRecorderLog}
             />,
             pageViewport.container
           )

@@ -1,6 +1,7 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { cn } from '@/lib/utils'
 import {
+  CircleDot,
   Crosshair,
   ExternalLink,
   Loader2,
@@ -30,6 +31,8 @@ import { readBrowserHtmlArtifactRequest } from '../describe-page/browser-artifac
 import type { GrabModeHook } from '../annotate/useGrabMode'
 import type { BrowserViewportPresetId } from '../../../../../shared/browser-workspace-types'
 import type { GrabIntent } from '../describe-page/browser-page-types'
+import { BrowserRecorderOptionsMenu } from '../BrowserRecorderOptionsMenu'
+import type { BrowserRecorderHook } from '../useBrowserRecorder'
 
 export function BrowserPageToolbar({
   browserPageId,
@@ -66,7 +69,9 @@ export function BrowserPageToolbar({
   browserAnnotationsLength,
   shareableArtifactFile,
   currentBrowserUrl,
-  externalUrl
+  externalUrl,
+  recorder,
+  onToggleRecorder
 }: {
   browserPageId: string
   workspaceId: string
@@ -103,6 +108,8 @@ export function BrowserPageToolbar({
   shareableArtifactFile: { filePath: string } | null
   currentBrowserUrl: string
   externalUrl: string | null
+  recorder: BrowserRecorderHook
+  onToggleRecorder: () => void
 }): React.JSX.Element {
   return (
     <BrowserNavigationControlRow
@@ -202,7 +209,12 @@ export function BrowserPageToolbar({
               )}
               data-contextual-tour-target="browser-grab-control"
             >
-              <Crosshair className="size-4" />
+              <Crosshair
+                className={cn(
+                  'size-4',
+                  recorder.recording && grab.state === 'idle' && 'text-destructive'
+                )}
+              />
             </Button>
           </span>
         </TooltipTrigger>
@@ -236,7 +248,12 @@ export function BrowserPageToolbar({
               )}
               data-contextual-tour-target="browser-annotation-control"
             >
-              <MessageSquarePlus className="size-4" />
+              <MessageSquarePlus
+                className={cn(
+                  'size-4',
+                  recorder.recording && grab.state === 'idle' && 'text-destructive'
+                )}
+              />
               {browserAnnotationsLength > 0 ? (
                 <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
                   {browserAnnotationsLength}
@@ -253,10 +270,62 @@ export function BrowserPageToolbar({
         </TooltipContent>
       </Tooltip>
 
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {/* Why: disabled <button> drops hover events, so wrap in a span so the tooltip trigger still fires. */}
+          <span className="inline-flex">
+            <BrowserRecorderOptionsMenu options={recorder.options} onToggle={recorder.setOption}>
+              <Button
+                size="icon"
+                variant={recorder.recording ? 'default' : 'ghost'}
+                className={cn(
+                  'relative h-8 w-8',
+                  recorder.recording &&
+                    'bg-destructive text-destructive-foreground hover:bg-destructive/90'
+                )}
+                onClick={onToggleRecorder}
+                aria-label={
+                  recorder.recording
+                    ? translate(
+                        'auto.components.browser.pane.BrowserPane.f039b073be',
+                        'Stop recording'
+                      )
+                    : translate(
+                        'auto.components.browser.pane.BrowserPane.c220f1eac9',
+                        'Record browser actions'
+                      )
+                }
+                data-contextual-tour-target="browser-recorder-control"
+              >
+                <CircleDot className="size-4" />
+                {recorder.stepCount > 0 ? (
+                  <span className="absolute -top-1 -right-1 flex min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] leading-4 text-primary-foreground">
+                    {recorder.stepCount}
+                  </span>
+                ) : null}
+              </Button>
+            </BrowserRecorderOptionsMenu>
+          </span>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" sideOffset={4}>
+          {recorder.recording
+            ? translate(
+                'auto.components.browser.pane.BrowserPane.c2778b3d98',
+                'Stop recording ({{value0}} steps)',
+                { value0: recorder.stepCount }
+              )
+            : translate(
+                'auto.components.browser.pane.BrowserPane.c220f1eac9',
+                'Record browser actions'
+              )}
+        </TooltipContent>
+      </Tooltip>
+
       <MarkupDrawButton
         onClick={() => (markupIsActive ? markupCancel() : void markupStart())}
         disabled={isBlankTab || grab.state !== 'idle'}
         active={markupIsActive}
+        recordActive={recorder.recording}
         surfaceActive={isActive}
       />
 

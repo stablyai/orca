@@ -1,0 +1,643 @@
+import { describe, expect, it, vi } from 'vitest'
+import { BrowserActionRecorder } from './browser-action-recorder'
+import {
+  compactOriginStack,
+  parseBrowserInteractionMessage,
+  parseBrowserRequestMessage,
+  redactPostData,
+  redactRequestUrl,
+  redactResponseText
+} from './browser-recorder-message-parsing'
+import {
+  BROWSER_RECORDER_ACTION_CHANNEL,
+  normalizeRecorderOptions,
+  type BrowserRecorderOptions
+} from '../../shared/browser-recorder-automation'
+
+describe('recorder message parsers', () => {
+  it('parses typing bursts, keys, hovers, and requests from tagged lines', () => {
+    expect(
+      parseBrowserInteractionMessage(
+        `__orca_recorder__ ${JSON.stringify({ type: 'type', text: 'ABC', target: '#stok_kod' })}`
+      )
+    ).toEqual({ type: 'type', text: 'ABC', target: '#stok_kod' })
+    expect(
+      parseBrowserInteractionMessage(
+        `__orca_recorder__ ${JSON.stringify({ type: 'keydown', key: 'Enter', target: '#a' })}`
+      )
+    ).toEqual({ type: 'keydown', key: 'Enter', target: '#a' })
+    expect(
+      parseBrowserInteractionMessage(
+        `__orca_recorder__ ${JSON.stringify({ type: 'hover', target: '#menu-stok' })}`
+      )
+    ).toEqual({ type: 'hover', target: '#menu-stok' })
+    expect(parseBrowserInteractionMessage('__orca_recorder__ not-json')).toBeNull()
+  })
+
+  it('routes request lines to the request parser only', () => {
+    const line = `__orca_recorder__ ${JSON.stringify({ type: 'request', method: 'POST', url: 'https://x/a', status: 200 })}`
+    expect(parseBrowserInteractionMessage(line)).toBeNull()
+    expect(parseBrowserRequestMessage(line)).toMatchObject({
+      type: 'request',
+      method: 'POST',
+      url: 'https://x/a',
+      status: 200
+    })
+    expect(parseBrowserRequestMessage('console.log("plain")')).toBeNull()
+  })
+
+  it('rejects oversized tagged interaction and request lines before parsing', () => {
+    const interaction = `__orca_recorder__ ${JSON.stringify({ type: 'click', x: 1, y: 2 })}${'x'.repeat(300 * 1024)}`
+    expect(parseBrowserInteractionMessage(interaction)).toBeNull()
+    const request = `__orca_recorder__ ${JSON.stringify({ type: 'request', url: 'https://x/a' })}${'y'.repeat(300 * 1024)}`
+    expect(parseBrowserRequestMessage(request)).toBeNull()
+  })
+
+  it('redacts secret-shaped values in request URLs and bodies', () => {
+    expect(redactRequestUrl('https://x/api?islem=stok&key=abc123')).toBe(
+      'https://x/api?islem=stok&key=***'
+    )
+    expect(redactPostData('islem=stok_kaydet&sifre=hunter2&ad=Test', 500)).toBe(
+      'islem=stok_kaydet&sifre=***&ad=Test'
+    )
+    expect(redactPostData('k=v'.repeat(200), 20)).toMatch(/…$/)
+  })
+
+  it('parses response body, size, and truncation flag from request lines', () => {
+    const payload = parseBrowserRequestMessage(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://x/api/stok',
+        status: 200,
+        response: '{"ok":true}',
+        responseSize: 2100,
+        responseTruncated: true,
+        responseSchema: 'html'
+      })}`
+    )
+    expect(payload).toMatchObject({
+      response: '{"ok":true}',
+      responseSize: 2100,
+      responseTruncated: true,
+      responseSchema: 'html'
+    })
+    // Absent fields default to empty/untruncated/text schema.
+    const bare = parseBrowserRequestMessage(
+      `__orca_recorder__ ${JSON.stringify({ type: 'request', url: 'https://x/a' })}`
+    )
+    expect(bare).toMatchObject({
+      response: '',
+      responseSize: 0,
+      responseTruncated: false,
+      responseSchema: 'text'
+    })
+  })
+
+  it('redacts secret-shaped values inside JSON responses', () => {
+    expect(redactResponseText('{"islem":"stok_kaydet","token":"abc123","ad":"Test"}')).toBe(
+      '{"islem":"stok_kaydet","token":"***","ad":"Test"}'
+    )
+    expect(redactResponseText('{"ok":true,"sifre":"hunter2"}')).toBe('{"ok":true,"sifre":"***"}')
+    expect(redactResponseText('key=abc123&ad=Test')).toBe('key=***&ad=Test')
+  })
+
+  it('parses element props from interaction payloads', () => {
+    const payload = parseBrowserInteractionMessage(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'click',
+        x: 10,
+        y: 20,
+        target: 'button.btn-save',
+        el: {
+          selector: 'body > form#urunForm > div.row > button.btn-save',
+          tagName: 'button',
+          classes: ['btn', 'btn-primary'],
+          text: 'Kaydet',
+          styles: ['position:fixed']
+        }
+      })}`
+    )
+    expect(payload?.el).toEqual({
+      selector: 'body > form#urunForm > div.row > button.btn-save',
+      tagName: 'button',
+      classes: ['btn', 'btn-primary'],
+      text: 'Kaydet',
+      styles: ['position:fixed']
+    })
+  })
+
+  it('compacts call stacks into the initiating function chain', () => {
+    const stack = [
+      'Error',
+      '    at originStack (<anonymous>:1:1)',
+      '    at report (<anonymous>:1:1)',
+      '    at XMLHttpRequest.send (browser-page-capture:1:1)',
+      '    at stokKaydet (https://example.com/stok.php:142:7)',
+      '    at HTMLButtonElement.onclick (https://example.com/urun.php:10:3)'
+    ].join('\n')
+    expect(compactOriginStack(stack)).toBe(
+      'stokKaydet@https://example.com/stok.php:142 ← HTMLButtonElement.onclick@https://example.com/urun.php:10'
+    )
+    expect(compactOriginStack(undefined)).toBeNull()
+    expect(compactOriginStack('Error\n    at <anonymous> (x:1:1)')).toBeNull()
+  })
+
+  it('redacts secret-shaped query values inside origin stack locations', () => {
+    const stack = [
+      'Error',
+      '    at report (<anonymous>:1:1)',
+      '    at CAGRI (https://example.com/ayarlar/otoban.js:561:3)',
+      '    at stokKaydet (https://example.com/stok.php:142:7)'
+    ].join('\n')
+    expect(compactOriginStack(stack)).toBe(
+      'CAGRI@https://example.com/ayarlar/otoban.js:561 ← stokKaydet@https://example.com/stok.php:142'
+    )
+    const withSecret = [
+      'Error',
+      '    at CAGRI (https://example.com/ayarlar/otoban.js?key=abc123:561:3)'
+    ].join('\n')
+    expect(compactOriginStack(withSecret)).toBe(
+      'CAGRI@https://example.com/ayarlar/otoban.js?key=***:561'
+    )
+  })
+})
+
+describe('BrowserActionRecorder session observer', () => {
+  function makeObserverHarness() {
+    const evaluate = vi.fn()
+    const getPageInfo = vi.fn()
+    const getPageWebContents = vi.fn()
+    const captureStart = vi.fn()
+    const captureStop = vi.fn()
+    const networkLog = vi.fn()
+    const send = vi.fn()
+    const bridge = {
+      evaluate,
+      getPageInfo,
+      getPageWebContents,
+      captureStart,
+      captureStop,
+      networkLog
+    }
+    const consoleListeners = new Map<string, (...args: unknown[]) => void>()
+    const executeJavaScript = vi.fn(() => Promise.resolve('installed'))
+    let webRequestHandler: ((details: Record<string, unknown>) => void) | null = null
+    const onCompleted = vi.fn(
+      (_filter: unknown, handler: (details: Record<string, unknown>) => void) => {
+        webRequestHandler = handler
+      }
+    )
+    const webContents = {
+      id: 7,
+      session: { webRequest: { onCompleted } },
+      mainFrame: { executeJavaScript, frames: [] },
+      on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+        consoleListeners.set(event, handler)
+      }),
+      removeListener: vi.fn((event: string) => {
+        consoleListeners.delete(event)
+      })
+    }
+    const windowLike = { webContents: { send } }
+    const recorder = new BrowserActionRecorder()
+    const pageInfo = { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' }
+    getPageInfo.mockReturnValue(pageInfo)
+    getPageWebContents.mockReturnValue(webContents)
+    const enable = (options?: Partial<BrowserRecorderOptions>) =>
+      recorder.setEnabled(
+        true,
+        { worktreeId: 'wt-1', browserPageId: 'page-1' },
+        {
+          getBridge: () => bridge as never,
+          getWindow: () => windowLike as never
+        },
+        normalizeRecorderOptions(options)
+      )
+    const fireConsole = (message: string, level = 'info') =>
+      consoleListeners.get('console-message')?.({
+        level,
+        message,
+        lineNumber: 3,
+        sourceId: 'a.js'
+      } as never)
+    const fireFrameNavigate = (url: string, isMainFrame: boolean, status = 200) =>
+      consoleListeners.get('did-frame-navigate')?.('event', url, status, 'OK', isMainFrame)
+    const fireWebRequest = (details: Record<string, unknown>) => {
+      webRequestHandler?.({
+        url: 'https://example.com/api',
+        method: 'GET',
+        statusCode: 200,
+        resourceType: 'xhr',
+        webContentsId: 7,
+        timestamp: Date.now(),
+        ...details
+      })
+    }
+    return {
+      recorder,
+      bridge,
+      webContents,
+      send,
+      evaluate,
+      executeJavaScript,
+      onCompleted,
+      getPageWebContents,
+      captureStart,
+      captureStop,
+      networkLog,
+      enable,
+      fireConsole,
+      fireFrameNavigate,
+      fireWebRequest
+    }
+  }
+
+  it('attaches the page listener, injects the capture script into frames, and starts HAR', () => {
+    const { recorder, webContents, executeJavaScript, captureStart, enable } = makeObserverHarness()
+    enable()
+    expect(webContents.on).toHaveBeenCalledWith('console-message', expect.any(Function))
+    expect(webContents.on).toHaveBeenCalledWith('did-navigate', expect.any(Function))
+    expect(webContents.on).toHaveBeenCalledWith('frame-created', expect.any(Function))
+    expect(executeJavaScript).toHaveBeenCalledWith(expect.stringContaining('__orca_recorder__'))
+    expect(captureStart).toHaveBeenCalledWith('wt-1', 'page-1')
+    recorder.setEnabled(false)
+  })
+
+  it('emits webRequest completions as safety-net requests', async () => {
+    const { recorder, send, enable, fireWebRequest } = makeObserverHarness()
+    enable()
+    fireWebRequest({
+      url: 'https://example.com/panel/stok',
+      resourceType: 'subFrame',
+      statusCode: 200
+    })
+    await vi.waitFor(
+      () => {
+        expect(send).toHaveBeenCalledTimes(1)
+      },
+      { timeout: 2000 }
+    )
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-request',
+      request: {
+        kind: 'frame',
+        method: 'GET',
+        url: 'https://example.com/panel/stok',
+        status: 200
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('deduplicates webRequest completions already reported by the page hook', async () => {
+    const { recorder, send, enable, fireConsole, fireWebRequest } = makeObserverHarness()
+    enable()
+    // Page hook reports the request first (with body).
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok',
+        body: 'islem=stok_kaydet',
+        status: 200,
+        durationMs: 85,
+        kind: 'xhr'
+      })}`
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    // Safety net fires for the same request — must not double-report.
+    fireWebRequest({
+      url: 'https://example.com/api/stok',
+      method: 'POST',
+      resourceType: 'xhr',
+      statusCode: 200
+    })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(send).toHaveBeenCalledTimes(1)
+    recorder.setEnabled(false)
+  })
+
+  it('ignores webRequest events for other webContents', async () => {
+    const { recorder, send, enable, fireWebRequest } = makeObserverHarness()
+    enable()
+    fireWebRequest({ webContentsId: 999 })
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('ignores main-frame navigations in the frame hook', () => {
+    const { recorder, send, enable, fireFrameNavigate } = makeObserverHarness()
+    enable()
+    fireFrameNavigate('https://example.com/', true)
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('turns a typing burst into a single type interaction', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({ type: 'type', text: 'ABC123', target: '#stok_kod' })}`
+    )
+    expect(send).toHaveBeenCalledTimes(1)
+    const [channel, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(channel).toBe(BROWSER_RECORDER_ACTION_CHANNEL)
+    expect(event).toMatchObject({
+      kind: 'interaction',
+      interaction: {
+        kind: 'type',
+        text: 'ABC123',
+        target: '#stok_kod',
+        page: { browserPageId: 'page-1', url: 'https://example.com/a', title: 'A' }
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('turns a change line into an interaction carrying the real value', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'change',
+        value: '2',
+        target: '#suz_kosul1'
+      })}`
+    )
+    expect(send).toHaveBeenCalledTimes(1)
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'interaction',
+      interaction: { kind: 'change', value: '2', target: '#suz_kosul1' }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('turns a clipboard line into an interaction with masked text', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'clipboard',
+        clipboardAction: 'paste',
+        clipboardText: '153.049 - TEST',
+        target: '#urun_kod'
+      })}`
+    )
+    expect(send).toHaveBeenCalledTimes(1)
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'interaction',
+      interaction: { kind: 'clipboard', clipboardAction: 'paste', clipboardText: '153.049 - TEST' }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('turns untagged console lines into coalesced console entries', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole('same message', 'error')
+    fireConsole('same message', 'error')
+    fireConsole('same message', 'error')
+    fireConsole('different message')
+    expect(send).toHaveBeenCalledTimes(1)
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'console',
+      entry: {
+        level: 'error',
+        message: 'same message',
+        repeatCount: 3
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('turns tagged request lines into network-request events with redaction', async () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok?key=abc',
+        body: 'islem=stok_kaydet&sifre=hunter2',
+        status: 200,
+        durationMs: 85
+      })}`
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-request',
+      request: {
+        method: 'POST',
+        url: 'https://example.com/api/stok?key=***',
+        postData: 'islem=stok_kaydet&sifre=***',
+        status: 200,
+        durationMs: 85,
+        kind: 'xhr'
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('skips storage interactions when the storage option is off', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ storage: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'storage',
+        storageKey: 'SUZ_FORM_CACHE',
+        storageValue: 'filtre'
+      })}`
+    )
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('skips websocket interactions when the ws option is off', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ ws: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'ws',
+        wsText: 'stok güncellendi'
+      })}`
+    )
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('skips console entries when the console option is off', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ console: false })
+    fireConsole('some error', 'error')
+    fireConsole('another message')
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('skips requests (page hook and webRequest net) when the requests option is off', async () => {
+    const { recorder, send, enable, fireConsole, fireWebRequest } = makeObserverHarness()
+    enable({ requests: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok',
+        body: 'islem=stok_kaydet'
+      })}`
+    )
+    fireWebRequest({ url: 'https://example.com/api/other', method: 'GET' })
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    expect(send).not.toHaveBeenCalled()
+    recorder.setEnabled(false)
+  })
+
+  it('drops request bodies when request details are off but keeps the request line', async () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable({ requestDetails: false })
+    fireConsole(
+      `__orca_recorder__ ${JSON.stringify({
+        type: 'request',
+        method: 'POST',
+        url: 'https://example.com/api/stok',
+        body: 'islem=stok_kaydet&sifre=hunter2',
+        response: '<table><tr><td>6675</td></tr></table>',
+        status: 200
+      })}`
+    )
+    await vi.waitFor(() => {
+      expect(send).toHaveBeenCalledTimes(1)
+    })
+    const [, event] = send.mock.calls[0] as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-request',
+      request: {
+        method: 'POST',
+        status: 200,
+        postData: null,
+        response: null,
+        responseTruncated: false
+      }
+    })
+    recorder.setEnabled(false)
+  })
+
+  it('does not emit a network summary when requests are off', async () => {
+    const { recorder, networkLog, enable } = makeObserverHarness()
+    enable({ requests: false })
+    recorder.setEnabled(false)
+    await vi.waitFor(() => {
+      expect(networkLog).not.toHaveBeenCalled()
+    })
+  })
+
+  it('caps console entries and warns once when the cap is reached', () => {
+    const { recorder, send, enable, fireConsole } = makeObserverHarness()
+    enable()
+    for (let index = 0; index < 410; index += 1) {
+      fireConsole(`message-${index}`)
+    }
+    const consoleEvents = send.mock.calls.filter(
+      (call) => (call[1] as Record<string, unknown>).kind === 'console'
+    )
+    // 400 entries + 1 cap warning
+    expect(consoleEvents).toHaveLength(401)
+    const capWarnings = consoleEvents.filter((call) =>
+      ((call[1] as Record<string, unknown>).entry as { message: string }).message.includes(
+        'cap reached'
+      )
+    )
+    expect(capWarnings).toHaveLength(1)
+    recorder.setEnabled(false)
+  })
+
+  it('re-attaches the listener and capture script after a navigation action', async () => {
+    const { recorder, bridge, getPageWebContents, evaluate, enable } = makeObserverHarness()
+    enable()
+    const secondExecute = vi.fn(() => Promise.resolve('installed'))
+    const secondWebContents = {
+      id: 8,
+      session: { webRequest: { onCompleted: vi.fn() } },
+      on: vi.fn(),
+      removeListener: vi.fn(),
+      mainFrame: { executeJavaScript: secondExecute, frames: [] }
+    }
+    getPageWebContents.mockReturnValue(secondWebContents)
+    evaluate.mockResolvedValue({ result: '{}', origin: 'https://example.com/a' })
+
+    await recorder.capture({
+      method: 'browser.goto',
+      params: { url: 'https://example.com/b' },
+      worktreeId: 'wt-1',
+      browserPageId: 'page-1',
+      getBridge: () => bridge as never,
+      getWindow: () => ({ webContents: { send: vi.fn() } }) as never,
+      run: async () => ({})
+    })
+
+    expect(secondWebContents.on).toHaveBeenCalledWith('console-message', expect.any(Function))
+    // capture script re-injected into the new page
+    expect(secondExecute).toHaveBeenCalledWith(expect.stringContaining('__orca_recorder__'))
+    recorder.setEnabled(false)
+  })
+
+  it('emits a network summary and detaches the listener on disable', async () => {
+    const { recorder, webContents, networkLog, send, enable } = makeObserverHarness()
+    networkLog.mockResolvedValue({
+      entries: [
+        {
+          url: 'https://example.com/a',
+          method: 'GET',
+          status: 200,
+          mimeType: 'text/html',
+          size: 100,
+          timestamp: 1
+        },
+        {
+          url: 'https://example.com/x',
+          method: 'GET',
+          status: 404,
+          mimeType: 'text/html',
+          size: 50,
+          timestamp: 2
+        }
+      ],
+      truncated: false
+    })
+    enable()
+    recorder.setEnabled(false)
+    await vi.waitFor(() => {
+      expect(
+        send.mock.calls.some(
+          (call) => (call[1] as Record<string, unknown>).kind === 'network-summary'
+        )
+      ).toBe(true)
+    })
+    expect(webContents.removeListener).toHaveBeenCalledWith('console-message', expect.any(Function))
+    const [, event] = send.mock.calls.find(
+      (call) => (call[1] as Record<string, unknown>).kind === 'network-summary'
+    ) as [string, Record<string, unknown>]
+    expect(event).toMatchObject({
+      kind: 'network-summary',
+      summary: {
+        total: 2,
+        failed: 1,
+        totalBytes: 150,
+        byStatus: [
+          { status: 200, count: 1 },
+          { status: 404, count: 1 }
+        ]
+      }
+    })
+  })
+})

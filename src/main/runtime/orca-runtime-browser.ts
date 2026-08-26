@@ -72,6 +72,7 @@ import type {
   BrowserScreencastViewport
 } from '../browser/browser-screencast-stream-types'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
+import { browserActionRecorder } from '../browser/browser-action-recorder'
 import {
   detectInstalledBrowsers,
   importCookiesFromBrowser,
@@ -462,6 +463,27 @@ export class RuntimeBrowserCommands {
     }
   }
 
+  // Why: capture DOM fingerprints around each action so the session log shows what it did.
+  private async recordedBrowserAction<T>(
+    method: string,
+    params: Record<string, unknown>,
+    target: ResolvedBrowserCommandTarget,
+    run: () => Promise<T>
+  ): Promise<T> {
+    if (!browserActionRecorder.isEnabled()) {
+      return run()
+    }
+    return (await browserActionRecorder.capture({
+      method,
+      params,
+      worktreeId: target.worktreeId,
+      browserPageId: target.browserPageId,
+      getBridge: () => this.host.getAgentBrowserBridge(),
+      getWindow: () => this.host.getAuthoritativeWindow(),
+      run
+    })) as T
+  }
+
   async browserSnapshot(params: BrowserCommandTargetParams): Promise<BrowserSnapshotResult> {
     const target = await this.resolveBrowserCommandTarget(params)
     return this.requireAgentBrowserBridge().snapshot(target.worktreeId, target.browserPageId)
@@ -471,30 +493,34 @@ export class RuntimeBrowserCommands {
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserClickResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.click(params.element, target.worktreeId, target.browserPageId)
-    // Why: clicks can trigger navigation, so push the tab's live URL/title to the renderer even when automation targeted a non-active page.
-    const page = bridge.getPageInfo(target.worktreeId, target.browserPageId)
-    if (page) {
-      this.notifyRendererNavigation(page.browserPageId, page.url, page.title)
-    }
-    return result
+    return this.recordedBrowserAction('browser.click', params, target, async () => {
+      const bridge = this.requireAgentBrowserBridge()
+      const result = await bridge.click(params.element, target.worktreeId, target.browserPageId)
+      // Why: clicks can trigger navigation, so push the tab's live URL/title to the renderer even when automation targeted a non-active page.
+      const page = bridge.getPageInfo(target.worktreeId, target.browserPageId)
+      if (page) {
+        this.notifyRendererNavigation(page.browserPageId, page.url, page.title)
+      }
+      return result
+    })
   }
 
   async browserGoto(
     params: { url: string } & BrowserCommandTargetParams
   ): Promise<BrowserGotoResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.goto(params.url, target.worktreeId, target.browserPageId)
-    const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
-    if (pageId) {
-      this.notifyRendererNavigation(pageId, result.url, result.title)
-    }
-    if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
-      this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
-    }
-    return result
+    return this.recordedBrowserAction('browser.goto', params, target, async () => {
+      const bridge = this.requireAgentBrowserBridge()
+      const result = await bridge.goto(params.url, target.worktreeId, target.browserPageId)
+      const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
+      if (pageId) {
+        this.notifyRendererNavigation(pageId, result.url, result.title)
+      }
+      if (!this.host.getAvailableAuthoritativeWindow() && target.worktreeId) {
+        this.host.notifyHeadlessBrowserSessionTabsChanged?.(target.worktreeId)
+      }
+      return result
+    })
   }
 
   async browserFill(
@@ -504,11 +530,13 @@ export class RuntimeBrowserCommands {
     } & BrowserCommandTargetParams
   ): Promise<BrowserFillResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().fill(
-      params.element,
-      params.value,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.fill', params, target, () =>
+      this.requireAgentBrowserBridge().fill(
+        params.element,
+        params.value,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -516,10 +544,8 @@ export class RuntimeBrowserCommands {
     params: { input: string } & BrowserCommandTargetParams
   ): Promise<BrowserTypeResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().type(
-      params.input,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.type', params, target, () =>
+      this.requireAgentBrowserBridge().type(params.input, target.worktreeId, target.browserPageId)
     )
   }
 
@@ -530,11 +556,13 @@ export class RuntimeBrowserCommands {
     } & BrowserCommandTargetParams
   ): Promise<BrowserSelectResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().select(
-      params.element,
-      params.value,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.select', params, target, () =>
+      this.requireAgentBrowserBridge().select(
+        params.element,
+        params.value,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -542,34 +570,40 @@ export class RuntimeBrowserCommands {
     params: { direction: 'up' | 'down'; amount?: number } & BrowserCommandTargetParams
   ): Promise<BrowserScrollResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().scroll(
-      params.direction,
-      params.amount,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.scroll', params, target, () =>
+      this.requireAgentBrowserBridge().scroll(
+        params.direction,
+        params.amount,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
   async browserBack(params: BrowserCommandTargetParams): Promise<BrowserBackResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.back(target.worktreeId, target.browserPageId)
-    const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
-    if (pageId) {
-      this.notifyRendererNavigation(pageId, result.url, result.title)
-    }
-    return result
+    return this.recordedBrowserAction('browser.back', params, target, async () => {
+      const bridge = this.requireAgentBrowserBridge()
+      const result = await bridge.back(target.worktreeId, target.browserPageId)
+      const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
+      if (pageId) {
+        this.notifyRendererNavigation(pageId, result.url, result.title)
+      }
+      return result
+    })
   }
 
   async browserReload(params: BrowserCommandTargetParams): Promise<BrowserReloadResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.reload(target.worktreeId, target.browserPageId)
-    const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
-    if (pageId) {
-      this.notifyRendererNavigation(pageId, result.url, result.title)
-    }
-    return result
+    return this.recordedBrowserAction('browser.reload', params, target, async () => {
+      const bridge = this.requireAgentBrowserBridge()
+      const result = await bridge.reload(target.worktreeId, target.browserPageId)
+      const pageId = bridge.getActivePageId(target.worktreeId, target.browserPageId)
+      if (pageId) {
+        this.notifyRendererNavigation(pageId, result.url, result.title)
+      }
+      return result
+    })
   }
 
   async browserScreenshot(
@@ -854,66 +888,70 @@ export class RuntimeBrowserCommands {
       focus?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSwitchResult> {
-    const listed = await this.browserTabList({ worktree: params.worktree })
-    const switchedIndex = params.page
-      ? listed.tabs.findIndex((tab) => tab.browserPageId === params.page)
-      : (params.index ?? -1)
-    const selected = listed.tabs[switchedIndex]
-    if (!selected) {
-      const label = params.page ? `Browser page ${params.page}` : `Tab index ${params.index}`
-      throw new BrowserError(
-        'browser_tab_not_found',
-        `${label} out of range (0-${listed.tabs.length - 1})`
-      )
-    }
-    const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(selected.browserPageId)
-    if (clientPage) {
-      this.host
-        .getRuntimeBrowserPageRegistry()
-        .activatePage(clientPage.browserPageId, clientPage.placement)
+    const target = await this.resolveBrowserCommandTarget(params)
+    return this.recordedBrowserAction('browser.tabSwitch', params, target, async () => {
+      const listed = await this.browserTabList({ worktree: params.worktree })
+      const switchedIndex = params.page
+        ? listed.tabs.findIndex((tab) => tab.browserPageId === params.page)
+        : (params.index ?? -1)
+      const selected = listed.tabs[switchedIndex]
+      if (!selected) {
+        const label = params.page ? `Browser page ${params.page}` : `Tab index ${params.index}`
+        throw new BrowserError(
+          'browser_tab_not_found',
+          `${label} out of range (0-${listed.tabs.length - 1})`
+        )
+      }
+      const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(selected.browserPageId)
+      if (clientPage) {
+        this.host
+          .getRuntimeBrowserPageRegistry()
+          .activatePage(clientPage.browserPageId, clientPage.placement)
+        publishSwitchedBrowserSessionTab(this.host, {
+          placementKind: 'client',
+          browserPageId: clientPage.browserPageId,
+          worktreeId: clientPage.workspaceId,
+          focus: params.focus
+        })
+        return { switched: switchedIndex, browserPageId: clientPage.browserPageId }
+      }
+      const bridge = this.requireAgentBrowserBridge()
+      const worktreeId =
+        typeof selected.worktreeId === 'string'
+          ? selected.worktreeId
+          : params.worktree
+            ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
+            : undefined
+      const result = await bridge.tabSwitch(undefined, worktreeId, selected.browserPageId)
+      this.host.getRuntimeBrowserPageRegistry().deactivateGlobal()
+      if (worktreeId) {
+        this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
+      }
+      const focusWorktreeId =
+        worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
       publishSwitchedBrowserSessionTab(this.host, {
-        placementKind: 'client',
-        browserPageId: clientPage.browserPageId,
-        worktreeId: clientPage.workspaceId,
+        placementKind: 'bridge',
+        browserPageId: result.browserPageId,
+        worktreeId: focusWorktreeId,
         focus: params.focus
       })
-      return { switched: switchedIndex, browserPageId: clientPage.browserPageId }
-    }
-    const bridge = this.requireAgentBrowserBridge()
-    const worktreeId =
-      typeof selected.worktreeId === 'string'
-        ? selected.worktreeId
-        : params.worktree
-          ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
-          : undefined
-    const result = await bridge.tabSwitch(undefined, worktreeId, selected.browserPageId)
-    this.host.getRuntimeBrowserPageRegistry().deactivateGlobal()
-    if (worktreeId) {
-      this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
-    }
-    // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
-    const focusWorktreeId =
-      worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
-    publishSwitchedBrowserSessionTab(this.host, {
-      placementKind: 'bridge',
-      browserPageId: result.browserPageId,
-      worktreeId: focusWorktreeId,
-      focus: params.focus
+      if (params.focus) {
+        this.notifyRendererBrowserPaneFocus(focusWorktreeId, result.browserPageId)
+      }
+      return { ...result, switched: switchedIndex }
     })
-    if (params.focus) {
-      this.notifyRendererBrowserPaneFocus(focusWorktreeId, result.browserPageId)
-    }
-    return { ...result, switched: switchedIndex }
   }
 
   async browserHover(
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserHoverResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().hover(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.hover', params, target, () =>
+      this.requireAgentBrowserBridge().hover(
+        params.element,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -924,11 +962,13 @@ export class RuntimeBrowserCommands {
     } & BrowserCommandTargetParams
   ): Promise<BrowserDragResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().drag(
-      params.from,
-      params.to,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.drag', params, target, () =>
+      this.requireAgentBrowserBridge().drag(
+        params.from,
+        params.to,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -936,11 +976,13 @@ export class RuntimeBrowserCommands {
     params: { element: string; files: string[] } & BrowserCommandTargetParams
   ): Promise<BrowserUploadResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().upload(
-      params.element,
-      params.files,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.upload', params, target, () =>
+      this.requireAgentBrowserBridge().upload(
+        params.element,
+        params.files,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -957,18 +999,22 @@ export class RuntimeBrowserCommands {
   ): Promise<BrowserWaitResult> {
     const target = await this.resolveBrowserCommandTarget(params)
     const { worktree: _, page: __, ...options } = params
-    return this.requireAgentBrowserBridge().wait(options, target.worktreeId, target.browserPageId)
+    return this.recordedBrowserAction('browser.wait', params, target, () =>
+      this.requireAgentBrowserBridge().wait(options, target.worktreeId, target.browserPageId)
+    )
   }
 
   async browserCheck(
     params: { element: string; checked: boolean } & BrowserCommandTargetParams
   ): Promise<BrowserCheckResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().check(
-      params.element,
-      params.checked,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.check', params, target, () =>
+      this.requireAgentBrowserBridge().check(
+        params.element,
+        params.checked,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -976,10 +1022,12 @@ export class RuntimeBrowserCommands {
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserFocusResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().focus(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.focus', params, target, () =>
+      this.requireAgentBrowserBridge().focus(
+        params.element,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -987,10 +1035,12 @@ export class RuntimeBrowserCommands {
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserClearResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().clear(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.clear', params, target, () =>
+      this.requireAgentBrowserBridge().clear(
+        params.element,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -998,10 +1048,12 @@ export class RuntimeBrowserCommands {
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<BrowserSelectAllResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().selectAll(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.selectAll', params, target, () =>
+      this.requireAgentBrowserBridge().selectAll(
+        params.element,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -1009,10 +1061,8 @@ export class RuntimeBrowserCommands {
     params: { key: string } & BrowserCommandTargetParams
   ): Promise<BrowserKeypressResult> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().keypress(
-      params.key,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.keypress', params, target, () =>
+      this.requireAgentBrowserBridge().keypress(params.key, target.worktreeId, target.browserPageId)
     )
   }
 
@@ -1196,26 +1246,32 @@ export class RuntimeBrowserCommands {
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().dblclick(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.dblclick', params, target, () =>
+      this.requireAgentBrowserBridge().dblclick(
+        params.element,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
   async browserForward(params: BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().forward(target.worktreeId, target.browserPageId)
+    return this.recordedBrowserAction('browser.forward', params, target, () =>
+      this.requireAgentBrowserBridge().forward(target.worktreeId, target.browserPageId)
+    )
   }
 
   async browserScrollIntoView(
     params: { element: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().scrollIntoView(
-      params.element,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.scrollIntoView', params, target, () =>
+      this.requireAgentBrowserBridge().scrollIntoView(
+        params.element,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -1252,10 +1308,12 @@ export class RuntimeBrowserCommands {
     params: { text: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().keyboardInsertText(
-      params.text,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.keyboardInsertText', params, target, () =>
+      this.requireAgentBrowserBridge().keyboardInsertText(
+        params.text,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -1265,11 +1323,13 @@ export class RuntimeBrowserCommands {
     params: { x: number; y: number } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseMove(
-      params.x,
-      params.y,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.mouseMove', params, target, () =>
+      this.requireAgentBrowserBridge().mouseMove(
+        params.x,
+        params.y,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -1277,10 +1337,12 @@ export class RuntimeBrowserCommands {
     params: { button?: string } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseDown(
-      params.button,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.mouseDown', params, target, () =>
+      this.requireAgentBrowserBridge().mouseDown(
+        params.button,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -1294,23 +1356,27 @@ export class RuntimeBrowserCommands {
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseClick(
-      params.x,
-      params.y,
-      params.button,
-      target.worktreeId,
-      target.browserPageId,
-      clampOptionalNumber(params.radius, 0, 64),
-      params.modifiers
+    return this.recordedBrowserAction('browser.mouseClick', params, target, () =>
+      this.requireAgentBrowserBridge().mouseClick(
+        params.x,
+        params.y,
+        params.button,
+        target.worktreeId,
+        target.browserPageId,
+        clampOptionalNumber(params.radius, 0, 64),
+        params.modifiers
+      )
     )
   }
 
   async browserMouseUp(params: { button?: string } & BrowserCommandTargetParams): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseUp(
-      params.button,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.mouseUp', params, target, () =>
+      this.requireAgentBrowserBridge().mouseUp(
+        params.button,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 
@@ -1321,11 +1387,13 @@ export class RuntimeBrowserCommands {
     } & BrowserCommandTargetParams
   ): Promise<unknown> {
     const target = await this.resolveBrowserCommandTarget(params)
-    return this.requireAgentBrowserBridge().mouseWheel(
-      params.dy,
-      params.dx,
-      target.worktreeId,
-      target.browserPageId
+    return this.recordedBrowserAction('browser.mouseWheel', params, target, () =>
+      this.requireAgentBrowserBridge().mouseWheel(
+        params.dy,
+        params.dx,
+        target.worktreeId,
+        target.browserPageId
+      )
     )
   }
 

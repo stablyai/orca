@@ -1,0 +1,125 @@
+// Browser action recorder — renderer-only types
+import type {
+  BrowserAnnotationIntent,
+  BrowserGrabRect,
+  BrowserGrabTarget
+} from '../../../../shared/browser-grab-types'
+import type {
+  BrowserRecorderAutomationAction,
+  BrowserRecorderConsoleEntry,
+  BrowserRecorderInteraction,
+  BrowserRecorderNetworkRequest,
+  BrowserRecorderNetworkSummary,
+  BrowserRecorderStreamEvent
+} from '../../../../shared/browser-recorder-automation'
+
+/** Compact element snapshot kept in the log (no screenshots, no full payloads). */
+export type BrowserRecorderElementSummary = {
+  tagName: string
+  selector: string
+  elementPath?: string
+  cssClasses?: string
+  accessibleName?: string | null
+  textSnippet: string
+  rectViewport: BrowserGrabRect
+}
+
+/** Element resolved from a markup shape's target point via elementFromPoint. */
+export type BrowserRecorderMarkupElement = {
+  tagName: string
+  selector: string
+  accessibleName?: string | null
+  textSnippet: string
+}
+
+/** One drawn markup shape's textual trace: geometry, content, and target element. */
+export type BrowserRecorderMarkupShapeLog = {
+  kind: 'pen' | 'highlight' | 'arrow' | 'rect' | 'ellipse' | 'text'
+  from?: { x: number; y: number }
+  to?: { x: number; y: number }
+  at?: { x: number; y: number }
+  text?: string
+  pointCount?: number
+  element?: BrowserRecorderMarkupElement | null
+}
+
+export type BrowserRecorderStepKind =
+  | 'recording-started'
+  | 'navigation'
+  | 'element-selected'
+  | 'annotation-added'
+  | 'annotation-removed'
+  | 'markup'
+  | 'automation-action'
+  | 'interaction'
+  | 'console'
+  | 'network-request'
+  | 'network-summary'
+
+export type BrowserRecorderStepDetail =
+  | { kind: 'recording-started' }
+  | { kind: 'navigation'; fromUrl: string; toUrl: string }
+  | { kind: 'element-selected'; element: BrowserRecorderElementSummary }
+  | {
+      kind: 'annotation-added'
+      element: BrowserRecorderElementSummary
+      comment: string
+      intent: BrowserAnnotationIntent
+    }
+  | { kind: 'annotation-removed'; comment: string }
+  | { kind: 'markup'; shapes: BrowserRecorderMarkupShapeLog[] }
+  | { kind: 'automation-action'; action: BrowserRecorderAutomationAction }
+  | { kind: 'interaction'; interaction: BrowserRecorderInteraction }
+  | { kind: 'console'; entry: BrowserRecorderConsoleEntry }
+  | { kind: 'network-request'; request: BrowserRecorderNetworkRequest }
+  | { kind: 'network-summary'; summary: BrowserRecorderNetworkSummary }
+
+export type BrowserRecorderStep = {
+  id: string
+  browserPageId: string
+  createdAt: string
+  /** URL of the page the step happened on. */
+  pageUrl: string
+  pageTitle: string
+  detail: BrowserRecorderStepDetail
+}
+
+export const RECORDER_BUDGET = {
+  /** Hard cap on steps kept in a single recording session (oldest dropped). */
+  maxStepsPerSession: 1000
+} as const
+
+/** Maps a grabbed element onto the compact log summary. */
+export function summarizeBrowserGrabTarget(
+  target: BrowserGrabTarget
+): BrowserRecorderElementSummary {
+  return {
+    tagName: target.tagName,
+    selector: target.selector,
+    elementPath: target.elementPath,
+    cssClasses: target.cssClasses,
+    accessibleName: target.accessibility.accessibleName,
+    textSnippet: target.textSnippet,
+    rectViewport: target.rectViewport
+  }
+}
+
+/** The page a streamed recorder event happened on (all variants carry one). */
+export function recorderEventPage(event: BrowserRecorderStreamEvent): {
+  browserPageId: string
+  url: string
+  title: string
+} {
+  switch (event.kind) {
+    case 'action':
+      return event.action.page
+    case 'interaction':
+      return event.interaction.page
+    case 'console':
+      return event.entry.page
+    case 'network-request':
+      return event.request.page
+    case 'network-summary':
+      return event.summary.page
+  }
+}

@@ -33,6 +33,8 @@ export type MarkupCompleteInput = {
 type UseMarkupModeParams = {
   getCaptureContext: () => MarkupCaptureContext | null
   onDeliver: (result: MarkupComposeResult) => Promise<void> | void
+  /** Called after a successful delivery — the markup actually reached the clipboard. */
+  onCompleted?: (input: MarkupCompleteInput) => void | Promise<void>
 }
 
 export type MarkupModeController = {
@@ -46,11 +48,16 @@ export type MarkupModeController = {
 
 export function useMarkupMode({
   getCaptureContext,
-  onDeliver
+  onDeliver,
+  onCompleted
 }: UseMarkupModeParams): MarkupModeController {
   const [state, setState] = useState<MarkupModeState>('idle')
   const [baseImage, setBaseImage] = useState<MarkupBaseImage | null>(null)
   const contextRef = useRef<MarkupCaptureContext | null>(null)
+  // Why: keep the callback in a ref so a changing owner callback (e.g. one that
+  // closes over recorder state) does not force `complete` to be recreated.
+  const onCompletedRef = useRef(onCompleted)
+  onCompletedRef.current = onCompleted
   // Why: a token invalidates an in-flight capture if the user cancels before it
   // resolves, so the stale promise can't flip state back to 'drawing'.
   const captureTokenRef = useRef(0)
@@ -144,6 +151,7 @@ export function useMarkupMode({
         if (captureTokenRef.current !== token) {
           return
         }
+        await onCompletedRef.current?.({ imageElement, shapes })
         reset()
       } catch {
         if (captureTokenRef.current !== token) {

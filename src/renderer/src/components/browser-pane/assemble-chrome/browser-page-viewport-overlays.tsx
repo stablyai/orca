@@ -33,6 +33,8 @@ import { PendingBrowserAnnotationCard } from '../annotate/pending-browser-annota
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
+import type { BrowserRecorderHook } from '../useBrowserRecorder'
+import { BrowserRecorderTray } from '../BrowserRecorderTray'
 
 export function BrowserPageViewportOverlays({
   markup,
@@ -57,7 +59,11 @@ export function BrowserPageViewportOverlays({
   worktreeId,
   grab,
   annotationSend,
-  grabAnnotations
+  grabAnnotations,
+  recorder,
+  recorderCopied,
+  onCopyRecorderLog,
+  onClearRecorderLog
 }: {
   markup: MarkupModeController
   browserZoomIndicatorState: { ariaHidden: boolean; opacityClassName: string }
@@ -82,6 +88,10 @@ export function BrowserPageViewportOverlays({
   grab: GrabModeHook
   annotationSend: ReturnType<typeof useBrowserPageAnnotationSend>
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
+  recorder: BrowserRecorderHook
+  recorderCopied: boolean
+  onCopyRecorderLog: () => void
+  onClearRecorderLog: () => void
 }): React.JSX.Element {
   const recheckSshRoute = useSshWorkspaceProbeSkipRecheck(worktreeId)
   const {
@@ -116,6 +126,7 @@ export function BrowserPageViewportOverlays({
         <MarkupOverlay
           baseImage={markup.baseImage}
           busy={markup.state === 'composing'}
+          recording={recorder.recording}
           onComplete={(input) => void markup.complete(input)}
           onCancel={markup.cancel}
         />
@@ -217,6 +228,15 @@ export function BrowserPageViewportOverlays({
           browserAnnotationsCopied={browserAnnotationsCopied}
           handleClearBrowserAnnotations={handleClearBrowserAnnotations}
           handleDeleteBrowserAnnotation={handleDeleteBrowserAnnotation}
+        />
+      ) : null}
+      {recorder.stepCount > 0 ? (
+        <BrowserRecorderTray
+          steps={recorder.steps}
+          recording={recorder.recording}
+          copied={recorderCopied}
+          onCopy={onCopyRecorderLog}
+          onClear={onClearRecorderLog}
         />
       ) : null}
       {/* Right-click context dropdown, positioned at the grabbed element's center. */}

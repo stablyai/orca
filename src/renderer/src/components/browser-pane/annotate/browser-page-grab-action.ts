@@ -6,6 +6,9 @@ import type {
 import { formatGrabPayloadAsText } from './GrabConfirmationSheet'
 import type { GrabModeHook } from './useGrabMode'
 import type { BrowserPageGrabToastState, GrabIntent } from '../describe-page/browser-page-types'
+import type { BrowserRecorderStepDetail } from '../browser-recorder-types'
+import type { BrowserRecorderPageContext } from '../useBrowserRecorder'
+import { summarizeBrowserGrabTarget } from '../browser-recorder-types'
 
 export function runBrowserGrabActionShortcut({
   key,
@@ -14,7 +17,8 @@ export function runBrowserGrabActionShortcut({
   grabPayloadRef,
   browserTabIdRef,
   recordFeatureInteraction,
-  showGrabToast
+  showGrabToast,
+  recorder
 }: {
   key: 'c' | 's'
   grabIntent: GrabIntent
@@ -27,11 +31,21 @@ export function runBrowserGrabActionShortcut({
     type: BrowserPageGrabToastState['type'],
     payload?: BrowserGrabPayload | null
   ) => void
+  recorder?: {
+    recordingRef: MutableRefObject<boolean>
+    recordStep: (detail: BrowserRecorderStepDetail, page: BrowserRecorderPageContext) => void
+  }
 }): void {
   if (grabIntent === 'annotate') {
     return
   }
   const copyFromPayload = (payload: BrowserGrabPayload): void => {
+    // Why: while recording the grab logs the element (hover path logs it
+    // above) instead of copying it.
+    if (recorder?.recordingRef.current) {
+      showGrabToast('Added to recording log', 'success', payload)
+      return
+    }
     if (key === 'c') {
       const text = formatGrabPayloadAsText(payload)
       void window.api.ui.writeClipboardText(text)
@@ -82,6 +96,13 @@ export function runBrowserGrabActionShortcut({
         return
       }
       const payload = result.payload as BrowserGrabPayload
+
+      // Why: the C/S shortcut acts on the hovered element without a click,
+      // so the confirm effect never sees it — log it here instead.
+      recorder?.recordStep(
+        { kind: 'element-selected', element: summarizeBrowserGrabTarget(payload.target) },
+        { pageUrl: payload.page.sanitizedUrl, pageTitle: payload.page.title }
+      )
 
       if (key === 's') {
         try {

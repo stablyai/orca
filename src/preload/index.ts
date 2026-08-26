@@ -29,6 +29,10 @@ import type { TerminalTabCreateReply } from '../shared/terminal-reveal-identity'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 import type { StartupCommandDelivery } from '../shared/codex-startup-delivery'
 import type {
+  BrowserRecorderOptions,
+  BrowserRecorderStreamEvent
+} from '../shared/browser-recorder-automation'
+import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../shared/agent-session-resume'
@@ -3024,6 +3028,23 @@ const api = {
       ) => callback(data)
       ipcRenderer.on('browser:grabActionShortcut', listener)
       return () => ipcRenderer.removeListener('browser:grabActionShortcut', listener)
+    },
+
+    setRecorderEnabled: (args: {
+      enabled: boolean
+      browserPageId?: string
+      worktreeId?: string
+      options?: Partial<BrowserRecorderOptions>
+    }): Promise<boolean> => ipcRenderer.invoke('browser:setRecorderEnabled', args),
+
+    setRecorderOptions: (args: { options: Partial<BrowserRecorderOptions> }): Promise<boolean> =>
+      ipcRenderer.invoke('browser:setRecorderOptions', args),
+
+    onRecorderEvent: (callback: (event: BrowserRecorderStreamEvent) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, record: BrowserRecorderStreamEvent) =>
+        callback(record)
+      ipcRenderer.on('browser:recorder-action', listener)
+      return () => ipcRenderer.removeListener('browser:recorder-action', listener)
     },
 
     sessionListProfiles: (): Promise<unknown[]> =>

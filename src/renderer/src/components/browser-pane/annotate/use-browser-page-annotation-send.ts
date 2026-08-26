@@ -6,6 +6,7 @@ import {
   useRef,
   useState,
   type Dispatch,
+  type MutableRefObject,
   type SetStateAction
 } from 'react'
 import { useAppStore } from '@/store'
@@ -13,13 +14,22 @@ import { translate } from '@/i18n/i18n'
 import type { BrowserPageAnnotation } from '../../../../../shared/browser-grab-types'
 import { formatBrowserAnnotationsAsMarkdown } from './browser-annotation-output'
 import { EMPTY_BROWSER_ANNOTATIONS } from '../describe-page/browser-annotation-geometry'
+import type { BrowserRecorderStepDetail } from '../browser-recorder-types'
+import type { BrowserRecorderPageContext } from '../useBrowserRecorder'
 
 export function useBrowserPageAnnotationSend({
   browserTabId,
-  worktreeId
+  worktreeId,
+  recorder
 }: {
   browserTabId: string
   worktreeId: string
+  recorder?: {
+    recordingRef: MutableRefObject<boolean>
+    recordStep: (detail: BrowserRecorderStepDetail, page: BrowserRecorderPageContext) => void
+    pageUrl: string
+    pageTitle: string
+  }
 }): {
   browserAnnotations: BrowserPageAnnotation[]
   browserAnnotationsPrompt: string
@@ -68,6 +78,14 @@ export function useBrowserPageAnnotationSend({
       clearTimeout(annotationCopyTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (browserAnnotations.length === 0 && !recorder?.recordingRef.current) {
+      setBrowserAnnotationTrayOpen(true)
+      setBrowserAnnotationsCopied(false)
+      clearTimeout(annotationCopyTimerRef.current)
+    }
+  }, [browserAnnotations.length, recorder])
 
   const handleAnnotationBannerSendOpenChange = useCallback(
     (open: boolean): void => {
@@ -158,18 +176,33 @@ export function useBrowserPageAnnotationSend({
 
   const handleDeleteBrowserAnnotation = useCallback(
     (annotationId: string): void => {
+      const annotation = browserAnnotationsRef.current.find((a) => a.id === annotationId)
       if (browserAnnotationsRef.current.length === 1) {
         clearTimeout(annotationCopyTimerRef.current)
         setBrowserAnnotationsCopied(false)
-        setBrowserAnnotationTrayOpen(true)
+        if (!recorder?.recordingRef.current) {
+          setBrowserAnnotationTrayOpen(true)
+        }
       }
       deleteBrowserPageAnnotation(browserTabId, annotationId)
       recordFeatureInteraction('browser-annotations')
+      // Why: removing an annotation is a user action on the page — keep the
+      // session log truthful about what happened to the recorded flow.
+      if (annotation) {
+        recorder?.recordStep(
+          { kind: 'annotation-removed', comment: annotation.comment },
+          {
+            pageUrl: recorder?.pageUrl ?? '',
+            pageTitle: recorder?.pageTitle ?? ''
+          }
+        )
+      }
     },
     [
       browserTabId,
       deleteBrowserPageAnnotation,
       recordFeatureInteraction,
+      recorder,
       setBrowserAnnotationTrayOpen
     ]
   )

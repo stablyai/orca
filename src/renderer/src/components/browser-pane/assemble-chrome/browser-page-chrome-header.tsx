@@ -9,6 +9,7 @@ import type { useBrowserPageReloadActions } from '../navigate/use-browser-page-r
 import type { useBrowserPageNavigationDownloads } from '../navigate/use-browser-page-navigation-downloads'
 import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
 import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
+import type { BrowserRecorderHook } from '../useBrowserRecorder'
 
 export function BrowserPageChromeHeader({
   chromeHeaderRef,
@@ -34,7 +35,9 @@ export function BrowserPageChromeHeader({
   externalUrl,
   isBlankTab,
   resourceNotice,
-  setResourceNotice
+  setResourceNotice,
+  recorder,
+  onToggleRecorder
 }: {
   chromeHeaderRef: RefObject<HTMLDivElement | null>
   browserTab: BrowserPageState
@@ -60,6 +63,8 @@ export function BrowserPageChromeHeader({
   isBlankTab: boolean
   resourceNotice: string | null
   setResourceNotice: Dispatch<SetStateAction<string | null>>
+  recorder: BrowserRecorderHook
+  onToggleRecorder: () => void
 }): React.JSX.Element {
   return (
     <div ref={chromeHeaderRef} className="pointer-events-auto shrink-0">
@@ -99,6 +104,8 @@ export function BrowserPageChromeHeader({
         shareableArtifactFile={shareableArtifactFile}
         currentBrowserUrl={currentBrowserUrl}
         externalUrl={externalUrl}
+        recorder={recorder}
+        onToggleRecorder={onToggleRecorder}
       />
       <BrowserPageDownloadList
         visibleDownloads={nav.visibleDownloads}
