@@ -35,6 +35,7 @@ import { CodexHookService } from '../codex/hook-service'
 import { CommandCodeHookService } from '../command-code/hook-service'
 import { CursorHookService } from '../cursor/hook-service'
 import { DevinHookService } from '../devin/hook-service'
+import { JunieHookService } from '../junie/hook-service'
 import { DroidHookService } from '../droid/hook-service'
 import { GeminiHookService } from '../gemini/hook-service'
 import { GrokHookService } from '../grok/hook-service'
@@ -51,6 +52,7 @@ const BATCH_SCRIPT_INSTALLERS = [
   { agent: 'command-code', install: () => new CommandCodeHookService().install() },
   { agent: 'cursor', install: () => new CursorHookService().install() },
   { agent: 'devin', install: () => new DevinHookService().install() },
+  { agent: 'junie', install: () => new JunieHookService().install() },
   { agent: 'droid', install: () => new DroidHookService().install() },
   { agent: 'gemini', install: () => new GeminiHookService().install() },
   { agent: 'grok', install: () => new GrokHookService().install() }

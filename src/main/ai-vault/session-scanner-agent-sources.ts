@@ -4,6 +4,7 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import { resolveJunieSessionsDir } from './session-scanner-junie-paths'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
@@ -232,6 +233,22 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
     // only those (not the sibling agents/*/wire.jsonl transcripts).
     filePredicate: (filePath) =>
       basename(filePath) === 'state.json' && basename(dirname(filePath)).startsWith('session_')
+  },
+  junie: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(resolveJunieSessionsDir(options.junieSessionsDir), wslHomeDirs, [
+        '.junie',
+        'sessions'
+      ]),
+    extensions: ['.jsonl'],
+    // Why: each Junie session is <sessions>/session-*/events.jsonl; match only those
+    // (not the top-level index.jsonl or per-task terminal-output files).
+    filePredicate: (filePath) =>
+      basename(filePath) === 'events.jsonl' && basename(dirname(filePath)).startsWith('session-'),
+    // Why deny-by-default below depth 0: nothing nested under a session dir is a session, and
+    // each one holds per-task `<task-id>/terminal-output/` trees that reach gigabytes — walking
+    // them would stall the scan to discover nothing.
+    directoryPredicate: (name, depth) => depth === 0 && name.startsWith('session-')
   }
 }
 

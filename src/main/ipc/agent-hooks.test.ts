@@ -102,6 +102,9 @@ vi.mock('../devin/hook-service', () => ({
 vi.mock('../kimi/hook-service', () => ({
   kimiHookService: { getStatus: vi.fn(() => ({ agent: 'kimi', state: 'absent' })) }
 }))
+vi.mock('../junie/hook-service', () => ({
+  junieHookService: { getStatus: vi.fn(() => ({ agent: 'junie', state: 'absent' })) }
+}))
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
@@ -271,6 +274,17 @@ describe('agentHooks:kimiStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:kimiStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
+  })
+})
+
+describe('agentHooks:junieStatus IPC', () => {
+  it('returns Junie hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:junieStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'junie', state: 'absent' })
   })
 })
 

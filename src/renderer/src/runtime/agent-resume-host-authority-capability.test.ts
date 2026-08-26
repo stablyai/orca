@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { RESUMABLE_TUI_AGENTS } from '../../../shared/agent-session-resume'
 import {
+  AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES
@@ -26,8 +27,15 @@ describe('agentResumeHostAuthorityCapability', () => {
     expect(agentResumeHostAuthorityCapability(undefined)).toBeUndefined()
   })
 
-  it('advertises the Kimi resume capability from the host', () => {
+  it('gates Junie resume behind its own capability', () => {
+    expect(agentResumeHostAuthorityCapability('junie')).toBe(
+      AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY
+    )
+  })
+
+  it('advertises the Kimi and Junie resume capabilities from the host', () => {
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY)
   })
 
   it('pins the gate for every resumable agent so a new member is a deliberate decision', () => {
@@ -51,7 +59,8 @@ describe('agentResumeHostAuthorityCapability', () => {
       'prime-agent': undefined,
       copilot: undefined,
       omp: AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
-      kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY
+      kimi: AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+      junie: AGENT_SESSION_JUNIE_RESUME_RUNTIME_CAPABILITY
     })
   })
 })

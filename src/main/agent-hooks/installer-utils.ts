@@ -16,6 +16,7 @@ import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { resolveHooksJsonWritePath } from './hook-config-write-path'
 import { writeRollingFileBackup } from '../rolling-file-backup'
 import { wrapWindowsPowerShellEncodedCommand } from './windows-powershell-hook-launcher'
+import { WINDOWS_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 
 export type HookCommandConfig = {
   type: 'command'
@@ -134,6 +135,19 @@ export const WINDOWS_CMD_SAFE_PATH = /^[A-Za-z0-9_.:\\~-]+$/
 export function wrapWindowsCmdHookCommand(scriptPath: string): string {
   // Why: Codex/Antigravity/Devin spawn the hook as argv[0], not via cmd.exe, so it must be one spawnable token; a cmd `if exist` launcher isn't (#8430).
   return WINDOWS_CMD_SAFE_PATH.test(scriptPath) ? scriptPath : wrapWindowsHookCommand(scriptPath)
+}
+
+/**
+ * Launcher for agents that hand the hook to `cmd.exe /c` as a command line rather than
+ * spawning it as argv[0] (Junie). Freed from the one-token rule of
+ * `wrapWindowsCmdHookCommand`, this keeps the POSIX wrapper's two guarantees that the
+ * bare-path form gives up: a missing script drains stdin instead of stranding the writer
+ * (#11549), and a quoted path survives the spaces in `C:\\Users\\Ada Lovelace\\…` without
+ * paying PowerShell's ~300ms startup on every hook event.
+ */
+export function wrapWindowsCmdShellHookCommand(scriptPath: string): string {
+  const quoted = `"${scriptPath}"`
+  return `if exist ${quoted} (call ${quoted}) else (${WINDOWS_HOOK_STDIN_DRAIN_COMMAND})`
 }
 
 /**

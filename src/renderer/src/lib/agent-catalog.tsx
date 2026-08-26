@@ -301,6 +301,13 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://devin.ai/cli'
   },
   {
+    id: 'junie',
+    label: translate('auto.lib.agent.catalog.junie_label', 'Junie'),
+    cmd: 'junie',
+    faviconDomain: 'jetbrains.com',
+    homepageUrl: 'https://www.jetbrains.com/junie/'
+  },
+  {
     id: 'openclaw',
     label: translate('auto.lib.agent.catalog.5dff448636', 'OpenClaw'),
     cmd: 'openclaw',

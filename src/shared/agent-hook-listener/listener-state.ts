@@ -29,6 +29,11 @@ export type HookListenerState = {
    *  conversation was replaced (/clear, relaunch, resume), so claims the old session owned are void
    *  even when no SessionStart arrives — the backstop for the exits that emit no terminating hook. */
   claudeSessionOwnerByPaneKey: Map<string, string>
+  /** Junie `session_id` last reported on the pane, keyed `paneKey\0launchToken`. Junie carries
+   *  the id only on SessionStart/UserPromptSubmit, so id-less events (PreToolUse/Stop/...) fall
+   *  back to this cache — otherwise the stored `done` row would lose its resume identity. The
+   *  launch token scopes it so a relaunch cannot inherit the previous session's id. */
+  junieSessionByPaneKey: Map<string, string>
   /** Live thread-spawn children per Codex pane. */
   codexSubagentRosterByPaneKey: Map<string, CodexSubagentRoster>
   /** Incremental parent/child rollout cursors for Codex collaboration v2. */
@@ -71,6 +76,7 @@ export function createHookListenerState(): HookListenerState {
     claudeActiveSessionCronPaneKeys: new Set(),
     claudeConsumedCompactPromptIdByPaneKey: new Map(),
     claudeSessionOwnerByPaneKey: new Map(),
+    junieSessionByPaneKey: new Map(),
     codexSubagentRosterByPaneKey: new Map(),
     codexSubagentTranscriptByPaneKey: new Map(),
     codexLeadStateByPaneKey: new Map()
@@ -90,6 +96,7 @@ export function clearPaneCacheState(state: HookListenerState, paneKey: string): 
   state.claudeRunningNonAgentTaskPaneKeys.delete(paneKey)
   state.claudeActiveSessionCronPaneKeys.delete(paneKey)
   state.claudeSessionOwnerByPaneKey.delete(paneKey)
+  deletePaneScopedCacheEntry(state.junieSessionByPaneKey, paneKey)
   state.codexSubagentRosterByPaneKey.delete(paneKey)
   state.codexSubagentTranscriptByPaneKey.delete(paneKey)
   state.codexLeadStateByPaneKey.delete(paneKey)
@@ -163,6 +170,7 @@ export function movePaneCacheState(
   movePaneScopedSetEntries(state.claudeRunningNonAgentTaskPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedSetEntries(state.claudeActiveSessionCronPaneKeys, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.claudeSessionOwnerByPaneKey, fromPaneKey, toPaneKey)
+  movePaneScopedMapEntries(state.junieSessionByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentRosterByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexSubagentTranscriptByPaneKey, fromPaneKey, toPaneKey)
   movePaneScopedMapEntries(state.codexLeadStateByPaneKey, fromPaneKey, toPaneKey)
@@ -210,6 +218,7 @@ export function clearAllListenerCaches(state: HookListenerState): void {
   state.claudeRunningNonAgentTaskPaneKeys.clear()
   state.claudeActiveSessionCronPaneKeys.clear()
   state.claudeSessionOwnerByPaneKey.clear()
+  state.junieSessionByPaneKey.clear()
   state.codexSubagentRosterByPaneKey.clear()
   state.codexSubagentTranscriptByPaneKey.clear()
   state.codexLeadStateByPaneKey.clear()

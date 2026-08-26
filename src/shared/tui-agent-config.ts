@@ -1,54 +1,13 @@
 import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
-export type AgentPromptInjectionMode =
-  | 'argv'
-  | 'flag-prompt'
-  | 'flag-prompt-interactive'
-  | 'flag-interactive'
-  | 'hermes-query'
-  | 'stdin-after-start'
-
-export type DraftPasteReadySignal =
-  | 'render-quiet-after-bracketed-paste'
-  | 'codex-composer-prompt'
-  | 'render-cursor-after-bracketed-paste'
-  | 'grok-composer-prompt'
-
-export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
-
-export type TuiAgentConfig = {
-  detectCmd: string
-  /** Additional executable names that identify the same agent on PATH. */
-  detectCmdAliases?: readonly string[]
-  /** Other commands that must also be present before this agent counts as installed. */
-  detectRequiredCommands?: readonly string[]
-  /** Detection runtimes where this launch mode is not available as a detected agent. */
-  detectUnsupportedRuntimes?: readonly TuiAgentDetectionRuntime[]
-  launchCmd: string
-  /** Platform-specific launch command when the public binary name differs. */
-  launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
-  expectedProcess: string
-  promptInjectionMode: AgentPromptInjectionMode
-  /** Option terminator required before positional prompts that may look like CLI syntax. */
-  argvPromptSeparator?: '--'
-  /** Native CLI flag that seeds the input without submitting (e.g. Claude's `--prefill <text>`); preferred over the paste-after-ready path. */
-  draftPromptFlag?: string
-  /** Startup env var that seeds the input without submitting, for agents with no `--prefill`-style flag (e.g. pi); avoids the paste-after-ready race. */
-  draftPromptEnvVar?: string
-  /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
-  preflightTrust?: 'cursor' | 'copilot' | 'codex'
-  /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
-  draftPasteReadySignal?: DraftPasteReadySignal
-  /** Hard deadline for the agent's composer readiness signal. */
-  draftPasteReadyTimeoutMs?: number
-  /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
-  windowsShiftEnterEncoding?: 'csi-u'
-  /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
-  windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
-  /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
-  ctrlEnterEncoding?: 'csi-u'
-}
+export type {
+  AgentPromptInjectionMode,
+  DraftPasteReadySignal,
+  TuiAgentConfig,
+  TuiAgentDetectionRuntime
+} from './tui-agent-config-types'
+import type { TuiAgentConfig } from './tui-agent-config-types'
 
 export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
   claude: {
@@ -335,6 +294,16 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     expectedProcess: 'devin',
     // Why: `devin -- <prompt>` auto-submits immediately (docs.devin.ai/cli), so start the REPL with no argv prompt.
     promptInjectionMode: 'stdin-after-start'
+  },
+  junie: {
+    detectCmd: 'junie',
+    launchCmd: 'junie',
+    expectedProcess: 'junie',
+    // Why: positional `junie "text"` is a headless batch run that exits; `--prompt <text>`
+    // starts the interactive TUI with the prompt auto-submitted.
+    // Why plain 'junie' is the process: the PATH shim and the versioned launcher both `exec`,
+    // and the jpackage app loads the JVM in-process, so no `java` child survives to be seen.
+    promptInjectionMode: 'flag-prompt'
   }
 }
 

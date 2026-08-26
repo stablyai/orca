@@ -24,7 +24,8 @@ export function isolatedScanRoots(root: string) {
     primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
     droidSessionsDir: join(root, 'droid-sessions'),
     droidProjectsDir: join(root, 'droid-projects'),
-    kimiSessionsDir: join(root, 'kimi-sessions')
+    kimiSessionsDir: join(root, 'kimi-sessions'),
+    junieSessionsDir: join(root, 'junie-sessions')
   }
 }
 
@@ -135,4 +136,38 @@ export function writeAntigravityScannerFixture(
       content: 'Done'
     }
   ])
+}
+
+// Junie: <sessions>/session-*/events.jsonl plus the shared sessions/index.jsonl that
+// carries title and cwd. Transcript events are discriminated by `kind`, not `type`.
+export async function writeJunieScannerFixture(sessionsDir: string): Promise<string> {
+  const sessionId = 'session-260501-101200-abcd'
+  await mkdir(sessionsDir, { recursive: true })
+  await writeFile(
+    join(sessionsDir, 'index.jsonl'),
+    jsonLines([
+      {
+        sessionId,
+        createdAt: Date.parse('2026-05-01T10:12:00.000Z'),
+        updatedAt: Date.parse('2026-05-01T10:12:05.000Z'),
+        projectDir: '/tmp/junie',
+        taskName: 'Junie vault title'
+      }
+    ])
+  )
+  await writeJsonlFile(join(sessionsDir, sessionId, 'events.jsonl'), [
+    {
+      kind: 'SessionA2uxEvent',
+      event: { state: 'IN_PROGRESS' },
+      timestampMs: Date.parse('2026-05-01T10:12:00.500Z')
+    },
+    {
+      kind: 'UserPromptEvent',
+      requestId: 'prompt-260501-101201-zzzz',
+      prompt: 'Junie vault prompt',
+      presentablePrompt: 'Junie vault prompt',
+      timestampMs: Date.parse('2026-05-01T10:12:01.000Z')
+    }
+  ])
+  return sessionId
 }

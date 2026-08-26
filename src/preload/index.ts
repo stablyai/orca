@@ -2287,7 +2287,8 @@ const api = {
       ipcRenderer.invoke('agentHooks:copilotStatus'),
     hermesStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:hermesStatus'),
-    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus')
+    kimiStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:kimiStatus'),
+    junieStatus: (): Promise<AgentHookInstallStatus> => ipcRenderer.invoke('agentHooks:junieStatus')
   },
 
   agentTrust: {

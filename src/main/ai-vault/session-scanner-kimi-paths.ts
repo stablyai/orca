@@ -5,12 +5,12 @@ import { openTranscriptReadStream, wslGatedStat } from '../native-chat/wsl-trans
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
 import { asRecord, extractString } from './session-scanner-values'
 import {
-  KimiSessionIndexCache,
-  KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS,
-  KIMI_WORK_DIR_CACHE_TTL_MS
-} from './session-scanner-kimi-index-cache'
+  SessionIndexCache,
+  SESSION_INDEX_CACHE_MAX_PATHS,
+  SESSION_INDEX_CACHE_TTL_MS
+} from './session-scanner-session-index-cache'
 
-export { KIMI_WORK_DIR_CACHE_MAX_INDEX_PATHS, KIMI_WORK_DIR_CACHE_TTL_MS }
+export { SESSION_INDEX_CACHE_MAX_PATHS, SESSION_INDEX_CACHE_TTL_MS }
 
 // Why: Kimi Code stores sessions under <KIMI_CODE_HOME>/sessions/, mirroring the
 // CLI's own `KIMI_CODE_HOME ?? ~/.kimi-code` resolution (see kimi-fetcher.ts).
@@ -66,7 +66,7 @@ export function kimiPrimaryAgentWirePath(
 // Re-reading it once per session would be O(n^2); memoize by path + file
 // identity so a scan reads the index at most once. Bound and expire entries
 // because host/WSL/runtime roots can change during one main-process lifetime.
-const workDirCacheByIndexPath = new KimiSessionIndexCache()
+const workDirCacheByIndexPath = new SessionIndexCache()
 
 export function clearKimiSessionIndexCache(): void {
   workDirCacheByIndexPath.clear()

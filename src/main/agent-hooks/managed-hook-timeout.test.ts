@@ -39,6 +39,7 @@ import { GrokHookService } from '../grok/hook-service'
 import { CopilotHookService } from '../copilot/hook-service'
 import { DevinHookService } from '../devin/hook-service'
 import { DroidHookService } from '../droid/hook-service'
+import { JunieHookService } from '../junie/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { createAgentHookMemorySftp as createFakeSftp } from './agent-hook-memory-sftp.test-fixture'
@@ -108,6 +109,12 @@ const JSON_INSTALLERS = [
     timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
     configPath: `${REMOTE_HOME}/.config/devin/config.json`,
     install: (sftp: SFTPWrapper) => new DevinHookService().installRemote(sftp, REMOTE_HOME)
+  },
+  {
+    agent: 'junie',
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS,
+    configPath: `${REMOTE_HOME}/.junie/config.json`,
+    install: (sftp: SFTPWrapper) => new JunieHookService().installRemote(sftp, REMOTE_HOME)
   }
 ] as const
 

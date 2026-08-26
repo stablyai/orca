@@ -8,6 +8,7 @@ import {
   isolatedScanRoots,
   jsonLines,
   writeAntigravityScannerFixture,
+  writeJunieScannerFixture,
   writeOmpScannerFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
@@ -696,7 +697,9 @@ describe('scanAiVaultSessions', () => {
       ])
     )
 
-    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 20 })
+    const junieSessionId = await writeJunieScannerFixture(roots.junieSessionsDir)
+
+    const result = await scanAiVaultSessions({ ...roots, platform: 'darwin', limit: 21 })
 
     expect(result.issues).toEqual([])
     expect(new Set(result.sessions.map((session) => session.agent))).toEqual(
@@ -743,6 +746,14 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('kimi')).toBe(
       "cd '/tmp/kimi' && kimi --session 'session_kimi-session'"
     )
+    // Pinned by id: bare `--resume` would reopen the globally most-recent session.
+    expect(commandByAgent.get('junie')).toBe(
+      `cd '/tmp/junie' && junie --resume --session-id '${junieSessionId}'`
+    )
+
+    const junieSession = result.sessions.find((session) => session.agent === 'junie')
+    expect(junieSession?.title).toBe('Junie vault title')
+    expect(junieSession?.cwd).toBe('/tmp/junie')
 
     const ompSession = result.sessions.find((session) => session.agent === 'omp')
     expect(ompSession?.model).toBe('gpt-5.4-mini')

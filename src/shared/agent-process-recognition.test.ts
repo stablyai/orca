@@ -297,6 +297,36 @@ describe('agent process recognition', () => {
     })
   })
 
+  it('does not recognize Junie batch runs as interactive agents', () => {
+    // A positional prompt (or --task) runs one batch task and exits.
+    expect(recognizeAgentProcessFromCommandLine('junie "fix the failing tests"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('junie --task "fix the failing tests"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('junie --acp true')).toBeNull()
+    // Bare, --prompt and --resume all host the interactive TUI Orca manages.
+    expect(recognizeAgentProcessFromCommandLine('junie')).toEqual({
+      agent: 'junie',
+      processName: 'junie'
+    })
+    expect(recognizeAgentProcessFromCommandLine('junie --prompt "fix the failing tests"')).toEqual({
+      agent: 'junie',
+      processName: 'junie'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine('junie --resume --session-id session-260501-101200-abcd')
+    ).toEqual({ agent: 'junie', processName: 'junie' })
+    // A flag value must not read as the positional batch task.
+    expect(recognizeAgentProcessFromCommandLine('junie --model gpt-5 --brave')).toEqual({
+      agent: 'junie',
+      processName: 'junie'
+    })
+  })
+
+  it('does not map the JVM host process to Junie', () => {
+    // Why: Junie is a JVM app; mapping `java` to it would claim every unrelated
+    // Java process as an agent pane.
+    expect(recognizeAgentProcessFromCommandLine('java -jar junie-SNAPSHOT.jar')).toBeNull()
+  })
+
   it('recognizes only the agent subcommand of the generic Orca CLI', () => {
     expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
       agent: 'claude-agent-teams',
