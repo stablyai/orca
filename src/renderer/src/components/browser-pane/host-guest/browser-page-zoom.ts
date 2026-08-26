@@ -1,7 +1,7 @@
 import {
+  applyBrowserPageZoomLevel,
   DEFAULT_BROWSER_PAGE_ZOOM_LEVEL,
   nextBrowserPageZoomLevel,
-  normalizeBrowserPageZoomLevel,
   type BrowserPageZoomDirection
 } from '../../../../../shared/browser-page-zoom'
 
@@ -58,22 +58,7 @@ export function setBrowserPageZoomLevel(
   webview: BrowserPageZoomWebview | null | undefined,
   level: number
 ): number | null {
-  try {
-    if (!webview || webview.isDestroyed?.()) {
-      return null
-    }
-    const next = normalizeBrowserPageZoomLevel(level)
-    // Why compare first: Chromium's HostZoomMap is keyed by host per partition,
-    // so a no-op write still overwrites the host-wide zoom a sibling tab on the
-    // same hostname set. Only write when this pane actually needs to move.
-    if (normalizeBrowserPageZoomLevel(webview.getZoomLevel()) === next) {
-      return next
-    }
-    webview.setZoomLevel(next)
-    return next
-  } catch {
-    return null
-  }
+  return applyBrowserPageZoomLevel(webview, level)
 }
 
 // Why module-level: the guest webview outlives its React pane (a worktree

@@ -4,6 +4,7 @@ import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
 import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
+import { attachRemoteBrowserGuestPageZoomReassert } from './browser-guest-page-zoom'
 import { browserSessionRegistry } from './browser-session-registry'
 
 // Why: headless orca serve has no renderer window to host a <webview>, so each
@@ -19,6 +20,7 @@ const LOAD_TIMEOUT_MS = 30_000
 
 export class OffscreenBrowserBackend implements BrowserBackend {
   private readonly windowsByPageId = new Map<string, BrowserWindow>()
+  private readonly zoomReassertByPageId = new Map<string, () => void>()
 
   constructor(private readonly browserManager: BrowserManager) {}
 
@@ -50,11 +52,18 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     })
 
     this.windowsByPageId.set(browserPageId, win)
+    // Why: remote/offscreen guests share the profile partition, so Chromium's
+    // per-origin HostZoomMap can inherit Cmd/+ from a local tab of the same host.
+    this.zoomReassertByPageId.set(
+      browserPageId,
+      attachRemoteBrowserGuestPageZoomReassert(win.webContents)
+    )
 
     // Why: if the offscreen window is destroyed out from under us (crash, app
     // teardown), drop the registry entry so commands fail cleanly instead of
     // resolving a dead WebContents.
     win.webContents.once('destroyed', () => {
+      this.detachZoomReassert(browserPageId)
       this.windowsByPageId.delete(browserPageId)
       this.browserManager.unregisterGuest(browserPageId)
     })
@@ -86,6 +95,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   async closeTab(browserPageId: string): Promise<void> {
     const win = this.windowsByPageId.get(browserPageId)
+    this.detachZoomReassert(browserPageId)
     this.windowsByPageId.delete(browserPageId)
     this.browserManager.unregisterGuest(browserPageId)
     if (win && !win.isDestroyed()) {
@@ -100,12 +110,18 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   destroyAll(): void {
     for (const [pageId, win] of this.windowsByPageId) {
+      this.detachZoomReassert(pageId)
       this.browserManager.unregisterGuest(pageId)
       if (!win.isDestroyed()) {
         win.destroy()
       }
     }
     this.windowsByPageId.clear()
+  }
+
+  private detachZoomReassert(browserPageId: string): void {
+    this.zoomReassertByPageId.get(browserPageId)?.()
+    this.zoomReassertByPageId.delete(browserPageId)
   }
 
   private async loadUrl(win: BrowserWindow, url: string): Promise<void> {

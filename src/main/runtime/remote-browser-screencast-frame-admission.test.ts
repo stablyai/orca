@@ -24,7 +24,18 @@ function createMockWebContents() {
     attached = false
   })
   dbg.sendCommand = vi.fn(async () => ({}))
-  return { isDestroyed: vi.fn(() => false), debugger: dbg }
+  const emitter = new EventEmitter()
+  let zoomLevel = 0
+  return {
+    isDestroyed: vi.fn(() => false),
+    debugger: dbg,
+    on: emitter.on.bind(emitter),
+    off: emitter.off.bind(emitter),
+    getZoomLevel: () => zoomLevel,
+    setZoomLevel: (level: number) => {
+      zoomLevel = level
+    }
+  }
 }
 
 // Why: exercises the real E2EE channel so the oracle fails if an over-limit frame ever reaches

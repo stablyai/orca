@@ -3,6 +3,7 @@ import { BrowserError } from './cdp-bridge'
 import { acquireElectronDebugger, type ElectronDebuggerLease } from './electron-debugger-lease'
 import { createBrowserScreencastMessageHandler } from './browser-screencast-cdp-events'
 import { sendDebuggerCommand } from './browser-screencast-debugger-command'
+import { attachRemoteBrowserGuestPageZoomReassert } from './browser-guest-page-zoom'
 import { createBrowserScreencastDeviceMetrics } from './browser-screencast-device-metrics'
 import { createBrowserScreencastFramePacer } from './browser-screencast-frame-pacer'
 import { createBrowserScreencastSnapshotCapture } from './browser-screencast-snapshot-capture'
@@ -35,6 +36,7 @@ export async function startBrowserScreencast(
   let closed = false
   let stopping = false
   let resolveDone!: () => void
+  const detachZoomReassert = attachRemoteBrowserGuestPageZoomReassert(webContents)
   // Serializes viewport and frame-budget changes against the snapshot capture they trigger.
   let pendingUpdate = Promise.resolve()
   const done = new Promise<void>((resolve) => {
@@ -81,6 +83,7 @@ export async function startBrowserScreencast(
       return
     }
     closed = true
+    detachZoomReassert()
     snapshotCapture.clearNavigationCaptureTimer()
     framePacer.clearPending()
     dbg.removeListener('message', handleMessage as never)

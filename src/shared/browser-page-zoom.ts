@@ -40,3 +40,31 @@ export function nextBrowserPageZoomLevel(
 
   return normalizeBrowserPageZoomLevel(rawNext)
 }
+
+export type BrowserPageZoomTarget = {
+  getZoomLevel: () => number
+  setZoomLevel: (level: number) => void
+  isDestroyed?: () => boolean
+}
+
+export function applyBrowserPageZoomLevel(
+  target: BrowserPageZoomTarget | null | undefined,
+  level: number
+): number | null {
+  try {
+    if (!target || target.isDestroyed?.()) {
+      return null
+    }
+    const next = normalizeBrowserPageZoomLevel(level)
+    // Why compare first: Chromium's HostZoomMap is keyed by host per partition,
+    // so a no-op write still overwrites the host-wide zoom a sibling tab on the
+    // same hostname set. Only write when this target actually needs to move.
+    if (normalizeBrowserPageZoomLevel(target.getZoomLevel()) === next) {
+      return next
+    }
+    target.setZoomLevel(next)
+    return next
+  } catch {
+    return null
+  }
+}
