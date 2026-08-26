@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog, mergeCatalogModels } from './agent-session-option-catalog'
+import {
+  findCatalogModel,
+  findCatalogModelByRequestedId,
+  getAgentSessionOptionCatalog,
+  mergeCatalogModels
+} from './agent-session-option-catalog'
 import { resolveAgentSessionOptionLaunch } from './agent-session-option-launch'
 import {
   resolveNativeChatSessionOptionDefaults,
@@ -17,6 +22,33 @@ describe('agent session option catalog', () => {
       catalog?.models.find((model) => model.id === 'opus')?.options.map(({ id }) => id)
     ).toEqual(['effort', 'fastMode'])
     expect(catalog?.models.find((model) => model.id === 'haiku')?.options).toEqual([])
+  })
+
+  it('resolves Codex family aliases and dated variants onto their seed capabilities', () => {
+    const codex = getAgentSessionOptionCatalog('codex')!
+    expect(findCatalogModelByRequestedId(codex, 'luna')?.id).toBe('gpt-5.6-luna')
+    expect(findCatalogModelByRequestedId(codex, 'sol')?.id).toBe('gpt-5.6-sol')
+    expect(findCatalogModelByRequestedId(codex, 'gpt-5.6-luna-2026-08-01')?.id).toBe('gpt-5.6-luna')
+    expect(findCatalogModelByRequestedId(codex, 'gpt-5.6-sol')?.id).toBe('gpt-5.6-sol')
+    // The bare version routes to Sol, matching the usage pricing table.
+    expect(findCatalogModelByRequestedId(codex, 'gpt-5.6')?.id).toBe('gpt-5.6-sol')
+    // An id that matches no family keeps the conservative unknown-model ceiling.
+    expect(findCatalogModelByRequestedId(codex, 'future-codex-model')).toBeUndefined()
+    // Exact matching must stay exact: it also gates launch-arg defaulting.
+    expect(findCatalogModel(codex, 'luna')).toBeUndefined()
+  })
+
+  it('never injects a catalog effort default for an aliased Codex model', () => {
+    // Why: the user's ~/.codex/config.toml owns model_reasoning_effort unless they picked one.
+    expect(resolveAgentSessionOptionLaunch('codex', { model: 'luna' }).args).toEqual(['-m', 'luna'])
+    expect(resolveAgentSessionOptionLaunch('codex', { model: 'luna', effort: 'max' })).toEqual({
+      args: ['-m', 'luna', '-c', 'model_reasoning_effort=max'],
+      appliedValues: { model: 'luna', effort: 'max' }
+    })
+    // Luna tops out at max, so ultra is still dropped rather than sent to the CLI.
+    expect(
+      resolveAgentSessionOptionLaunch('codex', { model: 'luna', effort: 'ultra' }).args
+    ).toEqual(['-m', 'luna'])
   })
 
   it('merges discovered labels while preserving cataloged option shapes', () => {

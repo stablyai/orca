@@ -160,7 +160,12 @@ describe('CodexUsageStore', () => {
 
   it('normalizes GPT-5.6 reasoning suffixes before pricing', async () => {
     const store = createStoreWithState({
-      dailyAggregates: ['gpt-5.6-terra-high', 'gpt-5.6-luna(medium)'].map((model) => ({
+      dailyAggregates: [
+        'gpt-5.6-terra-high',
+        'gpt-5.6-luna(medium)',
+        'gpt-5.6-sol-ultra',
+        'gpt-5.6-luna(max)'
+      ].map((model) => ({
         day: '2026-04-09',
         model,
         projectKey: 'worktree:repo-1::/workspace/repo',
@@ -185,6 +190,13 @@ describe('CodexUsageStore', () => {
     expect(
       breakdown.find((row) => row.key === 'gpt-5.6-luna(medium)')?.estimatedCostUsd
     ).toBeCloseTo(0.205)
+    // Codex 0.147 tiers: an unrecognized suffix drops the row's cost entirely.
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-sol-ultra')?.estimatedCostUsd).toBeCloseTo(
+      1.025
+    )
+    expect(breakdown.find((row) => row.key === 'gpt-5.6-luna(max)')?.estimatedCostUsd).toBeCloseTo(
+      0.205
+    )
   })
 
   it('prices the bare gpt-5.6 alias at Sol rates without shadowing the tier IDs', async () => {

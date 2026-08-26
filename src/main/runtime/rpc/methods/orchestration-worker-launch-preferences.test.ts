@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { getAgentSessionOptionCatalog } from '../../../../shared/agent-session-option-catalog'
+import {
+  findCatalogModelByRequestedId,
+  getAgentSessionOptionCatalog
+} from '../../../../shared/agent-session-option-catalog'
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
@@ -75,17 +78,42 @@ describe('orchestration worker launch preferences', () => {
       rejected: ['max', 'ultra', 'future-effort']
     },
     {
+      // Why: an id no seed row explains means unknown host capability, so the menu stops at
+      // the last tier every supported Codex build accepts. Raising this fallback would hand
+      // `max`/`ultra` to a binary that predates them; per-model ceilings lift it instead.
       model: 'future-codex-model',
       accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
       rejected: ['max', 'ultra', 'future-effort']
+    },
+    {
+      // Bare family alias, as accepted by `codex -m luna`.
+      model: 'luna',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+      rejected: ['ultra', 'future-effort']
+    },
+    {
+      model: 'sol',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
+    },
+    {
+      // Bare version alias; OpenAI routes it to Sol.
+      model: 'gpt-5.6',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['future-effort']
+    },
+    {
+      // Dated variant published after this Orca build.
+      model: 'gpt-5.6-luna-2026-08-01',
+      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
+      rejected: ['ultra', 'future-effort']
     }
   ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
     const catalog = getAgentSessionOptionCatalog('codex')!
     const effort =
-      catalog.models
-        .find((candidate) => candidate.id === model)
-        ?.options.find((option) => option.id === 'effort') ??
-      catalog.unknownModelOptions?.find((option) => option.id === 'effort')
+      findCatalogModelByRequestedId(catalog, model)?.options.find(
+        (option) => option.id === 'effort'
+      ) ?? catalog.unknownModelOptions?.find((option) => option.id === 'effort')
 
     expect(effort?.kind.type).toBe('select')
     expect(

@@ -168,6 +168,9 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('orders Codex models by version descending to match the official picker', () => {
     const ids = COMMIT_MESSAGE_AGENT_SPECS.codex?.models.map((m) => m.id)
     expect(ids).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
       'gpt-5.5',
       'gpt-5.4',
       'gpt-5.4-mini',

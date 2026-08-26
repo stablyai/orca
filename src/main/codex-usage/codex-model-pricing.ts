@@ -80,7 +80,17 @@ export const MODEL_PRICING: Record<string, CodexModelPricing> = {
   }
 }
 
-const REASONING_TIER_SUFFIXES = ['minimal', 'low', 'medium', 'high', 'xhigh', 'auto', 'none']
+const REASONING_TIER_SUFFIXES = [
+  'minimal',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+  'ultra',
+  'auto',
+  'none'
+]
 
 function stripParenthesizedReasoningTier(model: string): string | null {
   const match = model.match(/^(.*)\(([^()]*)\)$/)
@@ -116,12 +126,16 @@ export function normalizeModelForPricing(model: string | null): string | null {
     return null
   }
 
+  // Why: `max` is both a reasoning tier and the tail of the `gpt-5.1-codex-max` family
+  // name, so this family must resolve before dash-suffix stripping eats it and reprices
+  // the rows as plain `gpt-5.1-codex`.
+  if (lower === 'gpt-5.1-codex-max' || lower.startsWith('gpt-5.1-codex-max-')) {
+    return 'gpt-5.1-codex-max'
+  }
+
   const normalized = stripDashReasoningTiers(lower)
   if (normalized === 'gpt-5' || normalized === 'gpt-5-codex') {
     return 'gpt-5'
-  }
-  if (normalized === 'gpt-5.1-codex-max' || normalized.startsWith('gpt-5.1-codex-max-')) {
-    return 'gpt-5.1-codex-max'
   }
   if (normalized === 'gpt-5.1-codex' || normalized.startsWith('gpt-5.1-codex-')) {
     return 'gpt-5.1-codex'

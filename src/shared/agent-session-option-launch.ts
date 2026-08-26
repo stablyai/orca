@@ -1,5 +1,9 @@
 import type { AgentType } from './agent-status-types'
-import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
+import {
+  findCatalogModel,
+  findCatalogModelByRequestedId,
+  getAgentSessionOptionCatalog
+} from './agent-session-option-catalog'
 import type { SessionOptionValue } from './native-chat-session-options'
 
 export type ResolvedSessionOptionLaunch = {
@@ -43,7 +47,13 @@ export function resolveAgentSessionOptionLaunch(
   const model = findCatalogModel(catalog, modelId)
   const appliedValues: Record<string, SessionOptionValue> = {}
   const args: string[] = []
-  const modelOptions = model?.options ?? catalog.unknownModelOptions ?? []
+  // Why: the menu comes from the alias-resolved row so a dated or aliased id keeps its real
+  // ceiling, while `model` stays an exact match — an alias must not gain catalog defaults,
+  // which would override the effort the user set in their own agent config.
+  const modelOptions =
+    (model ?? findCatalogModelByRequestedId(catalog, modelId))?.options ??
+    catalog.unknownModelOptions ??
+    []
   const modelValues = Object.fromEntries(
     modelOptions.flatMap((option) => {
       const explicitValue = values[option.id]

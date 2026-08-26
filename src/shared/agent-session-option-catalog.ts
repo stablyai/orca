@@ -47,6 +47,21 @@ export function findCatalogModel(
   return catalog.models.find((model) => model.id === modelId)
 }
 
+/** Resolves aliases and dated variants onto their seed row for capability checks.
+ *  Why: kept separate from `findCatalogModel` because that lookup also gates launch-arg
+ *  injection — a fuzzy match there would override the user's own agent config. */
+export function findCatalogModelByRequestedId(
+  catalog: AgentSessionOptionCatalog,
+  modelId: string
+): CatalogModel | undefined {
+  const exact = findCatalogModel(catalog, modelId)
+  if (exact) {
+    return exact
+  }
+  const resolved = catalog.resolveModelId?.(modelId)
+  return resolved ? findCatalogModel(catalog, resolved) : undefined
+}
+
 export function findCatalogOption(
   model: CatalogModel | undefined,
   optionId: string

@@ -60,6 +60,10 @@ export type AgentSessionOptionCatalog = {
   supportsWorkerLaunchPreferences?: true
   /** Launch-safe options for opaque model ids that are absent from the static catalog. */
   unknownModelOptions?: CatalogOption[]
+  /** Maps a requested id onto the seed row that describes its capabilities (dated ids,
+   * family aliases). Why: validation-only — resolving during launch would inject the
+   * seed's option defaults over the user's own agent config. */
+  resolveModelId?: (modelId: string) => string | undefined
   composeModelValue?: (modelId: string, values: Record<string, SessionOptionValue>) => string
   /** Why: a seeded id the CLI has retired is a fatal launch, so a successful probe
    * must be able to drop it rather than only add. Membership only — option menus

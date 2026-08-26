@@ -1,6 +1,6 @@
 import type { AgentLaunchPreferences } from '../../../../shared/agent-session-host-authority'
 import {
-  findCatalogModel,
+  findCatalogModelByRequestedId,
   findCatalogOption,
   getAgentSessionOptionCatalog
 } from '../../../../shared/agent-session-option-catalog'
@@ -75,7 +75,7 @@ export function resolveWorkerLaunchPreferences(args: {
   }
 
   if (args.effort) {
-    const model = findCatalogModel(catalog, args.model)
+    const model = findCatalogModelByRequestedId(catalog, args.model)
     const option =
       findCatalogOption(model, 'effort') ??
       (!model

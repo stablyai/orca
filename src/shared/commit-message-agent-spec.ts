@@ -99,6 +99,18 @@ const OPENAI_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'xhigh', label: 'Extra High' }
 ]
 
+// Why: only the gpt-5.6 family accepts these; pre-5.6 Codex models reject them, and a
+// Codex older than 0.147 cannot run gpt-5.6 at all, so the higher tiers stay model-scoped.
+const OPENAI_MAX_THINKING_LEVELS: ThinkingLevel[] = [
+  ...OPENAI_THINKING_LEVELS,
+  { id: 'max', label: 'Max' }
+]
+
+const OPENAI_ULTRA_THINKING_LEVELS: ThinkingLevel[] = [
+  ...OPENAI_MAX_THINKING_LEVELS,
+  { id: 'ultra', label: 'Ultra' }
+]
+
 const CLAUDE_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'low', label: 'Low' },
   { id: 'medium', label: 'Medium' },
@@ -407,6 +419,24 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     // Why: ordered to match the official `codex` model picker — descending
     // by version so the frontier model lands on top and legacy models trail.
     models: [
+      {
+        id: 'gpt-5.6-sol',
+        label: 'GPT-5.6 Sol',
+        thinkingLevels: OPENAI_ULTRA_THINKING_LEVELS,
+        defaultThinkingLevel: 'low'
+      },
+      {
+        id: 'gpt-5.6-terra',
+        label: 'GPT-5.6 Terra',
+        thinkingLevels: OPENAI_ULTRA_THINKING_LEVELS,
+        defaultThinkingLevel: 'low'
+      },
+      {
+        id: 'gpt-5.6-luna',
+        label: 'GPT-5.6 Luna',
+        thinkingLevels: OPENAI_MAX_THINKING_LEVELS,
+        defaultThinkingLevel: 'low'
+      },
       {
         id: 'gpt-5.5',
         label: 'GPT-5.5',
