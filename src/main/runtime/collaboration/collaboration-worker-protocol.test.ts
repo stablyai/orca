@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import { createCollaborationTopology } from './collaboration-topology'
 import {
   buildCollaborationWorkerProtocol,
+  buildCollaborationWorkerProtocolForTask,
   type CollaborationWorkerProtocolInput
 } from './collaboration-worker-protocol'
 
@@ -28,7 +30,7 @@ describe('buildCollaborationWorkerProtocol', () => {
       expect(out).toContain('- alpha')
       expect(out).toContain('- beta')
       expect(out).toContain('orca orchestration collaboration-publish --from worker-1')
-      expect(out).toContain('--topic <topic> --semantic-type finding --priority normal')
+      expect(out).toContain('--topic <topic> --semantic-type <semantic-type> --priority <priority>')
       expect(out).toContain('--body')
       expect(out).not.toContain('=== COLLABORATION: SUBSCRIBER ===')
     })
@@ -51,6 +53,33 @@ describe('buildCollaborationWorkerProtocol', () => {
       expect(out).toContain('worker_done')
       expect(out).toMatch(/Published/)
       expect(out).toMatch(/required/i)
+    })
+
+    it('derives admitted semantic types and minimum priorities for each required topic', () => {
+      const topology = createCollaborationTopology([
+        { taskId: 'producer', publishesTo: ['gate'], requiredPublishesTo: ['gate'] },
+        {
+          taskId: 'subscriber-a',
+          subscribesTo: ['gate'],
+          admission: { acceptedTypes: ['finding', 'report'], minPriority: 'high' }
+        },
+        {
+          taskId: 'subscriber-b',
+          subscribesTo: ['gate'],
+          admission: { acceptedTypes: ['finding'], minPriority: 'normal' }
+        }
+      ])
+
+      const out = buildCollaborationWorkerProtocolForTask({
+        topology,
+        taskId: 'producer',
+        workerHandle: 'worker-1'
+      })!
+
+      expect(out).toContain('- gate')
+      expect(out).toMatch(/semantic-type finding.*minimum priority normal/i)
+      expect(out).toMatch(/semantic-type report.*minimum priority high/i)
+      expect(out).toContain('--semantic-type <semantic-type> --priority <priority>')
     })
 
     it('states that a required publish reaching zero subscribers does not satisfy completion', () => {

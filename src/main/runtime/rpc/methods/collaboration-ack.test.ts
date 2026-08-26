@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import { prepareCollaborationCheckpoint } from '../../collaboration/collaboration-checkpoint-store'
 import { buildCollaborationTaskMailboxAddress } from '../../collaboration/collaboration-task-mailbox'
 import { encodeCollaborationMessagePayload } from '../../collaboration/collaboration-message-payload'
 import type { MessagePriority } from '../../orchestration/types'
@@ -79,9 +80,17 @@ describe('orchestration.collaborationAck', () => {
     return { from: 'term_worker', messageIds: ['m0'], ...overrides }
   }
 
+  function deliverCheckpoint(): void {
+    prepareCollaborationCheckpoint(db, taskId, {
+      acceptedTypes: ['checkpoint'],
+      minPriority: 'normal'
+    })
+  }
+
   it('marks unread ids consumed and returns duplicate false', async () => {
     setup()
     insertCollaborationMessage('m0')
+    deliverCheckpoint()
 
     const result = (await call(ackParams())) as AckReceipt
 
@@ -92,6 +101,7 @@ describe('orchestration.collaborationAck', () => {
   it('returns duplicate true when all ids were already acked', async () => {
     setup()
     insertCollaborationMessage('m0')
+    deliverCheckpoint()
     await call(ackParams())
 
     const result = (await call(ackParams())) as AckReceipt
@@ -104,12 +114,22 @@ describe('orchestration.collaborationAck', () => {
     setup()
     insertCollaborationMessage('m0')
     insertCollaborationMessage('m1')
+    deliverCheckpoint()
 
     const result = (await call(ackParams({ messageIds: ['m0', 'm1'] }))) as AckReceipt
 
     expect(result).toEqual({ messageIds: ['m0', 'm1'], duplicate: false })
     expect(db.getMessageById('m0')?.read).toBe(1)
     expect(db.getMessageById('m1')?.read).toBe(1)
+  })
+
+  it('rejects a valid same-mailbox id that was never delivered by checkpoint', async () => {
+    setup()
+    insertCollaborationMessage('m0')
+
+    await expect(call(ackParams())).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(db.getMessageById('m0')?.read).toBe(0)
+    expect(db.getMessageById('m0')?.delivered_at).toBeNull()
   })
 
   it('rejects an id belonging to a different mailbox', async () => {
@@ -154,6 +174,7 @@ describe('orchestration.collaborationAck', () => {
     setup()
     insertCollaborationMessage('m0')
     insertCollaborationMessage('m1')
+    deliverCheckpoint()
     await call(ackParams({ messageIds: ['m0'] }))
 
     await expect(call(ackParams({ messageIds: ['m0', 'm1'] }))).rejects.toMatchObject({
@@ -192,6 +213,7 @@ describe('orchestration.collaborationAck', () => {
     setup()
     const otherTaskId = db.createTask({ spec: 'other', runId }).id
     insertCollaborationMessage('m0')
+    deliverCheckpoint()
 
     const result = (await call(
       ackParams({ taskId: otherTaskId, dispatchId: 'caller-fake-dispatch' })

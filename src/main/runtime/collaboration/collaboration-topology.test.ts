@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { AdmissionPolicy } from './collaboration-admission'
 import {
   admissionPolicyForTask,
+  admittedPublishOptionsForTopic,
   allowedPublishTopicsForTask,
   createCollaborationTopology,
   requiredPublishTopicsForTask,
@@ -183,6 +184,44 @@ describe('subscribersForTopic', () => {
   it('returns an empty array when nobody subscribes', () => {
     const topology = createCollaborationTopology([step({ taskId: 'a' })])
     expect(subscribersForTopic(topology, 't1')).toEqual([])
+  })
+})
+
+describe('admittedPublishOptionsForTopic', () => {
+  it('returns each semantic type with the least restrictive priority that reaches a subscriber', () => {
+    const topology = createCollaborationTopology([
+      step({ taskId: 'pub', publishesTo: ['t1'], requiredPublishesTo: ['t1'] }),
+      step({
+        taskId: 'a',
+        subscribesTo: ['t1'],
+        admission: policy({ acceptedTypes: ['finding', 'report'], minPriority: 'high' })
+      }),
+      step({
+        taskId: 'b',
+        subscribesTo: ['t1'],
+        admission: policy({ acceptedTypes: ['finding', 'status'], minPriority: 'normal' })
+      }),
+      step({
+        taskId: 'c',
+        subscribesTo: ['t1'],
+        admission: policy({ acceptedTypes: ['report'], minPriority: 'urgent' })
+      })
+    ])
+
+    expect(admittedPublishOptionsForTopic(topology, 't1')).toEqual([
+      { semanticType: 'finding', minPriority: 'normal' },
+      { semanticType: 'report', minPriority: 'high' },
+      { semanticType: 'status', minPriority: 'normal' }
+    ])
+  })
+
+  it('returns no options when subscribers admit no semantic type', () => {
+    const topology = createCollaborationTopology([
+      step({ taskId: 'a', subscribesTo: ['t1'], admission: policy({ acceptedTypes: [] }) })
+    ])
+
+    expect(admittedPublishOptionsForTopic(topology, 't1')).toEqual([])
+    expect(admittedPublishOptionsForTopic(topology, 'missing')).toEqual([])
   })
 })
 
