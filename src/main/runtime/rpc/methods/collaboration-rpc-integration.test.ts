@@ -148,7 +148,9 @@ describe('local collaboration RPC integration', () => {
     expect(fromB.subscriberTaskIds).toEqual([c.id])
 
     const cCheckpoint = await checkpoint('term_c')
-    expect(cCheckpoint.entries.map((entry) => [entry.topic, entry.body, entry.producerTaskId])).toEqual([
+    expect(
+      cCheckpoint.entries.map((entry) => [entry.topic, entry.body, entry.producerTaskId])
+    ).toEqual([
       ['/input/a', 'A', a.id],
       ['/input/b', 'B', b.id]
     ])
