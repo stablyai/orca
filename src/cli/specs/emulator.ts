@@ -117,5 +117,19 @@ export const EMULATOR_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Capture a one-shot logcat dump from the Android device',
     usage: 'orca emulator logcat [--lines <n>] [--device <id>] [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'lines']
+  },
+  {
+    path: ['emulator', 'record', 'start'],
+    summary: 'Start recording the emulator screen to a video file (iOS only)',
+    usage: 'orca emulator record start [path] [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree', 'path'],
+    positionalArgs: ['path'],
+    examples: ['orca emulator record start', 'orca emulator record start ./demo.mp4']
+  },
+  {
+    path: ['emulator', 'record', 'stop'],
+    summary: 'Stop the running screen recording and report the saved file',
+    usage: 'orca emulator record stop [--device <id>] [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'device', 'emulator', 'worktree']
   }
 ]

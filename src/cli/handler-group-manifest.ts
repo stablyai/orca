@@ -158,6 +158,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/emulator.js')).EMULATOR_HANDLERS
   },
   {
+    name: 'emulator-recording',
+    keys: ['emulator record start', 'emulator record stop'],
+    load: async () => (await import('./handlers/emulator-recording.js')).EMULATOR_RECORDING_HANDLERS
+  },
+  {
     name: 'computer',
     keys: [
       'computer capabilities',

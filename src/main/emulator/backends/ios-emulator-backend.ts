@@ -21,6 +21,8 @@ import {
   listServeSimHelperProcessesForDevice
 } from '../serve-sim-helper-processes'
 import type { EmulatorBridgeOptions } from '../emulator-bridge-types'
+import type { EmulatorRecordingInfo } from '../emulator-recording-registry'
+import { IosScreenRecorder } from './ios-screen-recorder'
 import { sendEmulatorGestureSequence, type EmulatorGesturePoint } from '../emulator-gesture-sender'
 import { parseServeSimDetachedSession } from '../serve-sim-detached-session'
 import { requestServeSimAccessibilityTree } from '../serve-sim-accessibility-tree'
@@ -43,14 +45,17 @@ export class IosEmulatorBackend implements EmulatorBackend {
     launch: false,
     permissions: false,
     accessibilityTree: true,
-    logcat: false
+    logcat: false,
+    record: true
   }
 
   private cachedServeSimExecutable: ServeSimExecutable | undefined
+  private readonly recorder: IosScreenRecorder
   private readonly waitForEndpointReady: (endpoint: string) => Promise<boolean>
 
   constructor(options: EmulatorBridgeOptions = {}) {
     this.waitForEndpointReady = options.waitForEndpointReady ?? waitForServeSimEndpointReady
+    this.recorder = new IosScreenRecorder(options.startVideoRecording)
   }
 
   // Why: resolving the executable can materialize the serve-sim runtime (a one-time
@@ -186,6 +191,24 @@ export class IosEmulatorBackend implements EmulatorBackend {
     return requestServeSimAccessibilityTree(axUrl)
   }
 
+  async startRecording(deviceId: string, outputPath: string): Promise<EmulatorRecordingInfo> {
+    const udid = await this.resolveDeviceId(deviceId)
+    await ensureSimulatorBooted(udid)
+    return this.recorder.start(udid, outputPath)
+  }
+
+  async stopRecording(deviceId: string): Promise<EmulatorRecordingInfo> {
+    return this.recorder.stop(await this.resolveDeviceId(deviceId))
+  }
+
+  activeRecording(deviceId: string): EmulatorRecordingInfo | null {
+    return this.recorder.get(deviceId)
+  }
+
+  async stopAllRecordings(): Promise<void> {
+    await this.recorder.stopAll()
+  }
+
   async startSession(deviceId: string): Promise<EmulatorSessionInfo> {
     const udid = await this.resolveDeviceId(deviceId)
     await ensureSimulatorBooted(udid)
@@ -261,6 +284,8 @@ export class IosEmulatorBackend implements EmulatorBackend {
     deviceId: string,
     options: { helperPid?: number; includeOrphaned?: boolean } = {}
   ): Promise<void> {
+    // Stop first: the capture process outlives the helper and would keep writing.
+    await this.recorder.stopIfRunning(deviceId)
     await this.execServeSim(['--kill', '-q', deviceId]).catch(() => {})
     // Why: serve-sim --kill depends on its state file; stale helper binaries
     // can survive state loss and keep old streams/listeners around.

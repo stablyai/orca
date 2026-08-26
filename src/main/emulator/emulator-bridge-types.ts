@@ -14,4 +14,10 @@ export type EmulatorSessionState = {
 
 export type EmulatorBridgeOptions = {
   waitForEndpointReady?: (endpoint: string) => Promise<boolean>
+  startVideoRecording?: StartVideoRecording
 }
+
+export type StartVideoRecording = (
+  udid: string,
+  outputPath: string
+) => Promise<{ outputPath: string; stop(): Promise<void> }>

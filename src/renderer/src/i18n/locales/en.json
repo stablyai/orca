@@ -14004,7 +14004,9 @@
                 "6bd8dff42a": "Rotate",
                 "3d836b879c": "Choose emulator",
                 "81b3571a07": "Connect",
-                "868c0f2938": "Working…"
+                "868c0f2938": "Working…",
+                "5f1c8b3d20": "Record",
+                "a7d4e9f612": "Stop recording"
               }
             },
             "screen": {
@@ -14029,6 +14031,14 @@
               "frame": {
                 "stream": {
                   "f1c0179002": "Stream is not producing frames."
+                }
+              },
+              "screen": {
+                "recording": {
+                  "9c7e2a1d40": "Could not start screen recording",
+                  "4b1f0c88ea": "Could not save screen recording",
+                  "7d3a5b2c19": "Screen recording saved",
+                  "2e6f9a0b77": "Open"
                 }
               }
             },
