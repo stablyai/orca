@@ -1083,6 +1083,9 @@ async function prepareWorktreePushTargetSsh(
   await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
   let remoteName = target.remoteName
   let remoteCreated = false
+  // Why: ownership above is inherited from sibling worktrees, so it can be true
+  // for a remote this call did not create. Only rollback needs that distinction.
+  let remoteAddedHere = false
   if (target.remoteUrl) {
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
@@ -1112,6 +1115,7 @@ async function prepareWorktreePushTargetSsh(
         throw error
       }
       remoteCreated = true
+      remoteAddedHere = true
     }
   }
   try {
@@ -1124,7 +1128,8 @@ async function prepareWorktreePushTargetSsh(
   } catch (error) {
     // Why: mirrors the local path — a fetch failure aborts the create, so the
     // remote we just added on the host would be orphaned with no owner to clean it.
-    if (remoteCreated) {
+    // A reused remote belongs to a live sibling worktree; removing it breaks that one.
+    if (remoteAddedHere) {
       await provider.exec(['remote', 'remove', remoteName], repoPath).catch(() => {})
     }
     throw error
