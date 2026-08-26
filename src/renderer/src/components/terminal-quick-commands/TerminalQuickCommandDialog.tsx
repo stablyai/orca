@@ -43,6 +43,7 @@ type TerminalQuickCommandDialogProps = {
   /** Settings has no ambient workspace to imply scope from, so it opens the
    *  Advanced section up front. In-workspace entry points leave it collapsed. */
   defaultAdvancedOpen?: boolean
+  showBackgroundPreference: boolean
   onOpenChange: (open: boolean) => void
   onSave: (command: TerminalQuickCommand) => void
 }
@@ -67,6 +68,7 @@ export function TerminalQuickCommandDialog({
   command,
   repos = EMPTY_REPOS,
   defaultAdvancedOpen = false,
+  showBackgroundPreference,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
@@ -129,6 +131,13 @@ export function TerminalQuickCommandDialog({
     )
   }
 
+  const toggleOpenInBackground = (): void => {
+    setDraft((current) => ({
+      ...current,
+      openInBackground: current.openInBackground ? undefined : true
+    }))
+  }
+
   const saveDraft = (): void => {
     const next: TerminalQuickCommand = isTerminalAgentQuickCommand(draft)
       ? {
@@ -137,7 +146,8 @@ export function TerminalQuickCommandDialog({
           action: 'agent-prompt',
           agent: draft.agent,
           prompt: draft.prompt.trimEnd(),
-          scope: selectedScope
+          scope: selectedScope,
+          ...(draft.openInBackground ? { openInBackground: true } : {})
         }
       : {
           id: draft.id,
@@ -145,7 +155,8 @@ export function TerminalQuickCommandDialog({
           action: 'terminal-command',
           command: draft.command.trimEnd(),
           appendEnter: draft.appendEnter,
-          scope: selectedScope
+          scope: selectedScope,
+          ...(draft.openInBackground ? { openInBackground: true } : {})
         }
     if (
       !next.label ||
@@ -228,6 +239,7 @@ export function TerminalQuickCommandDialog({
           />
 
           <TerminalQuickCommandAdvancedSection
+            draft={draft}
             repos={repos}
             advancedOpen={advancedOpen}
             selectedScope={selectedScope}
@@ -237,6 +249,8 @@ export function TerminalQuickCommandDialog({
             lastRepoScopeIdRef={lastRepoScopeIdRef}
             setAdvancedOpen={setAdvancedOpen}
             setDraft={setDraft}
+            toggleOpenInBackground={toggleOpenInBackground}
+            showBackgroundPreference={showBackgroundPreference}
           />
         </div>
 

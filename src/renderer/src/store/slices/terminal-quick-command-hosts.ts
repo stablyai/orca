@@ -3,7 +3,7 @@ import { toast } from 'sonner'
 import type { AppState } from '../types'
 import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import {
-  applyTerminalQuickCommandMutation,
+  applyAuthoritativeTerminalQuickCommandMutation,
   parseNormalizedTerminalQuickCommands,
   type TerminalQuickCommandMutation
 } from '../../../../shared/terminal-quick-commands'
@@ -67,7 +67,7 @@ async function mutateLocalCommands(
 ): Promise<boolean> {
   try {
     const current = get().settings?.terminalQuickCommands ?? []
-    const next = applyTerminalQuickCommandMutation(current, mutation)
+    const next = applyAuthoritativeTerminalQuickCommandMutation(current, mutation)
     await get().updateSettingsOrThrow({ terminalQuickCommands: next })
     return true
   } catch (error) {

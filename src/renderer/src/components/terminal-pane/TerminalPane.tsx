@@ -295,6 +295,7 @@ function TerminalQuickCommandEditorDialog({
       mode="add"
       command={command}
       repos={hostRepos}
+      showBackgroundPreference={hostId === LOCAL_EXECUTION_HOST_ID}
       onOpenChange={onOpenChange}
       onSave={onSave}
     />

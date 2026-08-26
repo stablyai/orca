@@ -6,9 +6,11 @@ import type { getTerminalQuickCommandScope } from '../../../../shared/terminal-q
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { TerminalQuickCommandBackgroundSwitch } from './TerminalQuickCommandBackgroundSwitch'
 import { TerminalQuickCommandScopeField } from './TerminalQuickCommandScopeField'
 
 type TerminalQuickCommandAdvancedSectionProps = {
+  draft: TerminalQuickCommand
   repos: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   advancedOpen: boolean
   selectedScope: ReturnType<typeof getTerminalQuickCommandScope>
@@ -18,6 +20,8 @@ type TerminalQuickCommandAdvancedSectionProps = {
   lastRepoScopeIdRef: MutableRefObject<string | null>
   setAdvancedOpen: Dispatch<SetStateAction<boolean>>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
+  toggleOpenInBackground: () => void
+  showBackgroundPreference: boolean
 }
 
 function getScopeSummaryLabel({
@@ -43,6 +47,7 @@ function getScopeSummaryLabel({
 }
 
 export function TerminalQuickCommandAdvancedSection({
+  draft,
   repos,
   advancedOpen,
   selectedScope,
@@ -51,7 +56,9 @@ export function TerminalQuickCommandAdvancedSection({
   selectedRepoMissing,
   lastRepoScopeIdRef,
   setAdvancedOpen,
-  setDraft
+  setDraft,
+  toggleOpenInBackground,
+  showBackgroundPreference
 }: TerminalQuickCommandAdvancedSectionProps): React.JSX.Element {
   const scopeSummary = getScopeSummaryLabel({ selectedScope, selectedRepo })
 
@@ -108,6 +115,13 @@ export function TerminalQuickCommandAdvancedSection({
               }}
               setDraft={setDraft}
             />
+            {showBackgroundPreference ? (
+              <TerminalQuickCommandBackgroundSwitch
+                openInBackground={draft.openInBackground === true}
+                disabled={!advancedOpen}
+                onToggle={toggleOpenInBackground}
+              />
+            ) : null}
           </div>
         </div>
       </div>
