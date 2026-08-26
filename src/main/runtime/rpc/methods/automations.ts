@@ -116,7 +116,8 @@ const AutomationCreate = z.object({
   rrule: AutomationSchedule,
   dtstart: requiredNumber('Missing trigger start time'),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  agentArgs: OptionalNullablePlainString
 })
 
 const AutomationUpdateFields = z.object({
@@ -137,7 +138,8 @@ const AutomationUpdateFields = z.object({
   rrule: AutomationSchedule.optional(),
   dtstart: requiredNumber('Missing trigger start time').optional(),
   enabled: OptionalBoolean,
-  missedRunGraceMinutes: OptionalPositiveInt
+  missedRunGraceMinutes: OptionalPositiveInt,
+  agentArgs: OptionalNullablePlainString
 })
 
 const AutomationUpdate = z.object({

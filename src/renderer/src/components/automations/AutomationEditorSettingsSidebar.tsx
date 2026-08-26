@@ -104,6 +104,29 @@ export function AutomationEditorSettingsSidebar({
                   allowNarrowTrigger
                 />
               </Field>
+              <Field
+                labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
+                label={translate(
+                  'auto.components.automations.AutomationEditorDialog.9f1c2a4d88',
+                  'Agent args'
+                )}
+              >
+                <input
+                  value={draft.agentArgs}
+                  onChange={(event) =>
+                    onDraftChange((current) => ({ ...current, agentArgs: event.target.value }))
+                  }
+                  placeholder={translate(
+                    'auto.components.automations.AutomationEditorDialog.7d5e8b3f01',
+                    'e.g. --yolo'
+                  )}
+                  aria-label={translate(
+                    'auto.components.automations.AutomationEditorDialog.2c4a9f6e01',
+                    'Extra agent launch arguments'
+                  )}
+                  className="h-9 w-full min-w-0 rounded-md border border-input bg-input/30 px-3 text-sm shadow-xs outline-none focus-visible:border-ring dark:bg-input/30"
+                />
+              </Field>
             </div>
           </div>
         </div>

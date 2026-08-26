@@ -873,4 +873,28 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockReleaseTerminalOwnership).toHaveBeenCalledOnce()
     expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
   })
+
+  it('passes the automation agent args through to the background session launch', async () => {
+    await registerAndDispatch(makeAutomation({ agentArgs: '--yolo' }))
+
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '--yolo' })
+    )
+  })
+
+  it('launches fresh instead of reusing a session when agent args are set', async () => {
+    mockFindReusableAutomationSession.mockReturnValue({
+      tabId: 'reuse-tab',
+      ptyId: 'reuse-pty',
+      paneKey: 'reuse-tab:pane'
+    })
+
+    await registerAndDispatch(makeAutomation({ reuseSession: true, agentArgs: '--yolo' }))
+
+    expect(mockFindReusableAutomationSession).not.toHaveBeenCalled()
+    expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
+      expect.objectContaining({ agentArgs: '--yolo' })
+    )
+    expect(mockSubmitPromptToAgentPty).not.toHaveBeenCalled()
+  })
 })

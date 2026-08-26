@@ -598,4 +598,61 @@ describe('launchAgentBackgroundSession', () => {
       })
     )
   })
+
+  it('uses per-automation agent args instead of the global defaults', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      agentArgs: '--yolo --verbose'
+    })
+
+    expect(mockSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        command: "claude '--yolo' '--verbose' 'run the automation'"
+      })
+    )
+    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
+      launchConfig: {
+        agentCommand: "claude '--yolo' '--verbose'",
+        agentArgs: '--yolo --verbose',
+        agentEnv: {}
+      }
+    })
+  })
+
+  it('keeps global default args when agent args are null, empty, or whitespace-only', async () => {
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      agentArgs: null
+    })
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      agentArgs: ''
+    })
+    await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation',
+      agentArgs: '   '
+    })
+
+    expect(mockSpawn.mock.calls[0]?.[0]).toMatchObject({
+      command: "claude '--dangerously-skip-permissions' 'run the automation'"
+    })
+    expect(mockSpawn.mock.calls[1]?.[0]).toMatchObject({
+      command: "claude '--dangerously-skip-permissions' 'run the automation'"
+    })
+    expect(mockSpawn.mock.calls[2]?.[0]).toMatchObject({
+      command: "claude '--dangerously-skip-permissions' 'run the automation'"
+    })
+  })
 })

@@ -22,6 +22,7 @@ const automation: Automation = {
   prompt: 'Review changes',
   precheck: null,
   agentId: 'codex',
+  agentArgs: null,
   runContext: {
     kind: 'workspace-run',
     projectId: 'project-1',
@@ -73,6 +74,7 @@ describe('headless automation workspace create args', () => {
       createdWithAgent: 'codex',
       startupAgent: 'codex',
       startupPrompt: 'Review changes',
+      agentArgs: undefined,
       telemetrySource: 'unknown',
       automationProvenance: {
         kind: 'created-by-automation',
@@ -88,6 +90,20 @@ describe('headless automation workspace create args', () => {
         hostId: 'ssh:ssh-target-1'
       }
     })
+  })
+
+  it('threads agentArgs through if non-empty', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, agentArgs: '--dangerously-skip-permissions' },
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args.agentArgs).toBe('--dangerously-skip-permissions')
   })
 
   it('falls back to skip for legacy automations without a saved setup decision', () => {

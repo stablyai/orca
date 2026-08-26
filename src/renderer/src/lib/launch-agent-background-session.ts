@@ -53,7 +53,11 @@ export async function launchAgentBackgroundSession(
     throw new Error('The target workspace is no longer available.')
   }
   const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const agentArgs = resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
+  // Why: unset (null/empty) agentArgs keeps global defaults so legacy automations keep their flags.
+  const agentArgs =
+    args.agentArgs !== undefined && args.agentArgs !== null && args.agentArgs.trim().length > 0
+      ? args.agentArgs
+      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
   const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
   // Folder launch ownership cannot be derived from a repo row (#2989).
   const launchHost = resolveAgentBackgroundLaunchHost({

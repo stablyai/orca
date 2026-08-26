@@ -28,6 +28,7 @@ const mockApi = {
 globalThis.window = { api: mockApi }
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
+  const { agentArgs, ...rest } = overrides
   return {
     id: 'auto-1',
     name: 'Remote check',
@@ -59,7 +60,8 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
       repoId: 'repo-1',
       path: '/srv/orca'
     },
-    ...overrides
+    agentArgs: agentArgs ?? null,
+    ...rest
   }
 }
 

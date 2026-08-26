@@ -184,6 +184,7 @@ describe('formatAutomationShow', () => {
       prompt: 'Run checks',
       precheck: null,
       agentId: 'codex',
+      agentArgs: null,
       projectId: 'repo-legacy',
       executionTargetType: 'local',
       executionTargetId: 'local',
@@ -226,6 +227,13 @@ describe('formatAutomationShow', () => {
     expect(output).toContain('runPath: /srv/orca')
     expect(output).toContain('legacyRepoId: repo-legacy')
     expect(output).not.toContain('projectId: repo-legacy')
+  })
+
+  it('shows agent args when set and none when unset', () => {
+    expect(formatAutomationShow({ automation: automation() })).toContain('agentArgs: none')
+    expect(
+      formatAutomationShow({ automation: automation({ agentArgs: '--yolo --verbose' }) })
+    ).toContain('agentArgs: --yolo --verbose')
   })
 })
 

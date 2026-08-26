@@ -282,6 +282,17 @@ function getPrecheckFlag(
   }
 }
 
+function getOptionalAgentArgsFlag(flags: Map<string, string | boolean>): string | null | undefined {
+  if (!flags.has('agent-args')) {
+    return undefined
+  }
+  const value = flags.get('agent-args')
+  if (typeof value !== 'string') {
+    throw new RuntimeClientError('invalid_argument', '--agent-args requires a value')
+  }
+  return value.trim() || null
+}
+
 function getSourceContextFlag(
   flags: Map<string, string | boolean>
 ): TaskSourceContext | null | undefined {
@@ -457,6 +468,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       timezone: getOptionalStringFlag(flags, 'timezone'),
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
+      agentArgs: getOptionalAgentArgsFlag(flags),
       ...schedule
     } satisfies AutomationCreateParams)
     printResult(result, json, formatAutomationShow)
@@ -482,6 +494,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
         timezone: getOptionalStringFlag(flags, 'timezone'),
         enabled: getEnabledFlag(flags),
         missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
+        agentArgs: getOptionalAgentArgsFlag(flags),
         ...schedule
       } satisfies AutomationUpdateParams
     })

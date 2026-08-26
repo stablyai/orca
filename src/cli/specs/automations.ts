@@ -18,7 +18,8 @@ const AUTOMATION_STATE_FLAGS = [
   'disabled',
   'missed-run-grace-minutes',
   'reuse-session',
-  'fresh-session'
+  'fresh-session',
+  'agent-args'
 ]
 
 export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
@@ -60,12 +61,14 @@ export const AUTOMATION_COMMAND_SPECS: CommandSpec[] = [
       'Use --source-context with a JSON TaskSourceContext when task/provider data should come from a specific host/account; pass null on edit to clear it.',
       'Use --workspace to run in an existing worktree; otherwise the automation creates a new worktree per run.',
       'Use --precheck to run a bounded command before scheduled runs; exit code 0 continues, anything else records a skipped run.',
-      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.'
+      'Use --reuse-session only with existing-workspace automations to submit later runs to the previous live automation session when it is still available. Use --fresh-session to disable reuse.',
+      'Use --agent-args to pass extra CLI flags to the agent launch command (e.g. "--yolo"). When omitted, the global agent default args apply.'
     ],
     examples: [
       'orca automations create --name "Daily review" --trigger daily --prompt "Review open changes" --provider codex',
       'orca automations create --name "Weekday triage" --trigger "0 9 * * 1-5" --prompt "Triage issues" --provider claude --repo my-repo',
-      'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex'
+      'orca automations create --name "PR review" --trigger hourly --precheck "gh pr list --json number -q .[0].number" --prompt "Review requested PRs" --provider codex',
+      'orca automations create --name "Yolo check" --trigger daily --prompt "Check the repo" --provider claude --agent-args "--yolo"'
     ]
   },
   {

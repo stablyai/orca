@@ -4266,7 +4266,8 @@ export class OrcaRuntimeService {
       rrule: input.rrule,
       dtstart: input.dtstart,
       enabled: input.enabled,
-      missedRunGraceMinutes: input.missedRunGraceMinutes
+      missedRunGraceMinutes: input.missedRunGraceMinutes,
+      agentArgs: input.agentArgs
     })
   }
 
@@ -4317,6 +4318,9 @@ export class OrcaRuntimeService {
     }
     if (hasRuntimeAutomationUpdateValue(updates, 'missedRunGraceMinutes')) {
       patch.missedRunGraceMinutes = updates.missedRunGraceMinutes
+    }
+    if (hasRuntimeAutomationUpdateValue(updates, 'agentArgs')) {
+      patch.agentArgs = updates.agentArgs
     }
     const targetChanged =
       hasRuntimeAutomationUpdateValue(updates, 'repo') ||
@@ -24190,7 +24194,8 @@ export class OrcaRuntimeService {
     repo: Repo,
     agent: TuiAgent,
     prompt: string | undefined,
-    launchPreferences?: AgentLaunchPreferences
+    launchPreferences?: AgentLaunchPreferences,
+    agentArgs?: string | null
   ): { agent: TuiAgent; startup: WorktreeStartupLaunch; followup?: WorktreeStartupFollowup } {
     if (!this.store) {
       throw new Error('runtime_unavailable')
@@ -24213,7 +24218,10 @@ export class OrcaRuntimeService {
       agent,
       prompt: prompt ?? '',
       cmdOverrides: settings.agentCmdOverrides ?? {},
-      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentArgs:
+        agentArgs !== undefined && agentArgs !== null && agentArgs.trim().length > 0
+          ? agentArgs
+          : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
       sessionOptions,
       sessionOptionsOverrideAgentArgs: Boolean(sessionOptions),
@@ -24662,6 +24670,7 @@ export class OrcaRuntimeService {
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
     startupLaunchPreferences?: AgentLaunchPreferences
+    agentArgs?: string | null
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
     automationProvenance?: AutomationWorkspaceProvenance
@@ -24699,7 +24708,8 @@ export class OrcaRuntimeService {
             repo,
             args.startupAgent,
             args.startupPrompt,
-            args.startupLaunchPreferences
+            args.startupLaunchPreferences,
+            args.agentArgs
           )
         : null
     const draftStartup =
@@ -29000,14 +29010,20 @@ export class OrcaRuntimeService {
 
   async launchAgentTerminal(
     worktreeSelector: string,
-    opts: { agent: TuiAgent; prompt: string; title?: string }
+    opts: { agent: TuiAgent; prompt: string; title?: string; agentArgs?: string | null }
   ): Promise<RuntimeTerminalCreate> {
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
     const repo = this.store?.getRepo(worktree.repoId)
     if (!repo) {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
-    const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
+    const startup = this.buildStartupForAgent(
+      repo,
+      opts.agent,
+      opts.prompt,
+      undefined,
+      opts.agentArgs
+    )
     if (repo.connectionId) {
       await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
     } else {

@@ -8,6 +8,7 @@ import { getAutomationTargetAvailability } from './automation-target-availabilit
 import { getAutomationCreateAvailability } from './automation-create-admission'
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
+  const { agentArgs, ...rest } = overrides
   return {
     id: 'automation-1',
     name: 'Nightly',
@@ -31,7 +32,8 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
     missedRunGraceMinutes: 720,
     createdAt: 1,
     updatedAt: 1,
-    ...overrides
+    agentArgs: agentArgs ?? null,
+    ...rest
   }
 }
 
