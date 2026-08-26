@@ -150,22 +150,29 @@ export function dropStaleResumePermissionEscalation(args: {
 }
 
 /** Fails open (reports granted) for any string it cannot tokenize, so an
- * unreadable setting never silently narrows a resumed pane. */
+ * unreadable setting never silently narrows a resumed pane.
+ *
+ * Why one token list rather than a scan per source: `resolveAgentLaunchCommand`
+ * emits the override ahead of the args, so a multi-token escalation can be
+ * split across the two — `qwen --approval-mode` plus `yolo` still launches with
+ * the flag, and scanning each source alone would call it stale. */
 function currentLaunchGrantsEscalation(
   args: { cmdOverride?: string | null; currentAgentArgs: string },
   sequence: readonly string[],
   shell: AgentStartupShell
 ): boolean {
-  for (const source of [args.currentAgentArgs, args.cmdOverride ?? '']) {
+  const tokens: string[] = []
+  for (const source of [args.cmdOverride ?? '', args.currentAgentArgs]) {
     if (!source.trim()) {
       continue
     }
     const tokenized = tokenizeStartupCommand(source, shell)
-    if (!tokenized.ok || containsTokenSequence(tokenized.tokens, sequence)) {
+    if (!tokenized.ok) {
       return true
     }
+    tokens.push(...tokenized.tokens)
   }
-  return false
+  return containsTokenSequence(tokens, sequence)
 }
 
 export type ResumeLaunchInputs = {

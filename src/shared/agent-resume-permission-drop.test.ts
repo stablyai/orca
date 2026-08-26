@@ -177,6 +177,26 @@ describe('dropStaleResumePermissionEscalation', () => {
     ).toEqual({ agentCommand: 'qwen', agentArgs: '', agentEnv: {} })
   })
 
+  it('keeps an escalation split across the command override and the args', () => {
+    const launchConfig = {
+      agentCommand: "qwen '--approval-mode' 'yolo'",
+      agentArgs: '--approval-mode yolo',
+      agentEnv: {}
+    }
+    // Why: the launch is `<override> <args>`, so these two settings still put
+    // `--approval-mode yolo` on the command line.
+    expect(
+      dropStaleResumePermissionEscalation({
+        agent: 'qwen-code',
+        launchConfig,
+        cmdOverride: 'qwen --approval-mode',
+        currentAgentArgs: 'yolo',
+        currentAgentEnv: {},
+        platform: 'darwin'
+      })
+    ).toEqual(launchConfig)
+  })
+
   it('drops a stale escalation env var', () => {
     expect(
       dropStaleResumePermissionEscalation({
