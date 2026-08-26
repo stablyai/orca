@@ -128,6 +128,44 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     )
   })
 
+  it('clears activeTabId and activeTabIdByWorktree entries that name a tombstoned tab', () => {
+    const ghost = terminalTab('tab-ghost')
+    const survivor = terminalTab('tab-survivor')
+    const current = sessionState({
+      tabsByWorktree: { [WORKTREE]: [] }
+    })
+    const remote = sessionState({
+      tabsByWorktree: { [WORKTREE]: [ghost, survivor] },
+      activeTabId: 'tab-ghost',
+      activeTabIdByWorktree: { [WORKTREE]: 'tab-ghost' },
+      closedTerminalTabTombstonesByTabId: {
+        'tab-ghost': { closedAt: Date.now(), worktreeId: WORKTREE }
+      }
+    })
+
+    const merged = merge(current, remote, { [WORKTREE]: [] })
+
+    expect(merged.activeTabId).toBeNull()
+    expect(merged.activeTabIdByWorktree?.[WORKTREE]).toBeNull()
+  })
+
+  it('a non-tombstoned active tab id passes through unchanged', () => {
+    const survivor = terminalTab('tab-survivor')
+    const current = sessionState({
+      tabsByWorktree: { [WORKTREE]: [] }
+    })
+    const remote = sessionState({
+      tabsByWorktree: { [WORKTREE]: [survivor] },
+      activeTabId: 'tab-survivor',
+      activeTabIdByWorktree: { [WORKTREE]: 'tab-survivor' }
+    })
+
+    const merged = merge(current, remote, { [WORKTREE]: [] })
+
+    expect(merged.activeTabId).toBe('tab-survivor')
+    expect(merged.activeTabIdByWorktree?.[WORKTREE]).toBe('tab-survivor')
+  })
+
   it('without any tombstone the local-survival trade is unchanged', () => {
     // Copied from remote-workspace-session-merge-local-survival.test.ts: the host still lists a tab
     // closed elsewhere, and absence alone must keep letting it survive.

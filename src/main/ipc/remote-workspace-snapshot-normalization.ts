@@ -31,6 +31,35 @@ function normalizeOptionalRecord<T extends Record<string, unknown>>(value: unkno
   return Object.keys(value).length > 0 ? (value as T) : undefined
 }
 
+function isValidRemoteClosedTabTombstone(value: unknown): value is RemoteClosedTabTombstone {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return false
+  }
+  const candidate = value as Partial<RemoteClosedTabTombstone>
+  return (
+    typeof candidate.closedAt === 'number' &&
+    Number.isFinite(candidate.closedAt) &&
+    typeof candidate.worktreePath === 'string' &&
+    candidate.worktreePath.length > 0
+  )
+}
+
+// Why: a corrupt inbound snapshot (e.g. `{"tab-1": null}`) later crashes
+// importRemoteWorkspaceSession, which reads tombstone.worktreePath without
+// re-checking its shape. Dropping invalid entries here keeps that read safe.
+function normalizeClosedTabTombstonesByTabId(
+  value: unknown
+): Record<string, RemoteClosedTabTombstone> | undefined {
+  const record = normalizeOptionalRecord<Record<string, unknown>>(value)
+  if (!record) {
+    return undefined
+  }
+  const entries = Object.entries(record).filter(([, tombstone]) =>
+    isValidRemoteClosedTabTombstone(tombstone)
+  ) as [string, RemoteClosedTabTombstone][]
+  return entries.length > 0 ? Object.fromEntries(entries) : undefined
+}
+
 function normalizeRemoteSession(raw: unknown): RemoteWorkspaceSession {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return emptyRemoteSession()
@@ -64,7 +93,7 @@ function normalizeRemoteSession(raw: unknown): RemoteWorkspaceSession {
     lastVisitedAtByWorktreePath: normalizeOptionalRecord<Record<string, number>>(
       input.lastVisitedAtByWorktreePath
     ),
-    closedTabTombstonesByTabId: normalizeOptionalRecord<Record<string, RemoteClosedTabTombstone>>(
+    closedTabTombstonesByTabId: normalizeClosedTabTombstonesByTabId(
       input.closedTabTombstonesByTabId
     )
   }

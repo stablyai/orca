@@ -239,7 +239,17 @@ export function mergeDirectSshRemoteWorkspaceSession(
       : activeWorktreeId
         ? worktreeWorkspaceKey(activeWorktreeId)
         : null,
-    activeTabId: activeOutsideTarget ? current.activeTabId : remote.activeTabId,
+    // Why nulling here is still safe despite the null-deselect contract above:
+    // hydration re-picks a valid tab whenever activeTabId is null, and the
+    // duplicate-tab repair pass already tolerates a null activeTabId — so a
+    // tombstoned id is treated the same as a deliberate deselect rather than
+    // surfacing a dead reference downstream.
+    activeTabId:
+      !activeOutsideTarget && remote.activeTabId != null && isTombstoned(remote.activeTabId)
+        ? null
+        : activeOutsideTarget
+          ? current.activeTabId
+          : remote.activeTabId,
     // Why sweeping the WHOLE map (not just replaceWorktreeIds) is safe: this
     // function's sole caller applies the merge through target-scoped
     // hydration, which replaces only `workspaceKeys` (targetScopedWorkspaceHydrationPatch
@@ -266,7 +276,15 @@ export function mergeDirectSshRemoteWorkspaceSession(
           return localActiveTabId == null ? [] : [[worktreeId, localActiveTabId] as const]
         })
       ),
-      ...remote.activeTabIdByWorktree
+      // Why nulling a tombstoned entry is safe here too: same reasoning as
+      // activeTabId above — hydration re-picks a valid tab and the
+      // duplicate-tab repair pass tolerates the null.
+      ...Object.fromEntries(
+        Object.entries(remote.activeTabIdByWorktree ?? {}).map(([worktreeId, tabId]) => [
+          worktreeId,
+          tabId != null && isTombstoned(tabId) ? null : tabId
+        ])
+      )
     },
     remoteSessionIdsByTabId: {
       ...Object.fromEntries(

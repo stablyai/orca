@@ -18,6 +18,8 @@ export const CLOSED_TAB_TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000
 // still able to race a stale snapshot.
 export const MAX_CLOSED_TAB_TOMBSTONES = 500
 
+/** Drops tombstones past the TTL and caps the rest at MAX_CLOSED_TAB_TOMBSTONES,
+ *  keeping the newest so a heavy multi-workspace user's map stays bounded. */
 export function pruneClosedTerminalTabTombstones(
   map: ClosedTerminalTabTombstonesByTabId | undefined,
   now: number
@@ -29,6 +31,7 @@ export function pruneClosedTerminalTabTombstones(
   return Object.fromEntries(entries.slice(0, MAX_CLOSED_TAB_TOMBSTONES))
 }
 
+/** Records the close as a tombstone for the given tab and prunes the map in the same pass. */
 export function recordClosedTerminalTabTombstone(
   map: ClosedTerminalTabTombstonesByTabId | undefined,
   tabId: string,
@@ -38,6 +41,7 @@ export function recordClosedTerminalTabTombstone(
   return pruneClosedTerminalTabTombstones({ ...map, [tabId]: { closedAt: now, worktreeId } }, now)
 }
 
+/** Combines two tombstone maps, keeping the newer closedAt on a shared tab id, then prunes. */
 export function mergeClosedTerminalTabTombstones(
   a: ClosedTerminalTabTombstonesByTabId | undefined,
   b: ClosedTerminalTabTombstonesByTabId | undefined,
