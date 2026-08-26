@@ -209,7 +209,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
     ) : null
   }
   const mermaidSourceOccurrences = new Map<string, number>()
-  const paragraphSourceOccurrences = new Map<string, number>()
+  let paragraphOccurrence = 0
 
   return (
     <View style={styles.root}>
@@ -338,13 +338,10 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
         if (block.type === 'rule') {
           return <View key={index} style={styles.rule} />
         }
-        const occurrence = paragraphSourceOccurrences.get(block.text) ?? 0
-        paragraphSourceOccurrences.set(block.text, occurrence + 1)
+        const paragraphKey = `paragraph:${paragraphOccurrence}`
+        paragraphOccurrence += 1
         return (
-          <SelectableMarkdownText
-            key={`${block.text}:${occurrence}`}
-            style={[styles.paragraph, proseScale]}
-          >
+          <SelectableMarkdownText key={paragraphKey} style={[styles.paragraph, proseScale]}>
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}

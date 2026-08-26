@@ -67,4 +67,19 @@ describe('MobileMarkdown text selection', () => {
       ).toBe(true)
     }
   })
+
+  it('preserves the active paragraph Text while prose streams', () => {
+    act(() => {
+      renderer = create(createElement(MobileMarkdown, { content: 'Streaming response' }))
+    })
+    const initialParagraph = renderer!.root.findByType('Text' as never)
+
+    act(() => {
+      renderer!.update(createElement(MobileMarkdown, { content: 'Streaming response continues' }))
+    })
+
+    const updatedParagraph = renderer!.root.findByType('Text' as never)
+    expect(updatedParagraph).toBe(initialParagraph)
+    expect(flattenText(updatedParagraph)).toBe('Streaming response continues')
+  })
 })
