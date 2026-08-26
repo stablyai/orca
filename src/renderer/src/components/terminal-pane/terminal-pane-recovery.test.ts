@@ -62,6 +62,19 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.hasPty).not.toHaveBeenCalled()
   })
 
+  it('remounts an unverifiable reattach without requiring host-death evidence', async () => {
+    const result = await requestTerminalPaneRecovery({
+      tabId: 'tab-ssh',
+      ptyId: 'ssh:target@@pty-1',
+      reason: 'reattach-unverifiable'
+    })
+
+    expect(result).toBe(true)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-ssh')
+    expect(mocks.hasPty).not.toHaveBeenCalled()
+    expect(isTerminalInputQuarantined('tab-ssh')).toBe(false)
+  })
+
   it('records a breadcrumb when the tab cannot be remounted, without consuming budget', async () => {
     mocks.remountTerminalTabForRecovery.mockReturnValue(false)
 
@@ -149,6 +162,23 @@ describe('requestTerminalPaneRecovery', () => {
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
     await vi.advanceTimersByTimeAsync(400_000)
     expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not restart an unverifiable SSH reattach chain after its incident cap', async () => {
+    vi.useFakeTimers()
+    for (let attempt = 0; attempt < 4; attempt += 1) {
+      vi.setSystemTime(attempt * 20_000)
+      await requestTerminalPaneRecovery({
+        tabId: 'tab-ssh',
+        ptyId: 'ssh:target@@pty-1',
+        reason: 'reattach-unverifiable',
+        terminalRecoveryGeneration: captureTerminalPaneRecoveryGeneration('tab-ssh')
+      })
+    }
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
+
+    await vi.advanceTimersByTimeAsync(600_000)
+    expect(mocks.remountTerminalTabForRecovery).toHaveBeenCalledTimes(3)
   })
 
   it('does not retry a cooldown decline from the xterm replaced by the remount', async () => {

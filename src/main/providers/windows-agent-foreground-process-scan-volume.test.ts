@@ -1,26 +1,27 @@
-// Regression guard: bound the volume of full-process-table PowerShell/CIM scans
-// driven by Windows agent foreground-process inspection — the Windows analogue of
-// issue #6288 (POSIX `ps`).
+// Regression guard: bound the volume of full-process-table scans driven by
+// Windows agent foreground-process inspection — the Windows analogue of issue
+// #6288 (POSIX `ps`).
 //
 // Drives queryWindowsProcessDescendants across several concurrently-inspecting
 // agent panes on the agent-completion cadence (ACTIVE_POLL_INTERVAL_MS = 750ms)
-// and counts how many powershell.exe process-table scans actually spawn. Pre-fix
-// the call site forked one powershell.exe per pane per tick; with the shared
-// snapshot cache the scans collapse to ~one per tick regardless of pane count,
-// while each pane still resolves the same descendant set.
+// and counts how many Toolhelp32 snapshots actually run. Pre-fix the call site
+// scanned once per pane per tick; with the shared snapshot cache the scans
+// collapse to ~one per tick regardless of pane count, while each pane still
+// resolves the same descendant set.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, powershellScanCount } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  powershellScanCount: { value: 0 }
-}))
+const getAllProcessesMock = vi.fn()
 
-vi.mock('child_process', () => ({ execFile: execFileMock }))
-
-import {
-  queryWindowsProcessDescendants,
-  resetWindowsProcessRowsSnapshotForTests
-} from './windows-foreground-process-rows'
+import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
+import { queryWindowsProcessDescendants } from './windows-foreground-process-rows'
+// A real snapshot always contains the process doing the querying; the reader
+// rejects a table without it, because that is what a blocked
+// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
+  SELF_PROCESS_ROW,
+  ...rows
+]
 
 const ACTIVE_POLL_INTERVAL_MS = 750
 const PANE_COUNT = 6
@@ -29,64 +30,56 @@ const TICKS = Math.floor((WINDOW_SECONDS * 1000) / ACTIVE_POLL_INTERVAL_MS)
 
 const shellPid = (pane: number): number => 100 + pane * 1000
 
-// A real CIM query returns the whole system, so one shared snapshot must contain
-// every pane's shell + foreground node/codex child. Each pane resolves its own
+// A snapshot returns the whole system, so one shared scan must contain every
+// pane's shell + foreground node/codex child. Each pane resolves its own
 // descendant from the single scan.
-const PROCESS_TABLE_JSON = JSON.stringify(
-  Array.from({ length: PANE_COUNT }, (_, pane) => {
-    const shell = shellPid(pane)
-    return [
-      {
-        ProcessId: shell,
-        ParentProcessId: 99,
-        Name: 'cmd.exe',
-        CommandLine: 'cmd.exe',
-        ExecutablePath: 'C:/Windows/System32/cmd.exe'
-      },
-      {
-        ProcessId: shell + 1,
-        ParentProcessId: shell,
-        Name: 'node.exe',
-        CommandLine: 'node C:/Users/dev/AppData/codex/bin/codex.js',
-        ExecutablePath: 'C:/Program Files/nodejs/node.exe'
-      }
-    ]
-  }).flat()
-)
-
-function installCountingPowerShellMock(): void {
-  execFileMock.mockImplementation((cmd: string, _args: unknown, _opts: unknown, cb: unknown) => {
-    const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
-    if (cmd === 'powershell.exe') {
-      powershellScanCount.value += 1
+const NATIVE_ROWS = Array.from({ length: PANE_COUNT }, (_, pane) => {
+  const shell = shellPid(pane)
+  return [
+    {
+      pid: shell,
+      ppid: 99,
+      name: 'cmd.exe',
+      commandLine: 'cmd.exe'
+    },
+    {
+      pid: shell + 1,
+      ppid: shell,
+      name: 'node.exe',
+      commandLine: 'node C:/Users/dev/AppData/codex/bin/codex.js'
     }
-    callback(null, { stdout: PROCESS_TABLE_JSON, stderr: '' })
-  })
-}
+  ]
+}).flat()
 
-describe('windows agent foreground inspection powershell-scan volume', () => {
+describe('windows agent foreground inspection process-table scan volume', () => {
   let platform: PropertyDescriptor | undefined
 
   beforeEach(() => {
-    execFileMock.mockReset()
-    resetWindowsProcessRowsSnapshotForTests()
-    powershellScanCount.value = 0
+    getAllProcessesMock.mockReset()
+    getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
+      cb(withSelf(NATIVE_ROWS))
+    })
     platform = Object.getOwnPropertyDescriptor(process, 'platform')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses: getAllProcessesMock
+    }))
     vi.useFakeTimers({ toFake: ['Date'] })
     vi.setSystemTime(0)
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    __setWindowsProcessTreeLoaderForTests()
     if (platform) {
       Object.defineProperty(process, 'platform', platform)
     }
   })
 
-  it('bounds powershell scans by poll ticks, not by pane count, while resolving every pane', async () => {
-    installCountingPowerShellMock()
+  const scanCount = (): number => getAllProcessesMock.mock.calls.length
 
+  it('bounds process-table scans by poll ticks, not by pane count, while resolving every pane', async () => {
     for (let tick = 0; tick < TICKS; tick++) {
       vi.setSystemTime(tick * ACTIVE_POLL_INTERVAL_MS)
       // All panes inspect concurrently within the tick (worst case).
@@ -106,22 +99,20 @@ describe('windows agent foreground inspection powershell-scan volume', () => {
     }
 
     const totalInspections = PANE_COUNT * TICKS
-    // Pre-fix this equals totalInspections (one powershell.exe per inspection).
-    // With the shared cache, concurrent panes within a tick share one scan and
-    // the 500ms TTL forces a fresh scan each new 750ms tick -> ~one per tick.
-    expect(powershellScanCount.value).toBeLessThanOrEqual(TICKS + 1)
-    expect(powershellScanCount.value).toBeLessThan(totalInspections / 2)
+    // Pre-fix this equals totalInspections (one scan per inspection). With the
+    // shared cache, concurrent panes within a tick share one scan and the 500ms
+    // TTL forces a fresh scan each new 750ms tick -> ~one per tick.
+    expect(scanCount()).toBeLessThanOrEqual(TICKS + 1)
+    expect(scanCount()).toBeLessThan(totalInspections / 2)
   })
 
   it('collapses a burst of concurrent panes into a single scan', async () => {
-    installCountingPowerShellMock()
-
     await Promise.all(
       Array.from({ length: PANE_COUNT }, (_, pane) =>
         queryWindowsProcessDescendants(shellPid(pane))
       )
     )
 
-    expect(powershellScanCount.value).toBe(1)
+    expect(scanCount()).toBe(1)
   })
 })

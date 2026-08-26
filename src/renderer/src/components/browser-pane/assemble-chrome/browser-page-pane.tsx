@@ -16,7 +16,7 @@ import { getBrowserPageZoomIndicatorState } from '../host-guest/browser-page-zoo
 import { getOpenableExternalUrl, toDisplayUrl } from '../describe-page/browser-page-url-display'
 import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import type {
-  BrowserFindShortcutScope,
+  BrowserChromeShortcutScope,
   BrowserPageUrlSetter,
   BrowserTabPageState
 } from '../describe-page/browser-page-types'
@@ -25,6 +25,7 @@ import { BrowserPageContextMenu } from './browser-page-context-menu'
 import { BrowserPageViewportOverlays } from './browser-page-viewport-overlays'
 import { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
 import { useBrowserPageChromeFocus } from './use-browser-page-chrome-focus'
+import { useWebviewGuestFocus } from './browser-page-guest-focus'
 import { useBrowserPageFindShortcuts } from './use-browser-page-find-shortcuts'
 import { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
 import { useBrowserPageKeyboardShortcuts } from '../host-guest/use-browser-page-keyboard-shortcuts'
@@ -45,9 +46,10 @@ export function BrowserPagePane({
   sessionProfileId,
   sessionPartition,
   isActive,
-  findShortcutScope,
+  chromeShortcutScope,
   isAutomationVisible,
   isMobileDriven,
+  isRemotelyViewed,
   inputLocked,
   onUpdatePageState,
   onSetUrl
@@ -58,9 +60,10 @@ export function BrowserPagePane({
   sessionProfileId: string | null
   sessionPartition: string | null
   isActive: boolean
-  findShortcutScope: BrowserFindShortcutScope
+  chromeShortcutScope: BrowserChromeShortcutScope
   isAutomationVisible: boolean
   isMobileDriven: boolean
+  isRemotelyViewed: boolean
   inputLocked: boolean
   onUpdatePageState: (tabId: string, updates: BrowserTabPageState) => void
   onSetUrl: BrowserPageUrlSetter
@@ -68,7 +71,8 @@ export function BrowserPagePane({
   const isPaintable = isBrowserPagePanePaintable({
     isActive,
     isAutomationVisible,
-    isMobileDriven
+    isMobileDriven,
+    hasRemoteViewer: isRemotelyViewed
   })
   const pageViewport = ensureBrowserPageViewport(browserTab.id, workspaceId)
   const pageViewportContainer = pageViewport?.container ?? null
@@ -82,7 +86,6 @@ export function BrowserPagePane({
   const dismissAddressBarSuggestionsRef = useRef<(() => void) | null>(null)
   const addressBarValueRef = useRef(browserTab.url)
   const browserTabUrlRef = useRef(browserTab.url)
-  const keepAddressBarFocusRef = useRef(false)
   // Most-recent observed webview URL; URL sync checks it to avoid force-navigating to an intermediate redirect (which would loop the redirect chain).
   const lastKnownWebviewUrlRef = useRef<string | null>(null)
   const trackNextLoadingEventRef = useRef(false)
@@ -119,12 +122,18 @@ export function BrowserPagePane({
 
   const zoom = useBrowserPageZoomFeedback(browserTab.id)
   const { resourceNotice, setResourceNotice } = useBrowserPageResourceNotices(browserTab.id)
-  const { focusAddressBarNow, focusWebviewNow } = useBrowserPageChromeFocus({
-    browserTabId: browserTab.id,
-    isActive,
-    addressBarInputRef,
-    webviewRef,
+  const guestFocus = useWebviewGuestFocus(webviewRef)
+  const {
+    focusAddressBarNow,
+    focusGuestNow: focusWebviewNow,
     keepAddressBarFocusRef
+  } = useBrowserPageChromeFocus({
+    browserTabId: browserTab.id,
+    workspaceId,
+    isActive,
+    chromeShortcutScope,
+    addressBarInputRef,
+    guestFocus
   })
   const annotationSend = useBrowserPageAnnotationSend({
     browserTabId: browserTab.id,
@@ -229,7 +238,7 @@ export function BrowserPagePane({
     browserTabId: browserTab.id,
     workspaceId,
     isActive,
-    findShortcutScope,
+    chromeShortcutScope,
     setFindOpen
   })
   useBrowserPageKeyboardShortcuts({
@@ -243,7 +252,6 @@ export function BrowserPagePane({
     showBrowserZoomFeedback: zoom.showBrowserZoomFeedback,
     reloadWebviewOrRecoverGuest: reload.reloadWebviewOrRecoverGuest,
     startGrabIntent: grabAnnotations.startGrabIntent,
-    focusAddressBarNow,
     handleGrabActionShortcut: grabAnnotations.handleGrabActionShortcut,
     grabIsInteractive: grab.state !== 'idle' && grab.state !== 'error'
   })
@@ -350,6 +358,7 @@ export function BrowserPagePane({
               navigateToUrl={nav.navigateToUrl}
               setResourceNotice={setResourceNotice}
               certificateFailure={certificateFailure}
+              sshRouted={Boolean(sessionPartition?.startsWith('persist:orca-browser-v1-'))}
               isBlankTab={isBlankTab}
               containerRef={containerRef}
               browserOverlayViewport={browserOverlayViewport}

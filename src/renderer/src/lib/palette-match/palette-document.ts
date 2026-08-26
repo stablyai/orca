@@ -40,6 +40,7 @@ export type PaletteDocument = {
   /** Visible identity fields, cached because they carry the whole-query check. */
   visibleFields: readonly PaletteIndexedField[]
   fieldsByEvidenceId: ReadonlyMap<string, readonly PaletteIndexedField[]>
+  fieldById: ReadonlyMap<string, PaletteIndexedField>
 }
 
 export type PaletteDocumentInput = {
@@ -80,7 +81,9 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
   const fields = indexPaletteFields([...input.visibleFields, ...evidenceSources])
   const fieldsByEvidenceId = new Map<string, PaletteIndexedField[]>()
   const visibleFields: PaletteIndexedField[] = []
+  const fieldById = new Map<string, PaletteIndexedField>()
   for (const field of fields) {
+    fieldById.set(field.id, field)
     if (!field.evidenceId) {
       visibleFields.push(field)
       continue
@@ -103,7 +106,8 @@ export function buildPaletteDocument(input: PaletteDocumentInput): PaletteDocume
     evidenceUnits,
     renderOffsetByFieldId,
     visibleFields,
-    fieldsByEvidenceId
+    fieldsByEvidenceId,
+    fieldById
   }
 }
 
@@ -125,6 +129,8 @@ export type PaletteSupportingEvidence = {
 export type PaletteDocumentRank = {
   /** 0 when a recognized exact intent (such as a task URL) produced this row. */
   exactIntent: number
+  /** Tokens whose chosen assignment only matched container fields. */
+  containerOnlyTokenCount: number
   /** 0 equality, 1 prefix, 2 word boundary, 3 none — whole query in visible text. */
   wholeQuery: number
   worstQuality: number
@@ -144,6 +150,7 @@ export type PaletteDocumentMatch = {
 
 const RANK_KEYS: readonly (keyof PaletteDocumentRank)[] = [
   'exactIntent',
+  'containerOnlyTokenCount',
   'wholeQuery',
   'worstQuality',
   'usesSupportingEvidence',

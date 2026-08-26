@@ -148,7 +148,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'omp',
     expectedProcess: 'omp',
     promptInjectionMode: 'argv',
-    draftPromptEnvVar: 'ORCA_OMP_PREFILL'
+    draftPromptEnvVar: 'ORCA_OMP_PREFILL',
+    // Why: OMP wraps Pi's TUI, so the bytes land in a Pi reader that decodes CSI-u (see pi above).
+    windowsShiftEnterEncoding: 'csi-u'
   },
   'prime-agent': {
     detectCmd: 'prime-agent',

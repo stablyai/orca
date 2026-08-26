@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-
 const { execFileSyncMock, resolveCodexCommandMock } = vi.hoisted(() => ({
   execFileSyncMock: vi.fn(),
   resolveCodexCommandMock: vi.fn()

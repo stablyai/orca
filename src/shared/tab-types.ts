@@ -1,4 +1,5 @@
 import type { AiVaultSessionTitle } from './ai-vault-session-title'
+import type { ExecutionHostId } from './execution-host'
 
 // ─── Tab Group Layout ───────────────────────────────────────────────
 export type TabGroupSplitDirection = 'horizontal' | 'vertical'
@@ -41,6 +42,8 @@ export type Tab = {
   entityId: string // ID of the backing content (terminal tab ID, file path, browser workspace ID)
   groupId: string
   worktreeId: string
+  /** Owning execution host when the same worktree id is visible from multiple hosts. */
+  executionHostId?: ExecutionHostId
   contentType: TabContentType
   label: string // display title (auto-derived from PTY or filename)
   generatedLabel?: string | null
@@ -58,6 +61,8 @@ export type Tab = {
    *  underneath; `'terminal'` (the default for legacy/missing) shows the raw
    *  xterm. Optional so sessions persisted before this field hydrate cleanly. */
   viewMode?: 'terminal' | 'chat'
+  /** Timestamp when the tab was last focused / activated by the user. */
+  lastFocusedAt?: number
 }
 
 export type TabGroup = {

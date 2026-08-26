@@ -14,6 +14,7 @@ import {
   scheduleWorktreeTrashDeletion
 } from '../worktree-trash'
 import { parseWslPath } from '../wsl'
+import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import type {
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion
@@ -33,7 +34,7 @@ import {
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { hasWorktreeBaseCommitRef, probeWorktreeBaseRefPresence } from './worktree-base-ref-probe'
 
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
@@ -265,6 +266,16 @@ async function evaluateLocalBaseRefRefreshability(
     )
     drift = parsedDrift
   } catch {
+    // Why (#15331): the probes above also fail when refs/heads/<branch> is simply absent; a branch that
+    // does not exist yet cannot be stale, so report nothing instead of a bogus divergence warning.
+    // Only a proven absence suppresses: an unusable repo leaves the warning alone.
+    const presence = await probeWorktreeBaseRefPresence(
+      (args) => gitExecFileAsync(args, gitExecOptions(repoPath, options)),
+      parsed.fullRef
+    )
+    if (presence === 'absent') {
+      return undefined
+    }
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
 
@@ -975,7 +986,8 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  const args = ['worktree', 'add']
+  // Why: enable long paths for this Windows checkout without changing user Git config.
+  const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
@@ -1081,15 +1093,21 @@ export async function addSparseWorktree(
       options
     )
     created = true
+    // Why: `worktree add --no-checkout` writes no files, so these are the calls that
+    // actually materialize the deep path and need the long-path escape hatch.
+    const longPathArgs = windowsLongPathGitArgs(worktreePath)
     await gitExecFileAsync(
       ['sparse-checkout', 'init', '--cone'],
       gitExecOptions(worktreePath, options)
     )
     await gitExecFileAsync(
-      ['sparse-checkout', 'set', '--', ...directories],
+      [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
       gitExecOptions(worktreePath, options)
     )
-    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, options))
+    await gitExecFileAsync(
+      [...longPathArgs, 'checkout', branch],
+      gitExecOptions(worktreePath, options)
+    )
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =

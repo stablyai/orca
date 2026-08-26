@@ -17,6 +17,7 @@ import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
 import type * as fsModule from 'node:fs'
 import { join } from 'node:path'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 
 // The service calls app.getPath('userData') for its overlay root. Point that
 // at a real tmp dir so we can exercise the filesystem behavior end-to-end.
@@ -37,17 +38,6 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: (name: string) => {
-      if (name === 'userData') {
-        return userDataDir
-      }
-      throw new Error(`unexpected app.getPath(${name})`)
-    }
-  }
-}))
-
 import { PiTitlebarExtensionService, isSafeDescendCandidate } from './titlebar-extension-service'
 
 function legacyOverlayPath(kind: 'pi' | 'omp', ptyId: string): string {
@@ -62,6 +52,17 @@ function legacySourceOverlayPath(kind: 'pi' | 'omp', sourceAgentDir: string): st
 }
 
 describe('PiTitlebarExtensionService', () => {
+  beforeEach(() => {
+    installFakeAppEnvironment({
+      getPath: (name) => {
+        if (name === 'userData') {
+          return userDataDir
+        }
+        throw new Error(`unexpected app.getPath(${name})`)
+      }
+    })
+  })
+
   let piHome: string
 
   beforeEach(() => {

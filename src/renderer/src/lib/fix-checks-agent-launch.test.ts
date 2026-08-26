@@ -156,6 +156,25 @@ describe('startFixChecksAgent', () => {
     mocks.resolveSourceControlLaunchPlatform.mockReturnValue('darwin')
   })
 
+  it('activates the attached workspace as a surface-providing caller', async () => {
+    const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
+
+    await expect(
+      startFixChecksAgent({
+        repoId: 'repo-1',
+        worktreeId: 'wt-1',
+        basePrompt: 'Fix checks',
+        launchSource: 'task_page'
+      })
+    ).resolves.toBe(true)
+
+    // Why: launchAgentInNewTab creates the surface; without the opt-out, activation would
+    // also re-seed a shell in a closed-last-terminal workspace.
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
+    })
+  })
+
   it('fails without launching when the requested worktree is missing', async () => {
     const { startFixChecksAgent } = await import('./fix-checks-agent-launch')
 

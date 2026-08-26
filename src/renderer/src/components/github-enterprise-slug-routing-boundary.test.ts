@@ -51,7 +51,9 @@ describe('GitHub Enterprise slug routing boundaries', () => {
   })
 
   it('keeps PR base-repository hosts on checks-sidebar comment writes', () => {
-    const source = componentSource('right-sidebar/ChecksPanel.tsx')
+    const source = componentSource(
+      'right-sidebar/checks-panel/use-checks-panel-comment-mutations.tsx'
+    )
     const conversationSection = sourceBetween(
       source,
       'const handleEditComment = useCallback',

@@ -90,6 +90,7 @@ import {
   WatcherProcessFailure
 } from '../ipc/parcel-watcher-process-failure'
 import { joinWorktreeRelativePath, normalizeRuntimeRelativePath } from './runtime-relative-paths'
+import { readSshFileExplorerChunk } from './ssh-file-explorer-chunk-read'
 import {
   rankRuntimeMobileFilePaths,
   RuntimeMobileFilePathSearchCache
@@ -1709,7 +1710,7 @@ export class RuntimeFileCommands {
       if (fileStat.type === 'directory') {
         throw new Error('Cannot download a directory')
       }
-      throw new Error('SSH runtime chunked download is unavailable; use the SSH download path')
+      return readSshFileExplorerChunk(provider, target.path, fileStat.size, offset, length)
     }
 
     const filePath = await resolveAuthorizedPath(target.path, this.host.requireStore())

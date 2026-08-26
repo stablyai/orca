@@ -435,6 +435,71 @@ describe('LocalPtyProvider', () => {
       expect(env.LD_LIBRARY_PATH).toBe('/opt/audio/lib')
     })
 
+    it('does not forward a half-activated conda env into the shell', async () => {
+      // Why: CONDA_SHLVL asserts CONDA_PREFIX exists; forwarding the sentinel
+      // alone makes the user's rc-file conda hook raise a TypeError (#14195).
+      const saved = {
+        CONDA_SHLVL: process.env.CONDA_SHLVL,
+        CONDA_PREFIX: process.env.CONDA_PREFIX,
+        CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
+        CONDA_PROMPT_MODIFIER: process.env.CONDA_PROMPT_MODIFIER,
+        CONDA_EXE: process.env.CONDA_EXE
+      }
+      delete process.env.CONDA_PREFIX
+      process.env.CONDA_SHLVL = '1'
+      process.env.CONDA_DEFAULT_ENV = 'base'
+      process.env.CONDA_PROMPT_MODIFIER = '(base) '
+      process.env.CONDA_EXE = '/opt/miniconda3/bin/conda'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24 })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+      expect(env.CONDA_PROMPT_MODIFIER).toBeUndefined()
+      expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
+    })
+
+    it('drops the conda sentinel when the client asks to delete CONDA_PREFIX', async () => {
+      // Why: envToDelete runs after the inherited-env scrub, so the coherence
+      // pass must run last or it re-creates the exact broken pair it prevents.
+      const saved = {
+        CONDA_SHLVL: process.env.CONDA_SHLVL,
+        CONDA_PREFIX: process.env.CONDA_PREFIX,
+        CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV
+      }
+      process.env.CONDA_SHLVL = '1'
+      process.env.CONDA_PREFIX = '/opt/miniconda3'
+      process.env.CONDA_DEFAULT_ENV = 'base'
+
+      try {
+        await provider.spawn({ cols: 80, rows: 24, envToDelete: ['CONDA_PREFIX'] })
+      } finally {
+        for (const [key, value] of Object.entries(saved)) {
+          if (value === undefined) {
+            delete process.env[key]
+          } else {
+            process.env[key] = value
+          }
+        }
+      }
+
+      const env = spawnMock.mock.calls.at(-1)?.[2].env
+      expect(env.CONDA_PREFIX).toBeUndefined()
+      expect(env.CONDA_SHLVL).toBeUndefined()
+      expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    })
+
     it('uses shell wrapper when MiMo home must survive shell startup', async () => {
       provider.configure({
         buildSpawnEnv: (_id, env) => {

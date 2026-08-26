@@ -32,6 +32,13 @@ describe('mobileNativeChatEmptyState', () => {
     expect(mobileNativeChatEmptyState('ready', 'codex')?.title).toBe('Start a chat with Codex')
   })
 
+  it('invites a first message while the transcript file is still unwritten', () => {
+    // The spinner is already gone by then, so a bare list would read as broken.
+    expect(mobileNativeChatEmptyState('awaiting-transcript', 'claude')?.title).toBe(
+      'Start a chat with Claude'
+    )
+  })
+
   it('falls back to "the agent" when the agent is unknown', () => {
     expect(mobileNativeChatEmptyState('waiting-session', null)?.title).toBe(
       'Start a chat with the agent'

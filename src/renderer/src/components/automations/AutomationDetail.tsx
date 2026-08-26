@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
 import { formatAutomationPrecheckTimeout } from '../../../../shared/automation-precheck'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import {
@@ -16,6 +16,7 @@ import {
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import { getAutomationSourceDisplay } from './automation-source-display'
 import { translate } from '@/i18n/i18n'
+import { AutomationPromptDisclosure } from './AutomationPromptDisclosure'
 
 type AutomationDetailProps = {
   automation: Automation | null
@@ -227,7 +228,7 @@ export function AutomationDetail({
       <div className="grid grid-cols-[repeat(auto-fit,minmax(9rem,1fr))] gap-5 rounded-md border border-border/50 bg-muted/30 px-4 py-3 shadow-sm">
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.18763ded26', 'Schedule')}
-          value={formatAutomationSchedule(automation.rrule)}
+          value={formatUiAutomationSchedule(automation.rrule)}
         />
         <DetailMetric
           label={translate('auto.components.automations.AutomationDetail.578ff46987', 'Next run')}
@@ -301,21 +302,10 @@ export function AutomationDetail({
         />
       </div>
 
-      <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
-        <div className="border-b border-border/50 px-3 py-2 text-sm font-medium">
-          {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
-        </div>
-        <div className="px-3 py-3">
-          <div className="min-w-0">
-            <div className="text-[11px] font-medium uppercase text-muted-foreground">
-              {translate('auto.components.automations.AutomationDetail.007c8ad874', 'Prompt')}
-            </div>
-            <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm text-foreground">
-              {automation.prompt}
-            </p>
-          </div>
-        </div>
-      </div>
+      <AutomationPromptDisclosure
+        key={`${automation.id}:${automation.prompt}`}
+        prompt={automation.prompt}
+      />
     </div>
   )
 }

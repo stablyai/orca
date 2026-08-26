@@ -38,6 +38,18 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('does not create a PTY when the pane generation is stale', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    const transport = createIpcPtyTransport({})
+
+    await expect(
+      transport.connect({ url: '', shouldContinue: () => false, callbacks: {} })
+    ).resolves.toBeUndefined()
+
+    expect(spawn).not.toHaveBeenCalled()
+  })
+
   it('threads provider command ownership through the spawn IPC', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const transport = createIpcPtyTransport({

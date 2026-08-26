@@ -244,6 +244,14 @@ export type GlobalSettings = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
+  /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
+  browserClientHostedRemoteEnabled?: boolean
+  /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
+  browserSshWorkspaceRoutingEnabled?: boolean
+  /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
+  browserSshWorkspaceRoutingDisabledTargetIds?: string[]
+  /** Targets whose forwarding preflight the user overrode via "Try anyway" (e.g. PermitOpen allows their sites); skips the probe, never changes egress. */
+  browserSshWorkspaceRoutingProbeSkippedTargetIds?: string[]
   /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
   /** Start dir for new floating-workspace terminal tabs; empty or '~' = home dir. */

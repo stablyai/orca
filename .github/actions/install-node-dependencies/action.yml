@@ -73,7 +73,8 @@ runs:
       shell: bash
       run: |
         pnpm install --frozen-lockfile --ignore-scripts
-        git diff --exit-code package.json pnpm-lock.yaml
+        # Job containers can run composite steps from a source mirror without .git.
+        git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml
 
     # Why cached: `--ignore-scripts` leaves node-pty without build/Release, so
     # ensure-native-runtime node-gyp-compiles it in every job that asks for a runtime.

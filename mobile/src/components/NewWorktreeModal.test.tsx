@@ -68,6 +68,21 @@ function pickerItems(
   return picker?.props.items ?? []
 }
 
+function sourceInputs(renderer: ReactTestRenderer) {
+  return renderer.root.findAll(
+    (node) =>
+      node.type === 'TextInput' && node.props.placeholder === 'Type a name or search a source'
+  )
+}
+
+async function flushUpdates(): Promise<void> {
+  await act(async () => {
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+  })
+}
+
 describe('NewWorktreeModal project targets', () => {
   let renderer: ReactTestRenderer
 
@@ -163,5 +178,225 @@ describe('NewWorktreeModal project targets', () => {
         detail: '/home/dev/orca'
       })
     ])
+  })
+
+  it('loads SSH state before detecting agents on the selected remote target', async () => {
+    const remoteRepo = {
+      id: 'repo-remote',
+      displayName: 'orca',
+      path: '/home/dev/orca',
+      connectionId: 'build-server',
+      kind: 'git',
+      upstream: { owner: 'stablyai', repo: 'orca' }
+    }
+    setCachedRepos('host-ssh', [remoteRepo])
+    const sendRequest = vi.fn().mockImplementation((method: string) => {
+      if (method === 'repo.list') {
+        return Promise.resolve({ ok: true, result: { repos: [remoteRepo] } })
+      }
+      if (method === 'ssh.getState') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            state: {
+              targetId: 'build-server',
+              status: 'connected',
+              error: null,
+              reconnectAttempt: 0
+            }
+          }
+        })
+      }
+      if (method === 'preflight.detectRemoteAgents') {
+        return Promise.resolve({ ok: true, result: ['codex'] })
+      }
+      if (method === 'settings.get') {
+        return Promise.resolve({ ok: true, result: { settings: { defaultTuiAgent: 'codex' } } })
+      }
+      if (method === 'ui.get') {
+        return Promise.resolve({ ok: true, result: { ui: {} } })
+      }
+      if (method === 'preflight.check') {
+        return Promise.resolve({ ok: true, result: {} })
+      }
+      if (method === 'linear.status') {
+        return Promise.resolve({ ok: true, result: {} })
+      }
+      if (method === 'status.get') {
+        return Promise.resolve({ ok: true, result: { hostPlatform: 'linux' } })
+      }
+      if (method === 'repo.hooks') {
+        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const client = { sendRequest } as unknown as RpcClient
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-ssh',
+          onCreated: () => {},
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    expect(sendRequest).toHaveBeenCalledWith('ssh.getState', { targetId: 'build-server' })
+    expect(sendRequest).toHaveBeenCalledWith('preflight.detectRemoteAgents', {
+      connectionId: 'build-server'
+    })
+  })
+
+  it('keeps folder workspaces on the local execution and text-only source path', async () => {
+    const folderRepo = {
+      id: 'folder-1',
+      displayName: 'notes',
+      path: '/src/notes',
+      kind: 'folder'
+    }
+    setCachedRepos('host-folder', [folderRepo])
+    const sendRequest = vi.fn().mockImplementation((method: string) => {
+      if (method === 'repo.list') {
+        return Promise.resolve({ ok: true, result: { repos: [folderRepo] } })
+      }
+      if (method === 'preflight.detectAgents') {
+        return Promise.resolve({ ok: true, result: ['codex'] })
+      }
+      if (method === 'settings.get') {
+        return Promise.resolve({ ok: true, result: { settings: { defaultTuiAgent: 'codex' } } })
+      }
+      if (method === 'ui.get') {
+        return Promise.resolve({ ok: true, result: { ui: {} } })
+      }
+      if (method === 'preflight.check') {
+        return Promise.resolve({ ok: true, result: {} })
+      }
+      if (method === 'linear.status') {
+        return Promise.resolve({ ok: true, result: {} })
+      }
+      if (method === 'status.get') {
+        return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+      }
+      if (method === 'repo.hooks') {
+        return Promise.resolve({ ok: true, result: { hooks: null, source: null } })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const client = { sendRequest } as unknown as RpcClient
+
+    await act(async () => {
+      renderer = create(
+        createElement(NewWorktreeModal, {
+          visible: true,
+          client,
+          hostId: 'host-folder',
+          onCreated: () => {},
+          onClose: () => {}
+        })
+      )
+    })
+    await flushUpdates()
+
+    expect(renderer.root.findAll((node) => node.props.label === 'Workspace name')).toHaveLength(1)
+    expect(sendRequest).toHaveBeenCalledWith('preflight.detectAgents')
+    expect(sendRequest).not.toHaveBeenCalledWith('ssh.getState', expect.anything())
+  })
+
+  it('ignores a stale repo list after the client changes', async () => {
+    let resolveOldList: ((value: unknown) => void) | undefined
+    const oldList = new Promise((resolve) => {
+      resolveOldList = resolve
+    })
+    const freshRepo = { ...repos[0]!, id: 'repo-fresh', displayName: 'fresh' }
+    const oldClient = {
+      sendRequest: vi.fn().mockImplementation((method: string) => {
+        if (method === 'repo.list') {
+          return oldList
+        }
+        return new Promise(() => {})
+      })
+    } as unknown as RpcClient
+    const freshClient = {
+      sendRequest: vi.fn().mockImplementation((method: string) => {
+        if (method === 'repo.list') {
+          return Promise.resolve({ ok: true, result: { repos: [freshRepo] } })
+        }
+        if (method === 'status.get') {
+          return Promise.resolve({ ok: true, result: { hostPlatform: 'darwin' } })
+        }
+        return new Promise(() => {})
+      })
+    } as unknown as RpcClient
+    const modalProps = {
+      visible: true,
+      hostId: 'host-1',
+      onCreated: () => {},
+      onClose: () => {}
+    }
+
+    await act(async () => {
+      renderer = create(createElement(NewWorktreeModal, { ...modalProps, client: oldClient }))
+    })
+    const sourceInput = sourceInputs(renderer)[0]!
+    act(() => sourceInput.props.onChangeText('stale-client-name'))
+    expect(sourceInput.props.value).toBe('stale-client-name')
+    await act(async () => {
+      renderer.update(createElement(NewWorktreeModal, { ...modalProps, client: freshClient }))
+      await Promise.resolve()
+    })
+    expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
+    resolveOldList?.({ ok: true, result: { repos } })
+    await flushUpdates()
+
+    expect(pickerItems(renderer, 'Project')).toEqual([expect.objectContaining({ label: 'fresh' })])
+  })
+
+  it('remounts before the reopened session renders, so no stale instance sees visible', async () => {
+    const sendRequest = vi.fn().mockImplementation(() => new Promise(() => {}))
+    const client = { sendRequest } as unknown as RpcClient
+    const modalProps = {
+      client,
+      hostId: 'host-1',
+      onCreated: () => {},
+      onClose: () => {}
+    }
+
+    await act(async () => {
+      renderer = create(createElement(NewWorktreeModal, { ...modalProps, visible: true }))
+    })
+    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: false })))
+    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: true })))
+
+    // One repo.list per opening. A third means the previous session's instance
+    // re-ran its visible-gated effects before the remount key caught up.
+    const repoListCalls = sendRequest.mock.calls.filter(([method]) => method === 'repo.list')
+    expect(repoListCalls).toHaveLength(2)
+  })
+
+  it('starts with fresh form state after closing and reopening', async () => {
+    const client = {
+      sendRequest: vi.fn().mockImplementation(() => new Promise(() => {}))
+    } as unknown as RpcClient
+    const modalProps = {
+      client,
+      hostId: 'host-1',
+      onCreated: () => {},
+      onClose: () => {}
+    }
+
+    await act(async () => {
+      renderer = create(createElement(NewWorktreeModal, { ...modalProps, visible: true }))
+    })
+    const sourceInput = sourceInputs(renderer)[0]!
+    act(() => sourceInput.props.onChangeText('previous-workspace'))
+
+    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: false })))
+    act(() => renderer.update(createElement(NewWorktreeModal, { ...modalProps, visible: true })))
+
+    expect(sourceInputs(renderer).map((input) => input.props.value)).toEqual(['', ''])
   })
 })

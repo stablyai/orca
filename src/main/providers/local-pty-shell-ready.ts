@@ -17,10 +17,7 @@ import {
   SHELL_STARTUP_FEATURE_ENV,
   type ShellStartupFeature
 } from '../shell-startup-features'
-import {
-  resolveInheritedZdotdir,
-  resolveInheritedZshenvSourceDir
-} from '../zsh-wrapper-dir-ownership'
+import { inheritedZdotdirEnv, resolveInheritedZdotdir } from '../zsh-wrapper-dir-ownership'
 import { ensureShellReadyWrappers } from './local-pty-shell-ready-wrapper-generation'
 import {
   getShellReadyWrapperRoot,
@@ -82,8 +79,7 @@ export function getShellLaunchConfig(
     return {
       args: ['-l'],
       env: {
-        ORCA_ORIG_ZDOTDIR: resolveInheritedZdotdir(process.env),
-        ORCA_ZSHENV_SOURCE_DIR: resolveInheritedZshenvSourceDir(process.env),
+        ...inheritedZdotdirEnv(resolveInheritedZdotdir(process.env)),
         ZDOTDIR: `${getShellReadyWrapperRoot()}/zsh`,
         [SHELL_STARTUP_FEATURE_ENV]: encodeShellStartupFeatures(features)
       },

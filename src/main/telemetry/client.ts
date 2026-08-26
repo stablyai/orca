@@ -7,7 +7,7 @@
 
 import { randomUUID } from 'node:crypto'
 import { arch as osArch, platform as osPlatform, release as osRelease } from 'node:os'
-import { app } from 'electron'
+import { getAppEnvironment } from '../../shared/app-environment'
 import { PostHog } from 'posthog-node'
 import type { CommonProps, EventName, EventProps, OptInVia } from '../../shared/telemetry-events'
 import type { Store } from '../persistence'
@@ -53,7 +53,7 @@ let appOpenedTrackedThisSession = false
 function buildCommonProps(installId: string, sid: string, channel: 'stable' | 'rc'): CommonProps {
   // Don't truncate here; the validator's `.max(64)` is authoritative, so an over-long string drops rather than being silently masked.
   return {
-    app_version: app.getVersion(),
+    app_version: getAppEnvironment().getVersion(),
     platform: osPlatform(),
     arch: osArch(),
     os_release: osRelease(),

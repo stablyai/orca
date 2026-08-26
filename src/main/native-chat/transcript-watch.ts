@@ -49,6 +49,11 @@ async function attemptInstall(
 const INITIAL_RESOLVE_POLL_MS = 500
 const MAX_RESOLVE_POLL_MS = 5_000
 const FALLBACK_RESOLVE_POLL_MS = 5_000
+// Why: with no frame at all a client shows a bare spinner for the whole flush
+// delay — a fresh session that has yet to be prompted never flushes, so the
+// spinner is permanent. Long enough that a merely slow resolve still wins the
+// race and paints history directly.
+const UNFLUSHED_SETTLE_MS = 1_500
 
 function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | null {
   const path = args.transcriptPath?.trim()
@@ -62,6 +67,8 @@ function exactTranscriptPath(args: SubscribeNativeChatTranscriptArgs): string | 
  * unsubscribe() cancels it. Reports watching:true — the engine's first drain
  * delivers the initial snapshot once the file appears, so subscribers must not
  * settle a merely not-yet-flushed transcript into a permanent error (#8401).
+ * A short grace period in, it reports the transcript as pending once so the
+ * view can stop spinning while it waits.
  */
 function subscribeViaResolvePoll(
   args: SubscribeNativeChatTranscriptArgs,
@@ -81,7 +88,35 @@ function subscribeViaResolvePoll(
   // Latches only once a frame was actually emitted, so a subscriber without the
   // callback can't suppress it for a later one.
   let gateErrorEmitted = false
+  // Whether the subscriber already has an initial frame to render.
+  let settled = false
+  let settleTimer: ReturnType<typeof setTimeout> | null = null
   const resolveController = new AbortController()
+
+  function stopSettleTimer(): void {
+    if (settleTimer) {
+      clearTimeout(settleTimer)
+      settleTimer = null
+    }
+  }
+
+  /** Report a still-unresolved transcript so the view can leave 'loading' and
+   *  invite a first message instead of spinning. Deliberately not a snapshot:
+   *  an empty window presented as a settled read would capture over retained
+   *  history and unblock consumers that require a trustworthy transcript. */
+  function settleUnflushed(): void {
+    settleTimer = null
+    if (closed || settled || installed || !args.onTranscriptPending) {
+      return
+    }
+    settled = true
+    args.onTranscriptPending()
+  }
+
+  if (args.onTranscriptPending) {
+    settleTimer = setTimeout(settleUnflushed, UNFLUSHED_SETTLE_MS)
+    settleTimer.unref?.()
+  }
 
   function scheduleAttempt(): void {
     if (closed) {
@@ -154,6 +189,9 @@ function subscribeViaResolvePoll(
       // runAttempt is invoked as `void runAttempt()`.
       if (error instanceof WslTranscriptFsError && !gateErrorEmitted && args.onInitialSnapshot) {
         gateErrorEmitted = true
+        // Its retryable message outranks the empty settle; don't overwrite it.
+        settled = true
+        stopSettleTimer()
         args.onInitialSnapshot([], false, 0, error.message)
       }
       result = null
@@ -165,6 +203,7 @@ function subscribeViaResolvePoll(
     }
     if (result) {
       installed = result
+      stopSettleTimer()
       return
     }
     scheduleAttempt()
@@ -180,6 +219,7 @@ function subscribeViaResolvePoll(
       }
       closed = true
       resolveController.abort()
+      stopSettleTimer()
       if (pollTimer) {
         clearTimeout(pollTimer)
         pollTimer = null

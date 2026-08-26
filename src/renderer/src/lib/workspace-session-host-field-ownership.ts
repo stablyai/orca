@@ -20,6 +20,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   browserUrlHistory: 'global',
   // Why: SSH remains local-owned, so its connection identifiers stay in the local slice.
   activeConnectionIdsAtShutdown: 'global',
+  // Why global: keyed by runtime environment rather than by worktree, and it is this client's
+  // record of what it owes those environments — the same reason SSH connection state stays local.
+  clientHostedBrowserCloseIntentsByEnvironment: 'global',
   tabsByWorktree: 'worktreeKeyed',
   openFilesByWorktree: 'worktreeKeyed',
   activeFileIdByWorktree: 'worktreeKeyed',
@@ -27,6 +30,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeTabTypeByWorktree: 'worktreeKeyed',
   activeTabIdByWorktree: 'worktreeKeyed',
   browserTabsByWorktree: 'worktreeKeyed',
+  // Runtime-authored, never written by this renderer; classified so a merged read still routes each
+  // worktree's rows back to the host that owns them instead of dropping them.
+  clientHostedBrowserPagesByWorktree: 'worktreeKeyed',
   unifiedTabs: 'worktreeKeyed',
   tabGroups: 'worktreeKeyed',
   tabGroupLayouts: 'worktreeKeyed',

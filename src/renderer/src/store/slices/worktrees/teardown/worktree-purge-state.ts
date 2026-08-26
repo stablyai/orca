@@ -1,13 +1,21 @@
 import type { AppState } from '../../../types'
+import type { WorktreePurgeTarget, WorktreePurgeTargets } from '../../worktree-helpers'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
+import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
 
-export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Partial<AppState> {
-  const worktreeIdSet = new Set(worktreeIds)
+export function buildWorktreePurgeState(
+  s: AppState,
+  worktreeTargets: WorktreePurgeTargets
+): Partial<AppState> {
+  const normalizedTargets: WorktreePurgeTarget[] = worktreeTargets.map((target) =>
+    typeof target === 'string' ? { id: target } : target
+  )
+  const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
   // Why: every authoritative and explicit purge converges here, so a deleted path can't inherit stale UI state.
   forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
@@ -172,7 +180,10 @@ export function buildWorktreePurgeState(s: AppState, worktreeIds: string[]): Par
     // Top-level actives
     openFiles: nextOpenFiles,
     everActivatedWorktreeIds: nextEverActivatedWorktreeIds,
-    lastVisitedAtByWorktreeId: omitByWorktree(s.lastVisitedAtByWorktreeId),
+    lastVisitedAtByWorktreeId: removeWorktreeVisitEntriesForTargets(
+      s.lastVisitedAtByWorktreeId,
+      normalizedTargets
+    ),
     // Why: keyed by worktreeId; re-keyed on rename but missed by both removal paths (write-once default-terminal guard).
     defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
       s.defaultTerminalTabsAppliedByWorktreeId
