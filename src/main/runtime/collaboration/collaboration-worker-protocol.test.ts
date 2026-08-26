@@ -170,11 +170,18 @@ describe('buildCollaborationWorkerProtocol', () => {
       expect(out).toMatch(/without blocking/i)
     })
 
-    it('runs exactly one blocking checkpoint --wait --timeout-ms 60000 before worker_done when required context is missing', () => {
-      const out = buildCollaborationWorkerProtocol(protocol({ subscribesTo: ['alpha'] }))
+    it('allows repeated event-driven blocking checkpoints while concrete task-required context is still missing', () => {
+      const out = buildCollaborationWorkerProtocol(protocol({ subscribesTo: ['alpha', 'beta'] }))
       expect(out).toContain('--wait --timeout-ms 60000')
       expect(out).toContain('worker_done')
-      expect(out).toMatch(/exactly one blocking/i)
+      expect(out).not.toMatch(/exactly one blocking/i)
+      expect(out).toMatch(/one blocking checkpoint at a time/i)
+      expect(out).toMatch(/incorporat.*ack/i)
+      expect(out).toMatch(/still missing/i)
+      expect(out).toMatch(/another blocking checkpoint/i)
+      expect(out).toMatch(/timeout|cancel/i)
+      expect(out).toMatch(/no useful/i)
+      expect(out).toMatch(/escalat/i)
       expect(out).toMatch(/do not report success/i)
     })
 

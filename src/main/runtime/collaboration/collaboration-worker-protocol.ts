@@ -132,13 +132,20 @@ At safe stage boundaries, consume new collaboration context without blocking:
 
 Never poll or sleep-loop waiting for context; checkpoint is event-driven.
 
-Before worker_done: if required context is missing, run exactly one blocking
-checkpoint:
+Before worker_done: when concrete task-required context is still missing, run
+one blocking checkpoint at a time:
   ${cli} orchestration collaboration-checkpoint --from ${workerHandle}${capability} \\
     --wait --timeout-ms 60000
 
-If context is still missing after that single blocking wait, do not report success;
-escalate to the coordinator.
+After each admitted batch, incorporate it and acknowledge its message ids, then
+recompute what task-required context is still missing. If concrete required
+context is still missing, you may run another blocking checkpoint. Never keep
+more than one blocking checkpoint outstanding and never replace it with a
+sleep/poll loop.
+
+If a blocking checkpoint times out, is cancelled, or returns no useful admitted
+context while required context is still missing, do not report success; escalate
+to the coordinator.
 
 Acknowledge message ids only after you have incorporated them:
   ${cli} orchestration collaboration-ack --from ${workerHandle}${capability} \\
