@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { shouldQuitWhenAllWindowsClosed } from './window-all-closed-quit-policy'
+import {
+  shouldCommitDesktopQuit,
+  shouldQuitWhenAllWindowsClosed
+} from './window-all-closed-quit-policy'
 
 describe('shouldQuitWhenAllWindowsClosed', () => {
   it('keeps headless serve alive when its offscreen browser windows close', () => {
@@ -48,6 +51,35 @@ describe('shouldQuitWhenAllWindowsClosed', () => {
         platform: 'darwin',
         isQuitting: true,
         isServeMode: true
+      })
+    ).toBe(true)
+  })
+})
+
+describe('shouldCommitDesktopQuit', () => {
+  it('does not quit the serve process on a desktop Cmd+Q', () => {
+    expect(
+      shouldCommitDesktopQuit({
+        isServeMode: true,
+        isUpdateQuit: false
+      })
+    ).toBe(false)
+  })
+
+  it('still quits a normal desktop app', () => {
+    expect(
+      shouldCommitDesktopQuit({
+        isServeMode: false,
+        isUpdateQuit: false
+      })
+    ).toBe(true)
+  })
+
+  it('still allows an update-install quit in serve mode', () => {
+    expect(
+      shouldCommitDesktopQuit({
+        isServeMode: true,
+        isUpdateQuit: true
       })
     ).toBe(true)
   })

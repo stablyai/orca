@@ -221,7 +221,10 @@ import {
 import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
-import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
+import {
+  shouldCommitDesktopQuit,
+  shouldQuitWhenAllWindowsClosed
+} from './startup/window-all-closed-quit-policy'
 import {
   createServeDesktopActivationGate,
   settleServeDesktopActivation as settleServeDesktopActivationGate
@@ -3420,11 +3423,26 @@ void app.whenReady().then(async () => {
 // Why: app.exit() skips Electron quit events, so keep its log child from surviving forced exits.
 process.once('exit', stopTccPromptNotice)
 
-app.on('before-quit', () => {
+app.on('before-quit', (event) => {
   if (isQuittingForUpdate()) {
     recordUpdaterLifecycle('before_quit_allowed', undefined, {
       message: 'before-quit allowed for update install'
     })
+  }
+  if (
+    !shouldCommitDesktopQuit({
+      isServeMode,
+      isUpdateQuit: isQuittingForUpdate()
+    })
+  ) {
+    // Why: close the hosted window without fencing the relay or setting isQuitting.
+    event.preventDefault()
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.close()
+      }
+    }
+    return
   }
   isQuitting = true
   desktopRelayService?.fenceAndCloseNow()
