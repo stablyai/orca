@@ -162,7 +162,9 @@ export function getDefaultOnboardingState(): OnboardingState {
   }
 }
 
-function getDefaultWorkspaceDir(homeDir: string): string {
+/** The stock worktree root. Exported so callers can tell an untouched default apart
+ *  from a workspace directory the user actually chose. */
+export function getDefaultWorkspaceDir(homeDir: string): string {
   const separator = homeDir.includes('\\') ? '\\' : '/'
   const trimmedHomeDir = homeDir.replace(/[\\/]+$/, '')
   return [trimmedHomeDir, 'orca', 'workspaces'].join(separator)
