@@ -93,9 +93,11 @@ export class TerminalShellRecoveryBarrier {
   }
 
   /** Synchronous bail for teardown: resolves the current episode as refuted so
-   *  the queued bytes reach the emulator and records before a final snapshot. */
+   *  the queued bytes reach the emulator and records before a final snapshot.
+   *  Queue replay can re-enter pending on a nested trigger, so drain to
+   *  completion — bounded, because a pathological stream must not spin teardown. */
   flushPending(): void {
-    if (this.pending) {
+    for (let guard = 0; this.pending && guard < 16; guard += 1) {
       this.finishPending(this.pendingEpisode, false)
     }
   }

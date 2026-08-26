@@ -125,4 +125,32 @@ describe('Session shell-owned recovery through the output barrier', () => {
     // No injection either: an unproven episode flushes unmodified.
     expect(received.join('')).not.toContain('\x1b[?1049l')
   })
+
+  it('flushes nested episodes stacked inside one proof window when the shell exits', async () => {
+    const sub = createSubprocess()
+    const session: Session = new Session({
+      sessionId: 's4',
+      cols: 80,
+      rows: 24,
+      subprocess: sub.handle,
+      shellReadySupported: false,
+      onExit: () => session.dispose()
+    } as never)
+    const received: string[] = []
+    session.attachClient({ onData: (data: string) => received.push(data), onExit: () => {} })
+
+    // Three alt-screen death cycles inside one proof window: each flush pass can
+    // re-enter pending on the next trigger, so a single-level flush loses the tail.
+    sub.emit(
+      '\x1b[?1049hT1\x1b]133;D;1\x07AAA\x1b[?1049hT2\x1b]133;D;2\x07BBB\x1b[?1049hT3\x1b]133;D;3\x07CCC'
+    )
+    await vi.waitFor(() => expect(sub.confirmShellForeground).toHaveBeenCalled())
+    sub.exit(0)
+
+    const joined = received.join('')
+    for (const marker of ['AAA', 'BBB', 'CCC']) {
+      expect(joined).toContain(marker)
+    }
+    expect(joined).not.toContain('\x1b[?1049l')
+  })
 })

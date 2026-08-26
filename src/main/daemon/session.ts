@@ -287,14 +287,15 @@ export class Session {
       return
     }
 
-    // Why first: a dispose mid-episode must deliver the barrier's queued bytes
-    // while clients are still attached and the emulator still accepts writes.
-    this.recoveryBarrier.flushPending()
     // Why: `wasTerminating` below must be read BEFORE the `_state = 'exited'` flip — it guards the
     // "dispose while kill() in flight" case and the invariant needs the pre-flip `_state`; do NOT move it down.
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    // Why after drainAndClose (and before clearClients below): a dispose
+    // mid-episode must deliver the barrier's queued bytes — drained ingress
+    // included — while clients are attached and the emulator accepts writes.
+    this.recoveryBarrier.flushPending()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
@@ -358,14 +359,15 @@ export class Session {
       return
     }
 
-    // Why first: a shell exiting mid-proof must not strand the barrier's queued
-    // bytes — the post-133;D prompt and exit banner belong to clients, records,
-    // and history; the reaper's dispose() runs synchronously from onSessionExit.
-    this.recoveryBarrier.flushPending()
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    // Why after drainAndClose: drained ingress bytes re-enter the barrier and can
+    // open a fresh episode; flushing here delivers them too. A shell exiting
+    // mid-proof must not strand the queued post-133;D prompt — those bytes belong
+    // to clients, records, and history before broadcastExit below.
+    this.recoveryBarrier.flushPending()
     this._exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()
