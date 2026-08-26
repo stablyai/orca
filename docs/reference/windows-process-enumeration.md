@@ -37,6 +37,37 @@ Measured on Windows 11 with 1050 processes (p50 / p95):
 | + memory + command line | 30.6 ms | 33.7 ms |
 | `Get-CimInstance` via PowerShell | 706 ms | 723 ms |
 
+## The relay has no binding, and falls back
+
+Relay deployment installs only `node-pty` and `@parcel/watcher` on the remote
+host (`RELAY_NATIVE_DEPS` in `src/main/ssh/ssh-relay-deploy.ts`), so a Windows
+machine used as an SSH host has no `@vscode/windows-process-tree` at all. It is
+not added there on purpose: the package ships no prebuilds, so installing it
+would put a from-source `node-gyp` build — MSVC, the SDK, and the same
+Spectre-mitigated libraries described below — on the critical path of every
+Windows relay deploy, where today none is needed. pnpm patches also do not cross
+SSH, so the remote would get the unpatched 1024-process cap regardless.
+
+Instead, `windows-process-table.ts` falls back to
+`readWindowsProcessRowsWithCim` (`windows-process-table-cim-scan.ts`), the
+`Get-CimInstance` scan this module replaced. The gate is deliberately narrow:
+
+- it engages **only** when the module cannot be required, never when a loaded
+  module fails, wedges, or returns an unreadable table — a present-but-failing
+  reader must not silently start forking a shell at the caller's poll rate;
+- a fallback that also fails still rejects, so "unavailable" never degrades into
+  "nothing is running";
+- the scan applies the same self-presence guard as the native path.
+
+`src/main/ssh/relay-native-dependency-coverage.test.ts` asserts that every
+native addon reachable from the relay entry is either installed on relay hosts
+or listed there with the reason its absence is safe. That test exists because
+#15749 shipped this gap: the relay tests injected a fake module through
+`__setWindowsProcessTreeLoaderForTests`, so nothing exercised the real require.
+
+The native fast path stays unavailable on relay hosts until the toolchain or a
+prebuild story is solved. That is a real gap, tracked separately.
+
 ## Why the package is patched
 
 `config/patches/@vscode__windows-process-tree@0.8.0.patch` carries two hunks.

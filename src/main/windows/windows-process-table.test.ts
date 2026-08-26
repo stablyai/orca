@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  __setWindowsProcessTableCimScanForTests,
   __setWindowsProcessTreeLoaderForTests,
   isWindowsProcessTableAvailable,
   readWindowsProcessTable,
@@ -66,9 +67,13 @@ describe('windows process table', () => {
 
   it('rejects rather than reporting an empty machine when the module is absent', async () => {
     // A caller that reads "no processes" acts on it -- by declaring a tree dead,
-    // or by concluding a shell has no children. Absence must not look like that.
+    // or by concluding a shell has no children. Absence must not look like that,
+    // and neither must a fallback that also fails.
     __setWindowsProcessTreeLoaderForTests(() => null)
-    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unavailable/)
+    __setWindowsProcessTableCimScanForTests(async () => {
+      throw new Error('powershell unavailable')
+    })
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/powershell unavailable/)
     expect(isWindowsProcessTableAvailable()).toBe(false)
   })
 
@@ -104,6 +109,77 @@ describe('windows process table', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     __setWindowsProcessTreeLoaderForTests()
     expect(isWindowsProcessTableAvailable()).toBe(false)
+  })
+})
+
+// Why this path exists: relay deployment installs only node-pty and
+// @parcel/watcher, so a Windows SSH host has no native binding and every read
+// used to reject -- which agent recognition reads as "no evidence" forever.
+describe('PowerShell fallback when the native binding is absent', () => {
+  let platform: PropertyDescriptor | undefined
+  const cimScan = vi.fn()
+  const CIM_ROWS = [
+    { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' },
+    { pid: 200, ppid: process.pid, name: 'claude.exe', command: 'claude --resume' }
+  ]
+
+  beforeEach(() => {
+    platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    cimScan.mockReset()
+    cimScan.mockResolvedValue(CIM_ROWS)
+    __setWindowsProcessTableCimScanForTests(cimScan)
+  })
+
+  afterEach(() => {
+    __setWindowsProcessTableCimScanForTests()
+    __setWindowsProcessTreeLoaderForTests()
+    if (platform) {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
+  it('engages when the module cannot be required', async () => {
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    await expect(readWindowsProcessTableFresh()).resolves.toEqual(CIM_ROWS)
+    expect(cimScan).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not engage when the native binding is present', async () => {
+    const getAllProcesses = vi.fn()
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb(NATIVE))
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+    await readWindowsProcessTableFresh()
+    expect(cimScan).not.toHaveBeenCalled()
+  })
+
+  it('does not engage when a present binding fails its read', async () => {
+    // A wedged or blocked reader must not silently start forking a shell at the
+    // caller's poll rate; only absence is unrecoverable.
+    const getAllProcesses = vi.fn()
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb([]))
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
+    expect(cimScan).not.toHaveBeenCalled()
+  })
+
+  it('rejects a scan missing our own pid instead of reporting an idle machine', async () => {
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    cimScan.mockResolvedValue([{ pid: 200, ppid: 4, name: 'claude.exe', command: 'claude' }])
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
+  })
+
+  it('stays off Windows-only: darwin still reports unavailable', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unavailable/)
+    expect(cimScan).not.toHaveBeenCalled()
   })
 })
 

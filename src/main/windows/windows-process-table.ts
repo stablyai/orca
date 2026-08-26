@@ -1,5 +1,6 @@
 import { createRequire } from 'node:module'
 import { createProcessTableSnapshotReader } from '../../shared/process-table-snapshot'
+import { readWindowsProcessRowsWithCim } from './windows-process-table-cim-scan'
 
 /**
  * The only place Orca reads the Windows process table.
@@ -54,6 +55,7 @@ const requireFromMain = createRequire(__filename)
 
 let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
+let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 
 /**
  * Resolve the native module, or null where it cannot be used.
@@ -110,6 +112,14 @@ let readGeneration = 0
 function readNativeRows(): Promise<WindowsProcessRow[]> {
   const native = moduleLoader()
   if (!native) {
+    if (process.platform === 'win32') {
+      // Why only when the module is absent: a binding that loads is the fast
+      // path even when a read fails or wedges, so a failing native reader must
+      // never silently start forking shells at the caller's poll rate. Absence
+      // is the one condition that can never resolve itself — see
+      // docs/reference/windows-process-enumeration.md.
+      return readCimRows()
+    }
     // Reject rather than resolve empty: an empty table is a claim that nothing
     // is running, and callers act on that by force-killing or by declaring a
     // tree dead. "Unavailable" has to stay distinguishable from "empty".
@@ -186,6 +196,21 @@ function readNativeRows(): Promise<WindowsProcessRow[]> {
   })
 }
 
+/**
+ * Whole-table read for hosts with no native binding (the relay).
+ *
+ * Applies the same self-presence guard as the native path: a scan that omits
+ * our own pid is truncated or permission-filtered, not empty, and must reject
+ * so nothing downstream reads it as proof a process died.
+ */
+async function readCimRows(): Promise<WindowsProcessRow[]> {
+  const rows = await cimScan()
+  if (!rows.some((row) => row.pid === process.pid)) {
+    throw new Error('windows process table is unreadable')
+  }
+  return rows
+}
+
 // Why still cache: the snapshot is cheap but not free, and a worktree delete
 // tears down PTYs 32-wide. The shared TTL + single-in-flight reader collapses
 // that burst into one scan, exactly as the PowerShell path had to.
@@ -227,6 +252,14 @@ export function __setWindowsProcessTreeLoaderForTests(
   moduleLoader = loader ?? loadWindowsProcessTree
   cachedModule = undefined
   wedgedUntilMs = 0
+  snapshotReader.reset()
+}
+
+/** Test-only: substitute the no-binding PowerShell scan, which spawns a child. */
+export function __setWindowsProcessTableCimScanForTests(
+  scan?: () => Promise<WindowsProcessRow[]>
+): void {
+  cimScan = scan ?? readWindowsProcessRowsWithCim
   snapshotReader.reset()
 }
 
