@@ -54,16 +54,18 @@ export function suspendPaneRendering(
   retention?: { owner: object; livePanes: () => Iterable<ManagedPaneInternal> }
 ): void {
   const suspended = Array.from(panes)
+  // Why: both branches must leave a suspended pane in the same state; only the retention
+  // branch below used to blur. Defence in depth, not a measured cost — display:none and
+  // inert both make Chromium blur the pane itself, and disposeWebgl kills the blink timer
+  // regardless. It only bites under opacity:0 without inert (TerminalOverlaySlot's startup
+  // probe), the one hide mode that keeps focus.
   for (const pane of suspended) {
     pane.webglAttachmentDeferred = true
+    pane.terminal.blur()
   }
   // Keep recent hidden worktrees on live WebGL so switch-back never presents
   // DOM-fallback frames; evicted/over-cap owners fall back to dispose.
   if (retention && tryRetainHiddenPanesWebgl(retention.owner, retention.livePanes)) {
-    // Why: retained WebGL keeps xterm's focused cursor timer alive behind the hidden surface.
-    for (const pane of suspended) {
-      pane.terminal.blur()
-    }
     return
   }
   for (const pane of suspended) {
