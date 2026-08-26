@@ -62,7 +62,7 @@ import { GrokHookService } from '../grok/hook-service'
 import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
-import { POSIX_HOOK_STDIN_READER } from './hook-stdin-contract'
+import { POSIX_HOOK_STDIN_READER, POSIX_HOOK_STDIN_READER_COMMAND } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 import { createAgentHookMemorySftp } from './agent-hook-memory-sftp.test-fixture'
 import { findGitBash } from './windows-git-bash-path.test-fixture'
@@ -189,6 +189,18 @@ function hookEnvironment(extraEnv: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
 
 function runPosixHook(command: string, extraEnv: NodeJS.ProcessEnv = {}): Promise<HookRun> {
   return runHookProcess('/bin/sh', ['-c', command], hookEnvironment(extraEnv))
+}
+
+function posixOrcaEnvIfRequired(agent: string): NodeJS.ProcessEnv {
+  // Why: command-code and Antigravity env-guard before stdin; without these the writer sees EPIPE.
+  if (agent.startsWith('command-code') || agent.startsWith('antigravity')) {
+    return {
+      ORCA_AGENT_HOOK_PORT: '1',
+      ORCA_AGENT_HOOK_TOKEN: 'test-token',
+      ORCA_PANE_KEY: 'test-pane'
+    }
+  }
+  return {}
 }
 
 async function generatePosixScripts(): Promise<Map<string, string>> {
@@ -461,6 +473,24 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
+      if (agent.startsWith('antigravity')) {
+        // Why: Antigravity may abandon stdin; missing Orca env must exit before cat (#11549).
+        const guardIndex = script.indexOf('[ -z "$ORCA_PANE_KEY" ]')
+        const captureIndex = script.indexOf('exec 3<&0')
+        expect(guardIndex, `${agent} env guard`).toBeGreaterThanOrEqual(0)
+        expect(captureIndex, `${agent} bounded capture`).toBeGreaterThan(guardIndex)
+        expect(script, `${agent} reader probe`).toContain(
+          `if ${POSIX_HOOK_STDIN_READER_COMMAND} </dev/null >/dev/null 2>&1; then`
+        )
+        expect(script, `${agent} qualified reader`).toContain(
+          `${POSIX_HOOK_STDIN_READER_COMMAND} <&3 2>/dev/null &`
+        )
+        expect(script, `${agent} fallback reader`).toContain('command cat <&3 2>/dev/null &')
+        expect(script, `${agent} grouped reader`).not.toContain(`${POSIX_HOOK_STDIN_READER} <&3 &`)
+        expect(script, `${agent} watchdog`).toContain('kill -9 "$_orca_reader"')
+        expect(script, `${agent} reader wait`).toContain('wait "$_orca_reader" 2>/dev/null || :')
+        continue
+      }
       const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
@@ -471,13 +501,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('accepts a large payload without Orca environment or a broken writer', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const extraEnv = agent.startsWith('command-code')
-        ? {
-            ORCA_AGENT_HOOK_PORT: '1',
-            ORCA_AGENT_HOOK_TOKEN: 'test-token',
-            ORCA_PANE_KEY: 'test-pane'
-          }
-        : {}
+      const extraEnv = posixOrcaEnvIfRequired(agent)
       const result = await runPosixHook(script, extraEnv)
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
@@ -487,7 +511,7 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('does not need PATH to capture or drain POSIX hook stdin', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const result = await runPosixHook(script, { PATH: '' })
+      const result = await runPosixHook(script, { PATH: '', ...posixOrcaEnvIfRequired(agent) })
       expect(result.exitCode, `${agent} exit code`).toBe(0)
       expect(result.stdinErrors, `${agent} stdin errors`).toHaveLength(0)
     }

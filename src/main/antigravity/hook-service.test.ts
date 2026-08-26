@@ -17,7 +17,10 @@ vi.mock('os', async () => {
 })
 
 import { AntigravityHookService } from './hook-service'
-import { POSIX_HOOK_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import {
+  POSIX_HOOK_STDIN_READER,
+  POSIX_HOOK_STDIN_READER_COMMAND
+} from '../agent-hooks/hook-stdin-contract'
 import { createManagedCommandMatcher } from '../agent-hooks/installer-utils'
 
 const ANTIGRAVITY_SCRIPT_FILE_NAME =
@@ -106,7 +109,19 @@ describe('AntigravityHookService', () => {
       expect(script).toContain('setlocal DisableDelayedExpansion')
     } else {
       expect(script).toContain('hook_event_name=${ORCA_ANTIGRAVITY_EVENT}')
-      expect(script).toContain(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      expect(script).toContain(
+        `if ${POSIX_HOOK_STDIN_READER_COMMAND} </dev/null >/dev/null 2>&1; then`
+      )
+      expect(script).toContain(`${POSIX_HOOK_STDIN_READER_COMMAND} <&3 2>/dev/null &`)
+      expect(script).toContain('command cat <&3 2>/dev/null &')
+      expect(script).not.toContain(`${POSIX_HOOK_STDIN_READER} <&3 &`)
+      expect(script).toContain('command -p sleep')
+      expect(script).toContain('kill -9 "$_orca_reader"')
+      expect(script).toContain('wait "$_orca_reader" 2>/dev/null || :')
+      expect(script).toContain('exec 3<&0')
+      expect(script.indexOf('[ -z "$ORCA_PANE_KEY" ]')).toBeLessThan(
+        script.indexOf('_orca_reader=$!')
+      )
       expect(script).toContain("payload='{}'")
       expect(script).not.toContain('if [ -z "$payload" ]; then\n  exit 0\nfi')
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands

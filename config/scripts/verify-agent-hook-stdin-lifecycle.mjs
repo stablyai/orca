@@ -140,10 +140,27 @@ function readGeneratedScripts(home, minMtime) {
       throw new Error([fileName, ' predates the Electron launch'].join(''))
     }
     const body = readFileSync(path, 'utf8')
-    const captureIndex = body.indexOf('payload=$(cat)')
-    const firstExitIndex = body.indexOf('exit 0')
-    if (captureIndex === -1 || firstExitIndex <= captureIndex) {
-      throw new Error([fileName, ' can exit before capturing stdin'].join(''))
+    if (fileName === 'antigravity-hook.sh') {
+      const guardIndex = body.indexOf('[ -z "$ORCA_PANE_KEY" ]')
+      const captureIndex = body.indexOf('exec 3<&0')
+      if (
+        guardIndex === -1 ||
+        captureIndex === -1 ||
+        captureIndex <= guardIndex ||
+        !body.includes('if command -p cat </dev/null >/dev/null 2>&1; then') ||
+        !body.includes('command -p cat <&3 2>/dev/null &') ||
+        !body.includes('command cat <&3 2>/dev/null &') ||
+        !body.includes('kill -9 "$_orca_reader"') ||
+        !body.includes('wait "$_orca_reader" 2>/dev/null || :')
+      ) {
+        throw new Error([fileName, ' is missing the bounded stdin watchdog'].join(''))
+      }
+    } else {
+      const captureIndex = body.indexOf('payload=$({ command -p cat 2>/dev/null || cat; })')
+      const firstExitIndex = body.indexOf('exit 0')
+      if (captureIndex === -1 || firstExitIndex <= captureIndex) {
+        throw new Error([fileName, ' can exit before capturing stdin'].join(''))
+      }
     }
     return { body, fileName, path, source }
   })
@@ -203,7 +220,7 @@ async function verifyNoOpWrites(scripts, home, payload) {
           : (process.env.PATH ?? '/usr/bin:/bin')
       const result = await runShell(
         ['/bin/sh ', JSON.stringify(script.path)].join(''),
-        payload,
+        script.fileName === 'antigravity-hook.sh' ? '' : payload,
         withoutOrcaEnvironment({
           HOME: home,
           PATH: path,

@@ -1,11 +1,15 @@
 import {
-  buildPosixHookPayloadCapture,
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue,
+  POSIX_HOOK_STDIN_READER_COMMAND,
   WINDOWS_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
 import { buildWindowsAgentHookPostCommand } from '../agent-hooks/installer-utils'
 import { ANTIGRAVITY_PRE_TOOL_USE_DECISION } from './hook-events'
+
+// Why: agy can omit stdin or leave the pipe open until the hook exits (#15117/#11549).
+// POSIX capture is watchdog-killed at this bound; tests reuse it so the budget cannot drift.
+export const ANTIGRAVITY_POSIX_STDIN_WATCHDOG_SECONDS = 1
 
 // Why (#15117): PowerShell cost ~300ms of startup per event, which is what made the console
 // the agent allocates for each hook last long enough to see.
@@ -52,14 +56,33 @@ export function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '    printf "{}\\n"',
     '    ;;',
     'esac',
-    // Why: some Antigravity events arrive without stdin but still need a
-    // status post, so the shared capture maps empty input to an object.
-    ...buildPosixHookPayloadCapture('empty-object'),
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
+    // Why: hanging is worse than EPIPE when the caller may abandon stdin (#11549).
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  exit 0',
+    'fi',
+    // Why: agy can omit stdin or leave the pipe open until the hook exits (#15117).
+    // Background cat otherwise inherits /dev/null. Dup stdin to fd 3 first.
+    // Detach the sleeper from this capture so closed-stdin events do not wait the bound.
+    'exec 3<&0',
+    'payload=$(',
+    `  if ${POSIX_HOOK_STDIN_READER_COMMAND} </dev/null >/dev/null 2>&1; then`,
+    `    ${POSIX_HOOK_STDIN_READER_COMMAND} <&3 2>/dev/null &`,
+    '  else',
+    '    command cat <&3 2>/dev/null &',
+    '  fi',
+    '  _orca_reader=$!',
+    `  ( command -p sleep ${ANTIGRAVITY_POSIX_STDIN_WATCHDOG_SECONDS} && kill -9 "$_orca_reader" 2>/dev/null ) >/dev/null 2>&1 &`,
+    '  _orca_watch=$!',
+    '  wait "$_orca_reader" 2>/dev/null || :',
+    '  kill -9 "$_orca_watch" 2>/dev/null',
+    '  wait "$_orca_watch" 2>/dev/null || :',
+    ')',
+    'exec 3<&-',
+    'if [ -z "$payload" ]; then',
+    "  payload='{}'",
     'fi',
     // Timeout caps best-effort hook posts if the local listener stalls.
     // Why: pipe payload to curl's stdin (`payload@-`) instead of an inline
