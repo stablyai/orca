@@ -89,19 +89,34 @@ export class ExternalChromiumBrowserSession {
 
   async start(): Promise<string> {
     await mkdir(this.profilePath, { recursive: true })
-    // Why: the session name is stable across runs, so a daemon a killed orcad left behind is
-    // reused here — still holding the previous run's Chromium on a now-dead serve port (#16367).
+    // Why: the session name is stable across runs, so a daemon an earlier orcad left behind is
+    // still driving the user's Chromium. Unlike the pane bridge this session never passes --cdp,
+    // so nothing binds it to the old process — a surviving one is reusable as-is, and closing it
+    // would take the remote user's browser and every tab with it (#16367).
+    const reusable = await this.readActiveTabId()
+    if (reusable) {
+      return reusable
+    }
+    // Nothing answered, so anything under this name is wedged or half-dead; reclaim it.
     await this.stop()
     await this.run(['open', 'about:blank'])
-    const tabs = await this.readTabs()
-    const active = tabs.find((tab) => tab.active) ?? tabs[0]
-    if (!active) {
+    const opened = await this.readActiveTabId()
+    if (!opened) {
       throw new BrowserError(
         BROWSER_UNAVAILABLE_ERROR_CODE,
         'The browser launched without an automation target.'
       )
     }
-    return active.tabId
+    return opened
+  }
+
+  private async readActiveTabId(): Promise<string | null> {
+    try {
+      const tabs = await this.readTabs()
+      return (tabs.find((tab) => tab.active) ?? tabs[0])?.tabId ?? null
+    } catch {
+      return null
+    }
   }
 
   async stop(): Promise<void> {

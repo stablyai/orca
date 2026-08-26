@@ -60,12 +60,13 @@ describe('orcad external-chromium agent-browser environment', () => {
     expect(env.AGENT_BROWSER_ARGS).toBe('--headless=new\n--no-sandbox')
   })
 
-  // Why: the session name is stable across runs, so without this a killed orcad's daemon is
-  // reused on the next start, still holding the previous run's Chromium (#16367).
-  it("closes the previous run's daemon before opening a page", async () => {
+  // Why (#16367): orcad is the backend a remote user's Chromium hangs off, and this session
+  // never passes --cdp, so a daemon an earlier orcad left behind is not bound to the dead
+  // process. Closing it on every start would take their browser and every tab with it.
+  it("reuses a surviving session instead of closing the user's browser", async () => {
     runProcessMock.mockImplementation((spec: Spec) => {
       const data = spec.args?.includes('tab')
-        ? { tabs: [{ active: true, tabId: 'tab-1', title: 'x', url: 'about:blank' }] }
+        ? { tabs: [{ active: true, tabId: 'tab-live', title: 'x', url: 'https://example.test' }] }
         : {}
       return Promise.resolve({
         code: 0,
@@ -81,10 +82,49 @@ describe('orcad external-chromium agent-browser environment', () => {
       { executablePath: BASE.executablePath, provider: 'chromium' },
       '/state'
     )
+    await expect(session.start()).resolves.toBe('tab-live')
+
+    const issued = commands().map((args) => args.filter((arg) => !arg.startsWith('-')))
+    expect(issued.some((args) => args.includes('close'))).toBe(false)
+    expect(issued.some((args) => args.includes('open'))).toBe(false)
+  })
+
+  // Why: a name that answers nothing is wedged or half-dead, so reclaiming it is correct —
+  // that is the killed-orcad case the stable session name exists to recover.
+  it('reclaims a session that answers nothing, then opens', async () => {
+    let listed = 0
+    runProcessMock.mockImplementation((spec: Spec) => {
+      if (spec.args?.includes('tab')) {
+        listed += 1
+        // First probe finds nothing; after `open` the page exists.
+        const tabs =
+          listed === 1 ? [] : [{ active: true, tabId: 'tab-1', title: 'x', url: 'about:blank' }]
+        return Promise.resolve({
+          code: 0,
+          signal: null,
+          stdout: JSON.stringify({ success: true, data: { tabs } }),
+          stderr: '',
+          timedOut: false
+        })
+      }
+      return Promise.resolve({
+        code: 0,
+        signal: null,
+        stdout: JSON.stringify({ success: true, data: {} }),
+        stderr: '',
+        timedOut: false
+      })
+    })
+
+    const session = new ExternalChromiumBrowserSession(
+      '/opt/orca/agent-browser',
+      { executablePath: BASE.executablePath, provider: 'chromium' },
+      '/state'
+    )
     await expect(session.start()).resolves.toBe('tab-1')
 
     const issued = commands().map((args) => args.filter((arg) => !arg.startsWith('-')))
-    expect(issued[0]).toContain('close')
-    expect(issued[1]).toContain('open')
+    expect(issued.some((args) => args.includes('close'))).toBe(true)
+    expect(issued.some((args) => args.includes('open'))).toBe(true)
   })
 })
