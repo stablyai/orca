@@ -151,6 +151,31 @@ describe('MobileNativeChatView', () => {
     })
   }
 
+  it('keeps streaming output pinned after the user jumps to latest', async () => {
+    const folded = [assistantTurn('a1', 'Older output')]
+    await render({ folded, streaming: 'First streaming chunk' })
+    const list = renderer!.root.find((node) => node.type === 'FlatList')
+    await act(async () => {
+      list.props.onScroll({
+        nativeEvent: {
+          contentOffset: { y: 0 },
+          contentSize: { height: 1_000 },
+          layoutMeasurement: { height: 200 }
+        }
+      })
+    })
+    const jumpButton = renderer!.root.find(
+      (node) => node.props.accessibilityLabel === 'Scroll to latest'
+    )
+
+    await act(async () => jumpButton.props.onPress())
+    await update({ folded, streaming: 'First streaming chunk with more output' })
+
+    expect(
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Scroll to latest')
+    ).toHaveLength(0)
+  })
+
   it('renders the route-reported failure verbatim', async () => {
     await render({ sendErrorMessage: 'Permission reply failed' })
 
