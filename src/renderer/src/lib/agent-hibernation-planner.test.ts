@@ -87,7 +87,7 @@ function plannedPaneKeys(input: AgentHibernationPlannerSnapshot): string[] {
 }
 
 describe('agent sleep planner', () => {
-  it('selects nothing when disabled, active, or foreground', () => {
+  it('selects nothing when disabled or foreground', () => {
     expect(
       plannedWorktrees(
         snapshot({
@@ -98,7 +98,6 @@ describe('agent sleep planner', () => {
         })
       )
     ).toEqual([])
-    expect(plannedWorktrees(snapshot({ activeWorktreeId: 'wt-bg' }))).toEqual([])
     expect(plannedWorktrees(snapshot({ foregroundTerminalTabIds: ['tab-1'] }))).toEqual([])
   })
 
@@ -359,6 +358,9 @@ describe('agent sleep planner', () => {
     ).toEqual([])
   })
 
+  // Why: `activeWorktreeId` is the worktree under test, so this also pins #16211 — the planner
+  // used to skip the active tree wholesale and this case would return []. Lever from @sanshengai's
+  // #16214; it fails against the pre-fix planner, where a standalone background-worktree case does not.
   it('does not let one foreground terminal tab reset a sibling tab in the same worktree', () => {
     const siblingEntry = entry({
       paneKey: `tab-2:${OTHER_LEAF}`,
@@ -369,6 +371,7 @@ describe('agent sleep planner', () => {
     expect(
       plannedPaneKeys(
         snapshot({
+          activeWorktreeId: 'wt-bg',
           foregroundTerminalTabIds: ['tab-1'],
           foregroundTerminalLastSeenAtByTabId: {
             'tab-1': NOW

@@ -142,6 +142,7 @@ export async function useIpcEventsForCloseRouting({
     dispatchEvent: vi.fn(),
     api: {
       repos: { onChanged: () => () => {} },
+      automations: { onChanged: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
         onBaseStatus: () => () => {},

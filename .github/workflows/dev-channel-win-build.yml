@@ -230,10 +230,23 @@ jobs:
         shell: bash
         run: node config/scripts/verify-dev-channel-packaging.mjs --channel="$CHANNEL" --platform=win32
 
+      # Why here and not in build:relay: only a Windows runner can compile it, and
+      # arm64 cross-compiles from this same x64 agent. Runs before the 20-minute
+      # build so a runner image missing the MSVC ARM64 cross toolset fails in
+      # seconds with MSB8020 naming the component, rather than deep into packaging.
+      - name: Build Windows process-table addon for the relay
+        shell: bash
+        run: |
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=x64
+          node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=arm64
+
       - name: Build app
         shell: bash
         run: pnpm build:release
         env:
+          # Fail the build rather than ship a relay that silently falls back to
+          # the PowerShell scan on every Windows SSH host.
+          ORCA_REQUIRE_RELAY_NATIVE_ADDONS: 'x64,arm64'
           # Why unset ORCA_BUILD_IDENTITY: telemetry's transport gate accepts only
           # 'stable' or 'rc', so leaving it unset keeps dev builds silent — which
           # is correct for unvetted artifacts. Same as the mac dev channels.

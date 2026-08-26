@@ -5,6 +5,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { openDecisionGateFromMessage } from '../../orchestration/coordinator-decision-gates'
 import { applyEscalationToDispatch } from '../../orchestration/coordinator-escalation-triage'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration.send Dispatch authority', () => {
   const harness = createOrchestrationRpcHarness()
@@ -29,7 +30,8 @@ describe('orchestration.send Dispatch authority', () => {
     async (legacyAuthority) => {
       setup()
       const attackerTask = db.createTask({ spec: 'attacker assignment' })
-      const attacker = db.createDispatchContext(
+      const attacker = createRootDispatch(
+        db,
         attackerTask.id,
         'term_attacker',
         'tab_attacker:leaf_attacker',
@@ -37,7 +39,7 @@ describe('orchestration.send Dispatch authority', () => {
         legacyAuthority ? undefined : 'runtime_test:term_attacker:1'
       )
       const victimTask = db.createTask({ spec: 'victim assignment' })
-      const victim = db.createDispatchContext(victimTask.id, 'term_victim')
+      const victim = createRootDispatch(db, victimTask.id, 'term_victim')
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_attacker' ? 'tab_attacker:leaf_attacker' : harness.coordinatorPaneKey
       )
@@ -74,7 +76,7 @@ describe('orchestration.send Dispatch authority', () => {
   it('rejects a caller-spoofed canonical Dispatch sender', async () => {
     setup()
     const task = db.createTask({ spec: 'legacy victim assignment' })
-    const dispatch = db.createDispatchContext(task.id, 'term_victim')
+    const dispatch = createRootDispatch(db, task.id, 'term_victim')
 
     const result = (await send({
       from: `dispatch:${dispatch.id}`,
@@ -97,7 +99,7 @@ describe('orchestration.send Dispatch authority', () => {
     async (type) => {
       setup()
       const task = db.createTask({ spec: 'legacy owned assignment' })
-      db.createDispatchContext(task.id, 'term_legacy')
+      createRootDispatch(db, task.id, 'term_legacy')
       vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
         handle === 'term_legacy' ? 'tab_legacy:leaf_legacy' : harness.coordinatorPaneKey
       )
@@ -123,7 +125,7 @@ describe('orchestration.send Dispatch authority', () => {
     async (type) => {
       setup()
       const task = db.createTask({ spec: 'legacy re-dispatch target' })
-      const first = db.createDispatchContext(task.id, 'term_legacy')
+      const first = createRootDispatch(db, task.id, 'term_legacy')
 
       const sent = (await send({
         from: 'term_legacy',
@@ -137,7 +139,7 @@ describe('orchestration.send Dispatch authority', () => {
 
       expect(JSON.parse(sent.message.payload)).toMatchObject({ dispatchId: first.id })
       db.failDispatch(first.id, 'worker stopped before coordinator read its mail')
-      const second = db.createDispatchContext(task.id, 'term_legacy')
+      const second = createRootDispatch(db, task.id, 'term_legacy')
 
       if (type === 'escalation') {
         applyEscalationToDispatch(db, db.getMessageById(sent.message.id)!, () => {})

@@ -9,9 +9,15 @@ import type { WindowsProcessRow } from './windows-process-table'
  * Why this still exists after #15749 retired it: the relay bundle is deployed to
  * SSH hosts that only ever receive `node-pty` and `@parcel/watcher`, so
  * `@vscode/windows-process-tree` is absent there and every native read rejects.
- * Callers read that as "no evidence" and agent panes identify as powershell.exe
- * forever. This restores the v1.4.188 answer on exactly those hosts; the local
- * app ships the addon and never reaches this path.
+ * Callers read that as "no evidence", so a pane keeps whatever name node-pty
+ * reported -- the shell, usually -- instead of the agent running under it, for
+ * the life of the relay process. This restores the v1.4.188 answer on exactly
+ * those hosts; the local app ships the addon and never reaches this path.
+ *
+ * Measured on a Windows 11 SSH host with 1486 processes: 1.36s and 4.8MiB of
+ * JSON per scan, against the 3s / 8MiB limits below. Both limits match the
+ * pre-#15749 reader, so this is parity, but the headroom is thinner than the
+ * 706ms figure in docs/reference/windows-process-enumeration.md suggests.
  */
 
 const WINDOWS_CIM_QUERY_TIMEOUT_MS = 3_000

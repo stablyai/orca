@@ -53,16 +53,57 @@ type WindowsProcessTreeModule = {
 
 const requireFromMain = createRequire(__filename)
 
+// Why injectable: `createRequire` bypasses the module mocker, and the two
+// resolution steps below are the exact thing #15749 shipped untested -- the
+// relay suites replaced the loader wholesale, so nothing exercised the require.
+let requireNative: (specifier: string) => unknown = requireFromMain
+
+/**
+ * The bare addon a relay host receives, with no npm package around it.
+ *
+ * The published package's `lib/index.js` adds only a queue over this call, and
+ * that queue is the wedge this module already defends against: it latches a
+ * module-global `requestInProgress` with no try/catch. We hold our own
+ * single-flight and deadline, so binding straight to the addon drops the
+ * duplicate queue rather than nesting inside it.
+ */
+type WindowsProcessTreeAddon = {
+  getProcessList: (
+    callback: (processes: NativeProcessInfo[] | undefined) => void,
+    flags: number
+  ) => void
+}
+
+/** Mirrors the package's enum; the addon takes the raw bit field. */
+const PROCESS_DATA_FLAG = { None: 0, Memory: 1, CommandLine: 2 } as const
+
+/** Staged beside the relay bundle by build-relay; see RELAY_ARTIFACTS. */
+const RELAY_ADDON_FILENAME = './windows-process-tree.node'
+
 let cachedModule: WindowsProcessTreeModule | null | undefined
 let moduleLoader: () => WindowsProcessTreeModule | null = loadWindowsProcessTree
 let cimScan: () => Promise<WindowsProcessRow[]> = readWindowsProcessRowsWithCim
 
+/** Present the bare addon through the same shape as the npm package. */
+function adaptAddon(addon: WindowsProcessTreeAddon): WindowsProcessTreeModule {
+  return {
+    ProcessDataFlag: PROCESS_DATA_FLAG,
+    getAllProcesses: (callback, flags) => addon.getProcessList(callback, flags ?? 0)
+  }
+}
+
 /**
- * Resolve the native module, or null where it cannot be used.
+ * Resolve the native reader, or null where it cannot be used.
  *
- * Why tolerate absence: it is an optional, Windows-only dependency, so a
- * macOS/Linux install legitimately has no binary. Callers must treat null the
- * same way they treat any other unavailable evidence.
+ * Two sources, because two very different deployments need it. The desktop app
+ * installs the npm package. A relay host has no node_modules of ours at all, so
+ * build-relay stages the bare addon next to the bundle and we bind to that.
+ *
+ * Why tolerate absence: it stays optional and Windows-only, so a macOS/Linux
+ * install legitimately has no binary, and a relay built before this artifact
+ * existed has no file. Callers must treat null the same way they treat any
+ * other unavailable evidence -- `readNativeRows` then falls back to the CIM
+ * scan, which needs nothing installed.
  */
 function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
   if (cachedModule !== undefined) {
@@ -73,7 +114,18 @@ function loadWindowsProcessTree(): WindowsProcessTreeModule | null {
     return cachedModule
   }
   try {
-    cachedModule = requireFromMain('@vscode/windows-process-tree') as WindowsProcessTreeModule
+    cachedModule = requireNative('@vscode/windows-process-tree') as WindowsProcessTreeModule
+    return cachedModule
+  } catch {
+    // Not an error here: the relay never has the package. Try the staged addon.
+  }
+  try {
+    const addon = requireNative(RELAY_ADDON_FILENAME) as WindowsProcessTreeAddon
+    // Why check the shape: a truncated upload or an addon built for another
+    // arch can load and still not answer. Binding to it would then reject every
+    // read forever, where falling through reaches a scan that works.
+    cachedModule =
+      typeof addon?.getProcessList === 'function' ? adaptAddon(addon) : /* v8 ignore next */ null
   } catch {
     cachedModule = null
   }
@@ -250,6 +302,17 @@ export function __setWindowsProcessTreeLoaderForTests(
   loader?: () => WindowsProcessTreeModule | null
 ): void {
   moduleLoader = loader ?? loadWindowsProcessTree
+  cachedModule = undefined
+  wedgedUntilMs = 0
+  snapshotReader.reset()
+}
+
+/** Test-only: substitute the require that resolves the package and the addon. */
+export function __setWindowsProcessTreeRequireForTests(
+  resolve?: (specifier: string) => unknown
+): void {
+  requireNative = resolve ?? requireFromMain
+  moduleLoader = loadWindowsProcessTree
   cachedModule = undefined
   wedgedUntilMs = 0
   snapshotReader.reset()

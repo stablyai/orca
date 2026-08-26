@@ -128,6 +128,8 @@ describe('federation relay parsing', () => {
       })
       const task = db.createTask({ spec: 'Remote work', runId: run.id })
       const { dispatch } = db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: {},
         federation: {
@@ -196,6 +198,8 @@ describe('federation relay acknowledgments', () => {
     })
     const task = db.createTask({ spec: 'Remote work', runId: run.id })
     const { dispatch } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       federation: {

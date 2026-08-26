@@ -87,7 +87,8 @@ vi.mock('./agent-foreground-process', () => ({
 }))
 
 vi.mock('./windows-pty-job-membership', () => ({
-  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args)
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({

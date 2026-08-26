@@ -3506,7 +3506,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "합산된 워킹 세트(WS). 공유 페이지가 둘 이상의 프로세스에 나타날 수 있습니다.",
+                "workingSetDescription": "합산된 워킹 세트(WS): 지금 RAM에 상주 중인 페이지입니다. 공유 페이지가 둘 이상의 프로세스에 나타날 수 있으며, Windows가 페이지 아웃한 메모리는 여기에 포함되지 않습니다.",
+                "privateBytesDescription": "합산된 프라이빗 바이트: 이 프로세스들이 커밋한 메모리로, 상주 여부와 관계없이 계산됩니다. 호스트가 커밋 한도에 반영하는 값이므로, 페이징으로 위의 워킹 세트가 줄어드는 동안에도 계속 늘어납니다.",
                 "rssDescription": "합산된 레지던트 세트 크기(RSS). 공유 또는 별칭된 페이지가 둘 이상의 프로세스에 나타날 수 있습니다."
               }
             },
@@ -3877,6 +3878,19 @@
         }
       },
       "skills": {
+        "SkillsPage": {
+          "cb142070b4": "새로 고침", "a68dee6a32": "스킬 검색", "f43ad6edf3": "스킬", "ea72d6185b": "스킬을 검색하지 못했습니다", "dc4c3328ee": "파일 표시", "9963dff6d3": "설명을 찾을 수 없습니다.", "995fde8337": "스킬 파일을 표시하지 못했습니다", "4acd6d68ec": "스킬을 찾을 수 없습니다", "6a62a0168c": "일치하는 항목 없음", "08a321a984": "현재 검색 및 필터와 일치하는 스킬이 없습니다.", "cd7893fbc1": "스킬 검색 중", "35b9a724a0": "사용 가능", "c13b82793c": "설치 관리", "aee7b99cc6": "링크에서 설치", "filterProvider": "에이전트별 필터", "filterSource": "소스별 필터", "allSources": "전체", "clearFilters": "필터 지우기", "closeSkills": "스킬 닫기", "closeTooltip": "닫기 · Esc", "moreActions": "추가 작업", "sharedLinks": "공유 링크", "emptyCopy": "검색한 스킬 폴더가 비어 있습니다. 공유 번들을 설치하거나 스킬을 추가한 후 새로 고치세요.", "retry": "다시 시도", "remoteShareNotice": "이 스킬은 {{host}}에 있습니다. 공유하려면 해당 머신에서 스킬을 여세요.", "viewSwitch": "표시", "searchLinks": "링크 검색", "deleteSkills": "스킬 삭제…"
+        },
+        "SkillShareSelectionControls": { "01c5a15e02": "스킬 공유" },
+        "SkillRow": { "updatedUnknown": "날짜 없음", "pathCopied": "경로 복사됨", "copyPath": "경로 복사", "detailPath": "경로", "skillActions": "{{value0}} 작업", "viewDetails": "세부 정보 보기", "deleteSkill": "삭제…" },
+        "SkillsList": { "listLabel": "스킬" },
+        "sourceStatus": { "missing": "폴더를 찾을 수 없음", "remoteRepo": "원격 리포지토리 — 검색 안 됨", "unavailable": "검색 안 됨" },
+        "sources": { "heading": "스킬 폴더" },
+        "sourceKind": { "home": "홈", "workspace": "워크스페이스", "bundled": "번들", "plugin": "플러그인" },
+        "count": { "skillOne": "스킬 {{count}}개", "skillOther": "스킬 {{count}}개", "sourceOne": "소스 {{count}}개", "sourceOther": "소스 {{count}}개", "fileOne": "파일 {{count}}개", "fileOther": "파일 {{count}}개", "resultOne": "결과 {{count}}개", "resultOther": "결과 {{count}}개", "selected": "{{count}}개 선택됨", "shareOne": "스킬 {{count}}개 공유", "shareOther": "스킬 {{count}}개 공유", "linkOne": "링크 {{count}}개", "linkOther": "링크 {{count}}개" },
+        "filter": { "allAgents": "모든 에이전트", "sharedAgent": "공유됨 (.agents)" },
+        "SkillsSelectionHeader": { "exit": "선택 나가기", "exitTooltip": "선택 나가기 · Esc", "title": "공유할 스킬 선택", "selectAll": "가능한 {{count}}개 모두 선택", "clear": "지우기", "deleteTitle": "삭제할 스킬 선택" },
+        "SkillDetailDialog": { "agents": "에이전트", "updated": "업데이트됨", "copy": "복사" },
         "SkillFreshnessNudge": {
           "titleOne": "설치된 Orca 스킬이 오래되었습니다",
           "titleMany": "설치된 Orca 스킬 {{value0}}개가 오래되었습니다",
@@ -4288,7 +4302,7 @@
           "489d1c8c9f": "프로젝트 검색...",
           "ee240a39eb": "필터 편집",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
-          "cliCreated": "Hide CLI-created",
+          "cliCreated": "CLI로 생성된 워크스페이스 숨기기",
           "detachedHead": "분리된 HEAD 숨기기",
           "keepDefaultBranch": "기본 브랜치는 제외",
           "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
@@ -4357,7 +4371,7 @@
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
-          "cliCreated": "Hide CLI-created",
+          "cliCreated": "CLI로 생성된 워크스페이스 숨기기",
           "detachedHead": "분리된 HEAD 숨기기",
           "keepDefaultBranch": "기본 브랜치는 제외",
           "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
@@ -4530,10 +4544,10 @@
           "issueLinkLabel": "이슈 링크",
           "reviewLinkLabel": "{{value0}} 링크",
           "cliHeader": "Orca CLI",
-          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
-          "cliCreatedFromShell": "Created via `orca worktree create`",
-          "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI",
+          "cliCreatedFromAgent": "Agent가 `orca worktree create`로 생성",
+          "cliCreatedFromShell": "`orca worktree create`로 생성",
+          "cliStartupAgent": "{{value0}}(으)로 시작됨",
+          "cliCreated": "Orca CLI로 생성됨",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "Jira에서 보기",
           "linkedJira": "연결된 Jira {{value0}}"
@@ -13875,6 +13889,7 @@
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
+          "tableHost": "호스트",
           "tableStatus": "상태",
           "tableActions": "작업",
           "newAutomation": "새 자동화",
