@@ -6,6 +6,7 @@ describe('pairing-local UI fields', () => {
   // preload, so a field added here without wiring every seam would otherwise ship silently.
   it('census: the set is exactly the fields no pairing may exchange', () => {
     expect([...PAIRING_LOCAL_UI_FIELDS]).toEqual([
+      'automationHostFilter',
       'hideWorkspacesFromOtherDevices',
       'manualRepoOrder',
       'workspaceHostOrder'

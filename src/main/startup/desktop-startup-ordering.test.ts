@@ -270,6 +270,40 @@ describe('startup ordering', () => {
     expect(disposeIndex).toBeGreaterThan(commitIndex)
   })
 
+  it('joins agent-browser cleanup before the committed quit exits', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const willQuitStart = source.indexOf("app.on('will-quit'")
+    const windowAllClosedStart = source.indexOf("app.on('window-all-closed'", willQuitStart)
+    const willQuit = source.slice(willQuitStart, windowAllClosedStart)
+    const cleanupStart = willQuit.indexOf('const browserShutdown')
+    const offscreenCleanupStart = willQuit.indexOf(
+      'runtime?.getOffscreenBrowserBackend()?.destroyAll?.()'
+    )
+    const residualCleanupStart = willQuit.indexOf(
+      'runtime?.getAgentBrowserBridge()?.destroyAllSessions()'
+    )
+    const barrierStart = willQuit.indexOf('settleTeardownWithinDeadline([')
+
+    expect(willQuitStart).toBeGreaterThanOrEqual(0)
+    expect(windowAllClosedStart).toBeGreaterThan(willQuitStart)
+    expect(cleanupStart).toBeGreaterThanOrEqual(0)
+    expect(offscreenCleanupStart).toBeGreaterThan(cleanupStart)
+    expect(residualCleanupStart).toBeGreaterThan(offscreenCleanupStart)
+    expect(barrierStart).toBeGreaterThan(cleanupStart)
+    expect(willQuit.slice(barrierStart)).toContain("{ name: 'browser', promise: browserShutdown }")
+  })
+
+  it('registers repeatable serve signal handling before headless startup completes', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const serveStart = source.indexOf('if (serveOptions) {')
+    const signalHandlers = source.indexOf('registerServeSignalHandlers(process', serveStart)
+    const serveReady = source.indexOf('await printServeReady(serveOptions)', serveStart)
+
+    expect(serveStart).toBeGreaterThanOrEqual(0)
+    expect(signalHandlers).toBeGreaterThan(serveStart)
+    expect(signalHandlers).toBeLessThan(serveReady)
+  })
+
   it('starts the automation scheduler before headless serve reports ready', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const serveStart = source.indexOf('if (serveOptions) {')

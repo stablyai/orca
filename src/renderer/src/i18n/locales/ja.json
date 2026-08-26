@@ -3501,7 +3501,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
+                "workingSetDescription": "合計ワーキングセット(WS): 現在 RAM に常駐しているページです。共有ページが複数のプロセスに表示されることがあり、Windows がページアウトしたメモリはここには含まれません。",
+                "privateBytesDescription": "合計プライベートバイト: これらのプロセスがコミットしたメモリで、常駐中かページアウト済みかを問わず計上されます。ホストがコミット制限に対して計上する値であるため、ページングによって上のワーキングセットが縮小しても増え続けます。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
               }
             },
@@ -3872,6 +3873,84 @@
         }
       },
       "skills": {
+        "SkillsPage": {
+          "cb142070b4": "更新",
+          "a68dee6a32": "スキルを検索",
+          "f43ad6edf3": "スキル",
+          "ea72d6185b": "スキルをスキャンできませんでした",
+          "dc4c3328ee": "ファイルを表示",
+          "9963dff6d3": "説明が見つかりません。",
+          "995fde8337": "スキルファイルを表示できませんでした",
+          "4acd6d68ec": "スキルが見つかりません",
+          "6a62a0168c": "一致する項目はありません",
+          "08a321a984": "現在の検索条件とフィルターに一致するスキルはありません。",
+          "cd7893fbc1": "スキルをスキャン中",
+          "35b9a724a0": "利用可能",
+          "c13b82793c": "インストールを管理",
+          "aee7b99cc6": "リンクからインストール",
+          "filterProvider": "Agent で絞り込み",
+          "filterSource": "ソースで絞り込み",
+          "allSources": "すべて",
+          "clearFilters": "フィルターをクリア",
+          "closeSkills": "スキルを閉じる",
+          "closeTooltip": "閉じる · Esc",
+          "moreActions": "その他の操作",
+          "sharedLinks": "共有リンク",
+          "emptyCopy": "スキャンしたスキルフォルダーは空です。共有バンドルをインストールするか、スキルを追加後に更新してください。",
+          "retry": "再試行",
+          "remoteShareNotice": "これらのスキルは {{host}} にあります。共有するには、そのマシンでスキルを開いてください。",
+          "viewSwitch": "表示",
+          "searchLinks": "リンクを検索",
+          "deleteSkills": "スキルを削除…"
+        },
+        "SkillShareSelectionControls": { "01c5a15e02": "スキルを共有" },
+        "SkillRow": {
+          "updatedUnknown": "日付なし",
+          "pathCopied": "パスをコピーしました",
+          "copyPath": "パスをコピー",
+          "detailPath": "パス",
+          "skillActions": "{{value0}} の操作",
+          "viewDetails": "詳細を表示",
+          "deleteSkill": "削除…"
+        },
+        "SkillsList": { "listLabel": "スキル" },
+        "sourceStatus": {
+          "missing": "フォルダーが見つかりません",
+          "remoteRepo": "リモートリポジトリ — 未スキャン",
+          "unavailable": "未スキャン"
+        },
+        "sources": { "heading": "スキルフォルダー" },
+        "sourceKind": {
+          "home": "ホーム",
+          "workspace": "ワークスペース",
+          "bundled": "バンドル済み",
+          "plugin": "プラグイン"
+        },
+        "count": {
+          "skillOne": "{{count}} 件のスキル",
+          "skillOther": "{{count}} 件のスキル",
+          "sourceOne": "{{count}} 件のソース",
+          "sourceOther": "{{count}} 件のソース",
+          "fileOne": "{{count}} 個のファイル",
+          "fileOther": "{{count}} 個のファイル",
+          "resultOne": "{{count}} 件の結果",
+          "resultOther": "{{count}} 件の結果",
+          "selected": "{{count}} 件を選択",
+          "shareOne": "{{count}} 件のスキルを共有",
+          "shareOther": "{{count}} 件のスキルを共有",
+          "linkOne": "{{count}} 件のリンク",
+          "linkOther": "{{count}} 件のリンク"
+        },
+        "filter": { "allAgents": "すべての Agent", "sharedAgent": "共有 (.agents)" },
+        "SkillsSelectionHeader": {
+          "exit": "選択を終了",
+          "exitTooltip": "選択を終了 · Esc",
+          "title": "共有するスキルを選択",
+          "selectAll": "対象の {{count}} 件をすべて選択",
+          "clear": "クリア",
+          "deleteTitle": "削除するスキルを選択"
+        },
+        "SkillDetailDialog": { "agents": "Agent", "updated": "更新日", "copy": "コピー" },
         "SkillFreshnessNudge": {
           "titleOne": "インストール済みの Orca スキルが古くなっています",
           "titleMany": "インストール済みの Orca スキル {{value0}} 件が古くなっています",
@@ -13843,6 +13922,7 @@
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
+          "tableHost": "ホスト",
           "tableStatus": "ステータス",
           "tableActions": "操作",
           "newAutomation": "新しい自動化",

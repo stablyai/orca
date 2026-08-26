@@ -172,6 +172,8 @@ export function installSessionReconcileDispose(session: ConnectPanePtySession): 
     },
     reconcileIfSessionDead: session.reconcileIfSessionDead,
     reconcileIfSessionMissing: session.reconcileIfSessionMissing,
+    isUntouchedFreshSpawnPty: (ptyId) =>
+      session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt),
     dispose() {
       session.disposed = true
       // Why: a detached client stops observing the pane's bytes, so it must cede

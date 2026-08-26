@@ -932,7 +932,8 @@
         "59718b120b": "The target workspace is no longer available.",
         "16a21d6413": "SSH reconnect requires interactive credentials.",
         "386db94f3e": "The target project is no longer available.",
-        "3ad7d77f57": "The target workspace is on a different host than this automation run target."
+        "3ad7d77f57": "The target workspace is on a different host than this automation run target.",
+        "workspaceHostUnresolved": "The target workspace spans more than one host, so this run has no single host to use."
       },
       "useComposerState": {
         "7eb3f44ff7": "Selected agent is disabled. Choose an enabled agent before creating.",
@@ -3841,7 +3842,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Summed working set (WS). Shared pages can appear in more than one process.",
+                "workingSetDescription": "Summed working set (WS): pages resident in RAM right now. Shared pages can appear in more than one process, and memory Windows has paged out is not counted here.",
+                "privateBytesDescription": "Summed private bytes: memory these processes have committed, counted whether it is resident or paged out. This is what the host charges against its commit limit, so it keeps rising while the working set above shrinks under paging.",
                 "rssDescription": "Summed resident set size (RSS). Shared or aliased pages can appear in more than one process."
               }
             },
@@ -4376,7 +4378,8 @@
           "3af85f6add": "Done",
           "readyDescriptionV2": "Anyone with this unlisted link can inspect and install the skills.",
           "descriptionV2": "Review the exact files, then publish an immutable version behind an unlisted link.",
-          "publishBundle": "Publish bundle"
+          "publishBundle": "Publish bundle",
+          "cancelRequestFailed": "Orca could not send the cancellation request. The upload may still finish."
         },
         "SkillCard": {
           "d25a1b8ae6": "Share skill",
@@ -4669,6 +4672,23 @@
           "showMore": "Show more"
         },
         "install": {
+          "authorizing": "Authorizing package access…",
+          "installing": "Downloading, verifying, and installing…",
+          "selectSkill": "Select at least one skill.",
+          "chooseWorkspace": "Choose a workspace.",
+          "reconnectBeforeInstalling": "Reconnect your Orca account before installing.",
+          "bundleVerificationFailed": "Installation failed before Orca could verify the requested bundle.",
+          "destinationAlreadyFinished": "The destination had already finished this installation.",
+          "enterShareLink": "Enter an Orca skill share link.",
+          "shareUnavailable": "This share is unavailable. The link may be invalid, expired, or revoked.",
+          "requestedVersionVerificationFailed": "Installation failed before Orca could verify the requested version.",
+          "versionVerificationFailed": "Orca could not verify the requested version.",
+          "inspectManagedFailed": "Orca could not inspect managed installs on this machine.",
+          "reconnectForVersionHistory": "Reconnect your Orca account to load version history.",
+          "versionHistoryUnavailable": "Version history is unavailable for this skill.",
+          "bundleSkillsMissing": "This version does not contain any of the installed bundle skills.",
+          "reconnectBeforeVersionChange": "Reconnect your Orca account before changing versions.",
+          "removeFailed": "Orca could not safely remove this skill.",
           "agentsLabel": "Agents",
           "agentsCanonical": "Always installed for {{value0}}, which read {{value1}}.",
           "agentsNoneChosen": "No extra agents",
@@ -7439,7 +7459,9 @@
           "9bedd2a6e5": "Enables agents to hand off context and coordinate work through Orca.",
           "07641b9768": "Orchestration skill",
           "2aacdb0517": "Coordinate coding agents across handoffs, worktree handovers, and child-agent work.",
-          "191ac34567": "Agent Orchestration"
+          "191ac34567": "Agent Orchestration",
+          "nestedWorkerDepthTitle": "Nested worker depth",
+          "nestedWorkerDepthDescription": "How many generations of dispatched workers may spawn their own workers. 1 keeps the agent tree flat: a coordinator dispatches workers, and those workers do not dispatch."
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Enables agents to hand off context and coordinate work through Orca.",
@@ -15276,7 +15298,8 @@
           "8faaa00726": "Run",
           "53fc5f07ab": "Run history",
           "a00e38d1a3": "n/a",
-          "fdb3caa8fb": "known"
+          "fdb3caa8fb": "known",
+          "historyUnavailable": "Run history could not be loaded for this automation."
         },
         "AutomationRunPageFrame": {
           "40a511bed4": "Run context",
@@ -15393,13 +15416,13 @@
           "backToList": "All automations",
           "tableName": "Name",
           "tableProject": "Project",
+          "tableHost": "Host",
           "tableStatus": "Status",
           "tableActions": "Actions",
           "newAutomation": "New Automation",
           "rowActions": "Automation actions",
           "tableLastRun": "Last run",
           "noListMatches": "No automations match.",
-          "destinationUnavailable": "The selected automation destination is not ready. Reconnect it and try again.",
           "destinationProjectUnavailable": "Choose a project owned by the selected automation destination."
         },
         "AutomationsPageSkeleton": {
@@ -15561,6 +15584,110 @@
         "AutomationListSortHeader": {
           "sortedAscending": "{{value0}}, sorted ascending",
           "sortedDescending": "{{value0}}, sorted descending"
+        },
+        "hostSummary": {
+          "partialFailure": "{{failed}} of {{total}} hosts could not be loaded"
+        },
+        "emptyState": {
+          "unknownHost": "this host",
+          "hostLoading": "Loading host…",
+          "hostLoadingDetail": "Waiting for {{hostLabel}} to report its automations.",
+          "hostError": "Automations could not be loaded from {{hostLabel}}",
+          "hostUnavailableDetail": "The host could not be reached, so its automations are unknown.",
+          "hostIncompatibleDetail": "This server is too old to scope automations by host.",
+          "hostStaleDetail": "The most recent refresh did not complete.",
+          "hostNotConnected": "{{hostLabel}} is not connected",
+          "hostNotConnectedDetail": "Connect to this host to see the automations stored for it.",
+          "hostEmpty": "No automations on {{hostLabel}}",
+          "searchNoMatch": "No automations match your search",
+          "filtersNoMatch": "No automations match your filters",
+          "allHostsEmpty": "No automations across loaded hosts"
+        },
+        "hostNotice": {
+          "loading": "Loading host…",
+          "unavailable": "{{hostLabel}} could not be reached. Showing the automations last loaded from it.",
+          "ghost": "{{hostLabel}} was removed. Automations still assigned to it remain listed.",
+          "removed": "The selected host is no longer available. Showing all hosts."
+        },
+        "hostPicker": {
+          "allHosts": "All hosts",
+          "loadingHost": "Loading host…"
+        },
+        "ownerConflict": {
+          "dismiss": "Dismiss"
+        },
+        "capturedOwner": {
+          "orphan": "This automation has no host to run on. Delete it, or re-add the host it belongs to.",
+          "unfenced": "This host cannot confirm which automation it is changing, so this automation is read-only here."
+        },
+        "hostStatus": {
+          "authority": {
+            "loading": "Loading",
+            "loadingDescription": "Loading automations from this host.",
+            "fresh": "Up to date",
+            "freshDescription": "Automations loaded from this host.",
+            "refreshing": "Refreshing",
+            "refreshingDescription": "Checking this host for changes.",
+            "staleError": "Not refreshed",
+            "staleErrorDescription": "Showing the automations last loaded from this host. The most recent refresh did not complete.",
+            "unavailable": "Unreachable",
+            "unavailableDescription": "This host could not be reached, so its automations could not be loaded.",
+            "incompatible": "Update server",
+            "incompatibleDescription": "This server does not support host-scoped automation queries. Update it to load automations for this host."
+          },
+          "execution": {
+            "connected": "Connected",
+            "connectedDescription": "This host is connected and can run automations.",
+            "connecting": "Connecting",
+            "connectingDescription": "Connecting to this host.",
+            "disconnected": "Not connected",
+            "disconnectedDescription": "Automations on this host cannot run until the connection is restored.",
+            "unavailable": "Unavailable",
+            "unavailableDescription": "This execution target is no longer available.",
+            "unknown": "Connection unknown",
+            "unknownDescription": "The connection state for this host has not loaded yet."
+          },
+          "query": {
+            "legacyUnscopedDescription": "This server lists automations without host scoping, so they cannot be edited or run from here.",
+            "incompatible": "Update server",
+            "incompatibleDescription": "This server is too old to scope automations by host. Update it to manage automations here.",
+            "viewOnly": "View only",
+            "targetRemovedDescription": "This host was removed, so its automations can no longer be edited or run from here.",
+            "targetUnverifiedDescription": "This host has not been verified since its connection dropped, so its automations cannot be edited or run from here.",
+            "targetUnregisteredDescription": "This host has no registration record, so its automations cannot be edited or run from here."
+          },
+          "action": {
+            "retry": "Retry",
+            "reconnect": "Reconnect",
+            "updateServer": "Update server"
+          }
+        },
+        "ownerAction": {
+          "failed": "That automation action did not complete."
+        },
+        "externalScope": {
+          "unknownManager": "This external automation is no longer listed for any host in view.",
+          "uncheckedHost": "External automation managers on {{hostLabel}} could not be checked.",
+          "uncheckedHosts": "External automation managers on {{count}} hosts could not be checked."
+        },
+        "enablement": {
+          "paused": "Paused"
+        },
+        "runHistory": {
+          "occurrencesWithLatest": "{{times}} times, most recently {{date}}",
+          "occurrences": "{{times}} times"
+        },
+        "createDestination": {
+          "label": "Create on",
+          "placeholder": "Select a host",
+          "storedOn": "Stored and scheduled by {authority}.",
+          "unselected": "Choose the host this automation will be created on.",
+          "orphan": "Automations with no host cannot hold new ones. Choose a host to create this automation on.",
+          "unavailable": "That host cannot hold a new automation yet. Choose another host to create this one on.",
+          "stale": "{host} changed while this form was open. Choose it again before saving.",
+          "projectMismatch": "That project is not on {host}. Choose a project on that host, or another host.",
+          "noProjects": "No projects are set up on {host}. Add one there, or choose another host.",
+          "updateRequired": "Update the Orca server on {hosts} to create automations there."
         }
       },
       "agent": {

@@ -7,6 +7,7 @@ import {
   DISPATCH_STALE_THRESHOLD,
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 type DriftResult = {
   base: string
@@ -223,7 +224,7 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
 
     const task = db.createTask({ spec: 'send-driven completion' })
-    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const dispatch = createRootDispatch(db, task.id, 'term_a')
     const msg = db.insertMessage({
       from: 'term_a',
       to: 'coord',
@@ -250,7 +251,7 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
 
     const task = db.createTask({ spec: 'duplicate completion' })
-    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const dispatch = createRootDispatch(db, task.id, 'term_a')
     const payload = JSON.stringify({
       taskId: task.id,
       dispatchId: dispatch.id,
@@ -530,7 +531,7 @@ describe('Coordinator', () => {
     // No terminals available so dispatchReadyTasks creates one and we can
     // drive the stale-scan deterministically via SQL backdating.
     const task = db.createTask({ spec: 'work' })
-    const ctx = db.createDispatchContext(task.id, 'term_stale')
+    const ctx = createRootDispatch(db, task.id, 'term_stale')
 
     // Backdate dispatched_at and last_heartbeat_at beyond the 10-min threshold
     // so getStaleDispatches returns this row on the first tick.
@@ -569,7 +570,7 @@ describe('Coordinator', () => {
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
     const task = db.createTask({ spec: 'work' })
-    const ctx = db.createDispatchContext(task.id, 'term_a')
+    const ctx = createRootDispatch(db, task.id, 'term_a')
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -606,9 +607,9 @@ describe('Coordinator', () => {
     const logs: string[] = []
 
     const task = db.createTask({ spec: 'retry-sensitive work' })
-    const staleCtx = db.createDispatchContext(task.id, 'term_old')
+    const staleCtx = createRootDispatch(db, task.id, 'term_old')
     db.failDispatch(staleCtx.id, 'retry elsewhere')
-    const activeCtx = db.createDispatchContext(task.id, 'term_current')
+    const activeCtx = createRootDispatch(db, task.id, 'term_current')
 
     db.insertMessage({
       from: 'term_old',
@@ -664,7 +665,7 @@ describe('Coordinator', () => {
 
     const task = db.createTask({ spec: 'owned work' })
     const leafId = '11111111-1111-4111-8111-111111111111'
-    const ctx = db.createDispatchContext(task.id, 'term_owner', `tab_before:${leafId}`)
+    const ctx = createRootDispatch(db, task.id, 'term_owner', `tab_before:${leafId}`)
 
     db.insertMessage({
       from: 'term_reminted',

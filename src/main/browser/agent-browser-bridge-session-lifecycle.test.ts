@@ -140,6 +140,43 @@ describe('AgentBrowserBridge', () => {
     expect(lastArgs).toContain('--cdp')
   })
 
+  it('bounds owner cleanup independently from command execution timeouts', async () => {
+    succeedWith({ snapshot: 'initial' })
+    await bridge.snapshot()
+    execFileMock.mockClear()
+
+    succeedWith(null)
+    await bridge.onPageClosed('tab-1')
+
+    const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('close')
+    )
+    expect(closeCall?.[2]).toMatchObject({ timeout: 5_000 })
+  })
+
+  it('uses the cleanup timeout when a target swap retires its session', async () => {
+    succeedWith({ snapshot: 'initial' })
+    await bridge.snapshot()
+    execFileMock.mockClear()
+
+    succeedWith(null)
+    await (
+      bridge as unknown as {
+        restartSessionForTarget: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number,
+          options: { recreate: boolean }
+        ) => Promise<void>
+      }
+    ).restartSessionForTarget('orca-tab-tab-1', 'tab-1', 100, { recreate: false })
+
+    const closeCall = execFileMock.mock.calls.find((call: unknown[]) =>
+      (call[1] as string[]).includes('close')
+    )
+    expect(closeCall?.[2]).toMatchObject({ timeout: 5_000 })
+  })
+
   it('waits for pending session destruction before recreating the same session', async () => {
     succeedWith({ snapshot: 'initial' })
     await bridge.snapshot()
@@ -418,22 +455,140 @@ describe('AgentBrowserBridge', () => {
 
   // ── destroyAllSessions ──
 
-  it('destroys all active sessions', async () => {
+  it('makes runtime-wide session destruction terminal', async () => {
     succeedWith({ snapshot: 'tree' })
     await bridge.snapshot()
 
-    // Should have one session now
-    succeedWith(null) // for the 'close' call
+    succeedWith(null)
     await bridge.destroyAllSessions()
+    execFileMock.mockClear()
 
-    // Next command should re-create session with --cdp
-    succeedWith({ snapshot: 'fresh' })
-    await bridge.snapshot()
+    await expect(bridge.snapshot()).rejects.toMatchObject({
+      code: 'browser_owner_unavailable',
+      message: 'Browser runtime is shutting down'
+    })
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
 
-    const snapshotCalls = execFileMock.mock.calls.filter((c: unknown[]) =>
-      (c[1] as string[]).includes('snapshot')
+  it('bounds concurrent helper retirements during runtime shutdown', async () => {
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    for (let index = 0; index < 6; index++) {
+      sessions.set(`orca-tab-tab-${index}`, {
+        proxy: { stop: vi.fn(async () => {}) },
+        cdpEndpoint: `ws://127.0.0.1:${9200 + index}`,
+        initialized: true,
+        consecutiveTimeouts: 0,
+        activeInterceptPatterns: [],
+        activeCapture: false,
+        webContentsId: 100 + index,
+        activeProcess: null
+      })
+    }
+
+    let activeRetirements = 0
+    let peakRetirements = 0
+    const releases: (() => void)[] = []
+    execFileMock.mockImplementation(
+      (_bin: string, _args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        activeRetirements++
+        peakRetirements = Math.max(peakRetirements, activeRetirements)
+        releases.push(() => {
+          activeRetirements--
+          cb(null, JSON.stringify({ success: true, data: null }), '')
+        })
+        return { kill: vi.fn() }
+      }
     )
-    const lastSnapshotArgs = snapshotCalls.at(-1)![1] as string[]
-    expect(lastSnapshotArgs).toContain('--cdp')
+
+    const shutdown = bridge.destroyAllSessions()
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(4))
+    releases.splice(0).forEach((release) => release())
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(6))
+    releases.splice(0).forEach((release) => release())
+    await shutdown
+
+    expect(peakRetirements).toBe(4)
+  })
+
+  it('destroys a session that finishes creating during runtime shutdown', async () => {
+    const commandCalls: string[][] = []
+    let releaseStaleClose: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        commandCalls.push(args)
+        if (args.includes('close') && !releaseStaleClose) {
+          releaseStaleClose = () => {
+            cb(null, JSON.stringify({ success: true, data: null }), '')
+          }
+          return { kill: vi.fn() }
+        }
+        cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const ensurePromise = (
+      bridge as unknown as {
+        ensureSession: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number
+        ) => Promise<void>
+      }
+    ).ensureSession('orca-tab-tab-1', 'tab-1', 100)
+    await vi.waitFor(() => expect(releaseStaleClose).not.toBeNull())
+
+    const destroyAllPromise = bridge.destroyAllSessions()
+    releaseStaleClose!()
+    await ensurePromise
+    await destroyAllPromise
+
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    const proxy = CdpWsProxyMock.instances[0] as { stop: ReturnType<typeof vi.fn> }
+    expect(commandCalls.filter((args) => args.includes('close'))).toHaveLength(2)
+    expect(sessions.size).toBe(0)
+    expect(proxy.stop).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not recreate a session after shutdown observes its pending retirement', async () => {
+    succeedWith({ snapshot: 'initial' })
+    await bridge.snapshot()
+    execFileMock.mockClear()
+
+    let releaseClose: (() => void) | null = null
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        if (!args.includes('close')) {
+          throw new Error(`unexpected agent-browser args ${args.join(' ')}`)
+        }
+        releaseClose = () => cb(null, JSON.stringify({ success: true, data: null }), '')
+        return { kill: vi.fn() }
+      }
+    )
+
+    const restart = (
+      bridge as unknown as {
+        restartSessionForTarget: (
+          sessionName: string,
+          browserPageId: string,
+          webContentsId: number
+        ) => Promise<void>
+      }
+    ).restartSessionForTarget('orca-tab-tab-1', 'tab-1', 100)
+    await vi.waitFor(() => expect(releaseClose).not.toBeNull())
+
+    const shutdown = bridge.destroyAllSessions()
+    releaseClose!()
+
+    await expect(restart).rejects.toMatchObject({
+      code: 'browser_owner_unavailable',
+      message: 'Browser runtime is shutting down'
+    })
+    await shutdown
+
+    const sessions = (bridge as unknown as { sessions: Map<string, unknown> }).sessions
+    expect(sessions.size).toBe(0)
+    expect(CdpWsProxyMock.instances).toHaveLength(1)
+    expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 })

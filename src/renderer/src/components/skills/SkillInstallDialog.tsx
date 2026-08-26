@@ -91,7 +91,7 @@ export function SkillInstallDialog({
   const resolveLink = useCallback(async (value: string): Promise<void> => {
     const shareId = parseSkillShareId(value)
     if (!shareId) {
-      setError('Enter an Orca skill share link.')
+      setError(translate('auto.components.skills.install.enterShareLink', 'Enter an Orca skill share link.'))
       return
     }
     setBusy(true)
@@ -103,14 +103,14 @@ export function SkillInstallDialog({
         setError(
           operation.status === 'unconfigured'
             ? operation.message
-            : 'This share is unavailable. The link may be invalid, expired, or revoked.'
+            : translate('auto.components.skills.install.shareUnavailable', 'This share is unavailable. The link may be invalid, expired, or revoked.')
         )
         return
       }
       setPreview({ shareId, version: operation.value.version })
     } catch (cause) {
       console.warn('[skills] share resolution failed:', cause)
-      setError('This share is unavailable. The link may be invalid, expired, or revoked.')
+      setError(translate('auto.components.skills.install.shareUnavailable', 'This share is unavailable. The link may be invalid, expired, or revoked.'))
     } finally {
       setBusy(false)
     }
@@ -138,7 +138,7 @@ export function SkillInstallDialog({
     }
     const choice = workspaceChoices.find((candidate) => candidate.id === workspace)
     if (scope === 'workspace' && !choice) {
-      setError('Choose a workspace.')
+      setError(translate('auto.components.skills.install.chooseWorkspace', 'Choose a workspace.'))
       return
     }
     setBusy(true)
@@ -204,7 +204,7 @@ export function SkillInstallDialog({
       if (operation.status !== 'ok') {
         setError(
           operation.status === 'reconnect-required'
-            ? 'Reconnect your Orca account before installing.'
+            ? translate('auto.components.skills.install.reconnectBeforeInstalling', 'Reconnect your Orca account before installing.')
             : operation.message
         )
         return
@@ -215,7 +215,12 @@ export function SkillInstallDialog({
       }
     } catch (cause) {
       console.warn('[skills] install failed:', cause)
-      setError('Installation failed before Orca could verify the requested version.')
+      setError(
+        translate(
+          'auto.components.skills.install.requestedVersionVerificationFailed',
+          'Installation failed before Orca could verify the requested version.'
+        )
+      )
     } finally {
       installProgress.finish()
       setBusy(false)
@@ -231,7 +236,7 @@ export function SkillInstallDialog({
       ...(environmentId === 'local' || environmentId.startsWith('ssh:') ? {} : { environmentId })
     })
     if (!cancelled.cancelled) {
-      setError('The destination had already finished this installation.')
+      setError(translate('auto.components.skills.install.destinationAlreadyFinished', 'The destination had already finished this installation.'))
     }
   }
 

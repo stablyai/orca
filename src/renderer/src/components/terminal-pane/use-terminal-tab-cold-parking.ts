@@ -7,6 +7,7 @@
  * render a slot as null.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import {
@@ -30,6 +31,7 @@ import {
   selectEvictionExemptTerminalTabLayoutKey
 } from './terminal-eviction-exempt-tabs'
 import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
+import { usePendingStartupParkPresence } from './terminal-pending-startup-park-presence'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
 import { createTerminalTabActivationOrder } from './terminal-tab-activation-order'
 import { buildTerminalTabColdParkCandidates } from './terminal-tab-park-candidates'
@@ -90,15 +92,21 @@ export function useTerminalTabColdParking(args: {
     activityTerminalPortals,
     activationDeferredMountTabIds
   } = args
-  const terminalParkingInputsKey = getTerminalParkingInputsKey(terminalTabs)
-  const terminalParkingAssignmentsKey = getTerminalParkingAssignmentsKey(assignments)
+  const terminalParkingInputsKey = useMemo(
+    () => getTerminalParkingInputsKey(terminalTabs),
+    [terminalTabs]
+  )
+  const terminalParkingAssignmentsKey = useMemo(
+    () => getTerminalParkingAssignmentsKey(assignments),
+    [assignments]
+  )
   const terminalParkingTabsDependency = coldParkTerminalPanes
     ? terminalParkingInputsKey
     : terminalTabs
   const terminalParkingAssignmentsDependency = coldParkTerminalPanes
     ? terminalParkingAssignmentsKey
     : assignments
-  const pendingStartupByTabId = useAppStore((state) => state.pendingStartupByTabId)
+  const pendingStartupByTabId = usePendingStartupParkPresence(terminalTabs)
   const terminalParkingEnabled = useAppStore(
     (state) => state.settings?.terminalHiddenViewParking !== false
   )
@@ -108,12 +116,12 @@ export function useTerminalTabColdParking(args: {
   const pairedRuntimeParkingEnvironmentIds = useAppStore(
     selectPairedRuntimeParkingEnvironmentIdsFromState
   )
-  const sleepingAgentSessionsByPaneKey = useAppStore(
-    (state) => state.sleepingAgentSessionsByPaneKey
-  )
-  const sleepingRecordOwnedTabIds = useMemo(
-    () => selectSleepingRecordParkExemptTabIds(sleepingAgentSessionsByPaneKey, worktreeId),
-    [sleepingAgentSessionsByPaneKey, worktreeId]
+  // Why the worktree-scoped set, not the record map: the map is app-global, so
+  // subscribing to it re-rendered this worktree on every other worktree's write.
+  const sleepingRecordOwnedTabIds = useAppStore(
+    useShallow((state) =>
+      selectSleepingRecordParkExemptTabIds(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    )
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why: view switches hide every tab at once, so the park clock cannot rank them.

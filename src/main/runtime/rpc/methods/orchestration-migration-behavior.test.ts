@@ -8,6 +8,7 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration migration behavior', () => {
   const databases: OrchestrationDb[] = []
@@ -124,7 +125,7 @@ describe('orchestration migration behavior', () => {
       coordinatorPaneKey: 'tab_coord:leaf_coord'
     })
     const task = db.createTask({ spec: 'legacy worker', runId: run.id })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker', 'tab_worker:leaf_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker', 'tab_worker:leaf_worker')
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
 
     const response = await dispatcher.dispatch({

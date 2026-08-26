@@ -19,9 +19,13 @@ import { AutomationSchedulePicker } from './AutomationSchedulePicker'
 import { AutomationSessionField } from './AutomationSessionField'
 import { AutomationSetupDecisionField } from './AutomationSetupDecisionField'
 import { AutomationWorkspaceField } from './AutomationWorkspaceField'
+import { AutomationCreateDestinationField } from './AutomationCreateDestinationField'
+import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { AutomationDraft } from './AutomationEditorDialog'
 
 type AutomationEditorSettingsSidebarProps = {
+  isCreateMode?: boolean
+  createDestination?: AutomationCreateDestinationControl
   isHermesTarget: boolean
   isHermesCreate: boolean
   repos: readonly Repo[]
@@ -44,6 +48,8 @@ type AutomationEditorSettingsSidebarProps = {
 }
 
 export function AutomationEditorSettingsSidebar({
+  isCreateMode,
+  createDestination,
   isHermesTarget,
   isHermesCreate,
   repos,
@@ -107,6 +113,14 @@ export function AutomationEditorSettingsSidebar({
             </div>
           </div>
         </div>
+        {createDestination && isCreateMode && !isHermesTarget ? (
+          <div className="mb-4">
+            <AutomationCreateDestinationField
+              control={createDestination}
+              labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}
+            />
+          </div>
+        ) : null}
         <Field
           className="mb-4"
           labelClassName={AUTOMATION_EDITOR_SECTION_LABEL_CLASS}

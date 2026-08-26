@@ -132,7 +132,9 @@ async function startOrcadRuntime(
   // Why a real Store: without one every persistence-backed RPC throws `runtime_unavailable`
   // and the read paths that use `this.store?.x ?? []` quietly answer "empty" instead —
   // a server that pairs and lists nothing looks healthy and is not.
-  const store = new Store({ dataFile: profile.dataFile })
+  // Why: orcad IS the runtime authority — loading as 'desktop' would classify its
+  // own runtime-scheduled automations as ambiguous mirrors and orphan them.
+  const store = new Store({ dataFile: profile.dataFile, storageAuthority: 'runtime' })
   // Why: every SSH connect consults this sidecar. Left unbound it reports nothing trusted,
   // which is safe but silently discards accept records on every launch.
   initSshHostKeyStoreFile(profile.dataFile)

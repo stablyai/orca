@@ -90,6 +90,8 @@ export type PersistedState = {
   /** Per-execution-host session partitions for non-'local' hosts (ssh:/runtime:); 'local' stays in workspaceSession so pre-partition builds keep working. */
   workspaceSessionsByHostId?: Partial<Record<ExecutionHostId, WorkspaceSessionState>>
   sshTargets: SshTarget[]
+  /** Highest SSH target registration generation issued; prevents identity reuse after rollback. */
+  sshTargetGenerationCounter?: number
   /** SSH config aliases the user deleted; suppresses re-import from ~/.ssh/config so a deleted host doesn't reappear. */
   deletedSshConfigAliases: string[]
   /** Identity records for removed SSH targets so a re-added host can re-adopt workspaces orphaned on the old target id. */

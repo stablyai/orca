@@ -31,6 +31,8 @@ export type PreambleParams = {
   // Why: prompt-returning agents should idle after worker_done, while bare
   // shells have no agent prompt for Orca to reuse.
   workerKind?: 'prompt-returning-agent' | 'bare-shell'
+  // Why gated: advertising a verb the depth cap will reject just burns a turn.
+  canDispatchSubWorkers?: boolean
 }
 
 // Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
@@ -138,7 +140,9 @@ ${postDoneInstructions}`
   const drift =
     params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
 
-  return `${header}${drift}
+  const subDispatch = params.canDispatchSubWorkers ? buildSubDispatchSection(cli) : ''
+
+  return `${header}${drift}${subDispatch}
 
 === TASK ===
 ${params.taskSpec}`
@@ -184,6 +188,26 @@ Do not exit the shell. Your terminal stays available, and if the
 coordinator has more for you it will re-engage this terminal with a fresh
 preamble + TASK block, which arrives as new input. Treat that as supervised
 work under the new Dispatch; ignore stale follow-ups from the settled task.`
+}
+
+// Why the whole section is omitted rather than softened when nesting is off: a
+// worker told it "usually cannot" delegate still tries, then reports the refusal
+// as a blocker.
+function buildSubDispatchSection(cli: string): string {
+  return `
+
+=== SUB-DISPATCH ===
+You may dispatch sub-workers for this task. Bind your own Run first, then create
+and start each one:
+
+  ${cli} orchestration run-create --objective "<what the sub-workers are for>" --json
+  ${cli} orchestration task-create --spec "<sub-task>" --json
+  ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
+
+You own those sub-workers: wait for their worker_done, and do not report your own
+until they have settled. Nesting is capped, so a sub-worker of yours may not be
+able to dispatch further.
+---`
 }
 
 function buildDriftSection(drift: NonNullable<PreambleParams['baseDrift']>): string {

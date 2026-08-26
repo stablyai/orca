@@ -157,7 +157,13 @@ describe('OrchestrationDb legacy contract storage', () => {
       createdByTerminalHandle: 'term_legacy_coord'
     })
 
-    const dispatch = db!.createDispatchContext(task.id, 'term_legacy_coord', 'tab_mixed:leaf_mixed')
+    const dispatch = db!.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_legacy_coord',
+      assigneePaneKey: 'tab_mixed:leaf_mixed',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
 
     expect(dispatch.contract_version).toBe(CURRENT_CONTRACT_VERSION)
     expect(db!.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([])
@@ -749,7 +755,12 @@ describe('OrchestrationDb legacy contract storage', () => {
     ).toThrow(/different answer/)
 
     const currentTask = db!.createTask({ runId: state.adoptedRunId, spec: 'current retry' })
-    const currentDispatch = db!.createDispatchContext(currentTask.id, 'term_current_retry')
+    const currentDispatch = db!.createDispatchContext({
+      taskId: currentTask.id,
+      assigneeHandle: 'term_current_retry',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
     const currentQuestion = db!.createQuestion({
       runId: state.adoptedRunId,
       dispatchId: currentDispatch.id,

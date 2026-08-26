@@ -47,6 +47,22 @@ describe('settings navigation metadata', () => {
     ])
   })
 
+  it('owns nested worker depth under Orchestration on desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const agents = sections.find((section) => section.id === 'agents')
+    const orchestration = sections.find((section) => section.id === 'orchestration')
+
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
+      'Nested worker depth'
+    )
+  })
+
   it('adds the Linear capability section right after Orchestration only when connected', () => {
     expect(ids()).not.toContain('linear')
 
@@ -156,6 +172,12 @@ describe('settings navigation metadata', () => {
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
       'New mobile emulator tab'
+    )
+    const agents = webSections.find((section) => section.id === 'agents')
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    const orchestration = webSections.find((section) => section.id === 'orchestration')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'Nested worker depth'
     )
   })
 

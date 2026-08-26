@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 type DatabaseHarness = {
   db: OrchestrationDb
@@ -28,7 +29,7 @@ describe('Task/Dispatch concurrency', () => {
   it('rolls back Dispatch failure when Task requeue fails', () => {
     const { db } = createDatabase()
     const task = db.createTask({ spec: 'atomic retry failure' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
     sqliteFor(db).exec(`
       CREATE TRIGGER reject_task_requeue
       BEFORE UPDATE OF status ON tasks
@@ -55,7 +56,12 @@ describe('Task/Dispatch concurrency', () => {
     const first = createDatabase()
     const concurrent = createDatabase(first.path)
     const task = first.db.createTask({ spec: 'worker completion wins' })
-    const started = first.db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+    const started = first.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      taskId: task.id,
+      startOptions: {}
+    })
     const capability = first.db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: 'term_worker',
@@ -117,10 +123,14 @@ describe('Task/Dispatch concurrency', () => {
     const losingTask = first.db.createTask({ spec: 'losing worker' })
     const winningTask = first.db.createTask({ spec: 'winning worker' })
     const loser = first.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: losingTask.id,
       startOptions: {}
     })
     const winner = concurrent.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: winningTask.id,
       startOptions: {}
     })

@@ -415,7 +415,7 @@ describe('remote hook service installers', () => {
       const definition = grokConfig.hooks[eventName]?.[0]
       const command = definition?.hooks?.[0]?.command
       expect(command).toContain('/home/dev/.orca/agent-hooks/grok-hook.sh')
-      expect(command).toMatch(/^if \[ -f /)
+      expect(command).toMatch(/^if \[ -n "\$ORCA_PANE_KEY" \] && /)
     }
     // Why: Grok tool matchers are real regexes; bare `*` is invalid match-all.
     expect(grokConfig.hooks.PreToolUse?.[0]?.matcher).toBe('.*')
