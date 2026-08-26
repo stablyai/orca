@@ -6,6 +6,7 @@ import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
+import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -128,7 +129,7 @@ export type WorkspaceSessionState = {
    *  direct-SSH pull merge consults these so a tab the user closed is not
    *  re-inserted from a stale remote snapshot (the resurrection loop in
    *  #10342). TTL/cap pruning lives in shared/closed-terminal-tab-tombstones. */
-  closedTerminalTabTombstonesByTabId?: Record<string, { closedAt: number; worktreeId: string }>
+  closedTerminalTabTombstonesByTabId?: ClosedTerminalTabTombstonesByTabId
 }
 
 export type WorkspaceSessionPatch = Partial<WorkspaceSessionState>

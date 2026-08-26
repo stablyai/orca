@@ -1,5 +1,6 @@
 import { isDeepStrictEqual } from 'node:util'
 import type {
+  RemoteClosedTabTombstone,
   RemoteWorkspaceSession,
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
@@ -62,6 +63,9 @@ function normalizeRemoteSession(raw: unknown): RemoteWorkspaceSession {
     ),
     lastVisitedAtByWorktreePath: normalizeOptionalRecord<Record<string, number>>(
       input.lastVisitedAtByWorktreePath
+    ),
+    closedTabTombstonesByTabId: normalizeOptionalRecord<Record<string, RemoteClosedTabTombstone>>(
+      input.closedTabTombstonesByTabId
     )
   }
 }
