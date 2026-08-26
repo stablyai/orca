@@ -5,13 +5,12 @@ import { toast } from 'sonner'
 import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
-import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useRepoMap, useWorktreeMap } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type {
   Automation,
+  AutomationCreateInput,
   ExternalAutomationAction,
   ExternalAutomationJob,
   ExternalAutomationManager,
@@ -19,23 +18,25 @@ import type {
   AutomationRun,
   AutomationUpdateInput
 } from '../../../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import {
+  AUTOMATION_OWNER_CONFLICT_CODES,
+  automationOwnerConflictMessage
+} from '../../../../shared/automation-owner-conflict'
 import {
   getLocalExecutionHostLabel,
   getRepoExecutionHostId,
+  getWorktreeExecutionHostId,
   parseExecutionHostId
 } from '../../../../shared/execution-host'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
-import type { PreflightStatus } from '../../../../preload/api-types'
-import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   buildAutomationRrule,
   isValidAutomationCronSchedule,
-  isValidAutomationSchedule,
-  tryParseAutomationRrule
+  isValidAutomationSchedule
 } from '../../../../shared/automation-schedules'
 import {
   canRerunAutomationRun,
@@ -48,7 +49,6 @@ import {
   getAutomationRunOpenTabId,
   resolveAutomationRunOpenTarget
 } from './automation-run-open-target'
-import { hasAutomationRunCompletionEvidence } from './automation-run-completion-evidence'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
 import {
   AutomationEditorDialog,
@@ -56,36 +56,30 @@ import {
   type AutomationDraft
 } from './AutomationEditorDialog'
 import {
-  getAutomationSetupDecisionDraftValue,
   getVisibleAutomationSetupDecision,
   resolveAutomationSetupDecisionForSave
 } from './automation-setup-decision'
 import type { AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
-import { getAutomationCreateAvailability } from './automation-create-admission'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
-import {
-  repoMatchesExternalAutomationTarget,
-  getExternalAutomationTargetForRepo
-} from './automation-external-target-match'
+import { repoMatchesExternalAutomationTarget } from './automation-external-target-match'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
+import { useAutomationSourceHostAvailability } from './use-automation-source-host-availability'
 import {
-  getRepoBackedProviderAvailability,
-  type RuntimeProviderPreflightStatus
-} from '../task-source-provider-availability'
-import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+  useSelectedAutomationRunHistory,
+  type SelectedAutomationRunHistoryOutcome
+} from './use-selected-automation-run-history'
 
 import {
-  createAutomationForTarget,
   deleteAutomationForTarget,
+  type AutomationHostTarget,
   getAutomationHostTargetFromKey,
   getAutomationHostTargetKey,
   getAutomationListTarget,
   getAutomationOwnerTarget,
   getAutomationTargetFromHostId,
-  listAutomationRunsForTarget,
   listAutomationsForTarget,
   runAutomationNowForTarget,
   updateAutomationForTarget
@@ -96,39 +90,100 @@ import {
   AUTOMATION_DEFAULT_TIME,
   buildDraftPrecheck,
   buildHermesCronSchedule,
-  formatTimeInput,
   getDefaultWorktree,
   parseDraftTime
 } from './automation-draft-model'
-import {
-  getRepoBackedAutomationSourceContext,
-  getRuntimeSourceHostAvailability,
-  type RepoBackedAutomationSourceContext
-} from './automation-source-context'
 import type { AutomationPaneTab, SelectedExternalRunPage } from './automation-page-state'
+import { isMissingExternalRunsApiError } from './external-automation-display'
 import {
-  getExternalAutomationKey,
-  isMissingExternalRunsApiError
-} from './external-automation-display'
+  externalAutomationActionKey,
+  externalAutomationJobKey
+} from './external-automation-scope-keys'
 import { buildExternalAutomationListEntries } from './external-automation-list-entries'
-import { shouldCloseDetailForLostSelection } from './automation-detail-selection'
+import type { ExternalAutomationScope } from './external-automation-scope-client'
 import { useAutomationListSearch } from './use-automation-list-search'
-import { useAutomationListView } from './use-automation-list-view'
 import {
   EMPTY_AUTOMATION_LIST_FILTER,
-  nextAutomationListSort,
-  type AutomationListFilter,
-  type AutomationListSort
+  filterAutomationListRows,
+  filterExternalAutomationListEntries,
+  type AutomationListFilter
 } from './automation-list-view'
+import {
+  automationRepoForRow,
+  automationWorktreeForRow,
+  unscopedAutomationListRows,
+  type AutomationListRow
+} from './automation-list-row-identity'
 import { AutomationDeleteDialog, ExternalAutomationDeleteDialog } from './AutomationDeleteDialogs'
 import { AutomationsListPanel } from './AutomationsListPanel'
 import { AutomationsDetailPane } from './AutomationsDetailPane'
 import { AutomationsPageSkeleton } from './AutomationsPageSkeleton'
+import type {
+  AutomationAuthorityRef,
+  StableAutomationCatalogRef
+} from '../../../../shared/automation-owner-ref'
+import type { AutomationDestination } from '../../../../shared/automation-owner-precondition'
+import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
+import {
+  capturedAutomationOwner,
+  capturedAutomationOwnerKey,
+  isAutomationActionEnabled,
+  type AutomationRowAction
+} from './automation-captured-owner'
+import { useAutomationHostCatalog } from './use-automation-host-catalog'
+import { useScopedExternalAutomations } from './use-scoped-external-automations'
+import { externalAutomationScopeEntries } from './external-automation-scope-gating'
+import { externalAutomationUncheckedNotice } from './external-automation-unchecked-hosts'
+import {
+  automationRuntimePairingRevision,
+  groupReposByAutomationAuthority
+} from './automation-authority-identity'
+import {
+  automationCreateHostOffered,
+  automationCreateHostStableKey,
+  resolveAutomationCreateDestination,
+  revalidateAutomationCreateDestination,
+  type AutomationCreateDestination
+} from './automation-create-destination'
+import { useAutomationCreateDestination } from './use-automation-create-destination'
+import { persistSkipDeleteAutomationConfirm } from './automation-delete-confirm-preference'
+import { buildAutomationEditDraft, buildExternalAutomationEditDraft } from './automation-edit-draft'
+import { createAutomationAtDestination } from './automation-owner-action-runner'
+import {
+  dispatchAutomationDelete,
+  dispatchAutomationReread,
+  dispatchAutomationRunNow,
+  dispatchAutomationUpdate,
+  toDispatchResult,
+  type AutomationActionNotice,
+  type AutomationDispatchResult
+} from './automation-row-action-dispatch'
+import {
+  automationRowCatalogRef,
+  automationWriteChangeEvent
+} from './automation-write-invalidation'
+import { automationRowRecoveryHost } from './automation-notice-recovery-host'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AutomationAuthorityChangeReason } from './automation-host-invalidation'
+import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { translate } from '@/i18n/i18n'
+import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
 
 const AGENTS = getAgentCatalog().map((agent) => agent.id)
-const AUTOMATIONS_CHANGED_EVENT = 'orca:automations-changed'
+
+const EMPTY_AUTOMATION_RUNS: readonly AutomationRun[] = []
+
+/** Returns the same set when nothing was removed, so an unchanged catalog memo holds. */
+function withoutKey(keys: ReadonlySet<string>, key: string): ReadonlySet<string> {
+  if (!keys.has(key)) {
+    return keys
+  }
+  const next = new Set(keys)
+  next.delete(key)
+  return next
+}
+
 export default function AutomationsPage(): React.JSX.Element {
   const repos = useAppStore((s) => s.repos)
   const projectHostSetups = useAppStore((s) => s.projectHostSetups)
@@ -144,26 +199,30 @@ export default function AutomationsPage(): React.JSX.Element {
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const closeAutomationsPage = useAppStore((s) => s.closeAutomationsPage)
-  const agentStatusByPaneKey = useAppStore((s) => s.agentStatusByPaneKey)
-  const retainedAgentsByPaneKey = useAppStore((s) => s.retainedAgentsByPaneKey)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
   const sshTargetLabels = useAppStore((s) => s.sshTargetLabels)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const settings = useAppStore((s) => s.settings)
-  const preflightStatus = useAppStore((s) => s.preflightStatus)
-  const preflightStatusChecked = useAppStore((s) => s.preflightStatusChecked)
-  const preflightStatusContextKey = useAppStore((s) => s.preflightStatusContextKey)
-  const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
-  const expectedPreflightContextKey = useAppStore((s) =>
-    localPreflightContextKey(getLocalPreflightContext(s))
-  )
   const selectedId = useAppStore((s) => s.selectedAutomationId)
   const setSelectedId = useAppStore((s) => s.setSelectedAutomationId)
   const pendingAutomationRunNavigation = useAppStore((s) => s.pendingAutomationRunNavigation)
   const setPendingAutomationRunNavigation = useAppStore((s) => s.setPendingAutomationRunNavigation)
   const repoMap = useRepoMap()
   const worktreeMap = useWorktreeMap()
+  const repoForRow = useCallback(
+    (row: AutomationListRow): Repo | undefined => automationRepoForRow(row, repos, repoMap),
+    [repoMap, repos]
+  )
+  const worktreeForRow = useCallback(
+    (
+      row: AutomationListRow,
+      repo: Repo | undefined,
+      workspaceId: string | null | undefined = row.automation.workspaceId
+    ): Worktree | undefined =>
+      automationWorktreeForRow(row, worktreesByRepo, repo, worktreeMap, workspaceId),
+    [worktreeMap, worktreesByRepo]
+  )
   const enabledAgents = filterEnabledTuiAgents(AGENTS, settings?.disabledTuiAgents)
   const defaultAgent =
     settings?.defaultTuiAgent &&
@@ -173,13 +232,31 @@ export default function AutomationsPage(): React.JSX.Element {
       : (enabledAgents[0] ?? AGENTS[0])
 
   const [automations, setAutomations] = useState<Automation[]>([])
-  const [runs, setRuns] = useState<AutomationRun[]>([])
   const [automationHostTargetKey, setAutomationHostTargetKey] = useState<string | null>(null)
-  const [selectedAutomationRuns, setSelectedAutomationRuns] = useState<{
-    automationId: string | null
-    runs: AutomationRun[]
-  }>({ automationId: null, runs: [] })
-  const [externalManagers, setExternalManagers] = useState<ExternalAutomationManager[]>([])
+  const [selectedAutomationRuns, setSelectedAutomationRuns] =
+    useState<SelectedAutomationRunHistoryOutcome>({
+      automationId: null,
+      rowKey: null,
+      ownerKey: null,
+      runs: [],
+      notice: null
+    })
+  // Bumped by the run-history Retry; the read is otherwise keyed only by the row.
+  const [runHistoryReloadToken, setRunHistoryReloadToken] = useState(0)
+  // Why a set of authority keys: a failed list is a fact about the authority that
+  // answered, and the catalog needs it per authority to mark its hosts unloaded.
+  const [failedAuthorityKeys, setFailedAuthorityKeys] = useState<ReadonlySet<string>>(
+    () => new Set()
+  )
+  // Held with the host it was raised against: Reconnect and Update server act on
+  // the row's own host, not on whatever the list happens to be scoped to.
+  const [ownerAction, setOwnerAction] = useState<{
+    notice: AutomationActionNotice
+    host: AutomationHostCatalogEntry | null
+  } | null>(null)
+  // Separate from the page notice: while the editor is open it covers the page,
+  // so a refusal posted there is a save that visibly did nothing at all.
+  const [editorNotice, setEditorNotice] = useState<AutomationActionNotice | null>(null)
   const [externalActionKey, setExternalActionKey] = useState<string | null>(null)
   const [rerunRunIdsInFlight, setRerunRunIdsInFlight] = useState<ReadonlySet<string>>(
     () => new Set()
@@ -188,37 +265,40 @@ export default function AutomationsPage(): React.JSX.Element {
   const [isSaving, setIsSaving] = useState(false)
   const [listSearchQuery, setListSearchQuery] = useState('')
   const [listFilter, setListFilter] = useState<AutomationListFilter>(EMPTY_AUTOMATION_LIST_FILTER)
-  const [listSort, setListSort] = useState<AutomationListSort | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [createTarget, setCreateTarget] = useState<AutomationCreateTarget>('orca')
   const [editingAutomationId, setEditingAutomationId] = useState<string | null>(null)
+  // Held beside the id: a save fences on the row the user opened, and under All
+  // hosts that id alone names two rows.
+  const [editingRowKey, setEditingRowKey] = useState<string | null>(null)
+  // Captured with the editor's selected project so an SSH re-registration while
+  // the form is open cannot silently retarget the saved automation.
+  const [editingDestination, setEditingDestination] = useState<{
+    projectId: string
+    destination: AutomationCreateDestination
+  } | null>(null)
   const [relativeNow, setRelativeNow] = useState(Date.now())
   const [activePaneTab, setActivePaneTab] = useState<AutomationPaneTab>('overview')
   const [selectedAutomationRunPageId, setSelectedAutomationRunPageId] = useState<string | null>(
     null
   )
+  // Held next to the store's automation id rather than in it: the id is what
+  // other pages navigate by, and only this side knows which host's copy is shown.
+  const [selectedRowKey, setSelectedRowKey] = useState<string | null>(null)
   const [selectedExternalKey, setSelectedExternalKey] = useState<string | null>(null)
   const [selectedExternalRunPage, setSelectedExternalRunPage] =
     useState<SelectedExternalRunPage | null>(null)
   // Why: list is the primary surface; detail is a full-page drill-in, not a side pane.
   const [isDetailOpen, setIsDetailOpen] = useState(false)
   const selectedExternalKeyRef = useRef<string | null>(null)
-  const isDetailOpenRef = useRef(false)
   // Keep async refresh/delete handlers reading the latest selection without render-time mutation.
   useEffect(() => {
     selectedExternalKeyRef.current = selectedExternalKey
   }, [selectedExternalKey])
-  useEffect(() => {
-    isDetailOpenRef.current = isDetailOpen
-  }, [isDetailOpen])
-  const runtimePreflightMountedRef = useRef(true)
-  const runtimePreflightRequestedHostIdsRef = useRef<Set<TaskSourceContext['hostId']>>(new Set())
-  const [runtimePreflightStatusByHostId, setRuntimePreflightStatusByHostId] = useState<
-    ReadonlyMap<TaskSourceContext['hostId'], RuntimeProviderPreflightStatus>
-  >(() => new Map())
   const selectAutomationId = useCallback(
     (automationId: string | null): void => {
       setSelectedAutomationRunPageId(null)
+      setSelectedRowKey(null)
       setSelectedId(automationId)
     },
     [setSelectedId]
@@ -228,10 +308,12 @@ export default function AutomationsPage(): React.JSX.Element {
     setSelectedExternalKey(externalKey)
   }, [])
   const [draftAtOpen, setDraftAtOpen] = useState<AutomationDraft | null>(null)
-  const [deleteTarget, setDeleteTarget] = useState<Automation | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<AutomationListRow | null>(null)
   const [externalDeleteTarget, setExternalDeleteTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
+    /** Captured with the row, so the confirmed delete cannot land on another host. */
+    scope: ExternalAutomationScope
   } | null>(null)
   useContextualTour(
     'automations',
@@ -241,6 +323,9 @@ export default function AutomationsPage(): React.JSX.Element {
   const [editingExternalTarget, setEditingExternalTarget] = useState<{
     manager: ExternalAutomationManager
     job: ExternalAutomationJob
+    // Captured from the row that opened the dialog: the manager ID alone cannot
+    // name an authority, so a re-lookup could save to the wrong host.
+    scope: ExternalAutomationScope
   } | null>(null)
   const [dontAskDeleteAgain, setDontAskDeleteAgain] = useState(false)
   const editRequestRef = useRef(0)
@@ -248,7 +333,6 @@ export default function AutomationsPage(): React.JSX.Element {
   // Why: both dialogs stay mounted, so a shared ref would let one dialog's
   // unmount clear the focus target the other still needs.
   const externalDeleteConfirmButtonRef = useRef<HTMLButtonElement>(null)
-  const completionInFlightRef = useRef<Set<string>>(new Set())
   const rerunRunIdsInFlightRef = useRef<Set<string>>(new Set())
   const workspaceNameCacheRef = useRef<Map<string, string>>(new Map())
   const setupDecisionPolicyDefaultRef = useRef<AutomationDraft['setupDecision']>(undefined)
@@ -279,67 +363,125 @@ export default function AutomationsPage(): React.JSX.Element {
     missedRunGraceMinutes: '720',
     scheduleWarning: null
   })
+  const draftRef = useRef(draft)
+  draftRef.current = draft
 
-  const externalAutomationEntries = useMemo(
-    () => buildExternalAutomationListEntries(externalManagers),
-    [externalManagers]
+  const hostCatalog = useAutomationHostCatalog({ failedAuthorityKeys })
+  // Probing follows the selection, not the catalog: a Local selection must not
+  // reach out to every SSH host the user happens to have registered.
+  const externalScopeEntries = useMemo(
+    () => externalAutomationScopeEntries(hostCatalog.entries, hostCatalog.resolution),
+    [hostCatalog.entries, hostCatalog.resolution]
   )
-  const {
-    isListSearchQueryTooLarge,
-    isListSearchActive,
-    filteredAutomations,
-    filteredExternalAutomationEntries,
-    hasListItems
-  } = useAutomationListSearch({
-    listSearchQuery,
-    automations,
-    externalAutomationEntries,
-    repoMap,
-    selectedId,
-    selectedExternalKey,
-    selectAutomationId,
-    selectExternalKey
+  const scopedExternal = useScopedExternalAutomations({
+    catalogEntries: hostCatalog.entries,
+    scopeEntries: externalScopeEntries
   })
-  const {
-    visibleItems,
-    isListFilterActive,
-    hasVisibleListItems: hasFilteredListItems
-  } = useAutomationListView({
-    automations: filteredAutomations,
-    externalEntries: filteredExternalAutomationEntries,
-    runs,
-    filter: listFilter,
-    sort: listSort,
-    selectedId,
-    selectedExternalKey,
-    selectAutomationId,
-    selectExternalKey
-  })
+  // Held apart from the view object, which is a fresh literal each render and
+  // would refetch the runs table on every render of this page.
+  const fetchScopedExternalRuns = scopedExternal.fetchRuns
+  // Why the cache wins once it has answered: only its rows carry the host each
+  // record came from, which is what the picker, the groups, and every fenced
+  // action key on. Until then the unscoped list is all the page has, and it has
+  // no host to qualify its rows with.
+  const unscopedRows = useMemo(() => unscopedAutomationListRows(automations), [automations])
+  const visibleRows = hostCatalog.rows.answered ? hostCatalog.rows.rows : unscopedRows
+  // Picking a row records both: the key names the host's copy, the id is what
+  // the rest of the page (and other pages) still address the record by.
+  const selectAutomationRow = useCallback(
+    (rowKey: string | null): void => {
+      const row = rowKey === null ? null : visibleRows.find((candidate) => candidate.key === rowKey)
+      setSelectedAutomationRunPageId(null)
+      setSelectedRowKey(row?.key ?? null)
+      setSelectedId(row?.automation.id ?? null)
+    },
+    [setSelectedId, visibleRows]
+  )
+  const capturedAutomationOwners = hostCatalog.rows.capturedOwners
+  const externalAutomationEntries = useMemo(
+    () => buildExternalAutomationListEntries(scopedExternal.managers),
+    [scopedExternal.managers]
+  )
+  // The status/last-run/agent menu narrows rows before search, so both compose.
+  const attributeFilteredRows = useMemo(
+    () => filterAutomationListRows(visibleRows, listFilter),
+    [listFilter, visibleRows]
+  )
+  const attributeFilteredExternalEntries = useMemo(
+    () => filterExternalAutomationListEntries(externalAutomationEntries, listFilter),
+    [externalAutomationEntries, listFilter]
+  )
 
   const selectedExternal =
     externalAutomationEntries.find((entry) => entry.key === selectedExternalKey) ??
-    (automations.length === 0 ? (externalAutomationEntries[0] ?? null) : null)
-  const selected =
+    (visibleRows.length === 0 ? (externalAutomationEntries[0] ?? null) : null)
+  // The row key decides which of two same-id rows is selected; the stored id
+  // still decides which record, so a selection arriving from another page (which
+  // only carries an id) still lands somewhere.
+  const selectedRow =
     selectedExternal === null
       ? selectedId
-        ? (automations.find((automation) => automation.id === selectedId) ?? null)
-        : (automations[0] ?? null)
+        ? (visibleRows.find(
+            (row) => row.key === selectedRowKey && row.automation.id === selectedId
+          ) ??
+          visibleRows.find((row) => row.automation.id === selectedId) ??
+          null)
+        : (visibleRows[0] ?? null)
       : null
-  const runsWithWorkspaceNames = useMemo(
-    () =>
-      runs.map((run) => {
-        if (!run.workspaceId || run.workspaceDisplayName?.trim()) {
-          return run
-        }
-        const displayName =
-          worktreeMap.get(run.workspaceId)?.displayName ??
-          workspaceNameCacheRef.current.get(run.workspaceId) ??
-          getWorktreePathBasenameFromId(run.workspaceId)
-        const trimmedDisplayName = displayName?.trim()
-        return trimmedDisplayName ? { ...run, workspaceDisplayName: trimmedDisplayName } : run
-      }),
-    [runs, worktreeMap]
-  )
+  const selected = selectedRow?.automation ?? null
+  useEffect(() => {
+    if (!isDetailOpen || pendingAutomationRunNavigation) {
+      return
+    }
+    const hasSelectedLocal = selectedRowKey
+      ? visibleRows.some((row) => row.key === selectedRowKey)
+      : selectedId !== null && selectedRow !== null
+    const hasSelectedExternal =
+      selectedExternalKey !== null &&
+      externalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
+    if (hasSelectedLocal || hasSelectedExternal) {
+      return
+    }
+    setIsDetailOpen(false)
+    setSelectedAutomationRunPageId(null)
+    setSelectedExternalRunPage(null)
+    setActivePaneTab('overview')
+  }, [
+    externalAutomationEntries,
+    isDetailOpen,
+    pendingAutomationRunNavigation,
+    selectedExternalKey,
+    selectedId,
+    selectedRow,
+    selectedRowKey,
+    visibleRows
+  ])
+  // The detail pane renders `selectedRow.automation`, so the record it echoes back
+  // names no row; the page already holds the one the user is looking at.
+  const onSelectedRow = (act: (row: AutomationListRow) => void): void => {
+    if (selectedRow) {
+      act(selectedRow)
+    }
+  }
+
+  const {
+    isListSearchQueryTooLarge,
+    filteredRows,
+    filteredExternalAutomationEntries,
+    hasListItems,
+    hasFilteredListItems,
+    searchCounts
+  } = useAutomationListSearch({
+    listSearchQuery,
+    rows: attributeFilteredRows,
+    externalAutomationEntries: attributeFilteredExternalEntries,
+    repoMap,
+    worktreeMap,
+    selectedRowKey: selectedRow?.key ?? null,
+    selectedExternalKey,
+    selectAutomationRow,
+    selectExternalKey
+  })
   const selectedAutomationRunsWithWorkspaceNames = useMemo(
     () =>
       selectedAutomationRuns.runs.map((run) => {
@@ -347,13 +489,15 @@ export default function AutomationsPage(): React.JSX.Element {
           return run
         }
         const displayName =
-          worktreeMap.get(run.workspaceId)?.displayName ??
+          (selectedRow
+            ? worktreeForRow(selectedRow, repoForRow(selectedRow), run.workspaceId)?.displayName
+            : worktreeMap.get(run.workspaceId)?.displayName) ??
           workspaceNameCacheRef.current.get(run.workspaceId) ??
           getWorktreePathBasenameFromId(run.workspaceId)
         const trimmedDisplayName = displayName?.trim()
         return trimmedDisplayName ? { ...run, workspaceDisplayName: trimmedDisplayName } : run
       }),
-    [selectedAutomationRuns.runs, worktreeMap]
+    [repoForRow, selectedAutomationRuns.runs, selectedRow, worktreeForRow, worktreeMap]
   )
   const getDraftSetupDecisionDefault = useCallback(
     (
@@ -425,11 +569,22 @@ export default function AutomationsPage(): React.JSX.Element {
   const markSetupDecisionTouched = useCallback((): void => {
     setupDecisionTouchedRef.current = true
   }, [])
-  // Why: keep the detail tab scoped even while the selected-run fetch catches up.
-  const selectedRunsSource =
-    selected && selectedAutomationRuns.automationId === selected.id
-      ? selectedAutomationRunsWithWorkspaceNames
-      : runsWithWorkspaceNames
+  // Row-qualified *and* incarnation-qualified: the row key says whose copy the
+  // history was read for, the owner key says whether that host is still the
+  // incarnation that answered.
+  const selectedRunsMatchSelection =
+    selectedRow !== null &&
+    selectedAutomationRuns.rowKey === selectedRow.key &&
+    selectedAutomationRuns.ownerKey ===
+      capturedAutomationOwnerKey(capturedAutomationOwner(capturedAutomationOwners, selectedRow.key))
+  // Empty rather than another row's history while the scoped fetch is in flight:
+  // the page no longer holds every run, and showing the previous row's is worse
+  // than showing none.
+  const selectedRunsSource = selectedRunsMatchSelection
+    ? selectedAutomationRunsWithWorkspaceNames
+    : EMPTY_AUTOMATION_RUNS
+  // Why: an unanswered history is not an empty one, so the pane states the refusal instead.
+  const selectedRunsNotice = selectedRunsMatchSelection ? selectedAutomationRuns.notice : null
   const selectedRuns = useMemo(
     () => (selected ? selectedRunsSource.filter((run) => run.automationId === selected.id) : []),
     [selected, selectedRunsSource]
@@ -437,6 +592,18 @@ export default function AutomationsPage(): React.JSX.Element {
   const selectedAutomationRunPage = selectedAutomationRunPageId
     ? (selectedRuns.find((run) => run.id === selectedAutomationRunPageId) ?? null)
     : null
+  const selectedRunWorktreeMap = useMemo(() => {
+    if (!selectedRow) {
+      return worktreeMap
+    }
+    const repo = repoForRow(selectedRow)
+    return new Map(
+      selectedRuns.flatMap((run) => {
+        const worktree = worktreeForRow(selectedRow, repo, run.workspaceId)
+        return worktree ? [[worktree.id, worktree] as const] : []
+      })
+    )
+  }, [repoForRow, selectedRow, selectedRuns, worktreeForRow, worktreeMap])
   const worktrees = useMemo(
     () => worktreesByRepo[draft.projectId] ?? [],
     [draft.projectId, worktreesByRepo]
@@ -444,6 +611,143 @@ export default function AutomationsPage(): React.JSX.Element {
   const automationHostTarget = useMemo(
     () => getAutomationHostTargetFromKey(automationHostTargetKey),
     [automationHostTargetKey]
+  )
+  // The authority behind the *selected host*, used for orphan actions and for
+  // stating a create destination. Owned rows never read it: their owner already
+  // names an authority. Under All hosts no host is selected, so this is the
+  // desktop — the client's own authority, never a guess at which host is meant.
+  const automationAuthority = useMemo((): AutomationAuthorityRef => {
+    const selectedAuthority = hostCatalog.resolution.entry?.stableRef.authority
+    if (selectedAuthority?.kind !== 'runtime') {
+      return { kind: 'desktop' }
+    }
+    const environmentId = selectedAuthority.environmentId
+    return {
+      kind: 'runtime',
+      environmentId,
+      pairingRevision: automationRuntimePairingRevision(runtimeEnvironments, environmentId)
+    }
+  }, [hostCatalog.resolution.entry, runtimeEnvironments])
+  // Scoped per owning authority: a repo ID is unique only inside one, so the
+  // flat map cannot say whether *this* authority holds the project.
+  const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])
+  const activeWorkspaceHostStableKey = useMemo(() => {
+    const worktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
+    return worktree
+      ? automationCreateHostStableKey(
+          getWorktreeExecutionHostId(worktree, repoMap.get(worktree.repoId))
+        )
+      : null
+  }, [activeWorktreeId, repoMap, worktreeMap])
+  const createDestination = useAutomationCreateDestination({
+    open: createOpen && editingAutomationId === null && createTarget === 'orca',
+    catalog: hostCatalog.catalog,
+    entries: hostCatalog.entries,
+    // Non-null only for a concrete host filter, which constrains the destination.
+    filterStableKey: hostCatalog.resolution.entry?.stableKey ?? null,
+    activeWorkspaceStableKey: activeWorkspaceHostStableKey,
+    repoTables,
+    projects: repos
+  })
+  const editorProjects = createDestination.control.projects
+  // The destination's own repo table decides project eligibility, so a runtime
+  // destination refreshes its mirror the moment the dialog captures it —
+  // otherwise a never-fetched host offers no projects at all.
+  const createDestinationRuntimeEnvironmentId =
+    createDestination.control.resolution.status === 'ready' &&
+    createDestination.control.resolution.authority.kind === 'runtime'
+      ? createDestination.control.resolution.authority.environmentId
+      : null
+  useEffect(() => {
+    if (createDestinationRuntimeEnvironmentId) {
+      void useAppStore
+        .getState()
+        .fetchRuntimeEnvironmentRepos(createDestinationRuntimeEnvironmentId)
+    }
+  }, [createDestinationRuntimeEnvironmentId])
+  // A destination change can strand the chosen project on another host; leaving it
+  // selected only defers the same refusal to submit.
+  useEffect(() => {
+    if (!createOpen || editingAutomationId !== null || createTarget !== 'orca') {
+      return
+    }
+    setDraft((current) =>
+      !current.projectId || editorProjects.some((project) => project.id === current.projectId)
+        ? current
+        : { ...current, projectId: '', workspaceId: '', baseBranch: '' }
+    )
+  }, [createOpen, createTarget, editingAutomationId, editorProjects])
+  // The row's own host, from its captured owner. A page-level target cannot
+  // speak for a list spanning authorities, and the legacy arm below it is only
+  // ever reached by rows the desktop's unscoped list produced.
+  const automationHostTargetForRowKey = useCallback(
+    (rowKey: string | null): AutomationHostTarget | null => {
+      const owner = capturedAutomationOwner(capturedAutomationOwners, rowKey).owner
+      if (owner?.authority.kind === 'runtime') {
+        return { kind: 'environment', environmentId: owner.authority.environmentId }
+      }
+      return owner ? { kind: 'local' } : automationHostTarget
+    },
+    [automationHostTarget, capturedAutomationOwners]
+  )
+  const automationHostTargetFor = useCallback(
+    (row: AutomationListRow): AutomationHostTarget | null => automationHostTargetForRowKey(row.key),
+    [automationHostTargetForRowKey]
+  )
+  const automationDispatchContext = useMemo(
+    () => ({ capturedOwners: capturedAutomationOwners, authority: automationAuthority }),
+    [automationAuthority, capturedAutomationOwners]
+  )
+  const rowRecoveryHost = useCallback(
+    (rowKey: string | null): AutomationHostCatalogEntry | null =>
+      automationRowRecoveryHost(
+        hostCatalog.catalog,
+        capturedAutomationOwner(capturedAutomationOwners, rowKey),
+        automationAuthority
+      ),
+    [automationAuthority, capturedAutomationOwners, hostCatalog.catalog]
+  )
+  const reportOwnerAction = useCallback(
+    (rowKey: string | null, notice: AutomationActionNotice | null): void => {
+      setOwnerAction(notice ? { notice, host: rowRecoveryHost(rowKey) } : null)
+    },
+    [rowRecoveryHost]
+  )
+  // A create is refused by the destination the dialog captured, a save by the row
+  // it addresses; neither is the host the list is filtered to.
+  const editorRecoveryHost = useMemo((): AutomationHostCatalogEntry | null => {
+    if (editingAutomationId !== null) {
+      return rowRecoveryHost(editingRowKey)
+    }
+    const resolution = createDestination.control.resolution
+    return resolution.status === 'ready' ? resolution.entry : null
+  }, [createDestination.control.resolution, editingAutomationId, editingRowKey, rowRecoveryHost])
+  const notifyAuthorityChange = hostCatalog.notifyAuthorityChange
+  // The list renders the per-host cache, so a write is only visible once that
+  // host is refetched. The authority publishes the same event, but a round trip
+  // later — and it cannot name a host the cache has no entry for, which is
+  // precisely the host a create lands on.
+  const invalidateWrittenHost = useCallback(
+    (ref: StableAutomationCatalogRef | null, reason: AutomationAuthorityChangeReason): void => {
+      notifyAuthorityChange(automationWriteChangeEvent(ref, automationAuthority, reason))
+    },
+    [automationAuthority, notifyAuthorityChange]
+  )
+  const invalidateRowHost = useCallback(
+    (rowKey: string | null, reason: AutomationAuthorityChangeReason): void => {
+      const captured = capturedAutomationOwner(capturedAutomationOwners, rowKey)
+      invalidateWrittenHost(automationRowCatalogRef(captured, automationAuthority), reason)
+    },
+    [automationAuthority, capturedAutomationOwners, invalidateWrittenHost]
+  )
+  const isAutomationRowActionEnabled = useCallback(
+    (row: AutomationListRow, action: AutomationRowAction): boolean =>
+      isAutomationActionEnabled(capturedAutomationOwner(capturedAutomationOwners, row.key), action),
+    [capturedAutomationOwners]
+  )
+  const externalManagersUncheckedNotice = useMemo(
+    () => externalAutomationUncheckedNotice(scopedExternal.failures, hostCatalog.entries),
+    [scopedExternal.failures, hostCatalog.entries]
   )
 
   useEffect(() => {
@@ -498,6 +802,18 @@ export default function AutomationsPage(): React.JSX.Element {
       setPendingAutomationRunNavigation(null)
       return
     }
+    if (
+      selectedAutomationRuns.notice &&
+      selectedAutomationRuns.automationId === pending.automationId
+    ) {
+      // The host refused the history: the runs pane states that and offers its own
+      // recovery, so the navigation must not sit pending waiting on runs never coming.
+      setIsDetailOpen(true)
+      setActivePaneTab('runs')
+      setSelectedAutomationRunPageId(null)
+      setPendingAutomationRunNavigation(null)
+      return
+    }
     if (selectedAutomationRuns.automationId !== pending.automationId) {
       return
     }
@@ -525,6 +841,7 @@ export default function AutomationsPage(): React.JSX.Element {
     selectExternalKey,
     selectedAutomationRuns.automationId,
     selectedExternalKey,
+    selectedAutomationRuns.notice,
     selectedId,
     selectedRuns,
     setPendingAutomationRunNavigation,
@@ -542,7 +859,13 @@ export default function AutomationsPage(): React.JSX.Element {
     return ids
   }, [unifiedTabsByWorktree])
   const selectedAutomationRunPageWorktree = selectedAutomationRunPage?.workspaceId
-    ? (worktreeMap.get(selectedAutomationRunPage.workspaceId) ?? null)
+    ? selectedRow
+      ? (worktreeForRow(
+          selectedRow,
+          repoForRow(selectedRow),
+          selectedAutomationRunPage.workspaceId
+        ) ?? null)
+      : (worktreeMap.get(selectedAutomationRunPage.workspaceId) ?? null)
     : null
   const selectedAutomationRunPageWorkspaceDisplay = selectedAutomationRunPage
     ? getAutomationRunWorkspaceDisplay({
@@ -579,141 +902,22 @@ export default function AutomationsPage(): React.JSX.Element {
     })
   const isSelectedAutomationRunPageRerunPending =
     selectedAutomationRunPage !== null && rerunRunIdsInFlight.has(selectedAutomationRunPage.id)
-  const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
-  const repoBackedAutomationSourceContexts = useMemo(
-    () =>
-      automations
-        .map((automation) => getRepoBackedAutomationSourceContext(automation))
-        .filter((context): context is RepoBackedAutomationSourceContext => context !== null),
-    [automations]
-  )
-  const runtimeAutomationSourceHostIds = useMemo(() => {
-    const hostIds = new Set<TaskSourceContext['hostId']>()
-    for (const context of repoBackedAutomationSourceContexts) {
-      const parsed = parseExecutionHostId(context.hostId)
-      if (parsed?.kind !== 'runtime') {
-        continue
-      }
-      const hostAvailability = getRuntimeSourceHostAvailability(
-        context,
-        runtimeStatusByEnvironmentId
-      )
-      if (hostAvailability) {
-        continue
-      }
-      hostIds.add(parsed.id)
-    }
-    return [...hostIds].sort()
-  }, [repoBackedAutomationSourceContexts, runtimeStatusByEnvironmentId])
-  useEffect(
-    () => () => {
-      runtimePreflightMountedRef.current = false
-    },
-    []
-  )
-  useEffect(() => {
-    if (!preflightStatusCurrent || !preflightStatusChecked) {
-      void refreshPreflightStatus()
-    }
-  }, [preflightStatusChecked, preflightStatusCurrent, refreshPreflightStatus])
-  useEffect(() => {
-    const unrequestedHostIds = runtimeAutomationSourceHostIds.filter(
-      (hostId) => !runtimePreflightRequestedHostIdsRef.current.has(hostId)
-    )
-    if (unrequestedHostIds.length === 0) {
-      return
-    }
-    setRuntimePreflightStatusByHostId((current) => {
-      const next = new Map(current)
-      for (const hostId of unrequestedHostIds) {
-        next.set(hostId, { checked: false, status: null })
-      }
-      return next
-    })
-    for (const hostId of unrequestedHostIds) {
-      runtimePreflightRequestedHostIdsRef.current.add(hostId)
-      const parsed = parseExecutionHostId(hostId)
-      if (parsed?.kind !== 'runtime') {
-        continue
-      }
-      // Why: automation sources can be owned by a different remote server than
-      // the run target; provider auth/tooling must be checked on the source host.
-      void callRuntimeRpc<PreflightStatus>(
-        { kind: 'environment', environmentId: parsed.environmentId },
-        'preflight.check',
-        undefined,
-        { timeoutMs: 15_000 }
-      )
-        .then((status) => {
-          if (!runtimePreflightMountedRef.current) {
-            return
-          }
-          setRuntimePreflightStatusByHostId((current) => {
-            const next = new Map(current)
-            next.set(hostId, { checked: true, status })
-            return next
-          })
-        })
-        .catch(() => {
-          if (!runtimePreflightMountedRef.current) {
-            return
-          }
-          setRuntimePreflightStatusByHostId((current) => {
-            const next = new Map(current)
-            next.set(hostId, { checked: true, status: null })
-            return next
-          })
-        })
-    }
-  }, [runtimeAutomationSourceHostIds])
-  const automationSourceHostAvailabilityById = useMemo(() => {
-    const availabilityById = new Map<string, TaskSourceHostAvailability[]>()
-    for (const automation of automations) {
-      const context = getRepoBackedAutomationSourceContext(automation)
-      if (!context) {
-        continue
-      }
-      const hostAvailability = getRuntimeSourceHostAvailability(
-        context,
-        runtimeStatusByEnvironmentId
-      )
-      const providerAvailability = getRepoBackedProviderAvailability({
-        provider: context.provider,
-        contexts: [context],
-        preflightStatus,
-        preflightReady: preflightStatusCurrent && preflightStatusChecked,
-        runtimePreflightStatusByHostId
-      })
-      const availability = [
-        ...(hostAvailability ? [hostAvailability] : []),
-        ...providerAvailability
-      ]
-      if (availability.length > 0) {
-        availabilityById.set(automation.id, availability)
-      }
-    }
-    return availabilityById
-  }, [
-    automations,
-    preflightStatus,
-    preflightStatusChecked,
-    preflightStatusCurrent,
-    runtimePreflightStatusByHostId,
-    runtimeStatusByEnvironmentId
-  ])
-  const selectedRepo = selected ? (repoMap.get(getAutomationRunRepoId(selected)) ?? null) : null
+  const automationSourceHostAvailabilityByRowKey = useAutomationSourceHostAvailability(visibleRows)
+  const selectedRepo = selectedRow ? (repoForRow(selectedRow) ?? null) : null
   const selectedWorktree =
-    selected && selected.workspaceId ? (worktreeMap.get(selected.workspaceId) ?? null) : null
-  const selectedRunNowAvailability = selected
+    selectedRow && selected?.workspaceId
+      ? (worktreeForRow(selectedRow, selectedRepo ?? undefined) ?? null)
+      : null
+  const selectedRunNowAvailability = selectedRow
     ? getAutomationTargetAvailability({
-        automation: selected,
+        automation: selectedRow.automation,
         repo: selectedRepo,
         workspace: selectedWorktree,
         projectHostSetups,
         sshConnectionStates,
         runtimeStatusByEnvironmentId,
-        automationHostTarget,
-        sourceHostAvailability: automationSourceHostAvailabilityById.get(selected.id)
+        automationHostTarget: automationHostTargetFor(selectedRow),
+        sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(selectedRow.key)
       })
     : null
   const canSaveDraft =
@@ -759,104 +963,127 @@ export default function AutomationsPage(): React.JSX.Element {
   }, [activePaneTab, selected, selectedExternal])
 
   const getDefaultTarget = useCallback(() => {
-    const destinationTarget = getAutomationListTarget(settings)
-    const eligibleRepos = getAutomationCreateRepos(repos, destinationTarget)
     const activeWorktree = activeWorktreeId ? worktreeMap.get(activeWorktreeId) : null
     const activeRepo = activeWorktree ? (repoMap.get(activeWorktree.repoId) ?? null) : null
-    const fallbackRepo =
-      (activeRepo &&
-      eligibleRepos.some(
-        (repo) =>
-          repo.id === activeRepo.id &&
-          getRepoExecutionHostId(repo) === getRepoExecutionHostId(activeRepo)
-      )
+    // The stated destination decides which projects exist for this draft, so an
+    // active workspace on another host is not a candidate here.
+    const eligibleActiveRepo =
+      activeRepo && editorProjects.some((project) => project.id === activeRepo.id)
         ? activeRepo
-        : null) ??
-      eligibleRepos[0] ??
-      null
+        : null
+    const fallbackRepo = eligibleActiveRepo ?? editorProjects[0] ?? null
     const fallbackWorktrees = fallbackRepo ? (worktreesByRepo[fallbackRepo.id] ?? []) : []
     // Why: automation-created workspaces can be active; new automations should start from
     // the repo's stable main worktree unless the user explicitly chooses otherwise.
-    const targetWorktree = fallbackRepo ? getDefaultWorktree(fallbackWorktrees) : null
-    const targetProjectId = fallbackRepo?.id ?? ''
+    const targetWorktree =
+      getDefaultWorktree(fallbackWorktrees) ??
+      (activeWorktree && activeWorktree.repoId === fallbackRepo?.id ? activeWorktree : null)
+    const targetProjectId = fallbackRepo?.id ?? targetWorktree?.repoId ?? ''
     return {
       projectId: targetProjectId,
       workspaceId: targetWorktree?.id ?? ''
     }
-  }, [activeWorktreeId, repoMap, repos, settings, worktreeMap, worktreesByRepo])
+  }, [activeWorktreeId, editorProjects, repoMap, worktreeMap, worktreesByRepo])
 
-  const canCreateAutomation = getAutomationCreateAvailability({
-    automationHostTarget: getAutomationListTarget(settings),
-    runtimeStatusByEnvironmentId
-  }).canRunNow
-  const editingAutomation = editingAutomationId
-    ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
+  // Gated on what the picker offers, not on eligibility: with every offered
+  // host ineligible (e.g. all pre-host-scoping servers), the dialog is where
+  // the repair is stated, so the button must still open it.
+  const canCreateAutomation = hostCatalog.entries.some(automationCreateHostOffered)
+  // The edited row's own captured owner names the host, not the ambient list
+  // target: a remote row need not appear in `automations` at all, and looking it
+  // up by id there would answer with whichever authority the page last listed.
+  // An uncaptured row resolves to the same host its save addresses.
+  const editingRow = editingRowKey
+    ? (visibleRows.find((row) => row.key === editingRowKey) ?? null)
     : null
-  const automationDialogTarget = editingAutomation
-    ? getAutomationOwnerTarget(editingAutomation, automationHostTarget)
-    : getAutomationListTarget(settings)
+  const editingRowCapturedOwner = capturedAutomationOwner(
+    capturedAutomationOwners,
+    editingRowKey
+  ).owner
+  const automationDialogTarget = ((): AutomationHostTarget => {
+    if (editingAutomationId === null) {
+      return getAutomationListTarget(settings)
+    }
+    // Uncaptured: the host the legacy save addresses, so a runtime row the
+    // desktop list produced stops offering desktop projects.
+    if (editingRow && !editingRowCapturedOwner) {
+      return getAutomationOwnerTarget(editingRow.automation, automationHostTarget)
+    }
+    return (
+      automationHostTargetForRowKey(editingRowKey) ??
+      getAutomationTargetFromHostId(editingRow?.automation.runContext?.hostId)
+    )
+  })()
   const isOrcaForm = createTarget === 'orca' && editingExternalTarget === null
   const dialogRepos = isOrcaForm
-    ? getAutomationCreateRepos(repos, automationDialogTarget)
+    ? editingAutomationId !== null
+      ? getAutomationCreateRepos(repos, automationDialogTarget)
+      : editorProjects
     : getAutomationCreateRepos(repos, { kind: 'local' })
 
-  const refresh = useCallback(async () => {
-    setIsLoading(true)
-    const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
-    const automationHostTarget = pendingNavigation
-      ? getAutomationTargetFromHostId(pendingNavigation.hostId)
-      : getAutomationListTarget(settings)
-    try {
-      const [nextAutomations, nextRuns, nextExternalManagers] = await Promise.all([
-        listAutomationsForTarget(automationHostTarget),
-        listAutomationRunsForTarget(automationHostTarget),
-        window.api.automations.listExternalManagers()
-      ])
-      const currentSelectedId = useAppStore.getState().selectedAutomationId
-      const hasCurrentSelection = nextAutomations.some(
-        (automation) => automation.id === currentSelectedId
-      )
-      let nextSelectedId: string | null
-      if (hasCurrentSelection) {
-        nextSelectedId = currentSelectedId
-      } else if (pendingNavigation) {
-        nextSelectedId = pendingNavigation.automationId
-      } else {
-        nextSelectedId = nextAutomations[0]?.id ?? null
-      }
-      const nextSelectedRuns = nextSelectedId
-        ? await listAutomationRunsForTarget(automationHostTarget, nextSelectedId)
-        : []
-      setAutomations(nextAutomations)
-      setRuns(nextRuns)
-      setAutomationHostTargetKey(getAutomationHostTargetKey(automationHostTarget))
-      setSelectedAutomationRuns({
-        automationId: nextSelectedId,
-        runs: nextSelectedRuns
+  const destinationForProject = useCallback(
+    (projectId: string): AutomationCreateDestination | null => {
+      const runContext = buildAutomationRunContextForRepo({
+        repoId: projectId,
+        repos,
+        projectHostSetups
       })
-      setExternalManagers(nextExternalManagers)
-      if (!hasCurrentSelection && !pendingNavigation) {
-        selectAutomationId(nextAutomations[0]?.id ?? null)
-        if (
-          shouldCloseDetailForLostSelection({
-            isDetailOpen: isDetailOpenRef.current,
-            hasPendingNavigation: false,
-            isSelectedAutomationInNextList: false,
-            isSelectedExternalInNextList: buildExternalAutomationListEntries(
-              nextExternalManagers
-            ).some((entry) => entry.key === selectedExternalKeyRef.current)
-          })
-        ) {
-          setIsDetailOpen(false)
-          setSelectedAutomationRunPageId(null)
-          setSelectedExternalRunPage(null)
-          setActivePaneTab('overview')
-        }
+      if (!runContext) {
+        return null
       }
-    } finally {
-      setIsLoading(false)
-    }
-  }, [selectAutomationId, settings])
+      const stableKey = automationCreateHostStableKey(runContext.hostId)
+      const entry = stableKey
+        ? hostCatalog.entries.find((candidate) => candidate.stableKey === stableKey)
+        : undefined
+      const resolved = resolveAutomationCreateDestination(entry)
+      return resolved.status === 'ready' ? resolved : null
+    },
+    [hostCatalog.entries, projectHostSetups, repos]
+  )
+
+  const reloadExternalManagers = scopedExternal.reload
+
+  const refresh = useCallback(
+    async (options?: { awaitExternalManagers?: boolean }) => {
+      setIsLoading(true)
+      const pendingNavigation = useAppStore.getState().pendingAutomationRunNavigation
+      // The desktop unless navigation named a host: this arm exists for rows the
+      // per-host reads have not answered for, and the client's own authority is
+      // the only one it can address without guessing which server is meant.
+      const automationHostTarget: AutomationHostTarget = pendingNavigation
+        ? getAutomationTargetFromHostId(pendingNavigation.hostId)
+        : { kind: 'local' }
+      const authorityKey = automationAuthorityCatalogKey(
+        automationHostTarget.kind === 'environment'
+          ? { kind: 'runtime', environmentId: automationHostTarget.environmentId }
+          : { kind: 'desktop' }
+      )
+      // Managers are per host and failures are per provider: the probe settles
+      // into its own state on its own time, and must neither fail the automation
+      // list nor keep the list loading while a slow provider answers. An explicit
+      // external mutation opts in below, so the row set it re-reads reflects the
+      // write before its success toast lands.
+      const managersSettled = reloadExternalManagers().catch(() => undefined)
+      try {
+        const nextAutomations = await listAutomationsForTarget(automationHostTarget)
+        // Selection and run history are deliberately not written here: this call
+        // addressed one authority, and the selected row may belong to another.
+        setAutomations(nextAutomations)
+        setAutomationHostTargetKey(getAutomationHostTargetKey(automationHostTarget))
+        setFailedAuthorityKeys((current) => withoutKey(current, authorityKey))
+      } catch {
+        // Why not a toast and not a rethrow: the list keeps whatever it had, and
+        // the host's own status row is where the failure and its Retry belong.
+        setFailedAuthorityKeys((current) => new Set(current).add(authorityKey))
+      } finally {
+        setIsLoading(false)
+      }
+      if (options?.awaitExternalManagers) {
+        await managersSettled
+      }
+    },
+    [reloadExternalManagers]
+  )
 
   useEffect(() => {
     if (!pendingAutomationRunNavigation || isLoading) {
@@ -899,29 +1126,14 @@ export default function AutomationsPage(): React.JSX.Element {
     })
   }, [])
 
-  useEffect(() => {
-    const automationId = selected?.id ?? null
-    if (!automationId) {
-      setSelectedAutomationRuns({ automationId: null, runs: [] })
-      return
-    }
-    let cancelled = false
-    const target =
-      pendingAutomationRunNavigation?.automationId === automationId &&
-      pendingAutomationRunNavigation.hostId
-        ? getAutomationTargetFromHostId(pendingAutomationRunNavigation.hostId)
-        : selected
-          ? getAutomationOwnerTarget(selected, automationHostTarget)
-          : getAutomationListTarget(settings)
-    void listAutomationRunsForTarget(target, automationId).then((nextRuns) => {
-      if (!cancelled) {
-        setSelectedAutomationRuns({ automationId, runs: nextRuns })
-      }
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [automationHostTarget, pendingAutomationRunNavigation, selected, selected?.id, runs, settings])
+  useSelectedAutomationRunHistory({
+    selected: selectedRow,
+    context: automationDispatchContext,
+    legacyTarget: automationHostTargetFor,
+    navigation: pendingAutomationRunNavigation,
+    reloadToken: runHistoryReloadToken,
+    onSettled: setSelectedAutomationRuns
+  })
 
   useEffect(() => {
     const onAutomationsChanged = (): void => {
@@ -944,56 +1156,6 @@ export default function AutomationsPage(): React.JSX.Element {
       document.removeEventListener('visibilitychange', onVisibilityOrFocus)
     }
   }, [refresh])
-
-  useEffect(() => {
-    const inFlight = completionInFlightRef.current
-    const completedRuns = runs.filter((run) => {
-      if (run.status !== 'dispatched' || !run.terminalPaneKey) {
-        return false
-      }
-      if (inFlight.has(run.id)) {
-        return false
-      }
-      const dispatchedAt = run.dispatchedAt ?? null
-      if (dispatchedAt === null) {
-        return false
-      }
-      return hasAutomationRunCompletionEvidence({
-        run,
-        dispatchedAt,
-        agentStatusByPaneKey,
-        retainedAgentsByPaneKey
-      })
-    })
-    if (completedRuns.length === 0) {
-      return
-    }
-    for (const run of completedRuns) {
-      inFlight.add(run.id)
-    }
-    void Promise.all(
-      completedRuns.map((run) =>
-        window.api.automations.markDispatchResult({
-          runId: run.id,
-          status: 'completed',
-          workspaceId: run.workspaceId,
-          terminalSessionId: run.terminalSessionId,
-          terminalPaneKey: run.terminalPaneKey,
-          terminalPtyId: run.terminalPtyId,
-          error: null
-        })
-      )
-    )
-      .then(() => refresh())
-      .catch((error) => {
-        console.error('[automations] failed to mark completed dispatch result:', error)
-      })
-      .finally(() => {
-        for (const run of completedRuns) {
-          inFlight.delete(run.id)
-        }
-      })
-  }, [agentStatusByPaneKey, retainedAgentsByPaneKey, refresh, runs])
 
   useEffect(() => {
     if (!draft.projectId) {
@@ -1117,6 +1279,7 @@ export default function AutomationsPage(): React.JSX.Element {
     const target = getDefaultTarget()
     setEditingAutomationId(null)
     setEditingExternalTarget(null)
+    setEditingDestination(null)
     setCreateTarget('orca')
     const baseDraft: AutomationDraft = {
       name: '',
@@ -1155,49 +1318,37 @@ export default function AutomationsPage(): React.JSX.Element {
     setCreateOpen(true)
   }
 
-  const openEditDialog = async (automation: Automation): Promise<void> => {
+  const openEditDialog = async (row: AutomationListRow): Promise<void> => {
     const requestId = (editRequestRef.current += 1)
     setEditingExternalTarget(null)
     setCreateTarget('orca')
-    let latest = automation
-    try {
-      latest =
-        (await window.api.automations.list()).find((entry) => entry.id === automation.id) ??
-        automation
-    } catch {
-      latest = automation
+    const automationId = row.automation.id
+    // Why: hydrate inside the row's own captured scope, not from whatever the
+    // ambient authority happens to hold under the same automation ID.
+    const reread = await dispatchAutomationReread(
+      automationDispatchContext,
+      { rowKey: row.key, automationId },
+      async () =>
+        (await listAutomationsForTarget({ kind: 'local' })).find(
+          (entry) => entry.id === automationId
+        ) ?? null
+    )
+    if (!reread.ok && reread.notice.severity === 'owner') {
+      reportOwnerAction(row.key, reread.notice)
+      return
     }
+    // A failed re-read still opens the form on the copy already on screen.
+    const latest = (reread.ok ? reread.value : null) ?? row.automation
     if (requestId !== editRequestRef.current) {
       return
     }
-    const schedule = tryParseAutomationRrule(latest.rrule)
-    const hasCustomSchedule = !schedule && isValidAutomationSchedule(latest.rrule)
     setEditingAutomationId(latest.id)
-    const nextDraft: AutomationDraft = {
-      name: latest.name,
-      prompt: latest.prompt,
-      agentId: latest.agentId,
-      projectId: getAutomationRunRepoId(latest),
-      workspaceMode: latest.workspaceMode,
-      workspaceId: latest.workspaceId ?? '',
-      baseBranch: latest.baseBranch ?? '',
-      setupDecision: getAutomationSetupDecisionDraftValue({
-        workspaceMode: latest.workspaceMode,
-        persistedSetupDecision: latest.setupDecision
-      }),
-      reuseSession: latest.workspaceMode === 'existing' && latest.reuseSession,
-      precheckCommand: latest.precheck?.command ?? '',
-      precheckTimeoutSeconds: String(latest.precheck?.timeoutSeconds ?? 60),
-      preset: schedule?.preset ?? (hasCustomSchedule ? 'custom' : 'weekdays'),
-      time: schedule ? formatTimeInput(schedule.hour, schedule.minute) : AUTOMATION_DEFAULT_TIME,
-      dayOfWeek: String(schedule?.dayOfWeek ?? 1),
-      customSchedule: hasCustomSchedule ? latest.rrule : '',
-      missedRunGraceMinutes: String(latest.missedRunGraceMinutes),
-      scheduleWarning:
-        schedule || hasCustomSchedule
-          ? null
-          : 'This automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-    }
+    setEditingRowKey(row.key)
+    const initialDestination = destinationForProject(latest.projectId)
+    setEditingDestination(
+      initialDestination ? { projectId: latest.projectId, destination: initialDestination } : null
+    )
+    const nextDraft = buildAutomationEditDraft(latest)
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
     setCreateOpen(true)
@@ -1205,11 +1356,10 @@ export default function AutomationsPage(): React.JSX.Element {
 
   const openEditExternalDialog = (
     manager: ExternalAutomationManager,
-    job: ExternalAutomationJob
+    job: ExternalAutomationJob,
+    scope: ExternalAutomationScope
   ): void => {
     editRequestRef.current += 1
-    const rawSchedule = job.rawSchedule?.trim() ?? ''
-    const hasCustomSchedule = isValidAutomationCronSchedule(rawSchedule)
     const targetWorktree =
       Object.values(worktreesByRepo)
         .flat()
@@ -1229,29 +1379,11 @@ export default function AutomationsPage(): React.JSX.Element {
       : null
     const projectId = targetWorktree?.repoId ?? fallbackRepo?.id ?? ''
     const workspaceId = targetWorktree?.id ?? fallbackWorktree?.id ?? ''
-    const nextDraft: AutomationDraft = {
-      name: job.name,
-      prompt: job.prompt ?? job.promptPreview,
-      agentId: 'hermes',
-      projectId,
-      workspaceMode: 'existing',
-      workspaceId,
-      baseBranch: '',
-      setupDecision: undefined,
-      reuseSession: false,
-      precheckCommand: '',
-      precheckTimeoutSeconds: '60',
-      preset: hasCustomSchedule ? 'custom' : 'weekdays',
-      time: AUTOMATION_DEFAULT_TIME,
-      dayOfWeek: '1',
-      customSchedule: hasCustomSchedule ? rawSchedule : '',
-      missedRunGraceMinutes: '720',
-      scheduleWarning: hasCustomSchedule
-        ? null
-        : 'This Hermes automation has an unsupported saved schedule. Pick a supported schedule before saving changes.'
-    }
+    const nextDraft = buildExternalAutomationEditDraft(job, { projectId, workspaceId })
     setEditingAutomationId(null)
-    setEditingExternalTarget({ manager, job })
+    setEditingRowKey(null)
+    setEditingDestination(null)
+    setEditingExternalTarget({ manager, job, scope })
     setCreateTarget('hermes')
     setDraft(nextDraft)
     setDraftAtOpen(nextDraft)
@@ -1262,6 +1394,10 @@ export default function AutomationsPage(): React.JSX.Element {
     (projectId: string): void => {
       const currentWorktrees = worktreesByRepo[projectId] ?? []
       const currentDefaultWorktree = getDefaultWorktree(currentWorktrees)
+      if (editingAutomationId !== null) {
+        const destination = destinationForProject(projectId)
+        setEditingDestination(destination ? { projectId, destination } : null)
+      }
       setDraft((current) => ({
         ...current,
         projectId,
@@ -1284,10 +1420,28 @@ export default function AutomationsPage(): React.JSX.Element {
         )
       })
     },
-    [fetchWorktrees, worktreesByRepo]
+    [destinationForProject, editingAutomationId, fetchWorktrees, worktreesByRepo]
+  )
+
+  const handleDraftChange = useCallback(
+    (updater: (current: AutomationDraft) => AutomationDraft): void => {
+      const current = draftRef.current
+      const next = updater(current)
+      draftRef.current = next
+      setDraft(next)
+      if (
+        editingAutomationId !== null &&
+        (next.projectId !== current.projectId || next.workspaceId !== current.workspaceId)
+      ) {
+        const destination = destinationForProject(next.projectId)
+        setEditingDestination(destination ? { projectId: next.projectId, destination } : null)
+      }
+    },
+    [destinationForProject, editingAutomationId]
   )
 
   const saveAutomation = async (): Promise<void> => {
+    setEditorNotice(null)
     const { hour, minute } = parseDraftTime(draft.time)
     const isHermesSave =
       editingAutomationId === null && (createTarget === 'hermes' || editingExternalTarget !== null)
@@ -1321,20 +1475,6 @@ export default function AutomationsPage(): React.JSX.Element {
         translate(
           'auto.components.automations.AutomationsPage.6e91dab317',
           'Enter a valid advanced schedule before saving.'
-        )
-      )
-      return
-    }
-    if (
-      editingAutomationId === null &&
-      editingExternalTarget === null &&
-      createTarget === 'orca' &&
-      !canCreateAutomation
-    ) {
-      toast.error(
-        translate(
-          'auto.components.automations.AutomationsPage.destinationUnavailable',
-          'The selected automation destination is not ready. Reconnect it and try again.'
         )
       )
       return
@@ -1378,10 +1518,16 @@ export default function AutomationsPage(): React.JSX.Element {
           )
           return
         }
-        const target =
-          editingExternalTarget?.manager.target ?? getExternalAutomationTargetForRepo(repo)
-        const repoTargetMatches = repoMatchesExternalAutomationTarget(repo, target)
-        if (!repoTargetMatches) {
+        // The scope the manager was listed under, never one re-derived from the
+        // repo at save time — that is how an edit lands on the wrong host.
+        const scope = editingExternalTarget
+          ? editingExternalTarget.scope
+          : scopedExternal.createScope(repo.connectionId ?? null)
+        const repoTargetMatches =
+          scope?.owner.selector.kind === 'ssh'
+            ? repo.connectionId === scope.owner.selector.targetId
+            : !repo.connectionId
+        if (!scope || !repoTargetMatches) {
           toast.error(
             translate(
               'auto.components.automations.AutomationsPage.e431bb85d4',
@@ -1390,34 +1536,27 @@ export default function AutomationsPage(): React.JSX.Element {
           )
           return
         }
-        const schedule = buildHermesCronSchedule(draft)
-        const managerId =
-          editingExternalTarget?.manager.id ??
-          (target.type === 'ssh' ? `hermes:ssh:${target.connectionId}` : 'hermes:local')
-        const input = {
-          managerId,
-          provider: 'hermes' as const,
-          target,
-          name: draft.name,
-          prompt: draft.prompt,
-          schedule,
-          workdir: selectedWorktree.path
-        }
-        await (editingExternalTarget
-          ? window.api.automations.updateExternal({
-              ...input,
-              jobId: editingExternalTarget.job.id
-            })
-          : window.api.automations.createExternal(input))
+        await scopedExternal.saveExternalAutomation(
+          scope,
+          {
+            name: draft.name,
+            prompt: draft.prompt,
+            schedule: buildHermesCronSchedule(draft),
+            workdir: selectedWorktree.path
+          },
+          editingExternalTarget?.job.id ?? null
+        )
         if (!editingExternalTarget) {
           useAppStore.getState().recordFeatureInteraction('automation-created')
         }
-        await refresh()
+        await refresh({ awaitExternalManagers: true })
         setCreateOpen(false)
         setEditingExternalTarget(null)
+        // Same helper and same captured scope the row's key was built from, so the
+        // edited automation stays selected instead of falling back to the first row.
         selectExternalKey(
           editingExternalTarget
-            ? getExternalAutomationKey(editingExternalTarget.manager, editingExternalTarget.job)
+            ? externalAutomationJobKey(editingExternalTarget.scope, editingExternalTarget.job.id)
             : null
         )
         toast.success(
@@ -1433,7 +1572,11 @@ export default function AutomationsPage(): React.JSX.Element {
         )
         return
       }
-      if (isOrcaForm && !dialogRepos.some((repo) => repo.id === draft.projectId)) {
+      if (
+        editingAutomationId !== null &&
+        isOrcaForm &&
+        !dialogRepos.some((repo) => repo.id === draft.projectId)
+      ) {
         toast.error(
           translate(
             'auto.components.automations.AutomationsPage.destinationProjectUnavailable',
@@ -1441,6 +1584,17 @@ export default function AutomationsPage(): React.JSX.Element {
           )
         )
         return
+      }
+      // Refused here, before the side-effectful steps below (hooks load, trust
+      // prompt): the user must not answer a trust dialog for a create that the
+      // destination was always going to reject. `createDraftAutomation` checks
+      // again after those awaits, which is the fence that actually gates the send.
+      if (editingAutomationId === null) {
+        const earlyDestination = createDestination.check(draft.projectId)
+        if (!earlyDestination.ok) {
+          setEditorNotice(earlyDestination.notice)
+          return
+        }
       }
       const now = Date.now()
       const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
@@ -1498,14 +1652,67 @@ export default function AutomationsPage(): React.JSX.Element {
         ? (automations.find((automation) => automation.id === editingAutomationId) ?? null)
         : null
       if (editingAutomationId) {
-        try {
-          currentAutomation =
-            (await listAutomationsForTarget(getAutomationListTarget(settings))).find(
+        // Why: the conflict check reads the row's own scope, and the legacy read
+        // under it addresses the desktop rather than whichever host was ambient.
+        const reread = await dispatchAutomationReread(
+          automationDispatchContext,
+          { rowKey: editingRowKey ?? '', automationId: editingAutomationId },
+          async () =>
+            (await listAutomationsForTarget(automationHostTarget ?? { kind: 'local' })).find(
               (automation) => automation.id === editingAutomationId
-            ) ?? currentAutomation
-        } catch {
-          // Keep the in-memory automation as a fallback if the refresh fails.
+            ) ?? null
+        )
+        if (!reread.ok && reread.notice.severity === 'owner') {
+          setEditorNotice(reread.notice)
+          return
         }
+        currentAutomation = (reread.ok ? reread.value : null) ?? currentAutomation
+      }
+      let editDestination: AutomationDestination | undefined
+      const destinationChanged =
+        currentAutomation &&
+        (currentAutomation.projectId !== draft.projectId ||
+          currentAutomation.workspaceId !== (draft.workspaceId || null) ||
+          currentAutomation.workspaceMode !== draft.workspaceMode)
+      if (editingAutomationId && currentAutomation && destinationChanged) {
+        if (!editingDestination || editingDestination.projectId !== draft.projectId) {
+          setEditorNotice({
+            message: translate(
+              'auto.components.automations.createDestination.unavailable',
+              'Choose an available project on this host before saving.'
+            ),
+            recovery: 'retry',
+            severity: 'owner'
+          })
+          return
+        }
+        const revalidated = revalidateAutomationCreateDestination(
+          editingDestination.destination,
+          hostCatalog.entries
+        )
+        if (revalidated.status === 'stale') {
+          setEditorNotice({
+            message: translate(
+              'auto.components.automations.createDestination.stale',
+              '{host} changed while this form was open. Choose the project again before saving.'
+            ).replace('{host}', revalidated.entry.label),
+            recovery: 'retry',
+            severity: 'owner'
+          })
+          return
+        }
+        if (revalidated.status !== 'ready') {
+          setEditorNotice({
+            message: translate(
+              'auto.components.automations.createDestination.unavailable',
+              'Choose an available project on this host before saving.'
+            ),
+            recovery: 'retry',
+            severity: 'owner'
+          })
+          return
+        }
+        editDestination = revalidated.destination
       }
       const updates: AutomationUpdateInput = {
         name: draft.name,
@@ -1527,14 +1734,26 @@ export default function AutomationsPage(): React.JSX.Element {
         updates.rrule = rrule
         updates.dtstart = now
       }
-      const automation = editingAutomationId
-        ? currentAutomation
-          ? await updateAutomationForTarget(currentAutomation, updates, automationHostTarget)
-          : await window.api.automations.update({
-              id: editingAutomationId,
-              updates
-            })
-        : await createAutomationForTarget({
+      const editSource = currentAutomation
+      const saved = editingAutomationId
+        ? await dispatchAutomationUpdate(
+            automationDispatchContext,
+            { rowKey: editingRowKey ?? '', automationId: editingAutomationId },
+            updates,
+            () => {
+              // Nothing names a host: no captured owner and no record to read one
+              // from, so the save is refused rather than sent unfenced.
+              if (!editSource) {
+                throw new Error(
+                  automationOwnerConflictMessage(AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged)
+                )
+              }
+              return updateAutomationForTarget(editSource, updates, automationHostTarget)
+            },
+            'save',
+            editDestination
+          )
+        : await createDraftAutomation({
             name: draft.name,
             prompt: draft.prompt,
             precheck,
@@ -1551,7 +1770,16 @@ export default function AutomationsPage(): React.JSX.Element {
             dtstart: now,
             missedRunGraceMinutes
           })
-      if (!editingAutomationId) {
+      if (!saved.ok) {
+        setEditorNotice(saved.notice)
+        return
+      }
+      const automation = saved.value
+      // Create invalidates its stated destination inside `createDraftAutomation`,
+      // which is the only place that still holds it.
+      if (editingAutomationId) {
+        invalidateRowHost(editingRowKey, 'definition')
+      } else {
         await hydratePersistedUIState()
       }
       setAutomations((current) => {
@@ -1560,7 +1788,13 @@ export default function AutomationsPage(): React.JSX.Element {
       })
       setDraft((current) => ({ ...current, name: '', prompt: '' }))
       await refresh()
-      selectAutomationId(automation.id)
+      if (editingAutomationId && editingRowKey) {
+        setSelectedAutomationRunPageId(null)
+        setSelectedRowKey(editingRowKey)
+        setSelectedId(automation.id)
+      } else {
+        selectAutomationId(automation.id)
+      }
       setCreateOpen(false)
       if (!editingAutomationId) {
         useAppStore.getState().recordFeatureInteraction('automation-created')
@@ -1590,64 +1824,77 @@ export default function AutomationsPage(): React.JSX.Element {
     }
   }
 
-  const toggleAutomation = async (automation: Automation): Promise<void> => {
-    await updateAutomationForTarget(
-      automation,
-      { enabled: !automation.enabled },
-      automationHostTarget
+  /** Creation states its destination and re-checks it at submit; it never infers one. */
+  const createDraftAutomation = async (
+    input: AutomationCreateInput
+  ): Promise<AutomationDispatchResult<Automation>> => {
+    const checked = createDestination.check(input.projectId)
+    if (!checked.ok) {
+      return { ok: false, notice: checked.notice }
+    }
+    const result = toDispatchResult(
+      await createAutomationAtDestination(
+        checked.destination.authority,
+        input,
+        checked.destination.destination
+      )
     )
-    await refresh()
+    if (result.ok) {
+      invalidateWrittenHost(checked.destination.entry.stableRef, 'definition')
+    }
+    return result
   }
 
-  const deleteAutomation = async (automation: Automation): Promise<void> => {
-    await deleteAutomationForTarget(automation, automationHostTarget)
-    if (useAppStore.getState().selectedAutomationId === automation.id) {
-      selectAutomationId(null)
-      setIsDetailOpen(false)
-      setSelectedAutomationRunPageId(null)
-      setActivePaneTab('overview')
+  const toggleAutomation = async (row: AutomationListRow): Promise<void> => {
+    const automation = row.automation
+    const result = await dispatchAutomationUpdate(
+      automationDispatchContext,
+      { rowKey: row.key, automationId: automation.id },
+      { enabled: !automation.enabled },
+      () =>
+        updateAutomationForTarget(
+          automation,
+          { enabled: !automation.enabled },
+          automationHostTargetFor(row)
+        )
+    )
+    reportOwnerAction(row.key, result.ok ? null : result.notice)
+    if (result.ok) {
+      invalidateRowHost(row.key, 'definition')
     }
     await refresh()
   }
 
-  const persistDeleteAutomationPreference = (): void => {
-    void updateSettings({ skipDeleteAutomationConfirm: true })
-    toast.success(
-      translate(
-        'auto.components.automations.AutomationsPage.690b94da54',
-        "We'll skip this confirmation next time."
-      ),
-      {
-        description: translate(
-          'auto.components.automations.AutomationsPage.d2a01b0b6f',
-          'You can change this in Settings.'
-        ),
-        duration: 8000,
-        action: {
-          label: translate(
-            'auto.components.automations.AutomationsPage.8a3226f172',
-            'Open Settings'
-          ),
-          onClick: () => {
-            openSettingsPage()
-            openSettingsTarget({
-              pane: 'general',
-              repoId: null,
-              sectionId: 'general-skip-delete-automation-confirm'
-            })
-          }
-        }
-      }
+  const deleteAutomation = async (row: AutomationListRow): Promise<void> => {
+    const automation = row.automation
+    const result = await dispatchAutomationDelete(
+      automationDispatchContext,
+      { rowKey: row.key, automationId: automation.id },
+      () => deleteAutomationForTarget(automation, automationHostTargetFor(row))
     )
+    reportOwnerAction(row.key, result.ok ? null : result.notice)
+    if (result.ok) {
+      if (selectedRowKey === row.key) {
+        selectAutomationId(null)
+        setIsDetailOpen(false)
+        setSelectedAutomationRunPageId(null)
+        setActivePaneTab('overview')
+      }
+      invalidateRowHost(row.key, 'definition')
+    }
+    await refresh()
   }
 
-  const requestDeleteAutomation = (automation: Automation): void => {
+  const persistDeleteAutomationPreference = (): void =>
+    persistSkipDeleteAutomationConfirm({ updateSettings, openSettingsPage, openSettingsTarget })
+
+  const requestDeleteAutomation = (row: AutomationListRow): void => {
     if (settings?.skipDeleteAutomationConfirm) {
-      void deleteAutomation(automation)
+      void deleteAutomation(row)
       return
     }
     setDontAskDeleteAgain(false)
-    setDeleteTarget(automation)
+    setDeleteTarget(row)
   }
 
   const confirmDeleteAutomation = async (): Promise<void> => {
@@ -1663,11 +1910,13 @@ export default function AutomationsPage(): React.JSX.Element {
     await deleteAutomation(target)
   }
 
-  const runNow = async (automation: Automation): Promise<void> => {
-    const repo = repoMap.get(getAutomationRunRepoId(automation)) ?? null
+  const runNow = async (row: AutomationListRow): Promise<void> => {
+    const automation = row.automation
+    const repo = repoForRow(row) ?? null
     const workspace = automation.workspaceId
-      ? (worktreeMap.get(automation.workspaceId) ?? null)
+      ? (worktreeForRow(row, repo ?? undefined) ?? null)
       : null
+    const rowHostTarget = automationHostTargetFor(row)
     const availability = getAutomationTargetAvailability({
       automation,
       repo,
@@ -1675,15 +1924,27 @@ export default function AutomationsPage(): React.JSX.Element {
       projectHostSetups,
       sshConnectionStates,
       runtimeStatusByEnvironmentId,
-      automationHostTarget,
-      sourceHostAvailability: automationSourceHostAvailabilityById.get(automation.id)
+      automationHostTarget: rowHostTarget,
+      sourceHostAvailability: automationSourceHostAvailabilityByRowKey.get(row.key)
     })
     if (!availability.canRunNow) {
       toast.error(availability.message)
       return
     }
-    await runAutomationNowForTarget(automation, automationHostTarget)
+    const result = await dispatchAutomationRunNow(
+      automationDispatchContext,
+      { rowKey: row.key, automationId: automation.id },
+      () => runAutomationNowForTarget(automation, rowHostTarget)
+    )
+    reportOwnerAction(row.key, result.ok ? null : result.notice)
+    if (!result.ok) {
+      return
+    }
     useAppStore.getState().recordFeatureInteraction('automation-run')
+    // A run rewrites this host's run history and its next-run projection, and the
+    // list renders that host's cache — `refresh()` alone only feeds the pre-catalog
+    // `automations`, which is no longer what is on screen.
+    invalidateRowHost(row.key, 'run')
     await hydratePersistedUIState()
     await refresh()
     toast.message(
@@ -1691,7 +1952,7 @@ export default function AutomationsPage(): React.JSX.Element {
     )
   }
 
-  const rerunAutomationRun = async (automation: Automation, run: AutomationRun): Promise<void> => {
+  const rerunAutomationRun = async (row: AutomationListRow, run: AutomationRun): Promise<void> => {
     const runId = run.id
     if (rerunRunIdsInFlightRef.current.has(runId)) {
       return
@@ -1700,7 +1961,17 @@ export default function AutomationsPage(): React.JSX.Element {
     rerunRunIdsInFlightRef.current.add(runId)
     setRerunRunIdsInFlight(new Set(rerunRunIdsInFlightRef.current))
     try {
-      await runAutomationNowForTarget(automation, automationHostTarget)
+      const result = await dispatchAutomationRunNow(
+        automationDispatchContext,
+        { rowKey: row.key, automationId: row.automation.id },
+        () => runAutomationNowForTarget(row.automation, automationHostTargetFor(row))
+      )
+      reportOwnerAction(row.key, result.ok ? null : result.notice)
+      if (!result.ok) {
+        await refresh()
+        return
+      }
+      invalidateRowHost(row.key, 'run')
       await hydratePersistedUIState()
       await refresh()
       toast.message(
@@ -1728,28 +1999,24 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const runExternalAction = async (
-    manager: ExternalAutomationManager,
+    scope: ExternalAutomationScope,
     job: ExternalAutomationJob,
     action: ExternalAutomationAction
   ): Promise<void> => {
-    const key = `${manager.id}:${job.id}:${action}`
-    setExternalActionKey(key)
+    // Keyed by the scope the row was discovered under — the same one the call
+    // below routes to — so two hosts running the same provider can neither
+    // disable each other's buttons nor receive each other's delete.
+    setExternalActionKey(externalAutomationActionKey(scope, job.id, action))
     try {
-      await window.api.automations.runExternalAction({
-        managerId: manager.id,
-        provider: manager.provider,
-        target: manager.target,
-        jobId: job.id,
-        action
-      })
+      await scopedExternal.runExternalAction(scope, job.id, action)
       if (action === 'run') {
         useAppStore.getState().recordFeatureInteraction('automation-run')
       }
-      await refresh()
+      await refresh({ awaitExternalManagers: true })
       // Why: full-page detail keeps selection when the deleted external was open;
       // without this, detail can fall through to an unrelated local automation.
       if (action === 'delete') {
-        const deletedKey = getExternalAutomationKey(manager, job)
+        const deletedKey = externalAutomationJobKey(scope, job.id)
         if (selectedExternalKeyRef.current === deletedKey) {
           selectExternalKey(null)
           setIsDetailOpen(false)
@@ -1793,38 +2060,22 @@ export default function AutomationsPage(): React.JSX.Element {
   }
 
   const fetchExternalAutomationRuns = useCallback<FetchExternalAutomationRuns>(
-    async ({ manager, job, page, pageSize }) => {
-      const fallbackRunsPage = {
-        runs: job.runs.slice(page * pageSize, page * pageSize + pageSize),
-        totalCount: job.runCount
-      }
-      const listExternalRuns = (
-        window.api.automations as Partial<Pick<typeof window.api.automations, 'listExternalRuns'>>
-      ).listExternalRuns
-      if (typeof listExternalRuns !== 'function') {
-        return fallbackRunsPage
-      }
+    async ({ scope, job, page, pageSize }) => {
       try {
-        const result = await listExternalRuns({
-          managerId: manager.id,
-          provider: manager.provider,
-          target: manager.target,
-          jobId: job.id,
-          page: page + 1,
-          pageSize
-        })
-        return {
-          runs: result.runs,
-          totalCount: result.total
-        }
+        const result = await fetchScopedExternalRuns(scope, job, page, pageSize)
+        return { runs: [...result.runs], totalCount: result.totalCount }
       } catch (error) {
         if (isMissingExternalRunsApiError(error)) {
-          return fallbackRunsPage
+          // An old host with no runs endpoint still has the runs the job carried.
+          return {
+            runs: job.runs.slice(page * pageSize, page * pageSize + pageSize),
+            totalCount: job.runCount
+          }
         }
         throw error
       }
     },
-    []
+    [fetchScopedExternalRuns]
   )
 
   const openExternalRunPage = (
@@ -1842,13 +2093,14 @@ export default function AutomationsPage(): React.JSX.Element {
   const requestExternalAction = (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    action: ExternalAutomationAction
+    action: ExternalAutomationAction,
+    scope: ExternalAutomationScope
   ): void => {
     if (action === 'delete') {
-      setExternalDeleteTarget({ manager, job })
+      setExternalDeleteTarget({ manager, job, scope })
       return
     }
-    void runExternalAction(manager, job, action)
+    void runExternalAction(scope, job, action)
   }
 
   const confirmDeleteExternalAutomation = async (): Promise<void> => {
@@ -1857,11 +2109,16 @@ export default function AutomationsPage(): React.JSX.Element {
     }
     const target = externalDeleteTarget
     setExternalDeleteTarget(null)
-    await runExternalAction(target.manager, target.job, 'delete')
+    // The scope the confirmed row was listed under, not one re-derived after the
+    // dialog opened: a delete is the action least able to survive a wrong host.
+    await runExternalAction(target.scope, target.job, 'delete')
   }
 
   const openRunWorkspace = (run: AutomationRun): void => {
-    const runWorktree = run.workspaceId ? (worktreeMap.get(run.workspaceId) ?? null) : null
+    const runWorktree =
+      run.workspaceId && selectedRow
+        ? (worktreeForRow(selectedRow, repoForRow(selectedRow), run.workspaceId) ?? null)
+        : null
     const store = useAppStore.getState()
     const openTabId = getAutomationRunOpenTabId(run)
     const terminalTabExists = openTabId ? Boolean(store.getTab(openTabId)) : false
@@ -1985,7 +2242,6 @@ export default function AutomationsPage(): React.JSX.Element {
     <main className="relative flex h-full min-h-0 flex-col bg-background pt-5 text-foreground md:pt-6">
       <header
         className="flex shrink-0 items-center px-3 pb-3 md:px-5"
-        // Why: no stacked center titlebar on this page; keep the title clear of Windows/Linux window controls.
         style={
           {
             paddingRight: 'max(0.75rem, var(--window-controls-width, 0px))'
@@ -1996,6 +2252,20 @@ export default function AutomationsPage(): React.JSX.Element {
           {translate('auto.components.automations.AutomationsPage.77c2778945', 'Automations')}
         </h1>
       </header>
+
+      <AutomationOwnerConflictNotice
+        notice={ownerAction?.notice ?? null}
+        className="mx-4 mb-2"
+        onRecover={(action) => {
+          const host = ownerAction?.host ?? null
+          setOwnerAction(null)
+          hostCatalog.recover(action, host)
+          if (action === 'retry') {
+            void refresh()
+          }
+        }}
+        onDismiss={() => setOwnerAction(null)}
+      />
 
       <AutomationEditorDialog
         open={createOpen}
@@ -2012,19 +2282,34 @@ export default function AutomationsPage(): React.JSX.Element {
         worktrees={worktrees}
         settings={settings}
         draft={draft}
+        createDestination={createDestination.control}
+        notice={editorNotice}
+        onNoticeRecover={(action) => {
+          setEditorNotice(null)
+          hostCatalog.recover(action, editorRecoveryHost)
+          if (action === 'retry') {
+            void refresh()
+          }
+        }}
+        onNoticeDismiss={() => setEditorNotice(null)}
         onProjectChange={handleProjectChange}
         getRepoHostLabel={getAutomationRepoHostLabel}
         allowAddProject={!isOrcaForm || automationDialogTarget.kind === 'local'}
         onCreateTargetChange={handleCreateTargetChange}
-        onOpenChange={setCreateOpen}
-        onDraftChange={setDraft}
+        onOpenChange={(open) => {
+          setCreateOpen(open)
+          if (!open) {
+            setEditorNotice(null)
+          }
+        }}
+        onDraftChange={handleDraftChange}
         onSetupDecisionTouched={markSetupDecisionTouched}
         onApplyTemplate={applyTemplateToDraft}
         onSave={() => void saveAutomation()}
       />
 
       <AutomationDeleteDialog
-        deleteTarget={deleteTarget}
+        deleteTarget={deleteTarget?.automation ?? null}
         dontAskDeleteAgain={dontAskDeleteAgain}
         confirmButtonRef={deleteConfirmButtonRef}
         onOpenChange={(open) => {
@@ -2064,6 +2349,14 @@ export default function AutomationsPage(): React.JSX.Element {
           selectedExternalRunPage={selectedExternalRunPage}
           selectedAutomationRunPage={selectedAutomationRunPage}
           selectedRuns={selectedRuns}
+          selectedRunsNotice={selectedRunsNotice}
+          recoverSelectedRuns={(action) => {
+            // Reconnect/Update server act on the selected row's own host; the
+            // re-ask is what brings this automation's history back either way.
+            hostCatalog.recover(action, rowRecoveryHost(selectedRowKey))
+            setSelectedAutomationRuns((current) => ({ ...current, notice: null }))
+            setRunHistoryReloadToken((token) => token + 1)
+          }}
           activePaneTab={activePaneTab}
           relativeNow={relativeNow}
           externalActionKey={externalActionKey}
@@ -2090,7 +2383,7 @@ export default function AutomationsPage(): React.JSX.Element {
           selectedAutomationRunPageViewState={selectedAutomationRunPageViewState}
           canRerunSelectedAutomationRunPage={canRerunSelectedAutomationRunPage}
           isSelectedAutomationRunPageRerunPending={isSelectedAutomationRunPageRerunPending}
-          worktreeMap={worktreeMap}
+          worktreeMap={selectedRunWorktreeMap}
           fetchExternalAutomationRuns={fetchExternalAutomationRuns}
           onActivePaneTabChange={setActivePaneTab}
           onClearExternalRunPage={() => setSelectedExternalRunPage(null)}
@@ -2098,11 +2391,13 @@ export default function AutomationsPage(): React.JSX.Element {
           requestExternalAction={requestExternalAction}
           openExternalRunPage={openExternalRunPage}
           openEditExternalDialog={openEditExternalDialog}
-          runNow={(automation) => void runNow(automation)}
-          openEditDialog={(automation) => void openEditDialog(automation)}
-          toggleAutomation={(automation) => void toggleAutomation(automation)}
-          requestDeleteAutomation={requestDeleteAutomation}
-          rerunAutomationRun={(automation, run) => void rerunAutomationRun(automation, run)}
+          runNow={() => onSelectedRow(runNow)}
+          openEditDialog={() => onSelectedRow(openEditDialog)}
+          toggleAutomation={() => onSelectedRow(toggleAutomation)}
+          requestDeleteAutomation={() => onSelectedRow(requestDeleteAutomation)}
+          rerunAutomationRun={(_automation, run) =>
+            onSelectedRow((row) => rerunAutomationRun(row, run))
+          }
           openRunWorkspace={openRunWorkspace}
           openAutomationRunPage={openAutomationRunPage}
           onBackToList={() => {
@@ -2116,42 +2411,69 @@ export default function AutomationsPage(): React.JSX.Element {
         <AutomationsListPanel
           hasListItems={hasListItems}
           hasFilteredListItems={hasFilteredListItems}
-          isListSearchActive={isListSearchActive}
-          isListFilterActive={isListFilterActive}
           listSearchQuery={listSearchQuery}
           isListSearchQueryTooLarge={isListSearchQueryTooLarge}
           onListSearchQueryChange={setListSearchQuery}
-          visibleItems={visibleItems}
           listFilter={listFilter}
-          onListFilterChange={setListFilter}
-          listSort={listSort}
-          onListSort={(field) => setListSort((current) => nextAutomationListSort(current, field))}
-          selectedId={selectedId}
+          onListFilterChange={(next) => {
+            setListFilter(next)
+            // Host narrowing is row-side now; a leftover single-host query scope
+            // would hide the very rows the menu is asking for.
+            if (
+              (next.hostStableKeys?.length ?? 0) > 0 &&
+              hostCatalog.resolution.effective.kind !== 'all'
+            ) {
+              hostCatalog.selectHost({ kind: 'all' })
+            }
+          }}
+          // Pre-filter count, so "no match" is distinguishable from an empty host.
+          searchCounts={{
+            ...searchCounts,
+            hostRowCount: visibleRows.length + externalAutomationEntries.length
+          }}
+          hostCatalog={hostCatalog}
+          externalManagersUncheckedNotice={externalManagersUncheckedNotice}
+          onSelectHost={hostCatalog.selectHost}
+          onRecoverHost={(action, entry) => {
+            hostCatalog.recover(action, entry)
+            if (action === 'retry') {
+              void refresh()
+            }
+          }}
+          isActionEnabled={isAutomationRowActionEnabled}
+          filteredRows={filteredRows}
+          filteredExternalAutomationEntries={filteredExternalAutomationEntries}
+          selectedRowKey={selectedRowKey}
           selectedExternalKey={selectedExternalKey}
-          runs={runs}
+          selectedExternal={selectedExternal}
           relativeNow={relativeNow}
           repoMap={repoMap}
           worktreeMap={worktreeMap}
+          repoForRow={repoForRow}
+          worktreeForRow={worktreeForRow}
           projectHostSetups={projectHostSetups}
           sshConnectionStates={sshConnectionStates}
           runtimeStatusByEnvironmentId={runtimeStatusByEnvironmentId}
-          automationHostTarget={automationHostTarget}
-          automationSourceHostAvailabilityById={automationSourceHostAvailabilityById}
+          hostTargetFor={automationHostTargetFor}
+          automationSourceHostAvailabilityByRowKey={automationSourceHostAvailabilityByRowKey}
           hostLabelById={hostLabelById}
           externalActionKey={externalActionKey}
-          selectAutomationId={selectAutomationId}
+          selectAutomationRow={selectAutomationRow}
           selectExternalKey={selectExternalKey}
           setActivePaneTab={setActivePaneTab}
-          runNow={(automation) => void runNow(automation)}
-          openEditDialog={(automation) => void openEditDialog(automation)}
-          toggleAutomation={(automation) => void toggleAutomation(automation)}
+          runNow={(row) => void runNow(row)}
+          openEditDialog={(row) => void openEditDialog(row)}
+          toggleAutomation={(row) => void toggleAutomation(row)}
           requestDeleteAutomation={requestDeleteAutomation}
           requestExternalAction={requestExternalAction}
           openEditExternalDialog={openEditExternalDialog}
           openCreateDialog={openCreateDialog}
           canCreateAutomation={canCreateAutomation}
           onOpenDetail={() => setIsDetailOpen(true)}
-          onRefresh={() => void refresh()}
+          onRefresh={() => {
+            hostCatalog.refreshHosts()
+            void refresh()
+          }}
           isRefreshing={isLoading}
         />
       )}

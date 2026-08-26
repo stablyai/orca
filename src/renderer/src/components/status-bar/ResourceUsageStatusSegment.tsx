@@ -67,7 +67,11 @@ import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
-import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import {
+  getCommitPressureToneClass,
+  getResourceCommitMetricCopy,
+  getResourceMemoryMetricCopy
+} from './resource-memory-metric-copy'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 import {
@@ -960,15 +964,29 @@ export function ResourceUsageStatusSegment({
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  const { totalMemory, totalCpu, memBadgeLabel } = useMemo(() => {
-    const memory = resourceSnapshot?.totalMemory ?? 0
-    const cpu = resourceSnapshot?.totalCpu ?? 0
-    return {
-      totalMemory: memory,
-      totalCpu: cpu,
-      memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—'
-    }
-  }, [resourceSnapshot])
+  // Why null-not-zero: a host that cannot read commit (every Unix host, and any
+  // host older than the field) must render nothing here, never "0 B committed".
+  const commitMetricCopy = resourceSnapshot?.processCommitMetric
+    ? getResourceCommitMetricCopy()
+    : null
+  const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
+    useMemo(() => {
+      const memory = resourceSnapshot?.totalMemory ?? 0
+      const cpu = resourceSnapshot?.totalCpu ?? 0
+      const privateMemory = resourceSnapshot?.totalPrivateMemory
+      return {
+        totalMemory: memory,
+        totalCpu: cpu,
+        memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
+        totalPrivateMemory: privateMemory,
+        commitToneClass: getCommitPressureToneClass({
+          privateMemory,
+          hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
+        })
+      }
+    }, [resourceSnapshot])
+  const commitBadgeLabel =
+    commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
 
   // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
@@ -976,7 +994,14 @@ export function ResourceUsageStatusSegment({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
     memoryLabel: resourceSnapshot
-      ? `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`
+      ? [
+          `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
+          commitBadgeLabel && commitMetricCopy
+            ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
+            : null
+        ]
+          .filter(Boolean)
+          .join(' · ')
       : memBadgeLabel,
     sessionCount: triggerSessionCount,
     spaceScanReady
@@ -1162,7 +1187,14 @@ export function ResourceUsageStatusSegment({
               <MemoryStick className="size-3 text-muted-foreground" />
               {!iconOnly && (
                 <>
-                  <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                  {/* Tint only: the number stays the resident sum it has always been,
+                      and the tooltip names the commit figure that raised the tone. */}
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium tabular-nums',
+                      commitToneClass ?? 'text-muted-foreground'
+                    )}
+                  >
                     {memBadgeLabel}
                   </span>
                   <span className="text-muted-foreground/50">·</span>
@@ -1353,6 +1385,30 @@ export function ResourceUsageStatusSegment({
                   {memoryMetricCopy.description}
                 </TooltipContent>
               </Tooltip>
+              {commitBadgeLabel && commitMetricCopy && (
+                <>
+                  <span className="text-muted-foreground/50">·</span>
+                  <Tooltip delayDuration={200}>
+                    <TooltipTrigger asChild>
+                      <span
+                        tabIndex={0}
+                        className={cn(
+                          'font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded',
+                          commitToneClass ?? 'text-foreground'
+                        )}
+                      >
+                        {commitBadgeLabel}{' '}
+                        <span className="font-normal text-muted-foreground">
+                          {commitMetricCopy.summaryLabel}
+                        </span>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
+                      {commitMetricCopy.description}
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
             </div>
             {orphanCount > 0 && (
               <span className="shrink-0 text-yellow-500" aria-live="polite">

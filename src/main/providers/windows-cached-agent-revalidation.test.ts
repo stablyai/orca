@@ -47,9 +47,38 @@ describe('judgeCachedAgentJobEvidence', () => {
       identityAgeMs
     })
 
+  it('defers to the scan when the build has no job exports to consult', () => {
+    // Every shipped Windows release still ships a node-pty without them
+    // (#16059), so the read is null for ALL real users today. Calling that
+    // 'unavailable' means the retire path never fires for any of them -- worse
+    // than the forked probe it replaced, which at least retired. 'unsupported'
+    // is "nothing to ask", not "asked and could not", so the scan decides.
+    const unsupported = (anchorProcessId: number | null, identityAgeMs: number) =>
+      judgeCachedAgentJobEvidence({
+        jobProcessIds: null,
+        jobSupported: false,
+        shellPid: SHELL,
+        anchorProcessId,
+        identityAgeMs
+      })
+
+    expect(unsupported(AGENT, FRESH)).toBe('unsupported')
+    expect(unsupported(null, AGED)).toBe('unsupported')
+  })
+
   it('is unavailable without a job answer, never exit proof', () => {
+    // Supported-but-null is genuine loss of contact and must still hold.
     expect(judge(null, AGENT, FRESH)).toBe('unavailable')
     expect(judge(null, null, AGED)).toBe('unavailable')
+    expect(
+      judgeCachedAgentJobEvidence({
+        jobProcessIds: null,
+        jobSupported: true,
+        shellPid: SHELL,
+        anchorProcessId: AGENT,
+        identityAgeMs: AGED
+      })
+    ).toBe('unavailable')
   })
 
   it('confirms a fresh anchored identity whose pid is still in the job', () => {

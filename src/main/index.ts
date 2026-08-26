@@ -90,7 +90,9 @@ import {
 import {
   applyAgentStatusHooksEnabled,
   isAgentStatusHooksEnabled,
-  removeManagedAgentHooks
+  removeManagedAgentHooks,
+  removeManagedAgentHooksAsync,
+  shouldContinueManagedHookStartup
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
@@ -209,6 +211,7 @@ import {
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
+import { settledDiffCache } from './git/source-control/git-read-cache-invalidation'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { SkillShareDeepLinkState } from './startup/skill-share-deep-link-state'
 import {
@@ -220,6 +223,7 @@ import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
+import { registerServeSignalHandlers } from './startup/serve-signal-handlers'
 import {
   createServeDesktopActivationGate,
   settleServeDesktopActivation as settleServeDesktopActivationGate
@@ -319,10 +323,11 @@ import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
+import { createRuntimeAutomationRunTerminalObserver } from './automations/runtime-terminal-run-observer'
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
-import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
+import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
 import { PluginService } from './plugins/plugin-service'
@@ -736,7 +741,9 @@ if (startupDiagnosticsEnabled) {
   startEventLoopStallProbe()
 }
 // Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
-startMainThreadChurnProbe()
+// Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
+// look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
+startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
 
 function focusExistingWindow(): void {
   focusExistingMainWindow({
@@ -2085,15 +2092,6 @@ async function printServeReady(options: ServeOptions): Promise<void> {
   notifyServeSupervisorReady(runtime.getRuntimeId())
 }
 
-function installServeSignalHandlers(): void {
-  const quit = (): void => {
-    // Why: route SIGINT/SIGTERM through Electron's normal quit so runtime metadata, daemon checkpoints, and telemetry flush.
-    app.quit()
-  }
-  process.once('SIGINT', quit)
-  process.once('SIGTERM', quit)
-}
-
 // Why: on PTY teardown drop the spinner entry explicitly, else the shared timer keeps ticking with sendSyntheticTitle no-oping forever.
 registerPaneKeyTeardownListener((paneKey) => {
   stopSyntheticTitleSpinner(paneKey)
@@ -2324,7 +2322,10 @@ void app.whenReady().then(async () => {
   // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
   // read has to have happened by then or the renderer and the browser-host lease disagree.
   initializeBrowserClientHostId(activeOrcaProfile.profileDirectory)
-  store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  store = new Store({
+    dataFile: activeOrcaProfile.dataFile,
+    storageAuthority: isServeMode ? 'runtime' : 'desktop'
+  })
   // Why here and not at install time: the report remembers what it last said, and that
   // state lives beside the profile data file, which does not exist until now.
   reportSecretProtectionGap({
@@ -2588,7 +2589,8 @@ void app.whenReady().then(async () => {
     isQuitting: () => isQuitting,
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store!.getSettings()),
-    prepareScheduledRun: () => codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(),
+    prepareScheduledRun: (scanDates) =>
+      codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(scanDates),
     finishScheduledRun: () => codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground
@@ -2779,6 +2781,8 @@ void app.whenReady().then(async () => {
   automations = new AutomationService(store, {
     claudeUsage,
     codexUsage,
+    terminalObserver: createRuntimeAutomationRunTerminalObserver(runtimeService),
+    onAutomationsChanged: (payload) => runtimeService.notifyAutomationsChanged(payload),
     // Why: desktop clients mirror remote-host automations, but only a server process should execute remote_host_service-owned schedules.
     allowRemoteHostScheduling: isServeMode,
     headlessDispatcher: isServeMode
@@ -3073,7 +3077,7 @@ void app.whenReady().then(async () => {
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const settings = managedHookStore.getSettings()
-          return isAgentStatusHooksEnabled(settings) && !settings.disabledTuiAgents.includes(agent)
+          return shouldContinueManagedHookStartup(isQuitting, settings, agent)
         }
       }).catch((error) => {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
@@ -3287,7 +3291,11 @@ void app.whenReady().then(async () => {
     await runtime.reconcileLegacyWorkerTerminals()
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {
-      runtime.setOffscreenBrowserBackend(new OffscreenBrowserBackend(browserManager))
+      runtime.setOffscreenBrowserBackend(
+        new OffscreenBrowserBackend(browserManager, {
+          getAgentBrowserBridge: () => agentBrowserBridge
+        })
+      )
     }
     // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
@@ -3296,7 +3304,8 @@ void app.whenReady().then(async () => {
       throw error
     })
     settleServeDesktopActivation()
-    installServeSignalHandlers()
+    // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
+    registerServeSignalHandlers(process, () => app.quit())
     // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
     if (process.platform === 'darwin' || process.platform === 'linux') {
       try {
@@ -3431,6 +3440,9 @@ app.on('before-quit', () => {
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
+// Why 2s: a config delete is best-effort, not durable state.
+const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
+
 app.on('will-quit', (e) => {
   // Why return instead of re-running teardown: the second pass is Electron re-firing after
   // our own app.quit(), so every step below already ran and every durable write already
@@ -3476,13 +3488,39 @@ app.on('will-quit', (e) => {
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
+  // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
+  // bare script path that cannot express the guard and would otherwise keep spawning after quit.
+  // Why bounded here: every other teardown member carries its own ceiling, and this one reaches
+  // $GROK_HOME -- which can be a stalled network mount, where the fs calls never settle and the
+  // shared 20s deadline becomes the only thing ending the quit.
+  const grokHookCleanup =
+    process.platform === 'win32'
+      ? settleWithinMs(
+          removeManagedAgentHooksAsync({ agents: ['grok'] }),
+          GROK_HOOK_CLEANUP_DEADLINE_MS
+        ).then((settled) => {
+          if (settled.outcome === 'timed-out') {
+            console.warn('[agent-hooks] Grok hook cleanup on quit timed out')
+            return
+          }
+          if (settled.outcome === 'failed') {
+            console.warn('[agent-hooks] Grok hook cleanup on quit failed:', settled.error)
+            return
+          }
+          // Why: removers report failures as statuses, so inspect details even after fulfillment.
+          for (const status of settled.value.filter((entry) => entry.detail)) {
+            console.warn(`[agent-hooks] ${status.agent} hook cleanup on quit: ${status.detail}`)
+          }
+        })
+      : Promise.resolve()
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
   const statsFlush = stats?.flushAsync() ?? Promise.resolve()
-  // Why: agent-browser daemon processes would otherwise linger after quit, holding ports and stale session state on disk.
-  runtime?.getAgentBrowserBridge()?.destroyAllSessions()
-  // Why: headless offscreen browser windows are main-process owned; tear them down explicitly on quit.
-  runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+  // Why: retire headless page owners first, then sweep residual helper sessions without duplicate close fanout.
+  const browserShutdown = (async (): Promise<void> => {
+    await runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+    await runtime?.getAgentBrowserBridge()?.destroyAllSessions()
+  })()
   // Why (review P2-4): local SSH browser routes own loopback listeners and, on the
   // system-ssh path, `ssh -N -D` children that would otherwise outlive the app.
   const localSshRouteShutdown = import('./browser/local-ssh-browser-route')
@@ -3534,6 +3572,7 @@ app.on('will-quit', (e) => {
   // temp+rename swap means a write cut short by the deadline leaves the old file intact.
   settleTeardownWithinDeadline([
     { name: 'daemon', promise: daemonTeardown },
+    { name: 'browser', promise: browserShutdown },
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
@@ -3542,6 +3581,7 @@ app.on('will-quit', (e) => {
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
     { name: 'skill-uploads', promise: skillUploadShutdown },
+    { name: 'grok-hooks', promise: grokHookCleanup },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },

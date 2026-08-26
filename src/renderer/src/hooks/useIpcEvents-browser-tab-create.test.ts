@@ -136,6 +136,7 @@ describe('useIpcEvents browser tab create routing', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: { onChanged: () => () => {} },
+        automations: { onChanged: () => () => {} },
         worktrees: {
           onChanged: () => () => {},
           onGitStatusMetadataChanged: () => () => {},

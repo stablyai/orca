@@ -4,13 +4,16 @@ import {
   BROWSER_NETWORK_TUNNEL_RUNTIME_CAPABILITY
 } from '../../../src/shared/protocol-version'
 import { BrowserTabCreateParams } from '../../../src/main/runtime/rpc/methods/browser-tab-create-schema'
-import { materializeReleaseCheckout, resolveBaselineReleaseRef } from './release-checkout'
+import { materializeReleaseCheckout } from './release-checkout'
 
 type Schema = { parse: (value: unknown) => Record<string, unknown> }
 
-// Why candidates: the baseline is whichever stable release is newest when this runs,
-// and v1.4.185 moved the tab-create schema out of browser-schemas.ts and renamed it.
-// Pinning one module name makes the harness break on an unrelated release refactor.
+// This contract needs a release from before client placement shipped; a rolling
+// stable baseline eventually contains every additive feature under test.
+const LEGACY_BROWSER_PLACEMENT_RELEASE_REF = 'v1.4.184'
+
+// v1.4.185 moved the tab-create schema and renamed it. Keeping both locations
+// avoids coupling an intentional legacy-baseline bump to that unrelated refactor.
 const BASELINE_TAB_CREATE_SOURCES = [
   ['browser-tab-create-schema.ts', 'BrowserTabCreateParams'],
   ['browser-schemas.ts', 'TabCreate']
@@ -48,7 +51,7 @@ let baselineTabCreate: Schema
 let baselineProtocol: Record<string, unknown>
 
 beforeAll(async () => {
-  baselineRef = resolveBaselineReleaseRef()
+  baselineRef = LEGACY_BROWSER_PLACEMENT_RELEASE_REF
   const checkout = materializeReleaseCheckout(baselineRef)
   baselineRevision = checkout.commit
   const [tabCreate, protocol] = await Promise.all([

@@ -840,15 +840,80 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
-      // No subscribers, indefinite hold — PTY stays at phone dims.
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
-      expect(runtime.isMobileSubscriberActive('pty-1')).toBe(false)
-
-      // Manual reclaim: PTY restored to desktop dims via the held branch.
-      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
-      expect(ok).toBe(true)
+      await runtime.reclaimTerminalForDesktop('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+      await vi.advanceTimersByTimeAsync(250)
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    })
+
+    it('reclaim cancels the soft-leave timer in the remote-layout branch', async () => {
+      const { runtime } = createRuntime()
+      await runtime.updateRemoteDesktopViewer('pty-1', 'sub-a', 'viewer-a', 120, 32)
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+      await vi.advanceTimersByTimeAsync(250)
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    })
+
+    it('reclaim cancels pending restore timers on the active-subscriber branch', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      await runtime.handleMobileSubscribe('pty-1', 'client-b', { cols: 40, rows: 18 })
+
+      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      pendingRestore.set('pty-1', { timer: setTimeout(() => {}, 60_000), clientId: 'client-b' })
+      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      expect(pendingSoft.has('pty-1')).toBe(true)
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(pendingRestore.has('pty-1')).toBe(false)
+      expect(pendingSoft.has('pty-1')).toBe(false)
+    })
+
+    it('reclaim cancels pending restore timers on the orphan-driver branch', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
+
+      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(pendingRestore.has('pty-1')).toBe(false)
+      expect(pendingSoft.has('pty-1')).toBe(false)
+    })
+
+    it('reclaim cancels pending restore timers when no driver lock remains', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
+      ;(Reflect.get(runtime, 'currentDriver') as Map<string, { kind: string }>).set('pty-1', {
+        kind: 'idle'
+      })
+
+      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
+      expect(pendingRestore.has('pty-1')).toBe(false)
+      expect(pendingSoft.has('pty-1')).toBe(false)
+    })
+
+    it('reclaim revokes soft-leave grace admission for mobile input', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      const claim = runtime.beginMobileInputFloor('pty-1', 'client-a')
+      expect(claim).not.toBeNull()
+      claim?.rollback()
+
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+      expect(runtime.beginMobileInputFloor('pty-1', 'client-a')).toBeNull()
     })
 
     it('reclaimTerminalForDesktop prefers fresh desktop geometry for a held PTY', async () => {

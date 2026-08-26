@@ -42,17 +42,24 @@ CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
   effects                 TEXT NOT NULL DEFAULT '[]',
   residual_resources      TEXT NOT NULL DEFAULT '[]',
   to_worker_imported_sequence INTEGER NOT NULL DEFAULT 0,
+  -- Nesting depth of the worker this attachment represents. Propagated from the
+  -- Run home; absent from an old client means 1, which fails closed.
+  depth                   INTEGER NOT NULL DEFAULT 1,
   last_error              TEXT,
   created_at              TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at              TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
+-- Why five states: 'start_unknown', 'stopping', and 'stop_unknown' do not
+-- establish process exit, and a potentially-live worker must still count as a
+-- nesting parent. See docs/reference/ssh-execution-boundary.md.
 CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane
   ON remote_dispatch_attachments(pane_key)
-  WHERE state IN ('starting', 'ready');
+  WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown');
 CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane_suffix
   ON remote_dispatch_attachments(${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL})
-  WHERE state IN ('starting', 'ready') AND pane_key IS NOT NULL;
+  WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+    AND pane_key IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS federation_relay_items (
   dispatch_id   TEXT NOT NULL,
@@ -127,6 +134,9 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   last_failure        TEXT,
   -- Why the process is gone, when Orca could establish it. See TerminalExitCause.
   termination_reason  TEXT,
+  -- Nesting depth: a root coordinator's worker is 1, its worker's worker is 2.
+  -- Defaults to 1 so an unstamped row fails closed rather than reading as a root.
+  depth               INTEGER NOT NULL DEFAULT 1,
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),

@@ -32,12 +32,8 @@ import type {
 } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
-import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
-import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
-import { getCodexManagedHookInstallMaterial } from '../codex/hook-service'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import { resolveCodexCommand } from '../codex-cli/command'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
@@ -93,9 +89,10 @@ type ResolvedCodexIdentity = {
 
 type CanonicalCodexConfig = {
   contents: string
-  /** Home the config was read from, in the path style Codex sees (Linux-side for WSL); relative settings resolve against it. */
+  /** Host-readable source home; the mirror resolves WSL UNC paths to their Linux spelling. */
   sourceHomePath: string
-  sourceHooksPath: string
+  /** Preserve Linux path semantics when WSL $HOME is under /mnt/<drive>. */
+  sourceConfigDir?: string
 }
 
 export type CodexAccountAddTarget = {
@@ -1303,12 +1300,6 @@ export class CodexAccountService {
     }
   }
 
-  private isSelfContainedHostManagedHome(managedHomePath: string): boolean {
-    // Why: each host account home is its own launch CODEX_HOME. WSL homes keep
-    // their distro-local seed lane.
-    return !parseWslUncPath(managedHomePath)
-  }
-
   private syncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath),
@@ -1319,36 +1310,13 @@ export class CodexAccountService {
     }
 
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
-    if (this.isSelfContainedHostManagedHome(trustedManagedHomePath)) {
-      // Why: this home is codex's live CODEX_HOME, so mirror config with the
-      // trust-preserving merge — the plain overwrite below would wipe the
-      // hook/project trust codex granted in this home, forcing a re-approval and
-      // an app-server re-grant on every account switch.
-      syncSystemConfigIntoManagedCodexHome({
-        runtimeHomePath: trustedManagedHomePath,
-        systemHomePath: getSystemCodexHomePath()
-      })
-      return
-    }
-    // Why: Orca account switching is meant to swap Codex credentials and quota
-    // identity, not silently fork the user's sandbox/config defaults. Syncing
-    // one canonical config into every managed home keeps auth isolated per
-    // account while preserving consistent Codex behavior. Managed homes are
-    // real CODEX_HOMEs for `codex login`, so relative path-valued settings
-    // must keep resolving against the home the config was read from.
-    const material = getCodexManagedHookInstallMaterial()
-    // Why: source-home Orca trust is foreign to each managed home's hooks.json.
-    const sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
-      runtimeHomePath: canonicalConfig.sourceHomePath,
-      sourcePath: canonicalConfig.sourceHooksPath,
-      command: material.command,
-      managedEventLabels: new Set(Object.values(material.eventLabel)),
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
+    // granted there while refreshing ordinary settings from the lane's source.
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: trustedManagedHomePath,
+      systemHomePath: canonicalConfig.sourceHomePath,
+      systemConfigDir: canonicalConfig.sourceConfigDir
     })
-    this.writeManagedConfig(
-      trustedManagedHomePath,
-      rewriteRelativePathConfigValues(sanitizedConfig, canonicalConfig.sourceHomePath)
-    )
   }
 
   private readCanonicalConfig(): CanonicalCodexConfig | null {
@@ -1361,8 +1329,7 @@ export class CodexAccountService {
     try {
       return {
         contents: readFileSync(primaryConfigPath, 'utf-8'),
-        sourceHomePath,
-        sourceHooksPath: join(sourceHomePath, 'hooks.json')
+        sourceHomePath
       }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
@@ -1392,8 +1359,8 @@ export class CodexAccountService {
       // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
       return {
         contents: readFileSync(configPath, 'utf-8'),
-        sourceHomePath: `${wslHome}/.codex`,
-        sourceHooksPath: `${wslHome}/.codex/hooks.json`
+        sourceHomePath: toWindowsWslPath(`${wslHome}/.codex`, wslInfo.distro),
+        sourceConfigDir: `${wslHome}/.codex`
       }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
@@ -1414,18 +1381,6 @@ export class CodexAccountService {
     throw new Error(
       `Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider ${JSON.stringify(modelProvider)}. Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.`
     )
-  }
-
-  private writeManagedConfig(managedHomePath: string, contents: string): void {
-    const configPath = join(managedHomePath, 'config.toml')
-    try {
-      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
-        return
-      }
-    } catch {
-      // Why: a read error must not make a stale config look current; atomic write owns ACL repair and error surfacing.
-    }
-    writeFileAtomically(configPath, contents)
   }
 
   private getManagedAccountsRoot(): string {

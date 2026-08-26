@@ -15,9 +15,17 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookInstallOptions = { userInitiated?: boolean }
+export type ManagedAgentHookInstaller = readonly [
+  HookInstallAgent,
+  (options?: ManagedAgentHookInstallOptions) => AgentHookInstallStatus
+]
 export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
 export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+export type ManagedAgentHookAsyncRemover = readonly [
+  HookInstallAgent,
+  () => Promise<AgentHookInstallStatus>
+]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
@@ -30,7 +38,7 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['cursor', () => cursorHookService.install()],
   ['droid', () => droidHookService.install()],
   ['command-code', () => commandCodeHookService.install()],
-  ['grok', () => grokHookService.install()],
+  ['grok', (options) => grokHookService.install(options)],
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
@@ -73,6 +81,10 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
   ['kimi', () => kimiHookService.remove()]
+]
+
+export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
+  ['grok', () => grokHookService.removeAsync()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [

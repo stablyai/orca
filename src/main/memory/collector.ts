@@ -30,7 +30,9 @@ import { getAppEnvironment, type AppEnvironment } from '../../shared/app-environ
 import type {
   AppMemory,
   MemorySnapshot,
+  ProcessCommitMetric,
   SessionMemory,
+  UsageValues,
   WorktreeMemory
 } from '../../shared/process-stats-types'
 import type { Store } from '../persistence'
@@ -81,12 +83,43 @@ type ProcRow = {
   cpu: number
   /** Resident memory in bytes. */
   memory: number
+  /** Committed bytes, resident or paged out. Absent when the host cannot report it. */
+  privateMemory?: number
 }
 
 /** Indexed view of a single host process sweep. */
 type ProcIndex = {
   byPid: Map<number, ProcRow>
   childrenOf: Map<number, number[]>
+  /**
+   * Whether this sweep reported committed bytes at all. Data-driven rather than
+   * platform-driven: the Windows typeperf fallback can be missing the counter,
+   * and reporting a 0 sum then would read as "agents commit nothing".
+   */
+  hasPrivateMemory: boolean
+}
+
+const PROCESS_COMMIT_METRIC: ProcessCommitMetric = 'private-bytes'
+
+/**
+ * The one rule for every committed-bytes key: present only when the sweep could
+ * measure it, because a 0 would read as "these processes commit nothing".
+ */
+function commitField(hasPrivateMemory: boolean, privateMemory: number): { privateMemory?: number } {
+  return hasPrivateMemory ? { privateMemory: clampNumber(privateMemory) } : {}
+}
+
+/** The snapshot-level pair, which names the unit alongside the total. */
+function snapshotCommitFields(
+  hasPrivateMemory: boolean,
+  totalPrivateMemory: number
+): Pick<MemorySnapshot, 'processCommitMetric' | 'totalPrivateMemory'> {
+  return hasPrivateMemory
+    ? {
+        processCommitMetric: PROCESS_COMMIT_METRIC,
+        totalPrivateMemory: clampNumber(totalPrivateMemory)
+      }
+    : {}
 }
 
 function clampNumber(value: unknown): number {
@@ -155,9 +188,11 @@ async function enumerateProcesses(): Promise<ProcIndex> {
 
   const byPid = new Map<number, ProcRow>()
   const childrenOf = new Map<number, number[]>()
+  let hasPrivateMemory = false
 
   for (const row of rows) {
     byPid.set(row.pid, row)
+    hasPrivateMemory ||= row.privateMemory !== undefined
     const siblings = childrenOf.get(row.ppid)
     if (siblings) {
       siblings.push(row.pid)
@@ -166,7 +201,7 @@ async function enumerateProcesses(): Promise<ProcIndex> {
     }
   }
 
-  return { byPid, childrenOf }
+  return { byPid, childrenOf, hasPrivateMemory }
 }
 
 async function enumerateUnix(): Promise<ProcRow[]> {
@@ -261,13 +296,16 @@ function electronMetricMemoryBytes(
 }
 
 function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
-  const main = { cpu: 0, memory: 0 }
-  const renderer = { cpu: 0, memory: 0 }
-  const other = { cpu: 0, memory: 0 }
+  const main = { cpu: 0, memory: 0, privateMemory: 0 }
+  const renderer = { cpu: 0, memory: 0, privateMemory: 0 }
+  const other = { cpu: 0, memory: 0, privateMemory: 0 }
 
   for (const proc of getAppEnvironment().getAppMetrics()) {
     const cpu = clampNumber(proc.cpu?.percentCPUUsage)
     const memoryBytes = electronMetricMemoryBytes(proc, processIndex)
+    // Why the host row rather than Electron's own metric: getAppMetrics has no
+    // commit figure for helper processes, and the sweep already indexed them.
+    const privateBytes = clampNumber(processIndex.byPid.get(proc.pid)?.privateMemory)
 
     // Why: lowercase once so future Electron versions emitting different
     // casing ('browser' vs 'Browser') still bucket correctly.
@@ -281,14 +319,24 @@ function bucketElectronMetrics(processIndex: ProcIndex): AppBucketsRaw {
 
     target.cpu += cpu
     target.memory += memoryBytes
+    target.privateMemory += privateBytes
   }
 
+  const usage = (bucket: typeof main): UsageValues => ({
+    cpu: bucket.cpu,
+    memory: bucket.memory,
+    ...commitField(processIndex.hasPrivateMemory, bucket.privateMemory)
+  })
+
   return {
-    main,
-    renderer,
-    other,
-    cpu: main.cpu + renderer.cpu + other.cpu,
-    memory: main.memory + renderer.memory + other.memory
+    main: usage(main),
+    renderer: usage(renderer),
+    other: usage(other),
+    ...usage({
+      cpu: main.cpu + renderer.cpu + other.cpu,
+      memory: main.memory + renderer.memory + other.memory,
+      privateMemory: main.privateMemory + renderer.privateMemory + other.privateMemory
+    })
   }
 }
 
@@ -301,6 +349,7 @@ type WorktreeBucket = {
   repoName: string
   cpu: number
   memory: number
+  privateMemory: number
   sessions: SessionMemory[]
 }
 
@@ -334,7 +383,16 @@ function makeEmptyBucket(
   repoId: string,
   repoName: string
 ): WorktreeBucket {
-  return { worktreeId, worktreeName, repoId, repoName, cpu: 0, memory: 0, sessions: [] }
+  return {
+    worktreeId,
+    worktreeName,
+    repoId,
+    repoName,
+    cpu: 0,
+    memory: 0,
+    privateMemory: 0,
+    sessions: []
+  }
 }
 
 // ─── Main collection path ───────────────────────────────────────────
@@ -361,6 +419,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   for (const pty of ptys) {
     let sessionCpu = 0
     let sessionMemory = 0
+    let sessionPrivateMemory = 0
 
     if (pty.pid != null) {
       for (const pid of collectSubtree(processIndex, pty.pid)) {
@@ -374,6 +433,9 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
         claimed.add(pid)
         sessionCpu += row.cpu
         sessionMemory += row.memory
+        // Why the whole subtree: an agent's committed bytes live in the
+        // children it spawned (codex.exe, MCP servers), not in the shell.
+        sessionPrivateMemory += clampNumber(row.privateMemory)
       }
     }
 
@@ -382,7 +444,8 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
       paneKey: pty.paneKey,
       pid: pty.pid ?? 0,
       cpu: clampNumber(sessionCpu),
-      memory: clampNumber(sessionMemory)
+      memory: clampNumber(sessionMemory),
+      ...commitField(processIndex.hasPrivateMemory, sessionPrivateMemory)
     }
 
     let bucket: WorktreeBucket
@@ -401,6 +464,7 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
 
     bucket.cpu += session.cpu
     bucket.memory += session.memory
+    bucket.privateMemory += clampNumber(session.privateMemory)
     bucket.sessions.push(session)
   }
 
@@ -419,16 +483,19 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
   }
   sweepStaleHistory(now)
 
-  const worktrees: WorktreeMemory[] = bucketList.map((b) => ({
+  const worktrees: WorktreeMemory[] = bucketList.map(({ privateMemory, ...b }) => ({
     ...b,
+    ...commitField(processIndex.hasPrivateMemory, privateMemory),
     history: readHistory(b.worktreeId)
   }))
 
   let sessionCpuTotal = 0
   let sessionMemoryTotal = 0
+  let sessionPrivateTotal = 0
   for (const wt of worktrees) {
     sessionCpuTotal += wt.cpu
     sessionMemoryTotal += wt.memory
+    sessionPrivateTotal += clampNumber(wt.privateMemory)
   }
 
   return {
@@ -436,6 +503,10 @@ async function runSnapshot(store: MemorySnapshotStore): Promise<MemorySnapshot> 
     worktrees,
     host,
     processMemoryMetric: getProcessMemoryMetric(),
+    ...snapshotCommitFields(
+      processIndex.hasPrivateMemory,
+      clampNumber(appBuckets.privateMemory) + sessionPrivateTotal
+    ),
     totalCpu: appBuckets.cpu + sessionCpuTotal,
     totalMemory: appBuckets.memory + sessionMemoryTotal,
     collectedAt: now

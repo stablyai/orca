@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -116,7 +117,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const t1 = db.createTask({ spec: 'ready work' })
       const t2 = db.createTask({ spec: 'active work' })
-      const ctx = db.createDispatchContext(t2.id, 'term_worker')
+      const ctx = createRootDispatch(db, t2.id, 'term_worker')
 
       const result = (await call('orchestration.taskList', {})) as {
         tasks: {
@@ -176,7 +177,7 @@ describe('orchestration RPC methods', () => {
     it('completion frees the active dispatch context', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      db.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(db, task.id, 'term_a')
 
       await call('orchestration.taskUpdate', {
         id: task.id,
@@ -397,7 +398,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const t1 = db.createTask({ spec: 'first' })
       const t2 = db.createTask({ spec: 'second' })
-      db.createDispatchContext(t1.id, 'term_a')
+      createRootDispatch(db, t1.id, 'term_a')
 
       await expect(call('orchestration.dispatch', { task: t2.id, to: 'term_a' })).rejects.toThrow(
         /already has an active dispatch/
@@ -432,6 +433,30 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
+    it('dry-run previews the same sub-dispatch section as a real dispatch', async () => {
+      setup()
+      vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(2)
+      const task = db.createTask({ spec: 'work' })
+
+      const preview = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        dryRun: true,
+        from: 'term_coord'
+      })) as { preamble: string }
+      const dispatched = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        returnPreamble: true,
+        from: 'term_coord'
+      })) as { preamble: string }
+
+      const section = (preamble: string) =>
+        preamble.match(/=== SUB-DISPATCH ===[\s\S]*?(?=\n=== TASK ===)/)?.[0]
+      expect(section(preview.preamble)).toBeDefined()
+      expect(section(preview.preamble)).toBe(section(dispatched.preamble))
+    })
+
     it('returnPreamble includes preamble in the response', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
@@ -453,7 +478,7 @@ describe('orchestration RPC methods', () => {
     it('shows dispatch context for a task', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
-      db.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(db, task.id, 'term_a')
 
       const result = (await call('orchestration.dispatchShow', {
         task: task.id
@@ -474,7 +499,7 @@ describe('orchestration RPC methods', () => {
     it('--preamble returns the preamble text', async () => {
       setup()
       const task = db.createTask({ spec: 'refactor auth' })
-      db.createDispatchContext(task.id, 'term_a')
+      createRootDispatch(db, task.id, 'term_a')
 
       const result = (await call('orchestration.dispatchShow', {
         task: task.id,

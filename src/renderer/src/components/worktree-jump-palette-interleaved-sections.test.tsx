@@ -456,7 +456,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     expect(testContainer.textContent).toContain('10 more')
   })
 
-  it('leaves the soft preview hint non-actionable when no rows are hidden', async () => {
+  it('expands soft preview when clicking See more even when all rows fit within the hard cap', async () => {
     await renderPalette(perfTabsPaletteProps(30))
 
     await act(async () => {
@@ -464,12 +464,33 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     })
     await flushEffects()
 
-    // All 30 tabs render (6 preview + 24 remainder), so expanding would only reorder rows.
+    // 6 preview tabs, 24 more follow below the worktrees section
     expect(testContainer.textContent).toContain('24 more')
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
-    expect(seeMoreBtn).toBeUndefined()
+    expect(seeMoreBtn).toBeDefined()
+
+    // Click See more: preview expands to 6 + 20 = 26 tabs, leaving 4 more
+    await act(async () => {
+      seeMoreBtn?.click()
+    })
+    await flushEffects()
+
+    expect(testContainer.textContent).toContain('4 more')
+
+    const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
+      btn.textContent?.includes('See more')
+    )
+    expect(seeMoreBtn2).toBeDefined()
+
+    // Click See more again: preview expands to 26 + 20 = 46 tabs (fits all 30), hint disappears
+    await act(async () => {
+      seeMoreBtn2?.click()
+    })
+    await flushEffects()
+
+    expect(testContainer.textContent).not.toContain('more')
   })
 
   it('resets expanded section caps when query changes', async () => {
