@@ -46,6 +46,7 @@ import {
 import { AgentAvailabilityControl, type AgentCatalogRowProps } from './AgentCatalogRow'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
+import { getTabStatusEmojiDescription, getTabStatusEmojiTitle } from './tab-status-emoji-copy'
 
 export {
   buildAgentAvailabilitySettingsUpdate,
@@ -256,6 +257,7 @@ export function AgentsPane({
       />
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
+      <TabStatusEmojiSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (
         <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
@@ -306,6 +308,24 @@ export function AgentGeneratedTabTitlesSetting({ settings, updateSettings }: Age
         checked={enabled}
         onChange={() => updateSettings({ tabAutoGenerateTitle: !enabled })}
         ariaLabel={getAgentGeneratedTabTitlesTitle()}
+      />
+    </section>
+  )
+}
+
+export function TabStatusEmojiSetting({
+  settings,
+  updateSettings
+}: AgentsPaneProps): React.JSX.Element {
+  const enabled = settings.tabStatusEmoji === true
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={getTabStatusEmojiTitle()}
+        description={getTabStatusEmojiDescription()}
+        checked={enabled}
+        onChange={() => updateSettings({ tabStatusEmoji: !enabled })}
+        ariaLabel={getTabStatusEmojiTitle()}
       />
     </section>
   )
