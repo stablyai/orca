@@ -1,4 +1,11 @@
-import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import {
+  aiVaultAgentLabel,
+  type AiVaultAgent,
+  type AiVaultScanIssue
+} from '../../shared/ai-vault-types'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { isSqliteBusyError } from '../sqlite/readonly-sync-database'
+import { errorMessage } from './session-scanner-values'
 
 // Why: a stalled WSL distro or an unreachable remote host fails one probe per
 // discovered path, so an uncapped list ships one row per transcript file in the
@@ -23,5 +30,40 @@ export function recordSessionScanIssue(issues: AiVaultScanIssue[], issue: AiVaul
       path: 'Agent Session History scan',
       message: 'Additional scan issues were omitted.'
     })
+  }
+}
+
+export function liveSqliteUnavailableIssue(args: {
+  agent: AiVaultAgent
+  path: string
+  executionHostId?: ExecutionHostId
+}): AiVaultScanIssue {
+  return {
+    ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+    agent: args.agent,
+    kind: 'notice',
+    path: args.path,
+    message: `${aiVaultAgentLabel(args.agent)} session history is temporarily unavailable. It will refresh on the next scan.`
+  }
+}
+
+export function sessionParseIssueFromError(args: {
+  executionHostId: ExecutionHostId
+  agent: AiVaultAgent
+  path: string
+  error: unknown
+}): AiVaultScanIssue {
+  if (isSqliteBusyError(args.error)) {
+    return liveSqliteUnavailableIssue({
+      executionHostId: args.executionHostId,
+      agent: args.agent,
+      path: args.path
+    })
+  }
+  return {
+    executionHostId: args.executionHostId,
+    agent: args.agent,
+    path: args.path,
+    message: errorMessage(args.error)
   }
 }

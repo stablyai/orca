@@ -27,7 +27,7 @@ import {
   parseAgentSessionFileCached,
   type SessionParseStats
 } from './session-scanner-parse-cache'
-import { recordSessionScanIssue } from './session-scan-issues'
+import { recordSessionScanIssue, sessionParseIssueFromError } from './session-scan-issues'
 import { discoverInScopeClaudeFiles } from './session-scanner-scope-discovery'
 import {
   DEFAULT_CODEX_HOME_DIR,
@@ -39,7 +39,7 @@ import type {
   SessionFileDiscovery,
   SessionParseResult
 } from './session-scanner-types'
-import { clampPositiveInteger, errorMessage } from './session-scanner-values'
+import { clampPositiveInteger } from './session-scanner-values'
 import { throwIfAiVaultScanCancelled } from './ai-vault-scan-cancellation'
 import { DEFAULT_AI_VAULT_SCAN_LIMIT } from '../../shared/ai-vault-session-depth'
 
@@ -298,12 +298,12 @@ async function parseSessionCandidate(
   } catch (err) {
     return {
       session: null,
-      issue: {
+      issue: sessionParseIssueFromError({
         executionHostId,
         agent: candidate.agent,
         path: candidate.file.path,
-        message: errorMessage(err)
-      }
+        error: err
+      })
     }
   }
 }

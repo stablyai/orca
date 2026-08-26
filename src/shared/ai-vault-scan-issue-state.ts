@@ -1,8 +1,11 @@
-import type { AiVaultListResult, AiVaultScanIssue } from '../../../../shared/ai-vault-types'
+import type { AiVaultScanIssue } from './ai-vault-types'
 
-export function blockingAiVaultScanIssue(
-  result: AiVaultListResult | null
-): AiVaultScanIssue | null {
+type AiVaultScanIssueView = {
+  sessions: readonly { id?: string }[]
+  issues: readonly AiVaultScanIssue[]
+} | null
+
+export function blockingAiVaultScanIssue(result: AiVaultScanIssueView): AiVaultScanIssue | null {
   if (!result || result.sessions.length > 0) {
     return null
   }
@@ -13,7 +16,7 @@ export function blockingAiVaultScanIssue(
 // own rows instead of being counted as skipped transcripts — a partial scan
 // (one SSH host down, rest fine) must not report a connectivity failure as a
 // skipped transcript file.
-export function aiVaultScanNoticeIssues(result: AiVaultListResult | null): AiVaultScanIssue[] {
+export function aiVaultScanNoticeIssues(result: AiVaultScanIssueView): AiVaultScanIssue[] {
   if (!result) {
     return []
   }
@@ -21,7 +24,7 @@ export function aiVaultScanNoticeIssues(result: AiVaultListResult | null): AiVau
   return result.issues.filter((issue) => Boolean(issue.kind) && issue !== blocking)
 }
 
-export function skippedAiVaultTranscriptCount(result: AiVaultListResult | null): number {
+export function skippedAiVaultTranscriptCount(result: AiVaultScanIssueView): number {
   return result ? result.issues.filter((issue) => !issue.kind).length : 0
 }
 
@@ -30,7 +33,7 @@ const SKIPPED_TRANSCRIPT_REASON_LIMIT = 3
 // Why: a bare "3 transcripts skipped" hides the actionable part (a 10 MiB cap
 // hit, an unreadable transcript). Surface the distinct scanner-authored reasons,
 // capped so a 500-issue scan can't turn the panel into a wall of text.
-export function skippedAiVaultTranscriptReasons(result: AiVaultListResult | null): string[] {
+export function skippedAiVaultTranscriptReasons(result: AiVaultScanIssueView): string[] {
   const reasons = new Set<string>()
   for (const issue of result?.issues ?? []) {
     if (issue.kind) {

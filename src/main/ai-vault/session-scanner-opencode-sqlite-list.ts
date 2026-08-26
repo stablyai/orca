@@ -5,8 +5,10 @@ import {
 } from './session-scanner-opencode-sqlite-paths'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import { isSqliteBusyError, openReadonlySyncDatabase } from '../sqlite/readonly-sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
+import { liveSqliteUnavailableIssue, recordSessionScanIssue } from './session-scan-issues'
 
 // Why: the SQLite session-list query + reader lives in its own electron-free
 // module so both the worker entry and the main-thread worker client can import
@@ -16,12 +18,6 @@ type SessionRow = {
   id: string
   time_created: number
   time_updated: number
-}
-
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
 }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
@@ -101,7 +97,7 @@ export async function listOpenCodeSqliteSessions(args: {
   for (const dbPath of args.dbPaths) {
     let db: SyncDatabase | null = null
     try {
-      db = openReadonlyDatabase(dbPath)
+      db = openReadonlySyncDatabase(dbPath)
       if (!canReadOpenCodeSessions(db)) {
         continue
       }
@@ -112,11 +108,12 @@ export async function listOpenCodeSqliteSessions(args: {
         candidates.push(rowToCandidate(row, dbPath))
       }
     } catch (err) {
-      args.issues.push({
-        agent: 'opencode',
-        path: dbPath,
-        message: errorMessage(err)
-      })
+      recordSessionScanIssue(
+        args.issues,
+        isSqliteBusyError(err)
+          ? liveSqliteUnavailableIssue({ agent: 'opencode', path: dbPath })
+          : { agent: 'opencode', path: dbPath, message: errorMessage(err) }
+      )
     } finally {
       db?.close()
     }

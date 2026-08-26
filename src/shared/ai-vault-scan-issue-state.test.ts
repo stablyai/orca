@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { AiVaultListResult } from '../../../../shared/ai-vault-types'
+import type { AiVaultListResult } from './ai-vault-types'
 import {
   aiVaultScanNoticeIssues,
   blockingAiVaultScanIssue,
@@ -76,6 +76,22 @@ describe('aiVaultScanNoticeIssues', () => {
 
     expect(aiVaultScanNoticeIssues(partial)).toEqual([hostIssue, scopeIssue])
     expect(skippedAiVaultTranscriptCount(partial)).toBe(1)
+  })
+
+  it('does not count a temporarily unavailable provider database as a skipped transcript', () => {
+    const unavailable = {
+      agent: 'opencode' as const,
+      kind: 'notice' as const,
+      path: '/home/ada/.local/share/opencode/opencode.db',
+      message:
+        'OpenCode session history is temporarily unavailable. It will refresh on the next scan.'
+    }
+    const locked = result([], [unavailable])
+
+    expect(blockingAiVaultScanIssue(locked)).toBeNull()
+    expect(aiVaultScanNoticeIssues(locked)).toEqual([unavailable])
+    expect(skippedAiVaultTranscriptCount(locked)).toBe(0)
+    expect(skippedAiVaultTranscriptReasons(locked)).toEqual([])
   })
 
   it('does not repeat the blocking issue as a notice row', () => {

@@ -28,6 +28,7 @@ import { useMobileAgentHistoryState } from './use-mobile-agent-history-state'
 import { buildMobileAgentHistorySections } from './agent-history-sections'
 import { shouldShowMobileCurrentWorktreeBadge } from './agent-history-current-worktree-badge'
 import { MobileAgentSessionHistoryList } from './MobileAgentSessionHistoryList'
+import { MobileAgentHistoryScanBanners } from './mobile-agent-history-scan-banners'
 import {
   resolveMobileAiVaultSessionResumeTarget,
   type MobileAiVaultResumeFolderWorkspace,
@@ -318,13 +319,7 @@ export function MobileAgentSessionHistoryPanel({
               autoCorrect={false}
             />
           </View>
-          {issues.length > 0 ? (
-            <View style={styles.noticeBanner}>
-              <Text style={styles.noticeText}>
-                {issues.length} {issues.length === 1 ? 'transcript' : 'transcripts'} skipped
-              </Text>
-            </View>
-          ) : null}
+          <MobileAgentHistoryScanBanners sessions={sessions} issues={issues} />
           {resumeMessage ? (
             <View style={styles.resumeBanner}>
               <Text style={styles.resumeBannerText}>{resumeMessage}</Text>
