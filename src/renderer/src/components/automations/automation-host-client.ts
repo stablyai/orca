@@ -76,8 +76,9 @@ function toRuntimeAutomationCreateInput(
   const { projectId, workspaceId, ...rest } = input
   return {
     ...rest,
-    repo: projectId,
-    workspace: input.workspaceMode === 'existing' ? (workspaceId ?? undefined) : undefined
+    // Machine selectors must not fall back to path/name matching on a remote host.
+    repo: `id:${projectId}`,
+    workspace: input.workspaceMode === 'existing' && workspaceId ? `id:${workspaceId}` : undefined
   }
 }
 
@@ -87,8 +88,10 @@ function toRuntimeAutomationUpdateInput(
   const { projectId, workspaceId, ...rest } = input
   return {
     ...rest,
-    ...(projectId !== undefined ? { repo: projectId } : {}),
-    ...(workspaceId !== undefined ? { workspace: workspaceId ?? undefined } : {})
+    ...(projectId !== undefined ? { repo: `id:${projectId}` } : {}),
+    ...(workspaceId !== undefined
+      ? { workspace: workspaceId ? `id:${workspaceId}` : undefined }
+      : {})
   }
 }
 

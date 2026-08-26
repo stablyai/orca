@@ -69,6 +69,7 @@ type AutomationEditorDialogProps = {
   draft: AutomationDraft
   onProjectChange: (projectId: string) => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
+  allowAddProject?: boolean
   onCreateTargetChange: (target: AutomationCreateTarget) => void
   onOpenChange: (open: boolean) => void
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
@@ -94,6 +95,7 @@ export function AutomationEditorDialog({
   draft,
   onProjectChange,
   getRepoHostLabel,
+  allowAddProject,
   onCreateTargetChange,
   onOpenChange,
   onDraftChange,
@@ -186,6 +188,7 @@ export function AutomationEditorDialog({
             segmentedItemClassName={AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS}
             onProjectChange={onProjectChange}
             getRepoHostLabel={getRepoHostLabel}
+            allowAddProject={allowAddProject}
             onDraftChange={onDraftChange}
             onSetupDecisionTouched={onSetupDecisionTouched}
           />

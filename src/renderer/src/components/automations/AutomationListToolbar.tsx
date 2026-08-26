@@ -20,7 +20,8 @@ export function AutomationListToolbar({
   onFilterChange,
   onRefresh,
   isRefreshing,
-  openCreateDialog
+  openCreateDialog,
+  canCreateAutomation
 }: {
   listSearchQuery: string
   isListSearchQueryTooLarge: boolean
@@ -31,6 +32,7 @@ export function AutomationListToolbar({
   onRefresh: () => void
   isRefreshing: boolean
   openCreateDialog: (template?: AutomationTemplate) => void
+  canCreateAutomation: boolean
 }): React.JSX.Element {
   return (
     <div className="flex shrink-0 items-start justify-between gap-3">
@@ -80,6 +82,7 @@ export function AutomationListToolbar({
         size="sm"
         className="shrink-0"
         onClick={() => openCreateDialog()}
+        disabled={!canCreateAutomation}
         data-contextual-tour-target="automations-create"
       >
         <Plus className="size-4" />

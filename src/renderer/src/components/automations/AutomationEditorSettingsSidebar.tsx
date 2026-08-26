@@ -38,6 +38,7 @@ type AutomationEditorSettingsSidebarProps = {
   segmentedItemClassName: string
   onProjectChange: (projectId: string) => void
   getRepoHostLabel?: (repo: Repo) => string | null | undefined
+  allowAddProject?: boolean
   onDraftChange: (updater: (current: AutomationDraft) => AutomationDraft) => void
   onSetupDecisionTouched: () => void
 }
@@ -59,6 +60,7 @@ export function AutomationEditorSettingsSidebar({
   segmentedItemClassName,
   onProjectChange,
   getRepoHostLabel,
+  allowAddProject,
   onDraftChange,
   onSetupDecisionTouched
 }: AutomationEditorSettingsSidebarProps): React.JSX.Element {
@@ -123,6 +125,7 @@ export function AutomationEditorSettingsSidebar({
             )}
             triggerClassName={`h-9 w-full min-w-0 ${pickerTriggerClassName}`}
             getRepoHostLabel={getRepoHostLabel}
+            allowAddProject={allowAddProject}
           />
         </Field>
         <div className="mb-4">

@@ -114,7 +114,7 @@ describe('automation host client', () => {
       { kind: 'environment', environmentId: 'gpu' },
       'automation.create',
       expect.objectContaining({
-        repo: 'repo-1',
+        repo: 'id:repo-1',
         workspace: undefined,
         setupDecision: 'run',
         runContext: automation.runContext
@@ -126,6 +126,40 @@ describe('automation host client', () => {
       { kind: 'environment', environmentId: 'gpu' },
       'automation.runNow',
       { id: automation.id },
+      { timeoutMs: 15_000 }
+    )
+  })
+
+  it('uses an exact machine selector for an existing runtime workspace', async () => {
+    const automation = makeAutomation({
+      workspaceMode: 'existing',
+      workspaceId: 'repo-1::/srv/orca'
+    })
+    const input: AutomationCreateInput = {
+      name: automation.name,
+      prompt: automation.prompt,
+      precheck: null,
+      agentId: automation.agentId,
+      runContext: automation.runContext,
+      projectId: automation.projectId,
+      workspaceMode: 'existing',
+      workspaceId: automation.workspaceId,
+      setupDecision: 'skip',
+      timezone: automation.timezone,
+      rrule: automation.rrule,
+      dtstart: automation.dtstart
+    }
+    vi.mocked(callRuntimeRpc).mockResolvedValueOnce({ automation })
+
+    await createAutomationForTarget(input)
+
+    expect(callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'gpu' },
+      'automation.create',
+      expect.objectContaining({
+        repo: 'id:repo-1',
+        workspace: 'id:repo-1::/srv/orca'
+      }),
       { timeoutMs: 15_000 }
     )
   })
