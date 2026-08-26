@@ -156,7 +156,7 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     )
   })
 
-  it('falls back to a whole-worktree mount when a passive record has no resolvable tab', () => {
+  it('does not background-mount when only an untargetable passive record exists (STA-4953)', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'not-a-pane-key' } }
     isPassiveSpy.mockReturnValue(true)
     const rec = recordEvents()
@@ -164,8 +164,10 @@ describe('wakeSleepingAgentsForWorktreeInBackground', () => {
     wakeSleepingAgentsForWorktreeInBackground('wt-1')
 
     rec.stop()
-    expect(rec.events).toEqual(['wake:wt-1', 'mount:wt-1'])
-    expect(rec.mountDetails[0]?.tabIds).toBeUndefined()
+    // Why: no tabId or parseable pane key means getSleepingRecordTabId
+    // returns null — mounting would bypass STA-4953's targeted restriction.
+    expect(rec.events).toEqual(['wake:wt-1'])
+    expect(rec.mountDetails).toEqual([])
   })
 
   it('mounts one canonical tab and clears cold aliases for the same provider session', () => {

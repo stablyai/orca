@@ -50,9 +50,9 @@ describe('browser automation bootstrap lease ownership', () => {
     expect(mocks.releaseVisibility).toHaveBeenCalledTimes(1)
     expect(mocks.releaseVisibility).toHaveBeenLastCalledWith('lease-1')
     expect(mocks.requestBackgroundMount.mock.calls).toEqual([
-      [{ worktreeId: 'wt-1' }],
-      [{ worktreeId: 'wt-1' }],
-      [{ worktreeId: 'wt-2' }]
+      [{ worktreeId: 'wt-1', tabIds: [] }],
+      [{ worktreeId: 'wt-1', tabIds: [] }],
+      [{ worktreeId: 'wt-2', tabIds: [] }]
     ])
 
     vi.advanceTimersByTime(9_999)

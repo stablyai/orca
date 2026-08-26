@@ -282,7 +282,7 @@ describe('useIpcEvents browser tab create routing', () => {
 
     expect(acquireBrowserAutomationVisibility).toHaveBeenCalledWith('page-detached')
     expect(dispatchEvent).toHaveBeenCalledWith(
-      expect.objectContaining({ detail: { worktreeId: 'wt-2' } })
+      expect.objectContaining({ detail: { worktreeId: 'wt-2', tabIds: [] } })
     )
   })
 })

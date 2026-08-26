@@ -5056,6 +5056,129 @@
       "demotionRule": "Demote or quarantine if the gate flakes once without a product bug or harness bug filed to the owner."
     },
     {
+      "id": "terminal-session.restored-spawn-hold",
+      "title": "Cold activation of a paired workspace cannot spawn host shells before the host answers",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-runtime",
+      "layer": "renderer-unit",
+      "surfaces": [
+        "terminal lifecycle",
+        "paired runtime activation",
+        "host session-tabs mirror",
+        "cold-activation mounting"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": [],
+      "coverageNotes": "Local macOS renderer-unit evidence only: a helper suite over the hold policy and a rendered Terminal suite whose oracle is which tabs Terminal actually instantiates a TerminalPane for. No live headed/headless paired-runtime topology is exercised, and Linux, Windows, and SSH hosts are not run. Scope is paired runtime workspaces; local, SSH, and folder workspaces resolve no runtime environment and are asserted to hold nothing.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-4953",
+        "https://github.com/stablyai/orca/pull/15742",
+        "https://github.com/stablyai/orca/pull/15644"
+      ],
+      "invariant": "While a paired workspace's first authoritative session.tabs answer is outstanding, cold activation must not mount a restored row that would take pty-connection's fresh-spawn branch (no ptyId on the row, none in ptyIdsByTabId, none on a surviving layout leaf, and not a web-terminal mirror row). The hold is scoped to one host epoch (environmentId plus that environment's connection generation), settles only on evidence that landed in the store for that epoch, and fails open after a 20s per-window deadline and a 60s total ceiling because a blank workspace must never wedge. It never withholds the active tab, a remembered per-worktree active tab, any group's active tab (including a unified-tab id mapped to its terminal entityId), an activity-terminal-portal tab, a queued pendingStartup tab, a live tab, or a row an earlier pass already mounted.",
+      "oracle": "Two independent oracles. Helper level: planRestoredTerminalSpawnHold's held set, window bookkeeping, and epoch identity, plus applyRestoredTerminalSpawnHold's allowed/deferred sets and their referential stability. Render level: the set of tabs the real Terminal component instantiates a (mocked) TerminalPane for, driven through the shipping web-session-tabs accept path and its host-session-mirror settle receipt, so a helper-only assertion cannot stand in for the wiring.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/restored-terminal-spawn-hold.test.ts src/renderer/src/components/terminal/restored-terminal-spawn-hold.render.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/host-session-mirror-hydration-frame-ordering.test.tsx src/renderer/src/runtime/host-session-mirror-settle-census.test.ts src/renderer/src/runtime/host-session-mirror-settle-receipt-frames.test.tsx src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-tabs-sync-snapshot-batch.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts"
+      ],
+      "testFiles": [
+        "src/renderer/src/components/terminal/restored-terminal-spawn-hold.test.ts",
+        "src/renderer/src/components/terminal/restored-terminal-spawn-hold.render.test.tsx",
+        "src/renderer/src/runtime/host-session-mirror-hydration-frame-ordering.test.tsx",
+        "src/renderer/src/runtime/host-session-mirror-settle-census.test.ts",
+        "src/renderer/src/runtime/host-session-mirror-settle-receipt-frames.test.tsx",
+        "src/renderer/src/runtime/web-session-tabs-sync.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync-snapshot-batch.test.ts",
+        "src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/renderer/src/components/terminal/restored-terminal-spawn-hold.render.test.tsx",
+          "assertions": [
+            "withholds restored pty-less rows on a paired worktree until the host answers",
+            "always mounts the active tab and any queued startup, even while holding",
+            "never holds a group active tab, through the unified tab or the raw id",
+            "never holds a tab an activity thread is portaling",
+            "mounts the attach-class rows the gate does not govern",
+            "fails open and mounts held rows when no answer ever arrives",
+            "measures its silence from the live connection, not the one it armed on",
+            "starts a fresh window when the workspace moves to a host at the same generation",
+            "never lets the previous host answer for the one the workspace moved to",
+            "settles on a full inventory that omits the worktree",
+            "does not settle on a single frame published for another worktree",
+            "does not carry an answer from the previous connection into a new hold",
+            "never re-holds rows a previous activation already mounted"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/terminal/restored-terminal-spawn-hold.test.ts",
+          "assertions": [
+            "is true only for a row with no pty anywhere",
+            "outlasts the session.tabs timeout it waits on",
+            "never holds a carve-out row",
+            "holds nothing on a local, ssh or folder workspace",
+            "gives a reconnect a fresh window but never waits past the ceiling",
+            "gives a workspace that moved hosts a fresh window at the same generation",
+            "never lets one host answer speak for a different host",
+            "still bounds a workspace that keeps moving hosts by the total ceiling",
+            "keeps both set identities while the held membership is unchanged",
+            "replaces both sets when the held membership changes"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal/restored-terminal-spawn-hold.test.ts src/renderer/src/components/terminal/restored-terminal-spawn-hold.render.test.tsx",
+          "result": "passed",
+          "durationSeconds": 3.3,
+          "summary": "2 test file(s) passed, 43 tests passed on the STA-4953 branch."
+        },
+        {
+          "date": "2026-08-21",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/host-session-mirror-hydration-frame-ordering.test.tsx src/renderer/src/runtime/host-session-mirror-settle-census.test.ts src/renderer/src/runtime/host-session-mirror-settle-receipt-frames.test.tsx src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/web-session-tabs-sync-snapshot-batch.test.ts src/renderer/src/runtime/web-session-tabs-sync-mirror-identity.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.0,
+          "summary": "6 test file(s) passed, 60 tests passed on the STA-4953 branch; covers the mirror-hydration evidence this gate consumes."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "local renderer unit and rendered-component tests"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "New gate; only local macOS passes exist. No CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Wiring red/green, run locally on this branch: with only the applyRestoredTerminalSpawnHold call removed from Terminal.tsx, all 21 rendered tests fail; with it restored, all 21 pass. Carve-out mutations each killed exactly their own test: deleting the unified-tab-to-entityId mapping failed only 'never holds a group active tab' (row-2 missing), and deleting the activity-portal loop failed only 'never holds a tab an activity thread is portaling' (row-4 missing). Host-epoch mutations: dropping the environmentId identity check failed 5 tests, not resetting settled on a host move failed 2, and re-arming armedAtMs on a host move failed 1. Set-identity mutation: making the apply path always re-set failed only the referential-stability test. No saved CI artifact yet."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The gate exists to prevent a fan-out, not to add one: holding issues no IPC, no RPC, and no probe. It reads two in-memory values per rendered Terminal pass (the mirror-hydration latch and the environment's connection generation) — every ready render pass, including settled holds, not only activation passes — and iterates only the rendered active worktree's own tabs. Fail-open scheduling is at most one active hold timer, for the rendered active worktree only, re-armed each render at min(window deadline, total ceiling) and cleared on cleanup. The allowed/deferred sets keep their identity while membership is unchanged, so a settled hold does not re-render the memoized worktree surface tree on every Terminal render. No renderer throughput or event-loop-delay measurement has been taken."
+      },
+      "promotionCriteria": [
+        "Run in soak on macOS, Linux, and Windows CI for 100 consecutive passes or 14 days without unexplained flakes.",
+        "Add a live paired-runtime topology gate (headed or headless) that counts host terminal.create calls across a cold activation instead of counting mounted panes.",
+        "Attach a saved CI red/green artifact for the removed-wiring run rather than a local transcript."
+      ],
+      "knownGaps": [
+        "No live headed or headless paired-runtime topology is exercised; the render oracle counts mounted panes, not host terminal.create calls.",
+        "Linux, Windows, and SSH hosts are not run for this gate.",
+        "The 20s fail-open window is a real exposure: a host that answers later than the deadline still storms, by design, because a mount gate must not wedge a blank workspace.",
+        "Whether a host ever publishes a floating-worktree frame in its listAll inventory is unverified, so inventory-omission settling rests on the documented enumeration contract."
+      ],
+      "demotionRule": "Demote or quarantine if the gate flakes without a product or harness bug, if a held row is ever observed still dark past the 60s ceiling, or if any carve-out row (active, group-active, portal, queued startup, live, already-mounted) is observed withheld."
+    },
+    {
       "id": "terminal-session.layout-pty-ownership",
       "title": "Restored terminal layouts retain one renderer owner per PTY",
       "maturity": "experimental",
