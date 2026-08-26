@@ -16,6 +16,29 @@ test.describe('Setup guide sidebar entry', () => {
     await waitForActiveWorktree(orcaPage)
   })
 
+  test('matches incomplete sidebar progress to the setup guide progress color', async ({
+    orcaPage
+  }) => {
+    await seedIncompleteSetupProgress(orcaPage)
+    const sidebarEntry = orcaPage.locator('[data-contextual-tour-target="setup-guide-entry"]')
+    const sidebarProgress = sidebarEntry.locator('[aria-label*="setup steps complete"]')
+
+    await expect(sidebarEntry).toBeVisible()
+    await expect(sidebarProgress).toBeVisible()
+    const sidebarProgressColor = await sidebarProgress.evaluate(
+      (element) => window.getComputedStyle(element).color
+    )
+
+    await sidebarEntry.click()
+    const setupGuide = orcaPage.getByRole('dialog')
+    await expect(setupGuide.getByRole('heading', { name: 'Getting started' })).toBeVisible()
+    const modalProgress = setupGuide.locator('[aria-label*="setup steps complete"]')
+    await expect(modalProgress).toBeVisible()
+    expect(await modalProgress.evaluate((element) => window.getComputedStyle(element).color)).toBe(
+      sidebarProgressColor
+    )
+  })
+
   test('does not flash while completed setup waits for capability readiness', async ({
     electronApp,
     orcaPage
@@ -64,6 +87,34 @@ test.describe('Setup guide sidebar entry', () => {
     })
   })
 })
+
+async function seedIncompleteSetupProgress(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('window.__store is not available')
+    }
+    const state = store.getState()
+    store.setState({
+      settings: state.settings
+        ? {
+            ...state.settings,
+            defaultTuiAgent: 'blank',
+            notifications: {
+              ...state.settings.notifications,
+              enabled: false,
+              agentTaskComplete: false
+            }
+          }
+        : null,
+      featureInteractions: {},
+      setupGuideSidebarDismissed: false,
+      setupGuideBrowserMilestoneMigrated: true,
+      setupGuideBrowserMilestoneLegacyComplete: false,
+      persistedUIReady: true
+    })
+  })
+}
 
 async function setActiveViewForFlashProbe(
   page: Page,
