@@ -1,5 +1,5 @@
 import type { IPty } from 'node-pty'
-import { listPtyJobProcessIds } from '../windows/windows-pty-job'
+import { isPtyJobOwnershipAvailable, listPtyJobProcessIds } from '../windows/windows-pty-job'
 
 /**
  * Processes still running under a pane, or null when there is no answer.
@@ -31,4 +31,14 @@ export function readWindowsPtyJobProcessIds(
   // Without the shell, a size-1 set would read as "shell alone, retire" when it
   // means the opposite. The forked probe this replaced refused the same way.
   return membership.has(proc.pid) ? membership : null
+}
+
+/**
+ * Whether this build's node-pty exports the job reads at all.
+ *
+ * Lives beside the read because callers must not confuse "asked and got no
+ * answer" with "there was nothing to ask" -- only the former is unverifiable.
+ */
+export function isWindowsPtyJobReadable(): boolean {
+  return isPtyJobOwnershipAvailable()
 }
