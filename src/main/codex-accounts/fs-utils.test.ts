@@ -1,5 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -118,6 +126,30 @@ describe('writeFileAtomically', () => {
     }
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'preserves a file when its mode changed after the expected generation',
+    () => {
+      setup()
+      try {
+        const target = join(dir, 'guarded.toml')
+        writeFileSync(target, 'baseline')
+        const expectedMode = statSync(target).mode
+        chmodSync(target, 0o600)
+
+        expect(
+          writeFileAtomicallyIfUnchanged(target, 'baseline', 'stale-write', {
+            expectedMode,
+            mode: expectedMode
+          })
+        ).toBe(false)
+        expect(readFileSync(target, 'utf-8')).toBe('baseline')
+        expect(statSync(target).mode & 0o777).toBe(0o600)
+      } finally {
+        cleanup()
+      }
+    }
+  )
+
   it('validates the generation moved after a Windows rename retry', () => {
     setup()
     try {
@@ -204,6 +236,25 @@ describe('writeFileAtomically', () => {
       cleanup()
     }
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'preserves a file when its mode changed before guarded removal',
+    () => {
+      setup()
+      try {
+        const target = join(dir, 'guarded-auth.json')
+        writeFileSync(target, 'baseline')
+        const expectedMode = statSync(target).mode
+        chmodSync(target, 0o600)
+
+        expect(removeFileAtomicallyIfUnchanged(target, 'baseline', expectedMode)).toBe(false)
+        expect(readFileSync(target, 'utf-8')).toBe('baseline')
+        expect(statSync(target).mode & 0o777).toBe(0o600)
+      } finally {
+        cleanup()
+      }
+    }
+  )
 
   it('returns false when the target disappears during the removal probe', () => {
     setup()

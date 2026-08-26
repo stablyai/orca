@@ -13,6 +13,10 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { captureCodexTrustConfig, restoreCodexTrustConfig } from './codex-trust-config-rollback'
+import {
+  codexTrustConfigSnapshotsEqual,
+  restoreCodexTrustFilesIfUnchanged
+} from './codex-trust-config-generation'
 
 const roots: string[] = []
 
@@ -113,6 +117,42 @@ describe('Codex trust config rollback', () => {
 
       expect(readFileSync(configPath, 'utf8')).toBe('[hooks]\n')
       expect(statSync(configPath).mode & 0o777).toBe(0o640)
+    }
+  )
+
+  it('rejects a guarded rollback when the expected mode differs from the live file', () => {
+    const configPath = tempConfigPath()
+    writeFileSync(configPath, '[hooks]\n')
+    const snapshot = captureCodexTrustConfig(configPath)
+    if (!snapshot.existed) {
+      throw new Error('expected the test config to exist')
+    }
+    const expectedCurrent = { ...snapshot, mode: snapshot.mode ^ 0o200 }
+
+    expect(codexTrustConfigSnapshotsEqual(snapshot, expectedCurrent)).toBe(false)
+    expect(
+      restoreCodexTrustFilesIfUnchanged([{ path: configPath, snapshot, expectedCurrent }])
+    ).toBe(false)
+    expect(readFileSync(configPath, 'utf8')).toBe('[hooks]\n')
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'treats a mode change as a newer generation during guarded rollback',
+    () => {
+      const configPath = tempConfigPath()
+      writeFileSync(configPath, '[hooks]\n')
+      chmodSync(configPath, 0o640)
+      const snapshot = captureCodexTrustConfig(configPath)
+      chmodSync(configPath, 0o600)
+      const expectedCurrent = captureCodexTrustConfig(configPath)
+      chmodSync(configPath, 0o644)
+
+      expect(codexTrustConfigSnapshotsEqual(snapshot, expectedCurrent)).toBe(false)
+      expect(
+        restoreCodexTrustFilesIfUnchanged([{ path: configPath, snapshot, expectedCurrent }])
+      ).toBe(false)
+      expect(readFileSync(configPath, 'utf8')).toBe('[hooks]\n')
+      expect(statSync(configPath).mode & 0o777).toBe(0o644)
     }
   )
 })

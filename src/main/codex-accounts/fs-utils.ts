@@ -1,5 +1,13 @@
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, existsSync, linkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  linkSync,
+  renameSync,
+  rmSync,
+  statSync,
+  writeFileSync
+} from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
 import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
@@ -44,7 +52,7 @@ export function writeFileAtomicallyIfUnchanged(
   targetPath: string,
   expectedContents: string | Buffer | null,
   contents: string | Buffer,
-  options?: { mode?: number }
+  options?: { mode?: number; expectedMode?: number }
 ): boolean {
   try {
     return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
@@ -59,7 +67,8 @@ export function writeFileAtomicallyIfUnchanged(
 
 export function removeFileAtomicallyIfUnchanged(
   targetPath: string,
-  expectedContents: string | Buffer
+  expectedContents: string | Buffer,
+  expectedMode?: number
 ): boolean {
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
@@ -80,7 +89,10 @@ export function removeFileAtomicallyIfUnchanged(
     throw error
   }
   try {
-    if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
+    if (
+      !nodeFileContentsEqualSync(heldPath, expectedContents) ||
+      !nodeFileModeEqualSync(heldPath, expectedMode)
+    ) {
       restoreMovedFileWithoutOverwrite(heldPath, targetPath)
       return false
     }
@@ -120,7 +132,7 @@ function attemptGuardedAtomicWrite(
   targetPath: string,
   expectedContents: string | Buffer | null,
   contents: string | Buffer,
-  options?: { mode?: number }
+  options?: { mode?: number; expectedMode?: number }
 ): boolean {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
@@ -139,7 +151,10 @@ function attemptGuardedAtomicWrite(
       }
       throw error
     }
-    if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
+    if (
+      !nodeFileContentsEqualSync(heldPath, expectedContents) ||
+      !nodeFileModeEqualSync(heldPath, options?.expectedMode)
+    ) {
       restoreMovedFileWithoutOverwrite(heldPath, targetPath)
       return false
     }
@@ -154,6 +169,20 @@ function attemptGuardedAtomicWrite(
     throw error
   } finally {
     rmSync(tmpPath, { force: true })
+  }
+}
+
+function nodeFileModeEqualSync(filePath: string, expectedMode?: number): boolean {
+  if (expectedMode === undefined) {
+    return true
+  }
+  try {
+    return statSync(filePath).mode === expectedMode
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false
+    }
+    throw error
   }
 }
 

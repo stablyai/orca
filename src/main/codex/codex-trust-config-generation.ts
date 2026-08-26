@@ -14,7 +14,8 @@ export function codexTrustConfigSnapshotsEqual(
   return (
     (left.restorePath ?? '') === (right.restorePath ?? '') &&
     left.existed === right.existed &&
-    (!left.existed || (right.existed && left.contents.equals(right.contents)))
+    (!left.existed ||
+      (right.existed && left.contents.equals(right.contents) && left.mode === right.mode))
   )
 }
 
@@ -30,14 +31,21 @@ export function restoreCodexTrustConfigIfUnchanged(
   }
   if (!snapshot.existed) {
     return expectedCurrent.existed
-      ? removeFileAtomicallyIfUnchanged(expectedPath, expectedCurrent.contents)
+      ? removeFileAtomicallyIfUnchanged(
+          expectedPath,
+          expectedCurrent.contents,
+          expectedCurrent.mode
+        )
       : true
   }
   return writeFileAtomicallyIfUnchanged(
     expectedPath,
     expectedCurrent.existed ? expectedCurrent.contents : null,
     snapshot.contents,
-    { mode: snapshot.mode }
+    {
+      mode: snapshot.mode,
+      expectedMode: expectedCurrent.existed ? expectedCurrent.mode : undefined
+    }
   )
 }
 
