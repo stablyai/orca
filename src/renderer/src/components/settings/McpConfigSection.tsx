@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { AlertCircle, FileCode2, LoaderCircle, Plus, RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
@@ -34,6 +34,7 @@ function countServers(configs: LoadedMcpConfigInspection[]): number {
 }
 
 export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Element {
+  const parallelDisclosureId = useId()
   const openFile = useAppStore((state) => state.openFile)
   const setActiveView = useAppStore((state) => state.setActiveView)
   const setActiveWorktree = useAppStore((state) => state.setActiveWorktree)
@@ -285,13 +286,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
                 variant={createConfirm === 'parallel' ? 'default' : 'outline'}
                 size="sm"
                 className="gap-1.5"
-                onClick={() =>
-                  void handleCreateStarter('parallel', PARALLEL_SEARCH_MCP_CONFIG)
-                }
-                title={translate(
-                  'auto.components.settings.McpConfigSection.parallelDisclosure',
-                  'Search objectives, queries, and fetched URLs are sent to Parallel.'
-                )}
+                onClick={() => void handleCreateStarter('parallel', PARALLEL_SEARCH_MCP_CONFIG)}
+                aria-describedby={parallelDisclosureId}
               >
                 <Plus className="size-3.5" />
                 {createConfirm === 'parallel'
@@ -325,6 +321,15 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           ) : null}
         </div>
       </div>
+
+      {canCreateStarter ? (
+        <p id={parallelDisclosureId} className="text-xs text-muted-foreground">
+          {translate(
+            'auto.components.settings.McpConfigSection.parallelDisclosure',
+            'When an agent uses these tools, search objectives, queries, and fetched URLs are sent to Parallel. No API key is required.'
+          )}
+        </p>
+      ) : null}
 
       <div className="rounded-md border border-border/50 bg-muted/20">
         <div className="flex items-center justify-between border-b border-border/50 px-3 py-2 text-xs text-muted-foreground">
