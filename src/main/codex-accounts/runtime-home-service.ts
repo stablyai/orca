@@ -71,8 +71,10 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasCompletedCodexSessionBackfillMarker,
-  invalidateCodexSessionBackfillMarker
+  markCodexSessionBackfillMarkerPending
 } from '../codex/codex-session-backfill-marker'
+import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
+import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
 import {
   ManagedCodexHomeTemporarilyUnavailableError,
@@ -305,18 +307,30 @@ export class CodexRuntimeHomeService {
     )
   }
 
-  prepareHostSystemDefaultSessionMigrationPass(): boolean {
+  prepareHostSystemDefaultSessionMigrationPass(
+    scanDates: readonly CodexSessionBackfillDate[] = []
+  ): boolean {
     const paths = resolveCodexSessionBackfillPaths(
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
+    const target = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
     if (
       this.hostSystemDefaultSessionMigrationPending &&
-      this.pendingHostSystemDefaultSessionMigrationTarget !== paths.systemSessionsRoot
+      this.pendingHostSystemDefaultSessionMigrationTarget !== target
     ) {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
-      this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
+      this.pendingHostSystemDefaultSessionMigrationTarget = target
     }
-    invalidateCodexSessionBackfillMarker(paths.markerPath)
+    // Why: the launch creates rollouts for these dates; record them durably so a
+    // force-quit recovers a bounded window instead of re-walking all history.
+    const markerOwesFullScan = markCodexSessionBackfillMarkerPending(
+      paths.markerPath,
+      paths.systemSessionsRoot,
+      scanDates.length > 0 ? scanDates : [getCodexSessionBackfillDate()]
+    )
+    // Why: the marker is the only place an overflowed pending window survives a
+    // restart, so its demand has to reach this pass rather than die in the file.
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= markerOwesFullScan
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
@@ -526,7 +540,9 @@ export class CodexRuntimeHomeService {
       )
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan =
         !hasCompletedCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot)
-      this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
+      this.pendingHostSystemDefaultSessionMigrationTarget = normalizeRuntimePathForComparison(
+        paths.systemSessionsRoot
+      )
       this.hostSystemDefaultSessionMigrationPending = true
     }
     return this.prepareHostSystemDefaultSessionMigrationPass()
