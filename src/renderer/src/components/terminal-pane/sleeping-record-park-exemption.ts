@@ -2,24 +2,22 @@ import type { SleepingAgentSessionRecord } from '../../../../shared/agent-sessio
 import { isPassiveCompletedHibernationEvidence } from '../../lib/sleeping-agent-pane-ownership'
 
 const EMPTY_TAB_IDS: ReadonlySet<string> = new Set()
-const TAB_ID_SEPARATOR = '\u0000'
 
-/** Tab ids whose panes own a sleeping record a mount can actually consume, as a
- *  value-comparable key.
+/** Tab ids whose panes own a sleeping record a mount can actually consume.
  *  Why: a parked pane can never cold-restore, so per-tab parks must exempt
  *  these — but only these: blocked and passive-completed records never resume,
  *  and exempting them would pin a hidden pane mounted indefinitely.
- *  Why a key: the record map is app-global, so a subscriber must compare the
- *  worktree-scoped verdict, not the map. Iterates in place — `Object.values`
- *  would allocate every record on every store write. */
-export function selectSleepingRecordParkExemptTabIdsKey(
+ *  Callers subscribe through `useShallow`, which compares the set structurally,
+ *  so a write for another worktree cannot re-render this one. Iterates in place —
+ *  `Object.values` would allocate every record on every store write. */
+export function selectSleepingRecordParkExemptTabIds(
   sleepingAgentSessionsByPaneKey: Record<string, SleepingAgentSessionRecord> | undefined,
   worktreeId: string
-): string {
+): ReadonlySet<string> {
   if (!sleepingAgentSessionsByPaneKey) {
-    return ''
+    return EMPTY_TAB_IDS
   }
-  let owned: string[] | null = null
+  let owned: Set<string> | null = null
   for (const paneKey in sleepingAgentSessionsByPaneKey) {
     const record = sleepingAgentSessionsByPaneKey[paneKey]
     if (!record || record.worktreeId !== worktreeId) {
@@ -29,15 +27,10 @@ export function selectSleepingRecordParkExemptTabIdsKey(
       continue
     }
     const tabId = record.tabId ?? record.paneKey.slice(0, record.paneKey.indexOf(':'))
-    if (tabId && !owned?.includes(tabId)) {
-      owned ??= []
-      owned.push(tabId)
+    if (tabId) {
+      owned ??= new Set()
+      owned.add(tabId)
     }
   }
-  // Why sorted: record insertion order must not churn the key and the derived set.
-  return owned === null ? '' : owned.sort().join(TAB_ID_SEPARATOR)
-}
-
-export function parseSleepingRecordParkExemptTabIdsKey(key: string): ReadonlySet<string> {
-  return key === '' ? EMPTY_TAB_IDS : new Set(key.split(TAB_ID_SEPARATOR))
+  return owned ?? EMPTY_TAB_IDS
 }

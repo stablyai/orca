@@ -7,6 +7,7 @@
  * render a slot as null.
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import {
@@ -29,10 +30,7 @@ import {
   selectEvictionExemptTerminalTabIds,
   selectEvictionExemptTerminalTabLayoutKey
 } from './terminal-eviction-exempt-tabs'
-import {
-  parseSleepingRecordParkExemptTabIdsKey,
-  selectSleepingRecordParkExemptTabIdsKey
-} from './sleeping-record-park-exemption'
+import { selectSleepingRecordParkExemptTabIds } from './sleeping-record-park-exemption'
 import { usePendingStartupParkPresence } from './terminal-pending-startup-park-presence'
 import { canWatcherCoverParkedTerminalTab } from './terminal-parked-tab-watchers'
 import { createTerminalTabActivationOrder } from './terminal-tab-activation-order'
@@ -118,14 +116,12 @@ export function useTerminalTabColdParking(args: {
   const pairedRuntimeParkingEnvironmentIds = useAppStore(
     selectPairedRuntimeParkingEnvironmentIdsFromState
   )
-  // Why a key, not the record map: the exemption is worktree-scoped, so a
-  // sleeping-record write for another worktree must not re-render this one.
-  const sleepingRecordOwnedTabIdsKey = useAppStore((state) =>
-    selectSleepingRecordParkExemptTabIdsKey(state.sleepingAgentSessionsByPaneKey, worktreeId)
-  )
-  const sleepingRecordOwnedTabIds = useMemo(
-    () => parseSleepingRecordParkExemptTabIdsKey(sleepingRecordOwnedTabIdsKey),
-    [sleepingRecordOwnedTabIdsKey]
+  // Why the worktree-scoped set, not the record map: the map is app-global, so
+  // subscribing to it re-rendered this worktree on every other worktree's write.
+  const sleepingRecordOwnedTabIds = useAppStore(
+    useShallow((state) =>
+      selectSleepingRecordParkExemptTabIds(state.sleepingAgentSessionsByPaneKey, worktreeId)
+    )
   )
   const terminalTabHiddenSinceRef = useRef(new Map<string, number>())
   // Why: view switches hide every tab at once, so the park clock cannot rank them.

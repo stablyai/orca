@@ -145,18 +145,14 @@ export function useParkedTerminalWatcherSynchronization(args: {
     parkedTabIds,
     activationDeferredMountTabIds
   } = args
-  // Why memoized: a fresh selector identity invalidates the store subscription's
-  // memoized snapshot, so every render would re-run the projection below.
-  const hasParkedTabs = parkedTabIds.size > 0
-  const reconciliationSelector = useMemo(
-    () => (state: AppState) =>
+  const reconciliationStoreInputs = useAppStore(
+    useShallow((state: AppState) =>
       // Why: an empty committed park set has no live watcher state for store writes to reconcile.
-      hasParkedTabs
-        ? selectWatcherReconciliationStoreInputs(state, terminalTabs)
-        : EMPTY_WATCHER_RECONCILIATION_INPUTS,
-    [hasParkedTabs, terminalTabs]
+      parkedTabIds.size === 0
+        ? EMPTY_WATCHER_RECONCILIATION_INPUTS
+        : selectWatcherReconciliationStoreInputs(state, terminalTabs)
+    )
   )
-  const reconciliationStoreInputs = useAppStore(useShallow(reconciliationSelector))
   // Why memoized: serializing the split tree per tab is the dominant cost here,
   // and the shallow selector output only changes when the serialization would.
   const reconciliationStoreInputsKey = useMemo(

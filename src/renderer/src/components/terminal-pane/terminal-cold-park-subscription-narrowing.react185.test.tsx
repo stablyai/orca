@@ -44,8 +44,12 @@ const terminalTabs = ['tab-1', 'tab-2'].map(
 )
 const assignments = new Map<string, { groupId: string; isActiveInGroup: boolean }>()
 
-function sleepingRecord(paneKey: string, worktreeId: string): SleepingAgentSessionRecord {
-  return { paneKey, worktreeId } as unknown as SleepingAgentSessionRecord
+function sleepingRecord(
+  paneKey: string,
+  worktreeId: string,
+  extra: Partial<SleepingAgentSessionRecord> = {}
+): SleepingAgentSessionRecord {
+  return { paneKey, worktreeId, ...extra } as unknown as SleepingAgentSessionRecord
 }
 const activityTerminalPortals: never[] = []
 
@@ -101,6 +105,21 @@ describe('cold-park store subscription narrowing', () => {
       useAppStore.setState({
         sleepingAgentSessionsByPaneKey: {
           'other-tab:1': sleepingRecord('other-tab:1', OTHER_WORKTREE_ID)
+        }
+      })
+    })
+    expect(harness.renders).toBe(0)
+  })
+
+  // Why: a blocked record never resumes, so it leaves the exempt set — and the
+  // narrowed subscription's compared value — unchanged.
+  it('ignores a sleeping-session write this worktree can never resume', () => {
+    act(() => {
+      useAppStore.setState({
+        sleepingAgentSessionsByPaneKey: {
+          'tab-1:1': sleepingRecord('tab-1:1', WORKTREE_ID, {
+            automaticResumeBlockedBy: 'legacy-orchestration-worker'
+          })
         }
       })
     })
