@@ -18,6 +18,7 @@ import {
   assertAgentSkillSharingAllowed,
   isAgentSkillSharingEnabled
 } from '../../shared/agent-skill-sharing-gate'
+import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -1407,6 +1408,7 @@ type RuntimeStore = {
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
+    nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
@@ -5281,6 +5283,11 @@ export class OrcaRuntimeService {
 
   assertAgentSkillSharingAllowed(): void {
     assertAgentSkillSharingAllowed(() => isAgentSkillSharingEnabled(this.store?.getSettings()))
+  }
+
+  /** Renderer-owned; read here because dispatch enforcement lives in main. */
+  getNestedWorkerMaxDepth(): number {
+    return resolveNestedWorkerMaxDepth(this.store?.getSettings())
   }
 
   async publishDiscoveredSkillsFromAgent(

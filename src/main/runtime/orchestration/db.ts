@@ -6,7 +6,7 @@ export {
 } from './db/contract-constants'
 export type { RunListPage, TaskRuntimeLineageRow } from './db/run-list-page'
 export { ORCHESTRATION_DELIVERY_BATCH_LIMIT } from './db/messages/mailbox-routing-page'
-export { DISPATCH_CONTEXT_CLAIM_SQL } from './db/dispatch-context/dispatch-context-store'
+export { DISPATCH_CONTEXT_CLAIM_SQL } from './db/dispatch-row-writer'
 export type {
   ForeignDirectMailboxRoutingPage,
   MailboxRoutingPage

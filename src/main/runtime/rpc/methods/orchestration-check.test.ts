@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -28,7 +29,7 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.check', () => {
     function createDispatchedTask(assigneeHandle = 'term_worker', assigneePaneKey?: string) {
       const task = db.createTask({ spec: 'manual check work' })
-      const dispatch = db.createDispatchContext(task.id, assigneeHandle, assigneePaneKey)
+      const dispatch = createRootDispatch(db, task.id, assigneeHandle, assigneePaneKey)
       return { task, dispatch }
     }
 
@@ -432,9 +433,9 @@ describe('orchestration RPC methods', () => {
     it('does not complete worker_done for a stale inactive dispatch', async () => {
       setup()
       const task = db.createTask({ spec: 'retry-sensitive work' })
-      const staleDispatch = db.createDispatchContext(task.id, 'term_old')
+      const staleDispatch = createRootDispatch(db, task.id, 'term_old')
       db.failDispatch(staleDispatch.id, 'retry elsewhere')
-      const activeDispatch = db.createDispatchContext(task.id, 'term_current')
+      const activeDispatch = createRootDispatch(db, task.id, 'term_current')
       insertWorkerDone({
         from: 'term_old',
         taskId: task.id,

@@ -1,8 +1,11 @@
 import { migrateMutationReceiptCapacity } from '../../mutation-receipt-capacity'
-import { DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL } from '../pane-key-match'
+import {
+  DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
+  REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL
+} from '../pane-key-match'
 import type { OrchestrationDb } from '../orchestration-db'
 
-export function applySchemaMigrationsV13ToV29(this: OrchestrationDb, current: number): void {
+export function applySchemaMigrationsV13ToV30(this: OrchestrationDb, current: number): void {
   if (current < 13 && !this.hasColumn('worker_dispatches', 'runtime_epoch')) {
     this.db.exec('ALTER TABLE worker_dispatches ADD COLUMN runtime_epoch TEXT')
   }
@@ -156,6 +159,29 @@ export function applySchemaMigrationsV13ToV29(this: OrchestrationDb, current: nu
   // against external logs to tell them apart (STA-4603).
   if (current < 29 && !this.hasColumn('dispatch_contexts', 'termination_reason')) {
     this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN termination_reason TEXT')
+  }
+  if (current < 30) {
+    if (!this.hasColumn('dispatch_contexts', 'depth')) {
+      this.db.exec('ALTER TABLE dispatch_contexts ADD COLUMN depth INTEGER NOT NULL DEFAULT 1')
+    }
+    if (!this.hasColumn('remote_dispatch_attachments', 'depth')) {
+      this.db.exec(
+        'ALTER TABLE remote_dispatch_attachments ADD COLUMN depth INTEGER NOT NULL DEFAULT 1'
+      )
+    }
+    // Why drop first: CREATE INDEX IF NOT EXISTS cannot widen an existing
+    // partial index predicate, and these two covered only starting/ready.
+    this.db.exec(`
+        DROP INDEX IF EXISTS idx_remote_dispatch_attachments_active_pane;
+        DROP INDEX IF EXISTS idx_remote_dispatch_attachments_active_pane_suffix;
+        CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane
+          ON remote_dispatch_attachments(pane_key)
+          WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown');
+        CREATE INDEX IF NOT EXISTS idx_remote_dispatch_attachments_active_pane_suffix
+          ON remote_dispatch_attachments(${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL})
+          WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+            AND pane_key IS NOT NULL;
+      `)
   }
   this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf

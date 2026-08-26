@@ -68,6 +68,7 @@ export async function dispatchTaskToWorker(params: {
   onLog: (msg: string) => void
   // Why: the coordinator owns the failed-task list, so a circuit break is reported back instead of mutated here.
   onCircuitBroken: (taskId: string) => void
+  nestedWorkerMaxDepth: number
 }): Promise<TaskDispatchResult> {
   const { db, runtime, task, targetHandle, baseDrift, onLog } = params
   // Why (§3.1): drift check runs before createDispatchContext so a refusal doesn't bump failure_count (carried forward as MAX in db.ts:301-306) and burn the circuit-breaker budget; the task stays `ready` and retries next tick.
@@ -95,13 +96,17 @@ export async function dispatchTaskToWorker(params: {
     dispatchAuthority?.paneKey && dispatchAuthority.processIncarnation
       ? dispatchAuthority.processIncarnation
       : undefined
-  const dispatch = db.createDispatchContext(
-    task.id,
-    targetHandle,
+  const dispatch = db.createDispatchContext({
+    taskId: task.id,
+    assigneeHandle: targetHandle,
     assigneePaneKey,
-    dispatchAuthority?.launchTokenHash ?? undefined,
-    processIncarnation
-  )
+    launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+    processIncarnation,
+    // Why system: the automatic loop is host-local Orca code driven by
+    // coordinator_runs, not a CLI caller, so it is a root by construction.
+    creator: { kind: 'system' },
+    maxDepth: params.nestedWorkerMaxDepth
+  })
 
   // Why: dispatched agents use orca-dev in dev mode to reach the dev runtime's socket, not production (Section 6.4).
   const preamble = buildDispatchPreamble({

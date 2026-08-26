@@ -2,6 +2,7 @@
 import { z } from 'zod'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import { defineMethod, type RpcMethod } from '../core'
+import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { OptionalFiniteNumber, OptionalString, OptionalBoolean, requiredString } from '../schemas'
 import {
   LEGACY_CONTRACT_VERSION,
@@ -1663,13 +1664,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       }
 
       revalidateLegacyCoordinator?.()
-      const ctx = db.createDispatchContext(
-        params.task,
-        to,
+      const ctx = db.createDispatchContext({
+        taskId: params.task,
+        assigneeHandle: to,
         assigneePaneKey,
-        dispatchAuthority?.launchTokenHash ?? undefined,
-        processIncarnation
-      )
+        launchTokenHash: dispatchAuthority?.launchTokenHash ?? undefined,
+        processIncarnation,
+        creator: resolveDispatchCreator(runtime, params.from),
+        maxDepth: runtime.getNestedWorkerMaxDepth()
+      })
       const dispatchCapability = params.inject
         ? db.mintDispatchCapability({
             dispatchId: ctx.id,

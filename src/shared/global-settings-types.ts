@@ -230,6 +230,10 @@ export type GlobalSettings = {
   artifactSharingEnabled?: boolean
   /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
   agentSkillSharingEnabled?: boolean
+  /** How deep dispatched workers may nest. 1 = workers cannot dispatch sub-workers.
+   *  Renderer-writable only: omitted from the SettingsUpdate RPC schema so a worker
+   *  cannot raise its own cap via `orca settings update`. */
+  nestedWorkerMaxDepth?: number
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
   /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
