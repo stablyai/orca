@@ -158,6 +158,9 @@ export class RuntimeAutomationController {
     if (targetChanged) {
       const target = await this.resolveTarget(updates, current)
       assertAutomationRunContextMatchesTarget(updates.runContext, target.repo)
+      if (!hasRuntimeAutomationUpdateValue(updates, 'runContext')) {
+        assertAutomationRunContextMatchesTarget(current.runContext, target.repo)
+      }
       if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
         throw new Error('Session reuse requires an existing workspace target.')
       }
