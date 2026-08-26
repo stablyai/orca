@@ -33,6 +33,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { resolveCliWorktreeCreateBranchOverride } from './worktree-create-branch-override'
 
 type HookWarningResult = {
   warning?: string
@@ -229,11 +230,22 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
+    const name = getRequiredStringFlag(flags, 'name')
+    // Why: --branch is optional but when present must have a value (not --branch alone).
+    const explicitBranch = getPresentStringFlag(flags, 'branch')
+    const repo = await getCreateRepoSelector(flags, cwdParentWorktree, client)
+    const branchNameOverride = await resolveCliWorktreeCreateBranchOverride({
+      client,
+      repo,
+      name,
+      branch: explicitBranch
+    })
     const activate = flags.get('activate') === true || flags.get('run-hooks') === true
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
-      repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
-      name: getRequiredStringFlag(flags, 'name'),
+      repo,
+      name,
       baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      ...(branchNameOverride ? { branchNameOverride } : {}),
       linkedIssue: getOptionalNumberFlag(flags, 'issue'),
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
