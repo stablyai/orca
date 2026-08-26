@@ -3,6 +3,7 @@ import type { Repo } from '../shared/repo-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { getRepoExecutionHostId } from '../shared/execution-host'
+import { worktreeIdComparisonKey } from '../shared/worktree/id'
 import { isWorkspaceKey, parseWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
 import type { Store } from './persistence'
 
@@ -56,6 +57,18 @@ export function pruneLineageForMissingRepoWorktrees(
     return
   }
   const liveIds = new Set(gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`))
+  // Why (#15598): git reports Windows paths with forward slashes while stored
+  // lineage keys can carry backslashes; exact-only membership would prune the
+  // lineage (and rotate the parent's instance) of a checkout that never went
+  // anywhere. An id is live when either spelling matches.
+  const liveComparisonKeys = new Set(
+    [...liveIds]
+      .map((id) => worktreeIdComparisonKey(id))
+      .filter((key): key is string => key !== null)
+  )
+  const isLiveWorktreeId = (worktreeId: string): boolean =>
+    liveIds.has(worktreeId) ||
+    liveComparisonKeys.has(worktreeIdComparisonKey(worktreeId) ?? worktreeId)
   const expectedHostId = getRepoExecutionHostId(repo)
   const repoOwners = store.getRepos().filter((candidate) => candidate.id === repo.id)
   const canMutateWorktree = (worktreeId: string): boolean => {
@@ -68,7 +81,7 @@ export function pruneLineageForMissingRepoWorktrees(
       childScope?.type === 'worktree' &&
       worktreeIdBelongsToRepo(childScope.worktreeId, repoPrefix) &&
       canMutateWorktree(childScope.worktreeId) &&
-      !liveIds.has(childScope.worktreeId) &&
+      !isLiveWorktreeId(childScope.worktreeId) &&
       isWorkspaceKey(childWorkspaceKey)
     ) {
       store.removeWorkspaceLineage?.(childWorkspaceKey)
@@ -78,7 +91,7 @@ export function pruneLineageForMissingRepoWorktrees(
     if (
       worktreeIdBelongsToRepo(childId, repoPrefix) &&
       canMutateWorktree(childId) &&
-      !liveIds.has(childId)
+      !isLiveWorktreeId(childId)
     ) {
       // Why: a proven-missing path must not transfer its lineage to a future checkout at that path.
       store.removeWorktreeLineage(childId)
@@ -87,7 +100,7 @@ export function pruneLineageForMissingRepoWorktrees(
     if (
       worktreeIdBelongsToRepo(lineage.parentWorktreeId, repoPrefix) &&
       canMutateWorktree(lineage.parentWorktreeId) &&
-      !liveIds.has(lineage.parentWorktreeId)
+      !isLiveWorktreeId(lineage.parentWorktreeId)
     ) {
       const parentMeta = store.getWorktreeMeta(lineage.parentWorktreeId)
       if (!parentMeta || parentMeta.instanceId === lineage.parentWorktreeInstanceId) {
