@@ -5,16 +5,13 @@ import {
 import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
+import { RelayOuterError } from './relay-outer-error'
+
+export { RelayOuterError } from './relay-outer-error'
 
 // Native WebSockets normally emit close immediately after error; bound the
 // missing-close case so a dead socket cannot leave recovery pending forever.
 const RELAY_ERROR_CLOSE_GRACE_MS = 250
-
-export class RelayOuterError extends Error {
-  constructor(readonly code: number) {
-    super(`relay_outer_${code}`)
-  }
-}
 
 type MobileRelayE2eeLinkOptions = {
   endpoint: { cellUrl: string; relayHostId: string }

@@ -1,64 +1,30 @@
-import { existsSync, readFileSync, statSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
+import { existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { performance } from 'node:perf_hooks'
 import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
-import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
-import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
+import {
+  fetchRelayRegionCatalog,
+  isCanonicalRelayProbeOrigin,
+  parseRelayRegion,
+  RELAY_REGIONS,
+  type RelayRegion,
+  type RelayRegionCatalog
+} from './relay-region-catalog'
 
-export const RELAY_REGIONS = ['us-central1', 'asia-east2'] as const
-export type RelayRegion = (typeof RELAY_REGIONS)[number]
+export { RELAY_REGIONS, type RelayRegion } from './relay-region-catalog'
 
 const RELAY_REGION_CACHE_FILENAME = 'orca-relay-region-preference.json'
 const CACHE_MAX_BYTES = 8 * 1024
-const CATALOG_MAX_BYTES = 16 * 1024
 const CACHE_TTL_MS = 24 * 60 * 60_000
+const FAILURE_RETRY_MS = 2 * 60_000
 const PROBE_SAMPLES = 3
 const PROBE_TIMEOUT_MS = 1_500
 const SWITCH_MINIMUM_MS = 25
 const SWITCH_RATIO = 0.8
 
 const RelayRegionSchema = z.enum(RELAY_REGIONS)
-const RelayProbeOriginSchema = z.string().max(2_048).refine(isCanonicalHttpsOrigin)
-const RelayRegionCatalogSchema = z
-  .object({
-    v: z.literal(1),
-    regions: z
-      .array(
-        z
-          .object({
-            region: RelayRegionSchema,
-            probeOrigins: z.array(RelayProbeOriginSchema).min(1).max(2)
-          })
-          .strict()
-      )
-      .max(RELAY_REGIONS.length)
-  })
-  .strict()
-  .superRefine((catalog, context) => {
-    const regions = new Set<RelayRegion>()
-    const origins = new Set<string>()
-    for (const [regionIndex, entry] of catalog.regions.entries()) {
-      if (regions.has(entry.region)) {
-        context.addIssue({
-          code: 'custom',
-          message: 'duplicate relay region',
-          path: ['regions', regionIndex, 'region']
-        })
-      }
-      regions.add(entry.region)
-      for (const [originIndex, origin] of entry.probeOrigins.entries()) {
-        if (origins.has(origin)) {
-          context.addIssue({
-            code: 'custom',
-            message: 'duplicate relay probe origin',
-            path: ['regions', regionIndex, 'probeOrigins', originIndex]
-          })
-        }
-        origins.add(origin)
-      }
-    }
-  })
 
 const RelayRegionCacheSchema = z
   .object({
@@ -70,7 +36,6 @@ const RelayRegionCacheSchema = z
   })
   .strict()
 
-type RelayRegionCatalog = z.infer<typeof RelayRegionCatalogSchema>
 type RelayRegionCache = z.infer<typeof RelayRegionCacheSchema>
 type RegionMeasurement = { region: RelayRegion; latencyMs: number }
 
@@ -88,17 +53,19 @@ type RelayRegionPreferenceOptions = {
 export class RelayRegionPreferenceResolver {
   private readonly options: RelayRegionPreferenceOptions
   private pending: Promise<RelayRegion | undefined> | null = null
+  private retryAfter = 0
+  private failureLogged = false
 
   constructor(options: RelayRegionPreferenceOptions) {
     this.options = options
   }
 
   async resolve(): Promise<RelayRegion | undefined> {
-    const override = RelayRegionSchema.safeParse(
+    const override = parseRelayRegion(
       this.options.diagnosticOverride ?? process.env.ORCA_RELAY_REGION_OVERRIDE
     )
-    if (override.success) {
-      return override.data
+    if (override) {
+      return override
     }
 
     const now = (this.options.now ?? Date.now)()
@@ -106,11 +73,29 @@ export class RelayRegionPreferenceResolver {
     if (cache && cache.expiresAt > now) {
       return cache.region
     }
+    if (now < this.retryAfter) {
+      return undefined
+    }
     if (this.pending) {
       return await this.pending
     }
 
-    this.pending = this.refresh(cache, now).catch(() => undefined)
+    this.pending = this.refresh(cache, now).then(
+      (region) => {
+        this.retryAfter = 0
+        this.failureLogged = false
+        return region
+      },
+      (error) => {
+        this.retryAfter = (this.options.now ?? Date.now)() + FAILURE_RETRY_MS
+        const reason = relayRegionFailureReason(error)
+        if (!this.failureLogged && reason !== 'catalog-http-404') {
+          console.warn('[relay] region preference unavailable:', reason)
+          this.failureLogged = true
+        }
+        return undefined
+      }
+    )
     try {
       return await this.pending
     } finally {
@@ -142,11 +127,11 @@ export class RelayRegionPreferenceResolver {
     ).filter((measurement): measurement is RegionMeasurement => measurement !== null)
     const selected = selectRegionMeasurement(measurements, previous)
     if (!selected) {
-      return undefined
+      throw new Error('relay region probes unavailable')
     }
 
     try {
-      writeSecureJsonFile(join(this.options.userDataPath, RELAY_REGION_CACHE_FILENAME), {
+      writeRelayRegionCache(join(this.options.userDataPath, RELAY_REGION_CACHE_FILENAME), {
         v: 1,
         directorUrl: this.options.directorUrl,
         region: selected.region,
@@ -171,46 +156,13 @@ export function createRelayRegionPreferenceReader(input: {
   return () => resolver.resolve()
 }
 
-async function fetchRelayRegionCatalog(
-  directorUrl: string,
-  fetch: typeof globalThis.fetch,
-  timeoutMs: number
-): Promise<RelayRegionCatalog> {
-  if (!isCanonicalDirectorOrigin(directorUrl)) {
-    throw new Error('invalid relay director origin')
-  }
-  const response = await fetch(`${directorUrl}/v1/regions`, {
-    method: 'GET',
-    cache: 'no-store',
-    redirect: 'error',
-    signal: AbortSignal.timeout(timeoutMs)
-  })
-  if (!response.ok) {
-    await cancelUnreadResponseBody(response)
-    throw new Error(`relay region catalog failed (${response.status})`)
-  }
-  const body = await readFetchResponseJsonWithinLimit<unknown>(response, CATALOG_MAX_BYTES, {
-    structuralTokens: 64,
-    nestingDepth: 8
-  })
-  const catalog = RelayRegionCatalogSchema.parse(body)
-  if (
-    catalog.regions.some((entry) =>
-      entry.probeOrigins.some((origin) => !isProbeOriginForDirector(origin, directorUrl))
-    )
-  ) {
-    throw new Error('relay probe origin does not belong to the director')
-  }
-  return catalog
-}
-
 export async function probeRelayOrigin(
   origin: string,
   fetch: typeof globalThis.fetch,
   now = () => performance.now(),
   timeoutMs = PROBE_TIMEOUT_MS
 ): Promise<number | null> {
-  if (!RelayProbeOriginSchema.safeParse(origin).success) {
+  if (!isCanonicalRelayProbeOrigin(origin)) {
     return null
   }
   const startedAt = now()
@@ -281,7 +233,6 @@ function readRelayRegionCache(userDataPath: string, directorUrl: string, now: nu
     if (!existsSync(path)) {
       return null
     }
-    hardenExistingSecureFile(path)
     if (statSync(path).size > CACHE_MAX_BYTES) {
       return null
     }
@@ -296,27 +247,35 @@ function readRelayRegionCache(userDataPath: string, directorUrl: string, now: nu
   }
 }
 
-function isCanonicalHttpsOrigin(value: string): boolean {
+function writeRelayRegionCache(path: string, cache: RelayRegionCache): void {
+  // This cache is non-secret; avoid synchronous Windows ACL subprocesses on the main thread.
+  const temporaryPath = `${path}.${process.pid}.${randomUUID()}.tmp`
   try {
-    const url = new URL(value)
-    return url.protocol === 'https:' && url.origin === value
-  } catch {
-    return false
+    writeFileSync(temporaryPath, JSON.stringify(cache), { encoding: 'utf8', mode: 0o600 })
+    renameSync(temporaryPath, path)
+  } catch (error) {
+    rmSync(temporaryPath, { force: true })
+    throw error
   }
 }
 
-function isCanonicalDirectorOrigin(value: string): boolean {
-  try {
-    const url = new URL(value)
-    const loopback = ['127.0.0.1', 'localhost', '[::1]'].includes(url.hostname)
-    return (
-      url.origin === value && (url.protocol === 'https:' || (url.protocol === 'http:' && loopback))
-    )
-  } catch {
-    return false
+function relayRegionFailureReason(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'request-failed'
   }
-}
-
-function isProbeOriginForDirector(origin: string, directorUrl: string): boolean {
-  return new URL(origin).hostname.endsWith(`.${new URL(directorUrl).hostname}`)
+  if (error.message === 'relay region probes unavailable') {
+    return 'probes-unavailable'
+  }
+  if (
+    error.message === 'invalid relay director origin' ||
+    error.message === 'invalid relay region catalog' ||
+    error.message === 'invalid relay region entry' ||
+    error.message === 'duplicate relay region' ||
+    error.message === 'invalid relay probe origin' ||
+    error.message === 'duplicate relay probe origin'
+  ) {
+    return 'invalid-catalog'
+  }
+  const status = /^relay region catalog failed \(([1-5]\d\d)\)$/.exec(error.message)?.[1]
+  return status ? `catalog-http-${status}` : 'request-failed'
 }

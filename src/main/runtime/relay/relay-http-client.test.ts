@@ -117,6 +117,37 @@ describe('relay HTTP client', () => {
     })
   })
 
+  it('bounds the combined region and reconnect compatibility fallbacks', async () => {
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(Response.json({ error: 'invalid_request' }, { status: 400 }))
+      .mockResolvedValueOnce(Response.json({ error: 'invalid_request' }, { status: 400 }))
+      .mockResolvedValueOnce(
+        Response.json({
+          v: 1,
+          cellUrl: 'https://relay-c1.example',
+          assignmentEpoch: 4,
+          lease: 'lease-jwt'
+        })
+      )
+
+    await expect(
+      requestRelayAssignment({
+        directorUrl: 'https://relay.example',
+        relayToken: 'scoped-token',
+        relayHostId: 'AbCdEf0123_-xyZ9',
+        reconnect: true,
+        preferredRegion: 'asia-east2',
+        fetch
+      })
+    ).resolves.toMatchObject({ assignmentEpoch: 4 })
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(JSON.parse(String(fetch.mock.calls[2]?.[1]?.body))).toEqual({
+      v: 1,
+      relayHostId: 'AbCdEf0123_-xyZ9'
+    })
+  })
+
   it('retries once unhinted when a rolled-back director rejects the hint', async () => {
     const fetch = vi
       .fn<typeof globalThis.fetch>()

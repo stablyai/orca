@@ -1,5 +1,7 @@
 import { z } from 'zod'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import { RelayOuterError } from './relay-outer-error'
 
 const MAX_RESPONSE_BYTES = 16 * 1024
 const ResolveResponseSchema = z
@@ -32,6 +34,9 @@ export async function resolveMobileRelayEndpoint(args: {
       signal: controller.signal
     })
     if (!response.ok) {
+      if (response.status === 401) {
+        throw new RelayOuterError(MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL)
+      }
       throw new Error(`relay director resolve failed (${response.status})`)
     }
     const declaredLength = Number(response.headers.get('content-length') ?? 0)

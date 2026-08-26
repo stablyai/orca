@@ -7,8 +7,11 @@ for 24 hours. A cached region changes only when the alternative is materially fa
 
 The assignment request sends only `preferredRegion`. It does not send latency, IP address, country,
 pairing data, or credentials. Catalog, probe, and cache failures fall back to an assignment without
-a region preference. A rolled-back director that rejects the new field is retried once without
-only that field while preserving reconnect behavior.
+a region preference, with a short in-memory backoff so recovery does not repeatedly repay failed
+probes. The preference is advisory: if that region has no healthy capacity, the director falls back
+to any healthy general cell. A rolled-back director that rejects the new field is retried once
+without only that field while preserving reconnect behavior. This client ignores catalog regions
+it does not recognize and continues measuring the regions it supports.
 
 The selection measures the desktop network path. Folder workspaces and SSH workspaces share the
 same local broker and do not run probes on remote hosts. The phone continues to connect to the

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { MOBILE_RELAY_CLOSE_CODE } from '../../../src/shared/mobile-relay-close-codes'
 import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 
 const relay = {
@@ -11,6 +12,20 @@ const relay = {
 }
 
 describe('mobile relay resume director', () => {
+  it('classifies a rejected resume credential for grace fallback', async () => {
+    const rejected = vi.fn(async () => new Response('', { status: 401 }))
+
+    const resolution = resolveMobileRelayEndpoint({
+      relay,
+      resumeToken: 'A'.repeat(43),
+      fetchImpl: rejected
+    })
+
+    await expect(resolution).rejects.toMatchObject({
+      code: MOBILE_RELAY_CLOSE_CODE.BAD_OUTER_CREDENTIAL
+    })
+  })
+
   it('uses a bounded POST body and never puts the bearer in the URL', async () => {
     const fetchImpl = vi.fn(
       async () =>

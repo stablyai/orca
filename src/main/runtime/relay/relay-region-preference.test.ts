@@ -9,9 +9,13 @@ const DIRECTOR = 'https://relay.example.test'
 const US = 'https://us-c1.relay.example.test'
 const US_SECONDARY = 'https://us-c2.relay.example.test'
 const ASIA = 'https://asia-c1.relay.example.test'
+const ASIA_SECONDARY = 'https://asia-c2.relay.example.test'
+const ASIA_TERTIARY = 'https://asia-c3.relay.example.test'
 const tempPaths: string[] = []
 
 afterEach(() => {
+  vi.unstubAllEnvs()
+  vi.restoreAllMocks()
   for (const path of tempPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -143,6 +147,10 @@ describe('Relay region preference', () => {
         { region: 'us-central1', probeOrigins: [US] },
         { region: 'asia-east2', probeOrigins: [US] }
       ],
+      [
+        { region: 'us-central1', probeOrigins: [US] },
+        { region: 'us-central1', probeOrigins: [US_SECONDARY] }
+      ],
       [{ region: 'us-central1', probeOrigins: ['http://us.relay.example.test'] }],
       [{ region: 'us-central1', probeOrigins: ['https://external.example.test'] }]
     ]
@@ -170,6 +178,33 @@ describe('Relay region preference', () => {
     ).resolves.toBeUndefined()
   })
 
+  it('ignores future regions and metadata while bounding known-region probes', async () => {
+    const { calls, probe } = sampledProbe({
+      [ASIA]: [30, 32, 34],
+      [ASIA_SECONDARY]: [28, 30, 32],
+      [ASIA_TERTIARY]: [1, 1, 1]
+    })
+    const resolver = new RelayRegionPreferenceResolver({
+      directorUrl: DIRECTOR,
+      userDataPath: userDataPath(),
+      fetch: catalogFetch([
+        ...Array.from({ length: 17 }, (_, index) => ({ futureMetadata: index })),
+        { region: 'europe-west1', futureShape: true },
+        {
+          region: 'asia-east2',
+          probeOrigins: [ASIA, ASIA_SECONDARY, ASIA_TERTIARY],
+          metadata: true
+        }
+      ]),
+      probe,
+      now: () => 1_000
+    })
+
+    await expect(resolver.resolve()).resolves.toBe('asia-east2')
+    expect(calls).not.toContain(ASIA_TERTIARY)
+    expect(calls).toHaveLength(6)
+  })
+
   it('recovers from corrupt cache and cancels an old directors error response', async () => {
     const path = userDataPath()
     writeFileSync(cachePath(path), '{not-json')
@@ -186,6 +221,7 @@ describe('Relay region preference', () => {
 
     rmSync(cachePath(path), { force: true })
     let cancelled = 0
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
     const oldDirector = vi.fn<typeof globalThis.fetch>(async () =>
       cancelTrackingResponse(404, () => {
         cancelled += 1
@@ -200,6 +236,7 @@ describe('Relay region preference', () => {
       }).resolve()
     ).resolves.toBeUndefined()
     expect(cancelled).toBe(1)
+    expect(warn).not.toHaveBeenCalled()
   })
 
   it('rejects a cache expiry beyond the 24-hour bound', async () => {
@@ -239,6 +276,69 @@ describe('Relay region preference', () => {
 
     await expect(resolver.resolve()).resolves.toBe('asia-east2')
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('uses the documented environment override without network access', async () => {
+    vi.stubEnv('ORCA_RELAY_REGION_OVERRIDE', 'asia-east2')
+    const fetch = vi.fn<typeof globalThis.fetch>()
+    const resolver = new RelayRegionPreferenceResolver({
+      directorUrl: DIRECTOR,
+      userDataPath: userDataPath(),
+      fetch
+    })
+
+    await expect(resolver.resolve()).resolves.toBe('asia-east2')
+    expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('briefly caches failed probe cycles and logs once per failure streak', async () => {
+    let now = 1_000
+    const path = userDataPath()
+    const fetch = catalogFetch([{ region: 'asia-east2', probeOrigins: [ASIA] }])
+    let healthy = false
+    const probe = vi.fn(async () => (healthy ? 20 : null))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const resolver = new RelayRegionPreferenceResolver({
+      directorUrl: DIRECTOR,
+      userDataPath: path,
+      fetch,
+      probe,
+      now: () => now
+    })
+
+    await expect(resolver.resolve()).resolves.toBeUndefined()
+    await expect(resolver.resolve()).resolves.toBeUndefined()
+    expect(fetch).toHaveBeenCalledOnce()
+    expect(probe).toHaveBeenCalledOnce()
+
+    now += 2 * 60_000 + 1
+    healthy = true
+    await expect(resolver.resolve()).resolves.toBe('asia-east2')
+    rmSync(cachePath(path), { force: true })
+    expect(fetch).toHaveBeenCalledTimes(2)
+    expect(probe).toHaveBeenCalledTimes(4)
+    expect(warn).toHaveBeenCalledOnce()
+
+    now += 1
+    healthy = false
+    await expect(resolver.resolve()).resolves.toBeUndefined()
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(probe).toHaveBeenCalledTimes(5)
+    expect(warn).toHaveBeenCalledTimes(2)
+  })
+
+  it('logs a bounded reason instead of an arbitrary request error', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    const resolver = new RelayRegionPreferenceResolver({
+      directorUrl: DIRECTOR,
+      userDataPath: userDataPath(),
+      fetch: vi.fn(async () => {
+        throw new Error('private upstream detail')
+      })
+    })
+
+    await expect(resolver.resolve()).resolves.toBeUndefined()
+    expect(warn).toHaveBeenCalledWith('[relay] region preference unavailable:', 'request-failed')
   })
 
   it('bounds an offline catalog request and returns no preference', async () => {
