@@ -7,8 +7,10 @@ import {
   DISPATCH_STALE_THRESHOLD,
   parseAllowStaleBaseFromSpec
 } from './coordinator-stale-base-flag'
+import { isAgentPromptStalledError } from '../agent-prompt-submission-verification'
 
-export type TaskDispatchResult = 'dispatched' | 'stale-base-refused'
+/** `dispatched-unobserved`: the preamble landed but the worker's turn start was never observed. */
+export type TaskDispatchResult = 'dispatched' | 'dispatched-unobserved' | 'stale-base-refused'
 
 // Why: 10 min = documented heartbeat cadence (5 min) × 2, so one missed heartbeat is the earliest a dispatch can look stale.
 const HUNG_THRESHOLD_MS = 10 * 60 * 1000
@@ -136,6 +138,17 @@ export async function dispatchTaskToWorker(params: {
   try {
     await runtime.sendTerminalAgentPrompt(targetHandle, preamble + gateContext)
   } catch (err) {
+    // Why (#16095): Enter is written before submission is verified, so a stall is only ever an
+    // unobserved turn start — never proof the preamble is missing. Failing here would reset the
+    // task to 'ready' and paste the whole preamble a second time into a worker already running it,
+    // and would revoke the capability its worker_done needs.
+    if (isAgentPromptStalledError(err)) {
+      onLog(
+        `Dispatched task ${task.id} to ${targetHandle}; turn start was not observed. ` +
+          `The preamble is already in the pane, so the dispatch stays active instead of being resent.`
+      )
+      return 'dispatched-unobserved'
+    }
     const updated = db.failDispatch(dispatch.id, err instanceof Error ? err.message : String(err))
     if (updated?.status === 'circuit_broken') {
       params.onCircuitBroken(task.id)

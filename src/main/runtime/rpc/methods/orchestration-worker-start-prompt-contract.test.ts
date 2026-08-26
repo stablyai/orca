@@ -254,10 +254,12 @@ describe('orchestration worker-start prompt contract', () => {
     expect(harness.writes.filter((data) => data === '\r')).toHaveLength(1)
     const persisted = reopenPromptContractDb(harness)
     expect(persisted.getTask(harness.taskId)?.status).toBe('failed')
+    // Why (#16095): the receipt still reports the failure, but Enter was written before it was
+    // verified — so the capability survives and the worker's own report can correct the record.
     expect(persisted.getDispatchContextById(dispatchId)).toMatchObject({
       status: 'failed',
       last_failure: 'agent_prompt_stalled',
-      capability_revoked_at: expect.any(String)
+      capability_revoked_at: null
     })
     expect(persisted.getWorkerDispatch(dispatchId)).toMatchObject({
       state: 'failed',

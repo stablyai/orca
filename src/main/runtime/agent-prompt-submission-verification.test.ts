@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_PROMPT_EFFECT_TIMEOUT_MS,
+  AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
   type AgentPromptActivity,
+  isAgentPromptStalledError,
+  resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 
@@ -10,6 +13,8 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
     generation: 1,
     permissionSequence: 2,
     workingSequence: 4,
+    explicitWorkingStartedAt: null,
+    outputSequence: 7,
     status: 'idle',
     ...overrides
   }
@@ -125,6 +130,111 @@ describe('agent prompt submission verification', () => {
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 
     await rejected
+  })
+
+  it('accepts a hook working status recorded after the baseline', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+
+    // No workingSequence edge: the window-gated synthetic title never ran (hidden window/headless).
+    current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(verification).resolves.toBeUndefined()
+  })
+
+  it('does not accept a hook working status that predates the baseline', async () => {
+    vi.useFakeTimers()
+    const current = activity({ explicitWorkingStartedAt: 2_000, status: 'working' })
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+
+    await rejected
+  })
+
+  // Why: same-state hook pings refresh the row without starting a turn, so only the pinned
+  // stateStartedAt may satisfy the check — a refreshed row must stay unproven.
+  it('does not accept a refreshed hook row whose working turn did not restart', async () => {
+    vi.useFakeTimers()
+    let current = activity({ explicitWorkingStartedAt: 2_000 })
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
+
+    current = activity({ explicitWorkingStartedAt: 2_000, outputSequence: 40 })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+
+    await rejected
+  })
+
+  it('accepts pane output after Enter when the agent was already working', async () => {
+    vi.useFakeTimers()
+    let current = activity({ status: 'working' })
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+
+    current = activity({ status: 'working', outputSequence: 8 })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(verification).resolves.toBeUndefined()
+  })
+
+  it('does not accept pane output when the agent was idle at submit', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
+
+    current = activity({ outputSequence: 9 })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+
+    await rejected
+  })
+
+  it('holds the longer hook window open past the default timeout', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current,
+      timeoutMs: AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
+    })
+
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS + 1_000)
+    current = activity({ explicitWorkingStartedAt: 9_000, status: 'working' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(verification).resolves.toBeUndefined()
+  })
+
+  it('gives hook-observed agents the longer effect window', () => {
+    expect(resolveAgentPromptEffectTimeoutMs('codex')).toBe(AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS)
+    expect(resolveAgentPromptEffectTimeoutMs('kimi')).toBe(AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS)
+    expect(resolveAgentPromptEffectTimeoutMs('claude')).toBe(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+    expect(resolveAgentPromptEffectTimeoutMs(null)).toBe(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
+  })
+
+  it('recognizes a stalled verdict from a message or a relayed error code', () => {
+    expect(isAgentPromptStalledError(new Error('agent_prompt_stalled'))).toBe(true)
+    expect(isAgentPromptStalledError({ code: 'agent_prompt_stalled' })).toBe(true)
+    expect(isAgentPromptStalledError(new Error('terminal_not_writable'))).toBe(false)
+    expect(isAgentPromptStalledError(null)).toBe(false)
   })
 
   it('rejects a replaced terminal generation', async () => {
