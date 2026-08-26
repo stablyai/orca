@@ -1,6 +1,10 @@
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { MessagePriority } from '../orchestration/types'
-import { isCollaborationMessageAdmitted, type AdmissionPolicy } from './collaboration-admission'
+import {
+  COLLABORATION_MESSAGE_PRIORITIES,
+  isCollaborationMessageAdmitted,
+  type AdmissionPolicy
+} from './collaboration-admission'
 
 export type CollaborationTopologyStep = {
   taskId: string
@@ -18,8 +22,6 @@ export type CollaborationPublishAdmissionOption = {
   semanticType: string
   minPriority: MessagePriority
 }
-
-const MESSAGE_PRIORITIES: readonly MessagePriority[] = ['normal', 'high', 'urgent']
 
 function dedupePreservingOrder(
   topics: readonly string[] | undefined
@@ -143,7 +145,7 @@ export function admittedPublishOptionsForTopic(
     }
   }
   return semanticTypes.flatMap((semanticType) => {
-    const minPriority = MESSAGE_PRIORITIES.find((priority) =>
+    const minPriority = COLLABORATION_MESSAGE_PRIORITIES.find((priority) =>
       policies.some((policy) =>
         isCollaborationMessageAdmitted({ type: semanticType, priority }, policy)
       )
