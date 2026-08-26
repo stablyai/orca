@@ -2,8 +2,7 @@ import type {
   LinearErrorCode,
   LinearIncludeErrorCode,
   LinearIssueInclude,
-  LinearIssueListFilter,
-  LinearIssueTaskUpdateRequest
+  LinearIssueListFilter
 } from './agent-access'
 import type { LinearInlineMedia } from './inline-media'
 import type { LinearPriorityLabel } from './priority-label'
@@ -256,26 +255,6 @@ export type LinearStatusSetResult = {
   state: { id: string; name: string; type: string }
   previousState: { id: string; name: string } | null
   meta: { workspaceId: string; alreadyInState: boolean }
-}
-
-export type LinearIssueTaskUpdateResult = {
-  issue: LinearWriteIssueRef
-  operation: LinearIssueTaskUpdateRequest['operation']
-  previous: {
-    assignee?: LinearUserSummary | null
-    priority?: number | null
-    estimate?: number | null
-    dueDate?: string | null
-    labels?: LinearNamedEntity[]
-  }
-  current: {
-    assignee?: LinearUserSummary | null
-    priority?: number | null
-    estimate?: number | null
-    dueDate?: string | null
-    labels?: LinearNamedEntity[]
-  }
-  meta: { workspaceId: string; alreadySet: boolean }
 }
 
 export type LinearCommentAddResult = {

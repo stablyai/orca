@@ -66,6 +66,13 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     examples: ['orca linear team labels --team ENG --json']
   },
   {
+    path: ['linear', 'team', 'cycles'],
+    summary: 'List Linear team cycles',
+    usage: 'orca linear team cycles --team <key|id> [--current] [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'team', 'current', 'workspace'],
+    examples: ['orca linear team cycles --team ENG --current --json']
+  },
+  {
     path: ['linear', 'project', 'list'],
     summary: 'List connected Linear projects',
     usage:
@@ -161,6 +168,23 @@ export const LINEAR_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'current', 'workspace', 'id'],
     positionalArgs: ['id'],
     examples: ['orca linear due-date clear ENG-123 --json']
+  },
+  {
+    path: ['linear', 'cycle', 'set'],
+    summary: 'Set a Linear issue cycle',
+    usage:
+      'orca linear cycle set [<id>] [--current] --to current|<cycleId-or-exact-name> [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'current', 'to', 'workspace', 'id'],
+    positionalArgs: ['id'],
+    examples: ['orca linear cycle set ENG-123 --to current --json']
+  },
+  {
+    path: ['linear', 'cycle', 'clear'],
+    summary: 'Clear a Linear issue cycle',
+    usage: 'orca linear cycle clear [<id>] [--current] [--workspace <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'current', 'workspace', 'id'],
+    positionalArgs: ['id'],
+    examples: ['orca linear cycle clear ENG-123 --json']
   },
   {
     path: ['linear', 'label', 'add'],

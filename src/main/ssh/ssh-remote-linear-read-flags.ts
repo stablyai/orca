@@ -38,6 +38,7 @@ export const LINEAR_TEAM_LOOKUP_FLAGS = new Set([
   'team',
   'workspace'
 ])
+export const LINEAR_TEAM_CYCLES_FLAGS = new Set([...LINEAR_TEAM_LOOKUP_FLAGS, 'current'])
 export const LINEAR_PROJECT_LIST_FLAGS = new Set([
   'help',
   'json',

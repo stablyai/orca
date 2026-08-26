@@ -81,6 +81,7 @@ orca linear team list [--workspace <id>|all] [--json]
 orca linear team members --team <key|id> [--workspace <id>] [--json]
 orca linear team states --team <key|id> [--workspace <id>] [--json]
 orca linear team labels --team <key|id> [--workspace <id>] [--json]
+orca linear team cycles --team <key|id> [--current] [--workspace <id>] [--json]
 orca linear project list [--query <text>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear list [--filter assigned|created|all|completed|open] [--team <key|id>] [--limit <n>] [--workspace <id>|all] [--json]
 orca linear status set [<id>] [--current] --to <state> [--workspace <id>] [--json]
@@ -92,6 +93,8 @@ orca linear estimate set [<id>] [--current] --to <number> [--workspace <id>] [--
 orca linear estimate clear [<id>] [--current] [--workspace <id>] [--json]
 orca linear due-date set [<id>] [--current] --to <yyyy-mm-dd> [--workspace <id>] [--json]
 orca linear due-date clear [<id>] [--current] [--workspace <id>] [--json]
+orca linear cycle set [<id>] [--current] --to current|<cycleId-or-exact-name> [--workspace <id>] [--json]
+orca linear cycle clear [<id>] [--current] [--workspace <id>] [--json]
 orca linear label add [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]
 orca linear label remove [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]
 orca linear label set [<id>] [--current] --label <labelId-or-exact-name>... [--workspace <id>] [--json]
@@ -109,12 +112,15 @@ orca linear team list --workspace all --json
 orca linear team states --team <key-or-id> --workspace <workspaceId> --json
 orca linear team labels --team <key-or-id> --workspace <workspaceId> --json
 orca linear team members --team <key-or-id> --workspace <workspaceId> --json
+orca linear team cycles --team <key-or-id> --current --workspace <workspaceId> --json
 orca linear project list --query <project-name> --workspace <workspaceId> --json
 ```
 
 Prefer IDs for automation. Names are accepted only when they exactly and uniquely match in the relevant team or workspace.
 
 `save-issue` matches Linear MCP's create-or-update shape: omit an issue target to create, or pass an id/`--current` to update. Repeated labels replace the complete label set. Use the literal `null` to clear assignee, estimate, due date, project, or parent.
+
+Use `team cycles --current` to resolve the active cycle before a write. `cycle set --to current` resolves the target issue's team and requires exactly one active cycle. Use a cycle ID for repeatable automation. `cycle clear` sends Linear's null cycle value.
 
 SSH/remoting note: when running through an SSH-backed remote Orca CLI, body files are only supported via stdin (`--body-file -`), not arbitrary remote file paths. Pipe or redirect the body content explicitly.
 
@@ -194,10 +200,13 @@ orca linear issue <id> --workspace <workspaceId> --json
 
 Check the current state, and only rerun the status command if the issue is still not in the intended state.
 
+Apply the same read-before-retry rule to `cycle set` and `cycle clear`. Read the issue and confirm its `cycle` before any retry.
+
 ## Errors
 
 - `linear_issue_required`: pass an issue id or `--current`.
 - `linear_invalid_state`: inspect `error.data.states`; choose only a deterministic valid state.
+- `linear_invalid_cycle`: inspect `error.data.cycles`; choose the single intended cycle by id.
 - `linear_write_unconfirmed`: follow the pinned `--write-id` retry rules above.
 - `linear_invalid_workspace`: rerun with the workspace id returned by search or issue context.
 - `linear_body_too_large`: shorten the comment/body and retry once.

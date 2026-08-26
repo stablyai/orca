@@ -12,6 +12,7 @@ import type {
   LinearSearchIssueSummary,
   LinearSearchResult,
   LinearTeamLabelsResult,
+  LinearTeamCyclesResult,
   LinearTeamListResult,
   LinearTeamMembersResult,
   LinearTeamStatesResult,
@@ -31,7 +32,8 @@ export function formatLinearIssue(result: LinearIssueContextResult): string {
     `URL: ${issue.url}`,
     `State: ${issue.state?.name ?? 'unknown'}`,
     `Assignee: ${issue.assignee?.displayName ?? 'unassigned'}`,
-    `Project: ${issue.project?.name ?? 'none'}`
+    `Project: ${issue.project?.name ?? 'none'}`,
+    `Cycle: ${issue.cycle?.name ?? 'none'}`
   ]
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)
@@ -114,6 +116,18 @@ export function formatLinearTeamLabels(result: LinearTeamLabelsResult): string {
     return `No Linear labels found for ${result.team.key}.`
   }
   return result.labels.map((label) => `${label.name.padEnd(24)} ${label.id}`).join('\n')
+}
+
+export function formatLinearTeamCycles(result: LinearTeamCyclesResult): string {
+  if (result.cycles.length === 0) {
+    return `No Linear cycles found for ${result.team.key}.`
+  }
+  return result.cycles
+    .map((cycle) => {
+      const active = cycle.isActive ? 'current' : cycle.isFuture ? 'future' : 'past'
+      return `${String(cycle.number).padEnd(6)} ${(cycle.name ?? '').padEnd(24)} ${active.padEnd(8)} ${cycle.id}`
+    })
+    .join('\n')
 }
 
 export function formatLinearIssueList(result: LinearIssueListResult): string {

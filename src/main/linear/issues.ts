@@ -111,6 +111,7 @@ export type LinearIssueWriteRecord = {
   state: { id: string; name: string } | null
   parent: { id: string; identifier: string } | null
   project?: { id: string; name: string } | null
+  cycle?: { id: string; name: string | null } | null
   assignee?: { id: string; displayName: string } | null
   priority?: number | null
   estimate?: number | null
@@ -251,6 +252,7 @@ const AGENT_ISSUE_WRITE_FIELDS = `
   state { id name }
   parent { id identifier }
   project { id name }
+  cycle { id name }
   assignee { id displayName }
   priority
   estimate
@@ -1267,6 +1269,9 @@ export async function updateIssue(
     if (updates.parentId !== undefined) {
       payload.parentId = updates.parentId
     }
+    if (updates.cycleId !== undefined) {
+      payload.cycleId = updates.cycleId
+    }
 
     const result = await entry.client.updateIssue(id, payload)
     if (!result.success) {
@@ -1327,6 +1332,9 @@ export async function updateIssueForAgent(
     }
     if (updates.parentId !== undefined) {
       payload.parentId = updates.parentId
+    }
+    if (updates.cycleId !== undefined) {
+      payload.cycleId = updates.cycleId
     }
     const result = await client.updateIssue(id, payload)
     if (!result.success) {

@@ -28,6 +28,8 @@ const LinearTeamLookup = z.object({
   })
 })
 
+const LinearTeamCycles = LinearTeamLookup.extend({ currentOnly: z.boolean().optional() })
+
 const LinearIssueList = z.object({
   filter: z.enum(['assigned', 'created', 'all', 'completed', 'open']).optional(),
   teamInput: OptionalString,
@@ -81,14 +83,15 @@ const LinearIssueSetState = LinearWriteTarget.extend({
 })
 
 const LinearIssueUpdateTask = LinearWriteTarget.extend({
-  operation: z.enum(['assignee', 'priority', 'estimate', 'dueDate', 'labels']),
+  operation: z.enum(['assignee', 'priority', 'estimate', 'dueDate', 'labels', 'cycle']),
   assigneeId: z.string().nullable().optional(),
   assigneeMe: z.boolean().optional(),
   priority: z.number().int().min(0).max(4).optional(),
   estimate: z.number().int().min(0).nullable().optional(),
   dueDate: OptionalLinearDueDateOrClear,
   labelMode: z.enum(['add', 'remove', 'set']).optional(),
-  labels: z.array(z.string()).optional()
+  labels: z.array(z.string()).optional(),
+  cycleInput: z.string().nullable().optional()
 })
 
 const LinearIssueAddComment = LinearWriteTarget.extend({
@@ -196,6 +199,11 @@ export const LINEAR_AGENT_ACCESS_METHODS: RpcMethod[] = [
     name: 'linear.agentTeamLabels',
     params: LinearTeamLookup,
     handler: async (params, { runtime }) => runtime.linearTeamLabelsForAgents(params)
+  }),
+  defineMethod({
+    name: 'linear.agentTeamCycles',
+    params: LinearTeamCycles,
+    handler: async (params, { runtime }) => runtime.linearTeamCyclesForAgents(params)
   }),
   defineMethod({
     name: 'linear.agentIssueList',
