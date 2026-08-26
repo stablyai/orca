@@ -90,8 +90,8 @@ export type Repo = {
   worktreeVisibilitySourcePreferences?: WorktreeVisibilitySourcePreferences
   /** User permanently opted out of the new-external-worktree inbox for this repo. */
   externalWorktreeDiscoverySuppressedAt?: number
-  /** Paths (relative to the primary checkout) that should be APFS clone-copied
-   *  on macOS when possible, otherwise symlinked, into newly created worktrees.
+  /** Paths (relative to the primary checkout) that should be copy-on-write cloned
+   *  on same-volume APFS/ReFS when possible, otherwise symlinked, into new worktrees.
    *  Undefined/empty means no shared paths are created for this repo. */
   symlinkPaths?: string[]
   /** Durable sidebar-only repo organization. Execution remains repo-scoped. */

@@ -8634,7 +8634,7 @@
           "ab40b8a5f1": "No matches. Keep typing to add a custom path.",
           "4cd2a4c077": "Type a path (e.g. .env or node_modules)…",
           "241325302c": "Add Path",
-          "7ff265071d": "When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.",
+          "7ff265071d": "When a new worktree is created, each path listed here is copy-on-write cloned on same-volume APFS (macOS) or ReFS (Windows) when possible, otherwise symlinked from the primary checkout.",
           "4755f120b6": "Worktree Shared Paths",
           "b07ef5a8b6": "Paths to materialize from the primary checkout into newly created worktrees.",
           "d72ba8dc68": "{{value0}} paths",

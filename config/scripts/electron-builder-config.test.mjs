@@ -151,6 +151,10 @@ describe('electron-builder config', () => {
         expect.objectContaining({
           from: 'native/windows-cli-launcher/.build/orca.exe',
           to: 'bin/orca.exe'
+        }),
+        expect.objectContaining({
+          from: 'native/windows-block-clone/.build/orca-block-clone.exe',
+          to: 'block-clone/orca-block-clone.exe'
         })
       ])
     )

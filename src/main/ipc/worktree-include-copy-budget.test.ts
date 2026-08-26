@@ -357,6 +357,21 @@ describe('createWorktreeCopiedPaths copy budget', () => {
     expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
   })
 
+  it('still block-clones on Windows ReFS when only the byte budget would be exceeded', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'pkg.js'), 'x'.repeat(200))
+    const cloneWorktreePath = vi.fn(async () => undefined)
+
+    const skipped = await createWorktreeCopiedPaths(primary, worktree, ['node_modules'], {
+      platform: 'win32',
+      cloneWorktreePath,
+      copyBudget: TINY_BYTE_BUDGET
+    })
+
+    expect(skipped).toEqual([])
+    expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
+  })
+
   it('does not run the macOS APFS clone for an entry over the file-count limit', async () => {
     mkdirSync(join(primary, '.cache'))
     for (const name of ['a', 'b', 'c', 'd', 'e']) {

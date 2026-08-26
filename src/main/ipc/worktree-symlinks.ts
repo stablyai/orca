@@ -1,14 +1,14 @@
 import { symlink, mkdir, stat, lstat, unlink, cp, realpath } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
+import { WorktreeLinkedPathTargetExistsError } from './worktree-apfs-clone'
 import {
-  ApfsCloneUnavailableError,
-  canCloneWithApfs,
-  cloneWorktreePathWithApfs,
-  defaultApfsCloneDeps,
-  WorktreeLinkedPathTargetExistsError,
-  type ApfsCloneDeps,
-  type DarwinFilesystemCache
-} from './worktree-apfs-clone'
+  canCloneWorktreePathCopyOnWrite,
+  cloneWorktreePathCopyOnWrite,
+  copyOnWriteCloneName,
+  isCopyOnWriteCloneUnavailable,
+  type CopyOnWriteCloneOptions,
+  type CopyOnWriteFilesystemCaches
+} from './worktree-copy-on-write-clone'
 import {
   createWorktreeCopyBudgetTracker,
   type SkippedWorktreeCopyPath,
@@ -19,19 +19,17 @@ import {
   getSafeRelativePath
 } from '../git/worktree-symlink-detection'
 
-type WorktreeLinkedPathOptions = {
+type WorktreeLinkedPathOptions = Omit<CopyOnWriteCloneOptions, 'platform'> & {
   platform?: NodeJS.Platform
-  cloneWorktreePath?: (source: string, target: string, sourceIsDirectory: boolean) => Promise<void>
-  apfsCloneDeps?: ApfsCloneDeps
   /** Copy-mode only. Overridable so tests can trip the bound without writing
    *  gigabytes to disk. */
   copyBudget?: WorktreeCopyBudget
 }
 
-// 'link': symlink when APFS clone is unavailable (user-configured shared paths).
-// 'copy': real copy when APFS clone is unavailable (.worktreeinclude paths, which
+// 'link': symlink when copy-on-write cloning is unavailable (user-configured paths).
+// 'copy': real copy when cloning is unavailable (.worktreeinclude paths, which
 // are per-worktree copies by cross-tool convention — edits must not leak back).
-// 'share': always symlink (orca.yaml sharedDirectories). An APFS clone would give
+// 'share': always symlink (orca.yaml sharedDirectories). A clone would give
 // each worktree an independent node_modules, defeating one-install-serves-all.
 type WorktreeMaterializeMode = 'link' | 'copy' | 'share'
 
@@ -87,11 +85,11 @@ async function copyWorktreePath(source: string, target: string): Promise<void> {
   await cp(source, target, { recursive: true, force: false, errorOnExist: false })
 }
 
-/** An APFS clone was expected (so its bytes were never charged) but failed, and
+/** A copy-on-write clone was expected (so its bytes were never charged) but failed, and
  *  the byte-for-byte fallback would escape the budget. */
 class WorktreeCopyBudgetFallbackError extends Error {
   constructor(target: string) {
-    super(`APFS clone failed and a real copy of "${target}" would exceed the copy budget`)
+    super(`Copy-on-write clone failed and a real copy of "${target}" would exceed the copy budget`)
     this.name = 'WorktreeCopyBudgetFallbackError'
   }
 }
@@ -103,39 +101,38 @@ async function createWorktreeLinkedPath(
   sourceIsDirectory: boolean,
   sourceIsSymbolicLink: boolean,
   mode: WorktreeMaterializeMode,
-  options: WorktreeLinkedPathOptions,
-  apfsFilesystemCache: DarwinFilesystemCache,
+  options: CopyOnWriteCloneOptions,
+  filesystemCaches: CopyOnWriteFilesystemCaches,
   realCopyFallbackAllowed: () => boolean
 ): Promise<void> {
   // Why: share mode must never clone — an independent copy would give each
   // worktree its own node_modules, defeating one-install-serves-all.
   if (
     mode !== 'share' &&
-    options.platform === 'darwin' &&
+    (options.platform === 'darwin' || options.platform === 'win32') &&
     (!sourceIsSymbolicLink || mode === 'copy')
   ) {
     try {
-      const cloneWorktreePath =
-        options.cloneWorktreePath ??
-        ((cloneSource: string, cloneTarget: string, cloneSourceIsDirectory: boolean) =>
-          cloneWorktreePathWithApfs(
-            cloneSource,
-            cloneTarget,
-            cloneSourceIsDirectory,
-            options.apfsCloneDeps ?? defaultApfsCloneDeps,
-            apfsFilesystemCache
-          ))
-      await cloneWorktreePath(copySource, target, sourceIsDirectory)
+      await cloneWorktreePathCopyOnWrite(
+        copySource,
+        target,
+        sourceIsDirectory,
+        options,
+        filesystemCaches
+      )
       return
     } catch (error) {
       if (error instanceof WorktreeLinkedPathTargetExistsError) {
         return
       }
-      // Why: APFS clone-copy can fail across volumes or on non-APFS disks.
+      // Why: copy-on-write cloning can fail across volumes or on unsupported filesystems.
       // Fall back per mode without touching any target path that may have
       // appeared after our preflight.
-      if (!(error instanceof ApfsCloneUnavailableError)) {
-        console.warn(`[worktree-symlinks] APFS clone-copy unavailable for "${target}":`, error)
+      if (!isCopyOnWriteCloneUnavailable(error)) {
+        console.warn(
+          `[worktree-symlinks] ${copyOnWriteCloneName(options.platform)} unavailable for "${target}":`,
+          error
+        )
         // Why: the fallback is a real byte-for-byte copy. If this entry was
         // admitted as a free clone its bytes were never charged, so bill them
         // now — and refuse if they no longer fit, rather than silently
@@ -153,28 +150,15 @@ async function createWorktreeLinkedPath(
   await symlinkWorktreePath(source, target, sourceIsDirectory, options.platform ?? process.platform)
 }
 
-/** Whether this copy will land as an APFS clone rather than a byte-for-byte
+/** Whether this copy will land as a copy-on-write clone rather than a byte-for-byte
  *  copy. Only the volume probe can answer it, and that probe writes nothing. */
 async function copyIsCopyOnWrite(
   source: string,
   worktreePath: string,
-  options: WorktreeLinkedPathOptions,
-  apfsFilesystemCache: DarwinFilesystemCache
+  options: CopyOnWriteCloneOptions,
+  filesystemCaches: CopyOnWriteFilesystemCaches
 ): Promise<boolean> {
-  if (options.platform !== 'darwin') {
-    return false
-  }
-  // An injected clone stands in for the real one, so treat it as cloning —
-  // probing the real filesystem here would make these tests host-dependent.
-  if (options.cloneWorktreePath) {
-    return true
-  }
-  return await canCloneWithApfs(
-    source,
-    worktreePath,
-    options.apfsCloneDeps ?? defaultApfsCloneDeps,
-    apfsFilesystemCache
-  )
+  return await canCloneWorktreePathCopyOnWrite(source, worktreePath, options, filesystemCaches)
 }
 
 async function targetExists(target: string): Promise<boolean> {
@@ -195,10 +179,9 @@ async function materializeWorktreePaths(
   mode: WorktreeMaterializeMode,
   options: WorktreeLinkedPathOptions = {}
 ): Promise<SkippedWorktreeCopyPath[]> {
-  const effectiveOptions = { platform: process.platform, ...options }
-  // Why: one df+diskutil probe per distinct volume for the whole materialization,
-  // not per copied path — see DarwinFilesystemCache.
-  const apfsFilesystemCache: DarwinFilesystemCache = new Map()
+  const effectiveOptions: CopyOnWriteCloneOptions = { platform: process.platform, ...options }
+  // Why: volume probes are shared across the whole materialization, not repeated per path.
+  const filesystemCaches: CopyOnWriteFilesystemCaches = { apfs: new Map(), refs: new Map() }
   // Why: one budget for the whole materialization, so a hundred medium entries
   // are refused for the same reason one `node_modules` entry is.
   const copyBudget = createWorktreeCopyBudgetTracker(options.copyBudget)
@@ -245,14 +228,14 @@ async function materializeWorktreePaths(
         if (sourceIsSymbolicLink) {
           copySource = await realpath(source)
         }
-        // Why: an APFS clone is copy-on-write — a 2.7 GB tree clones in ~20ms
+        // Why: a copy-on-write clone avoids the full byte cost of a large tree,
         // and consumes no disk — so bytes are not the cost there, inodes are.
         // Charging bytes on that path would refuse work that is already free.
         bytesAreCopied = !(await copyIsCopyOnWrite(
           copySource,
           worktreePath,
           effectiveOptions,
-          apfsFilesystemCache
+          filesystemCaches
         ))
         const verdict = await copyBudget.admit(copySource, { bytesAreCopied })
         if (!verdict.withinBudget) {
@@ -281,7 +264,7 @@ async function materializeWorktreePaths(
         sourceIsSymbolicLink,
         mode,
         effectiveOptions,
-        apfsFilesystemCache,
+        filesystemCaches,
         () => bytesAreCopied || copyBudget.chargeBytes(measuredBytes)
       )
     } catch (error) {
@@ -317,7 +300,7 @@ export async function createWorktreeLinkedPaths(
 
 /** Copy `.worktreeinclude`-resolved paths from the primary checkout into a
  *  freshly-created worktree. Same per-path failure isolation as
- *  createWorktreeLinkedPaths, but the non-APFS fallback is a real copy, never a
+ *  createWorktreeLinkedPaths, but the non-clone fallback is a real copy, never a
  *  symlink: the convention promises each worktree its own private copy.
  *
  *  Returns the entries refused by the copy budget so worktree creation can
@@ -333,7 +316,7 @@ export async function createWorktreeCopiedPaths(
 }
 
 /** Symlink `orca.yaml` `worktree.sharedDirectories` into a freshly-created
- *  worktree. Unlike createWorktreeLinkedPaths this never APFS clone-copies: a
+ *  worktree. Unlike createWorktreeLinkedPaths this never copy-on-write clones: a
  *  clone would give each worktree its own node_modules, and the point of a
  *  shared directory is that one install serves every worktree. */
 export async function createWorktreeSharedPaths(

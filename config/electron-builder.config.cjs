@@ -355,6 +355,10 @@ module.exports = {
         to: 'bin/orca.exe'
       },
       {
+        from: 'native/windows-block-clone/.build/orca-block-clone.exe',
+        to: 'block-clone/orca-block-clone.exe'
+      },
+      {
         from: 'node_modules/agent-browser/bin/agent-browser-win32-x64.exe',
         to: 'agent-browser-win32-x64.exe'
       },
