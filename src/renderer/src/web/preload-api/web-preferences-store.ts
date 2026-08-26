@@ -10,6 +10,11 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { osc52ClipboardDefaultOnOverridesPersistedOff } from '../../../../shared/osc52-clipboard-settings'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import {
+  normalizeTuiAgentArgsRecord,
+  normalizeTuiAgentEnvRecord
+} from '../../../../shared/agent-launch/choices/tui-agent-launch-defaults'
+import { normalizeDisabledTuiAgents } from '../../../../shared/agent-launch/catalog/tui-agent-selection'
+import {
   applyPRBotAuthorOverride,
   normalizePRBotAuthorOverrides
 } from '../../../../shared/source-control/review-comments/pr-bot-author-overrides'
@@ -226,6 +231,21 @@ export async function syncRuntimeBackedSettings(
       )
     }
     Object.assign(runtimeUpdates, await chatSettings.updates(updates, requestedEnvironment))
+    if ('agentDefaultArgs' in updates) {
+      runtimeUpdates.agentDefaultArgs = normalizeTuiAgentArgsRecord(updates.agentDefaultArgs)
+    }
+    if ('agentDefaultEnv' in updates) {
+      runtimeUpdates.agentDefaultEnv = normalizeTuiAgentEnvRecord(updates.agentDefaultEnv)
+    }
+    if ('defaultTuiAgent' in updates) {
+      runtimeUpdates.defaultTuiAgent = updates.defaultTuiAgent
+    }
+    if ('disabledTuiAgents' in updates) {
+      runtimeUpdates.disabledTuiAgents = normalizeDisabledTuiAgents(updates.disabledTuiAgents)
+    }
+    if (typeof updates.agentStatusHooksEnabled === 'boolean') {
+      runtimeUpdates.agentStatusHooksEnabled = updates.agentStatusHooksEnabled
+    }
     if (Object.keys(runtimeUpdates).length > 0) {
       try {
         // Consent is written only to the host it was chosen for; other settings keep the common path.
