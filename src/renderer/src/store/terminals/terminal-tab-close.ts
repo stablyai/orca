@@ -1,3 +1,4 @@
+import { recordClosedTerminalTabTombstone } from '../../../../shared/closed-terminal-tab-tombstones'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { sweepRetiredTerminalTabState } from '../slices/retired-terminal-tab-state-sweep'
 import {
@@ -58,6 +59,18 @@ export function createTerminalTabCloseActions(
             next[wId] = after
           }
         }
+        // Why: only a deliberate close (user/cleanup) is a durable "never
+        // bring this back" signal; a pty-exit close is the process ending,
+        // not the user retiring the tab.
+        const nextClosedTombstones =
+          retiresSession && closedWorktreeId
+            ? recordClosedTerminalTabTombstone(
+                s.closedTerminalTabTombstonesByTabId,
+                tabId,
+                closedWorktreeId,
+                Date.now()
+              )
+            : s.closedTerminalTabTombstonesByTabId
         // Why: only explicit user closes feed the Cmd+Shift+T reopen stack; cleanup/PTY-exit closes must not pollute undo history.
         const closedPosition =
           closedWorktreeId && closedTab
@@ -206,6 +219,9 @@ export function createTerminalTabCloseActions(
           directSshPaneRetryHistoryByTabId: nextDirectSshPaneRetryHistoryByTabId,
           ...(nextSleepingAgentSessionsByPaneKey !== s.sleepingAgentSessionsByPaneKey
             ? { sleepingAgentSessionsByPaneKey: nextSleepingAgentSessionsByPaneKey }
+            : {}),
+          ...(nextClosedTombstones !== s.closedTerminalTabTombstonesByTabId
+            ? { closedTerminalTabTombstonesByTabId: nextClosedTombstones }
             : {}),
           // Why: skip writing unreadTerminalTabs when unchanged to avoid a no-op state allocation that re-evaluates full-state selectors. Mirrors tabs.ts.
           ...(nextUnreadTerminalTabs !== s.unreadTerminalTabs
