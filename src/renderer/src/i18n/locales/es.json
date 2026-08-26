@@ -7620,7 +7620,7 @@
           "ab40b8a5f1": "No hay coincidencias. Sigue escribiendo para agregar una ruta personalizada.",
           "4cd2a4c077": "Escribe una ruta (por ejemplo, .env o node_modules)…",
           "241325302c": "Agregar ruta",
-          "7ff265071d": "Al crear un nuevo worktree, cada ruta listada aquí se clona mediante copia en escritura en APFS (macOS) o ReFS (Windows) del mismo volumen cuando es posible; de lo contrario, se enlaza simbólicamente desde el checkout principal.",
+          "7ff265071d": "Al crear un nuevo worktree, cada ruta listada aquí se clona mediante copia en escritura en APFS (macOS) o ReFS (Windows) del mismo volumen cuando es posible; de lo contrario, Orca usa la alternativa existente de unión, enlace simbólico o copia real.",
           "4755f120b6": "Rutas compartidas de worktree",
           "b07ef5a8b6": "Rutas para materializar desde el checkout principal en worktrees recién creados.",
           "d72ba8dc68": "{{value0}} rutas",

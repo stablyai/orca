@@ -133,13 +133,13 @@ async function createWorktreeLinkedPath(
           `[worktree-symlinks] ${copyOnWriteCloneName(options.platform)} unavailable for "${target}":`,
           error
         )
-        // Why: the fallback is a real byte-for-byte copy. If this entry was
-        // admitted as a free clone its bytes were never charged, so bill them
-        // now — and refuse if they no longer fit, rather than silently
-        // reopening the unbounded copy this budget exists to close.
-        if (mode === 'copy' && !realCopyFallbackAllowed()) {
-          throw new WorktreeCopyBudgetFallbackError(target)
-        }
+      }
+      // Why: the fallback is a real byte-for-byte copy. If this entry was
+      // admitted as a free clone its bytes were never charged, so bill them
+      // now — and refuse if they no longer fit, rather than silently
+      // reopening the unbounded copy this budget exists to close.
+      if (mode === 'copy' && !realCopyFallbackAllowed()) {
+        throw new WorktreeCopyBudgetFallbackError(target)
       }
     }
   }

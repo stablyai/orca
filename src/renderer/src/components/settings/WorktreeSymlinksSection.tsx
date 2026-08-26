@@ -133,7 +133,7 @@ export function WorktreeSymlinksSection({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
-              'When a new worktree is created, each path listed here is copy-on-write cloned on same-volume APFS (macOS) or ReFS (Windows) when possible, otherwise symlinked from the primary checkout.'
+              'When a new worktree is created, each path listed here is copy-on-write cloned on same-volume APFS (macOS) or ReFS (Windows) when possible; otherwise, Orca uses its existing junction, symlink, or real-copy fallback.'
             )}
           </p>
         </div>
