@@ -46,7 +46,9 @@ function createHistoryStore(worktreeIds: string[] = []): StoreApi<MinimalState> 
 
 const viewCases: { entry: WorktreeNavHistorySimpleViewEntry; label: string }[] = [
   { entry: 'tasks', label: 'Tasks' },
-  { entry: 'automations', label: 'Automations' }
+  { entry: 'automations', label: 'Automations' },
+  { entry: 'artifacts', label: 'Artifacts' },
+  { entry: 'skills', label: 'Skills' }
 ]
 
 function makeGitHubWorkItem(overrides: Partial<GitHubWorkItem> = {}): GitHubWorkItem {

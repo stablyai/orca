@@ -125,6 +125,8 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
     CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),
   failure_count       INTEGER NOT NULL DEFAULT 0,
   last_failure        TEXT,
+  -- Why the process is gone, when Orca could establish it. See TerminalExitCause.
+  termination_reason  TEXT,
   dispatched_at       TEXT,
   completed_at        TEXT,
   created_at          TEXT NOT NULL DEFAULT (datetime('now')),

@@ -210,7 +210,14 @@ describe('connectPanePty', () => {
     await flushAsyncTicks(20)
     await new Promise((resolve) => setTimeout(resolve, 70))
 
+    const reattachArgs = transport.connect.mock.calls.find(
+      ([args]) => args.sessionId === 'lost-pty'
+    )?.[0]
+    const launchToken = (reattachArgs?.env as Record<string, string> | undefined)
+      ?.ORCA_AGENT_LAUNCH_TOKEN
+
     expect(transport.sendInput).not.toHaveBeenCalled()
+    expect(launchToken).toMatch(new RegExp(`^${UUID_RE}$`))
     expect(transport.connect).toHaveBeenCalledWith(
       expect.objectContaining({
         sessionId: 'lost-pty',
@@ -221,13 +228,13 @@ describe('connectPanePty', () => {
           ORCA_TAB_ID: 'tab-1',
           ORCA_WORKTREE_ID: 'wt-1',
           ORCA_WORKSPACE_ID: 'wt-1',
-          ORCA_AGENT_LAUNCH_TOKEN: expect.stringMatching(new RegExp(`^${UUID_RE}$`))
+          ORCA_AGENT_LAUNCH_TOKEN: launchToken
         })
       })
     )
     expect(mockStoreState.registerAgentLaunchConfig).toHaveBeenCalledWith(paneKey, launchConfig, {
       agentType: 'codex',
-      launchToken: expect.stringMatching(new RegExp(`^${UUID_RE}$`)),
+      launchToken,
       tabId: 'tab-1',
       leafId: LEAF_1
     })

@@ -37,20 +37,27 @@ function makeTerminalTab(id: string, worktreeId: string): TerminalTab {
   }
 }
 
-function makeAgentEntry(tabId: string, state: AgentStatusState): AgentStatusEntry {
+function makeAgentEntry(
+  tabId: string,
+  state: AgentStatusState,
+  overrides: Partial<AgentStatusEntry> = {}
+): AgentStatusEntry {
   return {
     state,
     prompt: '',
     updatedAt: Date.now(),
     stateStartedAt: Date.now(),
     paneKey: makePaneKey(tabId, LEAF),
-    stateHistory: []
+    stateHistory: [],
+    ...overrides
   }
 }
 
-function setAgentState(state: AgentStatusState): void {
+function setAgentState(state: AgentStatusState, overrides: Partial<AgentStatusEntry> = {}): void {
   useAppStore.setState((s) => ({
-    agentStatusByPaneKey: { [makePaneKey('term-a', LEAF)]: makeAgentEntry('term-a', state) },
+    agentStatusByPaneKey: {
+      [makePaneKey('term-a', LEAF)]: makeAgentEntry('term-a', state, overrides)
+    },
     agentStatusEpoch: s.agentStatusEpoch + 1
   }))
 }
@@ -116,6 +123,21 @@ describe('palette live status', () => {
       setAgentState('blocked')
     })
     expect(dotLabels()).toEqual(['Needs permission'])
+  })
+
+  it('shows monitoring when a covered pane retains a working title', async () => {
+    setAgentState('working', { workingMode: 'monitoring' })
+    useAppStore.setState({
+      tabsByWorktree: {
+        'wt-a': [{ ...makeTerminalTab('term-a', 'wt-a'), title: 'claude [working]' }]
+      }
+    } as Partial<AppState>)
+
+    await render()
+
+    expect(testContainer.querySelector('[data-spinner]')).toBeNull()
+    expect(testContainer.querySelector('.lucide-radio')?.classList).toContain('text-yellow-500')
+    expect(dotLabels()).toEqual(['Monitoring background tasks'])
   })
 
   // Why this is the whole point: the palette body no longer subscribes to agent status, so if the
@@ -232,6 +254,31 @@ describe('palette live status', () => {
     expect(testContainer.querySelector('[data-spinner]')).toBeNull()
     expect(dotLabels()).toEqual(['Needs permission'])
     expect(testContainer.querySelector('[title="Needs permission"]')).not.toBeNull()
+  })
+
+  it('shows monitoring with a static radio instead of the working spinner', async () => {
+    setAgentState('working', { workingMode: 'monitoring' })
+    await act(async () => {
+      testRoot.render(
+        <PaletteLiveStatusProvider active>
+          <PaletteRecentTabStatusDot
+            row={{
+              id: 'workspace-tab:tab-a',
+              worktreeId: 'wt-a',
+              unifiedTabId: 'tab-a',
+              terminalTab: { id: 'term-a', title: 'Chat' },
+              worktreeLastActivityAt: 0
+            }}
+            fallback={<span data-fallback="true" />}
+          />
+        </PaletteLiveStatusProvider>
+      )
+    })
+
+    expect(testContainer.querySelector('[data-spinner]')).toBeNull()
+    expect(testContainer.querySelector('.lucide-radio')?.classList).toContain('text-yellow-500')
+    expect(dotLabels()).toEqual(['Monitoring background tasks'])
+    expect(testContainer.querySelector('[title="Monitoring background tasks"]')).not.toBeNull()
   })
 
   it('shows only the content icon when a terminal-backed row is inactive', async () => {

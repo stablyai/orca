@@ -7,10 +7,10 @@ import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github
 import {
   CHECK_COLOR,
   CHECK_ICON,
-  ChecksList,
   prStateColor,
   PullRequestIcon
-} from './checks-panel-content'
+} from './checks-panel/check-presentation'
+import { ChecksList } from './checks-panel/checks-list'
 import type { ParentPrChecksRow } from './parent-pr-checks-rows'
 
 type FolderWorkspacePrChecksRowProps = {

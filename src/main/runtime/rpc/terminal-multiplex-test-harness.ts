@@ -4,6 +4,7 @@ import type { RpcRequest } from './core'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { TERMINAL_METHODS } from './methods/terminal'
 import type { RuntimeTerminalWait } from '../../../shared/runtime-types'
+import { createSubscriptionRegistryDouble } from './subscription-registry-test-double'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -21,6 +22,7 @@ export function stubRuntime(overrides: Partial<OrcaRuntimeService> = {}): OrcaRu
       overrides.serializeTerminalBuffer?.(ptyId, opts))
   return {
     getRuntimeId: () => 'test-runtime',
+    subscribeToPtyExit: vi.fn(() => vi.fn()),
     // Why: every multiplex stream registers as a remote view subscriber for
     // Phase-5 query-authority suppression (terminal-query-authority.md).
     registerRemoteTerminalViewSubscriber: () => () => {},
@@ -57,7 +59,7 @@ export function startDesktopMultiplexSubscribe(
     number,
     (frame: NonNullable<ReturnType<typeof decodeTerminalStreamFrame>>) => void
   >()
-  const cleanups = new Map<string, () => void>()
+  const registry = createSubscriptionRegistryDouble()
   const runtime = stubRuntime({
     readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
     serializeTerminalBuffer: vi.fn().mockResolvedValue({ data: 'snapshot', cols: 120, rows: 40 }),
@@ -70,12 +72,11 @@ export function startDesktopMultiplexSubscribe(
     subscribeToDriverChanges: vi.fn().mockReturnValue(vi.fn()),
     getTerminalFitOverride: vi.fn().mockReturnValue(null),
     getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
-    registerSubscriptionCleanup: vi.fn((id: string, cleanup: () => void) => {
-      cleanups.set(id, cleanup)
-    }),
-    cleanupSubscription: vi.fn((id: string) => {
-      cleanups.get(id)?.()
-    }),
+    registerSubscriptionCleanup: vi.fn(registry.registerSubscriptionCleanup),
+    registerOwnedSubscriptionCleanup: vi.fn(registry.registerOwnedSubscriptionCleanup),
+    cleanupSubscription: vi.fn(registry.cleanupSubscription),
+    cleanupSubscriptionIfOwnedByConnection: vi.fn(registry.cleanupSubscriptionIfOwnedByConnection),
+    cleanupSubscriptionsForConnection: vi.fn(registry.cleanupSubscriptionsForConnection),
     ...overrides,
     waitForTerminal:
       overrides.waitForTerminal ?? vi.fn(() => new Promise<RuntimeTerminalWait>(() => {}))
@@ -118,7 +119,7 @@ export function startDesktopMultiplexSubscribe(
       }
     }
   )
-  return { messages, binaryFrames, handlers, cleanups, runtime, dispatchPromise }
+  return { messages, binaryFrames, handlers, registry, runtime, dispatchPromise }
 }
 
 export function sendDesktopMultiplexSubscribe(

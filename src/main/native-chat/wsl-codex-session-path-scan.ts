@@ -1,8 +1,7 @@
 import type { Dirent } from 'node:fs'
-import { readdir } from 'node:fs/promises'
 import { basename, extname } from 'node:path'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
-import { runWslTranscriptFsTask } from './wsl-transcript-fs-gate'
+import { wslGatedReaddir } from './wsl-transcript-fs-access'
 
 type ScanWaiter = {
   sessionId: string
@@ -23,10 +22,7 @@ type ScanGeneration = {
 const inFlightScans = new Map<string, ScanGeneration>()
 
 function readDirectory(dirPath: string, signal: AbortSignal): Promise<Dirent[]> {
-  return runWslTranscriptFsTask(
-    { operation: 'readdir', path: dirPath, priority: 'scan', signal },
-    () => readdir(dirPath, { withFileTypes: true })
-  )
+  return wslGatedReaddir(dirPath, 'scan', signal)
 }
 
 function sessionFileName(path: string): string {

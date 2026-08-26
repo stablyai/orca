@@ -387,6 +387,19 @@ describe('Store.migrateWorktreeIdentity', () => {
     expect(store.getWorktreeMeta(NEWER)?.priorWorktreeIds).toEqual([OLD, NEW])
   })
 
+  it('keeps the newest visit timestamp when a partial migration left both identities', async () => {
+    const store = await createStore()
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { [OLD]: 100, [NEW]: 900 }
+    })
+
+    store.migrateWorktreeIdentity(OLD, NEW)
+
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[OLD]).toBeUndefined()
+    expect(store.getWorkspaceSession().lastVisitedAtByWorktreeId?.[NEW]).toBe(900)
+  })
+
   it('is a no-op when the ids match', async () => {
     const store = await createStore()
     store.setWorktreeMeta(OLD, { displayName: 'Cunner' })

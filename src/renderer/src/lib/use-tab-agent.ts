@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
-import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
+import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import {

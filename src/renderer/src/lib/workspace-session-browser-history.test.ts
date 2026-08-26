@@ -20,6 +20,7 @@ function createSnapshot(browserUrlHistory: BrowserHistoryEntry[]): WorkspaceSess
     activeTabTypeByWorktree: {},
     browserTabsByWorktree: {},
     browserPagesByWorkspace: {},
+    remoteBrowserPageHandlesByPageId: {},
     activeBrowserTabIdByWorktree: {},
     browserUrlHistory,
     unifiedTabsByWorktree: {},

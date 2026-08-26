@@ -1,6 +1,7 @@
 import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { WorkspaceStatus, Worktree } from '../../../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { hasWorkspaceKanbanSidebarDropBoard } from '../../workspace-kanban-sidebar-drop'
 import {
   createSidebarDragPreview,
@@ -153,7 +154,8 @@ export function useWorktreePointerDrag(args: {
   )
 
   const handleWorktreeRowPointerDown = useCallback(
-    (event: React.PointerEvent<HTMLDivElement>, worktreeId: string, rowKey: string) => {
+    (event: React.PointerEvent<HTMLDivElement>, worktree: Worktree, rowKey: string) => {
+      const worktreeId = worktree.id
       if (event.button !== 0 || event.pointerType === 'touch') {
         return
       }
@@ -178,7 +180,7 @@ export function useWorktreePointerDrag(args: {
         return
       }
       const draggedIds =
-        selectedWorktreeIds.has(worktreeId) && selectedWorktrees.length > 1
+        selectedWorktreeIds.has(getWorktreeHostIdentity(worktree)) && selectedWorktrees.length > 1
           ? selectedWorktrees.map((worktree) => worktree.id)
           : [worktreeId]
       const reorderDraggedIds = session.getReorderDraggedIds(draggedIds)

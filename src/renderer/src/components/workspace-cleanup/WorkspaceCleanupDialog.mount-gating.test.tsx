@@ -17,8 +17,8 @@ vi.mock('./use-workspace-cleanup-facet-rows', () => ({
     probes.facets()
     return {
       rows: [],
-      selectableWorktreeIds: [],
-      facetMatchedWorktreeIds: new Set(),
+      selectableIdentities: [],
+      facetMatchedIdentities: new Set(),
       matchedCount: 0,
       totalCount: 0,
       facetCounts: {

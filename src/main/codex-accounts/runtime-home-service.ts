@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: keeps Codex's whole runtime-home contract in one place so account-switch semantics don't drift across launch/login/quota paths. */
+import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import {
   appendFileSync,
   copyFileSync,
@@ -16,6 +17,7 @@ import {
   symlinkSync,
   unlinkSync
 } from 'node:fs'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import { execFileSync } from 'node:child_process'
 import {
   dirname,
@@ -1212,38 +1214,36 @@ export class CodexRuntimeHomeService {
     )
     const nextLinuxPath = `${activeLinuxPath}.next-${process.pid}-${Date.now()}`
     const activeLinuxParentPath = this.dirnameLinuxPath(activeLinuxPath)
-    // Why: WSL drops bash argv, so keep the script literal; login-shell cleanup turns `exit 0` into status 1, so fall through.
+    // Why: login-shell cleanup turns `exit 0` into status 1, so fall through.
     execFileSync(
       'wsl.exe',
       [
         '-d',
         distro,
-        '--',
+        '--exec',
         'bash',
         '-lc',
         [
           'set -e',
-          `if [ ! -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
-          `elif [ -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          `if [ ! -e ${quotePosixShell(activeLinuxPath)} ] && [ ! -L ${quotePosixShell(activeLinuxPath)} ]; then :`,
+          `elif [ -e ${quotePosixShell(activeLinuxPath)} ] && [ ! -L ${quotePosixShell(activeLinuxPath)} ]; then :`,
           'else',
-          `mkdir -p ${this.quoteBashString(activeLinuxParentPath)}`,
-          `rm -rf -- ${this.quoteBashString(nextLinuxPath)}`,
-          `ln -s -- ${this.quoteBashString(runtimeWsl.linuxPath)} ${this.quoteBashString(nextLinuxPath)}`,
-          `mv -Tf -- ${this.quoteBashString(nextLinuxPath)} ${this.quoteBashString(activeLinuxPath)}`,
+          `mkdir -p ${quotePosixShell(activeLinuxParentPath)}`,
+          `rm -rf -- ${quotePosixShell(nextLinuxPath)}`,
+          `ln -s -- ${quotePosixShell(runtimeWsl.linuxPath)} ${quotePosixShell(nextLinuxPath)}`,
+          `mv -Tf -- ${quotePosixShell(nextLinuxPath)} ${quotePosixShell(activeLinuxPath)}`,
           'fi'
         ].join('\n')
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
+      // wsl.exe is console-subsystem: without this a GUI-launched Orca flashes
+      // a conhost and steals foreground for up to the timeout (#10488).
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true }
     )
   }
 
   private dirnameLinuxPath(value: string): string {
     const index = value.lastIndexOf('/')
     return index > 0 ? value.slice(0, index) : '/'
-  }
-
-  private quoteBashString(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`
   }
 
   private joinWslPath(basePath: string, ...segments: string[]): string {
@@ -2011,7 +2011,15 @@ export class CodexRuntimeHomeService {
     }
     const provenance: CodexSharedRuntimeAuthProvenance =
       owner.owner === 'system-default' ? { owner: 'system-default', authJson: contents } : owner
-    const runtimeAuthAlreadyMatches = this.fileContentsEqual(runtimeAuthPath, contents)
+    const runtimeAuthComparison = this.compareFileContents(runtimeAuthPath, contents)
+    if (runtimeAuthComparison === null) {
+      // Why: an unreadable runtime auth.json may hold a token Codex rotated a
+      // moment ago. Treating "could not read" as "differs" sent execution to the
+      // unconditional write below, consuming that rotation and logging the user
+      // out for good. Refuse; the next sync retries.
+      return false
+    }
+    const runtimeAuthAlreadyMatches = runtimeAuthComparison
     if (
       runtimeAuthAlreadyMatches &&
       this.sharedRuntimeAuthProvenanceMatches(
@@ -2059,16 +2067,31 @@ export class CodexRuntimeHomeService {
     writeFileAtomically(authPath, contents, { mode: 0o600 })
   }
 
-  private fileContentsEqual(targetPath: string, contents: string): boolean {
+  /**
+   * `true`/`false` only when the bytes were actually read; `null` when the file
+   * could not be read at all. The old `catch { return false }` reported "these
+   * differ" for a file nobody could open, and every caller reads that as
+   * permission to write.
+   */
+  private compareFileContents(targetPath: string, contents: string): boolean | null {
     try {
-      return existsSync(targetPath) && readFileSync(targetPath, 'utf-8') === contents
-    } catch {
-      return false
+      return readFileSync(targetPath, 'utf-8') === contents
+    } catch (error) {
+      return isDefinitiveAbsence(error) ? false : null
     }
+  }
+
+  private fileContentsEqual(targetPath: string, contents: string): boolean {
+    return this.compareFileContents(targetPath, contents) === true
   }
 
   private fileContentsMatchExpected(targetPath: string, expectedContents: string | null): boolean {
     if (expectedContents === null) {
+      // Why: `!existsSync` does report `true` for a locked file, but this branch
+      // is not where that matters — the write it guards is
+      // `writeFileAtomicallyIfUnchanged`, whose rename-and-compare re-checks the
+      // real file and refuses on its own. Classifying here would be a guard no
+      // test can drive.
       return !existsSync(targetPath)
     }
     return this.fileContentsEqual(targetPath, expectedContents)

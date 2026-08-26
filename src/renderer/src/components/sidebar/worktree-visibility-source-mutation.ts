@@ -9,7 +9,7 @@ import {
   effectiveCustomWorktreeSourceVisibility
 } from '../../../../shared/worktree/visibility-sources'
 import { buildWorktreeSourcePreferenceUpdate } from '../../../../shared/worktree/visibility-source-preferences'
-import type { RepoUpdate } from '@/store/slices/repos'
+import type { RepoUpdate } from '@/store/repos/repo-state'
 import type { WorktreeVisibilitySourceRow } from './WorktreeVisibilitySourceList'
 
 export type WorktreeVisibilitySourceMutation = {

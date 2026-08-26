@@ -320,7 +320,7 @@ describe('orchestration worker release', () => {
       setup()
       const { dispatchId } = await startWorker()
       if (state === 'stopped') {
-        db.beginWorkerStop(dispatchId)
+        db.beginWorkerStop(dispatchId, runtime.getRuntimeId())
         db.settleWorkerStop(dispatchId)
       } else {
         db.abandonWorkerDispatch(dispatchId)

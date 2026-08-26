@@ -12,6 +12,7 @@ import {
   normalizeFeatureInteractions,
   type FeatureInteractionId
 } from './feature-interactions'
+import { escapeRegex } from './string-utils'
 
 type DefinedFeatureInteractionId = (typeof FEATURE_INTERACTIONS)[number]['id']
 type MissingFeatureInteractionId = Exclude<FeatureInteractionId, DefinedFeatureInteractionId>
@@ -41,6 +42,7 @@ describe('feature interactions', () => {
       'cmd-j-quick-action',
       'cmd-j-create-workspace',
       'browser',
+      'client-hosted-browser',
       'browser-tab-created',
       'tasks',
       'github-tasks',
@@ -201,7 +203,7 @@ describe('feature interactions', () => {
   it('keeps every catalog id wired to a production writer', () => {
     const productionText = collectProductionSourceText()
     const missingWriters = FEATURE_INTERACTIONS.map((feature) => feature.id).filter((id) => {
-      const escaped = escapeRegExp(id)
+      const escaped = escapeRegex(id)
       const directRecord = new RegExp(
         `recordFeatureInteraction(?:\\?\\.)?\\(\\s*['"]${escaped}['"]`
       )
@@ -249,8 +251,4 @@ function collectSourceFiles(directory: string): string[] {
     files.push(path)
   }
   return files
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }

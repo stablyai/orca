@@ -1,10 +1,12 @@
-import type { Cookie, Cookies, Session } from 'electron'
+import type { Cookie, Cookies } from 'electron'
 import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
+import type { ImportedDomainScope } from './browser-cookie-import-policy'
 import {
   cookieRemovalUrl,
+  domainIsInImportedScope,
   isNonTransplantableCookieDomain,
-  NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS,
-  normalizeCookieDomain
+  normalizeCookieDomain,
+  registrableFamily
 } from './browser-cookie-import-policy'
 
 const COOKIE_CLEAR_CONCURRENCY = 8
@@ -35,15 +37,24 @@ export type CookieClearStore = Pick<Cookies, 'get' | 'remove'> & {
   restoreClearIdentities(identities: readonly CookieClearIdentity[]): Promise<void>
 }
 
+// Why (STA-4300): the import writes go through this store, and 'set' stays out of it for the same
+// reason it stays out of the clear path — cookies.set() drops partitionKey silently, so a CHIPS
+// cookie imported through it is downgraded on the success path with nothing to report it.
+export type CookieImportWriteStore = Pick<Cookies, 'get' | 'remove'> & {
+  writeCookieIdentity(identity: CookieClearIdentity): Promise<void>
+}
+
 // Why (STA-4061): 'set' stays out so the lossy partition-dropping reconstruction cannot return.
+// Why (STA-4797): 'clearData' stays out for the same structural reason. It can only express
+// "everything except these origins", never "only the domains this import replaces", so any route
+// back to it is a route back to wiping the whole partition.
 export type CookieClearSession = {
   cookies: Pick<Cookies, 'get' | 'remove'>
-  clearData: Session['clearData']
   snapshotClearIdentities: CookieClearStore['snapshotClearIdentities']
   restoreClearIdentities: CookieClearStore['restoreClearIdentities']
 }
 
-const clearLocks = new WeakMap<object, Promise<void>>()
+const mutationLocks = new WeakMap<object, Promise<void>>()
 
 function cookieClearKey(url: string, name: string): string {
   return JSON.stringify([url, name])
@@ -66,17 +77,30 @@ export function identitiesFromClearCookies(
   }))
 }
 
-export async function withCookieClearLock<T>(owner: object, run: () => Promise<T>): Promise<T> {
-  const previous = clearLocks.get(owner) ?? Promise.resolve()
+/**
+ * Serialises every live-jar mutation for one owner.
+ *
+ * Why (STA-4601): an import's clear, its writes, and its rollback are one transaction. Holding the
+ * lock for the clear alone lets a second import interleave between them, so a stale rollback can
+ * remove cookies the newer import already reported as written. Callers that need the lock across a
+ * try/finally take it directly; callers with a single callback use the wrapper below.
+ */
+export async function acquireCookieMutationLock(owner: object): Promise<() => void> {
+  const previous = mutationLocks.get(owner) ?? Promise.resolve()
   let release!: () => void
   const current = new Promise<void>((resolve) => {
     release = resolve
   })
-  clearLocks.set(
+  mutationLocks.set(
     owner,
     previous.then(() => current)
   )
   await previous
+  return release
+}
+
+export async function withCookieMutationLock<T>(owner: object, run: () => Promise<T>): Promise<T> {
+  const release = await acquireCookieMutationLock(owner)
   try {
     return await run()
   } finally {
@@ -84,18 +108,38 @@ export async function withCookieClearLock<T>(owner: object, run: () => Promise<T
   }
 }
 
-function removableCookieEntries(cookies: readonly Cookie[]): { cookie: Cookie; url: string }[] {
+function removableCookieEntries(
+  cookies: readonly Cookie[],
+  preserveFamilies: ReadonlySet<string>,
+  importScope: ImportedDomainScope
+): { cookie: Cookie; url: string }[] {
   const removable: { cookie: Cookie; url: string }[] = []
   for (const cookie of cookies) {
     if (isNonTransplantableCookieDomain(cookie.domain ?? '')) {
       continue
     }
-    const domain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
-    const url = domain ? cookieRemovalUrl(cookie, domain) : null
-    if (!url) {
-      throw new Error('Could not clear existing cookies; the session was left unchanged')
+    // Why (STA-4797): a cookie for a site this import never mentions is not stale — it is the
+    // user's live session, and signing them out of it buys the import nothing. The scope test
+    // comes before the removal-URL derivation below so an unaddressable cookie parked in some
+    // unrelated corner of the jar cannot fail an import that was never going to touch it.
+    const scopedDomain = cookie.domain ? normalizeCookieDomain(cookie.domain) : null
+    if (
+      scopedDomain === null ||
+      !domainIsInImportedScope(importScope, scopedDomain, cookie.hostOnly === true)
+    ) {
+      continue
     }
-    removable.push({ cookie, url })
+    // Why (STA-4300 I2): a family whose partition could not be read faithfully is neither written
+    // nor removed. Filtering HERE keeps it out of the removal plan and — because the CDP snapshot
+    // is taken from this same list — out of the restore set too, so it is never submitted to any
+    // mutation at all.
+    if (preserveFamilies.size > 0) {
+      const family = registrableFamily(cookie.domain ?? '')
+      if (family !== null && preserveFamilies.has(family)) {
+        continue
+      }
+    }
+    removable.push({ cookie, url: cookieRemovalUrl(cookie, scopedDomain) })
   }
   return removable
 }
@@ -144,17 +188,37 @@ async function restoreClearedCookies(
   )
 }
 
+/**
+ * Clears the cookies an import is about to replace, for the domains it is importing.
+ *
+ * Why (STA-4601): this takes the mutation lock on the object it is PASSED, which serialises direct
+ * callers that hand it a real Session — pinned by "serializes concurrent clears on the same
+ * session" in the atomicity suite. It does NOT serialise the importer, because both import paths
+ * build a fresh adapter object per call, so the key is new every time and this lock is a no-op for
+ * them. That is deliberate and safe: the importer holds the real per-partition lock, keyed on the
+ * Electron Session, across its whole clear-and-write transaction — a scope this function cannot
+ * see. Do not remove the importer's outer lock on the assumption that this one covers it.
+ *
+ * Why (STA-4797): importScope is required, not defaulted. A default would be the whole jar again,
+ * and the whole-jar clear is the defect — an import of three sites signed the user out of every
+ * other site in the partition. Every caller has to name what it is about to replace.
+ */
 export async function removeTransplantableCookies(
-  targetSession: CookieClearSession
+  targetSession: CookieClearSession,
+  preserveFamilies: ReadonlySet<string>,
+  importScope: ImportedDomainScope
 ): Promise<void> {
-  return withCookieClearLock(targetSession, async () => {
+  return withCookieMutationLock(targetSession, async () => {
     const store = targetSession.cookies
+    if (importScope.exact.size === 0) {
+      return
+    }
     const initialCookies = await store.get({})
     if (initialCookies.length === 0) {
       return
     }
 
-    const initialRemovable = removableCookieEntries(initialCookies)
+    const initialRemovable = removableCookieEntries(initialCookies, preserveFamilies, importScope)
     if (initialRemovable.length === 0) {
       return
     }
@@ -167,18 +231,13 @@ export async function removeTransplantableCookies(
     // no-op, so the stale plan costs nothing; only its narrowness matters.
     const removalGroups = [...groupRemovableCookies(initialRemovable).values()]
 
-    try {
-      // Why (STA-4065): excludeOrigins keeps the google.com family, including partitioned
-      // cookies, so one call replaces a remove() per cookie on the ordinary import path.
-      await targetSession.clearData({
-        dataTypes: ['cookies'],
-        excludeOrigins: NON_TRANSPLANTABLE_CLEAR_EXCLUDED_ORIGINS
-      })
-      return
-    } catch {
-      // Why: a rejected bulk clear can still have emptied part of the jar.
-    }
-
+    // Why (STA-4797): the bulk clearData shortcut is gone. It clears by exclusion, so the only
+    // scope it could express was "everything except google.com" — the defect itself. Narrowing it
+    // to an include list would not help either: clearData matches at the registrable-domain
+    // boundary, so it would still take host-only siblings this import does not replace, and a
+    // partial delete followed by a rejection would destroy them with no identity to restore from.
+    // The frozen per-coordinate plan is now the only path, and it is a small one — it covers the
+    // imported domains rather than the jar.
     const results = await mapSettledWithConcurrency(
       removalGroups,
       COOKIE_CLEAR_CONCURRENCY,

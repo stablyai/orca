@@ -9,6 +9,7 @@ import {
   type TabPaneInputSources
 } from '@/components/sidebar/smart-attention'
 import { cn } from '@/lib/utils'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {
   getWorktreeStatus,
@@ -26,6 +27,11 @@ import {
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -33,6 +39,7 @@ import type { Worktree } from '../../../../shared/worktree/types'
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
   liveAgentStatusByWorktreeId: ReadonlyMap<string, LiveAgentWorktreeStatus>
+  agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   paneSources: TabPaneInputSources
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
@@ -85,17 +92,19 @@ export function PaletteLiveStatusProvider({
     // Why: `now` decides freshness, so both derivations must read it on the same tick — otherwise a
     // "done" dot can outlive its window while the worktree row beside it has already decayed.
     const now = Date.now()
+    const entriesByTabId = buildExplicitEntriesByTabId(
+      agentStatusByPaneKey,
+      migrationUnsupportedByPtyId
+    )
     return {
       liveAgentStatusByWorktreeId: getLiveAgentStatusByWorktreeId(
         agentStatusByPaneKey,
         tabsByWorktree,
         now
       ),
+      agentStatusPaneIdsByTabId: buildLiveAgentStatusPaneIdsByTabId(entriesByTabId, now),
       paneSources: {
-        entriesByTabId: buildExplicitEntriesByTabId(
-          agentStatusByPaneKey,
-          migrationUnsupportedByPtyId
-        ),
+        entriesByTabId,
         ptyIdsByTabId,
         runtimePaneTitlesByTabId,
         terminalLayoutsByTabId
@@ -122,6 +131,32 @@ export function PaletteLiveStatusProvider({
   return (
     <PaletteLiveStatusContext.Provider value={value}>{children}</PaletteLiveStatusContext.Provider>
   )
+}
+
+function buildLiveAgentStatusPaneIdsByTabId(
+  entriesByTabId: ReadonlyMap<string, readonly AgentStatusEntry[]>,
+  now: number
+): Record<string, ReadonlySet<string>> {
+  const paneIdsByTabId: Record<string, ReadonlySet<string>> = {}
+  for (const [tabId, entries] of entriesByTabId) {
+    const paneIds = new Set<string>()
+    for (const entry of entries) {
+      if (
+        entry.restoredUnconfirmed !== true &&
+        !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      ) {
+        continue
+      }
+      const paneId = parsePaneKey(entry.paneKey)?.leafId
+      if (paneId) {
+        paneIds.add(paneId)
+      }
+    }
+    if (paneIds.size > 0) {
+      paneIdsByTabId[tabId] = paneIds
+    }
+  }
+  return paneIdsByTabId
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
@@ -158,7 +193,10 @@ export function PaletteWorktreeStatusDot({
     live.browserTabsByWorktree[worktree.id] ?? [],
     live.paneSources.ptyIdsByTabId,
     live.paneSources.runtimePaneTitlesByTabId,
-    { liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id) }
+    {
+      liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id),
+      agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId
+    }
   )
   return (
     <>

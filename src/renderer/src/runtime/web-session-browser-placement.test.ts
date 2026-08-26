@@ -5,6 +5,8 @@ import {
   clearWebSessionBrowserPlacementsForWorktree,
   forgetWebSessionBrowserPlacement,
   isWebSessionBrowserPlacementGroupReserved,
+  markWebSessionBrowserPlacementAdopted,
+  moveWebSessionBrowserPlacement,
   peekWebSessionBrowserPlacementGroup,
   recordWebSessionBrowserPlacement,
   releaseWebSessionBrowserPlacementGroup,
@@ -324,6 +326,102 @@ describe('web session browser placement', () => {
         remotePageId: 'page-0'
       })
     ).toBe('group-0')
+  })
+
+  /**
+   * A record survives adoption because the group it named is still reserved against cleanup, so
+   * every later write to that entry has to carry the spent intent with it. Nothing in the create
+   * flow can reach these two paths today — the mark needs the host to publish the provisional id,
+   * and the move only fires when it mints a different one — but the module is what promises the
+   * three states stay consistent, not the order its callers happen to run in.
+   */
+  describe('a create intent the host already spent', () => {
+    function recordAdoptedPage(remotePageId: string): void {
+      recordWebSessionBrowserPlacement({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId,
+        groupId: 'preview-group',
+        callerCreatedGroup: true
+      })
+      markWebSessionBrowserPlacementAdopted({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId
+      })
+    }
+
+    it('stays spent when the create rehomes onto a host-minted page id', () => {
+      recordAdoptedPage('provisional-page')
+
+      moveWebSessionBrowserPlacement({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        fromRemotePageId: 'provisional-page',
+        toRemotePageId: 'host-page'
+      })
+
+      expect(
+        peekWebSessionBrowserPlacementGroup({
+          environmentId: ENVIRONMENT_ID,
+          worktreeId: WORKTREE_ID,
+          remotePageId: 'host-page'
+        })
+      ).toBeUndefined()
+      expect(
+        isWebSessionBrowserPlacementGroupReserved({
+          worktreeId: WORKTREE_ID,
+          groupId: 'preview-group'
+        })
+      ).toBe(true)
+    })
+
+    it('stays spent when the same page is recorded again', () => {
+      recordAdoptedPage('page-1')
+
+      recordWebSessionBrowserPlacement({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-1',
+        groupId: 'preview-group'
+      })
+
+      expect(
+        peekWebSessionBrowserPlacementGroup({
+          environmentId: ENVIRONMENT_ID,
+          worktreeId: WORKTREE_ID,
+          remotePageId: 'page-1'
+        })
+      ).toBeUndefined()
+    })
+
+    // Why re-marking is worth its own case: the mark runs on every snapshot for every published
+    // page, so the second one is the common case, not an edge. A mark that rewrote the entry
+    // instead of amending it would drop the group reservation the entry is being kept alive for.
+    it('keeps its group and its cleanup claim when a later snapshot marks it again', () => {
+      recordAdoptedPage('page-1')
+      markWebSessionBrowserPlacementAdopted({
+        environmentId: ENVIRONMENT_ID,
+        worktreeId: WORKTREE_ID,
+        remotePageId: 'page-1'
+      })
+
+      expect(
+        isWebSessionBrowserPlacementGroupReserved({
+          worktreeId: WORKTREE_ID,
+          groupId: 'preview-group'
+        })
+      ).toBe(true)
+      expect(
+        releaseWebSessionBrowserPlacementGroup({
+          environmentId: ENVIRONMENT_ID,
+          worktreeId: WORKTREE_ID,
+          remotePageId: 'page-1',
+          groupId: 'preview-group',
+          callerCreatedGroup: false
+        })
+      ).toBe(true)
+    })
   })
 
   it('clears only the requested worktree or environment', () => {

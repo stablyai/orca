@@ -20,7 +20,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
-import { formatAutomationSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
 import {
   getExecutionHostLabel,
   getLocalExecutionHostLabel,
@@ -39,12 +39,9 @@ import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAgentLabel } from './automation-draft-model'
 import { formatAutomationCost } from './automation-usage-model'
-import {
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_ROW_CLASS,
-  AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
-} from './automations-table-layout'
-import { isPortaledRowMenuClick, isRowActivationKey } from './automation-list-row-interaction'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
+import { LIST_TABLE_ROW_CLASS, LIST_TABLE_ROW_SELECTED_CLASS } from '@/lib/list-table-layout'
+import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
 
@@ -110,7 +107,7 @@ export function AutomationListLocalRows({
         const projectLabel =
           automationRepo?.displayName ??
           translate('auto.components.automations.AutomationsPage.13118faadf', 'Unknown project')
-        const scheduleLabel = formatAutomationSchedule(automation.rrule)
+        const scheduleLabel = formatUiAutomationSchedule(automation.rrule)
         const nextRunLabel = automation.enabled
           ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
           : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
@@ -191,8 +188,8 @@ export function AutomationListLocalRows({
                 }}
                 className={cn(
                   AUTOMATIONS_TABLE_GRID_CLASS,
-                  AUTOMATIONS_TABLE_ROW_CLASS,
-                  isSelected && AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
+                  LIST_TABLE_ROW_CLASS,
+                  isSelected && LIST_TABLE_ROW_SELECTED_CLASS
                 )}
               >
                 <span className="min-w-0 truncate font-medium">{automation.name}</span>

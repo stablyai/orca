@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import { isTransientError } from './ssh-connection-utils'
+import { HostKeyVerificationError } from './ssh-host-key-decision'
 import {
   isDefiniteSystemSshHostFailure,
   isTransientReconnectError
@@ -90,5 +91,20 @@ describe('isTransientReconnectError', () => {
 
   it('keeps unrelated failures permanent', () => {
     expect(isTransientReconnectError(new Error('something went wrong'))).toBe(false)
+  })
+
+  // Retrying re-derives the same verdict, so this would back off against an already-refused host
+  // until the ladder gave up — with the reason buried under nine failed attempts.
+  it('never retries a refused host key', () => {
+    expect(isTransientReconnectError(new HostKeyVerificationError('key changed', 'mismatch'))).toBe(
+      false
+    )
+  })
+
+  // The classifier is otherwise substring-driven, so a reason that happened to contain network
+  // wording would silently become retryable. The type is what decides.
+  it('never retries a refused host key whose reason reads like a network fault', () => {
+    const err = new HostKeyVerificationError('connection reset while checking the key', 'mismatch')
+    expect(isTransientReconnectError(err)).toBe(false)
   })
 })

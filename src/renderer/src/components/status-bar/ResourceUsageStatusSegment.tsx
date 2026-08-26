@@ -28,7 +28,7 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
-import { useWorktreeMap } from '../../store/selectors'
+import { getAllWorktreesFromState, useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
 import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
@@ -69,6 +69,7 @@ import {
 } from './resource-manager-terminal-copy'
 import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
+import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 import {
   countUnboundDaemonSessions,
   selectUnboundDaemonSessions,
@@ -1014,7 +1015,14 @@ export function ResourceUsageStatusSegment({
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
     }
-    activateAndRevealWorktree(worktreeId)
+    const target = resolveResourceManagerWorktreeTarget(
+      worktreeId,
+      getAllWorktreesFromState(useAppStore.getState())
+    )
+    if (!target) {
+      return
+    }
+    activateAndRevealWorktree(worktreeId, { executionHostId: target.hostId })
   }, [])
 
   const navigateToTab = useCallback(
@@ -1031,8 +1039,15 @@ export function ResourceUsageStatusSegment({
   )
 
   const deleteWorktree = useCallback((worktreeId: string): void => {
+    const target = resolveResourceManagerWorktreeTarget(
+      worktreeId,
+      getAllWorktreesFromState(useAppStore.getState())
+    )
+    if (!target) {
+      return
+    }
     setOpen(false)
-    runWorktreeDelete(worktreeId)
+    runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
   }, [])
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {

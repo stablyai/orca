@@ -51,6 +51,9 @@ export function classifyConnection(args: {
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
   pendingPath?: MobileConnectionPath | null
+  // The desktop has repeatedly refused this device's relay credential — retrying
+  // cannot fix it, so it outranks any "still connecting" reading (STA-4681).
+  pairingRejected?: boolean
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
@@ -59,7 +62,7 @@ export function classifyConnection(args: {
 
   // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
   // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
-  if (state === 'auth-failed') {
+  if (state === 'auth-failed' || (args.pairingRejected && state !== 'connected')) {
     return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 
@@ -67,7 +70,10 @@ export function classifyConnection(args: {
     return { kind: 'normal', label: 'Connected' }
   }
 
-  if (args.pendingPath === 'relay') {
+  // A disconnected pending path can survive a cleared retry timer during a
+  // lifecycle race. Only narrate Relay while dialing or after a retry has
+  // recorded progress; otherwise the idle transport must read Disconnected.
+  if (args.pendingPath === 'relay' && (state !== 'disconnected' || reconnectAttempts > 0)) {
     if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
       if (lastConnectedAt == null) {
         return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'never-connected' }

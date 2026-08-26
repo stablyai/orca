@@ -297,8 +297,7 @@ export class DesktopRelayService {
   }
 
   private async activeBrokerForDemand(): Promise<RelaySessionBroker | null> {
-    const broker =
-      this.coordinator.getActiveBroker() ?? (await this.coordinator.waitForActiveBroker())
+    const broker = this.coordinator.getLiveBroker() ?? (await this.coordinator.waitForLiveBroker())
     return broker instanceof RelaySessionBroker ? broker : null
   }
 

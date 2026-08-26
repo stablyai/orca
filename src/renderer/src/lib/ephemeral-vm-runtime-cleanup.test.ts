@@ -7,6 +7,7 @@ const cleanup = vi.fn().mockResolvedValue({ status: 'cleaned' })
 globalThis.window = { api: { ephemeralVm: { listRuntimes, cleanup } } }
 
 import { cleanupEphemeralVmRuntimesForDeleted } from './ephemeral-vm-runtime-cleanup'
+import { toSshExecutionHostId } from '../../../shared/execution-host'
 
 function runtime(overrides: Record<string, unknown>): Record<string, unknown> {
   return { id: 'rt', cleanupStatus: 'not_started', ...overrides }
@@ -32,6 +33,44 @@ describe('cleanupEphemeralVmRuntimesForDeleted', () => {
       destroyedSshTargetIds: ['runtime-ssh-a'],
       retainedSshTargetIds: []
     })
+  })
+
+  it('cleans only the confirmed host runtime when another host owns the same workspace id', async () => {
+    listRuntimes.mockResolvedValue([
+      runtime({
+        id: 'rt-a',
+        workspaceId: 'wt-1',
+        runtimeEnvironmentId: 'env-a'
+      }),
+      runtime({
+        id: 'rt-b',
+        workspaceId: 'wt-1',
+        runtimeEnvironmentId: 'env-b'
+      })
+    ])
+
+    await cleanupEphemeralVmRuntimesForDeleted({
+      hostScopedWorkspaces: [{ workspaceId: 'wt-1', executionHostId: 'runtime:env-a' }]
+    })
+
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-a' })
+  })
+
+  it('cleans only the confirmed SSH-host runtime when target ids need encoding', async () => {
+    listRuntimes.mockResolvedValue([
+      runtime({ id: 'rt-a', workspaceId: 'wt-1', sshTargetId: 'build/a|primary' }),
+      runtime({ id: 'rt-b', workspaceId: 'wt-1', sshTargetId: 'build-b' })
+    ])
+
+    await cleanupEphemeralVmRuntimesForDeleted({
+      hostScopedWorkspaces: [
+        { workspaceId: 'wt-1', executionHostId: toSshExecutionHostId('build/a|primary') }
+      ]
+    })
+
+    expect(cleanup).toHaveBeenCalledTimes(1)
+    expect(cleanup).toHaveBeenCalledWith({ runtimeId: 'rt-a' })
   })
 
   it('cleans a runtime matched only by its runtime-owned SSH target id', async () => {

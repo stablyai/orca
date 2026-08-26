@@ -25,7 +25,11 @@ import {
 } from './agent-title-core'
 import type { AgentStatus } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { getPiCompatibleSyntheticAgentStatus } from './pi-compatible-synthetic-title'
+import {
+  getPiCompatibleTitleSeparatorStatus,
+  getPiCompatibleSyntheticAgentStatus
+} from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import { isGrokRotatingWorkingTitle } from './terminal-title-agent-type'
 
 /**
@@ -132,15 +136,14 @@ export function normalizeTerminalTitle(title: string): string {
     }
   }
 
-  // Why: Pi animates every 80ms; collapse frames while preserving status.
-  if (isPiAgentTitle(title)) {
-    const status = detectAgentStatusFromTitle(title)
-    if (status === 'working') {
-      return '\u280b Pi'
-    }
-    if (status === 'idle') {
-      return 'Pi'
-    }
+  // Why: Pi/OMP animate a braille frame every 80ms, so the frame is the churn — but the rest of
+  // the title is the session name and cwd the agent chose. Canonicalize the frame in place
+  // (it leads in `⠋ π - session - cwd` and sits medially in `π ⠋ label`) and keep everything
+  // else; collapsing to a bare "Pi" discarded both the identity and the label (#16093).
+  // Why segments: a multiplexer prefixes the pane title (`zsh | ⠋ π - …`), and an anchored
+  // match would skip the canonicalization and let the frame churn through (#8032).
+  if (getWrapperTitleSegments(title).some(isPiAgentTitle)) {
+    return canonicalizeBrailleSpinnerFrame(title)
   }
 
   // Why: Grok Build interpolates a rotating status/tool phrase between the
@@ -152,6 +155,17 @@ export function normalizeTerminalTitle(title: string): string {
   }
 
   return title
+}
+
+/** Why: any braille frame reads as the same animation step, so consecutive frames dedupe. */
+function canonicalizeBrailleSpinnerFrame(title: string): string {
+  let canonical = ''
+  for (const char of title) {
+    const codePoint = char.codePointAt(0)
+    canonical +=
+      codePoint !== undefined && codePoint >= 0x2800 && codePoint <= 0x28ff ? '\u280b' : char
+  }
+  return canonical
 }
 
 export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
@@ -185,6 +199,12 @@ export function detectAgentStatusFromTitle(title: string): AgentStatus | null {
 
   if (title.startsWith(`${CLAUDE_IDLE} `) || title === CLAUDE_IDLE) {
     return 'idle'
+  }
+  // Why: read the state separator before the blanket idle below — `π ! <label>` is a
+  // blocked agent, and treating it as idle hides an OMP pane waiting on the user.
+  const piCompatibleSeparatorStatus = getPiCompatibleTitleSeparatorStatus(title)
+  if (piCompatibleSeparatorStatus) {
+    return piCompatibleSeparatorStatus
   }
   if (isPiTerminalTitle(title)) {
     return 'idle'

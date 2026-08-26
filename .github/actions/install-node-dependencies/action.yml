@@ -21,6 +21,7 @@ runs:
         run_install: false
 
     - name: Setup Node.js
+      id: default-node
       if: inputs.node-version == ''
       uses: actions/setup-node@v6
       with:
@@ -28,6 +29,7 @@ runs:
         cache: pnpm
 
     - name: Setup requested Node.js
+      id: requested-node
       if: inputs.node-version != ''
       uses: actions/setup-node@v6
       with:
@@ -63,14 +65,27 @@ runs:
           rm -rf node_modules
         fi
 
+    # Why --frozen-lockfile: re-resolving pulls ~62 MB of registry packuments per job
+    # (measured) to recompute what the lockfile already pins, and the `git diff` guard
+    # below fails the run whenever that recomputation would have changed anything. The
+    # guard stays so a stale lockfile still fails by name rather than by resolver error.
     - name: Install dependencies
       shell: bash
       run: |
-        pnpm install \
-          --no-frozen-lockfile \
-          --prefer-frozen-lockfile=false \
-          --ignore-scripts
-        git diff --exit-code package.json pnpm-lock.yaml
+        pnpm install --frozen-lockfile --ignore-scripts
+        # Job containers can run composite steps from a source mirror without .git.
+        git -C "$GITHUB_WORKSPACE" diff --exit-code -- package.json pnpm-lock.yaml
+
+    # Why cached: `--ignore-scripts` leaves node-pty without build/Release, so
+    # ensure-native-runtime node-gyp-compiles it in every job that asks for a runtime.
+    # The artifacts are ABI-bound, so the key carries the target runtime, the resolved
+    # Node version, and the patch whose contents the build has to match.
+    - name: Restore compiled native modules
+      if: inputs.native-runtime != 'none'
+      uses: actions/cache@v5
+      with:
+        path: node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
+        key: native-modules-${{ runner.os }}-${{ runner.arch }}-${{ inputs.native-runtime }}-node${{ steps.default-node.outputs.node-version }}${{ steps.requested-node.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', 'config/patches/node-pty@1.1.0.patch') }}
 
     - name: Prepare native runtime
       if: inputs.native-runtime != 'none'

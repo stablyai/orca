@@ -4,7 +4,10 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { buildPaletteTabDocument } from '@/lib/palette-match/tab-document'
+import type { SearchableWorkspaceTab } from '@/lib/workspace-tab-palette-search'
 import type { OpenTabSearchResult } from './open-tab-search'
+import type { OpenTabSearchEntries } from './open-tab-search-entries'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'
 import type { TabEntryOption } from './tab-create-entry-action'
@@ -18,7 +21,12 @@ vi.mock('./tab-create-entry-action', () => ({
   isTabEntryAbsolutePathLike: () => false
 }))
 vi.mock('../quick-open-file-list', () => ({
-  useRuntimeFileListForWorktree: () => ({ files: [], loading: false, loadError: null })
+  useRuntimeFileListForWorktree: () => ({
+    files: [],
+    loading: false,
+    loadError: null,
+    truncated: false
+  })
 }))
 vi.mock('@/lib/agent-catalog', () => ({
   getAgentCatalog: () => [],
@@ -27,15 +35,69 @@ vi.mock('@/lib/agent-catalog', () => ({
 
 // `hold` stands in for the hook's deferred query: it pins the results to the
 // query they were built from, so later keystrokes leave them stale.
-const tabSearchMock = vi.hoisted(() => ({
-  hold: null as string | null,
-  resultsByQuery: {} as Record<string, unknown[]>
-}))
+const tabSearchMock = vi.hoisted(() => {
+  const worktree = {
+    id: 'wt',
+    repoId: 'repo-1',
+    path: '/tmp/wt',
+    hostId: 'local',
+    displayName: 'Aurora Workspace'
+  }
+  return {
+    hold: null as string | null,
+    resultsByQuery: {} as Record<string, OpenTabSearchResult[]>,
+    // Retention re-checks each row against the live query with the real engines,
+    // so every registered row needs the searchable entry it came from.
+    entries(): OpenTabSearchEntries {
+      const rows = Object.values(tabSearchMock.resultsByQuery).flat()
+      return {
+        browserPages: [],
+        simulatorTabs: [],
+        workspaceTabs: rows
+          .filter(
+            (row): row is Extract<OpenTabSearchResult, { source: 'workspace' }> =>
+              row.source === 'workspace'
+          )
+          .map((row) => ({
+            tab: {
+              id: row.tabId,
+              entityId: `${row.tabId}-entity`,
+              groupId: 'g',
+              worktreeId: worktree.id,
+              contentType: row.contentType
+            } as SearchableWorkspaceTab['tab'],
+            worktree: worktree as SearchableWorkspaceTab['worktree'],
+            repoName: 'octo/rocket',
+            worktreeSortIndex: 0,
+            groupSortIndex: 0,
+            tabSortIndex: 0,
+            title: row.title,
+            secondaryText: row.relativePath ?? '',
+            titleSearchText: row.title,
+            secondarySearchTexts: row.relativePath ? [row.relativePath] : [],
+            document: buildPaletteTabDocument({
+              id: row.tabId ?? row.title,
+              title: row.title,
+              secondaryTexts: row.relativePath ? [row.relativePath] : [],
+              worktreeName: worktree.displayName,
+              branch: 'main',
+              repoName: 'octo/rocket'
+            }),
+            agentMetadata: [],
+            occupantAgent: null,
+            isCurrentTab: false,
+            isCurrentWorktree: true
+          }))
+      }
+    }
+  }
+})
 vi.mock('./use-open-tab-search', () => ({
   useOpenTabSearch: ({ enabled, query }: { enabled: boolean; query: string }) => {
     const resolved = tabSearchMock.hold ?? query
     return {
       query: enabled ? resolved : query,
+      entries: enabled ? tabSearchMock.entries() : null,
       results: enabled ? (tabSearchMock.resultsByQuery[resolved.trim()] ?? []) : []
     }
   }
@@ -62,7 +124,7 @@ vi.mock('@/lib/simulator-tab-palette-activation', () => ({
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
   focusTerminalTabSurface: activationMocks.focusTerminalTabSurface
 }))
-vi.mock('@/components/browser-pane/browser-focus', () => ({
+vi.mock('@/components/browser-pane/host-guest/browser-focus', () => ({
   requestBrowserFocus: activationMocks.requestBrowserFocus
 }))
 
@@ -83,6 +145,7 @@ function terminalResult(overrides: Partial<OpenTabSearchResult> = {}): OpenTabSe
     entityId: 'term-1',
     groupId: 'g',
     relativePath: null,
+    occupantAgent: null,
     ...overrides
   } as OpenTabSearchResult
 }
@@ -274,7 +337,27 @@ describe('TabBarCreateEntry tab results', () => {
     expect(activationMocks.workspace).not.toHaveBeenCalled()
   })
 
-  it('drops tab rows built for an earlier query until the search catches up', () => {
+  it('keeps a deferred tab row that still matches the newer query', () => {
+    entryOptionsMock.options = [newFileOption]
+    tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
+    const onOpenEntry = vi.fn().mockResolvedValue(undefined)
+    renderEntry({ onOpenEntry })
+
+    setQuery('add tab')
+    expect(rowTexts()[0]).toContain('Switch to tab')
+
+    // The user backspaces; the deferred search still describes 'add tab'.
+    tabSearchMock.hold = 'add tab'
+    setQuery('add ta')
+
+    expect(rowTexts()[0]).toContain('Switch to tab')
+    submitForm()
+
+    expect(activationMocks.workspace).toHaveBeenCalledTimes(1)
+    expect(onOpenEntry).not.toHaveBeenCalled()
+  })
+
+  it('drops a deferred tab row that the newer query no longer matches', () => {
     entryOptionsMock.options = [newFileOption]
     tabSearchMock.resultsByQuery['add tab'] = [terminalResult()]
     const onOpenEntry = vi.fn().mockResolvedValue(undefined)

@@ -150,6 +150,17 @@ export function retainWorkerTerminalResource(
   | { disposition: 'no_owned_resource'; resource: null } {
   this.db.exec('BEGIN IMMEDIATE')
   try {
+    const dispatch = this.getDispatchContextById(dispatchId)
+    if (!dispatch) {
+      throw new OrchestrationError('dispatch_not_found', `Dispatch ${dispatchId} was not found.`)
+    }
+    const worker = this.getWorkerDispatch(dispatchId)
+    if (!worker && !['completed', 'failed', 'circuit_broken'].includes(dispatch.status)) {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Dispatch ${dispatchId} is ${dispatch.status}; only a settled dispatch can retain.`
+      )
+    }
     const resource = this.getWorkerTerminalResourceByOwner(dispatchId)
     if (!resource) {
       this.db.exec('COMMIT')

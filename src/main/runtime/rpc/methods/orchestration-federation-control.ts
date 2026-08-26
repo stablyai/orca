@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { ORCHESTRATION_WORKER_READ_SOURCES } from '../../../../shared/orchestration-worker-output'
+import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { RemoteDispatchAttachmentRow } from '../../orchestration/types'
@@ -40,7 +41,8 @@ export const ORCHESTRATION_FEDERATION_CONTROL_METHODS: RpcMethod[] = [
         observation: {
           status: observation.status,
           exactWorker: observation.exact,
-          ...(observation.reason ? { reason: observation.reason } : {})
+          ...(observation.reason ? { reason: observation.reason } : {}),
+          ...(observation.agentWait !== undefined ? { agentWait: observation.agentWait } : {})
         }
       }
     }
@@ -216,6 +218,8 @@ async function inspectRemoteAttachment(
   status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
+  /** Set only on a proven-exact attachment parked on a prompt that needs a human. */
+  agentWait?: RuntimeTerminalInteractiveWait | null
 }> {
   const db = runtime.getOrchestrationDb()
   const attachment = db.getRemoteDispatchAttachment(dispatchId)
@@ -237,14 +241,17 @@ async function inspectRemoteAttachment(
   // Why: the same rule as the local worker observation — the inventory only
   // iterates registered providers, so a dropped relay clears `connected` for
   // every remote PTY at once. Lost contact is not a death certificate.
+  // Why reused: showTerminal above already scanned this pane's tail for the same verdict.
+  const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(attachment.terminal_handle) ?? null
   if (verdict?.status === 'unverifiable') {
-    return { terminal, exact, status: 'unverifiable', reason: verdict.reason }
+    return { terminal, exact, status: 'unverifiable', reason: verdict.reason, agentWait }
   }
   return {
     terminal,
     exact,
-    status: verdict?.status !== 'live' && terminal.connected === false ? 'exited' : 'live'
+    status: verdict?.status !== 'live' && terminal.connected === false ? 'exited' : 'live',
+    agentWait
   }
 }
 

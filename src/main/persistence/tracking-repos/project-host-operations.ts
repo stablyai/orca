@@ -13,12 +13,11 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { Repo } from '../../../shared/repo-types'
 import { getRepoExecutionHostId, normalizeExecutionHostId } from '../../../shared/execution-host'
 import { normalizeProjectRuntimePreference } from '../../../shared/project-execution-runtime'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { makeProjectHostSetupId } from './project-host-compatibility'
 import { repoGitUsernameCacheKey } from './repo-hydration'
 
 export type ProjectHostMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   gitUsernameCache: Map<string, string>
   hydrateRepo: (repo: Repo) => Repo
   updateRepoBackedProjectHostSetup: (
@@ -208,10 +207,18 @@ export class ProjectHostPersistenceOperations {
 
   /**
    * Record a background-resolved git username; kept out of updateRepo's whitelist so the renderer can't write it directly.
+   * Takes the probed repo, not just its id: the same id can exist on several execution hosts, and an
+   * id-only lookup would write one host's username onto a sibling host's row and cache key.
    * @returns true when the hydrated value changed.
    */
-  setResolvedRepoGitUsername(id: string, username: string): boolean {
-    const repo = this.state.repos.find((r) => r.id === id)
+  setResolvedRepoGitUsername(
+    target: Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>,
+    username: string
+  ): boolean {
+    const targetHostId = getRepoExecutionHostId(target)
+    const repo = this.state.repos.find(
+      (r) => r.id === target.id && getRepoExecutionHostId(r) === targetHostId
+    )
     if (!repo) {
       return false
     }

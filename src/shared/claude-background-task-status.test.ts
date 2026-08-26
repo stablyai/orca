@@ -3,12 +3,14 @@ import {
   clearAllListenerCaches,
   clearPaneCacheState,
   createHookListenerState,
-  markClaudeLeadTurnInterrupted,
   movePaneCacheState,
-  normalizeHookPayload,
-  seedClaudeSubagentRosterFromSnapshots,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import {
+  markClaudeLeadTurnInterrupted,
+  seedClaudeSubagentRosterFromSnapshots
+} from './agent-hook-listener/providers/claude-roster-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { AGENT_STATUS_MAX_SUBAGENTS } from './agent-status-types'
 import { readClaudeBackgroundAgentTasks } from './claude-background-task-inventory'
 import { makePaneKey } from './stable-pane-id'
@@ -105,41 +107,147 @@ describe('Claude background task status', () => {
     }
   })
 
-  it('stays working through Claude 2.1.220 Stop and SubagentStop until the shell finishes', () => {
+  it('drains the Claude 2.1.229 background-task completion sequence', () => {
     const state = createHookListenerState()
 
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'UserPromptSubmit',
         prompt: 'run a background sleep'
-      })?.state
-    ).toBe('working')
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'Stop',
         background_tasks: [RUNNING_SHELL]
-      })?.state
-    ).toBe('working')
+      })
+    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'SubagentStop',
         agent_id: 'a70fdf2986e38302b',
         background_tasks: [RUNNING_SHELL]
-      })?.state
-    ).toBe('working')
+      })
+    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
 
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'UserPromptSubmit',
-        prompt: '<task-notification><status>completed</status></task-notification>'
-      })?.state
-    ).toBe('working')
+        prompt:
+          '<task-notification><task-id>b8rs2wmxg</task-id><status>completed</status></task-notification>'
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'Stop',
-        background_tasks: []
+        background_tasks: [],
+        session_crons: []
       })?.state
     ).toBe('done')
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(false)
+  })
+
+  // Why: STA-4119's second complaint is the missing completion notification. The renderer's
+  // completion coordinator announces off `turnCompletedAt` on a still-`working` payload, so the
+  // stamp — not the rendered state — is what makes the notification fire when a turn ends into
+  // monitoring. The stamp predicate and the monitoring predicate are computed from the same
+  // "lead said done but the pane resolves to working" expression, so a refactor that renames one
+  // can silently drop the other with nothing else going red. These pin both halves.
+  it('stamps the turn end when a finished lead falls back to monitoring', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'start the dev server'
+    })
+    const monitoring = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+
+    expect(monitoring).toMatchObject({ state: 'working', workingMode: 'monitoring' })
+    expect(typeof monitoring?.turnCompletedAt).toBe('number')
+  })
+
+  it('stamps a lead that ends into a working subagent, which carries no monitoring mode', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'delegate' })
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'SubagentStart', agent_id: 'child-1' })
+    const childWorking = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }]
+    })
+
+    // Why: real agent work keeps the spinner (no workingMode) but the lead turn still ended,
+    // so the stamp must be present. The two predicates are deliberately not the same.
+    expect(childWorking).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(typeof childWorking?.turnCompletedAt).toBe('number')
+  })
+
+  it('does not stamp a turn that is still running in the foreground', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'work' })
+    const midTurn = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Bash'
+    })
+
+    expect(midTurn).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(midTurn?.turnCompletedAt).toBeUndefined()
+  })
+
+  it('does not stamp an interrupted lead, which settles done instead of monitoring', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'start it' })
+    markClaudeLeadTurnInterrupted(state, SOURCE_PANE)
+    const interrupted = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [RUNNING_SHELL]
+    })
+
+    expect(interrupted?.state).toBe('done')
+    expect(interrupted?.workingMode).toBeUndefined()
+    expect(interrupted?.turnCompletedAt).toBeUndefined()
+  })
+
+  it('does not stamp a turn that simply finished with nothing left running', () => {
+    const state = createHookListenerState()
+
+    claudeEvent(state, SOURCE_PANE, { hook_event_name: 'UserPromptSubmit', prompt: 'quick job' })
+    const finished = claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'Stop',
+      background_tasks: [],
+      session_crons: []
+    })
+
+    // Why: the stamp exists to announce a turn whose pane STAYS working. A plain done
+    // needs no stamp — the ordinary done path already notifies.
+    expect(finished?.state).toBe('done')
+    expect(finished?.turnCompletedAt).toBeUndefined()
+  })
+
+  it('keeps foreground child work active before falling back to monitoring', () => {
+    const state = createHookListenerState()
+    claudeEvent(state, SOURCE_PANE, {
+      hook_event_name: 'SubagentStart',
+      agent_id: 'child-1'
+    })
+
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [{ id: 'child-1', type: 'subagent', status: 'running' }, RUNNING_SHELL]
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'SubagentStop',
+        agent_id: 'child-1'
+      })
+    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
   })
 
   it('keeps pending task state when pane authority moves', () => {
@@ -209,15 +317,15 @@ describe('Claude background task status', () => {
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'Stop',
         session_crons: [{ id: 'cron-1' }]
-      })?.state
-    ).toBe('working')
+      })
+    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
     expect(state.claudeActiveSessionCronPaneKeys.has(SOURCE_PANE)).toBe(true)
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'SubagentStop',
         agent_id: 'child-1'
-      })?.state
-    ).toBe('working')
+      })
+    ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
     expect(
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'Stop',
@@ -550,7 +658,11 @@ describe('Claude background task status', () => {
       background_tasks: [RUNNING_SHELL]
     })
 
-    expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop' })?.state).toBe('working')
+    expect(claudeEvent(state, SOURCE_PANE, { hook_event_name: 'Stop' })).toMatchObject({
+      state: 'working',
+      workingMode: 'monitoring'
+    })
+    expect(state.claudeRunningNonAgentTaskPaneKeys.has(SOURCE_PANE)).toBe(true)
     clearPaneCacheState(state, SOURCE_PANE)
     expect(state.claudeRunningNonAgentTaskPaneKeys.size).toBe(0)
 

@@ -111,9 +111,7 @@ function renderSidebar(
         ]}
         repoSections={[]}
         hasRepos={false}
-        searchQuery=""
         onBack={vi.fn()}
-        onSearchChange={vi.fn()}
         onSelectSection={vi.fn()}
       />
     </TooltipProvider>

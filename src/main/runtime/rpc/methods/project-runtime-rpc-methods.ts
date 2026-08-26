@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { normalizeExecutionHostId } from '../../../../shared/execution-host'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  normalizeExecutionHostId,
+  parseExecutionHostId
+} from '../../../../shared/execution-host'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 import { projectRepoResultVisibilityForClient } from '../repo-visibility-projection'
@@ -11,17 +15,27 @@ const ProjectProviderIdentity = z.object({
   host: OptionalString
 })
 
+// Why: `runtime:<environment-id>` ids are minted by the calling client's own pairing store
+// (addEnvironmentFromPairingCode -> randomUUID), so they name a machine only relative to that
+// client. A client sending one to this runtime is addressing *us*, and runtimes do not proxy
+// these calls onward, so the host it names is this machine. Persisting the caller's id verbatim
+// makes one machine look like a different host to every other client, hides its rows from them,
+// and defeats the (projectId, hostId) duplicate check. Store our own spelling instead: `local`.
+// Rows written before this normalization keep their client-minted stamp; readers still project
+// `local` back to `runtime:<their-id>`, so the client-visible model is unchanged.
+const RequestedHostId = requiredString('Missing host ID').transform((value, ctx) => {
+  const hostId = normalizeExecutionHostId(value)
+  if (!hostId) {
+    ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
+    return z.NEVER
+  }
+  return parseExecutionHostId(hostId)?.kind === 'runtime' ? LOCAL_EXECUTION_HOST_ID : hostId
+})
+
 const ProjectHostSetupExistingFolder = z.object({
   projectId: requiredString('Missing project ID'),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
-  hostId: requiredString('Missing host ID').transform((value, ctx) => {
-    const hostId = normalizeExecutionHostId(value)
-    if (!hostId) {
-      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-      return z.NEVER
-    }
-    return hostId
-  }),
+  hostId: RequestedHostId,
   path: requiredString('Missing project path'),
   kind: z.enum(['git', 'folder']).optional(),
   displayName: OptionalString,
@@ -31,14 +45,7 @@ const ProjectHostSetupExistingFolder = z.object({
 const ProjectHostSetupClone = z.object({
   projectId: requiredString('Missing project ID'),
   projectProviderIdentity: ProjectProviderIdentity.optional(),
-  hostId: requiredString('Missing host ID').transform((value, ctx) => {
-    const hostId = normalizeExecutionHostId(value)
-    if (!hostId) {
-      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-      return z.NEVER
-    }
-    return hostId
-  }),
+  hostId: RequestedHostId,
   url: requiredString('Missing clone URL'),
   destination: requiredString('Missing clone destination'),
   displayName: OptionalString
@@ -59,14 +66,7 @@ const ProjectUpdate = z.object({
 
 const ProjectHostSetupCreate = z.object({
   projectId: requiredString('Missing project ID'),
-  hostId: requiredString('Missing host ID').transform((value, ctx) => {
-    const hostId = normalizeExecutionHostId(value)
-    if (!hostId) {
-      ctx.addIssue({ code: 'custom', message: 'Invalid host ID' })
-      return z.NEVER
-    }
-    return hostId
-  }),
+  hostId: RequestedHostId,
   setupId: OptionalString,
   path: OptionalString,
   kind: z.enum(['git', 'folder']).optional(),

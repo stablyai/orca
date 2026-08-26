@@ -111,6 +111,7 @@ export function connectMobileRelayRpcSession(args: {
     getState: () => state,
     getReconnectAttempt: () => 0,
     getLastConnectedAt: () => lastConnectedAt,
+    getLastInboundAt: () => livenessWatchdog.getLastInboundAt() || null,
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)

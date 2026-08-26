@@ -5,7 +5,9 @@ import {
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
+import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
 
@@ -65,6 +67,14 @@ export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Pi/OMP titles include cwd/session text; substring matching made
   // paths like "gemini-project" masquerade as Gemini CLI.
   if (isPiAgentTitle(title)) {
+    return false
+  }
+  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
+  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
+  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
+  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
+  // emits none of them.
+  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return false
   }
   return titleHasAgentName(title, 'gemini')
@@ -131,6 +141,19 @@ export function isClaudeManagementTitle(title: string): boolean {
 
 export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
+}
+
+const CLAUDE_IDENTITY_FRAME_RE =
+  /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+export function isClaudeIdentityFrameSegment(title: string): boolean {
+  return CLAUDE_IDENTITY_FRAME_RE.test(
+    stripLeadingAgentTitleDecorationOrEmpty(title).trim().toLowerCase()
+  )
+}
+
+export function isClaudeIdentityFrameTitle(title: string): boolean {
+  return getWrapperTitleSegments(title).some(isClaudeIdentityFrameSegment)
 }
 
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own

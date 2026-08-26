@@ -343,6 +343,40 @@ describe('web worktree preload API', () => {
     ])
   })
 
+  it('reuses the worktree catalog cache until disconnect invalidates its runtime owner', async () => {
+    const calls: string[] = []
+    vi.doMock('./web-runtime-client', () => ({
+      WebRuntimeClient: class {
+        call(method: string): Promise<RuntimeRpcResponse<unknown>> {
+          calls.push(method)
+          return Promise.resolve({
+            id: method,
+            ok: true,
+            result:
+              method === 'status.get'
+                ? { runtimeId: 'runtime-a', version: '1.0.0' }
+                : { worktrees: [{ id: 'worktree-a', repoId: 'repo-a', path: '/srv/a' }] },
+            _meta: { runtimeId: 'runtime-a' }
+          })
+        }
+
+        close(): void {}
+      }
+    }))
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await globals.window.api.worktrees.listAll()
+    await globals.window.api.worktrees.listAll()
+    await globals.window.api.runtimeEnvironments.disconnect({ selector: 'web-server-a' })
+    await globals.window.api.runtimeEnvironments.connect({ selector: 'web-server-a' })
+    await globals.window.api.worktrees.listAll()
+
+    expect(calls).toEqual(['worktree.list', 'status.get', 'worktree.list'])
+  })
+
   it('preserves runtime-routed detected-worktree host ownership in the compatibility shape', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {

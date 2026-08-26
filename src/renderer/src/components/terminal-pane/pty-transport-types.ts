@@ -154,6 +154,8 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean
+    /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
+    shouldContinue?: () => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -245,7 +247,7 @@ export type IpcPtyTransportOptions = {
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
-  onPtyExit?: (ptyId: string) => void
+  onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */
