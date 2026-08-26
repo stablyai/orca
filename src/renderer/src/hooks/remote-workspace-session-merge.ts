@@ -1,6 +1,7 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { ExecutionHostId } from '../../../shared/execution-host'
+import { mergeClosedTerminalTabTombstones } from '../../../shared/closed-terminal-tab-tombstones'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
 import {
@@ -33,6 +34,20 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .flatMap((worktreeId) => liveTabsByWorktree[worktreeId] ?? [])
       .map((tab) => [tab.id, tab])
   )
+  // Why merged first: a tombstone from either side must beat that same side's
+  // stale tab list. A live local tab overrides its own tombstone — the id is a
+  // uuid, so a live tab under a tombstoned id means the tombstone is stale
+  // (e.g. a close that was undone before it ever persisted), not a revival.
+  const closedTombstones = Object.fromEntries(
+    Object.entries(
+      mergeClosedTerminalTabTombstones(
+        current.closedTerminalTabTombstonesByTabId,
+        remote.closedTerminalTabTombstonesByTabId,
+        Date.now()
+      )
+    ).filter(([tabId]) => !currentTabsById.has(tabId))
+  )
+  const isTombstoned = (tabId: string): boolean => tabId in closedTombstones
   const locallyPreservedTabIds = new Set<string>()
   const localTabsFor = (worktreeId: string): TerminalTab[] =>
     liveTabsByWorktree[worktreeId] ?? current.tabsByWorktree[worktreeId] ?? []
@@ -92,19 +107,21 @@ export function mergeDirectSshRemoteWorkspaceSession(
   const tabsByWorktree = Object.fromEntries(
     orderedWorktreeIds.map((worktreeId) => {
       const remoteTabs = remote.tabsByWorktree[worktreeId] ?? []
-      const reconciled = remoteTabs.map((tab) => {
-        const local = currentTabsById.get(tab.id)
-        if (
-          !local ||
-          ((local.generation ?? 0) <= (tab.generation ?? 0) &&
-            !local.pendingActivationSpawn &&
-            !preserveLocalTerminalTabIds.has(tab.id))
-        ) {
-          return tab
-        }
-        locallyPreservedTabIds.add(tab.id)
-        return preserveNewerLocalTerminalFields(tab, local)
-      })
+      const reconciled = remoteTabs
+        .filter((tab) => !isTombstoned(tab.id))
+        .map((tab) => {
+          const local = currentTabsById.get(tab.id)
+          if (
+            !local ||
+            ((local.generation ?? 0) <= (tab.generation ?? 0) &&
+              !local.pendingActivationSpawn &&
+              !preserveLocalTerminalTabIds.has(tab.id))
+          ) {
+            return tab
+          }
+          locallyPreservedTabIds.add(tab.id)
+          return preserveNewerLocalTerminalFields(tab, local)
+        })
       for (const tab of reconciled) {
         emittedTabIds.add(tab.id)
       }
@@ -126,6 +143,9 @@ export function mergeDirectSshRemoteWorkspaceSession(
       // been told about the tab, so it is not host-unknown.
       const hostUnknown = localTabsFor(worktreeId).filter((tab) => {
         if (remoteKnownTabIds.has(tab.id) || emittedTabIds.has(tab.id)) {
+          return false
+        }
+        if (isTombstoned(tab.id)) {
           return false
         }
         const localSessionId = current.remoteSessionIdsByTabId?.[tab.id]
@@ -179,7 +199,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
     ),
     ...Object.fromEntries(
       Object.entries(remote.terminalLayoutsByTabId).filter(
-        ([tabId]) => !locallyPreservedTabIds.has(tabId)
+        ([tabId]) => !locallyPreservedTabIds.has(tabId) && !isTombstoned(tabId)
       )
     )
   }
@@ -217,10 +237,12 @@ export function mergeDirectSshRemoteWorkspaceSession(
         ? worktreeWorkspaceKey(activeWorktreeId)
         : null,
     activeTabId: activeOutsideTarget ? current.activeTabId : remote.activeTabId,
-    tabsByWorktree: {
-      ...omitTargetWorktrees(current.tabsByWorktree),
-      ...tabsByWorktree
-    },
+    tabsByWorktree: Object.fromEntries(
+      Object.entries({
+        ...omitTargetWorktrees(current.tabsByWorktree),
+        ...tabsByWorktree
+      }).map(([worktreeId, tabs]) => [worktreeId, tabs.filter((tab) => !isTombstoned(tab.id))])
+    ),
     terminalLayoutsByTabId,
     activeWorktreeIdsOnShutdown: [
       ...(current.activeWorktreeIdsOnShutdown ?? []).filter((id) => !replaceWorktreeIds.has(id)),
@@ -246,7 +268,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       ),
       ...Object.fromEntries(
         Object.entries(remote.remoteSessionIdsByTabId ?? {}).filter(
-          ([tabId]) => !locallyPreservedTabIds.has(tabId)
+          ([tabId]) => !locallyPreservedTabIds.has(tabId) && !isTombstoned(tabId)
         )
       )
     },
@@ -257,7 +279,9 @@ export function mergeDirectSshRemoteWorkspaceSession(
     defaultTerminalTabsAppliedByWorktreeId: {
       ...omitTargetWorktrees(current.defaultTerminalTabsAppliedByWorktreeId),
       ...remote.defaultTerminalTabsAppliedByWorktreeId
-    }
+    },
+    closedTerminalTabTombstonesByTabId:
+      Object.keys(closedTombstones).length > 0 ? closedTombstones : undefined
   }
 }
 
