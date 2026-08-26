@@ -26,7 +26,7 @@ vi.mock('../runtime-client', async () => {
 })
 
 import { main } from '../index'
-import { okFixture, queueFixtures } from '../test-fixtures'
+import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
 
 describe('orca emulator CLI handlers', () => {
   const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
@@ -92,7 +92,9 @@ describe('orca emulator CLI handlers', () => {
   it('uses the folder workspace exported by the current Orca terminal', async () => {
     process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
     delete process.env.ORCA_WORKTREE_ID
-    callMock.mockResolvedValue(
+    queueFixtures(
+      callMock,
+      worktreeListFixture([]),
       okFixture('req_attach', {
         attached: true,
         info: { deviceUdid: 'device-1', streamUrl: 'scrcpy://device-1' }
@@ -101,18 +103,24 @@ describe('orca emulator CLI handlers', () => {
 
     await main(['emulator', 'attach', 'device-1'], '/folder/project')
 
-    expect(callMock).toHaveBeenCalledOnce()
-    expect(callMock).toHaveBeenCalledWith(
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
       'emulator.attach',
       { device: 'device-1', worktree: 'folder:folder-1', focus: false },
       { timeoutMs: 180_000 }
     )
   })
 
+  // Why: two workspaces on one folder path are indistinguishable to the path scan.
   it('uses the current git worktree exported by the Orca terminal', async () => {
     process.env.ORCA_WORKSPACE_ID = 'folder:stale-parent'
-    process.env.ORCA_WORKTREE_ID = 'repo-1::/repo/project '
-    callMock.mockResolvedValue(
+    process.env.ORCA_WORKTREE_ID = 'repo-2::/repo/project'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([
+        buildWorktree('/repo/project', 'main', 'abc', 'repo-1'),
+        buildWorktree('/repo/project', 'main', 'abc', 'repo-2')
+      ]),
       okFixture('req_attach', {
         attached: true,
         info: { deviceUdid: 'device-1', streamUrl: 'scrcpy://device-1' }
@@ -121,10 +129,10 @@ describe('orca emulator CLI handlers', () => {
 
     await main(['emulator', 'attach', 'device-1'], '/repo/project')
 
-    expect(callMock).toHaveBeenCalledOnce()
-    expect(callMock).toHaveBeenCalledWith(
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
       'emulator.attach',
-      { device: 'device-1', worktree: 'repo-1::/repo/project ', focus: false },
+      { device: 'device-1', worktree: 'id:repo-2::/repo/project', focus: false },
       { timeoutMs: 180_000 }
     )
   })

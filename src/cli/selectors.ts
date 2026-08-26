@@ -43,24 +43,45 @@ function assertLocalCwdWorktreeSelector(selector: string, client: RuntimeClient)
   )
 }
 
+// Why: an Orca-launched terminal was told which workspace it belongs to, so it
+// can name the one thing a path scan cannot work out on its own.
+function getTerminalWorkspaceSelector(): string | undefined {
+  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
+  if (terminalWorktreeId?.trim()) {
+    return terminalWorktreeId
+  }
+  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
+  if (folderWorkspaceId?.startsWith('folder:')) {
+    return folderWorkspaceId
+  }
+  return undefined
+}
+
 export async function resolveCurrentWorktreeSelector(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
   assertLocalCwdWorktreeSelector('current', client)
 
+  const terminalWorkspace = getTerminalWorkspaceSelector()
   const currentPath = resolvePath(cwd)
   const worktrees = await client.call<RuntimeWorktreeListResult>('worktree.list', {
     limit: 10_000
   })
   let enclosingWorktree: RuntimeWorktreeRecord | undefined
   let enclosingPathLength = -1
-  for (const worktree of worktrees.result.worktrees) {
+  for (const worktree of worktrees.result.worktrees ?? []) {
     const worktreePath = resolvePath(worktree.path)
     if (
       !isPathInsideOrEqual(worktreePath, currentPath) ||
-      worktreePath.length <= enclosingPathLength
+      worktreePath.length < enclosingPathLength
     ) {
+      continue
+    }
+    // Why: several workspaces can share one folder path, and the path scan alone
+    // would keep whichever row the runtime happened to list first. The launching
+    // terminal names the right one.
+    if (worktreePath.length === enclosingPathLength && worktree.id !== terminalWorkspace) {
       continue
     }
     enclosingWorktree = worktree
@@ -68,6 +89,11 @@ export async function resolveCurrentWorktreeSelector(
   }
 
   if (!enclosingWorktree) {
+    // Why: cwd stops identifying anything once the caller steps outside the
+    // worktree, but the terminal still knows where it was launched.
+    if (terminalWorkspace) {
+      return terminalWorkspace
+    }
     throw new RuntimeClientError(
       'selector_not_found',
       `No Orca-managed worktree contains the current directory: ${currentPath}`
@@ -112,8 +138,8 @@ export async function getRequiredWorktreeSelector(
   return normalizeWorktreeSelector(value, cwd)
 }
 
-// Why: local browser commands default to the current worktree by auto-resolving
-// from cwd. Remote commands omit worktree so the runtime uses server-side focus.
+// Why: local browser commands default to the current worktree. Remote commands
+// omit worktree so the runtime uses server-side focus.
 export async function getBrowserWorktreeSelector(
   flags: Map<string, string | boolean>,
   cwd: string,
@@ -236,14 +262,6 @@ export async function getEmulatorWorktreeSelector(
   }
   if (client.isRemote) {
     return undefined
-  }
-  const terminalWorktreeId = process.env.ORCA_WORKTREE_ID
-  if (terminalWorktreeId?.trim()) {
-    return terminalWorktreeId
-  }
-  const folderWorkspaceId = process.env.ORCA_WORKSPACE_ID?.trim()
-  if (folderWorkspaceId?.startsWith('folder:')) {
-    return folderWorkspaceId
   }
   try {
     return await resolveCurrentWorktreeSelector(cwd, client)

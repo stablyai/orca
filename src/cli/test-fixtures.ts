@@ -1,4 +1,4 @@
-import type { Mock } from 'vitest'
+import { afterEach, beforeEach, type Mock } from 'vitest'
 
 type OkFixture = {
   id: string
@@ -65,4 +65,30 @@ export function queueFixtures(mock: Mock, ...fixtures: OkFixture[]): void {
   for (const fixture of fixtures) {
     mock.mockResolvedValueOnce(fixture)
   }
+}
+
+// Why: these suites run inside an Orca terminal, which exports the very
+// variables workspace targeting honours — leave them set and every cwd-default
+// case silently asserts the developer's own worktree instead of the fixture.
+export function isolateOrcaTerminalWorkspaceEnv(): void {
+  const originalWorktreeId = process.env.ORCA_WORKTREE_ID
+  const originalWorkspaceId = process.env.ORCA_WORKSPACE_ID
+
+  beforeEach(() => {
+    delete process.env.ORCA_WORKTREE_ID
+    delete process.env.ORCA_WORKSPACE_ID
+  })
+
+  afterEach(() => {
+    if (originalWorktreeId === undefined) {
+      delete process.env.ORCA_WORKTREE_ID
+    } else {
+      process.env.ORCA_WORKTREE_ID = originalWorktreeId
+    }
+    if (originalWorkspaceId === undefined) {
+      delete process.env.ORCA_WORKSPACE_ID
+    } else {
+      process.env.ORCA_WORKSPACE_ID = originalWorkspaceId
+    }
+  })
 }

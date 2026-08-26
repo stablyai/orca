@@ -45,7 +45,15 @@ vi.mock('../runtime-client', () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
+import {
+  buildWorktree,
+  isolateOrcaTerminalWorkspaceEnv,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from '../test-fixtures'
+
+isolateOrcaTerminalWorkspaceEnv()
 
 describe('orca file CLI handlers', () => {
   beforeEach(() => {
@@ -85,6 +93,27 @@ describe('orca file CLI handlers', () => {
       relativePath: 'src/App.tsx'
     })
     expect(vi.mocked(console.log).mock.calls[0][0]).toBe('Opened src/App.tsx.')
+  })
+
+  it('opens a path in the terminal workspace when cwd is outside every worktree', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo', 'feature')]),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(['file', 'open', 'src/App.tsx'], '/tmp/elsewhere')
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'repo::/tmp/repo',
+      relativePath: 'src/App.tsx'
+    })
   })
 
   it('opens a staged diff for an explicit worktree without cwd inference', async () => {

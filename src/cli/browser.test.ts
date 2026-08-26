@@ -36,7 +36,15 @@ vi.mock('./runtime-client', () => {
 
 import { main } from './index'
 import { RuntimeClientError } from './runtime-client'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from './test-fixtures'
+import {
+  buildWorktree,
+  isolateOrcaTerminalWorkspaceEnv,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from './test-fixtures'
+
+isolateOrcaTerminalWorkspaceEnv()
 
 describe('orca cli browser page targeting', () => {
   beforeEach(() => {
@@ -750,6 +758,154 @@ describe('orca cli browser waits and viewport flags', () => {
       deviceScaleFactor: 2,
       mobile: true,
       worktree: undefined
+    })
+  })
+})
+
+describe('orca cli browser workspace targeting from an Orca terminal', () => {
+  beforeEach(() => {
+    callMock.mockReset()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('creates the tab in the terminal workspace even when cwd is outside every worktree', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo/feature'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_create', { browserPageId: 'page-3' })
+    )
+
+    await main(['tab', 'create', '--url', 'https://example.com', '--json'], '/tmp/elsewhere')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.tabCreate',
+      { url: 'https://example.com', worktree: 'repo::/tmp/repo/feature', profileId: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  // Why: folder workspaces can share one folder path, so the path scan alone would
+  // keep whichever row the runtime listed first.
+  it('breaks a shared-path tie with the exported workspace', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo-2::/tmp/repo/feature'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([
+        buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-1'),
+        buildWorktree('/tmp/repo/feature', 'feature/foo', 'abc', 'repo-2')
+      ]),
+      okFixture('req_create', { browserPageId: 'page-4' })
+    )
+
+    await main(['tab', 'create', '--json'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.tabCreate',
+      { url: undefined, worktree: 'id:repo-2::/tmp/repo/feature', profileId: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  // Why: cwd stays the primary signal, so cd'ing into a sibling worktree still targets it.
+  it('lets a cwd inside another worktree win over the exported workspace', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo/feature'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([
+        buildWorktree('/tmp/repo/feature', 'feature/foo'),
+        buildWorktree('/tmp/repo/other', 'feature/bar')
+      ]),
+      okFixture('req_create', { browserPageId: 'page-5' })
+    )
+
+    await main(['tab', 'create', '--json'], '/tmp/repo/other/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.tabCreate',
+      { url: undefined, worktree: 'id:repo::/tmp/repo/other', profileId: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  // Why: folder workspaces can share one folder path, so the path scan cannot tell them apart.
+  it('falls back to the exported folder workspace when no worktree id is set', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'folder:folder-1'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([]),
+      okFixture('req_create', { browserPageId: 'page-6' })
+    )
+
+    await main(['tab', 'create', '--json'], '/folder/project')
+
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.tabCreate',
+      { url: undefined, worktree: 'folder:folder-1', profileId: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('ignores a non-workspace ORCA_WORKSPACE_ID and resolves from cwd', async () => {
+    process.env.ORCA_WORKSPACE_ID = 'not-a-workspace-key'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_create', { browserPageId: 'page-6' })
+    )
+
+    await main(['tab', 'create', '--json'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.list', { limit: 10_000 })
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'browser.tabCreate',
+      { url: undefined, worktree: 'id:repo::/tmp/repo/feature', profileId: undefined },
+      { timeoutMs: 60_000 }
+    )
+  })
+
+  it('keeps --worktree all unscoped despite the exported workspace', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo/feature'
+    queueFixtures(callMock, okFixture('req_list', { tabs: [] }))
+
+    await main(['tab', 'list', '--worktree', 'all', '--json'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenCalledWith('browser.tabList', { worktree: undefined })
+  })
+
+  it('keeps --worktree current resolving from cwd rather than the exported id', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo/other'
+    queueFixtures(
+      callMock,
+      worktreeListFixture([buildWorktree('/tmp/repo/feature', 'feature/foo')]),
+      okFixture('req_list', { tabs: [] })
+    )
+
+    await main(['tab', 'list', '--worktree', 'current', '--json'], '/tmp/repo/feature/src')
+
+    expect(callMock).toHaveBeenNthCalledWith(2, 'browser.tabList', {
+      worktree: 'id:repo::/tmp/repo/feature'
+    })
+  })
+
+  it('leaves --page targeting global so a tab in another workspace stays reachable', async () => {
+    process.env.ORCA_WORKTREE_ID = 'repo::/tmp/repo/feature'
+    queueFixtures(callMock, okFixture('req_switch', { switched: 2, browserPageId: 'page-2' }))
+
+    await main(['tab', 'switch', '--page', 'page-2', '--json'], '/tmp/elsewhere')
+
+    expect(callMock).toHaveBeenCalledWith('browser.tabSwitch', {
+      index: undefined,
+      page: 'page-2'
     })
   })
 })

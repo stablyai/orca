@@ -35,7 +35,15 @@ vi.mock('../runtime-client', () => {
 })
 
 import { main } from '../index'
-import { buildWorktree, okFixture, queueFixtures, worktreeListFixture } from '../test-fixtures'
+import {
+  buildWorktree,
+  isolateOrcaTerminalWorkspaceEnv,
+  okFixture,
+  queueFixtures,
+  worktreeListFixture
+} from '../test-fixtures'
+
+isolateOrcaTerminalWorkspaceEnv()
 
 describe('orca computer action CLI routing', () => {
   beforeEach(() => {

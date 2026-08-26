@@ -265,6 +265,8 @@ Common Commands:
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
+                            active/current means the worktree containing the current directory; when that is
+                            ambiguous or outside every worktree, the workspace of the Orca terminal you ran in
   --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
   --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
@@ -330,6 +332,7 @@ Browser Options:
   --files <path,...>        Comma-separated file paths for upload
   --timeout <ms>            Wait timeout in milliseconds
   --worktree <selector>     Scope commands to a specific worktree's browser tabs
+                            (defaults to the worktree containing the current directory)
 
 Examples:
   $ orca open
