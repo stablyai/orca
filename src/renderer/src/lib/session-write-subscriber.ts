@@ -131,7 +131,11 @@ export function createSessionWriteSubscriber({
       // Why defer instead of drop: pendingChangedFields already absorbed any
       // changes made while the gate was closed (e.g. a tab close during a
       // snapshot apply) — clearing it here would lose that change forever.
-      // Keep rescheduling until the gate reopens.
+      // Keep rescheduling until the gate reopens. This is a behavior change
+      // from stop-to-poll: while the gate stays closed, flush now
+      // self-reschedules every debounceMs instead of going idle; bounded in
+      // practice because apply depth decrements in a finally and the
+      // trailing window is 1s.
       timer = setTimeout(flush, debounceMs)
       return
     }

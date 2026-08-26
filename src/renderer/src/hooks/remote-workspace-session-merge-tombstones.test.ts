@@ -101,6 +101,33 @@ describe('direct-SSH pull merge: closed-tab tombstones', () => {
     expect(merged.closedTerminalTabTombstonesByTabId?.['tab-live']).toBeUndefined()
   })
 
+  it('a tombstone wins over preserveLocalTerminalTabIds when the tab is not live locally', () => {
+    // preserveLocalTerminalTabIds (recovery tabs) only matters for a REMOTE tab that also exists
+    // locally with a newer generation — it never revives a tab the tombstone filter already dropped.
+    const ghost = terminalTab('tab-recovery-ghost')
+    const current = sessionState({
+      tabsByWorktree: { [WORKTREE]: [] },
+      closedTerminalTabTombstonesByTabId: {
+        'tab-recovery-ghost': { closedAt: Date.now(), worktreeId: WORKTREE }
+      }
+    })
+    const remote = sessionState({
+      tabsByWorktree: { [WORKTREE]: [ghost] }
+    })
+
+    const merged = mergeDirectSshRemoteWorkspaceSession(
+      current,
+      remote,
+      new Set([WORKTREE]),
+      {},
+      new Set(['tab-recovery-ghost'])
+    )
+
+    expect((merged.tabsByWorktree[WORKTREE] ?? []).map((t) => t.id)).not.toContain(
+      'tab-recovery-ghost'
+    )
+  })
+
   it('without any tombstone the local-survival trade is unchanged', () => {
     // Copied from remote-workspace-session-merge-local-survival.test.ts: the host still lists a tab
     // closed elsewhere, and absence alone must keep letting it survive.

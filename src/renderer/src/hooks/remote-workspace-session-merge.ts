@@ -35,9 +35,12 @@ export function mergeDirectSshRemoteWorkspaceSession(
       .map((tab) => [tab.id, tab])
   )
   // Why merged first: a tombstone from either side must beat that same side's
-  // stale tab list. A live local tab overrides its own tombstone — the id is a
-  // uuid, so a live tab under a tombstoned id means the tombstone is stale
-  // (e.g. a close that was undone before it ever persisted), not a revival.
+  // stale tab list. A live local tab overrides its own tombstone for THIS
+  // merge pass — the id is a uuid, so a live tab under a tombstoned id means
+  // the tombstone is stale (e.g. a close that was undone before it ever
+  // persisted), not a revival. This is not a durable deletion: it is
+  // recomputed every pass while the tab stays live, because hydration
+  // re-unions the store's own tombstone map back in afterwards.
   const closedTombstones = Object.fromEntries(
     Object.entries(
       mergeClosedTerminalTabTombstones(
@@ -237,6 +240,11 @@ export function mergeDirectSshRemoteWorkspaceSession(
         ? worktreeWorkspaceKey(activeWorktreeId)
         : null,
     activeTabId: activeOutsideTarget ? current.activeTabId : remote.activeTabId,
+    // Why sweeping the WHOLE map (not just replaceWorktreeIds) is safe: this
+    // function's sole caller applies the merge through target-scoped
+    // hydration, which replaces only `workspaceKeys` (targetScopedWorkspaceHydrationPatch
+    // in workspace-terminal-hydration-patch.ts) — so an out-of-scope worktree
+    // entry produced here is never consumed, and filtering it too costs nothing.
     tabsByWorktree: Object.fromEntries(
       Object.entries({
         ...omitTargetWorktrees(current.tabsByWorktree),
