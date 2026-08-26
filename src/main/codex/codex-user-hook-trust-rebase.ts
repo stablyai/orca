@@ -11,9 +11,9 @@ import { createCodexHookTrustEntry } from './codex-hook-identity'
 import { resolveCodexTrustGrantHost } from './codex-trust-grant-host'
 import {
   captureCodexTrustConfig,
-  restoreCodexTrustConfig,
   type CodexTrustConfigSnapshot
 } from './codex-trust-config-rollback'
+import { restoreCodexTrustFilesIfUnchanged } from './codex-trust-config-generation'
 import { computeTrustKey, type CodexTrustEntry } from './config-toml-trust'
 import type {
   CodexUserHookTrustRebaseRequest,
@@ -96,27 +96,20 @@ export function getMovedCodexUserHookTrust(
 }
 
 function rollbackMutation(
-  restoreHooks: () => void,
+  sourcePath: string,
   tomlPath: string,
-  snapshot: CodexTrustConfigSnapshot,
+  hooksSnapshot: CodexTrustConfigSnapshot,
+  hooksAfterWrite: CodexTrustConfigSnapshot,
+  configSnapshot: CodexTrustConfigSnapshot,
+  configBeforeRepair: CodexTrustConfigSnapshot,
   originalError: unknown
 ): never {
-  const rollbackErrors: unknown[] = []
-  try {
-    restoreHooks()
-  } catch (error) {
-    rollbackErrors.push(error)
-  }
-  try {
-    restoreCodexTrustConfig(tomlPath, snapshot)
-  } catch (error) {
-    rollbackErrors.push(error)
-  }
-  if (rollbackErrors.length > 0) {
-    throw new AggregateError(
-      [originalError, ...rollbackErrors],
-      'Failed to rebase moved user hook trust and restore the original files'
-    )
+  const restored = restoreCodexTrustFilesIfUnchanged([
+    { path: tomlPath, snapshot: configSnapshot, expectedCurrent: configBeforeRepair },
+    { path: sourcePath, snapshot: hooksSnapshot, expectedCurrent: hooksAfterWrite }
+  ])
+  if (!restored) {
+    console.warn('[codex-user-hook-trust] files changed during repair; stale rollback skipped')
   }
   throw originalError
 }
@@ -174,9 +167,13 @@ export async function mutateRealHomeHooksPreservingUserTrust(args: {
   }
 
   let hooksWritten = false
+  const hooksSnapshot = captureCodexTrustConfig(args.sourcePath)
+  const configBeforeRepair = captureCodexTrustConfig(args.tomlPath)
+  let hooksAfterWrite: CodexTrustConfigSnapshot | null = null
   try {
     args.writeHooks()
     hooksWritten = true
+    hooksAfterWrite = captureCodexTrustConfig(args.sourcePath)
     const repaired = await runSession({
       operation: 'repair-user-hook-trust',
       invocation: baseRequest.invocation,
@@ -189,8 +186,16 @@ export async function mutateRealHomeHooksPreservingUserTrust(args: {
     return snapshot
   } catch (error) {
     rememberRebaseSessionFailure(hostKey, error)
-    if (hooksWritten) {
-      return rollbackMutation(args.restoreHooks, args.tomlPath, snapshot, error)
+    if (hooksWritten && hooksAfterWrite) {
+      return rollbackMutation(
+        args.sourcePath,
+        args.tomlPath,
+        hooksSnapshot,
+        hooksAfterWrite,
+        snapshot,
+        configBeforeRepair,
+        error
+      )
     }
     throw error
   }

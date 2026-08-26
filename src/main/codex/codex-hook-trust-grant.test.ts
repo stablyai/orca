@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import {
@@ -310,7 +310,7 @@ describe('grantManagedCodexHookTrust', () => {
     })
   })
 
-  it('restores exact config bytes before fallback after a mutating RPC error', async () => {
+  it('preserves a newer config generation after a mutating RPC error', async () => {
     const entries = [managedEntry('session_start')]
     const plan = buildPlan(entries)
     const original = '# user formatting\r\n[hooks]\r\n'
@@ -325,10 +325,27 @@ describe('grantManagedCodexHookTrust', () => {
       lane: 'fallback',
       reason: 'error'
     })
+    expect(readFileSync(plan.tomlPath, 'utf8')).toContain('rpc-partial')
+  })
+
+  it('restores the previous config when a failing RPC did not change it', async () => {
+    const entries = [managedEntry('session_start')]
+    const plan = buildPlan(entries)
+    const original = '# keep exact bytes\r\n'
+    mkdirSync(runtimeHomeDir, { recursive: true })
+    writeFileSync(plan.tomlPath, original)
+    _internals.setGrantSessionRunnerSync(() => {
+      throw new Error('transport failed before write')
+    })
+
+    expect(await grantManagedCodexHookTrust(plan)).toMatchObject({
+      lane: 'fallback',
+      reason: 'error'
+    })
     expect(readFileSync(plan.tomlPath, 'utf8')).toBe(original)
   })
 
-  it('removes an RPC-created config before fallback when none existed', async () => {
+  it('preserves an RPC-created config generation before fallback', async () => {
     const entries = [managedEntry('session_start')]
     const plan = buildPlan(entries)
     mkdirSync(runtimeHomeDir, { recursive: true })
@@ -345,7 +362,7 @@ describe('grantManagedCodexHookTrust', () => {
       lane: 'fallback',
       reason: 'verify-failed'
     })
-    expect(existsSync(plan.tomlPath)).toBe(false)
+    expect(readFileSync(plan.tomlPath, 'utf8')).toContain('rpc-partial')
   })
 
   it('honors the ops kill switch env flag', async () => {

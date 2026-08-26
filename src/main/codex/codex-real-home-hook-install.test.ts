@@ -276,6 +276,20 @@ describe('ensureRealHomeCodexHookState (install)', () => {
     expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(userRaw)
   })
 
+  it('preserves hooks.json edits made while the grant is pending', async () => {
+    const externalRaw = `${JSON.stringify({ hooks: { Stop: [{ hooks: [{ type: 'command', command: 'external.sh' }] }] } })}\n`
+    writeFileSync(getRealHooksJsonPath(), '{ "hooks": {} }\n', 'utf-8')
+    grantMock.mockImplementation(() => {
+      writeFileSync(getRealHooksJsonPath(), externalRaw, 'utf-8')
+      return { lane: 'fallback', reason: 'unsupported' }
+    })
+
+    expect(
+      await ensureRealHomeCodexHookState({ hooksEnabled: true, userDataPath: userDataDir })
+    ).toBe('unavailable')
+    expect(readFileSync(getRealHooksJsonPath(), 'utf-8')).toBe(externalRaw)
+  })
+
   it('removes a freshly created hooks.json when the grant lane is unavailable', async () => {
     grantUnavailable()
 

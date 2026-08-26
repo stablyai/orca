@@ -313,7 +313,7 @@ async function spawnLocalStartupAndSetupTerminals(args: {
         } else if (preset === 'copilot') {
           markCopilotFolderTrusted(worktree.path)
         } else if (preset === 'codex') {
-          markCodexProjectTrusted(worktree.path)
+          await markCodexProjectTrusted(worktree.path)
         }
       } catch {
         // Best-effort: launch still proceeds and the agent can ask interactively.

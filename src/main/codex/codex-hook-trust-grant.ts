@@ -22,14 +22,16 @@ import {
 } from './codex-trust-grant-ledger'
 import {
   computeTrustKey,
-  computeTrustedHash,
   normalizeHookTrustKeyForLookup,
   readHookTrustEntries,
-  removeHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
 import { getCodexHookTrustSignature } from './codex-hook-identity'
-import { captureCodexTrustConfig, restoreCodexTrustConfig } from './codex-trust-config-rollback'
+import { captureCodexTrustConfig } from './codex-trust-config-rollback'
+import {
+  removeSelfComputedTrustBeforeGrant,
+  restoreGrantConfigIfUnchanged
+} from './codex-hook-trust-grant-config'
 import {
   readCodexTrustGrantLedgerHomeMatchingStamp,
   resolveCodexTrustGrantHost,
@@ -77,7 +79,9 @@ const transientRetryAfterByHost = new Map<string, number>()
 
 export const getCodexTrustGrantDiagnostics = (): CodexTrustGrantDiagnostics => ({ ...diagnostics })
 
-type GrantSessionRunner = (request: CodexHookTrustGrantRequest) => Promise<CodexHookTrustGrantSessionResult> | CodexHookTrustGrantSessionResult
+type GrantSessionRunner = (
+  request: CodexHookTrustGrantRequest
+) => Promise<CodexHookTrustGrantSessionResult> | CodexHookTrustGrantSessionResult
 
 let runSession: GrantSessionRunner = runCodexHookTrustGrantSession
 
@@ -119,19 +123,6 @@ function buildExpectedEntries(plan: CodexManagedTrustGrantPlan): ExpectedManaged
     normalizedKey: normalizeHookTrustKeyForLookup(computeTrustKey(entry)),
     signature: getCodexHookTrustSignature(entry)
   }))
-}
-
-function removeSelfComputedTrustBeforeGrant(plan: CodexManagedTrustGrantPlan): void {
-  const trustStates = readHookTrustEntries(plan.tomlPath)
-  const ownedKeys = plan.managedEntries
-    .map((entry) => {
-      const key = computeTrustKey(entry)
-      return trustStates.get(key)?.trustedHash === computeTrustedHash(entry) ? key : null
-    })
-    .filter((key): key is string => key !== null)
-  if (ownedKeys.length > 0) {
-    removeHookTrustEntries(plan.tomlPath, ownedKeys)
-  }
 }
 
 function findLedgerGrant(
@@ -212,10 +203,12 @@ export async function grantManagedCodexHookTrust(
     // has the same input and output as the pre-RPC implementation.
     const configSnapshot = captureCodexTrustConfig(plan.tomlPath)
     let result: CodexHookTrustGrantSessionResult
+    let rpcInputSnapshot = configSnapshot
     try {
       // Why: Windows fallback writes equivalent separator variants that Codex's
       // canonical RPC key may not overwrite, leaving conflicting logical trust.
       removeSelfComputedTrustBeforeGrant(plan)
+      rpcInputSnapshot = captureCodexTrustConfig(plan.tomlPath)
       result = await runSession(
         resolvedHost.buildRequest({
           runtimeHomePath: plan.runtimeHomePath,
@@ -225,7 +218,7 @@ export async function grantManagedCodexHookTrust(
         })
       )
     } catch (error) {
-      restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+      restoreGrantConfigIfUnchanged(plan.tomlPath, configSnapshot, rpcInputSnapshot)
       if (isCodexAppServerUnsupportedError(error)) {
         transientRetryAfterByHost.delete(hostKey)
         codexAppServerCapabilityCache.rememberUnsupported(hostKey)
@@ -241,7 +234,7 @@ export async function grantManagedCodexHookTrust(
     // remember support so a later drift event retries the preferred lane.
     codexAppServerCapabilityCache.rememberSupported(hostKey)
     if (result.outcome === 'verify-failed') {
-      restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+      restoreGrantConfigIfUnchanged(plan.tomlPath, configSnapshot, rpcInputSnapshot)
       transientRetryAfterByHost.set(
         hostKey,
         Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
@@ -256,7 +249,7 @@ export async function grantManagedCodexHookTrust(
     for (const granted of result.entries) {
       const match = byNormalizedKey.get(granted.normalizedKey)
       if (!match) {
-        restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+        restoreGrantConfigIfUnchanged(plan.tomlPath, configSnapshot, rpcInputSnapshot)
         transientRetryAfterByHost.set(
           hostKey,
           Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
@@ -269,7 +262,7 @@ export async function grantManagedCodexHookTrust(
         )
       }
       if (seenNormalizedKeys.has(granted.normalizedKey)) {
-        restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+        restoreGrantConfigIfUnchanged(plan.tomlPath, configSnapshot, rpcInputSnapshot)
         transientRetryAfterByHost.set(
           hostKey,
           Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS
@@ -289,7 +282,7 @@ export async function grantManagedCodexHookTrust(
       }
     }
     if (seenNormalizedKeys.size !== expected.length) {
-      restoreCodexTrustConfig(plan.tomlPath, configSnapshot)
+      restoreGrantConfigIfUnchanged(plan.tomlPath, configSnapshot, rpcInputSnapshot)
       transientRetryAfterByHost.set(
         hostKey,
         Date.now() + CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS

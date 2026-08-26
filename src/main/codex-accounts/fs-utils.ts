@@ -42,8 +42,8 @@ export function writeFileAtomically(
 
 export function writeFileAtomicallyIfUnchanged(
   targetPath: string,
-  expectedContents: string | null,
-  contents: string,
+  expectedContents: string | Buffer | null,
+  contents: string | Buffer,
   options?: { mode?: number }
 ): boolean {
   try {
@@ -59,7 +59,7 @@ export function writeFileAtomicallyIfUnchanged(
 
 export function removeFileAtomicallyIfUnchanged(
   targetPath: string,
-  expectedContents: string
+  expectedContents: string | Buffer
 ): boolean {
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
@@ -118,15 +118,15 @@ function recoverInterruptedGuardedOperation(heldPath: string, targetPath: string
 
 function attemptGuardedAtomicWrite(
   targetPath: string,
-  expectedContents: string | null,
-  contents: string,
+  expectedContents: string | Buffer | null,
+  contents: string | Buffer,
   options?: { mode?: number }
 ): boolean {
   const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
   const heldPath = getGuardedOperationHeldPath(targetPath)
   recoverInterruptedGuardedOperation(heldPath, targetPath)
   try {
-    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+    writeFileSync(tmpPath, contents, { mode: options?.mode })
     if (expectedContents === null) {
       return publishFileWithoutOverwrite(tmpPath, targetPath)
     }

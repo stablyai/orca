@@ -11,6 +11,10 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  resetCodexHookTransactionQueueForTests,
+  runCodexHookTransaction
+} from './codex/codex-hook-transaction-queue'
 
 const testState = {
   fakeHomeDir: '',
@@ -49,6 +53,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  resetCodexHookTransactionQueueForTests()
   rmSync(testState.fakeHomeDir, { recursive: true, force: true })
   rmSync(testState.userDataDir, { recursive: true, force: true })
   if (testState.previousUserDataPath === undefined) {
@@ -137,7 +142,28 @@ describe('markCopilotFolderTrusted', () => {
 })
 
 describe('markCodexProjectTrusted', () => {
-  it('trusts the main repository root for a linked worktree without reading commondir', () => {
+  it('waits for the shared Codex hook transaction before writing project trust', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-queued-ws-'))
+    let release: (() => void) | undefined
+    const blocker = runCodexHookTransaction(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    const trust = markCodexProjectTrusted(workspace)
+
+    await Promise.resolve()
+    expect(existsSync(join(testState.fakeHomeDir, '.codex', 'config.toml'))).toBe(false)
+    release?.()
+    await Promise.all([blocker, trust])
+    expect(readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf-8')).toContain(
+      'trust_level = "trusted"'
+    )
+    rmSync(workspace, { recursive: true, force: true })
+  })
+
+  it('trusts the main repository root for a linked worktree without reading commondir', async () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-linked-ws-'))
     const repository = join(fixtureRoot, 'repo')
     const workspace = join(fixtureRoot, 'worktrees', 'feature')
@@ -148,7 +174,7 @@ describe('markCodexProjectTrusted', () => {
       writeFileSync(join(workspace, '.git'), `gitdir: ${worktreeGitDir}\n`, 'utf-8')
       writeFileSync(join(worktreeGitDir, 'gitdir'), join(workspace, '.git'), 'utf-8')
 
-      markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace)
 
       const repositoryRoot = realpathSync.native(repository)
       const workspaceRoot = realpathSync.native(workspace)
@@ -171,7 +197,7 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  it('does not broaden trust through arbitrary or adversarial Git metadata', () => {
+  it('does not broaden trust through arbitrary or adversarial Git metadata', async () => {
     const fixtureRoot = mkdtempSync(join(tmpdir(), 'orca-codex-untrusted-gitdir-'))
     const workspace = join(fixtureRoot, 'workspace')
     const arbitraryGitDir = join(fixtureRoot, 'metadata', 'feature')
@@ -183,12 +209,12 @@ describe('markCodexProjectTrusted', () => {
       writeFileSync(join(workspace, '.git'), `gitdir: ${arbitraryGitDir}\n`, 'utf-8')
       writeFileSync(join(arbitraryGitDir, 'commondir'), join(unrelatedRoot, '.git'), 'utf-8')
 
-      markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace)
       const structuredGitDir = join(unrelatedRoot, '.git', 'worktrees', 'feature')
       mkdirSync(structuredGitDir, { recursive: true })
       writeFileSync(join(workspace, '.git'), `gitdir: ${structuredGitDir}\n`, 'utf-8')
       writeFileSync(join(structuredGitDir, 'gitdir'), join(unrelatedRoot, '.git'), 'utf-8')
-      markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace)
 
       const written = readFileSync(join(testState.fakeHomeDir, '.codex', 'config.toml'), 'utf-8')
       expect(written).toContain(
@@ -202,11 +228,11 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  it('writes ~/.codex/config.toml with the project marked trusted', () => {
+  it('writes ~/.codex/config.toml with the project marked trusted', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     try {
       const realpath = realpathSync.native(workspace)
-      markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace)
       const configPath = join(testState.fakeHomeDir, '.codex', 'config.toml')
       const runtimeConfigPath = join(
         testState.userDataDir,
@@ -227,7 +253,7 @@ describe('markCodexProjectTrusted', () => {
     }
   })
 
-  it('preserves existing config keys and updates an existing project block', () => {
+  it('preserves existing config keys and updates an existing project block', async () => {
     const workspace = mkdtempSync(join(tmpdir(), 'orca-codex-ws-'))
     const realpath = realpathSync.native(workspace)
     try {
@@ -260,7 +286,7 @@ describe('markCodexProjectTrusted', () => {
         'utf-8'
       )
 
-      markCodexProjectTrusted(workspace)
+      await markCodexProjectTrusted(workspace)
 
       const written = readFileSync(join(codexDir, 'config.toml'), 'utf-8')
       const runtimeWritten = readFileSync(join(runtimeCodexDir, 'config.toml'), 'utf-8')

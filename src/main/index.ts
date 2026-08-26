@@ -1138,7 +1138,7 @@ async function prepareCodexRuntimeHomeForLaunch(
     try {
       // Why: mark the workspace before the Codex hook transaction so trust is
       // ready when the pane starts without mutating unrelated shell panes.
-      markCodexProjectTrusted(launchContext.workspacePath)
+      await markCodexProjectTrusted(launchContext.workspacePath)
     } catch (error) {
       console.warn('[codex-project-trust] failed to pre-mark launch workspace:', error)
     }
@@ -1301,7 +1301,7 @@ async function prepareCodexSessionResumeForLaunch(args: {
 
       if (args.workspacePath) {
         try {
-          markCodexProjectTrusted(args.workspacePath)
+          await markCodexProjectTrusted(args.workspacePath)
         } catch (error) {
           console.warn('[codex-project-trust] failed to pre-mark resumed workspace:', error)
         }

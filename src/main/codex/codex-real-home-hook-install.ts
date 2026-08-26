@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync } from 'node:fs'
+import { existsSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { join } from 'node:path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import {
@@ -23,9 +23,11 @@ import { removeCodexManagedHookTrustEntries } from './codex-managed-trust-reconc
 import { getCodexManagedHookInstallMaterial } from './hook-service'
 import { getSystemCodexHomePath } from './codex-home-paths'
 import type { CodexTrustEntry } from './config-toml-trust'
-import { restoreCodexTrustConfig } from './codex-trust-config-rollback'
+import { captureCodexTrustConfig } from './codex-trust-config-rollback'
+import { restoreRealHomeTrustFilesIfUnchanged } from './codex-real-home-hook-rollback'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 import { runCodexHookTransaction } from './codex-hook-transaction-queue'
+import { backupRealHomeHooksJsonOnce } from './codex-real-home-hook-backup'
 
 /** Real-home Codex hook lane for the system-default selection (flag ON). */
 export type RealHomeCodexHookLane = 'pending' | 'installed' | 'unavailable' | 'removed'
@@ -46,11 +48,6 @@ export const isRealHomeCodexHookLaneUsable = (): boolean => currentLane !== 'una
 const getRealHomeHooksJsonPath = (): string => join(getSystemCodexHomePath(), 'hooks.json')
 
 const getRealHomeConfigTomlPath = (): string => join(getSystemCodexHomePath(), 'config.toml')
-
-/** Orca-side state dir; nothing extra is ever written into the user's ~/.codex. */
-function getRealHomeHookStateDir(userDataPath: string): string {
-  return join(userDataPath, 'codex-real-home-hooks')
-}
 
 function assertHooksJsonGeneration(
   hooksJsonPath: string,
@@ -157,6 +154,7 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
   backupRealHomeHooksJsonOnce(userDataPath, previousRaw)
   // Why: unknown top-level fields belong to the user (other managers'
   // metadata); unlike the managed-home writer, preserve them verbatim.
+  const hooksSnapshot = captureCodexTrustConfig(hooksJsonPath)
   const trustConfigSnapshot = await mutateRealHomeHooksPreservingUserTrust({
     sourcePath: hooksJsonPath,
     runtimeHomePath: getSystemCodexHomePath(),
@@ -171,6 +169,9 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
     },
     restoreHooks: () => restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
   })
+
+  const hooksAfterMutation = captureCodexTrustConfig(hooksJsonPath)
+  const configAfterMutation = captureCodexTrustConfig(getRealHomeConfigTomlPath())
 
   const grant = await grantManagedCodexHookTrust({
     runtimeHomePath: getSystemCodexHomePath(),
@@ -189,18 +190,21 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
   // would surface as "Hooks need review". Roll the file back to its prior
   // bytes and keep this host on the managed-home lane; the grant client
   // already logged the fallback reason.
-  try {
-    restoreRealHomeHooksJson(hooksWritePath, previousRaw, previousMode)
-  } finally {
-    // Why: a user-trust rebase may have succeeded before the managed grant
-    // failed. Roll both files back to the same pre-mutation generation.
-    if (trustConfigSnapshot) {
-      restoreCodexTrustConfig(getRealHomeConfigTomlPath(), trustConfigSnapshot)
-    }
+  if (
+    !restoreRealHomeTrustFilesIfUnchanged({
+      hooksJsonPath,
+      hooksSnapshot,
+      hooksAfterMutation,
+      configTomlPath: getRealHomeConfigTomlPath(),
+      configSnapshot: trustConfigSnapshot,
+      configAfterMutation
+    })
+  ) {
+    console.warn('[codex-real-home-hooks] files changed after trust preparation; rollback skipped')
   }
   installRetryAfterMs = getInstallRetryAfterMs(grant.reason)
   console.warn(
-    `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); entry rolled back, managed lane kept`
+    `[codex-real-home-hooks] trust grant unavailable (${grant.reason}); managed lane kept`
   )
   return 'unavailable'
 }
@@ -325,22 +329,6 @@ async function sweepRealHomeCodexHook(): Promise<RealHomeCodexHookLane> {
     }
   }
   return 'removed'
-}
-
-/** One-time pristine copy of the user's file, kept under Orca's userData. */
-function backupRealHomeHooksJsonOnce(userDataPath: string, previousRaw: string | null): void {
-  if (previousRaw === null) {
-    return
-  }
-  const backupDir = getRealHomeHookStateDir(userDataPath)
-  const backupPath = join(backupDir, 'hooks.json.pre-orca')
-  if (existsSync(backupPath)) {
-    return
-  }
-  // Why: this lane mutates the user's real Codex home. If the required
-  // pristine recovery copy cannot be created, keep the managed lane intact.
-  mkdirSync(backupDir, { recursive: true })
-  writeFileAtomically(backupPath, previousRaw, { mode: 0o600 })
 }
 
 function restoreRealHomeHooksJson(

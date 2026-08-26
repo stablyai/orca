@@ -214,7 +214,7 @@ describe('real-home user hook trust rebasing', () => {
     expect(codexAppServerCapabilityCache.shouldTry('native')).toBe(true)
   })
 
-  it('restores both files byte-exactly when post-mutation repair fails', async () => {
+  it('preserves newer hook and config generations when post-mutation repair fails', async () => {
     const orca = command('orca-hook')
     const user = command('user-hook')
     const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
@@ -251,7 +251,48 @@ describe('real-home user hook trust rebasing', () => {
         restoreHooks: () => writeFileSync(hooksPath, originalHooks)
       })
     ).rejects.toThrow('repair transport failed')
-    expect(readFileSync(hooksPath, 'utf-8')).toBe(originalHooks)
-    expect(readFileSync(configPath, 'utf-8')).toBe(originalConfig)
+    expect(readFileSync(hooksPath, 'utf-8')).toContain('user-hook')
+    expect(readFileSync(hooksPath, 'utf-8')).not.toContain('orca-hook')
+    expect(readFileSync(configPath, 'utf-8')).toContain('partial')
+  })
+
+  it('does not overwrite hooks.json edited while repair is pending', async () => {
+    const orca = command('orca-hook')
+    const user = command('user-hook')
+    const external = command('external-hook')
+    const before = { Stop: [{ hooks: [orca] }, { hooks: [user] }] }
+    const after = { Stop: [{ hooks: [user] }] }
+    const externalRaw = `${JSON.stringify({ hooks: { Stop: [{ hooks: [external] }] } })}\n`
+    writeFileSync(hooksPath, `${JSON.stringify({ hooks: before })}\n`)
+    writeFileSync(configPath, '# original config\n')
+    _internals.setSessionRunnerSync((request) => {
+      if (request.operation === 'inspect-user-hook-trust') {
+        return {
+          outcome: 'inspected',
+          moves: request.moves.map((move) => ({
+            ...move,
+            reportedOldKey: move.oldKey,
+            wasTrusted: true,
+            enabled: true
+          }))
+        }
+      }
+      writeFileSync(hooksPath, externalRaw)
+      throw new Error('repair failed after external edit')
+    })
+
+    await expect(
+      mutateRealHomeHooksPreservingUserTrust({
+        sourcePath: hooksPath,
+        runtimeHomePath: root,
+        tomlPath: configPath,
+        beforeHooks: before,
+        afterHooks: after,
+        writeHooks: () => writeFileSync(hooksPath, `${JSON.stringify({ hooks: after })}\n`),
+        restoreHooks: () => writeFileSync(hooksPath, `${JSON.stringify({ hooks: before })}\n`)
+      })
+    ).rejects.toThrow('repair failed after external edit')
+    expect(readFileSync(hooksPath, 'utf-8')).toBe(externalRaw)
+    expect(readFileSync(configPath, 'utf-8')).toBe('# original config\n')
   })
 })

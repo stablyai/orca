@@ -3,6 +3,7 @@ import { homedir } from 'node:os'
 import { basename, dirname, join, resolve } from 'node:path'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath } from './codex/codex-home-paths'
+import { runCodexHookTransaction } from './codex/codex-hook-transaction-queue'
 import { upsertProjectTrustLevel } from './codex/config-toml-trust'
 
 export type AgentTrustPreset = 'cursor' | 'copilot' | 'codex'
@@ -108,13 +109,15 @@ export function markCopilotFolderTrusted(workspacePath: string): void {
  * Verified against codex-rs/tui/src/onboarding/trust_directory.rs and
  * codex-rs/core/src/config/config_tests.rs in the Codex CLI source.
  */
-export function markCodexProjectTrusted(workspacePath: string): void {
+export function markCodexProjectTrusted(workspacePath: string): Promise<void> {
   const absPath = resolveCodexProjectTrustRoot(workspacePath)
-  const configPath = join(homedir(), '.codex', 'config.toml')
-  upsertProjectTrustLevel(configPath, absPath, 'trusted')
-  // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
-  // preset must also update the runtime config Codex will actually read.
-  upsertProjectTrustLevel(join(getOrcaManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
+  return runCodexHookTransaction(() => {
+    const configPath = join(homedir(), '.codex', 'config.toml')
+    upsertProjectTrustLevel(configPath, absPath, 'trusted')
+    // Why: Orca-launched Codex runs with an Orca-owned CODEX_HOME, so the trust
+    // preset must also update the runtime config Codex will actually read.
+    upsertProjectTrustLevel(join(getOrcaManagedCodexHomePath(), 'config.toml'), absPath, 'trusted')
+  })
 }
 
 function resolveCodexProjectTrustRoot(workspacePath: string): string {
