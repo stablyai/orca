@@ -1,6 +1,5 @@
 import { mkdirSync, readFileSync, renameSync, rmSync, writeFileSync, existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { tmpdir } from 'node:os'
 import type { ProviderRateLimits, RateLimitWindow } from '../../shared/rate-limit-types'
 import {
   getNousAuthPath,
@@ -11,6 +10,14 @@ import {
 } from './nous-auth'
 
 const API_TIMEOUT_MS = 15_000
+
+// Why: keep the endpoint deadline while letting the caller abort a credentialed
+// request (e.g. the service cycle signal) so stop() doesn't strand a live fetch.
+function withEndpointDeadline(signal: AbortSignal | undefined): AbortSignal {
+  return signal
+    ? AbortSignal.any([signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+    : AbortSignal.timeout(API_TIMEOUT_MS)
+}
 // Why: Hermes refreshes 2 minutes before expiry; mirror that skew so a token
 // that is about to die is not used for a 15-minute-cached status-bar snapshot.
 const TOKEN_REFRESH_SKEW_MS = 2 * 60 * 1000
@@ -19,6 +26,7 @@ const NOUS_MONTHLY_WINDOW_MINUTES = 43_200
 
 export type FetchNousRateLimitsOptions = {
   authReadResult?: NousAuthReadResult
+  signal?: AbortSignal
 }
 
 type NousSubscriptionPayload = {
@@ -111,8 +119,8 @@ function readJsonQuiet(path: string): Record<string, unknown> | null {
 function writeJsonAtomically(path: string, payload: unknown): void {
   const json = `${JSON.stringify(payload, null, 2)}\n`
   const tmpPath = join(
-    tmpdir(),
-    `nous-auth-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`
+    dirname(path),
+    `.nous-auth-${process.pid}-${Math.random().toString(36).slice(2)}.tmp`
   )
   writeFileSync(tmpPath, json, { mode: 0o600 })
   try {
@@ -179,7 +187,8 @@ function persistNousRefresh(session: NousAuthSession, refreshed: Record<string, 
 }
 
 async function resolveAccessToken(
-  session: NousAuthSession
+  session: NousAuthSession,
+  signal?: AbortSignal
 ): Promise<
   | { token: string }
   | { error: string; kind: NonNullable<ProviderRateLimits['usageMetadata']>['failureKind'] }
@@ -206,7 +215,7 @@ async function resolveAccessToken(
         'x-nous-refresh-token': session.refreshToken
       },
       body: body.toString(),
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: withEndpointDeadline(signal)
     })
     if (!response.ok) {
       return {
@@ -261,7 +270,7 @@ function buildMonthlyWindow(current: NousSubscriptionPayload['current']): RateLi
     resetsAt: parseCycleEndsAt(current.cycleEndsAt),
     resetDescription: null,
     usedAmount: roundAmount(used),
-    remainingAmount: roundAmount(creditsRemaining)
+    remainingAmount: roundAmount(Math.max(0, creditsRemaining))
   }
 }
 
@@ -276,7 +285,7 @@ export async function fetchNousRateLimits(
         : 'Nous Portal login not found — run `hermes portal` to sign in.'
     )
   }
-  const resolved = await resolveAccessToken(authReadResult.session)
+  const resolved = await resolveAccessToken(authReadResult.session, options.signal)
   if ('error' in resolved) {
     return makeError(resolved.error, resolved.kind)
   }
@@ -288,7 +297,7 @@ export async function fetchNousRateLimits(
           Accept: 'application/json',
           Authorization: `Bearer ${resolved.token}`
         },
-        signal: AbortSignal.timeout(API_TIMEOUT_MS)
+        signal: withEndpointDeadline(options.signal)
       }
     )
     if (response.status === 401 || response.status === 403) {

@@ -61,7 +61,11 @@ export function readNousAuthSession(): NousAuthReadResult {
     if (typeof parsed !== 'object' || parsed === null) {
       return { status: 'error', error: 'Hermes auth file is invalid' }
     }
-    const providerState = (parsed as Record<string, unknown>).providers?.['nous']
+    const providers = (parsed as Record<string, unknown>).providers
+    const providerState =
+      typeof providers === 'object' && providers !== null
+        ? (providers as Record<string, unknown>)['nous']
+        : undefined
     if (typeof providerState !== 'object' || providerState === null) {
       return { status: 'missing' }
     }

@@ -94,7 +94,8 @@ describe('RateLimitService nous usage', () => {
 
     expect(fetchNousRateLimits).toHaveBeenCalledTimes(1)
     expect(fetchNousRateLimits).toHaveBeenCalledWith({
-      authReadResult: { status: 'ok', session: expect.objectContaining({ accessToken: 'at' }) }
+      authReadResult: { status: 'ok', session: expect.objectContaining({ accessToken: 'at' }) },
+      signal: expect.any(AbortSignal)
     })
     const state = service.getState()
     expect(state.nous?.status).toBe('ok')

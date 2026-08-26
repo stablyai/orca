@@ -11,12 +11,9 @@ export function getNousStatusBarToggleSearchEntry(): {
 } {
   return {
     id: 'nous',
-    title: translate(
-      'auto.components.settings.appearance.status.bar.nous.toggle.search.e1f3cf3042',
-      'Nous Usage'
-    ),
+    title: translate('settings.appearance.statusBar.nousToggleTitle', 'Nous Usage'),
     description: translate(
-      'auto.components.settings.appearance.status.bar.nous.toggle.search.06772dccab',
+      'settings.appearance.statusBar.nousToggleSearchDescription',
       'Show Nous Portal subscription usage in the status bar.'
     ),
     keywords: [
@@ -25,11 +22,11 @@ export function getNousStatusBarToggleSearchEntry(): {
         'status bar'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.nous.toggle.search.cd4ad1de8a',
+        'settings.appearance.statusBar.nousToggleSearchKeywordNous',
         'nous'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.nous.toggle.search.803915a64d',
+        'settings.appearance.statusBar.nousToggleSearchKeywordHermes',
         'hermes'
       ),
       ...translateSearchKeyword('auto.components.settings.appearance.search.00a028f25f', 'usage'),
@@ -38,15 +35,15 @@ export function getNousStatusBarToggleSearchEntry(): {
         'subscription'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.nous.toggle.search.da8fcec43f',
+        'settings.appearance.statusBar.nousToggleSearchKeywordCredits',
         'credits'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.nous.toggle.search.f2ad6c2b3d',
+        'settings.appearance.statusBar.nousToggleSearchKeywordBalance',
         'balance'
       ),
       ...translateSearchKeyword(
-        'auto.components.settings.appearance.status.bar.nous.toggle.search.6beb71128d',
+        'settings.appearance.statusBar.nousToggleSearchKeywordPortal',
         'portal'
       )
     ],

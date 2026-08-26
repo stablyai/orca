@@ -238,7 +238,7 @@ function ProviderRateLimitWindowSection({
       <div className={`flex justify-between ${mutedClass}`}>
         <span>
           {amounts
-            ? `${displayedPct}% · ${amounts}`
+            ? `${formatUsagePercentageLabel(usedPct, usagePercentageDisplay)} · ${amounts}`
             : formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}
         </span>
         {resetLabel && <span>{resetLabel}</span>}

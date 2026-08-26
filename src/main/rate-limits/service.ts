@@ -1743,7 +1743,7 @@ export class RateLimitService {
             groupId: miniMaxGroupId,
             models: miniMaxModels
           }),
-      fetchNousRateLimits({ authReadResult: nousAuthReadResult })
+      fetchNousRateLimits({ authReadResult: nousAuthReadResult, signal })
     ])
 
     if (signal.aborted) {

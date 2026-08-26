@@ -1127,7 +1127,7 @@ function WindowLabel({
   return (
     <span className="tabular-nums">
       {compactAmounts
-        ? `${getDisplayedUsagePercentage(w.usedPercent, display)}% ${compactAmounts}`
+        ? `${formatUsagePercentageLabel(w.usedPercent, display)} ${compactAmounts}`
         : formatUsagePercentageLabel(w.usedPercent, display)}
       {showLabel ? ` ${label}` : ''}
     </span>
