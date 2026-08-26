@@ -4,10 +4,13 @@ function pathSeparatorFor(pathValue: string): '/' | '\\' {
   return pathValue.includes('\\') ? '\\' : '/'
 }
 
-/** The `~/orca/projects` fallback, which is the only default the `~` shorthand can
- *  stand for. A configured Workspace Directory must be shown verbatim. */
+/** True only for `{home}/orca/projects` on the usual OS home layouts. A configured
+ *  directory that merely ends in `orca/projects` (e.g. `/data/orca/projects`) must
+ *  stay verbatim — the `~` shorthand would otherwise lie. */
 function isHomeProjectsFallback(pathValue: string): boolean {
-  return /(?:^|[\\/])orca[\\/]projects$/.test(pathValue)
+  return /^(?:\/(?:Users|home)\/[^/]+|[A-Za-z]:[\\/]Users[\\/][^\\/]+)[\\/]orca[\\/]projects$/.test(
+    pathValue
+  )
 }
 
 function trimTrailingSeparators(pathValue: string): string {

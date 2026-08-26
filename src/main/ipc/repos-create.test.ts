@@ -196,6 +196,16 @@ describe('repos:create', () => {
     await expect(callDefaultCreateProjectParent()).resolves.toBe(defaultProjectParent)
   })
 
+  it('ignores a Windows seeded workspace directory regardless of drive-letter case', async () => {
+    homedirMock.mockReturnValue('C:\\Users\\alice')
+    mockStore.getSettings.mockReturnValue({
+      workspaceDir: 'c:\\users\\alice\\orca\\workspaces'
+    })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe(
+      join('C:\\Users\\alice', 'orca', 'projects')
+    )
+  })
+
   it('unregisters any previously-registered repos:create handler', () => {
     // registerRepoHandlers must call removeHandler('repos:create') before
     // ipcMain.handle to avoid the "second handler for same channel" throw
