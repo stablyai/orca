@@ -65,4 +65,24 @@ describe('parseAntigravityCliUsage', () => {
     expect(limits.weekly).toBeNull()
     expect(limits.error).toBeTruthy()
   })
+
+  // Why: Antigravity bills two independent pools with their own resets (see #9122),
+  // so both must survive as named buckets, not just the headline Gemini numbers.
+  it('exposes both quota pools as named buckets', () => {
+    const limits = parseAntigravityCliUsage(SAMPLE, UPDATED_AT)
+
+    expect(limits.buckets?.map((bucket) => bucket.name)).toEqual([
+      'Gemini Models · 7d',
+      'Gemini Models · 5h',
+      'Claude and GPT models · 7d',
+      'Claude and GPT models · 5h'
+    ])
+  })
+
+  it('marks the source as cli so the meter can explain itself', () => {
+    expect(parseAntigravityCliUsage(SAMPLE, UPDATED_AT).usageMetadata?.source).toBe('cli')
+    expect(parseAntigravityCliUsage('nope', UPDATED_AT).usageMetadata?.failureKind).toBe(
+      'usage-unavailable'
+    )
+  })
 })
