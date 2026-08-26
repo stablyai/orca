@@ -106,3 +106,49 @@ describe('SettledDiffCache bounds', () => {
     expect(cache.stats().invalidatedDuringRead).toBe(1)
   })
 })
+
+// Why (#15036 review): the margin compares this host's clock to mtimes the WSL guest
+// wrote. A guest running ahead refuses every store for as long as the skew lasts, and
+// without its own counter that is indistinguishable from a repo nobody has touched.
+describe('settled diff cache clock skew', () => {
+  const result: GitDiffResult = diffOfSize(10)
+
+  it('counts a future-dated mtime separately from an ordinary racy write', () => {
+    const cache = new SettledDiffCache()
+    const now = Date.now()
+
+    // Honestly fresh: written just now, margin not yet satisfied.
+    cache.set(
+      'fresh',
+      { value: 'a', newestMtimeMs: now, capturedAtMs: now },
+      result,
+      cache.beginRead()
+    )
+    // Skewed: mtime in this host's future, which no local write can produce.
+    cache.set(
+      'skewed',
+      { value: 'b', newestMtimeMs: now + 60_000, capturedAtMs: now },
+      result,
+      cache.beginRead()
+    )
+
+    const stats = cache.stats()
+    expect(stats.racyWrites).toBe(2)
+    expect(stats.clockSkewedWrites).toBe(1)
+    expect(stats.stores).toBe(0)
+  })
+
+  it('does not flag a stamp whose components were all absent', () => {
+    const cache = new SettledDiffCache()
+    const now = Date.now()
+
+    cache.set(
+      'absent',
+      { value: 'c', newestMtimeMs: Number.NEGATIVE_INFINITY, capturedAtMs: now },
+      result,
+      cache.beginRead()
+    )
+
+    expect(cache.stats().clockSkewedWrites).toBe(0)
+  })
+})

@@ -1,6 +1,10 @@
 import { BoundedMap } from '../../../shared/bounded-map'
 import type { GitDiffResult } from '../../../shared/git-diff-compare-types'
-import { canProveUnchangedByStamp, type WorktreeDiffStamp } from './worktree-diff-stamp'
+import {
+  canProveUnchangedByStamp,
+  isDiffStampClockSkewed,
+  type WorktreeDiffStamp
+} from './worktree-diff-stamp'
 
 /**
  * Diff results that survive their read, guarded by a stamp of the git state they
@@ -30,6 +34,12 @@ export type SettledDiffCacheStats = {
   stores: number
   /** Store declined because a write was too recent for its mtime to be conclusive. */
   racyWrites: number
+  /**
+   * Subset of `racyWrites` where a component's mtime was in this host's future, so
+   * the clocks disagree and the refusal will persist until they converge. A nonzero
+   * count here means the cache is off for a reason no amount of idling will fix.
+   */
+  clockSkewedWrites: number
   /** Store declined because a mutation invalidated the cache while the read ran. */
   invalidatedDuringRead: number
   entries: number
@@ -51,6 +61,7 @@ export class SettledDiffCache {
   private unprovable = 0
   private stores = 0
   private racyWrites = 0
+  private clockSkewedWrites = 0
   private invalidatedDuringRead = 0
 
   /**
@@ -92,6 +103,9 @@ export class SettledDiffCache {
     }
     if (!canProveUnchangedByStamp(stamp)) {
       this.racyWrites += 1
+      if (isDiffStampClockSkewed(stamp)) {
+        this.clockSkewedWrites += 1
+      }
       return
     }
     const characters = resultCharacterCount(result)
@@ -118,6 +132,7 @@ export class SettledDiffCache {
       unprovable: this.unprovable,
       stores: this.stores,
       racyWrites: this.racyWrites,
+      clockSkewedWrites: this.clockSkewedWrites,
       invalidatedDuringRead: this.invalidatedDuringRead,
       entries: this.entries.size,
       retainedCharacters: this.entries.retainedBytes
@@ -130,6 +145,7 @@ export class SettledDiffCache {
     this.unprovable = 0
     this.stores = 0
     this.racyWrites = 0
+    this.clockSkewedWrites = 0
     this.invalidatedDuringRead = 0
   }
 }

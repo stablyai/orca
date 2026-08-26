@@ -41,9 +41,24 @@ type StampComponent = { text: string; mtimeMs: number }
 /**
  * A write that lands in the same timestamp bucket as the stamp is invisible, so
  * only a stamp taken a full bucket after its newest component can be trusted.
+ *
+ * The margin compares two clocks: `capturedAtMs` is this host's, while the mtimes
+ * come from whatever wrote the files. On a `\\wsl.localhost` worktree the guest
+ * sets them, and a guest running ahead pushes every recently-touched file past the
+ * margin — silently, and for as long as the skew lasts. `isDiffStampClockSkewed`
+ * separates that from an honestly-too-fresh file so the caller can count it.
  */
 export function canProveUnchangedByStamp(stamp: WorktreeDiffStamp): boolean {
   return stamp.capturedAtMs - stamp.newestMtimeMs >= DIFF_STAMP_RACY_WRITE_MARGIN_MS
+}
+
+/**
+ * True when a component's mtime is in this host's future, which no local write can
+ * produce — so the margin above is measuring skew, not freshness, and will keep
+ * refusing to store until the clocks converge.
+ */
+export function isDiffStampClockSkewed(stamp: WorktreeDiffStamp): boolean {
+  return Number.isFinite(stamp.newestMtimeMs) && stamp.newestMtimeMs > stamp.capturedAtMs
 }
 
 /**
