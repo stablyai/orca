@@ -117,6 +117,15 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --color-markdown-text-gray: var(--markdown-text-gray);
+  --color-markdown-text-red: var(--markdown-text-red);
+  --color-markdown-text-orange: var(--markdown-text-orange);
+  --color-markdown-text-yellow: var(--markdown-text-yellow);
+  --color-markdown-text-green: var(--markdown-text-green);
+  --color-markdown-text-teal: var(--markdown-text-teal);
+  --color-markdown-text-blue: var(--markdown-text-blue);
+  --color-markdown-text-purple: var(--markdown-text-purple);
+  --color-markdown-text-pink: var(--markdown-text-pink);
   --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
@@ -238,6 +247,15 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #f59e0b;
+  --markdown-text-gray: var(--color-zinc-700);
+  --markdown-text-red: var(--color-red-700);
+  --markdown-text-orange: var(--color-orange-700);
+  --markdown-text-yellow: var(--color-yellow-700);
+  --markdown-text-green: var(--color-green-700);
+  --markdown-text-teal: var(--color-teal-700);
+  --markdown-text-blue: var(--color-blue-700);
+  --markdown-text-purple: var(--color-violet-700);
+  --markdown-text-pink: var(--color-pink-700);
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
   /* Why: tab-group splits use a dedicated divider — `--border` is too faint on
@@ -350,6 +368,15 @@
   --git-graph-lane-4: #40b0a6;
   --git-graph-lane-5: #b66dff;
   --annotation-highlight: #fbbf24;
+  --markdown-text-gray: var(--color-zinc-300);
+  --markdown-text-red: var(--color-red-300);
+  --markdown-text-orange: var(--color-orange-300);
+  --markdown-text-yellow: var(--color-yellow-300);
+  --markdown-text-green: var(--color-green-300);
+  --markdown-text-teal: var(--color-teal-300);
+  --markdown-text-blue: var(--color-blue-300);
+  --markdown-text-purple: var(--color-violet-300);
+  --markdown-text-pink: var(--color-pink-300);
   --markdown-search-match: #facc15;
   --markdown-search-match-active: #fb923c;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */

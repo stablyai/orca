@@ -68,6 +68,174 @@
   color: var(--foreground);
 }
 
+.rich-markdown-toolbar-button[data-rich-markdown-text-color] {
+  color: var(--rich-markdown-current-text-color);
+}
+
+.rich-markdown-selection-toolbar {
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--popover);
+  color: var(--popover-foreground);
+  box-shadow: var(--shadow-floating);
+}
+
+.rich-markdown-selection-toolbar .rich-markdown-toolbar-button {
+  color: var(--popover-foreground);
+}
+
+.rich-markdown-text-color-popover {
+  width: auto;
+  padding: 6px;
+}
+
+.rich-markdown-text-color-options {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.rich-markdown-text-color-option {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted-foreground);
+}
+
+.rich-markdown-text-color-option[data-rich-markdown-text-color] {
+  color: var(--rich-markdown-current-text-color);
+}
+
+.rich-markdown-text-color-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.rich-markdown-text-color-option:hover,
+.rich-markdown-text-color-option.is-active {
+  border-color: color-mix(in srgb, var(--border) 82%, transparent);
+  background: var(--accent);
+}
+
+.rich-markdown-text-color-divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: color-mix(in srgb, var(--border) 72%, transparent);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='gray'] {
+  --rich-markdown-current-text-color: var(--markdown-text-gray);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='red'] {
+  --rich-markdown-current-text-color: var(--markdown-text-red);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='orange'] {
+  --rich-markdown-current-text-color: var(--markdown-text-orange);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='yellow'] {
+  --rich-markdown-current-text-color: var(--markdown-text-yellow);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='green'] {
+  --rich-markdown-current-text-color: var(--markdown-text-green);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='teal'] {
+  --rich-markdown-current-text-color: var(--markdown-text-teal);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='blue'] {
+  --rich-markdown-current-text-color: var(--markdown-text-blue);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='purple'] {
+  --rich-markdown-current-text-color: var(--markdown-text-purple);
+}
+
+:is(
+  .rich-markdown-toolbar-button,
+  .rich-markdown-text-color-option
+)[data-rich-markdown-text-color='pink'] {
+  --rich-markdown-current-text-color: var(--markdown-text-pink);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='gray'] {
+  color: var(--markdown-text-gray);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='red'] {
+  color: var(--markdown-text-red);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='orange'] {
+  color: var(--markdown-text-orange);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='yellow'] {
+  color: var(--markdown-text-yellow);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='green'] {
+  color: var(--markdown-text-green);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='teal'] {
+  color: var(--markdown-text-teal);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='blue'] {
+  color: var(--markdown-text-blue);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='purple'] {
+  color: var(--markdown-text-purple);
+}
+
+:is(.rich-markdown-editor, .markdown-preview) [data-orca-text-color='pink'] {
+  color: var(--markdown-text-pink);
+}
+
 .github-markdown-composer .rich-markdown-editor-toolbar {
   padding: 6px 8px;
   background: color-mix(in srgb, var(--background) 92%, transparent);

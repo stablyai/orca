@@ -14742,6 +14742,19 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "RichMarkdownTextColorControl": {
+          "gray": "Gray",
+          "red": "Red",
+          "orange": "Orange",
+          "yellow": "Yellow",
+          "green": "Green",
+          "teal": "Teal",
+          "blue": "Blue",
+          "purple": "Purple",
+          "pink": "Pink",
+          "textColor": "Text color",
+          "clear": "Clear text color"
         }
       },
       "diff": {

@@ -18,7 +18,7 @@ import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import rehypeRaw from 'rehype-raw'
-import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import rehypeSanitize from 'rehype-sanitize'
 import rehypeSlug from 'rehype-slug'
 import { extractFrontMatter } from './markdown-frontmatter'
 import {
@@ -100,6 +100,7 @@ import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { dirname } from '@/lib/path'
 import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { translate } from '@/i18n/i18n'
+import { markdownPreviewSanitizeSchema } from './markdown-preview-sanitize-schema'
 
 const EMPTY_MARKDOWN_DOCUMENTS: MarkdownDocument[] = []
 
@@ -291,45 +292,6 @@ function getMarkdownPreviewAnnotationQuote(node: React.ReactNode): string | unde
 function hasMarkdownPreviewNestedBlock(node: MarkdownPreviewPositionNode | undefined): boolean {
   const blockTags = new Set(['p', 'pre', 'table', 'blockquote', 'ul', 'ol'])
   return Boolean(node?.children?.some((child) => child.tagName && blockTags.has(child.tagName)))
-}
-
-const markdownPreviewSanitizeSchema = {
-  ...defaultSchema,
-  tagNames: [...(defaultSchema.tagNames ?? []), 'details', 'summary', 'kbd', 'sub', 'sup', 'ins'],
-  protocols: {
-    ...defaultSchema.protocols,
-    // Why: keep file:// through sanitize so the click handler can authorize and open the target (the security decision lives there).
-    href: [...(defaultSchema.protocols?.href ?? []), 'file'],
-    src: [...(defaultSchema.protocols?.src ?? []), 'file']
-  },
-  attributes: {
-    ...defaultSchema.attributes,
-    '*': [...(defaultSchema.attributes?.['*'] ?? []), 'id'],
-    a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
-    code: [
-      ...(defaultSchema.attributes?.code ?? []),
-      ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
-    ],
-    div: [...(defaultSchema.attributes?.div ?? []), ['className', /^language-[\w-]+$/], 'align'],
-    details: [
-      ...(defaultSchema.attributes?.details ?? []),
-      'open',
-      ['className', 'orca-details'],
-      ['dataOrcaToggle', 'heading-1', 'heading-2', 'heading-3', 'heading-4', 'heading-5']
-    ],
-    h1: [...(defaultSchema.attributes?.h1 ?? []), 'id'],
-    h2: [...(defaultSchema.attributes?.h2 ?? []), 'id'],
-    h3: [...(defaultSchema.attributes?.h3 ?? []), 'id'],
-    h4: [...(defaultSchema.attributes?.h4 ?? []), 'id'],
-    h5: [...(defaultSchema.attributes?.h5 ?? []), 'id'],
-    h6: [...(defaultSchema.attributes?.h6 ?? []), 'id'],
-    img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
-    input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
-    pre: [...(defaultSchema.attributes?.pre ?? []), ['className', /^language-[\w-]+$/]],
-    span: [...(defaultSchema.attributes?.span ?? []), ['className', /^hljs(?:-[\w-]+)?$/]],
-    td: [...(defaultSchema.attributes?.td ?? []), 'align'],
-    th: [...(defaultSchema.attributes?.th ?? []), 'align']
-  }
 }
 
 // Why: react-markdown's <Markdown> has no internal memoization — it rebuilds the whole

@@ -9,6 +9,7 @@ import type {
 } from './rich-markdown-source-transport'
 import { isReservedRichMarkdownTransportBody } from './rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
+import { matchRichMarkdownTextColorSource } from './rich-markdown-text-color'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
 
@@ -167,6 +168,12 @@ export function encodeRawMarkdownHtmlForRichEditor(
     }
 
     if (normalizedContent[index] === '<' && !isEscaped(normalizedContent, index)) {
+      const textColor = matchRichMarkdownTextColorSource(normalizedContent, index)
+      if (textColor) {
+        result += textColor.raw
+        index = textColor.end
+        continue
+      }
       if (htmlSuperscriptLinks) {
         const superscriptLink = matchHtmlSuperscriptLinkSource(normalizedContent, index)
         if (superscriptLink) {
