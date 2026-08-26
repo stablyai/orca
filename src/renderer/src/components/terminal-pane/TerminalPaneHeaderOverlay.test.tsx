@@ -41,6 +41,7 @@ function makePane(id: number): ManagedPane {
 
 function renderOverlay({
   paneTitles,
+  generatedPaneTitlesByLeaf = {},
   paneCount = 2,
   showAlwaysOnHeaders = true,
   showSplitButton = true,
@@ -53,6 +54,7 @@ function renderOverlay({
   renamingPaneId = null
 }: {
   paneTitles: Record<number, string>
+  generatedPaneTitlesByLeaf?: Record<string, string>
   paneCount?: number
   showAlwaysOnHeaders?: boolean
   showSplitButton?: boolean
@@ -85,6 +87,7 @@ function renderOverlay({
         activePaneId={1}
         panes={panes}
         paneTitles={paneTitles}
+        generatedPaneTitlesByLeaf={generatedPaneTitlesByLeaf}
         paneTitleOverlayRects={{
           1: { left: 0, top: 0, width: 200 },
           2: { left: 220, top: 0, width: 200 }
@@ -159,6 +162,35 @@ describe('TerminalPaneHeaderOverlay', () => {
 
     expect(onRemoveTitle).toHaveBeenCalledWith(1)
     expect(onClosePane).not.toHaveBeenCalledWith(1)
+  })
+
+  it('shows the agent-generated name on a pane the user has not renamed', () => {
+    const { container } = renderOverlay({
+      paneTitles: { 1: '', 2: '' },
+      generatedPaneTitlesByLeaf: { 'leaf-1': 'Fix the flaky upload test' }
+    })
+
+    expect(
+      container.querySelector('button[aria-label="Edit pane title: Fix the flaky upload test"]')
+        ?.textContent
+    ).toBe('Fix the flaky upload test')
+    // Why: nothing is stored for a generated name, so the header must not offer
+    // to remove one; the untitled pane's close control stays in that slot.
+    expect(container.querySelector('button[aria-label^="Remove pane title"]')).toBeNull()
+    expect(container.querySelector('button[aria-label="Close Pane"]')).not.toBeNull()
+  })
+
+  it('lets a manual rename outrank the agent-generated name', () => {
+    const { container } = renderOverlay({
+      paneTitles: { 1: 'server', 2: '' },
+      generatedPaneTitlesByLeaf: { 'leaf-1': 'Fix the flaky upload test' }
+    })
+
+    expect(container.querySelector('button[aria-label="Edit pane title: server"]')).not.toBeNull()
+    expect(
+      container.querySelector('button[aria-label="Edit pane title: Fix the flaky upload test"]')
+    ).toBeNull()
+    expect(container.querySelector('button[aria-label="Remove pane title: server"]')).not.toBeNull()
   })
 
   it('keeps split and close-pane controls available for untitled split pane headers', () => {

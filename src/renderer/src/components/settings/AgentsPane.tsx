@@ -13,6 +13,10 @@ import {
   getAgentGeneratedTabTitlesDescription,
   getAgentGeneratedTabTitlesTitle
 } from './agent-generated-tab-title-copy'
+import {
+  getAgentGeneratedTerminalTitlesDescription,
+  getAgentGeneratedTerminalTitlesTitle
+} from './agent-generated-terminal-title-copy'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
   SettingsSegmentedControl,
@@ -256,6 +260,7 @@ export function AgentsPane({
       />
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
+      <AgentGeneratedTerminalTitlesSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (
         <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
@@ -291,6 +296,28 @@ export function AgentStatusHooksSetting({ settings, updateSettings }: AgentsPane
         checked={enabled}
         onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
         ariaLabel={getAgentStatusHooksTitle()}
+      />
+    </section>
+  )
+}
+
+export function AgentGeneratedTerminalTitlesSetting({
+  settings,
+  updateSettings
+}: AgentsPaneProps): React.JSX.Element {
+  const enabled = settings.terminalAutoGenerateTitle === true
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={getAgentGeneratedTerminalTitlesTitle()}
+        description={getAgentGeneratedTerminalTitlesDescription()}
+        checked={enabled}
+        onChange={() =>
+          updateSettings({
+            terminalAutoGenerateTitle: !enabled
+          })
+        }
+        ariaLabel={getAgentGeneratedTerminalTitlesTitle()}
       />
     </section>
   )

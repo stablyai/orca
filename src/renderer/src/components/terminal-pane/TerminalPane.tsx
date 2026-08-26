@@ -198,6 +198,11 @@ import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
+import {
+  EMPTY_GENERATED_PANE_TITLES,
+  selectTerminalTabGeneratedPaneTitles,
+  type GeneratedPaneTitlesByLeaf
+} from './terminal-tab-generated-pane-titles'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
@@ -422,6 +427,9 @@ function TerminalPane(
   const [paneTitles, setPaneTitles] = useState<Record<number, string>>({})
   const paneTitlesRef = useRef<Record<number, string>>({})
   paneTitlesRef.current = paneTitles
+  // Generated titles are display-only: they never enter paneTitles, so they are
+  // never persisted into titlesByLeafId and a manual rename always outranks one.
+  const generatedPaneTitlesRef = useRef<GeneratedPaneTitlesByLeaf>(EMPTY_GENERATED_PANE_TITLES)
   const removedTitleLeafIdsRef = useRef<Set<string>>(new Set())
   const clearedScrollbackLeafIdsRef = useRef<Set<string>>(new Set())
   const remotePaneLayoutPusherRef = useRef<RemotePaneLayoutPusher | null>(null)
@@ -481,7 +489,13 @@ function TerminalPane(
       renameBlurCommitEnabledRef.current = false
       renameUserRequestedBlurCommitRef.current = false
       renameSubmittedRef.current = false
-      setRenameValue(paneTitlesRef.current[paneId] ?? '')
+      // Why: Set Title on an auto-named pane opens on that name, so editing it is
+      // a correction rather than retyping what the header already shows.
+      const leafId = managerRef.current?.getPanes().find((pane) => pane.id === paneId)?.leafId
+      setRenameValue(
+        paneTitlesRef.current[paneId] ??
+          (leafId ? (generatedPaneTitlesRef.current[leafId] ?? '') : '')
+      )
       setRenamingPaneId(paneId)
     },
     [cancelPendingRenameFrames]
@@ -540,6 +554,12 @@ function TerminalPane(
   const tabAgentTypeByLeaf = useAppStore((store) =>
     selectTerminalTabAgentTypesByLeaf(store.agentStatusByPaneKey, tabId)
   )
+  const generatedPaneTitlesByLeaf = useAppStore((store) =>
+    store.settings?.terminalAutoGenerateTitle === true
+      ? selectTerminalTabGeneratedPaneTitles(store.agentStatusByPaneKey, tabId)
+      : EMPTY_GENERATED_PANE_TITLES
+  )
+  generatedPaneTitlesRef.current = generatedPaneTitlesByLeaf
   const toggleTabViewMode = useAppStore((store) => store.toggleTabViewMode)
   const setTabViewMode = useAppStore((store) => store.setTabViewMode)
   const savedLayout = useAppStore((store) => store.terminalLayoutsByTabId[tabId] ?? EMPTY_LAYOUT)
@@ -2303,6 +2323,7 @@ function TerminalPane(
     const needsFit = syncSessionRestoredBannerTitleSpace({
       panes: manager.getPanes(),
       paneTitles,
+      generatedPaneTitlesByLeaf,
       renamingPaneId,
       sessionRestoredBannerPaneIds
     })
@@ -2314,6 +2335,7 @@ function TerminalPane(
     paneCount,
     paneLayoutRevision,
     paneTitles,
+    generatedPaneTitlesByLeaf,
     renamingPaneId,
     sessionRestoredBannerPaneIds,
     isVisible,
@@ -3268,6 +3290,7 @@ function TerminalPane(
         activePaneId={activePane?.id}
         panes={managedPanes}
         paneTitles={paneTitles}
+        generatedPaneTitlesByLeaf={generatedPaneTitlesByLeaf}
         paneTitleOverlayRects={paneTitleOverlayRects}
         renamingPaneId={renamingPaneId}
         renameValue={renameValue}
