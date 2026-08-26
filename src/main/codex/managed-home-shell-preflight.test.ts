@@ -35,7 +35,7 @@ describe('managed Codex shell preflight', () => {
     ).toBe(home)
   })
 
-  it('accepts a marker-proven account home and installs only while hooks are enabled', () => {
+  it('accepts a marker-proven account home and installs only while hooks are enabled', async () => {
     const userDataPath = makeRoot()
     const home = join(userDataPath, 'codex-accounts', 'account-1', 'home')
     mkdirSync(home, { recursive: true })
@@ -50,12 +50,22 @@ describe('managed Codex shell preflight', () => {
     const env = { CODEX_HOME: home, ORCA_CODEX_HOME: home }
 
     expect(
-      prepareManagedCodexHomeBeforeShellLaunch({ userDataPath, hooksEnabled: true, env, install })
+      await prepareManagedCodexHomeBeforeShellLaunch({
+        userDataPath,
+        hooksEnabled: true,
+        env,
+        install
+      })
     ).toMatchObject({ state: 'installed' })
     expect(install).toHaveBeenCalledWith(home)
 
     expect(
-      prepareManagedCodexHomeBeforeShellLaunch({ userDataPath, hooksEnabled: false, env, install })
+      await prepareManagedCodexHomeBeforeShellLaunch({
+        userDataPath,
+        hooksEnabled: false,
+        env,
+        install
+      })
     ).toBeNull()
     expect(install).toHaveBeenCalledTimes(1)
   })

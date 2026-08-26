@@ -86,14 +86,14 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
   return MANAGED_AGENT_HOOK_INSTALLERS.filter(([agent]) => allowed.has(agent))
 }
 
-function runInstaller(
+async function runInstaller(
   entry: ManagedAgentHookInstaller,
   onInstallError: InstallOptions['onInstallError'],
   userInitiated?: boolean
-): AgentHookInstallStatus {
+): Promise<AgentHookInstallStatus> {
   const [agent, install] = entry
   try {
-    return install({ userInitiated })
+    return await install({ userInitiated })
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -177,22 +177,27 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(runInstaller(entry, options.onInstallError, options.userInitiated))
+    results.push(await runInstaller(entry, options.onInstallError, options.userInitiated))
   }
   return results
 }
 
-export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookInstallStatus[] {
+export async function removeManagedAgentHooks(
+  options: RemoveOptions = {}
+): Promise<AgentHookInstallStatus[]> {
   const allowed = options.agents ? new Set(options.agents) : null
-  return MANAGED_AGENT_HOOK_REMOVERS.filter(
-    ([agent]) => allowed === null || allowed.has(agent)
-  ).map(([agent, remove]) => {
-    try {
-      return remove()
-    } catch (error) {
-      return errorStatus(agent, error)
+  const results: AgentHookInstallStatus[] = []
+  for (const [agent, remove] of MANAGED_AGENT_HOOK_REMOVERS) {
+    if (allowed !== null && !allowed.has(agent)) {
+      continue
     }
-  })
+    try {
+      results.push(await remove())
+    } catch (error) {
+      results.push(errorStatus(agent, error))
+    }
+  }
+  return results
 }
 
 export async function removeManagedAgentHooksAsync(
@@ -228,7 +233,7 @@ export async function applyAgentStatusHooksEnabled(
   options: InstallOptions = {}
 ): Promise<AgentHookInstallStatus[]> {
   if (!enabled) {
-    return removeManagedAgentHooks()
+    return await removeManagedAgentHooks()
   }
   const disabled = normalizeDisabledTuiAgents(settings?.disabledTuiAgents).filter(
     isManagedAgentHookTarget
@@ -241,7 +246,10 @@ export async function applyAgentStatusHooksEnabled(
     return installed
   }
   const removed = new Map(
-    removeManagedAgentHooks({ agents: disabledToRemove }).map((status) => [status.agent, status])
+    (await removeManagedAgentHooks({ agents: disabledToRemove })).map((status) => [
+      status.agent,
+      status
+    ])
   )
   return installed.map((status) => removed.get(status.agent) ?? status)
 }

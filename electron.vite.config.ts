@@ -239,12 +239,6 @@ export const electronViteConfig: UserConfig = {
           'main-thread-hang-watchdog-entry': resolve(
             'src/main/hang-watchdog/main-thread-hang-watchdog-entry.ts'
           ),
-          // Why: run under ELECTRON_RUN_AS_NODE while the caller blocks on
-          // spawnSync — codex app-server trust grants need a live event loop
-          // but must finish before a Codex pane launch proceeds.
-          'codex/codex-app-server-grant-entry': resolve(
-            'src/main/codex/codex-app-server-grant-entry.ts'
-          ),
           // Why: electron-vite cleans out/main in dev. The dev CLI imports
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(
