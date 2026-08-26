@@ -153,7 +153,11 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
               localPtyTeardownOwnedExternally: true
             })
           } catch (error) {
-            if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
+            // The confirmed PTY exit can retire the HUB surface before this post-stop cleanup runs.
+            if (
+              !(error instanceof Error) ||
+              (error.message !== 'workspace_session_unavailable' && error.message !== 'tab_not_found')
+            ) {
               throw error
             }
             this.notifier?.closeTerminal(tabId)
