@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../../orchestration/db'
+import { scheduleAutomaticWorkerTerminalRelease } from '../../orchestration/automatic-worker-terminal-release'
 import { reconcileRequestedWorkerTerminalReleases } from '../../orchestration/worker-terminal-release-reconciliation'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
@@ -93,6 +94,7 @@ describe('orchestration worker release recovery', () => {
   }
 
   afterEach(() => {
+    vi.useRealTimers()
     if (dbOpen) {
       dbOpen = false
       db.close()
@@ -198,6 +200,67 @@ describe('orchestration worker release recovery', () => {
     await startSettledWorker()
     const result = await reconcileRequestedWorkerTerminalReleases(runtime)
     expect(result.attempted).toBe(0)
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('automatically releases an owned terminal after worker completion', async () => {
+    setup()
+    vi.useFakeTimers()
+    const { taskId, dispatchId } = await startWorker()
+    const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls.at(-1)?.[1]
+    const capability = String(prompt).match(/--dispatch-capability (dcap_[A-Za-z0-9_-]+)/)?.[1]
+    expect(capability).toBeTruthy()
+    ctx = { runtime, orchestrationCapability: capability }
+
+    await call('orchestration.send', {
+      from: 'term_worker',
+      to: `run:${activeRunId}`,
+      subject: 'Done',
+      type: 'worker_done',
+      payload: JSON.stringify({ taskId, dispatchId, outcome: 'succeeded' })
+    })
+
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('not_requested')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('released')
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
+  })
+
+  it('preserves an explicit retain when completion requests automatic release', async () => {
+    setup()
+    vi.useFakeTimers()
+    const { dispatchId } = await startSettledWorker()
+    scheduleAutomaticWorkerTerminalRelease(runtime, dispatchId)
+    await expect(
+      call('orchestration.workerRetain', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'retained', reason: 'user_requested' })
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    expect(db.getWorkerTerminalResourceByOwner(dispatchId)).toMatchObject({
+      release_state: 'retained',
+      retained_reason: 'user_requested'
+    })
+    expect(runtime.closeTerminal).not.toHaveBeenCalled()
+  })
+
+  it('preserves an exact terminal reuse during the automatic release grace window', async () => {
+    setup()
+    vi.useFakeTimers()
+    const { dispatchId } = await startSettledWorker()
+    scheduleAutomaticWorkerTerminalRelease(runtime, dispatchId)
+    const nextTask = db.createTask({ spec: 'reuse the same worker', runId: activeRunId })
+    const reused = (await call('orchestration.workerStart', {
+      task: nextTask.id,
+      from: 'term_coord',
+      terminal: 'term_worker'
+    })) as { dispatchId: string; state: string }
+    expect(reused.state).toBe('ready')
+
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(db.getWorkerTerminalResourceByOwner(reused.dispatchId)).toMatchObject({
+      ownership_state: 'owned',
+      release_state: 'not_requested'
+    })
     expect(runtime.closeTerminal).not.toHaveBeenCalled()
   })
 
