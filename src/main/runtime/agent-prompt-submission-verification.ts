@@ -1,4 +1,6 @@
-export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 5_000
+export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = Number(
+  process.env.ORCA_AGENT_PROMPT_TIMEOUT_MS ?? 5_000
+)
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
 
 export type AgentPromptActivity = Readonly<{
