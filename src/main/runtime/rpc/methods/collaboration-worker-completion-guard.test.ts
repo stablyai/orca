@@ -4,7 +4,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { createCollaborationTopology } from '../../collaboration/collaboration-topology'
 import { registerCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
-import { publishCollaborationMessage } from '../../collaboration/collaboration-publish-store'
+import { COLLABORATION_PUBLISH_METHODS } from './collaboration-publish'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
 const PRODUCER_PANE = 'tab_producer:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -90,6 +90,29 @@ describe('collaboration worker completion guard', () => {
     }
   }
 
+  async function publishRequired(
+    fixture: Fixture,
+    semanticType: string
+  ): Promise<{ subscriberTaskIds: string[] }> {
+    const method = COLLABORATION_PUBLISH_METHODS[0]!
+    const params = method.params!.parse({
+      from: 'term_producer',
+      topic: '/required',
+      semanticType,
+      priority: 'normal',
+      body: 'required payload'
+    })
+    return (await method.handler(params, {
+      runtime: fixture.runtime,
+      orchestrationMutation: {
+        callerFingerprint: 'completion-guard-test',
+        requestId: `publication-${semanticType}`,
+        method: 'orchestration.collaborationPublish',
+        payloadHash: 'hash'
+      }
+    } as RpcContext)) as { subscriberTaskIds: string[] }
+  }
+
   it('rejects a succeeded worker_done while a required collaboration publish is missing', async () => {
     const fixture = setup()
 
@@ -103,24 +126,30 @@ describe('collaboration worker completion guard', () => {
     expect(fixture.db.getDispatchContextById(fixture.dispatchId)?.status).toBe('dispatched')
   })
 
-  it('completes a succeeded worker_done once the required collaboration publish exists', async () => {
+  it('completes a succeeded worker_done once the required collaboration publish reaches an admitted subscriber', async () => {
     const fixture = setup()
-    publishCollaborationMessage(fixture.db, {
-      runId: fixture.runId,
-      publicationId: 'publication-required-1',
-      producerTaskId: fixture.producerTaskId,
-      subscriberTaskIds: [fixture.subscriberTaskId],
-      topic: '/required',
-      semanticType: 'result',
-      priority: 'normal',
-      body: 'required payload'
-    })
+    const publish = await publishRequired(fixture, 'result')
 
+    expect(publish.subscriberTaskIds).toEqual([fixture.subscriberTaskId])
     const result = await sendWorkerDone(fixture, 'succeeded')
 
     expect(result.lifecycle).toMatchObject({ action: 'completed' })
     expect(fixture.db.getTask(fixture.producerTaskId)?.status).toBe('completed')
     expect(fixture.db.getDispatchContextById(fixture.dispatchId)?.status).toBe('completed')
+  })
+
+  it('keeps required publication incomplete when every subscriber rejects the message', async () => {
+    const fixture = setup()
+    const publish = await publishRequired(fixture, 'not-accepted-by-subscriber')
+
+    expect(publish.subscriberTaskIds).toEqual([])
+    const result = await sendWorkerDone(fixture, 'succeeded')
+
+    expect(result.lifecycle).toMatchObject({
+      action: 'rejected',
+      code: 'collaboration_publish_incomplete'
+    })
+    expect(fixture.db.getTask(fixture.producerTaskId)?.status).toBe('dispatched')
   })
 
   it('does not block a failed worker_done when the required collaboration publish is missing', async () => {

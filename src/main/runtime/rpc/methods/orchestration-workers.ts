@@ -1,5 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { buildCollaborationWorkerProtocol } from '../../collaboration/collaboration-worker-protocol'
+import { buildCollaborationWorkerProtocolForTask } from '../../collaboration/collaboration-worker-protocol'
 import { getCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -247,21 +247,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
 
         failedStage = 'dispatch_input'
         const cliCommand = runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-        // Why: the run topology may grant this task publish/subscribe grants; the
-        // collaboration playbook must land in the same prompt, ahead of worker_done.
-        const collaborationStep = getCollaborationRuntimeTopology(runtime, run.id)?.steps.find(
-          (step) => step.taskId === task.id
-        )
-        const preCompletionProtocol = collaborationStep
-          ? buildCollaborationWorkerProtocol({
-              cli: params.devMode ? 'orca-dev' : (cliCommand ?? 'orca'),
-              workerHandle: terminalHandle,
-              dispatchCapability: capability,
-              publishesTo: collaborationStep.publishesTo ?? [],
-              requiredPublishesTo: collaborationStep.requiredPublishesTo ?? [],
-              subscribesTo: collaborationStep.subscribesTo ?? []
-            })
-          : undefined
+        // Why: every local Dispatch path derives collaboration instructions from the
+        // same Task topology, so completion gates never outrun the worker preamble.
+        const preCompletionProtocol = buildCollaborationWorkerProtocolForTask({
+          topology: getCollaborationRuntimeTopology(runtime, run.id),
+          taskId: task.id,
+          workerHandle: terminalHandle,
+          dispatchCapability: capability,
+          devMode: params.devMode,
+          cliCommand
+        })
         const preamble = buildDispatchPreamble({
           canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,

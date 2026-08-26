@@ -3,6 +3,8 @@ import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { createCollaborationTopology } from '../../collaboration/collaboration-topology'
+import { registerCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
@@ -225,6 +227,23 @@ describe('orchestration RPC methods', () => {
       )
     }
 
+    function registerRequiredPublishTopology(taskId: string): void {
+      const task = db.getTask(taskId)!
+      const subscriber = db.createTask({ spec: 'subscriber', runId: task.run_id })
+      registerCollaborationRuntimeTopology(
+        runtime,
+        task.run_id,
+        createCollaborationTopology([
+          { taskId, publishesTo: ['/required'], requiredPublishesTo: ['/required'] },
+          {
+            taskId: subscriber.id,
+            subscribesTo: ['/required'],
+            admission: { acceptedTypes: ['finding'], minPriority: 'normal' }
+          }
+        ])
+      )
+    }
+
     it('dispatches a task to a terminal', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
@@ -393,6 +412,33 @@ describe('orchestration RPC methods', () => {
       expect(rawSend).not.toHaveBeenCalled()
     })
 
+    it('injects collaboration protocol for a topology-gated task', async () => {
+      setup()
+      provideInjectIdentity()
+      const task = db.createTask({ spec: 'publish required result' })
+      registerRequiredPublishTopology(task.id)
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      const agentPrompt = vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
+        handle: 'term_a',
+        accepted: true,
+        bytesWritten: 1
+      })
+
+      await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        inject: true,
+        from: 'term_coord'
+      })
+
+      const prompt = vi.mocked(agentPrompt).mock.calls[0]![1]
+      expect(prompt).toContain('collaboration-publish')
+      expect(prompt).toContain('/required')
+      expect(prompt.indexOf('=== COLLABORATION: PUBLISHER ===')).toBeLessThan(
+        prompt.indexOf('# Report the terminal task outcome')
+      )
+    })
+
     it('rejects inject to terminal without recognized agent', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
@@ -418,9 +464,10 @@ describe('orchestration RPC methods', () => {
       )
     })
 
-    it('dry-run returns the preamble without mutating state', async () => {
+    it('dry-run returns the collaboration-aware preamble without mutating state', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })
+      registerRequiredPublishTopology(task.id)
 
       const result = (await call('orchestration.dispatch', {
         task: task.id,
@@ -441,6 +488,8 @@ describe('orchestration RPC methods', () => {
       expect(result.preamble).toContain('work')
       expect(result.preamble).toContain(task.id)
       expect(result.preamble).toContain('term_coord')
+      expect(result.preamble).toContain('collaboration-publish')
+      expect(result.preamble).toContain('/required')
       // Task state must not change on dry-run.
       expect(db.getTask(task.id)?.status).toBe('ready')
       expect(db.getDispatchContext(task.id)).toBeUndefined()

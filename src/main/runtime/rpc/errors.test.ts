@@ -83,6 +83,21 @@ describe('mapRuntimeError', () => {
   )
 
   it.each([
+    'sender_not_assignee',
+    'collaboration_topology_exists',
+    'collaboration_topology_unavailable',
+    'collaboration_topic_not_allowed',
+    'collaboration_subscription_unavailable'
+  ])('preserves structured collaboration failure %s', (code) => {
+    const error = Object.assign(new Error(`Collaboration failed: ${code}`), { code })
+
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: { code, message: `Collaboration failed: ${code}` }
+    })
+  })
+
+  it.each([
     ['window_not_focused', 'keyboard input requires focus', 'restore-window'],
     ['permission_denied', 'missing DBUS_SESSION_BUS_ADDRESS', 'permissions'],
     ['element_not_found', 'fresh element index required', 'get-app-state'],

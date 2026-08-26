@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../orchestration/db/orchestration-db'
+import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { MessagePriority } from '../orchestration/types'
 import { admitCandidates, type AdmissionPolicy } from './collaboration-admission'
 import { parseCollaborationMessagePayload } from './collaboration-message-payload'
@@ -75,17 +76,23 @@ export function ackCollaborationCheckpoint(
   messageIds: readonly string[]
 ): boolean {
   if (messageIds.length === 0) {
-    throw new Error('messageIds must not be empty')
+    throw new OrchestrationError('invalid_argument', 'messageIds must not be empty')
   }
   const address = buildCollaborationTaskMailboxAddress(taskId)
   const rows = messageIds.map((id) => db.getMessageById(id))
   for (let i = 0; i < rows.length; i++) {
     const row = rows[i]
     if (row === undefined || row.to_handle !== address) {
-      throw new Error(`message ${messageIds[i]} does not belong to mailbox ${address}`)
+      throw new OrchestrationError(
+        'invalid_argument',
+        `message ${messageIds[i]} does not belong to mailbox ${address}`
+      )
     }
     if (parseCollaborationMessagePayload(row.payload ?? '') === null) {
-      throw new Error(`message ${messageIds[i]} has no valid collaboration payload`)
+      throw new OrchestrationError(
+        'invalid_argument',
+        `message ${messageIds[i]} has no valid collaboration payload`
+      )
     }
   }
   const allUnread = rows.every((row) => row!.read === 0)
@@ -97,5 +104,5 @@ export function ackCollaborationCheckpoint(
   if (allRead) {
     return true
   }
-  throw new Error('cannot ack a mix of read and unread messages')
+  throw new OrchestrationError('invalid_argument', 'cannot ack a mix of read and unread messages')
 }
