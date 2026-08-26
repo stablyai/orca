@@ -2,6 +2,7 @@ import { getRepoExecutionHostId } from './execution-host'
 import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
 import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
+import { getSecondarySameHostCloneIds } from './project-host-setup-clone-identity'
 import type { Repo } from './repo-types'
 import type { WorktreeMeta } from './worktree/meta-types'
 
@@ -241,12 +242,12 @@ export function mergeCatalogUpdatedAt(left: number, right: number): number {
   return Math.max(known, other)
 }
 
-function createProjectFromRepo(repo: Repo): Project {
+function createProjectFromRepo(repo: Repo, projectId: string): Project {
   const identity = getProjectProviderIdentity(repo)
   const gitRemoteIdentity = getProjectGitRemoteIdentity(repo)
   const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
   return {
-    id: getProjectId(repo),
+    id: projectId,
     displayName: repo.displayName,
     badgeColor: repo.badgeColor,
     ...(repo.repoIcon !== undefined ? { repoIcon: repo.repoIcon } : {}),
@@ -305,13 +306,16 @@ export function projectHostSetupProjectionFromRepos(
 ): ProjectHostSetupProjection {
   const projectById = new Map<string, ProjectAccumulator>()
   const setups: ProjectHostSetup[] = []
+  const secondarySameHostCloneIds = getSecondarySameHostCloneIds(repos, getProjectId)
 
   for (const repo of repos) {
-    const projectId = getProjectId(repo)
+    const projectId = secondarySameHostCloneIds.has(repo.id)
+      ? `${HOST_LOCAL_PROJECT_ID_PREFIX}${repo.id}`
+      : getProjectId(repo)
     const existing = projectById.get(projectId)
     const project = existing
       ? mergeProjectRepo(existing.project, repo)
-      : createProjectFromRepo(repo)
+      : createProjectFromRepo(repo, projectId)
     const setup = createSetupFromRepo(repo, projectId)
     projectById.set(projectId, {
       project

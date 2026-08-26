@@ -49,11 +49,16 @@ const gitRemote = {
 describe('buildSettingsProjectList', () => {
   it('collapses a git same-remote pair on two hosts (different ids) into one project', () => {
     const repos: Repo[] = [
-      makeRepo({ id: 'local-1', gitRemoteIdentity: gitRemote }),
+      makeRepo({
+        id: 'local-1',
+        gitRemoteIdentity: gitRemote,
+        projectHostSetupMethod: 'imported-existing-folder'
+      }),
       makeRepo({
         id: 'remote-9',
         gitRemoteIdentity: gitRemote,
-        executionHostId: 'runtime:home-mac'
+        executionHostId: 'runtime:home-mac',
+        projectHostSetupMethod: 'imported-existing-folder'
       })
     ]
 
@@ -63,6 +68,31 @@ describe('buildSettingsProjectList', () => {
     expect(projects[0].setups).toHaveLength(2)
     // Representative is the local host's repo.
     expect(projects[0].representativeRepoId).toBe('local-1')
+  })
+
+  it('keeps independently imported same-host clones as separate projects', () => {
+    const repos: Repo[] = [
+      makeRepo({
+        id: 'local-first',
+        addedAt: 100,
+        gitRemoteIdentity: gitRemote,
+        projectHostSetupMethod: 'imported-existing-folder'
+      }),
+      makeRepo({
+        id: 'local-second',
+        addedAt: 200,
+        gitRemoteIdentity: gitRemote,
+        projectHostSetupMethod: 'imported-existing-folder'
+      })
+    ]
+
+    const projects = buildSettingsProjectList(repos)
+
+    expect(projects).toHaveLength(2)
+    expect(projects.map((project) => project.representativeRepoId)).toEqual([
+      'local-first',
+      'local-second'
+    ])
   })
 
   it('collapses a folder with the same id on local + runtime into one project', () => {
