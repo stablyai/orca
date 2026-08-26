@@ -53,10 +53,11 @@ function parseArgs(argv) {
 /**
  * Refuse to build unpatched source.
  *
- * Both hunks are load-bearing and fail in opposite directions: with Spectre the
- * build dies outright, and with the cap it succeeds and lies. Checking the
- * source rather than trusting the install is what stops a silently unpatched
- * tree from being shipped as if it were patched.
+ * Each hunk fails differently: Spectre dies outright, the 1024-process cap
+ * succeeds and lies, and `.targets` is cwd-relative so pnpm's nested layout
+ * makes node-gyp miss node_addon_api.gyp on Windows. Checking the source
+ * rather than trusting the install is what stops a silently unpatched tree
+ * from being shipped as if it were patched.
  */
 function assertPatchApplied() {
   const bindingGyp = readFileSync(join(PACKAGE_DIR, 'binding.gyp'), 'utf8')
@@ -64,6 +65,13 @@ function assertPatchApplied() {
     throw new Error(
       'binding.gyp still requests SpectreMitigation. pnpm did not apply ' +
         'config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
+    )
+  }
+  if (!bindingGyp.includes("require.resolve('node-addon-api/node_addon_api.gyp')")) {
+    throw new Error(
+      'binding.gyp still uses require("node-addon-api").targets. That path is ' +
+        'cwd-relative and misses node_addon_api.gyp under pnpm on Windows. ' +
+        'pnpm did not apply config/patches/@vscode__windows-process-tree@0.8.0.patch; run pnpm install.'
     )
   }
   const processCc = readFileSync(join(PACKAGE_DIR, 'src', 'process.cc'), 'utf8')

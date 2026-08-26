@@ -116,11 +116,11 @@ it as an optional relay artifact.
 
 `config/scripts/build-windows-process-tree-relay-addon.mjs` builds it from the
 source pnpm has already patched, on a Windows runner, and refuses to run if
-either patch hunk is missing — the Spectre hunk fails loudly, but the
-1024-process hunk fails *silently*, so the source is checked rather than the
-install trusted. It also reads the PE machine field of the output, because a
-cross-build that quietly emitted host arch would ship a binary the target cannot
-load.
+any patch hunk is missing — the Spectre hunk fails loudly, the 1024-process
+hunk fails *silently*, and the relative gyp path dies at configure on Windows.
+The source is checked rather than the install trusted. It also reads the PE
+machine field of the output, because a cross-build that quietly emitted host
+arch would ship a binary the target cannot load.
 
 Windows arm64 cross-compiles from the x64 runner — verified on real hardware,
 producing `IMAGE_FILE_MACHINE_ARM64` (0xaa64) against x64's 0x8664. It needs the
@@ -143,7 +143,7 @@ on any other OS keeps using the scan.
 
 ## Why the package is patched
 
-`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries two hunks.
+`config/patches/@vscode__windows-process-tree@0.8.0.patch` carries three hunks.
 
 1. **Spectre mitigation.** The upstream `binding.gyp` requires Spectre-mitigated
    libraries, which Orca's Windows build agents do not install. `node-pty` is
@@ -153,6 +153,11 @@ on any other OS keeps using the scan.
    1024 and the querying process was itself among the 27 missing. A truncated
    snapshot silently hides the descendants a teardown is trying to reap — the
    exact failure the native path exists to remove.
+3. **Absolute `node-addon-api` gyp path.** `require('node-addon-api').targets`
+   is cwd-relative. node-gyp on Windows evaluates it from the pnpm store
+   realpath, then loads the relative path from the `node_modules` symlink, so
+   `node_addon_api.gyp` resolves outside the repo and hourly Windows builds
+   die at configure. `node-pty` is patched the same way for the same reason.
 
 The typings claim `commandLine` is truncated at 512 characters. Measured, it is
 not: the longest observed on a real host was 26,059.
