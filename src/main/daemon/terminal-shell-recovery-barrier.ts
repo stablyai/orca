@@ -104,8 +104,9 @@ export class TerminalShellRecoveryBarrier {
     if (!this.pending) {
       return
     }
-    // Pathological episode storm: stop rescanning but never drop bytes — the
-    // scanner's model is stale from here on, which teardown never reads again.
+    // Pathological episode storm: stop rescanning but never drop bytes. The
+    // scanner's model is stale from here on — a checkpoint after this may
+    // publish a stale owner, acceptable only past a >16-nested-episode storm.
     const queued = this.queue
     this.queue = []
     this.queuedBytes = 0

@@ -67,6 +67,13 @@ export async function createOrAttachTerminalSession(
         attachToken: token
       }
     }
+    // A kill that COMPLETED during the settle leaves no isTerminating/teardown
+    // trace (exit clears the flag, the sweep entry deletes itself), so the
+    // tombstone — set at kill, cleared only by the next create — is the one
+    // signal left. Respawning here would resurrect a session the user killed.
+    if (deps.killedTombstones.has(opts.sessionId)) {
+      throw new SessionNotFoundError(opts.sessionId)
+    }
     // The shell exited (and was possibly reaped) during the settle await: fall
     // through to the dead-session respawn below — the pre-settle sync path
     // would have spawned a fresh shell here, never thrown.
