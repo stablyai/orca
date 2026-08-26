@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as GitRunner from '../git/runner'
 
-// A resolved repo identity used to expire on a flat 30s clock, so a client
-// polling PR state re-ran `git remote get-url` for every repo every half
-// minute. On Windows that spawn costs 250-800ms in the field. The identity is
-// a read of `.git/config`, and the config signature already exists to say when
-// that file changed — so a signed answer is now held for the same five minutes
-// a signed negative already was, and revalidated against the signature.
+// Signed identities revalidate Git config instead of re-spawning Git every 30 seconds.
 
 const { gitExecFileAsyncMock, readLocalGitConfigSignatureMock } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
@@ -58,8 +53,7 @@ describe('owner/repo identity cache', () => {
     })
     expect(remoteGetUrlCalls()).toBe(1)
 
-    // Why 4 minutes: past the 30s unsigned TTL that forced the re-probe, and
-    // still inside the signed window this change introduces.
+    // Past the unsigned TTL, inside the signed TTL.
     vi.setSystemTime(Date.now() + FOUR_MINUTES)
     await expect(getOwnerRepoForRemote(REPO, 'origin')).resolves.toEqual({
       owner: 'stablyai',
@@ -78,8 +72,7 @@ describe('owner/repo identity cache', () => {
     readLocalGitConfigSignatureMock.mockImplementation(async () => 'sig-2')
     vi.setSystemTime(Date.now() + THIRTY_SECONDS)
 
-    // Why not "after the TTL": a `git remote set-url` must be visible on the
-    // very next lookup, which is what the longer hold is allowed to rely on.
+    // A signature change must invalidate before the TTL.
     await expect(getOwnerRepoForRemote(REPO, 'origin')).resolves.toEqual({
       owner: 'other-org',
       repo: 'orca'
@@ -94,8 +87,7 @@ describe('owner/repo identity cache', () => {
     await getOwnerRepoForRemote(REPO, 'origin')
     expect(remoteGetUrlCalls()).toBe(1)
 
-    // Why: with no signature nothing invalidates on change, so the entry must
-    // still expire on the clock rather than silently pinning a stale identity.
+    // Unsigned entries need a bounded lifetime.
     vi.setSystemTime(Date.now() + THIRTY_SECONDS + 1)
     await getOwnerRepoForRemote(REPO, 'origin')
     expect(remoteGetUrlCalls()).toBe(2)
