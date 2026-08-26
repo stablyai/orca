@@ -17,6 +17,7 @@ import {
   commandExecFileAsync,
   ghExecFileAsync,
   gitExecFileAsync,
+  glabExecFileAsync,
   gitStreamStdout,
   translateWslOutputPaths,
   wslAwareSpawn
@@ -274,6 +275,42 @@ describe('runner execFile timeout handling', () => {
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('rejects glab executions that never call back using the default timeout', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+
+    const promise = glabExecFileAsync(['api', 'projects/stablyai%2Forca/issues'], {
+      cwd: '/repo'
+    })
+    const rejection = expect(promise).rejects.toThrow('glab timed out.')
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('aborts glab retry backoff instead of starting another attempt', async () => {
+    const controller = new AbortController()
+    const transient = Object.assign(new Error('glab failed'), {
+      stderr: 'HTTP 503 Service Unavailable'
+    })
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(transient)
+      return createMockChildProcess(1234)
+    })
+
+    const promise = glabExecFileAsync(['api', 'projects'], {
+      cwd: '/repo',
+      signal: controller.signal
+    })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(1))
+    controller.abort()
+
+    await rejection
+    expect(execFileMock).toHaveBeenCalledTimes(1)
   })
 
   it('kills an active gh execution when its caller aborts', async () => {

@@ -1377,7 +1377,8 @@
         "3a051b8ade": "Work item",
         "32f8bef818": "No log output.",
         "4168eb2c51": "Resolve",
-        "commentTooLarge": "Comment is too large to submit safely."
+        "commentTooLarge": "Comment is too large to submit safely.",
+        "gitlabActionFailed": "GitLab action failed."
       },
       "JiraIssueWorkspace": {
         "b0b92666c9": "Comment",
@@ -15772,6 +15773,114 @@
               "chooseSource": "Choose task source"
             }
           }
+        },
+        "page": {
+          "chrome": {
+            "task": {
+              "page": {
+                "gitlab": {
+                  "filters": {
+                    "e157d7ce4d": "MRs",
+                    "2328f6a40c": "My Todos"
+                  }
+                }
+              }
+            }
+          },
+          "dialogs": {
+            "new": {
+              "github": {
+                "issue": {
+                  "dialog": {
+                    "e02508846c": "this repository"
+                  }
+                }
+              },
+              "linear": {
+                "issue": {
+                  "dialog": {
+                    "dialogTitle": "New Linear issue",
+                    "dialogDescription": "Create a Linear issue for the selected team."
+                  }
+                }
+              }
+            },
+            "task": {
+              "page": {
+                "connect": {
+                  "dialogs": {
+                    "353c7dc71d": "Update access"
+                  }
+                }
+              }
+            }
+          },
+          "github": {
+            "github": {
+              "detail": {
+                "host": {
+                  "8d5cde4770": "Pull requests",
+                  "312ca15778": "GitHub list"
+                }
+              },
+              "issue": {
+                "label": {
+                  "selector": {
+                    "2a1862c470": "Loading labels…"
+                  }
+                }
+              },
+              "work": {
+                "item": {
+                  "row": {
+                    "draftPullRequest": "Draft pull request",
+                    "pullRequest": "Pull request",
+                    "issue": "Issue"
+                  }
+                }
+              }
+            }
+          },
+          "hooks": {
+            "use": {
+              "task": {
+                "page": {
+                  "jira": {
+                    "create": {
+                      "dialog": {
+                        "jiraRequiredFieldsLoadFailed": "Failed to load required Jira fields."
+                      }
+                    }
+                  },
+                  "linear": {
+                    "active": {
+                      "collection": {
+                        "d8b3cd9488": "Project: {{value0}}",
+                        "68462f8b29": "View: {{value0}}"
+                      }
+                    }
+                  },
+                  "session": {
+                    "resume": {
+                      "savedLinearProjectMissing": "Saved Linear project was not found.",
+                      "savedLinearProjectRestoreFailed": "Failed to restore saved Linear project.",
+                      "savedLinearViewMissing": "Saved Linear view was not found.",
+                      "savedLinearViewRestoreFailed": "Failed to restore saved Linear view."
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "linear": {
+            "linear": {
+              "connect": {
+                "empty": {
+                  "3e00e8ebd4": "Loading Linear"
+                }
+              }
+            }
+          }
         }
       },
       "taskPageEmptyState": {
@@ -16091,6 +16200,9 @@
       },
       "githubCheckDetailsTimeout": {
         "timedOut": "Timed out loading check details."
+      },
+      "gitlabIpcTimeout": {
+        "timedOut": "Timed out talking to GitLab."
       }
     },
     "ssh": {
