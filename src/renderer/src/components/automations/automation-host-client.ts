@@ -127,9 +127,6 @@ export async function listAutomationRunsForTarget(
 
 export async function createAutomationForTarget(input: AutomationCreateInput): Promise<Automation> {
   const target = getAutomationCreateTarget(input)
-  if (target.kind === 'local') {
-    return await window.api.automations.create(input)
-  }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.create',
