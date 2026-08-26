@@ -44,7 +44,8 @@ export function stampMirroredRuntimeTrustWithCurrentHashes(
     if (!listing) {
       return entry
     }
-    if (listing.command !== null && listing.command !== entry.command) {
+    // Why: command:null is an incomplete hooks/list record, not a match.
+    if (listing.command !== entry.command) {
       return entry
     }
     return { ...entry, trustedHash: listing.currentHash }

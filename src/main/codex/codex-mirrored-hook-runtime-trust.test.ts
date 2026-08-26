@@ -56,6 +56,21 @@ describe('stampMirroredRuntimeTrustWithCurrentHashes', () => {
     )
     expect(stamped[0]?.trustedHash).toBe(SYSTEM_HASH)
   })
+
+  it('keeps the system hash when hooks/list omits command', () => {
+    const entry = windowsUserHookEntry()
+    const stamped = stampMirroredRuntimeTrustWithCurrentHashes(
+      [entry],
+      [
+        {
+          key: 'C:\\Users\\Rod\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json:pre_tool_use:1:0',
+          command: null,
+          currentHash: RUNTIME_HASH
+        }
+      ]
+    )
+    expect(stamped[0]?.trustedHash).toBe(SYSTEM_HASH)
+  })
 })
 
 describe('clearHookTrustKeySeparatorVariants', () => {
