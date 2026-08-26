@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   admitCandidates,
+  COLLABORATION_MESSAGE_PRIORITIES,
   type AdmissionPolicy,
   type CollaborationCandidate
 } from './collaboration-admission'
@@ -11,6 +12,12 @@ const candidate = (
   type: string,
   priority: MessagePriority
 ): CollaborationCandidate => ({ id, message: { type, priority } })
+
+describe('collaboration priority order', () => {
+  it('exposes the same ascending order used by admission ranking', () => {
+    expect(COLLABORATION_MESSAGE_PRIORITIES).toEqual(['normal', 'high', 'urgent'])
+  })
+})
 
 describe('admitCandidates', () => {
   const policy: AdmissionPolicy = {

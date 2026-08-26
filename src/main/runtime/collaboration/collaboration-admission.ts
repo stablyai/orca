@@ -26,6 +26,12 @@ const PRIORITY_RANK: Record<MessagePriority, number> = {
   urgent: 2
 }
 
+export const COLLABORATION_MESSAGE_PRIORITIES: readonly MessagePriority[] = (
+  Object.entries(PRIORITY_RANK) as [MessagePriority, number][]
+)
+  .sort((left, right) => left[1] - right[1])
+  .map(([priority]) => priority)
+
 export function isCollaborationMessageAdmitted(
   message: CollaborationMessage,
   policy: AdmissionPolicy
