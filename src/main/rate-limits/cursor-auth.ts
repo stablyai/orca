@@ -98,20 +98,21 @@ async function resolveCursorCliProgram(): Promise<string | null> {
   return null
 }
 
-function extractIdeAccessToken(row: { value: unknown } | undefined): string | null {
+/** Exported for unit testing; not part of the injectable `CursorAuthDeps` seam. */
+export function extractIdeAccessToken(row: { value: unknown } | undefined): string | null {
   if (!row || typeof row.value !== 'string' || row.value.length === 0) {
     return null
   }
   try {
     const parsed: unknown = JSON.parse(row.value)
-    if (typeof parsed === 'string' && parsed.length > 0) {
-      return parsed
-    }
+    // Why: a value that parses as JSON but isn't a non-empty string (object,
+    // number, etc.) is not a valid token — never fall through to the raw JSON text.
+    return typeof parsed === 'string' && parsed.length > 0 ? parsed : null
   } catch {
     // Why: some VSCode-family storage items are stored as raw strings rather
-    // than JSON-encoded ones; fall back to the raw value below.
+    // than JSON-encoded ones; fall back to the raw value.
+    return row.value
   }
-  return row.value
 }
 
 function readIdeAccessTokenFromDb(dbPath: string): string | null {

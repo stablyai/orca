@@ -132,17 +132,26 @@ function buildBuckets(
   return buckets.length > 0 ? buckets : undefined
 }
 
-function parseFailure(): ProviderRateLimits {
+// Why: 'ide' auth comes from the Cursor IDE's own web-authenticated session,
+// while 'cli' comes from `cursor-agent`; UsageRateLimitSource has no 'ide' value.
+function toUsageMetadataSource(authSource: 'cli' | 'ide'): 'cli' | 'web' {
+  return authSource === 'ide' ? 'web' : 'cli'
+}
+
+function parseFailure(source: 'cli' | 'web'): ProviderRateLimits {
   return result('error', 'Cursor usage response could not be parsed', {
-    usageMetadata: { failureKind: 'parse', source: 'cli' }
+    usageMetadata: { failureKind: 'parse', source }
   })
 }
 
-function mapDashboardResponse(data: CursorDashboardResponse): ProviderRateLimits {
+function mapDashboardResponse(
+  data: CursorDashboardResponse,
+  source: 'cli' | 'web'
+): ProviderRateLimits {
   const usage = data.planUsage
   const totalPercent = toFiniteNumber(usage?.totalPercentUsed)
   if (!usage || totalPercent === null) {
-    return parseFailure()
+    return parseFailure(source)
   }
 
   const startMs = parseTimestamp(data.billingCycleStart)
@@ -168,7 +177,7 @@ function mapDashboardResponse(data: CursorDashboardResponse): ProviderRateLimits
     updatedAt: Date.now(),
     error: null,
     status: 'ok',
-    usageMetadata: { source: 'cli' }
+    usageMetadata: { source }
   }
 }
 
@@ -189,6 +198,8 @@ export async function fetchCursorRateLimits(
     })
   }
 
+  const source = toUsageMetadataSource(authResult.source)
+
   try {
     const requestSignal = options.signal
       ? AbortSignal.any([options.signal, AbortSignal.timeout(API_TIMEOUT_MS)])
@@ -206,12 +217,12 @@ export async function fetchCursorRateLimits(
 
     if (res.status === 401 || res.status === 403) {
       return result('error', 'Cursor sign-in expired — run cursor-agent and sign in again', {
-        usageMetadata: { failureKind: 'stale-token', source: 'cli' }
+        usageMetadata: { failureKind: 'stale-token', source }
       })
     }
     if (!res.ok) {
       return result('error', `Cursor usage request failed (HTTP ${res.status})`, {
-        usageMetadata: { failureKind: 'server', source: 'cli' }
+        usageMetadata: { failureKind: 'server', source }
       })
     }
 
@@ -219,15 +230,15 @@ export async function fetchCursorRateLimits(
     try {
       data = await res.json()
     } catch {
-      return parseFailure()
+      return parseFailure(source)
     }
     if (typeof data !== 'object' || data === null) {
-      return parseFailure()
+      return parseFailure(source)
     }
-    return mapDashboardResponse(data as CursorDashboardResponse)
+    return mapDashboardResponse(data as CursorDashboardResponse, source)
   } catch (err) {
     return result('error', err instanceof Error ? err.message : 'Cursor usage request failed', {
-      usageMetadata: { failureKind: 'network', source: 'cli' }
+      usageMetadata: { failureKind: 'network', source }
     })
   }
 }

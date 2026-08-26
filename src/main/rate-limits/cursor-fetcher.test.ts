@@ -23,6 +23,12 @@ const OK_AUTH: CursorAuthReadResult = {
   source: 'cli'
 }
 
+const OK_AUTH_IDE: CursorAuthReadResult = {
+  status: 'ok',
+  accessToken: 'cursor-access-token',
+  source: 'ide'
+}
+
 describe('fetchCursorRateLimits', () => {
   beforeEach(() => {
     netFetchMock.mockReset()
@@ -38,6 +44,7 @@ describe('fetchCursorRateLimits', () => {
     expect(result.provider).toBe('cursor')
     expect(result.status).toBe('unavailable')
     expect(result.usageMetadata?.failureKind).toBe('missing-credentials')
+    expect(result.usageMetadata?.source).toBe('cli')
     expect(result.error).toMatch(/not signed in to cursor/i)
     expect(result.error).toMatch(/cursor-agent/i)
     expect(netFetchMock).not.toHaveBeenCalled()
@@ -76,6 +83,24 @@ describe('fetchCursorRateLimits', () => {
     )
   })
 
+  it('maps an IDE-sourced ok auth to usageMetadata.source "web" on success', async () => {
+    netFetchMock.mockResolvedValueOnce(jsonResponse({ planUsage: { totalPercentUsed: 6.1 } }))
+
+    const result = await fetchCursorRateLimits({ authReadResult: OK_AUTH_IDE })
+
+    expect(result.status).toBe('ok')
+    expect(result.usageMetadata?.source).toBe('web')
+  })
+
+  it('maps a CLI-sourced ok auth to usageMetadata.source "cli" on success', async () => {
+    netFetchMock.mockResolvedValueOnce(jsonResponse({ planUsage: { totalPercentUsed: 6.1 } }))
+
+    const result = await fetchCursorRateLimits({ authReadResult: OK_AUTH })
+
+    expect(result.status).toBe('ok')
+    expect(result.usageMetadata?.source).toBe('cli')
+  })
+
   it('computes windowMinutes from billingCycleStart/End when both parse', async () => {
     const start = Date.parse('2026-07-01T00:00:00Z')
     const end = Date.parse('2026-08-01T00:00:00Z')
@@ -100,8 +125,18 @@ describe('fetchCursorRateLimits', () => {
 
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('stale-token')
+    expect(result.usageMetadata?.source).toBe('cli')
     expect(result.error).toMatch(/cursor-agent/i)
     expect(result.error).not.toContain('cursor-access-token')
+  })
+
+  it('keeps usageMetadata.source "web" for a 401 with an IDE-sourced auth result', async () => {
+    netFetchMock.mockResolvedValueOnce(jsonResponse({}, 401))
+
+    const result = await fetchCursorRateLimits({ authReadResult: OK_AUTH_IDE })
+
+    expect(result.usageMetadata?.failureKind).toBe('stale-token')
+    expect(result.usageMetadata?.source).toBe('web')
   })
 
   it('returns a stale-token error on 403', async () => {
@@ -160,6 +195,22 @@ describe('fetchCursorRateLimits', () => {
 
     expect(result.status).toBe('error')
     expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.usageMetadata?.source).toBe('cli')
+  })
+
+  it('keeps usageMetadata.source "web" for a parse failure with an IDE-sourced auth result', async () => {
+    netFetchMock.mockResolvedValueOnce({
+      ok: true,
+      status: 200,
+      json: async () => {
+        throw new SyntaxError('Unexpected token')
+      }
+    } as unknown as Response)
+
+    const result = await fetchCursorRateLimits({ authReadResult: OK_AUTH_IDE })
+
+    expect(result.usageMetadata?.failureKind).toBe('parse')
+    expect(result.usageMetadata?.source).toBe('web')
   })
 
   it('clamps usedPercent into the 0-100 range', async () => {

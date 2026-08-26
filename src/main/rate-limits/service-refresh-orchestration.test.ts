@@ -149,6 +149,31 @@ describe('RateLimitService', () => {
     expect(state.cursorAuthConfigured).toBe(true)
   })
 
+  it('does not block other providers on a slow Cursor auth read', async () => {
+    const cursorAuth = deferred<{ status: 'missing' }>()
+    vi.mocked(readCursorAuthSession).mockReturnValueOnce(cursorAuth.promise)
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    vi.mocked(fetchGrokRateLimits).mockResolvedValueOnce(okProvider('grok', 30, Date.now()))
+    const service = new RateLimitService()
+
+    const refresh = service.refresh()
+    await flushMicrotasks()
+
+    expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
+    expect(fetchGrokRateLimits).toHaveBeenCalledTimes(1)
+    const pendingState = service.getState()
+    expect(pendingState.claude?.status).toBe('ok')
+    expect(pendingState.grok?.status).toBe('ok')
+    expect(pendingState.cursor?.status).toBe('fetching')
+    expect(fetchCursorRateLimits).not.toHaveBeenCalled()
+
+    cursorAuth.resolve({ status: 'missing' })
+    await refresh
+
+    expect(service.getState().cursor?.status).toBe('unavailable')
+  })
+
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
     const service = new RateLimitService()
     const firstClaude = deferred<ProviderRateLimits>()

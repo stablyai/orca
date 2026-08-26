@@ -1647,11 +1647,6 @@ export class RateLimitService {
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
-    const cursorAuthReadResult = await readCursorAuthSession()
-    if (signal.aborted) {
-      return
-    }
-    this.cursorAuthConfigured = cursorAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1701,13 +1696,20 @@ export class RateLimitService {
       (reason) => ({ status: 'rejected', reason }) as const
     )
     // Why: fetched in parallel with Grok — both are independent, tokenless-until-read providers with no dedicated fetch cycle.
-    const cursorResultPromise = fetchCursorRateLimits({
-      signal,
-      authReadResult: cursorAuthReadResult
-    }).then(
-      (value) => ({ status: 'fulfilled', value }) as const,
-      (reason) => ({ status: 'rejected', reason }) as const
-    )
+    // Why: the auth read is folded into this chain (rather than awaited above) so a
+    // slow `cursor-agent status` spawn never delays the other providers' fetches.
+    const cursorResultPromise = readCursorAuthSession()
+      .then((auth) => {
+        this.cursorAuthConfigured = auth.status === 'ok'
+        if (signal.aborted) {
+          throw new DOMException('The operation was aborted.', 'AbortError')
+        }
+        return fetchCursorRateLimits({ signal, authReadResult: auth })
+      })
+      .then(
+        (value) => ({ status: 'fulfilled', value }) as const,
+        (reason) => ({ status: 'rejected', reason }) as const
+      )
 
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =

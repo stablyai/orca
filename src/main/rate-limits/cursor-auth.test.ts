@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CursorAuthDeps } from './cursor-auth'
-import { readCursorAuthSession } from './cursor-auth'
+import { extractIdeAccessToken, readCursorAuthSession } from './cursor-auth'
 
 function processResult(
   overrides: Partial<{ code: number | null; stdout: string; stderr: string }> = {}
@@ -156,5 +156,27 @@ describe('readCursorAuthSession', () => {
     await readCursorAuthSession(deps)
 
     expect(readIdeAccessToken).not.toHaveBeenCalled()
+  })
+})
+
+describe('extractIdeAccessToken', () => {
+  it('returns the parsed string when the stored value is JSON-encoded', () => {
+    expect(extractIdeAccessToken({ value: JSON.stringify('a-real-token') })).toBe('a-real-token')
+  })
+
+  it('returns the raw value when it is not valid JSON (a bare JWT-style string)', () => {
+    expect(extractIdeAccessToken({ value: 'raw.jwt.token' })).toBe('raw.jwt.token')
+  })
+
+  it('returns null when the JSON parses to an object rather than a string', () => {
+    expect(extractIdeAccessToken({ value: JSON.stringify({ token: 'nested' }) })).toBeNull()
+  })
+
+  it('returns null when the JSON parses to a number rather than a string', () => {
+    expect(extractIdeAccessToken({ value: JSON.stringify(12345) })).toBeNull()
+  })
+
+  it('returns null for an undefined row', () => {
+    expect(extractIdeAccessToken(undefined)).toBeNull()
   })
 })
