@@ -10,6 +10,7 @@ import {
 } from '../../trust/identity/codex-trust-identity'
 import { _internals as grantInternals } from '../../trust/grants/codex-hook-trust-grant'
 import { _internals as lookupInternals } from '../../trust/hooks/codex-hook-hash-lookup'
+import { _internals as mirroredTrustInternals } from '../../codex-mirrored-hook-runtime-trust'
 import { computeOrcaCodexHookHashes } from '../definitions/codex-hook-definition'
 import type { CodexHookAnswer } from '../../trust/hooks/codex-hook-trust-derivation'
 import { CODEX_VERSION_FOR_TESTS } from '../../trust/hooks/codex-hook-trust-derivation.test-fixture'
@@ -34,12 +35,16 @@ export function codexHookAnswerForTests(): CodexHookAnswer {
 
 export function stubCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(stubMissingCodexBinary)
+  // Why: mirrored runtime trust lists hooks/list. Tests must not spawn the developer Codex.
+  mirroredTrustInternals.setListRunner(() => [])
 }
 
 export function restoreCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(null)
   grantInternals.resetDiagnostics()
   lookupInternals.resetForTesting()
+  mirroredTrustInternals.setListRunner(null)
+  mirroredTrustInternals.resetRetryState()
 }
 
 export function setupCodexHookHomes(

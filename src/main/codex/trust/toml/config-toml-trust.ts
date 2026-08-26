@@ -261,6 +261,8 @@ function removeOrcaCreatedProjectTrustEntry(configPath: string, projectPath: str
   codexProjectTrustOwnership.forget(configPath, projectPath)
 }
 
+export { getTrustKeyWriteVariants as getHookTrustKeyWriteVariants }
+
 export function removeHookTrustEntries(configPath: string, keys: readonly string[]): void {
   if (!existsSync(configPath)) {
     return

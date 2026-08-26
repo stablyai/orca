@@ -9,7 +9,14 @@ import type { HookDefinition } from '../../../agent-hooks/installation/configura
 import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { upsertHookTrustEntries, type CodexTrustEntry } from '../../trust/toml/config-toml-trust'
-import { getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath } from '../../trust/identity/codex-trust-identity'
+import {
+  computeCodexTrustKey as computeTrustKey,
+  getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath
+} from '../../trust/identity/codex-trust-identity'
+import {
+  clearHookTrustKeySeparatorVariants,
+  resolveMirroredRuntimeUserHookTrustEntries
+} from '../../codex-mirrored-hook-runtime-trust'
 import {
   CODEX_EVENTS,
   CODEX_EVENT_LABEL,
@@ -134,7 +141,6 @@ export async function installCodexHooksExclusively(
       enabled: true
     })
   }
-  const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]
   const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
 
   config.hooks = nextHooks
@@ -156,10 +162,31 @@ export async function installCodexHooksExclusively(
     return trustWriteError(configPath, false, error)
   }
   try {
+    // Approved mirrored hooks still match by signature. The runtime record must
+    // carry hooks/list currentHash, or Codex keeps asking for review.
+    const resolvedMirroredTrustEntries = await resolveMirroredRuntimeUserHookTrustEntries({
+      entries: mirroredTrustEntries,
+      runtimeHomePath,
+      tomlPath
+    })
+    clearHookTrustKeySeparatorVariants(
+      tomlPath,
+      resolvedMirroredTrustEntries.map((entry) => computeTrustKey(entry))
+    )
+    const trustEntries: CodexTrustEntry[] = [
+      ...resolvedMirroredTrustEntries,
+      ...managedTrustEntries
+    ]
     // Reconcile revoked system approvals too; retaining old runtime trust would leave hooks approved.
-    upsertHookTrustEntries(tomlPath, mirroredTrustEntries)
+    upsertHookTrustEntries(tomlPath, resolvedMirroredTrustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    applyMirroredRuntimeUserHookTrustStates(tomlPath, mirroredUserTrustEntries)
+    applyMirroredRuntimeUserHookTrustStates(
+      tomlPath,
+      mirroredUserTrustEntries.map((item, index) => ({
+        entry: resolvedMirroredTrustEntries[index] ?? item.entry,
+        enabled: item.enabled
+      }))
+    )
   } catch (error) {
     return trustWriteError(configPath, true, error)
   }

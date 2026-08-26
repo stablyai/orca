@@ -7,6 +7,11 @@ import {
 import { readHooksJson } from '../../../agent-hooks/installation/configuration/hooks-json-read'
 import { syncSystemConfigIntoManagedCodexHome } from '../../configuration/settings/codex-config-mirror'
 import { upsertHookTrustEntries } from '../../trust/toml/config-toml-trust'
+import { computeCodexTrustKey as computeTrustKey } from '../../trust/identity/codex-trust-identity'
+import {
+  clearHookTrustKeySeparatorVariants,
+  resolveMirroredRuntimeUserHookTrustEntries
+} from '../../codex-mirrored-hook-runtime-trust'
 import {
   getCodexConfigTomlPath,
   getConfigPath,
@@ -69,15 +74,29 @@ export async function refreshCodexRuntimeUserHooksExclusively(
 
   try {
     const tomlPath = getCodexConfigTomlPath(runtimeHomePath)
-    const trustEntries = hookPlan.trustEntries.map(({ entry }) => entry)
     syncSystemConfigIntoManagedCodexHome({
       runtimeHomePath,
       systemHomePath: getSystemCodexHomePath()
     })
-    // Write current user hashes before stale cleanup removes managed trust with status hooks unavailable.
+    const trustEntries = await resolveMirroredRuntimeUserHookTrustEntries({
+      entries: hookPlan.trustEntries.map(({ entry }) => entry),
+      runtimeHomePath,
+      tomlPath
+    })
+    clearHookTrustKeySeparatorVariants(
+      tomlPath,
+      trustEntries.map((entry) => computeTrustKey(entry))
+    )
+    // Write runtime current hashes before stale cleanup removes managed trust with status hooks unavailable.
     upsertHookTrustEntries(tomlPath, trustEntries)
     removeStaleRuntimeHookTrustEntries(tomlPath, configPath, trustEntries)
-    applyMirroredRuntimeUserHookTrustStates(tomlPath, hookPlan.trustEntries)
+    applyMirroredRuntimeUserHookTrustStates(
+      tomlPath,
+      hookPlan.trustEntries.map((item, index) => ({
+        entry: trustEntries[index] ?? item.entry,
+        enabled: item.enabled
+      }))
+    )
   } catch (error) {
     return {
       agent: 'codex',

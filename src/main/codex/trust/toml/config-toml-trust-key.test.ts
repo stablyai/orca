@@ -2,13 +2,13 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import './config-toml-trust'
+import { getHookTrustKeyWriteVariants } from './config-toml-trust'
 import {
   computeCodexTrustKey as computeTrustKey,
   getExplicitHomeCodexHookSourcePath as getCodexExplicitHomeHookSourcePath,
   normalizeCodexTrustSourcePath as normalizeCodexHookSourcePath,
   parseCodexTrustKey as parseTrustKey
 } from '../identity/codex-trust-identity'
-
 import {
   createTrustConfigFixture,
   removeTrustConfigFixture
@@ -84,6 +84,23 @@ describe('computeTrustKey', () => {
     })
     expect(key).toContain('\\')
     expect(key.startsWith('C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:')).toBe(true)
+  })
+
+  it('returns both slash and backslash variants for Windows and WSL trust keys', () => {
+    expect(
+      getHookTrustKeyWriteVariants(
+        'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:pre_tool_use:1:0'
+      )
+    ).toEqual([
+      'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:pre_tool_use:1:0',
+      'C:/Users/Rod/AppData/Roaming/orca/hooks.json:pre_tool_use:1:0'
+    ])
+    expect(
+      getHookTrustKeyWriteVariants('//wsl$/Ubuntu/home/user/.orca/hooks.json:post_tool_use:1:0')
+    ).toEqual([
+      '\\\\wsl$\\Ubuntu\\home\\user\\.orca\\hooks.json:post_tool_use:1:0',
+      '//wsl$/Ubuntu/home/user/.orca/hooks.json:post_tool_use:1:0'
+    ])
   })
 
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {
