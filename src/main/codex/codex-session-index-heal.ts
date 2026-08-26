@@ -118,7 +118,7 @@ export async function runCodexSessionIndexHeal(
     }
   }
 
-  const pending = collectPendingHealThreads(paths)
+  const pending = await collectPendingHealThreads(paths)
   const summary: CodexSessionIndexHealSummary = {
     outcome: 'completed',
     pendingThreads: pending.length,

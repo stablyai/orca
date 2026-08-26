@@ -1,5 +1,6 @@
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
 import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import {
@@ -93,6 +94,15 @@ export function registerRuntimeClientIpcBridge(
     }
     if (event.type === 'reposChanged') {
       runtimeProjectRefreshScheduler.request(environmentId)
+      return
+    }
+    if (event.type === 'automationsChanged') {
+      // Why: without the environment the subscriber cannot attribute the changed authority.
+      emitAutomationsChangedWindowEvent({
+        environmentId,
+        ...(event.selector ? { selector: event.selector } : {}),
+        ...(event.reason ? { reason: event.reason } : {})
+      })
       return
     }
     if (event.type === 'sshStateChanged') {

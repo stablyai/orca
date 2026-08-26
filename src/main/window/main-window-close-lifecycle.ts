@@ -1,4 +1,5 @@
 import { ipcMain, Menu, Notification, type BrowserWindow } from 'electron'
+import { QUIT_RENDERER_ACK_TIMEOUT_MS } from '../../shared/quit-teardown-deadline'
 import { translateMain } from '../i18n/main-i18n'
 import type { Store } from '../persistence'
 import { resolveWindowCloseAction } from './window-close-decision'
@@ -7,7 +8,7 @@ import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
 
-export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = 10_000
+export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = QUIT_RENDERER_ACK_TIMEOUT_MS
 
 export function installMainWindowCloseLifecycle(args: {
   focus: MainWindowFocusLifecycle

@@ -20,14 +20,12 @@ function teardownBarrierMembers(): string {
 
 describe('quit teardown of agent-browser daemons', () => {
   it('joins the will-quit teardown barrier', () => {
-    expect(teardownBarrierMembers()).toContain(
-      "{ name: 'agent-browser', promise: agentBrowserShutdown }"
-    )
+    expect(teardownBarrierMembers()).toContain("{ name: 'browser', promise: browserShutdown }")
   })
 
   it('captures the destroyAllSessions promise instead of firing and forgetting', () => {
     expect(source).toMatch(
-      /const agentBrowserShutdown =\s+runtime\?\.getAgentBrowserBridge\(\)\?\.destroyAllSessions\(\) \?\? Promise\.resolve\(\)/
+      /const browserShutdown = \(async \(\): Promise<void> => \{[\s\S]*?await runtime\?\.getAgentBrowserBridge\(\)\?\.destroyAllSessions\(\)\s+\}\)\(\)/
     )
     // Why: a second, uncaptured call site is the pre-fix shape — it loses the race to app.quit().
     expect(source.match(/getAgentBrowserBridge\(\)\?\.destroyAllSessions\(\)/g)).toHaveLength(1)

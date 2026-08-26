@@ -8,7 +8,6 @@ cli/runtime/launch.ts
 main/agent-hooks/managed-hook-owner-identity.ts
 main/agent-hooks/managed-hook-runtime.ts
 main/app-icon.ts
-main/automations/external-manager.ts
 main/automations/precheck-runner.ts
 main/browser/browser-cookie-import.ts
 main/claude-accounts/keychain.ts

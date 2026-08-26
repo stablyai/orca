@@ -1,6 +1,10 @@
 import type { Store } from '../persistence'
 import type { Automation } from '../../shared/automations-types'
 import { getAutomationLegacyRepoId } from '../../shared/automation-run-identity'
+import {
+  AUTOMATION_ORPHAN_ISSUES,
+  type AutomationCapturedHostIssue
+} from '../../shared/automation-list-scope'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../shared/execution-host'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
@@ -9,6 +13,23 @@ import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 export type AutomationRunTargetResult =
   | { ok: true; cwd: string; repo: Repo; setup?: ProjectHostSetup }
   | { ok: false; error: string }
+
+/**
+ * One fixed sentence per diagnosis, and never the same sentence twice: run
+ * coalescing folds repeats on identical error text, so a message that varied per
+ * occurrence would write a row each, and a shared one would merge a host that is
+ * gone with a host that was replaced.
+ */
+const CAPTURED_HOST_REFUSALS: Record<AutomationCapturedHostIssue, string> = {
+  [AUTOMATION_ORPHAN_ISSUES.targetMissing]:
+    'The automation host is no longer registered, so this automation has nowhere to run.',
+  [AUTOMATION_ORPHAN_ISSUES.targetReplaced]:
+    'The automation host was removed and re-registered, so this automation must be re-adopted before it can run.',
+  [AUTOMATION_ORPHAN_ISSUES.workspaceHostAmbiguous]:
+    'The automation workspace spans more than one host, so Orca cannot tell which one to run it on.'
+}
+
+const NO_RUNNABLE_HOST = 'This automation has no host to run on.'
 
 type AutomationRunTargetOptions = {
   allowRemoteHostScheduling?: boolean
@@ -24,6 +45,14 @@ function getLegacyPrecheckCwd(store: Store, automation: Automation): string | nu
   return store.getRepo(getAutomationLegacyRepoId(automation))?.path ?? null
 }
 
+function resolveAutomationOwnerRefusal(store: Store, automation: Automation): string | null {
+  if (store.automationOwnerPrecondition(automation.id)?.selector.kind !== 'orphan') {
+    return null
+  }
+  const issue = store.automationCapturedHostIssue(automation)
+  return issue ? CAPTURED_HOST_REFUSALS[issue] : NO_RUNNABLE_HOST
+}
+
 export function resolveAutomationRunTarget(
   store: Store,
   automation: Automation,
@@ -31,6 +60,10 @@ export function resolveAutomationRunTarget(
 ): AutomationRunTargetResult {
   const context = automation.runContext ?? null
   if (!context) {
+    const ownerRefusal = resolveAutomationOwnerRefusal(store, automation)
+    if (ownerRefusal) {
+      return { ok: false, error: ownerRefusal }
+    }
     const repo = store.getRepo(getAutomationLegacyRepoId(automation))
     const cwd = getLegacyPrecheckCwd(store, automation)
     if (!repo || !cwd) {
@@ -48,6 +81,16 @@ export function resolveAutomationRunTarget(
       error:
         'Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.'
     }
+  }
+
+  // Why: removing a host — or removing and re-registering it under the same id —
+  // keeps hostId, repoId and path intact, so every check below still passes while
+  // the host is gone or is a different machine. Asks the list's projection for the
+  // verdict rather than re-deriving one, so the row the user sees as orphaned can
+  // never be the row that quietly keeps firing.
+  const hostIssue = store.automationCapturedHostIssue(automation)
+  if (hostIssue) {
+    return { ok: false, error: CAPTURED_HOST_REFUSALS[hostIssue] }
   }
 
   const setup = store

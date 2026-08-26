@@ -155,7 +155,7 @@ type CodexConfigMirrorResult =
   | { status: 'mirrored'; preservedConflictKeys: ReadonlySet<string> }
 
 function syncSystemConfigIntoManagedCodexHomeUnsafe(
-  { runtimeHomePath, systemHomePath }: CodexSettingsPromotionHomes,
+  { runtimeHomePath, systemHomePath, systemConfigDir }: CodexSettingsPromotionHomes,
   promotionPlan: CodexSettingsPromotionPlan
 ): CodexConfigMirrorResult {
   const systemConfigPath = join(systemHomePath, 'config.toml')
@@ -184,7 +184,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
       : { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
-  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath)
+  const sourceConfigDir = resolveCodexConfigMirrorSourceDirectory(systemHomePath, systemConfigDir)
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
@@ -207,8 +207,15 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   return { status: 'mirrored', preservedConflictKeys: preserved.keys }
 }
 
-export function resolveCodexConfigMirrorSourceDirectory(systemHomePath: string): string {
-  return parseWslUncPath(systemHomePath)?.linuxPath ?? dirname(join(systemHomePath, 'config.toml'))
+export function resolveCodexConfigMirrorSourceDirectory(
+  systemHomePath: string,
+  systemConfigDir?: string
+): string {
+  return (
+    systemConfigDir ??
+    parseWslUncPath(systemHomePath)?.linuxPath ??
+    dirname(join(systemHomePath, 'config.toml'))
+  )
 }
 
 function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {

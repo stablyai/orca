@@ -5,7 +5,11 @@ import {
   judgeCachedAgentJobEvidence,
   WINDOWS_DETACHED_DESCENDANT_IDENTITY_MAX_AGE_MS
 } from '../../providers/windows-cached-agent-revalidation'
-import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+import {
+  isWindowsPtyJobReadable,
+  readWindowsPtyJobProcessIds
+} from '../../providers/windows-pty-job-membership'
+
 import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import {
   isAgentForegroundWrapperProcess,
@@ -145,12 +149,20 @@ export function createPtyForegroundProcessTracker(args: {
             // Job, not console: needs no console attachment, so no fork (#10857).
             const verdict = judgeCachedAgentJobEvidence({
               jobProcessIds: readWindowsPtyJobProcessIds(proc),
+              jobSupported: isWindowsPtyJobReadable(),
               shellPid: proc.pid,
               anchorProcessId: cachedAgentForeground.pid,
               identityAgeMs: Date.now() - cachedAgentForeground.refreshedAt
             })
             // Unverifiable is never exit proof (ssh-execution-boundary.md): hold.
             if (verdict === 'unavailable') {
+              return
+            }
+            if (verdict === 'unsupported') {
+              // No job to consult on this build, and the scan that got here was
+              // available and found no agent. Trust it, as every other platform
+              // does, rather than holding a dead name forever (#16059).
+              retireStaleForegroundIdentity()
               return
             }
             if (verdict === 'confirmed' || verdict === 'recheck') {

@@ -91,6 +91,8 @@ describe('orchestration federation control mail', () => {
     runId = run.id
     const task = homeDb.createTask({ spec: 'Wait for coordinator guidance', runId })
     const started = homeDb.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       federation: {

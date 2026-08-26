@@ -2,9 +2,10 @@ import { randomUUID } from 'node:crypto'
 import { BrowserWindow } from 'electron'
 import { ORCA_BROWSER_PARTITION } from '../../shared/constants'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES } from '../../shared/browser-guest-web-preferences'
-import type { AgentBrowserBridge } from './agent-browser-bridge'
+import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
+import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
 
 // Why: headless orca serve has no renderer window to host a <webview>, so each
@@ -17,18 +18,26 @@ import { browserSessionRegistry } from './browser-session-registry'
 const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
 const LOAD_TIMEOUT_MS = 30_000
+const OWNER_RETIREMENT_CONCURRENCY = 4
 
 export class OffscreenBrowserBackend implements BrowserBackend {
   private readonly windowsByPageId = new Map<string, BrowserWindow>()
+  // Shutdown is terminal for this backend; rejecting creates closes the race
+  // where destroyAll snapshots ownership and a new page appears afterward.
+  private shutdownStarted = false
+  private readonly pendingOwnerRetirements = new Set<Promise<void>>()
 
   constructor(
     private readonly browserManager: BrowserManager,
-    // Why: headless serve destroys pages here and nowhere else, so this is the only place that can
-    // retire the page's agent-browser daemon before it becomes an orphan (#16367).
-    private readonly getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
+    private readonly options: {
+      getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
+    } = {}
   ) {}
 
   async createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }> {
+    if (this.shutdownStarted) {
+      throw new Error('Offscreen browser backend is shutting down')
+    }
     const browserPageId = params.browserPageId ?? randomUUID()
     if (this.windowsByPageId.has(browserPageId)) {
       throw new Error(`Browser page ${browserPageId} already exists`)
@@ -61,12 +70,13 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     // teardown), drop the registry entry so commands fail cleanly instead of
     // resolving a dead WebContents.
     win.webContents.once('destroyed', () => {
-      // Why the guard: closeTab and destroyAll drop the entry before destroying, so reaching this
-      // with the page still tracked means it died unexpectedly and nobody has retired it yet.
-      if (!this.windowsByPageId.delete(browserPageId)) {
+      // Explicit close removes the page first and performs awaited cleanup;
+      // only an unexpected destruction still owns the bridge retirement here.
+      if (this.windowsByPageId.get(browserPageId) !== win) {
         return
       }
-      void this.retireAgentBrowserSession(browserPageId)
+      void this.retirePageOwner(browserPageId)
+      this.windowsByPageId.delete(browserPageId)
       this.browserManager.unregisterGuest(browserPageId)
     })
 
@@ -98,18 +108,15 @@ export class OffscreenBrowserBackend implements BrowserBackend {
   async closeTab(browserPageId: string): Promise<void> {
     const win = this.windowsByPageId.get(browserPageId)
     this.windowsByPageId.delete(browserPageId)
-    await this.retireAgentBrowserSession(browserPageId)
     this.browserManager.unregisterGuest(browserPageId)
-    if (win && !win.isDestroyed()) {
-      win.destroy()
-    }
-  }
-
-  private async retireAgentBrowserSession(browserPageId: string): Promise<void> {
     try {
-      await this.getAgentBrowserBridge?.()?.onPageClosed(browserPageId)
-    } catch {
-      // A daemon that is already gone needs no retiring; never block the page close on it.
+      if (win) {
+        await this.retirePageOwner(browserPageId)
+      }
+    } finally {
+      if (win && !win.isDestroyed()) {
+        win.destroy()
+      }
     }
   }
 
@@ -118,16 +125,24 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     return win && !win.isDestroyed() ? win.webContents.id : null
   }
 
-  destroyAll(): void {
-    for (const [pageId, win] of this.windowsByPageId) {
-      // Why delete first: quit already closes every daemon through the will-quit barrier, so the
-      // destroyed handler must not queue a second, unawaited retirement outside it.
-      this.windowsByPageId.delete(pageId)
-      this.browserManager.unregisterGuest(pageId)
-      if (!win.isDestroyed()) {
-        win.destroy()
-      }
+  async destroyAll(): Promise<void> {
+    this.shutdownStarted = true
+    const pageIds = [...this.windowsByPageId.keys()]
+    await mapSettledWithConcurrency(pageIds, OWNER_RETIREMENT_CONCURRENCY, (pageId) =>
+      this.closeTab(pageId)
+    )
+    await Promise.all(this.pendingOwnerRetirements)
+  }
+
+  private retirePageOwner(browserPageId: string): Promise<void> {
+    const bridge = this.options.getAgentBrowserBridge?.()
+    if (!bridge) {
+      return Promise.resolve()
     }
+    const retirement = bridge.onPageClosed(browserPageId).catch(() => {})
+    this.pendingOwnerRetirements.add(retirement)
+    void retirement.finally(() => this.pendingOwnerRetirements.delete(retirement))
+    return retirement
   }
 
   private async loadUrl(win: BrowserWindow, url: string): Promise<void> {

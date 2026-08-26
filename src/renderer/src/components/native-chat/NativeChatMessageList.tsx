@@ -265,13 +265,9 @@ export function NativeChatMessageList({
 
   const { hasMore, loadingEarlier, loadEarlier } = session
 
-  // Strip harness noise (task-notifications, system reminders, slash-command
-  // envelopes) before folding so they don't render as the user's own bubbles —
-  // matching the mobile chat. Then fold each turn's tool activity into the
-  // assistant message it belongs to, ordered stably, so a turn's tools collapse
-  // under one run.
+  // Keep hidden harness turns as fold boundaries, then strip them before render.
   const messages = useMemo(
-    () => foldToolMessages(orderNativeChatMessages(stripNoiseMessages(session.messages))),
+    () => stripNoiseMessages(foldToolMessages(orderNativeChatMessages(session.messages))),
     [session.messages]
   )
   const showTypingIndicator =

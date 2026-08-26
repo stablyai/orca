@@ -49,6 +49,7 @@ import type {
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
+import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
 import {
@@ -58,11 +59,12 @@ import {
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 const EXEC_TIMEOUT_MS = 90_000
-// Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
-const TEARDOWN_CLOSE_TIMEOUT_MS = 5_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+// Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
+const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
+const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
 const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
@@ -91,6 +93,10 @@ type QueuedCommand = {
 type ResolvedBrowserCommandTarget = {
   browserPageId: string
   webContentsId: number
+}
+
+type AgentBrowserCleanupOptions = {
+  closeTimeoutMs?: number
 }
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
@@ -598,6 +604,7 @@ export class AgentBrowserBridge {
   // Why: `agent-browser close` is async, keyed by session name — recreating before it finishes lets the old teardown close the new session.
   private readonly pendingSessionDestruction = new Map<string, Promise<void>>()
   private readonly cancelledProcesses = new WeakSet<ChildProcess>()
+  private shutdownStarted = false
 
   constructor(
     private readonly browserManager: BrowserManager,
@@ -2086,8 +2093,8 @@ export class AgentBrowserBridge {
     })
   }
 
-  async destroyAllSessions(): Promise<void> {
-    const promises: Promise<void>[] = []
+  async destroyAllSessions(options?: AgentBrowserCleanupOptions): Promise<void> {
+    this.shutdownStarted = true
     // Why the union: a session still being created has already spawned its daemon but is not in
     // `sessions` yet, so closing only `sessions` lets that daemon outlive the quit (#16367).
     const sessionNames = new Set([
@@ -2095,10 +2102,11 @@ export class AgentBrowserBridge {
       ...this.pendingSessionCreation.keys(),
       ...this.pendingSessionDestruction.keys()
     ])
-    for (const sessionName of sessionNames) {
-      promises.push(this.destroySession(sessionName))
-    }
-    await Promise.allSettled(promises)
+    await mapSettledWithConcurrency(
+      [...sessionNames],
+      AGENT_BROWSER_CLEANUP_CONCURRENCY,
+      (sessionName) => this.destroySession(sessionName, options)
+    )
     this.pendingInterceptRestore.clear()
   }
 
@@ -2122,12 +2130,14 @@ export class AgentBrowserBridge {
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
+    this.assertCommandAdmission()
     const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
 
     if (options.ensureSession !== false) {
       await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
     }
+    this.assertCommandAdmission()
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
@@ -2351,6 +2361,7 @@ export class AgentBrowserBridge {
     if (pendingDestruction) {
       await pendingDestruction
     }
+    this.assertCommandAdmission()
 
     if (this.sessions.has(sessionName)) {
       return
@@ -2360,6 +2371,7 @@ export class AgentBrowserBridge {
     const pending = this.pendingSessionCreation.get(sessionName)
     if (pending) {
       await pending
+      this.assertCommandAdmission()
       return
     }
 
@@ -2431,7 +2443,9 @@ export class AgentBrowserBridge {
 
       const destroy = (async (): Promise<void> => {
         try {
-          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
+            timeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS
+          })
         } catch {
           // Session may already be dead.
         }
@@ -2450,7 +2464,10 @@ export class AgentBrowserBridge {
     }
   }
 
-  private async destroySession(sessionName: string): Promise<void> {
+  private async destroySession(
+    sessionName: string,
+    options: AgentBrowserCleanupOptions = { closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS }
+  ): Promise<void> {
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
     if (pendingDestruction) {
       await pendingDestruction
@@ -2494,9 +2511,11 @@ export class AgentBrowserBridge {
       try {
         // Why: each tab has its own named session — close without --session leaves this tab's daemon running.
         // Why bounded: this runs inside the 20s will-quit barrier, so it cannot inherit the 90s exec timeout.
-        await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
-          timeoutMs: TEARDOWN_CLOSE_TIMEOUT_MS
-        })
+        await this.runAgentBrowserRaw(
+          sessionName,
+          ['--session', sessionName, 'close'],
+          options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
+        )
       } catch {
         // Session may already be dead
       }
@@ -2544,6 +2563,12 @@ export class AgentBrowserBridge {
     session.initialized = false
     if (session.activeInterceptPatterns.length > 0) {
       this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+    }
+  }
+
+  private assertCommandAdmission(): void {
+    if (this.shutdownStarted) {
+      throw new BrowserError('browser_owner_unavailable', 'Browser runtime is shutting down')
     }
   }
 

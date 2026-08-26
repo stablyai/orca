@@ -94,45 +94,204 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     vi.useRealTimers()
   })
 
-  // Why: headless serve closes pages only here, so without this the page's agent-browser daemon
-  // survives every close and is reclaimed only by its own idle timer (#16367).
-  it('retires the page agent-browser daemon before dropping the guest', async () => {
-    const order: string[] = []
+  it('unregisters a closing page before awaiting owner retirement', async () => {
     const browserManager = {
       registerOffscreenGuest: vi.fn(),
-      unregisterGuest: vi.fn(() => order.push('unregister-guest'))
+      unregisterGuest: vi.fn()
     }
-    const onPageClosed = vi.fn(async (pageId: string) => {
-      order.push(`retire:${pageId}`)
+    let releaseOwnerRetirement!: () => void
+    const ownerRetirementBlocked = new Promise<void>((resolve) => {
+      releaseOwnerRetirement = resolve
     })
-    const backend = new OffscreenBrowserBackend(browserManager as never, () => ({ onPageClosed }))
+    const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
 
     await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
-    await backend.closeTab('page-1')
+    await backend.createTab({ browserPageId: 'page-2', url: 'about:blank', worktreeId: 'wt' })
+    const close = backend.closeTab('page-1')
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+    const pageWasUnregisteredBeforeRetirement = browserManager.unregisterGuest.mock.calls.some(
+      ([pageId]) => pageId === 'page-1'
+    )
+    releaseOwnerRetirement()
+    await close
 
-    expect(onPageClosed).toHaveBeenCalledWith('page-1')
-    // Why order matters: unregisterGuest clears the id the bridge would otherwise resolve through.
-    expect(order).toEqual(['retire:page-1', 'unregister-guest'])
+    expect(onPageClosed).toHaveBeenCalledOnce()
+    expect(onPageClosed).not.toHaveBeenCalledWith('page-2')
+    expect(backend.getWebContentsId('page-2')).toBe(2)
+    expect(pageWasUnregisteredBeforeRetirement).toBe(true)
   })
 
-  it('retires the daemon when the page is destroyed out from under the backend', async () => {
-    const browserManager = { registerOffscreenGuest: vi.fn(), unregisterGuest: vi.fn() }
+  it('preserves a replacement page when the old window finishes closing', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
+    let releaseOwnerRetirement!: () => void
+    const ownerRetirementBlocked = new Promise<void>((resolve) => {
+      releaseOwnerRetirement = resolve
+    })
+    const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    const close = backend.closeTab('page-1')
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+
+    releaseOwnerRetirement()
+    await close
+
+    expect(backend.getWebContentsId('page-1')).toBe(2)
+    expect(browserManager.unregisterGuest).toHaveBeenCalledTimes(1)
+  })
+
+  it('retires the helper when an offscreen renderer is destroyed unexpectedly', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
     const onPageClosed = vi.fn(async () => {})
-    const backend = new OffscreenBrowserBackend(browserManager as never, () => ({ onPageClosed }))
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
 
     await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
     mocks.windows[0].webContents.emit('destroyed')
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+  })
 
-    expect(onPageClosed).toHaveBeenCalledWith('page-1')
+  it('cleans every helper owner during backend shutdown', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
+    const onPageClosed = vi.fn(async () => {})
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    await backend.createTab({ browserPageId: 'page-2', url: 'about:blank', worktreeId: 'wt' })
+    await backend.destroyAll()
+
+    expect(onPageClosed).toHaveBeenCalledTimes(2)
+    expect(browserManager.unregisterGuest).toHaveBeenCalledWith('page-1')
+    expect(browserManager.unregisterGuest).toHaveBeenCalledWith('page-2')
+  })
+
+  it('rejects a concurrent create while shutdown is draining owned pages', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
+    let releaseOwnerRetirement!: () => void
+    const ownerRetirementBlocked = new Promise<void>((resolve) => {
+      releaseOwnerRetirement = resolve
+    })
+    const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    const shutdown = backend.destroyAll()
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+
+    await expect(
+      backend.createTab({ browserPageId: 'page-2', url: 'about:blank', worktreeId: 'wt' })
+    ).rejects.toThrow('Offscreen browser backend is shutting down')
+
+    releaseOwnerRetirement()
+    await shutdown
+    expect(mocks.windows).toHaveLength(1)
+    expect(browserManager.unregisterGuest).toHaveBeenCalledWith('page-1')
+    expect(browserManager.unregisterGuest).not.toHaveBeenCalledWith('page-2')
+  })
+
+  it('joins owner retirement started by an unexpected renderer destroy', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
+    let releaseOwnerRetirement!: () => void
+    const ownerRetirementBlocked = new Promise<void>((resolve) => {
+      releaseOwnerRetirement = resolve
+    })
+    const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    mocks.windows[0].webContents.emit('destroyed')
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+
+    const shutdown = backend.destroyAll()
+    const outcome = await Promise.race([
+      shutdown.then(() => 'settled'),
+      new Promise<string>((resolve) => setImmediate(() => resolve('pending')))
+    ])
+    expect(outcome).toBe('pending')
+
+    releaseOwnerRetirement()
+    await shutdown
+  })
+
+  it('bounds concurrent helper retirements during shutdown', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
+    let activeRetirements = 0
+    let peakRetirements = 0
+    const releases: (() => void)[] = []
+    const onPageClosed = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          activeRetirements++
+          peakRetirements = Math.max(peakRetirements, activeRetirements)
+          releases.push(() => {
+            activeRetirements--
+            resolve()
+          })
+        })
+    )
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
+
+    for (let index = 0; index < 6; index++) {
+      await backend.createTab({
+        browserPageId: `page-${index}`,
+        url: 'about:blank',
+        worktreeId: 'wt'
+      })
+    }
+
+    const shutdown = backend.destroyAll()
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledTimes(4))
+    releases.splice(0).forEach((release) => release())
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledTimes(6))
+    releases.splice(0).forEach((release) => release())
+    await shutdown
+
+    expect(peakRetirements).toBe(4)
   })
 
   it('closes the page even when daemon retirement throws', async () => {
     const browserManager = { registerOffscreenGuest: vi.fn(), unregisterGuest: vi.fn() }
-    const backend = new OffscreenBrowserBackend(browserManager as never, () => ({
-      onPageClosed: vi.fn(async () => {
-        throw new Error('daemon gone')
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({
+        onPageClosed: vi.fn(async () => {
+          throw new Error('daemon gone')
+        })
       })
-    }))
+    })
 
     await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
     await expect(backend.closeTab('page-1')).resolves.toBeUndefined()

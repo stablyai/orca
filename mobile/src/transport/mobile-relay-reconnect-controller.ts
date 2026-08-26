@@ -7,6 +7,7 @@ import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import { MobileE2EEAuthenticationError } from './mobile-e2ee-v2-physical-channel'
 import { RelayOuterError } from './mobile-relay-e2ee-link'
 import { RELAY_STABLE_CONNECTION_MS, RelayRetryDelays } from './mobile-relay-retry-delays'
+import { relayDirectorRetryAfterMs } from './mobile-relay-resume-director'
 import { RelayCredentialEligibility } from './relay-credential-eligibility'
 import { RelayPairingRejectionLatch } from './relay-pairing-rejection-latch'
 import { RelayRecoveryFailureCount } from './relay-recovery-failure-count'
@@ -246,10 +247,9 @@ export class RelayReconnectController {
     // replacement dial is not revocation — banking it would fire a false re-pair alarm
     // the moment that healthy session drops for an unrelated transport error.
     this.pairingRejection.record(this.activeSession ? null : error)
-    const code = error instanceof RelayOuterError ? error.code : null
     const recovery =
-      code != null && isMobileRelayCloseCode(code)
-        ? mobileRelayRecoveryFor(code, 'phone-resume')
+      error instanceof RelayOuterError && isMobileRelayCloseCode(error.code)
+        ? mobileRelayRecoveryFor(error.code, 'phone-resume')
         : null
     if (
       this.recoveryGate === 'fresh-credential' ||
@@ -264,10 +264,12 @@ export class RelayReconnectController {
     const failureCount = this.failureCount.recordAfterConnection(this.activeRelayConnectedAt, now)
     // Why: only a stable authenticated Relay resets the failure streak.
     this.activeRelayConnectedAt = null
+    // Why: a director Retry-After is the server pacing a bounded overload, and it
+    // only reaches this branch — a director HTTP error carries no relay close code.
     const delay =
       recovery?.kind === 'retry-after-host-offline'
         ? this.delays.hostOfflineDelayMs()
-        : this.delays.transportDelayMs(failureCount)
+        : this.delays.transportDelayMs(failureCount, relayDirectorRetryAfterMs(error))
     this.nextAttemptAt = now + delay
     if (error instanceof MobileE2EEAuthenticationError) {
       // Why: an E2EE rejection is usually pairing revocation, but it also fires

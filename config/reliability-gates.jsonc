@@ -2094,15 +2094,16 @@
       "providers": ["local", "daemon", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. Supervisor settlement coverage prevents a late handoff-completion failure from rearming termination after the replacement child exits. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8457",
         "https://github.com/stablyai/orca/issues/9563"
       ],
-      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
-      "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Once a supervised child exits or fails to start, no late handoff completion may signal it or arm force-kill escalation. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
+      "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. Force handoff completion to fail after the replacement child exits and require zero later child signals and zero escalation timers. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
         "pnpm exec electron-vite build --mode e2e",
@@ -2112,6 +2113,7 @@
         "src/main/updater.headless-serve-install.test.ts",
         "src/main/serve-update-handoff.test.ts",
         "src/cli/runtime/launch.test.ts",
+        "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
         "src/main/startup/serve-desktop-activation-wiring.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
@@ -2142,6 +2144,12 @@
             "an atomic app-bundle replacement starts one target-version serve child with the original arguments",
             "handoff completes only after the replacement reports target-version runtime readiness",
             "a replacement version mismatch or readiness timeout is persisted and exits without an in-process retry loop"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
+          "assertions": [
+            "late update handoff failure cannot rearm termination after child exit"
           ]
         },
         {
@@ -13116,7 +13124,7 @@
       "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending terminal query replies and 4096 UTF-16 code units. Every retained reply reaches the provider as one atomic write, and the host writes each reply the moment it accepts it, so replies reach the PTY in the order they were produced with no queue that could reorder them. A reply's own echo is contained on the output side by projecting its known echo shapes; the ESC-initial verbatim shape is matched only when complete, never held as a partial, so a query torn at its own ESC is still answered. Overflow removes only the oldest query replies, never ordinary input except the documented modified-F3/CPR byte collision, and drain failures cannot clear a newer queue generation.",
       "oracle": "Synchronously enqueue separate 10,000-entry OSC and DA1 reply floods before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. At the host boundary, defer an OSC reply and assert that separate or legacy-coalesced DA1/CPR replies flush after it in observed query order. At the remote-runtime boundary, preserve separate writes around pending ordinary input, async validation, and viewport-claim buffering. Repeat behind 10,000 ordinary inputs and exercise the text ceiling, real xterm generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13130,6 +13138,7 @@
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "src/shared/terminal-query-reply.test.ts",
         "src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "src/shared/pty-startup-reply-echo-shapes.test.ts",
         "tests/e2e/terminal-osc-color-queries.spec.ts",
         "tests/e2e/terminal-typing-latency.spec.ts",
         "tests/e2e/pty-input-write-queue-ssh.spec.ts"
@@ -13208,13 +13217,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-09",
+          "date": "2026-08-25",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
           "result": "passed",
-          "durationSeconds": 2.35,
-          "summary": "Four files and 138 tests passed, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
+          "durationSeconds": 1.05,
+          "summary": "Five files and 92 tests passed, including the live-pty echo-shape transcript, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
         },
         {
           "date": "2026-08-09",
@@ -16220,6 +16229,130 @@
         "Physical SSH, WSL, Linux, Windows, and host-restart cold-park journeys are not recorded."
       ],
       "demotionRule": "Demote if a live parked PTY loses its exact graph leaf, a retired PTY remains published, multi-pane identity drifts, or the routed client round trip flakes without a diagnosed cause."
+    },
+    {
+      "id": "agent-browser.owner-boundary-cleanup",
+      "title": "Headless browser helpers retire with their owning page and runtime",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "electron-main-headless-browser-lifecycle",
+      "surfaces": [
+        "headless offscreen browser page close",
+        "offscreen renderer destruction",
+        "app quit",
+        "headless serve SIGINT/SIGTERM"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "The owner-boundary contract injects an isolated BrowserManager, offscreen WebContents, and AgentBrowserBridge. It proves explicit close removes the page from command routing before awaiting exact named-session retirement, runs retirement on unexpected renderer destruction, preserves unrelated pages, joins pending creation/retirement during shutdown, rejects command admission after terminal cleanup begins, retries Electron quit after a vetoed signal, preserves Windows shared-console graceful Ctrl-C, reserves the full renderer-acknowledgement and committed-teardown budgets before supervisor force-kill, bounds process-swap retirement to five seconds, and caps cleanup concurrency at four. A built-CLI macOS headless serve run used an isolated profile, folder workspace, socket directory, and port: exact PPID-1 helper/session identity disappeared within five seconds after page close and after Ctrl-C runtime shutdown, while an unrelated page survived close and reconnect. Linux cgroup and paired/SSH journeys remain gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5400",
+        "https://github.com/stablyai/orca/issues/16367"
+      ],
+      "invariant": "For each Orca-owned page identity, after its owner closes or is destroyed and a five-second third-party shutdown grace expires, no live helper session named orca-tab-<pageId> may remain; unrelated live page identities must survive, and runtime quit must join the bounded cleanup attempt. The serve supervisor may force-kill only after the renderer-acknowledgement deadline, committed teardown deadline, and bounded scheduling margin have all elapsed.",
+      "oracle": "Create two isolated offscreen pages and register their WebContents. Close one, block onPageClosed for its stable page ID, and require unregisterGuest to have already removed that page from command routing while the unrelated page remains live. Emit destroyed and require the same exact retirement. Race shutdown with creation, pending retirement, and process-swap destruction; require no replacement session or command after terminal cleanup starts, require shutdown to remain pending until retirement settles, require the swap close command to use the five-second cleanup timeout, and require at most four concurrent close commands. Deliver repeated signals and require every attempt to reach Electron quit; under Windows shared-console semantics require the child to handle Ctrl-C without an immediate child.kill. Advance the supervisor clock through the renderer-acknowledgement and committed teardown deadlines and require no SIGKILL until the bounded scheduling margin elapses. In direct built-CLI serve, inspect exact session/PID/socket identity plus RSS/fd inventory before close and after a five-second grace; reconnect between commands and stop via Ctrl-C. No process-name kill or global sweep is permitted.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser"
+      ],
+      "testFiles": [
+        "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",
+        "src/main/browser/agent-browser-bridge-session-lifecycle.test.ts",
+        "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
+        "src/main/startup/serve-signal-handlers.test.ts",
+        "src/main/startup/desktop-startup-ordering.test.ts",
+        "src/cli/runtime/serve-signal-exit-diagnostic.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",
+          "assertions": [
+            "explicit close unregisters the page before awaiting exact owner cleanup while unrelated and same-ID replacement pages survive",
+            "unexpected offscreen renderer destruction invokes and joins exact helper-owner cleanup",
+            "backend shutdown joins every pending owner cleanup with concurrency capped at four"
+          ]
+        },
+        {
+          "file": "src/main/browser/agent-browser-bridge-session-lifecycle.test.ts",
+          "assertions": [
+            "owner cleanup uses a five-second close-command timeout",
+            "process-swap retirement uses the same five-second cleanup timeout",
+            "runtime shutdown includes sessions whose creation is still pending",
+            "runtime shutdown rejects late command and replacement-session admission",
+            "runtime-wide helper cleanup concurrency is capped at four"
+          ]
+        },
+        {
+          "file": "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
+          "assertions": [
+            "closing a tab retires the exact named agent-browser session"
+          ]
+        },
+        {
+          "file": "src/main/startup/serve-signal-handlers.test.ts",
+          "assertions": [
+            "every repeated serve signal retries Electron quit after a possible renderer veto",
+            "SIGINT and SIGTERM listeners remain installed during quit draining"
+          ]
+        },
+        {
+          "file": "src/main/startup/desktop-startup-ordering.test.ts",
+          "assertions": [
+            "agent-browser cleanup is joined by the committed quit teardown barrier",
+            "repeatable serve signal handling is registered before readiness"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
+          "assertions": [
+            "serve supervisor force-kill grace covers renderer acknowledgement, committed teardown, and scheduling margin",
+            "Windows shared-console Ctrl-C is not forwarded as an immediate child termination"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts",
+          "durationSeconds": 0.44,
+          "summary": "Candidate passed 63 lifecycle, bridge, routing, signal, and quit-order tests plus 1,469 browser tests. The production-reverted control was red; disabling the final swap-timeout/admission controls failed 3 of 15 bridge lifecycle tests; removing the pending-retirement join, page-routing fence, repeat-signal behavior, or Windows shared-console guard failed its exact focused oracle. Setting the supervisor scheduling margin to zero reproduced SIGKILL at the combined 30-second renderer-acknowledgement and teardown boundary. Direct built-CLI serve observed exact PPID-1 helpers at 10-11 MiB RSS and 16-18 fd rows. Closing one page removed only its helper/session within five seconds while the other page survived reconnect. With the signal fix disabled, Ctrl-C left exact helpers alive after the listener exited; the final candidate emptied session inventory and removed app/helper PIDs and port within five seconds."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "bounded offscreen lifecycle contracts and bridge cleanup ordering"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fresh deterministic coverage has local candidate evidence only."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The pristine current-main control failed explicit close, unexpected destruction, backend shutdown, pending creation, bounded concurrency, joined quit, and repeated-signal assertions; the candidate passed the byte-identical oracle. Disabling only process-swap cleanup timeout and terminal command admission failed 3 of 15 bridge lifecycle tests. Live candidate-with-signal-fix-disabled also retained exact helpers after Ctrl-C, while the final candidate removed them."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Cleanup is event-driven and exact-page scoped: no polling, process-name scan, idle timer, or new wire field. Owner and residual session drains cap close subprocess concurrency at four, sequence headless ownership cleanup before the residual bridge sweep, and reuse the existing bounded app teardown deadline."
+      },
+      "promotionCriteria": [
+        "Run the same oracle on Linux headless serve with bundled agent-browser PID/session and RSS/fd inventory.",
+        "Exercise runtime restart, transport loss, reconnect, concurrent tabs, and paired/SSH host ownership without cross-page cleanup.",
+        "Collect repeated open/close/reconnect evidence showing bounded helper count and no stale PID-1-owned Orca identities."
+      ],
+      "knownGaps": [
+        "No 64 GiB Linux cgroup stress was manufactured; the reported production incident remains un-soaked.",
+        "The real Electron headless serve oracle ran on macOS; physical Linux/SSH/WSL and paired-client journeys remain unvalidated.",
+        "A close-command timeout or error is treated as best-effort and does not escalate to a process kill; helper disappearance on that failure path remains unverifiable without exact PID ownership.",
+        "Four-way close batches remain bounded but can exceed the 20-second app quit barrier above 16 worst-case five-second retirements.",
+        "The patch does not add startup stale-process recovery or an idle timeout; those require an exact persisted ownership ledger and are intentionally out of scope."
+      ],
+      "demotionRule": "Demote if a closed or destroyed page leaves its exact named helper session, if quit can exit before helper retirement settles, if unrelated live pages are retired, or if cleanup regresses to a global process-name kill or timer-only sweep."
     },
     {
       "id": "terminal-session.remote-pane-layout-retry",

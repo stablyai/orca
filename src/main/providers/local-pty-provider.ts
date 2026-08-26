@@ -64,7 +64,7 @@ import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
+import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { terminatePtyJob } from '../windows/windows-pty-job'
 import {
@@ -1434,6 +1434,7 @@ export class LocalPtyProvider implements IPtyProvider {
         }
         const verdict = judgeCachedAgentJobEvidence({
           jobProcessIds: paneProcessIds,
+          jobSupported: isWindowsPtyJobReadable(),
           shellPid: proc.pid,
           anchorProcessId: cachedEntry?.pid ?? null,
           identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)

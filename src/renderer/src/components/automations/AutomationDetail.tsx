@@ -144,7 +144,7 @@ export function AutomationDetail({
             <Badge variant={automation.enabled ? 'secondary' : 'outline'}>
               {automation.enabled
                 ? translate('auto.components.automations.AutomationDetail.eaa02014f8', 'Enabled')
-                : translate('auto.components.automations.AutomationDetail.b09b2384fd', 'Paused')}
+                : translate('auto.components.automations.enablement.paused', 'Paused')}
             </Badge>
           </div>
           <p className="mt-1 truncate text-sm text-muted-foreground">

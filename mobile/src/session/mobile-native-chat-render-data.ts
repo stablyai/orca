@@ -47,7 +47,7 @@ export type MobileNativeChatPendingItem = {
 export function foldMobileNativeChatMessages(messages: NativeChatMessage[]): NativeChatMessage[] {
   // Normalize first (desktop assembler parity): image marker turns fold into
   // image-ref blocks instead of rendering as raw `[Image: …]` text.
-  return foldToolMessages(stripNoiseMessages(normalizeImageTranscriptMessages(messages)))
+  return stripNoiseMessages(foldToolMessages(normalizeImageTranscriptMessages(messages)))
 }
 
 /** Assemble the list data the chat renders: the folded transcript, then a

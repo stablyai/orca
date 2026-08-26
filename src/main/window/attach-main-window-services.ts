@@ -344,6 +344,7 @@ function registerRuntimeWindowLifecycle(
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
+    automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (
       repoId,
       worktreeId,

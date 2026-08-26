@@ -1,4 +1,5 @@
 import { addWslEnvKeys } from '../../shared/wsl-env'
+import { commandLineLength, MAX_COMMAND_LINE_CHARS } from '../../shared/windows-command-line-budget'
 import { runProcess } from '../../shared/child-process/run-process'
 import { buildWslExecArgs } from '../../shared/wsl-login-shell-command'
 import { getWslGuestEnvironment, type WslGuestEnvironment } from './wsl-guest-environment'
@@ -159,25 +160,6 @@ function withGuestCwd(cwd: string | undefined, argv: readonly string[]): string[
   return ['sh', '-c', 'cd "$1" || exit 1; shift; exec "$@"', 'orca-wsl', cwd, ...argv]
 }
 
-/**
- * Argv is the default, but it has a hard ceiling that stdin does not.
- *
- * Windows caps a command line at 32767 characters, and the distro, `--exec`,
- * the env prefix and the args all share it. A user's `orca.yaml` hook is the
- * one unbounded script Orca runs -- `run-both` concatenates two of them, and a
- * vendored installer is ~15KB -- so past this size the choice is between
- * failing to spawn at all and accepting the stdin caveat. Degrading beats
- * failing: a large script that also reads stdin was already broken, while a
- * large script that does not now works where it would have died.
- *
- * Measured on the WHOLE command line, not on the script alone. A login PATH is
- * itself a few KB and is spliced in as `PATH=...`, so a script-only threshold
- * produced a perverse band: with a long enough PATH, a 7,999-char hook went to
- * argv and failed to spawn while the same hook at 8,001 chars flipped to stdin
- * and ran. Size decided how a hook behaved, in the wrong direction.
- */
-const MAX_COMMAND_LINE_CHARS = 30_000
-
 /** `<shell> -c`/`-s` for a script, otherwise the program itself. */
 function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
   if (spec.script === undefined) {
@@ -188,19 +170,6 @@ function guestCommandArgv(spec: WslSpec, delivery: 'argv' | 'stdin'): string[] {
   return delivery === 'stdin'
     ? [shell, '-s', '--', ...(spec.args ?? [])]
     : [shell, '-c', spec.script, '--', ...(spec.args ?? [])]
-}
-
-/**
- * What `CreateProcess` will count.
- *
- * libuv escapes every `"` and doubles a backslash run before a quote, so a
- * quote-dense script costs more than its length. Charging one extra character
- * per `"` or `\\` keeps the estimate on the safe side of the cap; an earlier
- * version claimed to over-count and in fact under-counted, which put a
- * quote-heavy ~26KB script on argv and over the real limit.
- */
-function commandLineLength(args: readonly string[]): number {
-  return args.reduce((total, arg) => total + arg.length + 3 + (arg.match(/["\\]/g)?.length ?? 0), 0)
 }
 
 /** Shell-free argv, with the cached environment applied when one is available. */
@@ -255,6 +224,9 @@ export async function runWslProcess(spec: WslSpec): Promise<WslResult> {
   // Measure what is actually spawned: `wsl.exe` and `-d <distro> --exec` are
   // prepended after this point and are part of the same budget.
   const fullLine = [resolveWslExecutablePath(), ...buildWslExecArgs(spec.distro, argvForm)]
+  // Argv is the default, but it has a hard ceiling that stdin does not. A user's
+  // `orca.yaml` hook is the one unbounded script Orca runs, so past the cap the
+  // choice is between failing to spawn at all and accepting the stdin caveat.
   const delivery: 'argv' | 'stdin' =
     spec.script !== undefined && commandLineLength(fullLine) > MAX_COMMAND_LINE_CHARS
       ? 'stdin'

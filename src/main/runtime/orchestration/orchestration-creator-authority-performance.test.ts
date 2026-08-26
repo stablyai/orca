@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import type Database from '../../sqlite/sync-database'
 import { DISPATCH_CONTEXT_CLAIM_SQL, OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const CREATOR_PANE = 'tab-creator:11111111-1111-4111-8111-111111111111'
 const CREATOR_PROCESS = 'pty-creator:incarnation-a'
@@ -84,13 +85,7 @@ describe('creator authority lookup performance', () => {
       coordinatorPaneKey: 'tab-coordinator:22222222-2222-4222-8222-222222222222'
     })
     const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
-    db.createDispatchContext(
-      creatorTask.id,
-      'term-creator',
-      CREATOR_PANE,
-      undefined,
-      CREATOR_PROCESS
-    )
+    createRootDispatch(db, creatorTask.id, 'term-creator', CREATOR_PANE, undefined, CREATOR_PROCESS)
     const workerTask = db.createTask({
       spec: 'worker',
       runId: run.id,
@@ -145,7 +140,8 @@ describe('creator authority lookup performance', () => {
         )
         .run(retainedDispatchCount, run.id)
       const creatorTask = db.createTask({ spec: 'creator', runId: run.id })
-      const creatorDispatch = db.createDispatchContext(
+      const creatorDispatch = createRootDispatch(
+        db,
         creatorTask.id,
         'term-creator',
         CREATOR_PANE,
@@ -173,9 +169,14 @@ describe('creator authority lookup performance', () => {
       const elapsedMs = performance.now() - startedAt
 
       const competingTask = db.createTask({ spec: 'competing creator', runId: run.id })
-      expect(() => db!.createDispatchContext(competingTask.id, 'term-creator')).toThrow(
-        `Terminal term-creator already has an active dispatch (${creatorDispatch.id}`
-      )
+      expect(() =>
+        db!.createDispatchContext({
+          taskId: competingTask.id,
+          assigneeHandle: 'term-creator',
+          creator: { kind: 'system' },
+          maxDepth: Number.MAX_SAFE_INTEGER
+        })
+      ).toThrow(`Terminal term-creator already has an active dispatch (${creatorDispatch.id}`)
       expect(elapsedMs).toBeLessThan(200)
     }
   )
