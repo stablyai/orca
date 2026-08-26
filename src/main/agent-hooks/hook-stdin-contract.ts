@@ -7,19 +7,42 @@ export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
 export const POSIX_HOOK_STDIN_READER = '{ command -p cat 2>/dev/null || cat; }'
 export const POSIX_HOOK_STDIN_DRAIN_COMMAND = `${POSIX_HOOK_STDIN_READER} >/dev/null 2>&1 || :`
 
+export type PosixHookPayloadCaptureOptions = {
+  /**
+   * Why (#15833): a runner that never closes hook stdin makes a read-to-EOF block forever, and
+   * Codex 0.149 does not enforce the config-declared timeout for a shell-wrapped command that
+   * holds stdin (openai/codex#4337), so the intended safety net never fires. A watchdog bounds
+   * the wait while keeping capture-first semantics — well-behaved runners that close stdin are
+   * unaffected, a stalled stdin costs at most this many seconds and the hook exits empty instead
+   * of wedging the agent's turn. Keep the budget below the config-declared hook timeout so the
+   * script finishes before any runner that does enforce its kill.
+   */
+  maxWaitSeconds?: number
+}
+
 // Why: every POSIX hook must own stdin before any no-op exit; sharing this
 // prelude prevents agent templates from inventing different drain semantics.
 export function buildPosixHookPayloadCapture(
-  emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit'
+  emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit',
+  options: PosixHookPayloadCaptureOptions = {}
 ): string[] {
   const emptyPayloadLines =
     emptyPayloadPolicy === 'empty-object' ? ["  payload='{}'"] : ['  exit 0']
-  return [
-    `payload=$(${POSIX_HOOK_STDIN_READER})`,
-    'if [ -z "$payload" ]; then',
-    ...emptyPayloadLines,
-    'fi'
-  ]
+  // Why a watchdog that kills the whole script rather than the reader: POSIX gives async lists
+  // /dev/null stdin, so the reader must stay foreground, and a foreground command substitution
+  // cannot be interrupted any other portable way. A stalled stdin therefore costs the script its
+  // own life after maxWaitSeconds — the hook exits non-zero like any other timed-out hook
+  // instead of wedging the agent's turn forever (#15833).
+  const captureLines =
+    options.maxWaitSeconds === undefined
+      ? [`payload=$(${POSIX_HOOK_STDIN_READER})`]
+      : [
+          `  ( sleep ${options.maxWaitSeconds}; kill -9 "$$" 2>/dev/null ) >/dev/null 2>&1 &`,
+          '  orca_hook_stdin_watchdog=$!',
+          `payload=$(${POSIX_HOOK_STDIN_READER})`,
+          '  kill "$orca_hook_stdin_watchdog" 2>/dev/null'
+        ]
+  return [...captureLines, 'if [ -z "$payload" ]; then', ...emptyPayloadLines, 'fi']
 }
 
 export const WINDOWS_HOOK_STDIN_DRAIN_LABEL = 'orca_agent_hook_drain_stdin'
