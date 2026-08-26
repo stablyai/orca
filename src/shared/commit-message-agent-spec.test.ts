@@ -16,6 +16,7 @@ import {
   parseCodexModels,
   parseCursorModels,
   parseLineModels,
+  parseOmpModels,
   parsePiModels,
   resolveCommitMessageAgentChoice
 } from './commit-message-agent-spec'
@@ -35,6 +36,7 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'omp',
       'opencode',
       'pi'
     ])
@@ -473,6 +475,68 @@ describe('model discovery parsers', () => {
     expect(usedFullLineSplit).toBe(false)
     expect(usedWhitespaceFieldSplit).toBe(false)
   })
+  it('parses OMP models JSON into provider-qualified selector ids', () => {
+    const stdout = `${JSON.stringify({
+      models: [
+        {
+          provider: 'openrouter',
+          id: '~anthropic/claude-haiku-latest',
+          selector: 'openrouter/~anthropic/claude-haiku-latest',
+          name: 'Anthropic Claude Haiku Latest',
+          thinking: ['minimal', 'low', 'medium', 'high']
+        },
+        {
+          provider: 'openrouter',
+          id: '~deepseek/deepseek-v4-flash-latest',
+          selector: 'openrouter/~deepseek/deepseek-v4-flash-latest',
+          name: 'DeepSeek V4 Flash Latest'
+        }
+      ]
+    })}\n`
+
+    expect(parseOmpModels(stdout)).toEqual([
+      {
+        id: 'openrouter/~anthropic/claude-haiku-latest',
+        label: 'Anthropic Claude Haiku Latest',
+        thinkingLevels: [
+          { id: 'minimal', label: 'Minimal' },
+          { id: 'low', label: 'Low' },
+          { id: 'medium', label: 'Medium' },
+          { id: 'high', label: 'High' }
+        ],
+        defaultThinkingLevel: 'low'
+      },
+      { id: 'openrouter/~deepseek/deepseek-v4-flash-latest', label: 'DeepSeek V4 Flash Latest' }
+    ])
+  })
+
+  it('drops non-string and whitespace-only OMP model fields instead of exposing them', () => {
+    const stdout = JSON.stringify({
+      models: [
+        { selector: 42, name: 'Numeric selector' },
+        { selector: 'openrouter/ok', name: true },
+        { selector: '   ', name: 'Blank selector' },
+        { selector: 'openrouter/blank-name', name: '\t\n' },
+        { selector: ' openrouter/trimmed ', name: ' Trimmed Name ' },
+        { selector: 'openrouter/think', name: 'Thinky', thinking: [1, '  ', 'low'] }
+      ]
+    })
+
+    expect(parseOmpModels(stdout)).toEqual([
+      { id: 'openrouter/trimmed', label: 'Trimmed Name' },
+      {
+        id: 'openrouter/think',
+        label: 'Thinky',
+        thinkingLevels: [{ id: 'low', label: 'Low' }],
+        defaultThinkingLevel: 'low'
+      }
+    ])
+  })
+
+  it('returns no OMP models on malformed JSON so the seed stays', () => {
+    expect(parseOmpModels('not json')).toEqual([])
+    expect(parseOmpModels('{"models":[{"id":"no-selector"}]}')).toEqual([])
+  })
 })
 
 describe('buildArgs (Codex)', () => {
@@ -585,5 +649,53 @@ describe('buildArgs (Antigravity)', () => {
 
   it('uses Gemini 3.5 Flash (Medium) as default model', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.antigravity?.defaultModelId).toBe('Gemini 3.5 Flash (Medium)')
+  })
+})
+
+describe('buildArgs (OMP)', () => {
+  const spec = getCommitMessageAgentSpec('omp')!
+
+  it('runs `omp -p` in isolated text mode without passing the prompt via argv', () => {
+    const prompt = `PROMPT ${'x'.repeat(1024)}`
+    const args = spec.buildArgs({ prompt, model: 'default' })
+
+    expect(args).toEqual([
+      '-p',
+      '--no-session',
+      '--no-tools',
+      '--no-extensions',
+      '--no-skills',
+      '--no-rules',
+      '--mode',
+      'text'
+    ])
+    expect(args).not.toContain(prompt)
+    expect(spec.promptDelivery).toBe('stdin')
+  })
+
+  it('passes the provider-qualified selector to --model and thinking to --thinking', () => {
+    const args = spec.buildArgs({
+      prompt: 'PROMPT',
+      model: 'openrouter/~anthropic/claude-haiku-latest',
+      thinkingLevel: 'low'
+    })
+
+    expect(args).toContain('--model')
+    expect(args).toEqual(
+      expect.arrayContaining(['--model', 'openrouter/~anthropic/claude-haiku-latest', '--thinking', 'low'])
+    )
+  })
+
+  it('omits --model and --thinking when unset', () => {
+    const args = spec.buildArgs({ prompt: 'PROMPT', model: 'default' })
+
+    expect(args).not.toContain('--model')
+    expect(args).not.toContain('--thinking')
+  })
+
+  it('uses dynamic model discovery via `omp models --json`', () => {
+    expect(spec.modelSource).toBe('dynamic')
+    expect(spec.modelDiscovery?.binary).toBe('omp')
+    expect(spec.modelDiscovery?.args).toEqual(['models', '--json'])
   })
 })

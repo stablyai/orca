@@ -82,6 +82,30 @@ describe('source-control AI action recipes', () => {
     expect(result.ok && result.value.params.model).toBe('gpt-5.5')
   })
 
+  it('resolves an omp default TUI agent now that OMP has a commit-message spec', () => {
+    // Why: before the omp spec existed, a null action recipe plus defaultTuiAgent
+    // 'omp' failed with "Choose a supported Source Control AI agent" (#14319).
+    const base = settings()
+    base.defaultTuiAgent = 'omp'
+    base.sourceControlAi = {
+      ...base.sourceControlAi!,
+      agentId: null,
+      actions: {
+        ...base.sourceControlAi!.actions,
+        branchName: { agentId: null, commandInputTemplate: '{basePrompt}' }
+      }
+    }
+
+    const result = resolveSourceControlAiForOperation({
+      settings: base,
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local'
+    })
+    expect(result.ok && result.value.params.agentId).toBe('omp')
+    expect(result.ok && result.value.params.model).toBe('default')
+  })
+
   it('treats a repo action null agent as the default agent, not the global action agent', () => {
     const base = settings()
     base.defaultTuiAgent = 'codex'
@@ -427,7 +451,7 @@ describe('source-control AI action recipes', () => {
     ).toEqual({
       ok: false,
       error:
-        'Agent "aider" does not support Source Control AI commit messages. Supported agents: Claude, Codex, OpenCode, Pi, Amp, Cursor, Kimi, GitHub Copilot, Antigravity, or Custom command.'
+        'Agent "aider" does not support Source Control AI commit messages. Supported agents: Claude, Codex, OpenCode, Pi, OMP, Amp, Cursor, Kimi, GitHub Copilot, Antigravity, or Custom command.'
     })
   })
 })
