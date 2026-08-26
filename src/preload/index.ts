@@ -4486,7 +4486,10 @@ const api = {
   },
 
   memory: {
-    getSnapshot: (): Promise<MemorySnapshot> => ipcRenderer.invoke('memory:getSnapshot')
+    // Why: omitted/local executionHostId keeps the local collector; a runtime host id
+    // proxies diagnostics.memory to that machine.
+    getSnapshot: (request?: { executionHostId?: string | null }): Promise<MemorySnapshot> =>
+      ipcRenderer.invoke('memory:getSnapshot', request)
   },
 
   claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),

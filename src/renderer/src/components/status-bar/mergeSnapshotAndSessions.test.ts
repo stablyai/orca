@@ -573,3 +573,76 @@ describe('mergeSnapshotAndSessions', () => {
     expect(out[0].worktrees[0].sessions[0].bound).toBe(false)
   })
 })
+
+describe('mergeSnapshotAndSessions — remote host scope', () => {
+  const remoteWorktree: WorktreeMemory = {
+    worktreeId: 'hetzner-repo::/srv/work/api',
+    worktreeName: 'api',
+    repoId: 'hetzner-repo',
+    repoName: 'API',
+    cpu: 12,
+    memory: 900e6,
+    history: [900e6],
+    sessions: [{ sessionId: 'remote-pty-1', paneKey: null, pid: 44, cpu: 12, memory: 900e6 }]
+  }
+
+  const remoteCtx = (overrides: Partial<MergeContext> = {}): MergeContext =>
+    baseCtx({
+      hostScope: 'remote',
+      repoRuntimeScopedById: new Map([['hetzner-repo', true]]),
+      ...overrides
+    })
+
+  it('keeps runtime-scoped rows that the local scope drops', () => {
+    const out = mergeSnapshotAndSessions(makeSnapshot([remoteWorktree]), [], remoteCtx())
+    expect(out).toHaveLength(1)
+    expect(out[0].worktrees[0].sessions[0].memory).toBe(900e6)
+  })
+
+  it('still drops runtime-scoped rows under the local scope', () => {
+    const ctx = baseCtx({ repoRuntimeScopedById: new Map([['hetzner-repo', true]]) })
+    expect(mergeSnapshotAndSessions(makeSnapshot([remoteWorktree]), [], ctx)).toEqual([])
+  })
+
+  it('marks every remote row remote without a repo connectionId', () => {
+    const out = mergeSnapshotAndSessions(makeSnapshot([remoteWorktree]), [], remoteCtx())
+    expect(out[0].hasRemoteChildren).toBe(true)
+    expect(out[0].worktrees[0].isRemote).toBe(true)
+  })
+
+  it("ignores this machine's daemon sessions", () => {
+    const localSession = {
+      id: 'local-pty-9',
+      cwd: '/Users/me/local',
+      title: 'local',
+      agentOwnership: 'absent'
+    } as unknown as DaemonSession
+    const out = mergeSnapshotAndSessions(
+      makeSnapshot([remoteWorktree]),
+      [localSession],
+      remoteCtx()
+    )
+    const sessionIds = out.flatMap((repo) =>
+      repo.worktrees.flatMap((wt) => wt.sessions.map((session) => session.sessionId))
+    )
+    expect(sessionIds).toEqual(['remote-pty-1'])
+  })
+
+  it('ignores locally rendered browser workspaces', () => {
+    const worktree = {
+      id: 'orca::/Users/me/browser-only',
+      repoId: 'orca',
+      displayName: 'browser-only'
+    } as Worktree
+    const browser = { id: 'b1', url: 'https://example.com' } as unknown as BrowserWorkspace
+    const out = mergeSnapshotAndSessions(
+      makeSnapshot([remoteWorktree]),
+      [],
+      remoteCtx({
+        browserTabsByWorktree: { [worktree.id]: [browser] },
+        worktreeById: new Map([[worktree.id, worktree]])
+      })
+    )
+    expect(out.map((repo) => repo.repoId)).toEqual(['hetzner-repo'])
+  })
+})

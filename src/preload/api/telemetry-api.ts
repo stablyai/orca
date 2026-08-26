@@ -31,7 +31,8 @@ export type DiagnosticsUploadPayload =
     }
 
 export type MemoryApi = {
-  getSnapshot: () => Promise<MemorySnapshot>
+  /** Omitted/local host id samples this machine; a `runtime:<id>` host proxies to it. */
+  getSnapshot: (request?: { executionHostId?: string | null }) => Promise<MemorySnapshot>
 }
 
 export type DiagnosticsApi = {
