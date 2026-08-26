@@ -172,7 +172,8 @@ export class RuntimeClient {
             ...(response.result.remoteUpdateSupport
               ? { remoteUpdateSupport: response.result.remoteUpdateSupport }
               : {}),
-            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {})
+            ...(response.result.capabilities ? { capabilities: response.result.capabilities } : {}),
+            ...(response.result.degradations ? { degradations: response.result.degradations } : {})
           },
           graph: {
             state: graphState

@@ -40,7 +40,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     openHostedReviewInChecks,
     prGenerating,
     refreshBranchCompare,
-    remoteStatus,
     selectedKeys,
     setBaseRefDialogOpen,
     setDiffCommentsExpanded,
@@ -84,7 +83,6 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           branchLineTotal={branchLineTotal}
           compareBaseRef={compareBaseRef}
           headDisplay={gitIdentityDisplay}
-          upstreamStatus={remoteStatus}
           manualReviewUrl={manualReviewUrl}
         />
 

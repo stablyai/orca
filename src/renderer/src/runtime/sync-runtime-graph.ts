@@ -620,6 +620,7 @@ function serializeRuntimeMobileAgentStatusEntry(
     paneKey,
     entryPaneKey: entry.paneKey,
     state: entry.state,
+    workingMode: entry.workingMode ?? null,
     prompt: entry.prompt,
     updatedAtBucket: Math.floor(entry.updatedAt / AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS),
     stateStartedAt: entry.stateStartedAt,
@@ -1738,7 +1739,9 @@ function buildMobileSessionGroupProjection(
       groupTabs,
       terminalIds,
       editorIds,
-      browserIds
+      browserIds,
+      new Set(),
+      true
     )
     if (visibleOrder.length === 0) {
       continue

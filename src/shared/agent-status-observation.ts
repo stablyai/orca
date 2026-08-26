@@ -62,6 +62,17 @@ export type AgentStatusObservation = {
  *  body, so a hook or OSC writer cannot declare its own provenance. */
 export type WithAgentStatusObservation = { observation?: AgentStatusObservation }
 
+/** Renderer-local count of ACCEPTED status writes this pane's row has taken. Incremented only by
+ *  the store's accept branch, off the row it replaces, and carried through by every field-level
+ *  rewrite — so it answers "did the pane report again?", which `updatedAt` cannot, because the
+ *  accept rule admits equal timestamps. Lives on the row rather than in a side table so no
+ *  teardown path can reset it out from under a reader (STA-4612). Never sent over IPC or
+ *  persisted to last-status.json.
+ *
+ *  Declared here beside the observation facet because both are per-write facets mixed into
+ *  `AgentStatusEntry` rather than fields a reporter supplies. */
+export type AgentStatusRowFacets = WithAgentStatusObservation & { acceptedStatusSeq?: number }
+
 // ─── THE ORDERING RULE ──────────────────────────────────────────────────────
 // `(authorityId, incarnation, revision)` is a total order ONLY within one authorityId.
 // A different authorityId means "incomparable", not "older" — the id is regenerated per

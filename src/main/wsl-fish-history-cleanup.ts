@@ -1,8 +1,5 @@
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { runWslProcess } from './wsl/wsl-runner'
 import { isSafeFishHistorySession } from './fish-history-session'
-
-const execFileAsync = promisify(execFile)
 
 /** Deduped by distro+session, so a rescan that re-queues the same tombstone
  *  joins the running call instead of spawning a second `wsl.exe`.
@@ -29,7 +26,7 @@ function fishCleanupScript(session: string): string {
 export function deleteWslFishHistoryFile(
   distro: string,
   session: string,
-  run: typeof execFileAsync = execFileAsync
+  run: typeof runWslProcess = runWslProcess
 ): Promise<void> {
   if (!distro.trim() || !isSafeFishHistorySession(session)) {
     return Promise.resolve()
@@ -49,13 +46,25 @@ export function deleteWslFishHistoryFile(
 async function runCleanup(
   distro: string,
   session: string,
-  run: typeof execFileAsync
+  run: typeof runWslProcess
 ): Promise<void> {
-  await run(
-    'wsl.exe',
-    ['--distribution', distro, '--exec', 'fish', '--command', fishCleanupScript(session)],
-    { timeout: 5_000, windowsHide: true }
-  )
+  const result = await run({
+    distro,
+    // 'preferred', not 'none': `fish` is a bare name, so it is a PATH lookup.
+    // A fish from linuxbrew or nix lives only on the login PATH, and without it
+    // this throws on a distro where the cleanup would have worked. The probe
+    // failing is still fine -- the old `--exec fish` spawn sourced no login
+    // shell either, so running on the default PATH is no worse than before.
+    loginPath: 'preferred',
+    program: 'fish',
+    args: ['--command', fishCleanupScript(session)],
+    timeoutMs: 5_000
+  })
+  if (result.code !== 0 || result.timedOut) {
+    throw new Error(
+      `wsl fish history cleanup failed for ${distro}: code=${result.code} timedOut=${result.timedOut}`
+    )
+  }
 }
 
 /** Test-only: drop in-flight state so one test's pending work cannot reach the next. */

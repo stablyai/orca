@@ -2740,6 +2740,14 @@
             "5c8ce20be6": "この状態が続く場合は、",
             "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。"
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "Git Bash のコンソール上限に達しました",
+            "capacityDetail": "Git Bash が 128 個のコンソール上限に達しました。不要な Git Bash ターミナルを閉じてから、このターミナルを再起動してください。",
+            "failedTitle": "ターミナルが終了しました",
+            "failedDetail": "シェルプロセスが終了コード {{code}} で終了しました。出力は保持されています。",
+            "close": "閉じる",
+            "restart": "再起動"
+          },
           "TerminalPane": {
             "ac112e9036": "タイトルを削除",
             "f984ab2a30": "ペインのタイトルを削除: {{value0}}",
@@ -3216,6 +3224,14 @@
             "connecting": "接続中…",
             "workspaceConflict": "ワークスペースの競合",
             "workspaceSyncError": "ワークスペースの同期エラー"
+          },
+          "CaffeinateStatusSegment": {
+            "active": "アクティブ",
+            "inactive": "非アクティブ",
+            "ariaLabel": "{{title}}、{{status}}",
+            "onDescription": "このコンピュータを常にスリープさせない",
+            "autoDescription": "Agent の作業中はスリープさせない",
+            "offDescription": "通常のシステムスリープを許可する"
           },
           "StatusBar": {
             "9659e38343": "ポート",
@@ -3952,6 +3968,10 @@
         "SkillUpdateRow": {
           "oneLocation": "1 件の場所",
           "manyLocations": "{{value0}} 件の場所"
+        },
+        "host": {
+          "local": "このマシン",
+          "remote": "接続済みランタイム"
         }
       },
       "sidebar": {
@@ -5058,6 +5078,12 @@
           "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
           "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
           "c3e8a1f4b2": "今後表示しない"
+        },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} が切断されました",
+          "sshHostProject": "SSH ホスト {{hostName}} 上のプロジェクト",
+          "localHostProject": "このホスト上のプロジェクト",
+          "runtimeHostProject": "{{hostName}} 上のプロジェクト"
         },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "外部ワークツリーを非表示のままにできませんでした。もう一度お試しください。",
@@ -9189,7 +9215,13 @@
         "agent-awake-copy": {
           "e5995ce268": "Agent 作業中はコンピュータを起きたままにする",
           "95d3031db2": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。蓋を閉じたときの動作は、このデバイスの電源設定に従います。",
-          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。"
+          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。",
+          "modeTitle": "コンピュータをスリープさせない"
+        },
+        "AgentAwakeSetting": {
+          "on": "オン",
+          "auto": "Agent",
+          "off": "オフ"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",
@@ -10557,6 +10589,8 @@
             "7a09d7f9d2": "ベース",
             "383cf92c73": "木",
             "d7ae61269b": "コミット先のブランチ",
+            "branchFilesChangedVsBaseOne": "{{ref}} と比べて 1 ファイルが変更されています",
+            "branchFilesChangedVsBaseOther": "{{ref}} と比べて {{count}} ファイルが変更されています",
             "48a003c1b1": "ステージ済みの変更",
             "d4ef4bafc5": "変更点",
             "522f44dce5": "追跡されていないファイル",
@@ -10631,10 +10665,10 @@
             "b3c8f1a902": "ファイル名でフィルター",
             "d4f8c2a901": "フィルターをクリアして閉じる",
             "e8a1c4b203": "vs",
-            "f9b2441bb6": "{{value0}} より 1 コミット進んでいます",
-            "b715ef615b": "{{value1}}より{{value0}}コミット進んでいます",
-            "c1a8f3e204": "{{value0}} より 1 コミット遅れています",
-            "d2b9g4f315": "{{value1}}より{{value0}}コミット遅れています",
+            "compareBaseCommitsAheadOne": "{{ref}} より 1 コミット進んでいます",
+            "compareBaseCommitsAheadOther": "{{ref}}より{{count}}コミット進んでいます",
+            "compareBaseCommitsBehindOne": "{{ref}} より 1 コミット遅れています",
+            "compareBaseCommitsBehindOther": "{{ref}}より{{count}}コミット遅れています",
             "4b4a7de138": "ブラウザでレビューページを開く",
             "createPrIntentCommitBlockedSummary": "コミットがブロックされました：{{value0}} Issue を修正して、PR 作成を再試行してください。",
             "pushRecovery": {
@@ -13271,7 +13305,12 @@
           "5d2c3e7ae3": "音声が検出されませんでした。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "ディクテーションを停止する"
+          "335e1bc6cb": "ディクテーションを停止する",
+          "7f3660a7ba": "マイクを起動中…",
+          "f082d0cb9d": "処理中…",
+          "3de5a129e7": "聞き取り中",
+          "4977162383": "音量が大きすぎます",
+          "25f2b7a6a5": "発話中"
         }
       },
       "dashboard": {
@@ -13585,7 +13624,17 @@
           "3e3b2c369f": "クロン式",
           "e81a02d61b": "保存する前に、有効な 5 フィールドの cron を入力してください。",
           "968e66d686": "5 フィールドの cron を入力します。",
-          "cadb7b0bc9": "無効"
+          "cadb7b0bc9": "無効",
+          "f6ca30da23": "有効なカスタム cron",
+          "a226dbdd40": "分",
+          "ec9c1e35df": "時間",
+          "2d82246d23": "日",
+          "0e1de0358b": "月",
+          "77e96bded6": "曜日"
+        },
+        "AutomationPromptDisclosure": {
+          "showLess": "折りたたむ",
+          "showMore": "さらに表示"
         },
         "AutomationDetail": {
           "007c8ad874": "プロンプト",
@@ -13887,6 +13936,16 @@
               "category": "メンテナンス",
               "name": "毎時保守点検",
               "prompt": "スタックした作業、古い生成ファイル、検証の失敗、および人間の対応が必要なものがないか確認してください。対応が必要な Issue のみを報告してください。"
+            }
+          },
+          "schedule": {
+            "label": {
+              "a95afb7483": "毎時 :{{minute}}",
+              "280ccd2701": "毎日 {{time}}",
+              "3f1422adc1": "平日 {{time}}",
+              "cc71e252ba": "毎週{{day}} {{time}}",
+              "ba20c92073": "カスタムスケジュール",
+              "086a5a9fe2": "無効なスケジュール"
             }
           }
         },

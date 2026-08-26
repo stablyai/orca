@@ -163,8 +163,10 @@ function rankAssignments(args: {
   let worstQuality: PaletteMatchQuality = 'field-exact'
   let fuzzyTokenCount = 0
   const fields = new Set<string>()
-  // Derive from field metadata only: an evidence field can itself be a container.
-  let hasDirectHit = false
+  let containerOnlyTokenCount = 0
+  let tokenIndex = -1
+  let tokenHasDirectField = false
+  let matchedTokenCount = 0
 
   for (const assignment of args.assignments) {
     if (paletteMatchQualityRank(assignment.quality) > paletteMatchQualityRank(worstQuality)) {
@@ -174,20 +176,32 @@ function rankAssignments(args: {
       fuzzyTokenCount += 1
     }
     fields.add(assignment.fieldId)
+    if (assignment.tokenIndex !== tokenIndex) {
+      if (tokenIndex !== -1 && !tokenHasDirectField) {
+        containerOnlyTokenCount += 1
+      }
+      tokenIndex = assignment.tokenIndex
+      tokenHasDirectField = false
+      matchedTokenCount += 1
+    }
     const field = args.document.fieldById.get(assignment.fieldId)
     if (field && !field.isContainer) {
-      hasDirectHit = true
+      tokenHasDirectField = true
     }
   }
 
-  const isContainerOnly = !hasDirectHit
+  if (tokenIndex !== -1 && !tokenHasDirectField) {
+    containerOnlyTokenCount += 1
+  }
+  const isContainerOnly =
+    containerOnlyTokenCount > 0 && containerOnlyTokenCount === matchedTokenCount
 
   return {
     worstQuality,
     isContainerOnly,
     rank: {
       exactIntent: args.exactIntent ? 0 : 1,
-      matchedDirectField: isContainerOnly ? 1 : 0,
+      containerOnlyTokenCount,
       wholeQuery: args.wholeQuery,
       worstQuality: paletteMatchQualityRank(worstQuality),
       usesSupportingEvidence: args.usesEvidence ? 1 : 0,

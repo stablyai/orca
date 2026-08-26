@@ -172,7 +172,9 @@ export function buildTerminalCreateWindow(args: {
         getBrowserDrivers: () => Promise.resolve([]),
         onTerminalFitOverrideChanged: () => () => {},
         onTerminalDriverChanged: () => () => {},
-        onBrowserDriverChanged: () => () => {}
+        onBrowserDriverChanged: () => () => {},
+        onClientHostedBrowserRowsChanged: () => () => {},
+        getClientHostedBrowserRows: async () => []
       },
       ssh: {
         listTargets: () => Promise.resolve([]),

@@ -1,4 +1,4 @@
-import type { TestInfo } from '@stablyai/playwright-test'
+import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady, getActiveTabId } from './helpers/store'
 import {
@@ -18,6 +18,25 @@ import { connectDockerSshRelayTarget } from './helpers/docker-ssh-relay-connecti
 
 const RUN_DOCKER_SSH = process.env.ORCA_E2E_SSH_DOCKER === '1'
 const PARKING_DELAY_MS = Number(process.env.ORCA_E2E_TERMINAL_PARKING_DELAY_MS) || 500
+
+async function terminalTailContains(page: Page, marker: string): Promise<boolean> {
+  return page.evaluate((expected) => {
+    const tabId = window.__store?.getState().activeTabId
+    const manager = tabId ? window.__paneManagers?.get(tabId) : undefined
+    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
+    const buffer = pane?.terminal?.buffer?.active
+    if (!buffer) {
+      return false
+    }
+    const firstRow = Math.max(0, buffer.length - 200)
+    for (let row = buffer.length - 1; row >= firstRow; row -= 1) {
+      if (buffer.getLine(row)?.translateToString(true).includes(expected) === true) {
+        return true
+      }
+    }
+    return false
+  }, marker)
+}
 
 test.use({
   seedTestRepo: false,
@@ -60,11 +79,11 @@ test.describe('SSH terminal hidden view parking', () => {
         `for i in $(seq 1 200); do echo "${marker}_$i:"; done\r`
       )
       await expect
-        .poll(() => getTerminalContent(orcaPage, 20_000), {
+        .poll(() => terminalTailContains(orcaPage, `${marker}_200:`), {
           timeout: 30_000,
           message: 'SSH marker output did not render before parking'
         })
-        .toContain(`${marker}_200:`)
+        .toBe(true)
       // Why the pad: ~3000 × ~60B ≈ 180KB pushes the early markers past the
       // relay's 100KiB rolling replay buffer while staying inside main's
       // ~5k-row headless model — so a revealed `${marker}_1:` can only have
@@ -72,14 +91,14 @@ test.describe('SSH terminal hidden view parking', () => {
       await sendToTerminal(
         orcaPage,
         sshPtyId,
-        `for i in $(seq 1 3000); do echo "PAD_$i:0123456789012345678901234567890123456789"; done; echo "${marker}_PAD_DONE:"\r`
+        `for i in $(seq 1 3000); do echo "PAD_$i:0123456789012345678901234567890123456789"; done; printf '%s%s\\n' "${marker}" "_PAD_DONE:"\r`
       )
       await expect
-        .poll(() => getTerminalContent(orcaPage, 20_000), {
+        .poll(() => terminalTailContains(orcaPage, `${marker}_PAD_DONE:`), {
           timeout: 60_000,
           message: 'SSH pad output did not finish before parking'
         })
-        .toContain(`${marker}_PAD_DONE:`)
+        .toBe(true)
 
       await parkHiddenTabBehindDecoy(orcaPage, remote.worktreeId, sshTabId, {
         parkDelayMs: PARKING_DELAY_MS
@@ -94,11 +113,11 @@ test.describe('SSH terminal hidden view parking', () => {
       }, sshTabId)
       await waitForActiveTerminalManager(orcaPage, 60_000)
       await expect
-        .poll(() => getTerminalContent(orcaPage, 20_000), {
+        .poll(() => terminalTailContains(orcaPage, `${marker}_PAD_DONE:`), {
           timeout: 60_000,
           message: 'revealed SSH tab did not restore the final pad line'
         })
-        .toContain(`${marker}_PAD_DONE:`)
+        .toBe(true)
       // Depth proof: `${marker}_1:` predates >100KiB of later output, so its
       // presence after reveal proves the headless-model paint restored
       // scrollback the relay replay cannot hold.

@@ -281,7 +281,9 @@ export async function useIpcEventsForCloseRouting({
         getBrowserDrivers: () => Promise.resolve([]),
         onTerminalFitOverrideChanged: () => () => {},
         onTerminalDriverChanged: () => () => {},
-        onBrowserDriverChanged: () => {}
+        onBrowserDriverChanged: () => {},
+        onClientHostedBrowserRowsChanged: () => {},
+        getClientHostedBrowserRows: async () => []
       },
       agentStatus: { onSet: () => () => {} }
     }

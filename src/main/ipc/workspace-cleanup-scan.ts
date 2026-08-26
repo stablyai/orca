@@ -252,8 +252,8 @@ async function scanRepoWorkspaces(
         worktree: worktreeWithActivity,
         scannedAt,
         provider,
-        // Why: a row with no inactivity reason can never be queued or selected,
-        // so full-fleet scans stream it now and let a focused scan read git later.
+        // Why: full-fleet scans defer git for recently active rows; removal preflight
+        // forces a fresh read before any selected row can be deleted.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
         signal

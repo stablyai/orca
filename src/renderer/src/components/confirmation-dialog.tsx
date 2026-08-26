@@ -99,7 +99,10 @@ export function ConfirmationDialogProvider({
           <DialogHeader>
             <DialogTitle>{displayedRequest?.options.title}</DialogTitle>
             {displayedRequest?.options.description ? (
-              <DialogDescription>{displayedRequest.options.description}</DialogDescription>
+              // Callers pass multi-line descriptions (e.g. one path per line).
+              <DialogDescription className="whitespace-pre-line">
+                {displayedRequest.options.description}
+              </DialogDescription>
             ) : null}
           </DialogHeader>
           {displayedRequest?.options.dontAskAgain ? (

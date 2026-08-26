@@ -9,7 +9,7 @@ import {
   readHooksJson,
   removeManagedCommands,
   wrapPosixHookCommand,
-  wrapWindowsHookCommand,
+  wrapWindowsCmdHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
@@ -102,9 +102,23 @@ function getManagedScriptPath(): string {
 }
 
 function getManagedCommand(scriptPath: string): string {
+  // Why (#14828): Grok runs a hook command containing a space as `pwsh -Command <cmd>`, so the
+  // encoded PowerShell launcher cost two interpreters before reaching the script —
+  // `grok.exe -> pwsh.exe -> powershell.exe -> cmd.exe`, ~610ms per event, and the agent's hook
+  // console stays up for all of it. A cmd-safe bare path is spawned directly
+  // (`grok.exe -> cmd.exe`, ~110ms), the same shape Codex/Devin/Antigravity already register
+  // (#8430). Paths that are not cmd-safe still fall back to the encoded launcher (#6078).
+  // Tradeoff, as for those agents: a bare path cannot carry the launcher's missing-script
+  // guard, so a deleted script surfaces as a per-event `command not found` in the agent's log
+  // instead of a silent drain. Grok fails open — the tool still runs, including on PreToolUse.
   return process.platform === 'win32'
-    ? wrapWindowsHookCommand(scriptPath)
+    ? wrapWindowsCmdHookCommand(scriptPath)
     : wrapPosixHookCommand(scriptPath)
+}
+
+/** Test seam: the command registered for `scriptPath` on the current platform. */
+export function getManagedCommandForTests(scriptPath: string): string {
+  return getManagedCommand(scriptPath)
 }
 
 function getManagedScript(target: 'local' | 'posix' = 'local'): string {

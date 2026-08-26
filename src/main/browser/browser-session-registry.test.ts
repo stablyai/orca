@@ -235,6 +235,32 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession?.setDevicePermissionHandler).toHaveBeenCalled()
   })
 
+  it('applies and clears existing browser-profile policy on an opaque route partition', () => {
+    const partition =
+      'persist:orca-browser-v1-1111111111111111222222222222222233333333333333334444444444444444'
+
+    browserSessionRegistry.setupRoutePartitionPolicies(partition, 'default')
+
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith(partition)
+    const configuredSession = sessionFromPartitionMock.mock.results[0]?.value
+    expect(configuredSession.setPermissionRequestHandler).toHaveBeenCalled()
+    expect(configuredSession.setPermissionCheckHandler).toHaveBeenCalled()
+
+    browserSessionRegistry.clearRoutePartitionPolicies(partition)
+    const clearedSession = sessionFromPartitionMock.mock.results.at(-1)?.value
+    expect(clearedSession.setPermissionRequestHandler).toHaveBeenCalledWith(null)
+    expect(clearedSession.setPermissionCheckHandler).toHaveBeenCalledWith(null)
+  })
+
+  it('rejects route partitions for missing browser profiles', () => {
+    const partition =
+      'persist:orca-browser-v1-aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbccccccccccccccccdddddddddddddddd'
+
+    expect(() =>
+      browserSessionRegistry.setupRoutePartitionPolicies(partition, 'missing-profile')
+    ).toThrow('browser_route_partition_profile_unavailable')
+  })
+
   it('auto-grants pointer lock for browser partitions', () => {
     browserSessionRegistry.createProfile('isolated', 'Pointer Lock Test')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value

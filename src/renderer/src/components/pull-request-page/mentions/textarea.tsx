@@ -1,6 +1,7 @@
 import React, { useCallback, useId, useMemo, useState } from 'react'
 import { cn } from '@/lib/utils'
 import { filterGitHubMentionOptions } from '@/components/github/github-mention-option-filter'
+import { GitHubUserAvatar } from '@/components/github/github-user-avatar'
 import type { MentionOption, MentionQuery } from '../page-types'
 import { findMentionQuery } from './query'
 
@@ -86,13 +87,12 @@ export function MentionTextarea({
                 index === activeIndex && 'bg-accent text-accent-foreground'
               )}
             >
-              {option.avatarUrl ? (
-                <img src={option.avatarUrl} alt="" className="size-5 shrink-0 rounded-full" />
-              ) : (
-                <div className="flex size-5 shrink-0 items-center justify-center rounded-full bg-muted text-[10px] font-medium text-muted-foreground">
-                  {option.login.slice(0, 1).toUpperCase()}
-                </div>
-              )}
+              <GitHubUserAvatar
+                login={option.login}
+                name={option.name}
+                avatarUrl={option.avatarUrl}
+                className="size-5"
+              />
               <span className="flex min-w-0 flex-1 items-baseline gap-1.5">
                 <span className="shrink-0 font-medium">@{option.login}</span>
                 {option.name && (

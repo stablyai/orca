@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { Tab, TabGroup } from '../../../../shared/tab-types'
 import type { AppState } from '../../store/types'
 import { getActiveTabNavOrder, getGroupVisibleTabOrder } from './group-tab-order'
+import { buildOrderedTabItems } from './tab-bar-item-model'
 
 function terminalTab(id: string, groupId: string, entityId: string, sortOrder: number): Tab {
   return {
@@ -188,6 +189,74 @@ describe('getGroupVisibleTabOrder', () => {
       { type: 'editor', id: '/repo/file.md', tabId: 'tab-e1' }
     ])
   })
+
+  it('matches the strip lookup when duplicate entities resolve to the last tab copy', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t2',
+      tabOrder: ['tab-t1', 'tab-t2']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      terminalTab('tab-t2', 'g1', 'term-1', 1)
+    ]
+
+    expect(getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set())).toEqual(
+      [{ type: 'terminal', id: 'term-1', tabId: 'tab-t2' }]
+    )
+  })
+
+  it('uses terminal precedence when visible ids collide across content types', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t1',
+      tabOrder: ['tab-b1', 'tab-t1']
+    }
+    const tabs: Tab[] = [
+      browserTab('tab-b1', 'g1', 'collision', 0),
+      terminalTab('tab-t1', 'g1', 'collision', 1)
+    ]
+
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['collision']),
+        new Set(),
+        new Set(['collision'])
+      )
+    ).toEqual([{ type: 'terminal', id: 'collision', tabId: 'tab-t1' }])
+  })
+
+  it('can preserve cross-type ids for mobile publication compatibility', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-b1',
+      tabOrder: ['tab-b1', 'tab-t1']
+    }
+    const tabs: Tab[] = [
+      browserTab('tab-b1', 'g1', 'collision', 0),
+      terminalTab('tab-t1', 'g1', 'collision', 1)
+    ]
+
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['collision']),
+        new Set(),
+        new Set(['collision']),
+        new Set(),
+        true
+      )
+    ).toEqual([
+      { type: 'browser', id: 'collision', tabId: 'tab-b1' },
+      { type: 'terminal', id: 'collision', tabId: 'tab-t1' }
+    ])
+  })
 })
 
 type NavState = Pick<
@@ -302,5 +371,103 @@ describe('getActiveTabNavOrder', () => {
       { type: 'editor', id: 'e1' },
       { type: 'terminal', id: 'term-2' }
     ])
+  })
+})
+
+// The keyboard cycle must match the rendered strip; reconcileTabOrder appends missing group tabs.
+describe('group order matches the rendered tab strip', () => {
+  function renderedStripIds(group: TabGroup, tabs: Tab[]): string[] {
+    const groupTabs = tabs.filter((tab) => tab.groupId === group.id)
+    const tabBarOrder = group.tabOrder.map((tabId) => {
+      const tab = groupTabs.find((candidate) => candidate.id === tabId)
+      if (!tab) {
+        return tabId
+      }
+      return tab.contentType === 'terminal' || tab.contentType === 'browser' ? tab.entityId : tab.id
+    })
+    const terminalMap = new Map(
+      groupTabs
+        .filter((tab) => tab.contentType === 'terminal')
+        .map((tab) => [tab.entityId, { id: tab.entityId, unifiedTabId: tab.id }])
+    )
+    return buildOrderedTabItems({
+      tabBarOrder,
+      terminalIds: groupTabs
+        .filter((tab) => tab.contentType === 'terminal')
+        .map((tab) => tab.entityId),
+      editorFileIds: [],
+      browserTabIds: [],
+      simulatorTabIds: [],
+      terminalMap: terminalMap as never,
+      editorMap: new Map(),
+      browserMap: new Map(),
+      unifiedTabByVisibleId: new Map()
+    }).map((item) => item.id)
+  }
+
+  it('cycles a tab that hydrated into the group before group.tabOrder learned about it', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t1',
+      // Hydration race: tab-t2 is in the group but not yet in the persisted order.
+      tabOrder: ['tab-t1']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      terminalTab('tab-t2', 'g1', 'term-2', 1)
+    ]
+
+    expect(renderedStripIds(group, tabs)).toEqual(['term-1', 'term-2'])
+    expect(
+      getGroupVisibleTabOrder(group, tabs, new Set(['term-1', 'term-2']), new Set(), new Set()).map(
+        (entry) => entry.id
+      )
+    ).toEqual(['term-1', 'term-2'])
+  })
+
+  it('keeps drag-reordered positions and appends only the unknown tail', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t2',
+      tabOrder: ['tab-t3', 'tab-t2'],
+      recentTabIds: []
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      terminalTab('tab-t2', 'g1', 'term-2', 1),
+      terminalTab('tab-t3', 'g1', 'term-3', 2)
+    ]
+
+    expect(renderedStripIds(group, tabs)).toEqual(['term-3', 'term-2', 'term-1'])
+    expect(
+      getGroupVisibleTabOrder(
+        group,
+        tabs,
+        new Set(['term-1', 'term-2', 'term-3']),
+        new Set(),
+        new Set()
+      ).map((entry) => entry.id)
+    ).toEqual(['term-3', 'term-2', 'term-1'])
+  })
+
+  it('still drops tabs whose backing entity is gone, exactly as the strip does', () => {
+    const group: TabGroup = {
+      id: 'g1',
+      worktreeId: 'wt',
+      activeTabId: 'tab-t1',
+      tabOrder: ['tab-t1']
+    }
+    const tabs: Tab[] = [
+      terminalTab('tab-t1', 'g1', 'term-1', 0),
+      editorTab('tab-e1', 'g1', '/repo/closed.md', 1)
+    ]
+
+    expect(
+      getGroupVisibleTabOrder(group, tabs, new Set(['term-1']), new Set(), new Set()).map(
+        (entry) => entry.id
+      )
+    ).toEqual(['term-1'])
   })
 })

@@ -7,6 +7,7 @@ import { WorkspaceCleanupCandidateList } from './workspace-cleanup-candidate-lis
 import { WorkspaceCleanupEmptyState } from './workspace-cleanup-dialog-notices'
 import type { WorkspaceCleanupFacets } from './workspace-cleanup-facets'
 import { formatWorkspaceCleanupRelativeTime } from './workspace-cleanup-relative-time'
+import type { WorkspaceCleanupFailure } from '@/store/slices/workspace-cleanup'
 
 export type WorkspaceCleanupRowListState = {
   rows: readonly WorkspaceCleanupFacets[]
@@ -23,7 +24,7 @@ export type WorkspaceCleanupRowListState = {
   selectedIds: ReadonlySet<string>
   gitPendingWorktreeIds: ReadonlySet<string>
   /** Keyed by host-qualified identity so a failure marks only its own host's row. */
-  rowFailures: Record<string, string>
+  rowFailures: Record<string, WorkspaceCleanupFailure>
   scrollElement: HTMLDivElement | null
   onClearFilters: () => void
   onToggleExpanded: (identity: string) => void
@@ -31,6 +32,8 @@ export type WorkspaceCleanupRowListState = {
   onView: (candidate: WorkspaceCleanupCandidate) => void
   onIgnore: (candidate: WorkspaceCleanupCandidate) => void
   onRemove: (candidate: WorkspaceCleanupCandidate) => void
+  onForgetLocally: (candidate: WorkspaceCleanupCandidate) => void
+  onDeleteAnyway: (candidate: WorkspaceCleanupCandidate) => void
 }
 
 export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): React.JSX.Element {
@@ -92,6 +95,8 @@ export function WorkspaceCleanupRowList(props: WorkspaceCleanupRowListState): Re
             onView={props.onView}
             onIgnore={props.onIgnore}
             onRemove={props.onRemove}
+            onForgetLocally={props.onForgetLocally}
+            onDeleteAnyway={props.onDeleteAnyway}
           />
         )}
       />

@@ -102,6 +102,10 @@ describe('Electron Vite output contract', () => {
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
   })
 
+  it('bundles validation dependencies used by the sandboxed preload', () => {
+    expect(electronViteConfig.preload?.build?.externalizeDeps?.exclude).toContain('zod')
+  })
+
   it('exits when a static import fails before source error guards load', () => {
     const processMock = new EventEmitter() as EventEmitter & {
       exit: (code: number) => void

@@ -13,7 +13,7 @@ import {
   type RuntimeMetadataOwnershipWatch
 } from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { RpcRequest, RpcResponse } from './rpc/core'
+import type { RpcAnyMethod, RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
 import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-mutation-executor'
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
@@ -49,10 +49,8 @@ import type {
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
-import {
-  decodeTerminalStreamFrame,
-  type TerminalStreamFrame
-} from '../../shared/terminal-stream-protocol'
+import type { TerminalStreamFrame } from '../../shared/terminal-stream-protocol'
+import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 const DEFAULT_WS_PORT = 6768
 
@@ -79,6 +77,8 @@ type OrcaRuntimeRpcServerOptions = {
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
+  // Why: tests may inject inert protocol stages before production authorization registers them.
+  methods?: readonly RpcAnyMethod[]
 }
 
 export type PairingOfferUnavailableReason =
@@ -158,6 +158,10 @@ const LONG_POLL_CAP = 16
 // workers would otherwise hold every slot and starve the mobile/web/CLI/relay
 // clients sharing this runtime. Reserve half the budget for the other classes.
 const ASK_LONG_POLL_SHARE = 0.5
+// Why: eight host slots preserve four-host overlap for two independently paired desktops.
+const BROWSER_HOST_LONG_POLL_SHARE = 0.5
+// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
+const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -442,10 +446,13 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 ])
 
 // Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-type LongPollClass = 'ask' | 'wait'
+export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
-function longPollClassOf(request: RpcRequest): LongPollClass | null {
+export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
+  if (request.method === 'browser.clientHost.attach') {
+    return 'browser-host'
+  }
   if (request.method === 'terminal.wait') {
     return 'wait'
   }
@@ -501,6 +508,9 @@ export class OrcaRuntimeRpcServer {
   private readonly longPollCap: number
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
+  private readonly browserHostLongPollCap: number
+  private readonly browserHostLongPollCapPerDevice: number
+  private readonly specializedLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -524,10 +534,7 @@ export class OrcaRuntimeRpcServer {
   private mobilePairingOfferGeneration = 0
   private onUnpairedDeviceAuthFailure: (() => void) | null = null
   private unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
-  private readonly binaryStreamHandlers = new Map<
-    string,
-    Map<number, (frame: TerminalStreamFrame) => void>
-  >()
+  private readonly binaryMessageRouter = new RuntimeBinaryMessageRouter()
   private readonly wsDispatchAbortStates = new Map<
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
@@ -536,6 +543,8 @@ export class OrcaRuntimeRpcServer {
   private activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   private activeAskLongPolls = 0
+  private activeBrowserHostLongPolls = 0
+  private readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
 
   constructor({
     runtime,
@@ -549,10 +558,11 @@ export class OrcaRuntimeRpcServer {
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
-    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+    methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime })
+    this.dispatcher = new RpcDispatcher({ runtime, methods })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform
@@ -566,6 +576,12 @@ export class OrcaRuntimeRpcServer {
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
+    this.browserHostLongPollCap = Math.max(
+      1,
+      Math.floor(longPollCap * BROWSER_HOST_LONG_POLL_SHARE)
+    )
+    this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
+    this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -1005,37 +1021,18 @@ export class OrcaRuntimeRpcServer {
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
   ): () => void {
-    if (!connectionId || !Number.isInteger(streamId) || streamId < 0) {
-      return () => {}
-    }
-    let handlers = this.binaryStreamHandlers.get(connectionId)
-    if (!handlers) {
-      handlers = new Map()
-      this.binaryStreamHandlers.set(connectionId, handlers)
-    }
-    handlers.set(streamId, handler)
-    return () => {
-      const current = this.binaryStreamHandlers.get(connectionId)
-      if (!current || current.get(streamId) !== handler) {
-        return
-      }
-      current.delete(streamId)
-      if (current.size === 0) {
-        this.binaryStreamHandlers.delete(connectionId)
-      }
-    }
+    return this.binaryMessageRouter.registerTerminalStream(connectionId, streamId, handler)
+  }
+
+  private registerBinaryMessageHandler(
+    connectionId: string | undefined,
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ): () => void {
+    return this.binaryMessageRouter.registerRawMessage(connectionId, handler)
   }
 
   private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
-    if (!connectionId) {
-      return
-    }
-    const frame = decodeTerminalStreamFrame(bytes)
-    if (!frame) {
-      return
-    }
-    this.binaryStreamHandlers.get(connectionId)?.get(frame.streamId)?.(frame)
+    this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }
 
   private registerWebSocketDispatchAbort(ws: WebSocket): {
@@ -1340,7 +1337,7 @@ export class OrcaRuntimeRpcServer {
         // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
         this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
         this.runtime.cancelMobileDictationForConnection(socket.connectionId)
-        this.binaryStreamHandlers.delete(socket.connectionId)
+        this.binaryMessageRouter.deleteConnection(socket.connectionId)
         if (!hasOtherConnections) {
           this.runtime.onClientDisconnected(socket.device.deviceToken)
         }
@@ -1534,7 +1531,7 @@ export class OrcaRuntimeRpcServer {
     const request = parsed.request
 
     // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
-    const longPoll = longPollClassOf(request)
+    const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll)
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
@@ -1556,30 +1553,68 @@ export class OrcaRuntimeRpcServer {
   // Why: one fence for both transports — the total cap protects short RPCs, the ask
   // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
   // Returns the rejection message, or null once the slot is reserved.
-  private admitLongPoll(longPoll: LongPollClass | null): string | null {
+  private admitLongPoll(
+    longPoll: RuntimeLongPollClass | null,
+    pairedDeviceId?: string
+  ): string | null {
     if (!longPoll) {
       return null
     }
     if (this.activeLongPolls >= this.longPollCap) {
       return 'long-poll capacity reached; retry with backoff'
     }
+    if (
+      (longPoll === 'ask' || longPoll === 'browser-host') &&
+      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
+    ) {
+      return longPoll === 'ask'
+        ? 'orchestration.ask capacity reached; retry with backoff'
+        : 'browser-host capacity reached; retry with backoff'
+    }
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
+    }
+    if (
+      longPoll === 'browser-host' &&
+      (this.activeBrowserHostLongPolls >= this.browserHostLongPollCap ||
+        (pairedDeviceId !== undefined &&
+          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) >=
+            this.browserHostLongPollCapPerDevice))
+    ) {
+      return 'browser-host capacity reached; retry with backoff'
     }
     this.activeLongPolls += 1
     if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
+    } else if (longPoll === 'browser-host') {
+      this.activeBrowserHostLongPolls += 1
+      if (pairedDeviceId !== undefined) {
+        this.activeBrowserHostLongPollsByDevice.set(
+          pairedDeviceId,
+          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) + 1
+        )
+      }
     }
     return null
   }
 
-  private releaseLongPoll(longPoll: LongPollClass | null): void {
+  private releaseLongPoll(longPoll: RuntimeLongPollClass | null, pairedDeviceId?: string): void {
     if (!longPoll) {
       return
     }
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
     if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
+    } else if (longPoll === 'browser-host') {
+      this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
+      if (pairedDeviceId !== undefined) {
+        const remaining = (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 1) - 1
+        if (remaining > 0) {
+          this.activeBrowserHostLongPollsByDevice.set(pairedDeviceId, remaining)
+        } else {
+          this.activeBrowserHostLongPollsByDevice.delete(pairedDeviceId)
+        }
+      }
     }
   }
 
@@ -1671,8 +1706,8 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
-    const longPoll = longPollClassOf(request)
-    const rejection = this.admitLongPoll(longPoll)
+    const longPoll = classifyRuntimeLongPoll(request)
+    const rejection = this.admitLongPoll(longPoll, device.deviceId)
     if (rejection) {
       reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
       return
@@ -1725,11 +1760,13 @@ export class OrcaRuntimeRpcServer {
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
-          this.registerBinaryStreamHandler(connectionId, streamId, handler)
+          this.registerBinaryStreamHandler(connectionId, streamId, handler),
+        registerBinaryMessageHandler: (handler) =>
+          this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
       abortRegistration?.dispose()
-      this.releaseLongPoll(longPoll)
+      this.releaseLongPoll(longPoll, device.deviceId)
     }
   }
 

@@ -232,7 +232,10 @@
         "workspace": {
           "cleanup": {
             "9d6e531da6": "工作区不再存在。",
-            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。"
+            "changedSinceConfirmation": "工作区在确认后发生了更改。请刷新并在删除前重新检查。",
+            "gitStatusUnavailable": "Orca 无法检查此工作区的 Git 状态。请重试，或从对应主机的侧边栏或项目列表中将其删除。",
+            "gitStatusUnavailableOlderPeer": "Orca 无法将此 Git 状态检查失败与主机匹配。请更新较旧的已连接端，或从对应主机的侧边栏或项目列表中删除该工作区。",
+            "forceNeedsApproval": "请先检查并确认此工作区，然后再强制删除。"
           }
         },
         "worktrees": {
@@ -2752,6 +2755,14 @@
             "5c8ce20be6": "如果这种情况持续存在，请",
             "cc6d997c65": "从此处重新启动终端守护进程以清除失效的守护进程状态。"
           },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "已达到 Git Bash 控制台上限",
+            "capacityDetail": "Git Bash 已达到 128 个控制台的上限。关闭未使用的 Git Bash 终端，然后重新启动此终端。",
+            "failedTitle": "终端已退出",
+            "failedDetail": "Shell 进程以退出代码 {{code}} 结束。输出已保留。",
+            "close": "关闭",
+            "restart": "重新启动"
+          },
           "TerminalPane": {
             "ac112e9036": "删除标题",
             "f984ab2a30": "删除窗格标题：{{value0}}",
@@ -3228,6 +3239,14 @@
             "connecting": "正在连接…",
             "workspaceConflict": "工作区冲突",
             "workspaceSyncError": "工作区同步错误"
+          },
+          "CaffeinateStatusSegment": {
+            "active": "生效中",
+            "inactive": "未生效",
+            "ariaLabel": "{{title}}，{{status}}",
+            "onDescription": "始终防止此电脑进入睡眠状态",
+            "autoDescription": "智能体工作时防止电脑进入睡眠状态",
+            "offDescription": "允许系统正常进入睡眠状态"
           },
           "StatusBar": {
             "9659e38343": "端口",
@@ -3964,6 +3983,45 @@
         "SkillUpdateRow": {
           "oneLocation": "1 location",
           "manyLocations": "{{value0}} locations"
+        },
+        "count": {
+          "deleteOne": "删除 {{count}} 个技能",
+          "deleteOther": "删除 {{count}} 个技能",
+          "deletedOne": "已删除 {{count}} 个技能",
+          "deletedOther": "已删除 {{count}} 个技能",
+          "deleteFolderOne": "{{count}} 个文件夹",
+          "deleteFolderOther": "{{count}} 个文件夹",
+          "deleteLinkOne": "{{count}} 个链接",
+          "deleteLinkOther": "{{count}} 个链接"
+        },
+        "host": {
+          "local": "此机器",
+          "remote": "已连接的运行时"
+        },
+        "SkillDelete": {
+          "dismissResults": "关闭",
+          "reasonBundled": "Orca 内置技能 — 删除后会恢复",
+          "reasonPlugin": "由插件安装 — 请改为移除插件",
+          "reasonUnowned": "此技能位于 Orca 技能文件夹之外 — 请在其存储位置删除",
+          "reasonMissing": "此技能已不在磁盘上",
+          "reasonStale": "此技能在列表加载后发生了变化 — 请刷新后重试",
+          "placementSummaryParts": "将在 {{roots}} 中删除 {{parts}}。",
+          "placementJoin": " 和 ",
+          "retainedSource": "技能本体仍保留在 {{path}}。",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "已跳过",
+          "statusBusy": "忙碌 — 另一项技能操作正在进行",
+          "statusPartial": "部分移除 — 某些文件仍以隐藏名称保留在磁盘上",
+          "statusFailed": "失败 — 未进行任何更改",
+          "statusDeleted": "已删除",
+          "confirmHost": "位于 {{host}}。",
+          "confirmPermanent": "此操作无法撤销。",
+          "failed": "无法删除技能",
+          "hostUnresolved": "仍在查找存储这些技能的计算机。",
+          "hostUpdateRequired": "请更新所选机器上的 Orca 以删除技能。",
+          "nothingOne": "无法从这里删除该技能。",
+          "nothingOther": "所选的 {{count}} 个技能均无法从这里删除。"
         }
       },
       "sidebar": {
@@ -5070,6 +5128,12 @@
           "9f2d4c8b17": "永久隐藏 {{value0}} 的外部工作树",
           "5e1b8d3f62": "永久隐藏外部工作树",
           "c3e8a1f4b2": "不再显示"
+        },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} 已断开连接",
+          "sshHostProject": "SSH 主机 {{hostName}} 上的项目",
+          "localHostProject": "此主机上的项目",
+          "runtimeHostProject": "{{hostName}} 上的项目"
         },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "无法保持外部工作树隐藏。请重试。",
@@ -9164,7 +9228,13 @@
         "agent-awake-copy": {
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
-          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。"
+          "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",
+          "modeTitle": "防止电脑休眠"
+        },
+        "AgentAwakeSetting": {
+          "on": "开启",
+          "auto": "智能体",
+          "off": "关闭"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "智能体状态钩子",
@@ -10577,6 +10647,8 @@
             "7a09d7f9d2": "根据",
             "383cf92c73": "树",
             "d7ae61269b": "已提交的更改",
+            "branchFilesChangedVsBaseOne": "与 {{ref}} 相比更改了 1 个文件",
+            "branchFilesChangedVsBaseOther": "与 {{ref}} 相比更改了 {{count}} 个文件",
             "48a003c1b1": "已暂存的更改",
             "d4ef4bafc5": "更改",
             "522f44dce5": "未跟踪文件",
@@ -10651,10 +10723,10 @@
             "b3c8f1a902": "按文件名筛选",
             "d4f8c2a901": "清除并关闭筛选器",
             "e8a1c4b203": "vs",
-            "f9b2441bb6": "领先 {{value0}} 1 个提交",
-            "b715ef615b": "领先 {{value1}} {{value0}} 个提交",
-            "c1a8f3e204": "落后 {{value0}} 1 个提交",
-            "d2b9g4f315": "落后 {{value1}} {{value0}} 个提交",
+            "compareBaseCommitsAheadOne": "领先 {{ref}} 1 个提交",
+            "compareBaseCommitsAheadOther": "领先 {{ref}} {{count}} 个提交",
+            "compareBaseCommitsBehindOne": "落后 {{ref}} 1 个提交",
+            "compareBaseCommitsBehindOther": "落后 {{ref}} {{count}} 个提交",
             "4b4a7de138": "在浏览器中打开审查页面",
             "createPrIntentCommitBlockedSummary": "提交被阻止：{{value0}} 修复问题后重试创建 PR。",
             "pushRecovery": {
@@ -13291,7 +13363,12 @@
           "5d2c3e7ae3": "未检测到语音。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "停止听写"
+          "335e1bc6cb": "停止听写",
+          "7f3660a7ba": "正在启动麦克风…",
+          "f082d0cb9d": "正在处理…",
+          "3de5a129e7": "正在聆听",
+          "4977162383": "音量过大",
+          "25f2b7a6a5": "正在说话"
         }
       },
       "dashboard": {
@@ -13605,7 +13682,17 @@
           "3e3b2c369f": "cron",
           "e81a02d61b": "保存前输入有效的五字段 cron。",
           "968e66d686": "输入一个五字段 cron。",
-          "cadb7b0bc9": "无效的"
+          "cadb7b0bc9": "无效的",
+          "f6ca30da23": "有效的自定义 cron",
+          "a226dbdd40": "分钟",
+          "ec9c1e35df": "小时",
+          "2d82246d23": "日",
+          "0e1de0358b": "月",
+          "77e96bded6": "星期"
+        },
+        "AutomationPromptDisclosure": {
+          "showLess": "收起",
+          "showMore": "显示更多"
         },
         "AutomationDetail": {
           "007c8ad874": "提示词",
@@ -13907,6 +13994,16 @@
               "category": "维护",
               "name": "每小时维护检查",
               "prompt": "检查是否有卡住的工作、过时的生成文件、失败的验证以及任何需要人工注意的内容。仅报告需处理的问题。"
+            }
+          },
+          "schedule": {
+            "label": {
+              "a95afb7483": "每小时 :{{minute}}",
+              "280ccd2701": "每天 {{time}}",
+              "3f1422adc1": "工作日 {{time}}",
+              "cc71e252ba": "每{{day}} {{time}}",
+              "ba20c92073": "自定义日程",
+              "086a5a9fe2": "无效日程"
             }
           }
         },
@@ -14502,12 +14599,75 @@
     },
     "workspace": {
       "cleanup": {
+        "browse": {
+          "selectionWithheldOne": "当前筛选条件隐藏了 1 个已选工作区，已取消选择。",
+          "selectionWithheld": "当前筛选条件隐藏了 {{value0}} 个已选工作区，已取消选择。",
+          "selectAllCountOne": "选择 1 个通过安全检查的工作区",
+          "selectAllCount": "选择全部 {{value0}} 个通过安全检查的工作区"
+        },
+        "scan": {
+          "readyOne": "找到 1 个工作区。",
+          "readyMany": "找到 {{value0}} 个工作区。"
+        },
         "presentationFixtures": {
           "reviewAlphaCleanup": "评审 Alpha 清理"
         },
         "presentation": {
           "gitlabMergeRequestNumber": "MR #{{value0}}",
           "githubPullRequestNumber": "PR #{{value0}}"
+        },
+        "browse": {
+          "gitStatusCheckFailed": "Git 状态检查失败",
+          "gitStatusUnverified": "无法验证 Git 状态",
+          "deleteAnyway": "仍然删除",
+          "forceDeleteProjectionOne": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "forceDeleteProjectionMany": "当前有 {{count}} 个工作区显示风险，可能需要强制删除",
+          "appliedFilters": "已应用的筛选",
+          "removeFilter": "移除筛选 {{value0}}",
+          "chip": {
+            "idleDays": "闲置 {{value0}} 天以上",
+            "neverVisited": "从未访问",
+            "minSize": "至少 {{value0}} MB",
+            "maxSize": "最多 {{value0}} MB",
+            "excludesUnsized": "仅已测量",
+            "excludesStatusless": "有状态",
+            "list": "{{value0}}：{{value1}}",
+            "triState": "{{value0}}：{{value1}}",
+            "only": "仅",
+            "exclude": "排除",
+            "minAhead": "领先 {{value0}} 个以上",
+            "minBehind": "落后 {{value0}} 个以上",
+            "branchQuery": "分支：{{value0}}",
+            "pathPrefix": "路径：{{value0}}",
+            "presence": "{{value0}}：{{value1}}",
+            "has": "有",
+            "none": "无",
+            "completelyEmpty": "没有可丢失的内容",
+            "selectableOnly": "仅可删除",
+            "kind": {
+              "status": "状态",
+              "agent": "代理",
+              "git": "Git",
+              "review": "审查",
+              "reviewState": "审查状态",
+              "reviewProvider": "提供方",
+              "ticket": "工单",
+              "ticketSource": "工单来源",
+              "context": "上下文",
+              "host": "主机",
+              "repo": "仓库",
+              "blocker": "阻塞项",
+              "tier": "安全",
+              "dismissed": "已忽略",
+              "archived": "已归档",
+              "pinned": "已固定",
+              "unread": "未读",
+              "comment": "评论",
+              "prunable": "可修剪",
+              "locked": "已锁定",
+              "retainedAgents": "已完成的代理"
+            }
+          }
         }
       }
     },

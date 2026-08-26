@@ -1,11 +1,11 @@
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
 import { normalizeSshPtyConsumerRecovery } from './ssh-normalization'
 
 export type SshPtyConsumerRecoveryOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'isSealed' | 'removeRetainedBlob'>
   flushDurableStateOrThrowAsync: () => Promise<void>
 }

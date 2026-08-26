@@ -1,6 +1,14 @@
 import { vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
+import type { HarnessStoreState } from './ipc-events-harness-store-state'
+import type { ClientHostedBrowserRowsEvent } from '../../../shared/client-hosted-browser-rows'
+
+// Re-exported so a suite needs one import for the harness and the store surface it seeds.
+export {
+  createHarnessStoreState,
+  type HarnessStoreState,
+  type HarnessTab
+} from './ipc-events-harness-store-state'
 
 export type CreateTerminalRequest = {
   requestId?: string
@@ -26,89 +34,6 @@ export type RequestTerminalCreateRequest = {
   surfaceOwner?: boolean
 }
 
-export type HarnessTab = { id: string; ptyId?: string | null; title?: string }
-
-export type HarnessStoreState = {
-  tabsByWorktree: Record<string, HarnessTab[]>
-  ptyIdsByTabId: Record<string, string[]>
-  terminalLayoutsByTabId: Record<
-    string,
-    { root?: TerminalPaneLayoutNode; ptyIdsByLeafId?: Record<string, string> }
-  >
-  [key: string]: unknown
-}
-
-/** Store surface useIpcEvents touches at mount plus the terminal-reveal path. */
-export function createHarnessStoreState(
-  overrides: Partial<HarnessStoreState> & Pick<HarnessStoreState, 'tabsByWorktree'>
-): HarnessStoreState {
-  const state: HarnessStoreState = {
-    createTab: vi.fn(() => ({ id: 'tab-minted' })),
-    setActiveView: vi.fn(),
-    setActiveWorktree: vi.fn(),
-    markWorktreeVisited: vi.fn(),
-    recordWorktreeVisit: vi.fn(),
-    isNavigatingHistory: false,
-    setActiveTabType: vi.fn(),
-    setActiveTab: vi.fn(),
-    revealWorktreeInSidebar: vi.fn(),
-    setTabCustomTitle: vi.fn(),
-    queueTabStartupCommand: vi.fn(),
-    registerAgentLaunchConfig: vi.fn(),
-    clearAgentLaunchConfig: vi.fn(),
-    updateTabPtyId: vi.fn(),
-    setTabLayout: vi.fn(),
-    setTabBarOrder: vi.fn(),
-    clearTabPtyId: vi.fn(),
-    setUpdateStatus: vi.fn(),
-    fetchRepos: vi.fn(),
-    fetchWorktrees: vi.fn(),
-    closeModal: vi.fn(),
-    openModal: vi.fn(),
-    setActiveRepo: vi.fn(),
-    setIsFullScreen: vi.fn(),
-    updateBrowserPageState: vi.fn(),
-    setEditorFontZoomLevel: vi.fn(),
-    setRateLimitsFromPush: vi.fn(),
-    setSshConnectionState: vi.fn(),
-    setSshTargetLabels: vi.fn(),
-    setPortForwards: vi.fn(),
-    clearPortForwards: vi.fn(),
-    setDetectedPorts: vi.fn(),
-    enqueueSshCredentialRequest: vi.fn(),
-    removeSshCredentialRequest: vi.fn(),
-    ptyIdsByTabId: {},
-    terminalLayoutsByTabId: {},
-    folderWorkspaces: [],
-    projectGroups: [],
-    repos: [{ id: 'repo-1', connectionId: null, executionHostId: 'local' }],
-    worktreesByRepo: { 'repo-1': [{ id: 'wt-1', repoId: 'repo-1' }] },
-    openFiles: [],
-    browserTabsByWorktree: {},
-    tabBarOrderByWorktree: {},
-    activeModal: null,
-    activeWorktreeId: 'wt-1',
-    activeView: 'terminal',
-    activeTabType: 'terminal',
-    editorFontZoomLevel: 0,
-    settings: {
-      terminalFontSize: 13,
-      experimentalNativeChat: false,
-      openAgentTabsInChatByDefault: false,
-      activeRuntimeEnvironmentId: undefined
-    },
-    ...overrides
-  }
-  if (overrides.setTabLayout === undefined) {
-    state.setTabLayout = vi.fn(
-      (tabId: string, layout: HarnessStoreState['terminalLayoutsByTabId'][string]) => {
-        state.terminalLayoutsByTabId[tabId] = layout
-      }
-    )
-  }
-  return state
-}
-
 /** Subscription no-ops for every listener useIpcEvents attaches beyond the ones under test. */
 function createApiNamespaceStub(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return new Proxy(overrides, {
@@ -126,6 +51,11 @@ export type IpcEventsHarness = {
   jumpToWorktreeIndex: (index: number) => void
   jumpToTabIndex: (index: number) => void
   navigationUpdate: (event: { browserPageId: string; url: string; title: string }) => void
+  certificateFailureChanged: (event: { browserPageId: string; failure: unknown }) => void
+  /** Fire a host-local push of the pages a paired client renders for a worktree. */
+  clientHostedBrowserRowsChanged: (event: ClientHostedBrowserRowsEvent) => void
+  /** Resolves the hydration round trip the hook starts, so buffered pushes drain. */
+  settleClientHostedBrowserRowsSnapshot: () => Promise<void>
   /** Standard (non-palette) target of a workspace digit chord. */
   activateAndRevealWorkspace: ReturnType<typeof vi.fn>
 }
@@ -134,6 +64,10 @@ export type IpcEventsHarnessOptions = {
   /** Sidebar order the workspace digit chord indexes into. */
   visibleWorktreeIds?: string[]
   visibleWorktreeTargets?: { id: string; executionHostId?: 'local' | `ssh:${string}` }[]
+  /** Snapshot the client-hosted row hydration round trip resolves with. */
+  clientHostedBrowserRowsSnapshot?: ClientHostedBrowserRowsEvent[]
+  /** Rejects the hydration round trip instead of resolving it. */
+  clientHostedBrowserRowsSnapshotError?: Error
 }
 
 /**
@@ -151,6 +85,14 @@ export async function loadIpcEventsHarness(
   let navigationUpdateListener:
     | ((event: { browserPageId: string; url: string; title: string }) => void)
     | null = null
+  let certificateFailureListener:
+    | ((event: { browserPageId: string; failure: unknown }) => void)
+    | null = null
+  let clientHostedBrowserRowsListener: ((event: ClientHostedBrowserRowsEvent) => void) | null = null
+  let resolveClientHostedBrowserRowsSnapshot: (() => void) | null = null
+  const clientHostedBrowserRowsSnapshotGate = new Promise<void>((resolve) => {
+    resolveClientHostedBrowserRowsSnapshot = resolve
+  })
   const indexJumpListeners = new Map<string, (index: number) => void>()
 
   vi.resetModules()
@@ -232,13 +174,26 @@ export async function loadIpcEventsHarness(
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: (
+            listener: (event: ClientHostedBrowserRowsEvent) => void
+          ) => {
+            clientHostedBrowserRowsListener = listener
+            return () => {}
+          },
+          getClientHostedBrowserRows: async () => {
+            await clientHostedBrowserRowsSnapshotGate
+            if (options.clientHostedBrowserRowsSnapshotError) {
+              throw options.clientHostedBrowserRowsSnapshotError
+            }
+            return options.clientHostedBrowserRowsSnapshot ?? []
+          }
         },
         ssh: {
           listTargets: () => Promise.resolve([]),
           listPortForwards: () => Promise.resolve([]),
           listDetectedPorts: () => Promise.resolve([]),
-          listRemovedTargetLabels: () => Promise.resolve([]),
+          listRemovedTargetLabels: () => Promise.resolve({}),
           getState: () => Promise.resolve(null),
           onStateChanged: () => () => {},
           onCredentialRequest: () => () => {},
@@ -256,6 +211,12 @@ export async function loadIpcEventsHarness(
             listener: (event: { browserPageId: string; url: string; title: string }) => void
           ) => {
             navigationUpdateListener = listener
+            return () => {}
+          },
+          onCertificateFailureChanged: (
+            listener: (event: { browserPageId: string; failure: unknown }) => void
+          ) => {
+            certificateFailureListener = listener
             return () => {}
           }
         }),
@@ -291,6 +252,24 @@ export async function loadIpcEventsHarness(
         throw new Error('Expected the browser navigation listener to be registered')
       }
       navigationUpdateListener(event)
+    },
+    certificateFailureChanged: (event) => {
+      if (typeof certificateFailureListener !== 'function') {
+        throw new Error('Expected the browser certificate-failure listener to be registered')
+      }
+      certificateFailureListener(event)
+    },
+    clientHostedBrowserRowsChanged: (event) => {
+      if (typeof clientHostedBrowserRowsListener !== 'function') {
+        throw new Error('Expected the client-hosted browser rows listener to be registered')
+      }
+      clientHostedBrowserRowsListener(event)
+    },
+    settleClientHostedBrowserRowsSnapshot: async () => {
+      resolveClientHostedBrowserRowsSnapshot?.()
+      await clientHostedBrowserRowsSnapshotGate
+      await Promise.resolve()
+      await Promise.resolve()
     },
     activateAndRevealWorkspace
   }

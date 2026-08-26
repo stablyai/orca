@@ -1,5 +1,6 @@
 import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
-import { issueCacheKey as getIssueCacheKey } from '@/store/slices/github'
+import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
 import { buildPaletteDocument, type PaletteDocument } from './palette-match/palette-document'
 import type { PaletteComposedEvidence } from './palette-match/evidence-composer'
 import {
@@ -64,7 +65,12 @@ function resolveReviewSource(
   }
 
   const branch = resolveWorktreeBranchLabel(worktree)
-  const cached = repo && sources.prCache ? sources.prCache[`${repo.path}::${branch}`]?.data : null
+  // Why: legacy cache keys have no host identity, so only the local owner can
+  // consume them without borrowing another host's review metadata.
+  const cached =
+    repo && sources.prCache && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      ? sources.prCache[`${repo.path}::${branch}`]?.data
+      : null
   if (cached) {
     return { provider: 'github', number: cached.number, title: cached.title }
   }

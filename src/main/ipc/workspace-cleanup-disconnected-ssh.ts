@@ -74,8 +74,6 @@ function createDisconnectedSshCandidate(
     displayName: meta.displayName || basename(path),
     branch: basename(path),
     path,
-    tier: 'protected',
-    selectedByDefault: false,
     reasons,
     blockers: ['ssh-disconnected'],
     lastActivityAt: meta.lastActivityAt,

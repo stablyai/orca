@@ -16,6 +16,17 @@ afterAll(() => {
   }
 })
 
+// Retry once when Electron startup times out before `ready`; keep later failures fatal.
+const FIXTURE_LAUNCH_ATTEMPTS = 2
+
+function neverReachedElectronReady(fixtureResult: string): boolean {
+  try {
+    return (JSON.parse(fixtureResult) as { step?: string }).step === 'timed out after starting'
+  } catch {
+    return false
+  }
+}
+
 type FixtureResult = {
   before: Record<string, unknown>
   after: Record<string, unknown>
@@ -182,21 +193,27 @@ async function runFixture(): Promise<FixtureResult> {
   })
   writeFileSync(fixturePath, buildFixtureMain(importPath, resultPath, sourceCookiesPath))
   const { ELECTRON_RUN_AS_NODE: _electronRunAsNode, ...env } = process.env
-  const electronArgs = [fixturePath, `--user-data-dir=${join(root, 'profile')}`]
   const executable = process.platform === 'linux' ? 'xvfb-run' : electronBinary
-  const args =
-    process.platform === 'linux'
-      ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
-      : electronArgs
-  const run = spawnSync(executable, args, {
-    encoding: 'utf8',
-    env,
-    timeout: 60_000
-  })
-  const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
-  expect(run.error).toBeUndefined()
-  expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
-  return JSON.parse(fixtureResult) as FixtureResult
+  for (let attempt = 1; ; attempt += 1) {
+    rmSync(resultPath, { force: true })
+    // Why a fresh profile per attempt: a launch that never reached `ready` may have left the
+    // Chromium profile mid-initialization, and reusing it would bias the retry.
+    const electronArgs = [fixturePath, `--user-data-dir=${join(root, `profile-${attempt}`)}`]
+    const run = spawnSync(
+      executable,
+      process.platform === 'linux'
+        ? ['--auto-servernum', electronBinary, ...electronArgs, '--no-sandbox']
+        : electronArgs,
+      { encoding: 'utf8', env, timeout: 60_000 }
+    )
+    const fixtureResult = existsSync(resultPath) ? readFileSync(resultPath, 'utf8') : 'no result'
+    if (attempt < FIXTURE_LAUNCH_ATTEMPTS && neverReachedElectronReady(fixtureResult)) {
+      continue
+    }
+    expect(run.error).toBeUndefined()
+    expect(run.status, `${fixtureResult}\n${run.stdout}\n${run.stderr}`).toBe(0)
+    return JSON.parse(fixtureResult) as FixtureResult
+  }
 }
 
 describe('native Chromium excluded partition cookie under Electron', () => {
@@ -220,5 +237,5 @@ describe('native Chromium excluded partition cookie under Electron', () => {
       'partitioned-google',
       'stale'
     ])
-  }, 90_000)
+  }, 150_000)
 })
