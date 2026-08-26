@@ -279,6 +279,45 @@ describe('orchestration skill guidance', () => {
     )
   })
 
+  it('binds worker placement to the Run instead of deciding it per task', () => {
+    const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
+
+    expect(workerLoop).toContain('Decide placement once per Run, not once per task.')
+    expect(workerLoop).toContain('`--worktree` defaults to `current`')
+    expect(workerLoop).toContain(
+      'Create a new worktree only when the user explicitly requests one or a concrete checkout ' +
+        'or filesystem conflict makes sharing unsafe or impossible'
+    )
+    expect(workerLoop).toContain(
+      'independent tasks, parallel execution, convenience, or a preference for separate ' +
+        'checkouts are not isolation requirements'
+    )
+    expect(workerLoop).toContain(
+      'Every worker in one Run uses the same placement: choose `current`, `new-child`, or ' +
+        '`new-top-level` when you create the Run'
+    )
+    expect(workerLoop).toContain(
+      'A Run whose workers land under different lineages is a placement bug'
+    )
+    expect(workerLoop).toContain('pick its lineage for the whole Run')
+    expect(workerLoop).toContain('worktree, and `new-top-level` when it is not')
+    expect(workerLoop).toContain('Do not re-derive this per task.')
+    // The documented default only holds if the examples stop teaching the opposite.
+    expect(workerLoop).toContain(
+      'orca orchestration worker-start --task <task_a> --agent codex --json'
+    )
+    expect(workerLoop).not.toContain('--worktree current')
+    // The Run-level choice is only expressible while both placements stay documented.
+    expect(workerLoop).toContain(
+      'orca orchestration worker-start --task <task_id> --worktree new-child --name <name> ' +
+        '--agent codex --setup run --json'
+    )
+    expect(workerLoop).toContain(
+      'orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> ' +
+        '--agent codex --setup run --json'
+    )
+  })
+
   it('documents per-invocation model and effort for supervised workers', () => {
     const workerLoop = getSection(readSkill(), 'Preferred Supervised Worker Loop')
 

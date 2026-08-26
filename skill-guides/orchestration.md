@@ -180,31 +180,34 @@ Dispatch rules:
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
 
+Decide placement once per Run, not once per task. `--worktree` defaults to `current`, so omit it unless a new worktree is actually required. Create a new worktree only when the user explicitly requests one or a concrete checkout or filesystem conflict makes sharing unsafe or impossible; independent tasks, parallel execution, convenience, or a preference for separate checkouts are not isolation requirements. Every worker in one Run uses the same placement: choose `current`, `new-child`, or `new-top-level` when you create the Run and keep it for every later `worker-start` in that Run. A Run whose workers land under different lineages is a placement bug, not a per-task judgment call.
+
 Create the Run and every independent Task first, then start all independent workers before waiting:
 
 ```bash
 orca orchestration run-create --objective "<objective>" --json
 orca orchestration task-create --spec "<worker A task>" --json
 orca orchestration task-create --spec "<worker B task>" --json
-orca orchestration worker-start --task <task_a> --worktree current --agent codex --json
-orca orchestration worker-start --task <task_b> --worktree current --agent claude --json
+orca orchestration worker-start --task <task_a> --agent codex --json
+orca orchestration worker-start --task <task_b> --agent claude --json
 ```
 
-`current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
+`current` (the default) and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`.
 
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
+orca orchestration worker-start --task <task_id> --agent claude --model opus --effort high --json
 ```
 
 `--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
 
-For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
+When a new worktree is warranted, pick its lineage for the whole Run: `new-child` when the Run's work is stacked under or dependent on the coordinator's worktree, and `new-top-level` when it is not. Do not re-derive this per task. Tasks decomposed from one objective read as dependent and as independent at the same time, so a per-task reading splits one Run across both lineages. For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
 
 ```bash
+# Stacked under the coordinator's worktree — apply to every worker in the Run, or to none:
 orca orchestration worker-start --task <task_id> --worktree new-child --name <name> --agent codex --setup run --json
-# Independent/top-level:
+# Not stacked:
 orca orchestration worker-start --task <task_id> --worktree new-top-level --name <name> --agent codex --setup run --json
 ```
 
