@@ -18,6 +18,7 @@ import { reportCliError } from './format'
 import { printHelp } from './help'
 import type { RuntimeClient } from './runtime-client'
 import { COMMAND_SPECS } from './specs'
+import { resolveCliAppVersion } from './app-version'
 
 export { COMMAND_SPECS } from './specs'
 export { buildCurrentWorktreeSelector, normalizeWorktreeSelector } from './selectors'
@@ -58,6 +59,10 @@ export async function main(
   argv = process.argv.slice(2),
   cwd = resolveInvocationCwd()
 ): Promise<void> {
+  if (argv.length === 1 && ['--version', '-v', '-V'].includes(argv[0])) {
+    process.stdout.write(`${resolveCliAppVersion()}\n`)
+    return
+  }
   if (argv[0] === 'agent-teams-tmux') {
     await runAgentTeamsTmuxShim(argv.slice(1))
     return

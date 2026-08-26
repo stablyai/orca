@@ -1,4 +1,4 @@
-import { cp, mkdtemp, rm } from 'node:fs/promises'
+import { cp, mkdtemp, readFile, rm } from 'node:fs/promises'
 import { execFile } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { basename, join, resolve } from 'node:path'
@@ -31,6 +31,13 @@ function getPackagedCliPath(appDir) {
   return join(appDir, 'resources', 'bin', 'orca-ide')
 }
 
+function getPackagedResourcesPath(appDir) {
+  if (process.platform === 'darwin' || appDir.endsWith('.app')) {
+    return join(appDir, 'Contents', 'Resources')
+  }
+  return join(appDir, 'resources')
+}
+
 const appDir = resolve(readAppDirArg(process.argv.slice(2)))
 const tempRoot = await mkdtemp(join(tmpdir(), 'orca-packaged-cli-smoke-'))
 const copiedAppDir = join(tempRoot, basename(appDir))
@@ -39,6 +46,13 @@ let smokeFailure = null
 try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
+  const cliMetadataPath = join(
+    getPackagedResourcesPath(copiedAppDir),
+    'app.asar.unpacked',
+    'out',
+    'package.json'
+  )
+  const packageVersion = JSON.parse(await readFile(cliMetadataPath, 'utf8')).version
   const env = { ...process.env, NODE_PATH: '' }
   delete env.ORCA_CLI_CWD
   const run = (args) =>
@@ -50,6 +64,15 @@ try {
     })
 
   await run(['--help'])
+  assert.equal((await run(['--version'])).stdout, `${packageVersion}\n`)
+  if (process.platform === 'linux') {
+    const directBinary = join(copiedAppDir, 'orca-ide')
+    assert.equal(
+      (await execFileAsync(directBinary, ['--no-sandbox', '--version'], { env, timeout: 30_000 }))
+        .stdout,
+      `${packageVersion}\n`
+    )
+  }
   const list = JSON.parse((await run(['skills', 'list', '--json'])).stdout)
   assert(list.topics.some((topic) => topic.name === 'orca-cli'))
   assert.match((await run(['skills', 'get', 'orca-cli'])).stdout, /name: orca-cli/)

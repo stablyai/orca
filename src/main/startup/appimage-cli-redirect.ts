@@ -1,6 +1,10 @@
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
+import {
+  PACKAGED_LINUX_CLI_COMMAND_NAMES,
+  PACKAGED_LINUX_CLI_SHIM_NAMES
+} from '../../shared/packaged-linux-cli-command-names'
 
 type RedirectResult =
   | {
@@ -23,71 +27,10 @@ type RedirectOptions = {
 }
 
 const HELP_FLAGS = new Set(['--help', '-h', 'help'])
+const VERSION_FLAGS = new Set(['--version', '-v', '-V'])
 const APPIMAGE_DESKTOP_FLAGS = new Set(['--no-sandbox'])
 const CLI_FLAGS_WITH_VALUES = new Set(['--environment', '--pairing-code'])
-// Why: the main tsconfig cannot import the CLI project, but AppImage direct
-// launches need a conservative allow-list before bypassing the GUI startup.
-const APPIMAGE_CLI_COMMAND_NAMES = [
-  'agent',
-  'automations',
-  'back',
-  'capture',
-  'check',
-  'clear',
-  'click',
-  'clipboard',
-  'computer',
-  'console',
-  'cookie',
-  'dblclick',
-  'dialog',
-  'download',
-  'drag',
-  'environment',
-  'eval',
-  'exec',
-  'file',
-  'fill',
-  'find',
-  'focus',
-  'forward',
-  'full-screenshot',
-  'geolocation',
-  'get',
-  'goto',
-  'highlight',
-  'hover',
-  'inserttext',
-  'intercept',
-  'is',
-  'keypress',
-  'mouse',
-  'network',
-  'open',
-  'orchestration',
-  'pdf',
-  'reload',
-  'repo',
-  'screenshot',
-  'scroll',
-  'scrollintoview',
-  'select',
-  'select-all',
-  'serve',
-  'set',
-  'snapshot',
-  'status',
-  'storage',
-  'tab',
-  'terminal',
-  'type',
-  'uncheck',
-  'upload',
-  'viewport',
-  'wait',
-  'worktree'
-]
-
+const ELECTRON_DESKTOP_VALUE_FLAGS = new Set(['--user-data-dir'])
 export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): RedirectResult {
   const argv = options.argv ?? process.argv
   const env = options.env ?? process.env
@@ -99,7 +42,10 @@ export function maybeRedirectAppImageCliLaunch(options: RedirectOptions = {}): R
   const cliArgs = getAppImageCliArgs(argv, env, {
     platform,
     isPackaged,
-    commandNames: options.commandNames ?? APPIMAGE_CLI_COMMAND_NAMES
+    commandNames: options.commandNames ?? [
+      ...PACKAGED_LINUX_CLI_COMMAND_NAMES,
+      ...PACKAGED_LINUX_CLI_SHIM_NAMES
+    ]
   })
 
   if (!cliArgs) {
@@ -142,21 +88,27 @@ export function getAppImageCliArgs(
   if (options.platform !== 'linux' || !options.isPackaged) {
     return null
   }
-  if (!env.APPIMAGE && !env.APPDIR) {
-    return null
-  }
-
   const args = argv.slice(1)
   if (args.length === 0) {
     return null
   }
+  if (args.some((arg) => ELECTRON_DESKTOP_VALUE_FLAGS.has(flagName(arg)))) {
+    return null
+  }
   const cliArgs = args.filter((arg) => !APPIMAGE_DESKTOP_FLAGS.has(arg))
+  if (cliArgs.length === 1 && VERSION_FLAGS.has(cliArgs[0])) {
+    return cliArgs
+  }
+  const firstPositional = findFirstCommandCandidate(cliArgs)
+  if (firstPositional === 'serve' && !env.APPIMAGE && !env.APPDIR) {
+    // Why: env-less packaged serve already has an in-process pre-GUI path; a blocking child would not receive PID-targeted termination.
+    return null
+  }
   if (cliArgs.some((arg) => HELP_FLAGS.has(arg))) {
     return cliArgs
   }
 
   const commandNames = new Set(options.commandNames)
-  const firstPositional = findFirstCommandCandidate(cliArgs)
   return firstPositional && commandNames.has(firstPositional) ? cliArgs : null
 }
 
@@ -166,12 +118,16 @@ function findFirstCommandCandidate(args: string[]): string | null {
     if (!arg.startsWith('-')) {
       return arg
     }
-    const flagName = arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
-    if (CLI_FLAGS_WITH_VALUES.has(flagName) && !arg.includes('=')) {
+    const name = flagName(arg)
+    if (CLI_FLAGS_WITH_VALUES.has(name) && !arg.includes('=')) {
       index += 1
     }
   }
   return null
+}
+
+function flagName(arg: string): string {
+  return arg.includes('=') ? arg.slice(0, arg.indexOf('=')) : arg
 }
 
 function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {

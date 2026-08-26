@@ -23,11 +23,19 @@ function makeProjectWithCli(
   mkdirSync(path.dirname(cliPath), { recursive: true })
   writeFileSync(
     path.join(projectDir, 'package.json'),
-    JSON.stringify({ bin: { orca: './out/cli/index.js' }, type: rootPackageType }),
+    JSON.stringify({
+      bin: { orca: './out/cli/index.js' },
+      type: rootPackageType,
+      version: '1.2.3'
+    }),
     'utf8'
   )
   if (writeOutPackageJson) {
-    writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'commonjs' }), 'utf8')
+    writeFileSync(
+      outPackageJsonPath,
+      JSON.stringify({ type: 'commonjs', version: '1.2.3' }),
+      'utf8'
+    )
   }
   writeFileSync(cliPath, content, 'utf8')
   if (process.platform !== 'win32') {
@@ -73,7 +81,8 @@ describe('verifyPackageCliBin', () => {
     expect(JSON.parse(readFileSync(outPackageJsonPath, 'utf8'))).toEqual({
       name: 'orca-compiled-output',
       type: 'commonjs',
-      private: true
+      private: true,
+      version: '1.2.3'
     })
   })
 
@@ -84,6 +93,19 @@ describe('verifyPackageCliBin', () => {
     writeFileSync(outPackageJsonPath, JSON.stringify({ type: 'module' }), 'utf8')
 
     expect(() => verifyPackageCliBin({ projectDir })).toThrow('type=commonjs')
+  })
+
+  it('rejects a CLI package boundary with a stale application version', () => {
+    const { projectDir, outPackageJsonPath } = makeProjectWithCli(
+      '#!/usr/bin/env node\nconsole.log("orca")\n'
+    )
+    writeFileSync(
+      outPackageJsonPath,
+      JSON.stringify({ type: 'commonjs', version: '1.2.2' }),
+      'utf8'
+    )
+
+    expect(() => verifyPackageCliBin({ projectDir })).toThrow('version must match package.json')
   })
 
   it.skipIf(process.platform === 'win32')('can repair the POSIX executable bit', () => {

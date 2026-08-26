@@ -590,6 +590,11 @@ describe('electron-builder config', () => {
         )
         const unpackedCliDir = join(resourcesDir, 'app.asar.unpacked', 'out', 'cli')
         await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
+        await writeFile(
+          join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'),
+          JSON.stringify({ type: 'commonjs', version: '1.0.0' }),
+          'utf8'
+        )
         await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
         await writeFile(
           join(unpackedCliDir, 'index.js'),
@@ -606,10 +611,16 @@ describe('electron-builder config', () => {
         await electronBuilderConfig.afterPack({
           appOutDir: join(root, 'linux-unpacked'),
           electronPlatformName: 'linux',
-          arch: 1
+          arch: 1,
+          packager: { appInfo: { version: '1.0.0-local.1' } }
         })
 
         expect((await stat(launcherPath)).mode & 0o111).not.toBe(0)
+        expect(
+          JSON.parse(
+            await readFile(join(resourcesDir, 'app.asar.unpacked', 'out', 'package.json'), 'utf8')
+          ).version
+        ).toBe('1.0.0-local.1')
       } finally {
         await rm(root, { recursive: true, force: true })
       }

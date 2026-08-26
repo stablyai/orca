@@ -5,15 +5,18 @@ import { chmodSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'nod
 import path from 'node:path'
 import { pathToFileURL } from 'node:url'
 
-const OUT_COMMONJS_PACKAGE_JSON = `${JSON.stringify(
-  {
-    name: 'orca-compiled-output',
-    type: 'commonjs',
-    private: true
-  },
-  null,
-  2
-)}\n`
+function buildOutCommonJsPackageJson(version) {
+  return `${JSON.stringify(
+    {
+      name: 'orca-compiled-output',
+      type: 'commonjs',
+      private: true,
+      version
+    },
+    null,
+    2
+  )}\n`
+}
 
 /**
  * Verifies the published CLI entrypoint and the module-type boundary for the
@@ -49,7 +52,7 @@ export function verifyPackageCliBin({
   const outPackageJsonPath = path.join(projectDir, 'out', 'package.json')
   if (fixPackageJson) {
     mkdirSync(path.dirname(outPackageJsonPath), { recursive: true })
-    writeFileSync(outPackageJsonPath, OUT_COMMONJS_PACKAGE_JSON, 'utf8')
+    writeFileSync(outPackageJsonPath, buildOutCommonJsPackageJson(packageJson.version), 'utf8')
   }
   let outPackageJson
   try {
@@ -65,6 +68,14 @@ export function verifyPackageCliBin({
   if (outPackageJson.type !== 'commonjs') {
     throw new Error(
       `compiled CLI package boundary must declare type=commonjs: ${path.relative(
+        projectDir,
+        outPackageJsonPath
+      )}`
+    )
+  }
+  if (outPackageJson.version !== packageJson.version) {
+    throw new Error(
+      `compiled CLI package boundary version must match package.json: ${path.relative(
         projectDir,
         outPackageJsonPath
       )}`

@@ -1,10 +1,38 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getAppImageCliArgs, maybeRedirectAppImageCliLaunch } from './appimage-cli-redirect'
 
 const commandNames = ['serve', 'status', 'terminal']
+const registeredCommandNamesMissingFromTheRedirect = [
+  'account',
+  'agent-context',
+  'artifacts',
+  'claude-teams',
+  'diagnostics',
+  'emulator',
+  'linear',
+  'project',
+  'skills',
+  'vm'
+]
+const temporaryRoots: string[] = []
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true }))
+  )
+})
+
+async function createCliFixture(): Promise<{ root: string; cliEntryPath: string }> {
+  const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
+  temporaryRoots.push(root)
+  const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
+  await mkdir(join(root, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
+  await writeFile(cliEntryPath, '', 'utf8')
+  return { root, cliEntryPath }
+}
 
 describe('AppImage CLI redirect', () => {
   it('detects direct AppImage CLI commands', () => {
@@ -19,6 +47,75 @@ describe('AppImage CLI redirect', () => {
         }
       )
     ).toEqual(['status', '--json'])
+  })
+
+  it('detects packaged Linux CLI commands without AppImage runtime variables', () => {
+    expect(
+      getAppImageCliArgs(
+        ['orca-ide', 'status', '--json'],
+        {},
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual(['status', '--json'])
+  })
+
+  it.each(['--version', '-v', '-V'])('detects the global version flag %s', (versionFlag) => {
+    expect(
+      getAppImageCliArgs(
+        ['orca-linux.AppImage', versionFlag],
+        { APPIMAGE: '/opt/orca' },
+        {
+          platform: 'linux',
+          isPackaged: true,
+          commandNames
+        }
+      )
+    ).toEqual([versionFlag])
+  })
+
+  it('preserves version-like arguments for registered passthrough commands', () => {
+    expect(
+      getAppImageCliArgs(
+        ['orca-linux.AppImage', 'claude-teams', '--version'],
+        { APPIMAGE: '/opt/orca' },
+        { platform: 'linux', isPackaged: true, commandNames: ['claude-teams'] }
+      )
+    ).toEqual(['claude-teams', '--version'])
+  })
+
+  it.each(['darwin', 'win32'] as const)('does not redirect CLI commands on %s', (platform) => {
+    expect(
+      getAppImageCliArgs(['orca-ide', 'status'], {}, { platform, isPackaged: true, commandNames })
+    ).toBeNull()
+  })
+
+  it('does not redirect unpackaged Linux commands', () => {
+    expect(
+      getAppImageCliArgs(
+        ['electron', 'status'],
+        {},
+        { platform: 'linux', isPackaged: false, commandNames }
+      )
+    ).toBeNull()
+  })
+
+  it('keeps env-less serve on the in-process pre-GUI path', () => {
+    for (const serveArgs of [
+      ['serve', '--port', '6768'],
+      ['serve', '--help']
+    ]) {
+      expect(
+        getAppImageCliArgs(
+          ['orca-ide', ...serveArgs],
+          {},
+          { platform: 'linux', isPackaged: true, commandNames }
+        )
+      ).toBeNull()
+    }
   })
 
   it('allows CLI global flags before the command', () => {
@@ -53,6 +150,19 @@ describe('AppImage CLI redirect', () => {
     ).toBeNull()
   })
 
+  it.each([['--user-data-dir', 'status'], ['--user-data-dir', 'help'], ['--user-data-dir=status']])(
+    'does not redirect desktop launches with Electron profile args %s %s',
+    (...profileArgs) => {
+      expect(
+        getAppImageCliArgs(
+          ['orca-ide', ...profileArgs],
+          {},
+          { platform: 'linux', isPackaged: true, commandNames }
+        )
+      ).toBeNull()
+    }
+  )
+
   it('routes no-sandbox serve launches through the CLI', () => {
     expect(
       getAppImageCliArgs(
@@ -82,10 +192,7 @@ describe('AppImage CLI redirect', () => {
   })
 
   it('spawns the unpacked CLI entrypoint with Electron node mode', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
-    const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
-    await mkdir(join(root, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
-    await writeFile(cliEntryPath, '', 'utf8')
+    const { root, cliEntryPath } = await createCliFixture()
     const spawn = vi.fn((..._args: unknown[]) => ({ status: 0 }))
 
     const result = maybeRedirectAppImageCliLaunch({
@@ -119,10 +226,7 @@ describe('AppImage CLI redirect', () => {
   })
 
   it('forwards an explicit no-sandbox choice to the serve child', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-appimage-cli-redirect-'))
-    const cliEntryPath = join(root, 'app.asar.unpacked', 'out', 'cli', 'index.js')
-    await mkdir(join(root, 'app.asar.unpacked', 'out', 'cli'), { recursive: true })
-    await writeFile(cliEntryPath, '', 'utf8')
+    const { root, cliEntryPath } = await createCliFixture()
     const spawn = vi.fn((..._args: unknown[]) => ({ status: 0 }))
 
     maybeRedirectAppImageCliLaunch({
@@ -144,4 +248,23 @@ describe('AppImage CLI redirect', () => {
       })
     )
   })
+
+  it.each(registeredCommandNamesMissingFromTheRedirect)(
+    'redirects the registered %s command with the production registry',
+    async (commandName) => {
+      const { root } = await createCliFixture()
+
+      expect(
+        maybeRedirectAppImageCliLaunch({
+          argv: ['orca-linux.AppImage', commandName, '--json'],
+          env: { APPIMAGE: '/opt/orca/orca-linux.AppImage' },
+          platform: 'linux',
+          isPackaged: true,
+          resourcesPath: root,
+          execPath: '/opt/orca/orca-ide',
+          spawn: (() => ({ status: 0 })) as never
+        })
+      ).toEqual({ redirected: true, status: 0 })
+    }
+  )
 })
