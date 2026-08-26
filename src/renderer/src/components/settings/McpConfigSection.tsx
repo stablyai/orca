@@ -9,7 +9,8 @@ import {
   canInspectLocalMcpConfigRoot,
   inspectMcpConfigContent,
   MCP_CONFIG_CANDIDATES,
-  MCP_STARTER_CONFIG
+  MCP_STARTER_CONFIG,
+  PARALLEL_SEARCH_MCP_CONFIG
 } from '../../../../shared/mcp-config'
 import { useAppStore } from '../../store'
 import { joinPath } from '../../lib/path'
@@ -44,7 +45,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   )
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
-  const [createConfirm, setCreateConfirm] = useState(false)
+  const [createConfirm, setCreateConfirm] = useState<'empty' | 'parallel' | null>(null)
   const createConfirmResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
   const [inspectionUnavailableMessage, setInspectionUnavailableMessage] = useState<string | null>(
@@ -179,14 +180,17 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     setActiveView('terminal')
   }
 
-  const handleCreateStarter = async (): Promise<void> => {
-    if (!createConfirm) {
+  const handleCreateStarter = async (
+    preset: 'empty' | 'parallel',
+    content: string
+  ): Promise<void> => {
+    if (createConfirm !== preset) {
       clearCreateConfirmResetTimer()
-      setCreateConfirm(true)
+      setCreateConfirm(preset)
       createConfirmResetTimerRef.current = window.setTimeout(() => {
         createConfirmResetTimerRef.current = null
         if (mountedRef.current) {
-          setCreateConfirm(false)
+          setCreateConfirm(null)
         }
       }, 3000)
       return
@@ -201,13 +205,13 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       // guess per-agent directory layouts or mutate agent-specific files.
       await window.api.fs.writeFile({
         filePath: target,
-        content: MCP_STARTER_CONFIG,
+        content,
         connectionId,
         ...sshExpectation
       })
       clearCreateConfirmResetTimer()
       if (mountedRef.current) {
-        setCreateConfirm(false)
+        setCreateConfirm(null)
       }
       await loadConfigs()
       setActiveWorktree(targetWorktreeId)
@@ -276,23 +280,48 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
             )}
           </Button>
           {canCreateStarter ? (
-            <Button
-              variant={createConfirm ? 'default' : 'outline'}
-              size="sm"
-              className="gap-1.5"
-              onClick={() => void handleCreateStarter()}
-            >
-              <Plus className="size-3.5" />
-              {createConfirm
-                ? translate(
-                    'auto.components.settings.McpConfigSection.0a5c1ead54',
-                    'Create empty config'
-                  )
-                : translate(
-                    'auto.components.settings.McpConfigSection.82436439eb',
-                    'Add MCP config'
-                  )}
-            </Button>
+            <>
+              <Button
+                variant={createConfirm === 'parallel' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() =>
+                  void handleCreateStarter('parallel', PARALLEL_SEARCH_MCP_CONFIG)
+                }
+                title={translate(
+                  'auto.components.settings.McpConfigSection.parallelDisclosure',
+                  'Search objectives, queries, and fetched URLs are sent to Parallel.'
+                )}
+              >
+                <Plus className="size-3.5" />
+                {createConfirm === 'parallel'
+                  ? translate(
+                      'auto.components.settings.McpConfigSection.confirmParallel',
+                      'Confirm Parallel Search'
+                    )
+                  : translate(
+                      'auto.components.settings.McpConfigSection.addParallel',
+                      'Add Parallel Search'
+                    )}
+              </Button>
+              <Button
+                variant={createConfirm === 'empty' ? 'default' : 'outline'}
+                size="sm"
+                className="gap-1.5"
+                onClick={() => void handleCreateStarter('empty', MCP_STARTER_CONFIG)}
+              >
+                <Plus className="size-3.5" />
+                {createConfirm === 'empty'
+                  ? translate(
+                      'auto.components.settings.McpConfigSection.0a5c1ead54',
+                      'Create empty config'
+                    )
+                  : translate(
+                      'auto.components.settings.McpConfigSection.82436439eb',
+                      'Add MCP config'
+                    )}
+              </Button>
+            </>
           ) : null}
         </div>
       </div>
