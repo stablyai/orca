@@ -64,6 +64,9 @@ const ADVERSARIAL_INPUTS = [
   'feature/1️⃣/2️⃣'
 ]
 
+// Inputs whose segments all sanitize away — the sanitizer is allowed to throw on these.
+const UNUSABLE_INPUTS = new Set(['...', '///'])
+
 describe('sanitizeWorktreeBranchName git validity', () => {
   it('produces names git check-ref-format accepts for every adversarial input', () => {
     const failures: string[] = []
@@ -71,8 +74,12 @@ describe('sanitizeWorktreeBranchName git validity', () => {
       let branch: string
       try {
         branch = sanitizeWorktreeBranchName(input)
-      } catch {
-        // Throwing on unusable input is acceptable.
+      } catch (error) {
+        if (UNUSABLE_INPUTS.has(input)) {
+          continue
+        }
+        const reason = error instanceof Error ? error.message : String(error)
+        failures.push(`${JSON.stringify(input)} threw unexpectedly: ${reason}`)
         continue
       }
       try {
@@ -82,5 +89,9 @@ describe('sanitizeWorktreeBranchName git validity', () => {
       }
     }
     expect(failures).toEqual([])
+  })
+
+  it('does not throw on documented sanitizable inputs', () => {
+    expect(() => sanitizeWorktreeBranchName('feature/tti_fix_1440')).not.toThrow()
   })
 })
