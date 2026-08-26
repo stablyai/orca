@@ -72,7 +72,25 @@ describe('windows PowerShell hook launcher', () => {
     ).toString('utf16le')
 
     expect(decoded).toBe(
-      "try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; $ProgressPreference='SilentlyContinue'; & $scriptPath"
+      "$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; & $scriptPath"
+    )
+  })
+
+  it('silences progress before anything that can autoload a module', () => {
+    // Set-ExecutionPolicy pulls in Microsoft.PowerShell.Security, and its
+    // "Preparing modules for first use." progress record is written before a
+    // later assignment can suppress it. Measured on Windows 11: bypass-first put
+    // 616 bytes of <Objs Version="1.1.0.1"> on stderr and made "#< CLIXML" the
+    // first merged line -- the exact corruption HOOK_PROGRESS_SILENCER exists to
+    // stop. Silencer-first measured 0 bytes.
+    const decoded = Buffer.from(
+      encodeWindowsPowerShellHookCommand('& $scriptPath'),
+      'base64'
+    ).toString('utf16le')
+
+    expect(decoded.indexOf("$ProgressPreference='SilentlyContinue'")).toBeGreaterThanOrEqual(0)
+    expect(decoded.indexOf("$ProgressPreference='SilentlyContinue'")).toBeLessThan(
+      decoded.indexOf('Set-ExecutionPolicy')
     )
   })
 })

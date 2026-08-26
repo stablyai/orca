@@ -617,7 +617,7 @@ function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   // Why: the execution-policy bypass rides in the payload, not on the command
   // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; $ProgressPreference='SilentlyContinue'; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {

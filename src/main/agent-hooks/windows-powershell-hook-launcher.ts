@@ -35,7 +35,12 @@ export function getWindowsPowerShellExecutablePath(): string {
  */
 export const WINDOWS_POWERSHELL_HOOK_SWITCHES = '-NoProfile -WindowStyle Hidden'
 
-// Why: redirected PowerShell progress becomes CLIXML that can corrupt merged JSON output.
+// Why: redirected PowerShell progress becomes CLIXML that can corrupt merged JSON
+// output. It must be the FIRST statement: Set-ExecutionPolicy autoloads
+// Microsoft.PowerShell.Security, whose "Preparing modules for first use."
+// progress record is emitted before any later assignment can suppress it.
+// Measured on Windows 11: bypass-first put 616 bytes of <Objs Version="1.1.0.1">
+// on stderr and made "#< CLIXML" the first merged line; silencer-first, 0 bytes.
 const HOOK_PROGRESS_SILENCER = "$ProgressPreference='SilentlyContinue'; "
 
 /**
@@ -60,7 +65,7 @@ const HOOK_EXECUTION_POLICY_BYPASS =
 // Why: encoding shields paths and switches from cmd.exe and MSYS rewriting (#6078, #14815).
 export function encodeWindowsPowerShellHookCommand(command: string): string {
   return Buffer.from(
-    `${HOOK_EXECUTION_POLICY_BYPASS}${HOOK_PROGRESS_SILENCER}${command}`,
+    `${HOOK_PROGRESS_SILENCER}${HOOK_EXECUTION_POLICY_BYPASS}${command}`,
     'utf16le'
   ).toString('base64')
 }
