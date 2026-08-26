@@ -182,6 +182,34 @@ describe('OrcaRuntimeService automation methods', () => {
     expect(store.updateAutomation).not.toHaveBeenCalled()
   })
 
+  it('rejects a target-only update when the existing run context belongs to the previous repo', async () => {
+    const repo2: Repo = {
+      ...repo,
+      id: 'repo-2',
+      path: '/tmp/other-repo',
+      displayName: 'other-repo'
+    }
+    const existing = {
+      ...existingAutomation,
+      runContext: {
+        kind: 'workspace-run',
+        projectId: 'project-1',
+        hostId: 'local',
+        projectHostSetupId: 'setup-1',
+        repoId: repo.id,
+        path: repo.path
+      }
+    } satisfies Automation
+    const store = makeStore([existing])
+    store.getRepos.mockReturnValue([repo, repo2])
+    const runtime = new OrcaRuntimeService(store as never)
+
+    await expect(runtime.updateAutomation('auto-1', { repo: `id:${repo2.id}` })).rejects.toThrow(
+      'Automation project does not match its run context.'
+    )
+    expect(store.updateAutomation).not.toHaveBeenCalled()
+  })
+
   it('updates and deletes existing automations through the shared store', async () => {
     const store = makeStore([existingAutomation])
     const runtime = new OrcaRuntimeService(store as never)
