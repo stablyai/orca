@@ -4,6 +4,7 @@ import { useEmulatorFrameStream } from './use-emulator-frame-stream'
 import { useEmulatorVideoStream } from './use-emulator-video-stream'
 import { translate } from '@/i18n/i18n'
 import type { VisualStreamGeometry } from './emulator-device-frame-layout'
+import { androidDeviceIdFromStreamUrl } from './emulator-stream-backend'
 
 type StreamSize = {
   height: number
@@ -22,9 +23,6 @@ type EmulatorScreenStreamContentProps = {
   streamRotation?: VisualStreamGeometry['streamRotation']
 }
 
-// Android sessions stream H.264 over scrcpy://<serial>; iOS uses an MJPEG http URL.
-const SCRCPY_PREFIX = 'scrcpy://'
-
 export function EmulatorScreenStreamContent({
   loading,
   onStreamError,
@@ -36,10 +34,7 @@ export function EmulatorScreenStreamContent({
   streamKey,
   streamRotation = 0
 }: EmulatorScreenStreamContentProps) {
-  const androidDeviceId =
-    previewUrl && previewUrl.startsWith(SCRCPY_PREFIX)
-      ? previewUrl.slice(SCRCPY_PREFIX.length)
-      : null
+  const androidDeviceId = androidDeviceIdFromStreamUrl(previewUrl)
 
   const video = useEmulatorVideoStream(
     androidDeviceId ?? undefined,

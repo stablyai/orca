@@ -152,6 +152,7 @@ import {
   ListParams,
   LogcatParams,
   PermissionsParams,
+  RecordStopParams,
   RotateParams,
   ShutdownParams,
   TapParams,
@@ -741,6 +742,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'emulator.listSimulators': EmulatorListSimulatorsParams,
   'emulator.logcat': LogcatParams,
   'emulator.permissions': PermissionsParams,
+  'emulator.recordStop': RecordStopParams,
   'emulator.rotate': RotateParams,
   'emulator.shutdown': ShutdownParams,
   'emulator.tap': TapParams,
@@ -1187,6 +1189,7 @@ export const RPC_PARAMS_BY_METHOD = {
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
+  'emulator.recordStart',
   'orchestration.send',
   'orchestration.taskUpdate'
 ]

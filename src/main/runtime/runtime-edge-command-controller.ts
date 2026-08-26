@@ -1,6 +1,7 @@
 import type { BrowserScreencastResult } from '../../shared/runtime-types'
 import type { RuntimeBrowserCommands, RuntimeBrowserCommandHost } from './orca-runtime-browser'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
+import { RuntimeEmulatorRecordingCommands } from './orca-runtime-emulator-recording'
 import { RuntimeBrowserScreencastController } from './runtime-browser-screencast-controller'
 import { createRuntimeBrowserCommands } from './runtime-browser-commands-factory'
 import { RuntimeJiraCommands } from './runtime-jira-commands'
@@ -22,7 +23,8 @@ type BrowserSurface = Omit<PublicMethods<RuntimeBrowserCommands>, 'browserScreen
 
 export type RuntimeEdgeCommandSurface = BrowserSurface &
   PublicMethods<RuntimeJiraCommands> &
-  PublicMethods<RuntimeEmulatorCommands>
+  PublicMethods<RuntimeEmulatorCommands> &
+  PublicMethods<RuntimeEmulatorRecordingCommands>
 
 type ScreencastDependencies = ConstructorParameters<typeof RuntimeBrowserScreencastController>[0]
 type EmulatorHost = ConstructorParameters<typeof RuntimeEmulatorCommands>[0]
@@ -139,6 +141,7 @@ export class RuntimeEdgeCommandController {
   private readonly browser: RuntimeBrowserCommands
   private readonly screencasts: RuntimeBrowserScreencastController
   private readonly emulator: RuntimeEmulatorCommands
+  private readonly emulatorRecording: RuntimeEmulatorRecordingCommands
   readonly surface: RuntimeEdgeCommandSurface
 
   constructor(args: {
@@ -153,10 +156,13 @@ export class RuntimeEdgeCommandController {
       getCommands: () => args.getBrowserCommands?.() ?? this.browser
     })
     this.emulator = new RuntimeEmulatorCommands(args.emulatorHost)
+    this.emulatorRecording = new RuntimeEmulatorRecordingCommands(args.emulatorHost)
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: bindPrefixedMethods returns Partial; the spreads together cover every method the surface declares.
     this.surface = {
       ...bindPrefixedMethods(this.jira, 'jira'),
       ...bindNamedMethods(this.browser, BROWSER_COMMAND_NAMES),
       ...bindPrefixedMethods(this.emulator, 'emulator'),
+      ...bindPrefixedMethods(this.emulatorRecording, 'emulator'),
       browserScreencast: (params, options) => this.screencasts.start(params, options)
     } as RuntimeEdgeCommandSurface
   }

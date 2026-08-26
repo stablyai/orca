@@ -30,7 +30,8 @@ function makeBackend(): {
       launch: false,
       permissions: false,
       accessibilityTree: false,
-      logcat: false
+      logcat: false,
+      record: false
     },
     isSupportedOnHost: () => true,
     checkAvailability: vi.fn(),

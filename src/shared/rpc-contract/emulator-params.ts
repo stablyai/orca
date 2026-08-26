@@ -131,6 +131,12 @@ export const AttachParams = z.object({
   focus: z.boolean().optional()
 })
 
+export const RecordStopParams = z.object({
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
 export const KillParams = z.object({
   device: z.string().optional(),
   emulator: z.string().optional(),
