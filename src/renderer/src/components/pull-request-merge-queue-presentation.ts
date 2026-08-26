@@ -43,7 +43,9 @@ function queueEtaText(entry: PullRequestMergeQueueEntry | undefined): string | n
  * primary copy, not tooltip-only — but every part degrades away independently so
  * a missing field never renders a placeholder.
  */
-export function getGitHubPRMergeQueueLabel(entry: PullRequestMergeQueueEntry | undefined): string {
+export function getPullRequestMergeQueueLabel(
+  entry: PullRequestMergeQueueEntry | undefined
+): string {
   const queued = translate(
     'auto.components.github.pr.merge.queue.presentation.0cabcd9e02',
     'Queued'
@@ -54,7 +56,7 @@ export function getGitHubPRMergeQueueLabel(entry: PullRequestMergeQueueEntry | u
   return parts.length > 0 ? `${queued} · ${parts.join(' · ')}` : queued
 }
 
-export function getGitHubPRMergeQueueTooltip(
+export function getPullRequestMergeQueueTooltip(
   entry: PullRequestMergeQueueEntry | undefined
 ): string {
   const base = translate(

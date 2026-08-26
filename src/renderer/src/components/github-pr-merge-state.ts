@@ -7,9 +7,9 @@ import type {
   ProviderCheckSummary
 } from '../../../shared/github/pull-request-types'
 import {
-  getGitHubPRMergeQueueLabel,
-  getGitHubPRMergeQueueTooltip
-} from './github-pr-merge-queue-presentation'
+  getPullRequestMergeQueueLabel,
+  getPullRequestMergeQueueTooltip
+} from './pull-request-merge-queue-presentation'
 import {
   resolveGitHubPRAutoMergeAction,
   type GitHubPRAutoMergeAction
@@ -130,9 +130,9 @@ export function presentGitHubPRMergeState(
   // "base branch uses a queue" from "this PR is already sitting in it" (#12316).
   if (item.state === 'queued') {
     return {
-      label: getGitHubPRMergeQueueLabel(item.mergeQueueEntry),
+      label: getPullRequestMergeQueueLabel(item.mergeQueueEntry),
       tone: WARNING_TONE,
-      tooltip: getGitHubPRMergeQueueTooltip(item.mergeQueueEntry),
+      tooltip: getPullRequestMergeQueueTooltip(item.mergeQueueEntry),
       directMergeAvailable: false,
       autoMergeAction: null
     }
