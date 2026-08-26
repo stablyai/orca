@@ -4288,7 +4288,7 @@
           "489d1c8c9f": "프로젝트 검색...",
           "ee240a39eb": "필터 편집",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
-          "cliCreated": "Hide CLI-created",
+          "cliCreated": "CLI로 생성된 워크스페이스 숨기기",
           "detachedHead": "분리된 HEAD 숨기기",
           "keepDefaultBranch": "기본 브랜치는 제외",
           "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
@@ -4357,7 +4357,7 @@
           "ed1611b65b": "슬립 중인 항목 숨기기",
           "82594419ba": "필터",
           "automationCreated": "자동화로 생성된 워크스페이스 숨기기",
-          "cliCreated": "Hide CLI-created",
+          "cliCreated": "CLI로 생성된 워크스페이스 숨기기",
           "detachedHead": "분리된 HEAD 숨기기",
           "keepDefaultBranch": "기본 브랜치는 제외",
           "keepDefaultBranchAria": "슬립 중인 워크스페이스를 숨겨도 기본 브랜치는 계속 표시"
@@ -4530,10 +4530,10 @@
           "issueLinkLabel": "이슈 링크",
           "reviewLinkLabel": "{{value0}} 링크",
           "cliHeader": "Orca CLI",
-          "cliCreatedFromAgent": "Created by an agent via `orca worktree create`",
-          "cliCreatedFromShell": "Created via `orca worktree create`",
-          "cliStartupAgent": "Started with {{value0}}",
-          "cliCreated": "Created by Orca CLI",
+          "cliCreatedFromAgent": "Agent가 `orca worktree create`로 생성",
+          "cliCreatedFromShell": "`orca worktree create`로 생성",
+          "cliStartupAgent": "{{value0}}(으)로 시작됨",
+          "cliCreated": "Orca CLI로 생성됨",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "Jira에서 보기",
           "linkedJira": "연결된 Jira {{value0}}"
