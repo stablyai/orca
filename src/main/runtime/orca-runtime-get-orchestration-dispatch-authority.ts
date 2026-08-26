@@ -239,7 +239,7 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
         : undefined,
-      devMode: process.env.ORCA_USER_DATA_PATH?.includes('orca-dev') === true
+      devMode: !getAppEnvironment().isPackaged()
     })
   }
 }
