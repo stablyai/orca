@@ -246,7 +246,17 @@ function recordHealOutcome(
   thread: PendingHealThread,
   outcome: HealLedgerOutcome
 ): void {
-  if (!appendHealLedgerRecord(paths, thread.threadId, outcome, thread.auditRecordId)) {
+  if (
+    !appendHealLedgerRecord(
+      paths,
+      thread.threadId,
+      outcome,
+      thread.targetPath,
+      thread.auditRecordId,
+      thread.fileInstanceId,
+      thread.fileEventId
+    )
+  ) {
     throw new Error(`Failed to persist Codex session index-heal outcome for ${thread.threadId}`)
   }
 }

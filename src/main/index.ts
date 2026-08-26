@@ -482,7 +482,8 @@ function handleCodexHomePtySpawned(args: {
   const fullScanRequired =
     codexRuntimeHome?.beginHostSystemDefaultSessionMigrationLaunch(args.codexHomePath, {
       reattached: args.reattached,
-      launchEnv: args.launchEnv
+      launchEnv: args.launchEnv,
+      startedAt: args.startedAt
     }) ?? null
   if (fullScanRequired !== null) {
     codexSessionMigration?.beginLaunch(
@@ -2594,8 +2595,11 @@ void app.whenReady().then(async () => {
     isQuitting: () => isQuitting,
     resolveSystemCodexHomePathOverride: () =>
       resolveHostCodexSessionSourceHome(store!.getSettings()),
+    resolvePendingScanDates: () =>
+      codexRuntimeHome?.getHostSystemDefaultPendingSessionMigrationDates() ?? [],
     prepareScheduledRun: () => codexRuntimeHome?.prepareHostSystemDefaultSessionMigrationPass(),
-    finishScheduledRun: () => codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(),
+    finishScheduledRun: (keepLaunchTracking) =>
+      codexRuntimeHome?.finishHostSystemDefaultSessionMigrationPass(keepLaunchTracking),
     startBackfill: startCodexSessionBackfillInBackground,
     startIndexHeal: startCodexSessionIndexHealInBackground
   })

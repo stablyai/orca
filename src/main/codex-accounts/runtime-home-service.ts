@@ -71,8 +71,12 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasCompletedCodexSessionBackfillMarker,
-  invalidateCodexSessionBackfillMarker
+  invalidateCodexSessionBackfillMarker,
+  markCodexSessionBackfillPending,
+  readCodexSessionBackfillMarkerStatus
 } from '../codex/codex-session-backfill-marker'
+import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-date'
+import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
 import {
   ManagedCodexHomeTemporarilyUnavailableError,
@@ -281,7 +285,7 @@ export class CodexRuntimeHomeService {
 
   beginHostSystemDefaultSessionMigrationLaunch(
     codexHomePath: string | null,
-    options: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv } = {}
+    options: { reattached?: boolean; launchEnv?: NodeJS.ProcessEnv; startedAt?: Date } = {}
   ): boolean | null {
     if (
       !this.isHostSystemDefaultSessionMigrationEligible() ||
@@ -294,7 +298,8 @@ export class CodexRuntimeHomeService {
     }
     // Why: an older pass can clear launch preparation while PTY spawn awaits recovery.
     return this.invalidateBackfillAfterManagedSystemDefaultLaunch(
-      options.reattached && !codexHomePath ? undefined : options.launchEnv
+      options.reattached && !codexHomePath ? undefined : options.launchEnv,
+      options.startedAt
     )
   }
 
@@ -309,21 +314,48 @@ export class CodexRuntimeHomeService {
     const paths = resolveCodexSessionBackfillPaths(
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
+    const previousTarget = this.pendingHostSystemDefaultSessionMigrationTarget
     if (
       this.hostSystemDefaultSessionMigrationPending &&
-      this.pendingHostSystemDefaultSessionMigrationTarget !== paths.systemSessionsRoot
+      previousTarget !== paths.systemSessionsRoot
     ) {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
       this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
     }
-    invalidateCodexSessionBackfillMarker(paths.markerPath)
+    if (previousTarget && previousTarget !== paths.systemSessionsRoot) {
+      const pendingSince = readCodexSessionBackfillMarkerStatus(
+        paths.markerPath,
+        previousTarget
+      ).pendingSince
+      invalidateCodexSessionBackfillMarker(paths.markerPath)
+      if (pendingSince) {
+        markCodexSessionBackfillPending(paths.markerPath, paths.systemSessionsRoot, pendingSince)
+      }
+    }
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
-  finishHostSystemDefaultSessionMigrationPass(): void {
+  finishHostSystemDefaultSessionMigrationPass(keepLaunchTracking = false): void {
+    if (keepLaunchTracking) {
+      this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
+      return
+    }
     this.hostSystemDefaultSessionMigrationPending = false
     this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = false
     this.pendingHostSystemDefaultSessionMigrationTarget = null
+  }
+
+  getHostSystemDefaultPendingSessionMigrationDates(): readonly CodexSessionBackfillDate[] {
+    const paths = resolveCodexSessionBackfillPaths(
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
+    const markerStatus = readCodexSessionBackfillMarkerStatus(
+      paths.markerPath,
+      paths.systemSessionsRoot
+    )
+    return markerStatus.hasBaseline && markerStatus.pendingSince
+      ? getCodexSessionBackfillDatesBetween(markerStatus.pendingSince, new Date())
+      : []
   }
 
   // Why: a managed HOST account runs against its own self-contained CODEX_HOME
@@ -511,7 +543,8 @@ export class CodexRuntimeHomeService {
   }
 
   private invalidateBackfillAfterManagedSystemDefaultLaunch(
-    launchEnv?: NodeJS.ProcessEnv
+    launchEnv?: NodeJS.ProcessEnv,
+    startedAt = new Date()
   ): boolean | null {
     const settings = this.store.getSettings()
     if (
@@ -529,7 +562,16 @@ export class CodexRuntimeHomeService {
       this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
       this.hostSystemDefaultSessionMigrationPending = true
     }
-    return this.prepareHostSystemDefaultSessionMigrationPass()
+    const paths = resolveCodexSessionBackfillPaths(
+      resolveHostCodexSessionSourceHome(this.store.getSettings())
+    )
+    const needsFullScan = markCodexSessionBackfillPending(
+      paths.markerPath,
+      paths.systemSessionsRoot,
+      getCodexSessionBackfillDate(startedAt)
+    )
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= needsFullScan
+    return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
   private startWslSessionBridgeForLaunch(
@@ -2372,6 +2414,24 @@ export class CodexRuntimeHomeService {
   clearSystemDefaultSnapshot(): void {
     rmSync(this.getSystemDefaultSnapshotPath(), { force: true })
   }
+}
+
+function getCodexSessionBackfillDatesBetween(
+  startedAt: CodexSessionBackfillDate,
+  finishedAt: Date
+): CodexSessionBackfillDate[] {
+  const cursor = new Date(
+    Date.UTC(Number(startedAt[0]), Number(startedAt[1]) - 1, Number(startedAt[2]))
+  )
+  const last = new Date(
+    Date.UTC(finishedAt.getUTCFullYear(), finishedAt.getUTCMonth(), finishedAt.getUTCDate())
+  )
+  const dates: CodexSessionBackfillDate[] = []
+  while (cursor <= last) {
+    dates.push(getCodexSessionBackfillDate(cursor))
+    cursor.setUTCDate(cursor.getUTCDate() + 1)
+  }
+  return dates
 }
 
 // Why: Codex reads this config inside WSL, so relative path settings must anchor to the Linux-side home (verbatim copy breaks load, os error 2).

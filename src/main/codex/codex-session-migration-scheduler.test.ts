@@ -354,6 +354,7 @@ describe('createCodexSessionMigrationScheduler', () => {
       '/new-history'
     )
     await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
+    expect(finishScheduledRun).toHaveBeenCalledWith(false)
   })
 
   it('finishes a launch generation only after its PTY exits and every date is rescanned', async () => {
@@ -398,6 +399,7 @@ describe('createCodexSessionMigrationScheduler', () => {
       undefined
     )
     await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
+    expect(finishScheduledRun).toHaveBeenCalledWith(false)
   })
 
   it('keeps a failed full scan required for the final launch pass', async () => {
@@ -433,6 +435,101 @@ describe('createCodexSessionMigrationScheduler', () => {
       undefined
     )
     await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
+    expect(finishScheduledRun).toHaveBeenCalledWith(false)
+  })
+
+  it('establishes a full baseline while a Codex launch remains active', async () => {
+    const finishScheduledRun = vi.fn()
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      prepareScheduledRun: () => false,
+      finishScheduledRun,
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.beginLaunch('pty-1', true)
+    await vi.advanceTimersByTimeAsync(1_000)
+    await vi.waitFor(() => expect(startBackfill).toHaveBeenCalledOnce())
+
+    expect(startBackfill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        scanDates: undefined,
+        writeCompletionMarker: true,
+        preservePendingMarker: true
+      }),
+      undefined
+    )
+    await vi.waitFor(() => expect(finishScheduledRun).toHaveBeenCalledOnce())
+    expect(finishScheduledRun).toHaveBeenCalledWith(true)
+  })
+
+  it('recovers persisted pending dates after an abnormal Orca exit', async () => {
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      resolvePendingScanDates: () => [
+        ['2026', '08', '05'],
+        ['2026', '08', '06']
+      ],
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.scheduleInitialRun()
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(startBackfill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ignoreCompletionMarker: true,
+        scanDates: [
+          ['2026', '08', '05'],
+          ['2026', '08', '06']
+        ]
+      }),
+      undefined
+    )
+  })
+
+  it('keeps recovered dates when a launch replaces the initial recovery timer', async () => {
+    vi.setSystemTime(new Date('2026-08-07T10:00:00Z'))
+    const startBackfill = vi.fn().mockResolvedValue({ stopped: false })
+    const scheduler = createCodexSessionMigrationScheduler({
+      isEligible: () => true,
+      isQuitting: () => false,
+      resolveSystemCodexHomePathOverride: () => undefined,
+      resolvePendingScanDates: () => [
+        ['2026', '08', '05'],
+        ['2026', '08', '06']
+      ],
+      startBackfill,
+      startIndexHeal: vi.fn().mockResolvedValue(null),
+      initialDelayMs: 1_000
+    })
+
+    scheduler.scheduleInitialRun()
+    await vi.advanceTimersByTimeAsync(500)
+    scheduler.beginLaunch('pty-1')
+    await vi.advanceTimersByTimeAsync(1_000)
+
+    expect(startBackfill).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ignoreCompletionMarker: true,
+        scanDates: [
+          ['2026', '08', '05'],
+          ['2026', '08', '06'],
+          ['2026', '08', '07']
+        ]
+      }),
+      undefined
+    )
   })
 
   it('blocks marker publication when a newer launch pass is pending', async () => {

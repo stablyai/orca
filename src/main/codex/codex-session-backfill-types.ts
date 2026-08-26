@@ -34,6 +34,8 @@ export type CodexSessionBackfillOptions = CodexSessionBridgeIncrementalOptions &
   writeBoundedCompletionMarker?: boolean
   /** Rechecks launch scheduling state immediately before marker publication. */
   canWriteCompletionMarker?: () => boolean
+  /** A full scan can establish a baseline while an active launch remains pending. */
+  preservePendingMarker?: boolean
 }
 
 export type CodexSessionBackfillDate = readonly [year: string, month: string, day: string]
