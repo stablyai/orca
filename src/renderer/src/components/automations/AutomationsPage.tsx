@@ -64,6 +64,7 @@ import type { AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAutomationCreateAvailability } from './automation-create-admission'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
+import { repoMatchesExternalAutomationTarget } from './automation-external-target-match'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -1212,18 +1213,12 @@ export default function AutomationsPage(): React.JSX.Element {
         .find((worktree) => {
           const repo = repoMap.get(worktree.repoId)
           const repoTargetMatches =
-            manager.target.type === 'local'
-              ? !repo?.connectionId
-              : repo?.connectionId === manager.target.connectionId
+            repo !== undefined && repoMatchesExternalAutomationTarget(repo, manager.target)
           return repoTargetMatches && job.workdir !== null && worktree.path === job.workdir
         }) ?? null
     const localRepos = getAutomationCreateRepos(repos, { kind: 'local' })
     const fallbackRepo =
-      localRepos.find((repo) =>
-        manager.target.type === 'local'
-          ? !repo.connectionId
-          : repo.connectionId === manager.target.connectionId
-      ) ??
+      localRepos.find((repo) => repoMatchesExternalAutomationTarget(repo, manager.target)) ??
       localRepos[0] ??
       null
     const fallbackWorktree = fallbackRepo
@@ -1385,8 +1380,7 @@ export default function AutomationsPage(): React.JSX.Element {
           (repo.connectionId
             ? { type: 'ssh' as const, connectionId: repo.connectionId }
             : { type: 'local' as const })
-        const repoTargetMatches =
-          target.type === 'local' ? !repo.connectionId : repo.connectionId === target.connectionId
+        const repoTargetMatches = repoMatchesExternalAutomationTarget(repo, target)
         if (!repoTargetMatches) {
           toast.error(
             translate(
