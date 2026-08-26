@@ -53,6 +53,15 @@ describe('buildCollaborationWorkerProtocol', () => {
       expect(out).toMatch(/required/i)
     })
 
+    it('states that a required publish reaching zero subscribers does not satisfy completion', () => {
+      const out = buildCollaborationWorkerProtocol(
+        protocol({ requiredPublishesTo: ['release-notes'] })
+      )
+      expect(out).toMatch(/0 subscriber/i)
+      expect(out).toMatch(/does not satisfy/i)
+      expect(out).toMatch(/escalate/i)
+    })
+
     it('states subscribers are topology-derived and never named by the publisher', () => {
       const out = buildCollaborationWorkerProtocol(protocol({ publishesTo: ['alpha'] }))
       expect(out).toMatch(/topology-derived/i)

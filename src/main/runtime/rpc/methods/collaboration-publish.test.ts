@@ -135,6 +135,35 @@ describe('orchestration.collaborationPublish', () => {
     }
   })
 
+  it('fans out only to subscribers whose admission accepts the published message', async () => {
+    setup(() =>
+      createCollaborationTopology([
+        { taskId: producerTaskId, publishesTo: ['feature-a'] },
+        {
+          taskId: subscriberTaskIds[0],
+          subscribesTo: ['feature-a'],
+          admission: { acceptedTypes: ['status'], minPriority: 'normal' }
+        },
+        {
+          taskId: subscriberTaskIds[1],
+          subscribesTo: ['feature-a'],
+          admission: { acceptedTypes: ['result'], minPriority: 'urgent' }
+        }
+      ])
+    )
+
+    const result = (await call(
+      publishParams({ semanticType: 'status', priority: 'normal' }),
+      mutationCtx()
+    )) as PublishReceipt
+
+    expect(result.subscriberTaskIds).toEqual([subscriberTaskIds[0]])
+    expect(result.messageIds).toHaveLength(1)
+    expect(db.getAllMessages(buildCollaborationTaskMailboxAddress(subscriberTaskIds[0]))).toHaveLength(1)
+    expect(db.getAllMessages(buildCollaborationTaskMailboxAddress(subscriberTaskIds[1]))).toEqual([])
+    expect(vi.mocked(runtime.notifyMessageArrived)).toHaveBeenCalledTimes(1)
+  })
+
   it('uses the mutation requestId as the publicationId', async () => {
     setup(defaultTopology)
 

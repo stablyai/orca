@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { isCollaborationMessageAdmitted } from '../../collaboration/collaboration-admission'
 import { requireLocalCollaborationDispatchAuthority } from '../../collaboration/collaboration-dispatch-authority'
 import { getCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import {
+  admissionPolicyForTask,
   allowedPublishTopicsForTask,
   subscribersForTopic
 } from '../../collaboration/collaboration-topology'
@@ -49,7 +51,16 @@ export const COLLABORATION_PUBLISH_METHODS: RpcMethod[] = [
           'collaborationPublish requires a durable retry request.'
         )
       }
-      const subscriberTaskIds = subscribersForTopic(topology, params.topic)
+      const subscriberTaskIds = subscribersForTopic(topology, params.topic).filter((taskId) => {
+        const policy = admissionPolicyForTask(topology, taskId)
+        return (
+          policy !== undefined &&
+          isCollaborationMessageAdmitted(
+            { type: params.semanticType, priority: params.priority },
+            policy
+          )
+        )
+      })
       const rows = publishCollaborationMessage(runtime.getOrchestrationDb(), {
         runId: dispatch.run_id,
         publicationId: orchestrationMutation.requestId,

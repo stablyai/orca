@@ -1,3 +1,4 @@
+import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { AdmissionPolicy } from './collaboration-admission'
 
 export type CollaborationTopologyStep = {
@@ -29,22 +30,29 @@ export function createCollaborationTopology(
   steps: readonly CollaborationTopologyStep[]
 ): CollaborationTopology {
   if (steps.length === 0) {
-    throw new Error('collaboration topology requires at least one step')
+    throw new OrchestrationError('invalid_argument', 'collaboration topology requires at least one step')
   }
   const seenTaskIds = new Set<string>()
   const copiedSteps: CollaborationTopologyStep[] = steps.map((step) => {
     if (seenTaskIds.has(step.taskId)) {
-      throw new Error(`duplicate taskId in collaboration topology: ${step.taskId}`)
+      throw new OrchestrationError(
+        'invalid_argument',
+        `duplicate taskId in collaboration topology: ${step.taskId}`
+      )
     }
     if (step.taskId.trim() === '') {
-      throw new Error(
+      throw new OrchestrationError(
+        'invalid_argument',
         `taskId must be non-empty in collaboration topology: ${JSON.stringify(step.taskId)}`
       )
     }
     seenTaskIds.add(step.taskId)
     const subscribesTo = dedupePreservingOrder(step.subscribesTo)
     if (subscribesTo !== undefined && subscribesTo.length > 0 && step.admission === undefined) {
-      throw new Error(`step ${step.taskId} subscribes to topics but has no admission policy`)
+      throw new OrchestrationError(
+        'invalid_argument',
+        `step ${step.taskId} subscribes to topics but has no admission policy`
+      )
     }
     return {
       taskId: step.taskId,
@@ -66,12 +74,16 @@ export function createCollaborationTopology(
     const publishes = step.publishesTo ?? []
     for (const topic of required) {
       if (!publishes.includes(topic)) {
-        throw new Error(
+        throw new OrchestrationError(
+          'invalid_argument',
           `step ${step.taskId} requires publishing topic ${topic} but does not publish it`
         )
       }
       if (!copiedSteps.some((s) => s.subscribesTo?.includes(topic) ?? false)) {
-        throw new Error(`required topic ${topic} of step ${step.taskId} has no subscribers`)
+        throw new OrchestrationError(
+          'invalid_argument',
+          `required topic ${topic} of step ${step.taskId} has no subscribers`
+        )
       }
     }
   }

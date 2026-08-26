@@ -105,7 +105,7 @@ describe('orchestration.collaborationConfigure', () => {
     ).rejects.toMatchObject({ code: 'collaboration_topology_exists' })
   })
 
-  it('delegates required-topic validation to createCollaborationTopology', async () => {
+  it('surfaces required-topic topology validation as invalid_argument', async () => {
     setup()
 
     await expect(
@@ -114,7 +114,40 @@ describe('orchestration.collaborationConfigure', () => {
           steps: [{ taskId, publishesTo: ['feature-a'], requiredPublishesTo: ['feature-a'] }]
         })
       )
-    ).rejects.toThrow(/required topic|no subscribers/)
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(getCollaborationRuntimeTopology(runtime, runId)).toBeUndefined()
+  })
+
+  it('surfaces duplicate taskIds as invalid_argument', async () => {
+    setup()
+
+    await expect(
+      call(
+        configureParams({
+          steps: [
+            { taskId, publishesTo: ['feature-a'] },
+            { taskId, publishesTo: ['feature-b'] }
+          ]
+        })
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    expect(getCollaborationRuntimeTopology(runtime, runId)).toBeUndefined()
+  })
+
+  it('surfaces a subscription without admission policy as invalid_argument', async () => {
+    setup()
+    const subscriberTaskId = createTask('subscriber')
+
+    await expect(
+      call(
+        configureParams({
+          steps: [
+            { taskId, publishesTo: ['feature-a'] },
+            { taskId: subscriberTaskId, subscribesTo: ['feature-a'] }
+          ]
+        })
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
     expect(getCollaborationRuntimeTopology(runtime, runId)).toBeUndefined()
   })
 
