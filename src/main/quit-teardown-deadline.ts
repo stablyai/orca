@@ -3,9 +3,9 @@
 // socket) can leave one unsettled forever and make Force Quit the only way
 // out (#9447). Racing a deadline guarantees quit always completes.
 
-// Why: generous enough for daemon checkpoint writes on a slow disk; small
-// enough that a wedged teardown never needs Force Quit.
-export const WILL_QUIT_TEARDOWN_DEADLINE_MS = 20_000
+import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
+
+export { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../shared/quit-teardown-deadline'
 
 export type NamedQuitTeardown = {
   name: string

@@ -222,6 +222,7 @@ import { ensureWindowsUserDataAclGrant } from './startup/windows-user-data-acl'
 import { probeWindowsInstallDirAcl } from './startup/windows-install-dir-acl-probe'
 import { neutralizeLegacyTerminalShimDir } from './pty/legacy-terminal-shim-dir'
 import { shouldQuitWhenAllWindowsClosed } from './startup/window-all-closed-quit-policy'
+import { registerServeSignalHandlers } from './startup/serve-signal-handlers'
 import {
   createServeDesktopActivationGate,
   settleServeDesktopActivation as settleServeDesktopActivationGate
@@ -2088,15 +2089,6 @@ async function printServeReady(options: ServeOptions): Promise<void> {
   notifyServeSupervisorReady(runtime.getRuntimeId())
 }
 
-function installServeSignalHandlers(): void {
-  const quit = (): void => {
-    // Why: route SIGINT/SIGTERM through Electron's normal quit so runtime metadata, daemon checkpoints, and telemetry flush.
-    app.quit()
-  }
-  process.once('SIGINT', quit)
-  process.once('SIGTERM', quit)
-}
-
 // Why: on PTY teardown drop the spinner entry explicitly, else the shared timer keeps ticking with sendSyntheticTitle no-oping forever.
 registerPaneKeyTeardownListener((paneKey) => {
   stopSyntheticTitleSpinner(paneKey)
@@ -3295,7 +3287,11 @@ void app.whenReady().then(async () => {
     await runtime.reconcileLegacyWorkerTerminals()
     // Why: headless servers can't mount <webview> panes; use offscreen WebContents, gated on a real display so browser.headless.v1 stays honest.
     if (headlessBrowserDisplayAvailable) {
-      runtime.setOffscreenBrowserBackend(new OffscreenBrowserBackend(browserManager))
+      runtime.setOffscreenBrowserBackend(
+        new OffscreenBrowserBackend(browserManager, {
+          getAgentBrowserBridge: () => agentBrowserBridge
+        })
+      )
     }
     // Why: headless servers have no renderer graph publisher; publish an explicit empty graph so status clients see a ready server.
     runtime.syncWindowGraph(HEADLESS_RUNTIME_WINDOW_ID, { tabs: [], leaves: [] })
@@ -3304,7 +3300,8 @@ void app.whenReady().then(async () => {
       throw error
     })
     settleServeDesktopActivation()
-    installServeSignalHandlers()
+    // Why: every attempt must reach app.quit(); a page beforeunload can veto an earlier signal.
+    registerServeSignalHandlers(process, () => app.quit())
     // Why: headless serve has no renderer to run the normal cli:install flow; do it here for macOS/Linux only (Windows-excluded: install() only mutates registry PATH, not child terminals).
     if (process.platform === 'darwin' || process.platform === 'linux') {
       try {
@@ -3515,10 +3512,11 @@ app.on('will-quit', (e) => {
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
   const statsFlush = stats?.flushAsync() ?? Promise.resolve()
-  // Why: agent-browser daemon processes would otherwise linger after quit, holding ports and stale session state on disk.
-  runtime?.getAgentBrowserBridge()?.destroyAllSessions()
-  // Why: headless offscreen browser windows are main-process owned; tear them down explicitly on quit.
-  runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+  // Why: retire headless page owners first, then sweep residual helper sessions without duplicate close fanout.
+  const browserShutdown = (async (): Promise<void> => {
+    await runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+    await runtime?.getAgentBrowserBridge()?.destroyAllSessions()
+  })()
   // Why (review P2-4): local SSH browser routes own loopback listeners and, on the
   // system-ssh path, `ssh -N -D` children that would otherwise outlive the app.
   const localSshRouteShutdown = import('./browser/local-ssh-browser-route')
@@ -3570,6 +3568,7 @@ app.on('will-quit', (e) => {
   // temp+rename swap means a write cut short by the deadline leaves the old file intact.
   settleTeardownWithinDeadline([
     { name: 'daemon', promise: daemonTeardown },
+    { name: 'browser', promise: browserShutdown },
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
