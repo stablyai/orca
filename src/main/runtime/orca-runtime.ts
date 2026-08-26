@@ -595,6 +595,7 @@ import {
   TUI_AGENT_CONFIG
 } from '../../shared/tui-agent-config'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
+import { requiresOrchestrationStartupPrompt } from '../../shared/tui-agent-orchestration'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import {
   detectInstalledAgentsWithShellPathHydration,
@@ -608,6 +609,7 @@ import {
 import { markRemoteAgentWorkspaceTrusted } from '../remote-agent-trust-presets'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
+import { resolveZcodePromptDelivery } from '../zcode/interactive-client'
 import {
   isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
@@ -18855,6 +18857,62 @@ export class OrcaRuntimeService {
     }
   }
 
+  async resolveOrchestrationPromptDelivery(
+    agent: TuiAgent,
+    worktreeId: string
+  ): Promise<'agent-input' | 'startup-command'> {
+    if (!requiresOrchestrationStartupPrompt(agent)) {
+      return 'agent-input'
+    }
+    if (agent !== 'zcode' || !this.store) {
+      return 'startup-command'
+    }
+    const worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+    const repo = this.store.getRepo(worktree.repoId)
+    const commandOverride = this.store.getSettings().agentCmdOverrides?.zcode?.trim()
+    if (!repo) {
+      return 'startup-command'
+    }
+    return resolveZcodePromptDelivery({
+      isRemote: repoIsRemote(repo),
+      commandOverride
+    })
+  }
+
+  async resolveOrchestrationInteractiveAgentCommand(
+    agent: TuiAgent,
+    worktreeId: string
+  ): Promise<string | undefined> {
+    if (agent !== 'zcode' || !this.store) {
+      return undefined
+    }
+    const worktree = await this.resolveWorktreeSelector(`id:${worktreeId}`)
+    const repo = this.store.getRepo(worktree.repoId)
+    if (!repo) {
+      return undefined
+    }
+    const settings = this.store.getSettings()
+    const platform = this.getAgentLaunchPlatformForRepo(repo)
+    const isRemote = repoIsRemote(repo)
+    const shell = resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
+    const plan = buildAgentStartupPlan({
+      agent,
+      prompt: '',
+      cmdOverrides: settings.agentCmdOverrides ?? {},
+      agentArgs: resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs),
+      agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+      platform,
+      shell,
+      isRemote,
+      allowEmptyPromptLaunch: true
+    })
+    return plan?.launchCommand
+  }
+
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
     // Why: the renderer context menu only knows the stable pane key; main owns
     // the runtime terminal handle that agents and CLI commands can address.
@@ -24651,14 +24709,23 @@ export class OrcaRuntimeService {
 
   private async waitForStartupFollowupReady(
     handle: string,
-    expectedProcess: string
+    expectedProcess: string,
+    timeoutMs = 4_500
   ): Promise<string | null> {
     const livePty = this.getLivePtyForHandle(handle)
-    const ptyId = livePty?.pty.ptyId
+    let ptyId = livePty?.pty.ptyId
+    if (!ptyId) {
+      try {
+        ptyId = this.getLiveLeafForHandle(handle).leaf.ptyId ?? undefined
+      } catch {
+        return null
+      }
+    }
     if (!ptyId || !this.ptyController) {
       return null
     }
-    for (let attempt = 0; attempt < 30; attempt += 1) {
+    const deadline = Date.now() + timeoutMs
+    for (let attempt = 0; Date.now() <= deadline; attempt += 1) {
       if (attempt > 0) {
         await new Promise((resolve) => setTimeout(resolve, 150))
       }
@@ -24666,13 +24733,6 @@ export class OrcaRuntimeService {
         const foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
         if (isExpectedAgentProcess(foregroundProcess, expectedProcess)) {
           return ptyId
-        }
-        if (attempt >= 4 && !isShellProcess(foregroundProcess ?? '')) {
-          const hasChildProcesses =
-            (await this.ptyController.hasChildProcesses?.(ptyId).catch(() => false)) ?? false
-          if (hasChildProcesses) {
-            return ptyId
-          }
         }
       } catch {
         // Ignore transient PTY inspection failures and keep polling.
@@ -24683,7 +24743,14 @@ export class OrcaRuntimeService {
 
   private waitForStartupDraftReady(handle: string, agent: TuiAgent): Promise<string | null> {
     const livePty = this.getLivePtyForHandle(handle)
-    const ptyId = livePty?.pty.ptyId
+    let ptyId = livePty?.pty.ptyId
+    if (!ptyId) {
+      try {
+        ptyId = this.getLiveLeafForHandle(handle).leaf.ptyId ?? undefined
+      } catch {
+        return Promise.resolve(null)
+      }
+    }
     if (!ptyId) {
       return Promise.resolve(null)
     }
@@ -24792,6 +24859,8 @@ export class OrcaRuntimeService {
     observeSetupCompletion?: boolean
     createdWithAgent?: TuiAgent
     startupAgent?: TuiAgent
+    deferStartupAgent?: boolean
+    bareDeferredAgentShell?: boolean
     startupLaunchPreferences?: AgentLaunchPreferences
     startupPrompt?: string
     pendingFirstAgentMessageRename?: boolean
@@ -24825,7 +24894,7 @@ export class OrcaRuntimeService {
       throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
     }
     const agentStartup =
-      !args.startup && args.startupAgent
+      !args.startup && args.startupAgent && !args.deferStartupAgent
         ? this.buildStartupForAgent(
             repo,
             args.startupAgent,
@@ -24945,6 +25014,30 @@ export class OrcaRuntimeService {
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err)
           warning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
+          console.warn(`[worktree-create] ${warning}`)
+        }
+      } else if (args.deferStartupAgent && args.startupAgent && this.ptyController?.spawn) {
+        try {
+          const terminal = await this.createDeferredAgentTerminal(`id:${worktree.id}`, {
+            agent: args.startupAgent,
+            ...(args.bareDeferredAgentShell ? { bareShell: true } : {}),
+            ...(args.startupLaunchPreferences
+              ? { launchPreferences: args.startupLaunchPreferences }
+              : {}),
+            surfaceOwner: false
+          })
+          didSpawnStartup = true
+          startupTerminal = {
+            spawned: true,
+            handle: terminal.handle,
+            ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
+            ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
+            ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
+            surface: 'background'
+          }
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err)
+          warning = `Failed to create the deferred agent terminal for ${worktree.path}: ${message}`
           console.warn(`[worktree-create] ${warning}`)
         }
       }
@@ -25739,6 +25832,28 @@ export class OrcaRuntimeService {
           : `Failed to create the startup terminal for ${worktreePath}: ${message}`
         console.warn(`[worktree-create] ${warning}`)
       }
+    } else if (args.deferStartupAgent && args.startupAgent && this.ptyController?.spawn) {
+      try {
+        const terminal = await this.createDeferredAgentTerminal(`id:${worktree.id}`, {
+          agent: args.startupAgent,
+          ...(args.bareDeferredAgentShell ? { bareShell: true } : {}),
+          ...(args.startupLaunchPreferences
+            ? { launchPreferences: args.startupLaunchPreferences }
+            : {}),
+          surfaceOwner: false
+        })
+        didSpawnStartup = true
+        startupTerminalHandle = terminal.handle
+        startupTerminalTabId = terminal.tabId ?? null
+        startupTerminalPaneKey = terminal.paneKey ?? null
+        startupTerminalPtyId = terminal.ptyId ?? null
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        warning = warning
+          ? `${warning} Also failed to create the deferred agent terminal for ${worktreePath}: ${message}`
+          : `Failed to create the deferred agent terminal for ${worktreePath}: ${message}`
+        console.warn(`[worktree-create] ${warning}`)
+      }
     }
     if (shouldActivate) {
       // Why: plain CLI creates should not steal the user's current workspace.
@@ -25939,6 +26054,10 @@ export class OrcaRuntimeService {
       awaitTerminalProvisioning?: boolean
       observeSetupCompletion?: boolean
       createdWithAgent?: TuiAgent
+      startupAgent?: TuiAgent
+      deferStartupAgent?: boolean
+      bareDeferredAgentShell?: boolean
+      startupLaunchPreferences?: AgentLaunchPreferences
       pendingFirstAgentMessageRename?: boolean
       automationProvenance?: AutomationWorkspaceProvenance
       cliProvenance?: CliWorkspaceProvenance
@@ -26084,6 +26203,27 @@ export class OrcaRuntimeService {
         warning = warning
           ? `${warning} Also failed to create the startup terminal for ${result.worktree.path}: ${message}`
           : `Failed to create the startup terminal for ${result.worktree.path}: ${message}`
+      }
+    } else if (args.deferStartupAgent && args.startupAgent && this.ptyController?.spawn) {
+      try {
+        const terminal = await this.createDeferredAgentTerminal(`id:${result.worktree.id}`, {
+          agent: args.startupAgent,
+          ...(args.bareDeferredAgentShell ? { bareShell: true } : {}),
+          ...(args.startupLaunchPreferences
+            ? { launchPreferences: args.startupLaunchPreferences }
+            : {}),
+          surfaceOwner: false
+        })
+        didSpawnStartup = true
+        startupTerminalHandle = terminal.handle
+        startupTerminalTabId = terminal.tabId ?? null
+        startupTerminalPaneKey = terminal.paneKey ?? null
+        startupTerminalPtyId = terminal.ptyId ?? null
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        warning = warning
+          ? `${warning} Also failed to create the deferred agent terminal for ${result.worktree.path}: ${message}`
+          : `Failed to create the deferred agent terminal for ${result.worktree.path}: ${message}`
       }
     }
 
@@ -29153,6 +29293,120 @@ export class OrcaRuntimeService {
       telemetry: startup.startup.telemetry,
       title: opts.title
     })
+  }
+
+  async createDeferredAgentTerminal(
+    worktreeSelector: string,
+    opts: {
+      agent: TuiAgent
+      launchPreferences?: AgentLaunchPreferences
+      bareShell?: boolean
+      title?: string
+      surfaceOwner?: false
+    }
+  ): Promise<RuntimeTerminalCreate> {
+    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (!repo) {
+      throw new Error('Repository for the selected workspace is no longer available.')
+    }
+    if (repo.connectionId) {
+      await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
+    } else {
+      this.markLocalWorkspaceTrustedForAgent(opts.agent, worktree.path)
+    }
+    if (opts.bareShell) {
+      return await this.createTerminal(`id:${worktree.id}`, {
+        title: opts.title,
+        ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {})
+      })
+    }
+    const startup = this.buildStartupForAgent(repo, opts.agent, undefined, opts.launchPreferences)
+    return await this.createTerminal(`id:${worktree.id}`, {
+      ...(startup.startup.env ? { env: startup.startup.env } : {}),
+      ...(startup.startup.launchConfig ? { launchConfig: startup.startup.launchConfig } : {}),
+      launchAgent: startup.agent,
+      title: opts.title,
+      ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {})
+    })
+  }
+
+  async waitForTerminalAgentProcess(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs = 4_500
+  ): Promise<boolean> {
+    const expectedProcess = TUI_AGENT_CONFIG[agent].expectedProcess
+    if ((await this.waitForStartupFollowupReady(handle, expectedProcess, timeoutMs)) !== null) {
+      return true
+    }
+
+    // Why: wrapper CLIs can start successfully while the daemon's cached process-table
+    // snapshot still reports the generic Node parent. Force one authoritative refresh
+    // before declaring startup failure so a live ZCode TUI is not orphaned as failed.
+    const livePty = this.getLivePtyForHandle(handle)
+    let ptyId = livePty?.pty.ptyId
+    if (!ptyId) {
+      try {
+        ptyId = this.getLiveLeafForHandle(handle).leaf.ptyId ?? undefined
+      } catch {
+        return false
+      }
+    }
+    if (!ptyId || !this.ptyController?.confirmForegroundProcess) {
+      return false
+    }
+    try {
+      const confirmedProcess = await this.ptyController.confirmForegroundProcess(ptyId)
+      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+      return isExpectedAgentProcess(confirmedProcess, expectedProcess)
+    } catch {
+      this.assertTerminalAgentStatusPtyBinding(handle, ptyId)
+      return false
+    }
+  }
+
+  async waitForTerminalAgentInputReady(handle: string, agent: TuiAgent): Promise<boolean> {
+    return (await this.waitForStartupDraftReady(handle, agent)) !== null
+  }
+
+  async waitForTerminalProviderSession(
+    handle: string,
+    agent: TuiAgent,
+    observedAfter: number,
+    timeoutMs = 10_000
+  ): Promise<boolean> {
+    const deadline = Date.now() + timeoutMs
+    while (Date.now() <= deadline) {
+      const session = this.getExactWorkerProviderSession(handle, observedAfter)
+      if (session?.agent === agent) {
+        return true
+      }
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    return false
+  }
+
+  async sendTerminalAgentStartupPrompt(
+    handle: string,
+    agent: TuiAgent,
+    prompt: string,
+    launchPreferences?: AgentLaunchPreferences
+  ): Promise<RuntimeTerminalSend> {
+    const terminal = await this.showTerminal(handle)
+    const worktree = await this.resolveWorktreeSelector(`id:${terminal.worktreeId}`)
+    const repo = this.store?.getRepo(worktree.repoId)
+    if (!repo) {
+      throw new Error('Repository for the selected workspace is no longer available.')
+    }
+    const startup = this.buildStartupForAgent(repo, agent, prompt, launchPreferences)
+    if (startup.followup) {
+      throw new Error(`${agent} does not support startup-command prompt delivery.`)
+    }
+    // Why: the launch command contains the multiline Dispatch preamble as one
+    // quoted argv value. Bracketed paste keeps interactive shells from executing
+    // embedded newlines before the closing quote arrives.
+    return await this.sendTerminalAgentPrompt(handle, startup.startup.command)
   }
 
   // Why: dedupes a worktree.create whose response was lost when a mobile

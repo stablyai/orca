@@ -12,6 +12,7 @@ import type {
 } from './transcript-watch-contract'
 import { nativeChatLineDecoderForAgent } from './transcript-tail-reader'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
+import { subscribeZcodeSqliteTranscript } from './zcode-transcript-watch'
 
 export { readNativeChatTranscriptTail } from './transcript-tail-reader'
 export { getActiveNativeChatWatcherCount } from './transcript-watch-engine'
@@ -248,18 +249,21 @@ export async function subscribeNativeChatTranscript(
   setupSignal?: AbortSignal
 ): Promise<NativeChatTranscriptSubscription> {
   setupSignal?.throwIfAborted()
+  // Why: no transcript backend can resolve a blank provider session without
+  // an explicit path. Keep this ahead of backend-specific subscriptions so a
+  // partially initialized ZCode tab cannot leave a permanent SQLite poller.
+  if (!args.filePath && !args.sessionId.trim()) {
+    return { unsubscribe: () => {}, watching: false }
+  }
+  if (args.agent === 'zcode') {
+    return subscribeZcodeSqliteTranscript(args, setupSignal)
+  }
   const decode = nativeChatLineDecoderForAgent(args.agent)
   if (!decode) {
     // Nothing watchable — return a no-op teardown so callers can unconditionally
     // unsubscribe without null-checks.
     return { unsubscribe: () => {}, watching: false }
   }
-  // Why: a blank session id (and no explicit file) can never resolve — bail out
-  // instead of resolve-polling an unresolvable target forever.
-  if (!args.filePath && !args.sessionId.trim()) {
-    return { unsubscribe: () => {}, watching: false }
-  }
-
   let installed: NativeChatTranscriptSubscription | null
   try {
     installed = await attemptInstall(args, decode, setupSignal)

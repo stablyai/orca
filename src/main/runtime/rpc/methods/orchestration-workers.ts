@@ -1,5 +1,4 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
@@ -8,17 +7,21 @@ import { WorkerStartParams } from './orchestration-worker-start-schema'
 import {
   createExistingWorktreeWorkerTerminal,
   createWorkerWorktree,
-  monitorWorkerSetup,
-  requireWorkerAuthority,
   type WorkerEffect,
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
+import {
+  deliverWorkerDispatchInput,
+  failLocalWorkerStart,
+  finalizeWorkerStart,
+  prepareWorkerDispatchPreamble
+} from './orchestration-worker-lifecycle'
+import { mergeZcodeProviderWarning, waitForZcodeReadiness } from './orchestration-worker-zcode'
 import {
   persistGatedSetupSpawnFailure,
   persistWorkerReadinessStage,
   persistWorkerSetupWaitOutcome
 } from './orchestration-worker-setup-gate'
-import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
@@ -75,6 +78,18 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         : requestedWorktree === 'current'
           ? await runtime.showManagedTerminalWorkspace(`id:${coordinatorTerminal.worktreeId}`)
           : await runtime.showManagedTerminalWorkspace(requestedWorktree)
+      const promptDeliveryWorktree = creationWorktree ?? resolvedWorktree
+      const createdTerminalPromptDelivery =
+        agent && promptDeliveryWorktree
+          ? await runtime.resolveOrchestrationPromptDelivery(agent, promptDeliveryWorktree.id)
+          : 'agent-input'
+      const interactiveAgentCommand =
+        agent && createdTerminalPromptDelivery === 'agent-input' && promptDeliveryWorktree
+          ? await runtime.resolveOrchestrationInteractiveAgentCommand(
+              agent,
+              promptDeliveryWorktree.id
+            )
+          : undefined
       let explicitTerminal
       if (params.terminal) {
         explicitTerminal = await runtime.showTerminal(params.terminal)
@@ -117,6 +132,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         mutationReceipt: orchestrationMutation
       })
       const effects: WorkerEffect[] = []
+      const launchObservedAfter = Date.now()
       if (resolvedWorktree) {
         effects.push(
           { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
@@ -124,6 +140,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         )
       }
       let terminalHandle = params.terminal
+      let promptDelivery: 'agent-input' | 'startup-command' = 'agent-input'
       let terminalRevealWarning: string | undefined
       let failedStage = 'terminal_create'
       let setupReceipt: WorkerSetupReceipt = {
@@ -146,11 +163,14 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             params,
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,
+            promptDelivery: createdTerminalPromptDelivery,
+            interactiveAgentCommand,
             effects
           })
           resolvedWorktree = created.worktree
           terminalHandle = created.terminalHandle
           setupReceipt = created.setupReceipt
+          promptDelivery = createdTerminalPromptDelivery
         } else if (!terminalHandle) {
           db.recordWorkerStage({
             dispatchId: started.dispatch.id,
@@ -160,14 +180,19 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           })
           const terminal = await createExistingWorktreeWorkerTerminal({
             runtime,
+            db,
+            dispatchId: started.dispatch.id,
             worktreeId: resolvedWorktree!.id,
             agent: agent as TuiAgent,
             launchPreferences: launch.preferences,
             taskId: task.id,
+            promptDelivery: createdTerminalPromptDelivery,
+            interactiveAgentCommand,
             effects
           })
           terminalHandle = terminal.handle
           terminalRevealWarning = terminal.warning
+          promptDelivery = terminal.promptDelivery
         } else {
           effects.push({
             kind: 'terminal',
@@ -194,6 +219,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         persistWorkerReadinessStage(setupStage)
 
         failedStage = 'agent_readiness'
+        await waitForZcodeReadiness({
+          runtime,
+          terminalHandle,
+          agent: agent as TuiAgent,
+          promptDelivery,
+          timeoutMs: params.timeoutMs ?? 60_000
+        })
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
           timeoutMs: params.timeoutMs ?? 60_000
@@ -209,59 +241,54 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
               : `Agent did not become ready (${wait.status}).`
           )
         }
-        const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
-        const capability = db.prepareStartingWorkerAuthority({
+        const preamble = prepareWorkerDispatchPreamble({
+          runtime,
+          db,
+          taskId: task.id,
+          taskSpec: task.spec,
           dispatchId: started.dispatch.id,
-          handle: terminalHandle,
-          ...terminalAuthority,
+          coordinatorHandle: params.from,
+          terminalHandle,
           worktreeId: resolvedWorktree.id,
           effects,
           setupState: setupReceipt.state,
-          terminalOwnership: params.terminal ? 'external' : 'created'
+          terminalOwnership: params.terminal ? 'external' : 'created',
+          devMode: params.devMode,
+          promptDelivery
         })
 
         failedStage = 'dispatch_input'
-        const preamble = buildDispatchPreamble({
-          taskId: task.id,
-          dispatchId: started.dispatch.id,
-          taskSpec: task.spec,
-          coordinatorHandle: params.from,
-          workerHandle: terminalHandle,
-          dispatchCapability: capability,
-          devMode: params.devMode,
-          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+        await deliverWorkerDispatchInput({
+          runtime,
+          terminalHandle,
+          agent: agent as TuiAgent,
+          promptDelivery,
+          preamble,
+          launchPreferences: launch.preferences,
+          effects
         })
-        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
-        effects.push({
-          kind: 'dispatch_input',
-          role: 'agent',
-          id: terminalHandle,
-          state: 'accepted'
+        terminalRevealWarning = await mergeZcodeProviderWarning(terminalRevealWarning, {
+          runtime,
+          terminalHandle,
+          agent: agent as TuiAgent,
+          promptDelivery,
+          observedAfter: launchObservedAfter,
+          timeoutMs: params.timeoutMs ?? 60_000
         })
-        const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
-        monitorWorkerSetup({
+        return finalizeWorkerStart({
           runtime,
           db,
           runId: run.id,
-          dispatchId: started.dispatch.id,
-          setupReceipt,
-          effects
-        })
-        return {
-          runId: run.id,
           taskId: task.id,
           dispatchId: started.dispatch.id,
-          state: worker.state,
-          stage: worker.stage,
-          setup: setupReceipt,
-          launch: launch.receipt,
           timeoutMs: params.timeoutMs ?? 60_000,
+          setupReceipt,
+          launchReceipt: launch.receipt,
           effects,
-          residualResources: [],
-          ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
-        }
+          warning: terminalRevealWarning
+        })
       } catch (error) {
-        return failWorkerStartWithReceipt({
+        return failLocalWorkerStart({
           db,
           runId: run.id,
           taskId: task.id,
@@ -269,7 +296,9 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           failedStage,
           error,
           setup: setupReceipt,
-          launch: launch.receipt
+          launch: launch.receipt,
+          agent,
+          promptDelivery
         })
       }
     }

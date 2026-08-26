@@ -14,6 +14,7 @@ import {
   boundWorkerTranscriptMessages,
   clampWorkerTranscriptLimit
 } from './worker-transcript-payload'
+import { readZcodeWorkerTranscript } from './worker-transcript-read-zcode'
 
 const MAX_FORWARD_TRANSCRIPT_SCAN_BYTES = 8 * 1024 * 1024
 
@@ -42,6 +43,9 @@ export async function readWorkerTranscript(args: {
   endOffset?: number
   limit?: number
 }): Promise<WorkerTranscriptReadResult> {
+  if (args.agent === 'zcode') {
+    return readZcodeWorkerTranscript(args)
+  }
   const transcriptAgent = resolveNativeChatTranscriptAgent(args.agent)
   if (!transcriptAgent) {
     return { ok: false, reason: 'provider_unsupported', warnings: [] }

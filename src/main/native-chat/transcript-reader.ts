@@ -15,6 +15,8 @@ import {
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
+import { readZcodeSqliteTranscriptViaWorker } from '../ai-vault/session-scanner-opencode-sqlite-worker-spawn'
+import { resolveZcodeSqliteDbPath } from '../ai-vault/zcode-sqlite-transcript'
 
 export type ReadTranscriptResult =
   | {
@@ -42,6 +44,30 @@ export async function readNativeChatTranscript(
   sessionId: string,
   options: ReadTranscriptOptions = {}
 ): Promise<ReadTranscriptResult> {
+  if (agent === 'zcode') {
+    try {
+      const messages: NativeChatMessage[] = []
+      let offset = 0
+      while (true) {
+        const page = await readZcodeSqliteTranscriptViaWorker({
+          dbPath: resolveZcodeSqliteDbPath(options.transcriptPath ?? options.filePath),
+          sessionId,
+          offset,
+          limit: 2_000
+        })
+        messages.push(...page.messages)
+        offset = page.nextOffset
+        if (!page.limited) {
+          return { messages }
+        }
+      }
+    } catch (err) {
+      const message = errorMessage(err)
+      return message.includes('does not exist')
+        ? { error: message, notFound: true }
+        : { error: message }
+    }
+  }
   let filePath: string | null
   try {
     filePath = options.filePath ?? (await resolveSessionFilePath(agent, sessionId, options))

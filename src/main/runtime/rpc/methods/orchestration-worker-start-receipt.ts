@@ -1,8 +1,6 @@
 import type { OrchestrationDb } from '../../orchestration/db'
-import {
-  isUnknownWorkerStartOutcome,
-  type WorkerSetupReceipt
-} from './orchestration-worker-topology'
+import { isUnknownWorkerStartOutcome } from './orchestration-worker-outcome'
+import type { WorkerSetupReceipt } from './orchestration-worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-launch-preferences'
 
 export function failWorkerStartWithReceipt(args: {

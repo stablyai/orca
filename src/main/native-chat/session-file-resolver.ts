@@ -158,6 +158,11 @@ async function resolveSessionFileById(
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
   }
+  // ZCode stores every session in one SQLite database; its readers bypass the
+  // JSONL file resolver and address the database plus session id directly.
+  if (transcriptAgent === 'zcode') {
+    return null
+  }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
   // the build here instead of resolving silently wrong at runtime.

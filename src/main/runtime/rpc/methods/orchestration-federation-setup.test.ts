@@ -2,7 +2,11 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { monitorFederatedSetup } from './orchestration-federation-setup'
+import {
+  monitorFederatedSetup,
+  persistFederatedSetupWaitOutcome
+} from './orchestration-federation-setup'
+import type { WorkerSetupReceipt } from './orchestration-worker-topology'
 
 describe('orchestration federated setup evidence', () => {
   const databases: OrchestrationDb[] = []
@@ -193,5 +197,69 @@ describe('orchestration federated setup evidence', () => {
       }
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
+  })
+})
+
+describe('persistFederatedSetupWaitOutcome', () => {
+  function federatedStage(setup: WorkerSetupReceipt, wait: { satisfied: boolean; status: string }) {
+    const recordRemoteAttachmentStage = vi.fn()
+    const db = { recordRemoteAttachmentStage } as unknown as OrchestrationDb
+    persistFederatedSetupWaitOutcome({
+      db,
+      dispatchId: 'dispatch_remote_wait',
+      worktreeId: 'repo::remote-worktree',
+      terminalHandle: 'term_remote_worker',
+      setup,
+      effects: [{ kind: 'setup', action: 'run', state: setup.state }],
+      wait
+    })
+    return recordRemoteAttachmentStage
+  }
+
+  it('records remote setup_settled only after a terminal transition', () => {
+    const recordStage = federatedStage(
+      {
+        requested: 'run',
+        effective: 'run',
+        source: 'test',
+        hookFound: true,
+        startupPolicy: 'wait-for-setup',
+        state: 'running'
+      },
+      { satisfied: true, status: 'idle' }
+    )
+    expect(recordStage).toHaveBeenCalledWith(
+      expect.objectContaining({ stage: 'setup_settled', setupState: 'succeeded' })
+    )
+  })
+
+  it('records nothing while the remote wait is unresolved', () => {
+    const recordStage = federatedStage(
+      {
+        requested: 'run',
+        effective: 'run',
+        source: 'test',
+        hookFound: true,
+        startupPolicy: 'wait-for-setup',
+        state: 'running'
+      },
+      { satisfied: false, status: 'timeout' }
+    )
+    expect(recordStage).not.toHaveBeenCalled()
+  })
+
+  it('records nothing when the remote receipt already left the running state', () => {
+    const recordStage = federatedStage(
+      {
+        requested: 'run',
+        effective: 'run',
+        source: 'test',
+        hookFound: true,
+        startupPolicy: 'wait-for-setup',
+        state: 'spawn_failed'
+      },
+      { satisfied: false, status: 'timeout' }
+    )
+    expect(recordStage).not.toHaveBeenCalled()
   })
 })

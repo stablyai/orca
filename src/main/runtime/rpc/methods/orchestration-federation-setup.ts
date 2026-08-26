@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
-import { applyWaitForSetupOutcome, type WorkerSetupReceipt } from './orchestration-worker-topology'
+import type { WorkerSetupReceipt } from './orchestration-worker-topology'
+import { applyWaitForSetupOutcome } from './orchestration-worker-setup-gate'
 import {
   isFederationResidualEffect,
   type FederationEffect
@@ -42,10 +43,10 @@ export function persistFederatedSetupSpawnFailure(args: FederationSetupStageArgs
 export function persistFederatedSetupWaitOutcome(
   args: FederationSetupStageArgs & { wait: { satisfied: boolean; status: string } }
 ): void {
-  applyWaitForSetupOutcome(args.setup, args.effects, args.wait)
-  if (args.setup.startupPolicy === 'wait-for-setup') {
-    recordStage(args, args.setup.state === 'failed' ? 'setup_failed' : 'setup_settled')
+  if (!applyWaitForSetupOutcome(args.setup, args.effects, args.wait)) {
+    return
   }
+  recordStage(args, args.setup.state === 'failed' ? 'setup_failed' : 'setup_settled')
 }
 
 export function monitorFederatedSetup(

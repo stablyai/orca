@@ -162,6 +162,16 @@ describe('buildDispatchPreamble', () => {
     expect(section).not.toMatch(/may exit/)
   })
 
+  it('allows one-shot agents to exit after worker_done', () => {
+    const result = buildDispatchPreamble(baseParams({ workerKind: 'one-shot-agent' }))
+    const section = afterWorkerDoneSection(result)
+
+    expect(section).toContain('This one-shot agent process may exit')
+    expect(section).toContain('launch a fresh worker')
+    expect(section).not.toContain('Do not exit the shell')
+    expect(section).not.toContain('Exit the shell after completion')
+  })
+
   it('uses === TASK === separator with the task spec appended', () => {
     const result = buildDispatchPreamble(baseParams({ taskSpec: 'refactor the auth module' }))
     expect(result).toContain('=== TASK ===')

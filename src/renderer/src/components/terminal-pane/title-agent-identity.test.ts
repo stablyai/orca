@@ -11,4 +11,9 @@ describe('titleHasExplicitAgentIdentity', () => {
     expect(titleHasExplicitAgentIdentity('C:\\work\\devin.exe\\ready')).toBe(false)
     expect(titleHasExplicitAgentIdentity('devin-fixtures ready')).toBe(false)
   })
+
+  it('recognizes the ZCode runtime process title', () => {
+    expect(titleHasExplicitAgentIdentity('zcode-cli')).toBe(true)
+    expect(titleHasExplicitAgentIdentity('zcode-cli working')).toBe(true)
+  })
 })

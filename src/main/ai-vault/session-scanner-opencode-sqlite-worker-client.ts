@@ -4,6 +4,8 @@ import type {
   OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
   OpenCodeSqliteParseRequest,
+  OpenCodeSqliteTranscriptRequest,
+  OpenCodeSqliteTranscriptValue,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
@@ -18,6 +20,7 @@ import { errorMessage } from './session-scanner-values'
 
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000
+export const TRANSCRIPT_TIMEOUT_MS = 15_000
 export const IDLE_TEARDOWN_MS = 30_000
 // After this many consecutive worker deaths, fail the remaining queued calls to
 // scan issues instead of respawning so a DB that reliably kills the worker can't
@@ -32,6 +35,7 @@ export type WorkerFactory = () => Worker
 type OpenCodeSqliteRequestBody =
   | Omit<OpenCodeSqliteListRequest, 'id'>
   | Omit<OpenCodeSqliteParseRequest, 'id'>
+  | Omit<OpenCodeSqliteTranscriptRequest, 'id'>
 
 type PendingCall = {
   request: OpenCodeSqliteWorkerRequest
@@ -137,6 +141,22 @@ export class OpenCodeSqliteWorkerClient {
         throw new Error('OpenCode SQLite background scanner could not start.')
       }
       // Reject only this session; the scanner turns the throw into a scan issue.
+      throw err instanceof Error ? err : new Error(String(err))
+    }
+  }
+
+  async transcript(
+    args: Omit<OpenCodeSqliteTranscriptRequest, 'id' | 'kind'>
+  ): Promise<OpenCodeSqliteTranscriptValue> {
+    try {
+      return (await this.dispatch(
+        { kind: 'transcript', ...args },
+        TRANSCRIPT_TIMEOUT_MS
+      )) as OpenCodeSqliteTranscriptValue
+    } catch (err) {
+      if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
+        throw new Error('ZCode SQLite transcript reader could not start.')
+      }
       throw err instanceof Error ? err : new Error(String(err))
     }
   }

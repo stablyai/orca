@@ -167,6 +167,14 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
   })
 
+  it('detects ZCode from its macOS Desktop bundle without a PATH shim', async () => {
+    isCommandOnLocalPathMock.mockImplementation(
+      async (command: string) => command === '/Applications/ZCode.app/Contents/MacOS/ZCode'
+    )
+
+    await expect(detectInstalledAgents()).resolves.toEqual(['zcode'])
+  })
+
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
       if (command !== 'which') {
