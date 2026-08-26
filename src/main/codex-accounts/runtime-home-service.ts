@@ -59,7 +59,7 @@ import {
   prepareSystemConfigForFreshRuntimeMirror,
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/codex-config-mirror'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
 import {
   getWslSelectionKey,
   getSelectedCodexAccountIdForTarget,
@@ -757,7 +757,11 @@ export class CodexRuntimeHomeService {
       systemHomePath,
       managedHomePath: runtimeHomePath
     })
-    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath,
+      systemHomePath,
+      systemConfigDir: toLinuxPath(systemHomePath)
+    })
   }
 
   // Why: `null` is a real value here — it means "use the system-default lane".
