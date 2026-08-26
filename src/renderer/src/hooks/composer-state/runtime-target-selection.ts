@@ -11,6 +11,7 @@ import { resolveWorkspaceCreationTarget } from '@/lib/project-host-workspace-tar
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import {
+  getCachedLocalProjectRuntimeWslContext,
   getLocalRepoProjectExecutionRuntimeContext,
   getProjectRuntimePreflightContext,
   getWslDistroFromPath,
@@ -60,11 +61,17 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
       ? getLocalRepoProjectExecutionRuntimeContext(
           { activeRepoId, activeWorktreeId: null, projects, repos, settings, worktreesByRepo },
           sourceRepo.id,
-          CLIENT_PLATFORM
+          CLIENT_PLATFORM,
+          getCachedLocalProjectRuntimeWslContext()
         )
       : undefined
     if (projectRuntime) {
-      return getProjectRuntimePreflightContext(projectRuntime)
+      if (projectRuntime.status === 'repair-required' || projectRuntime.runtime.kind === 'wsl') {
+        return getProjectRuntimePreflightContext(projectRuntime)
+      }
+      if (projectRuntime.runtime.reason === 'project-override') {
+        return undefined
+      }
     }
     const wslDistro = getWslDistroFromPath(selectedProjectGroup.parentPath)
     return wslDistro ? { wslDistro } : undefined

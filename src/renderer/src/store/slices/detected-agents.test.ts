@@ -118,6 +118,7 @@ describe('createDetectedAgentsSlice WSL context', () => {
     ])
 
     expect(detectAgents).toHaveBeenCalledTimes(1)
+    expect(detectAgents).toHaveBeenCalledWith({ wslDistro: 'Ubuntu' })
     expect(store.getState().localDetectedAgentIdsByContext['wsl:Ubuntu']).toEqual(['claude'])
     expect(store.getState().detectedAgentIds).toBeNull()
   })

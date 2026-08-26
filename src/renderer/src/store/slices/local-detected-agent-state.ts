@@ -19,6 +19,24 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
   let legacyDetectContextKey: string | null = null
   let legacyRefreshContextKey: string | null = null
   let localDetectionGeneration = 0
+  const exposeInflightToLegacy = (
+    contextKey: string,
+    shouldExposeToLegacy: boolean,
+    phase: 'detect' | 'refresh'
+  ): void => {
+    if (!shouldExposeToLegacy) {
+      return
+    }
+    if (phase === 'detect') {
+      legacyDetectContextKey = contextKey
+    } else {
+      legacyRefreshContextKey = contextKey
+    }
+    const patch = getLegacyLoadingPatch(get(), detectedContextKey === contextKey, phase)
+    if (patch) {
+      set(patch)
+    }
+  }
   return {
     ...createEmptyLocalDetectedAgentState(),
 
@@ -30,9 +48,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const existing = get().localDetectedAgentIdsByContext[contextKey]
       const inflightRefresh = refreshPromises.get(contextKey)
       if (inflightRefresh) {
-        if (shouldExposeToLegacy) {
-          legacyRefreshContextKey = contextKey
-        }
+        exposeInflightToLegacy(contextKey, shouldExposeToLegacy, 'refresh')
         return inflightRefresh
       }
       if (existing != null && !failedDetectContextKeys.has(contextKey)) {
@@ -46,22 +62,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
         return Promise.resolve(existing)
       }
       const requestGeneration = localDetectionGeneration
-      const exposeInflightToLegacy = (): void => {
-        if (shouldExposeToLegacy) {
-          legacyDetectContextKey = contextKey
-        }
-        if (!shouldExposeToLegacy) {
-          return
-        }
-        const state = get()
-        const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'detect')
-        if (patch) {
-          set(patch)
-        }
-      }
       const inflight = detectPromises.get(contextKey)
       if (inflight) {
-        exposeInflightToLegacy()
+        exposeInflightToLegacy(contextKey, shouldExposeToLegacy, 'detect')
         return inflight
       }
       if (shouldExposeToLegacy) {
@@ -147,22 +150,9 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       const cached = get().localDetectedAgentIdsByContext[contextKey]
       const hadUsableCache = cached != null && !failedDetectContextKeys.has(contextKey)
       const requestGeneration = localDetectionGeneration
-      const exposeInflightToLegacy = (): void => {
-        if (shouldExposeToLegacy) {
-          legacyRefreshContextKey = contextKey
-        }
-        if (!shouldExposeToLegacy) {
-          return
-        }
-        const state = get()
-        const patch = getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh')
-        if (patch) {
-          set(patch)
-        }
-      }
       const inflight = refreshPromises.get(contextKey)
       if (inflight) {
-        exposeInflightToLegacy()
+        exposeInflightToLegacy(contextKey, shouldExposeToLegacy, 'refresh')
         return inflight
       }
       if (shouldExposeToLegacy) {
@@ -173,8 +163,12 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
       if (clearsLegacyDetect) {
         legacyDetectContextKey = null
       }
+      const exposesSupersededLegacy = Boolean(explicitContext) && clearsLegacyDetect
+      if (exposesSupersededLegacy) {
+        legacyRefreshContextKey = contextKey
+      }
       set((state) => ({
-        ...(shouldExposeToLegacy
+        ...(shouldExposeToLegacy || exposesSupersededLegacy
           ? (getLegacyLoadingPatch(state, detectedContextKey === contextKey, 'refresh') ?? {})
           : {}),
         ...getSupersededDetectPatch(state, contextKey, supersedesDetect, clearsLegacyDetect),

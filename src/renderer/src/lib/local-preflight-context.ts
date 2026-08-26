@@ -115,7 +115,7 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   repoId: string | null | undefined,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
-  wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
+  wslContext: LocalProjectRuntimeWslContext = {}
 ): ProjectExecutionRuntimeResolution | undefined {
   if (appPlatform !== 'win32' || !repoId) {
     return undefined
@@ -243,7 +243,7 @@ export function getLocalAgentPreflightContext(
   return undefined
 }
 
-function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
+export function getCachedLocalProjectRuntimeWslContext(): LocalProjectRuntimeWslContext {
   // Why: preflight selectors are synchronous. Reuse an existing capability
   // answer when available without spawning WSL probes from store reads.
   if (!hasCachedWindowsTerminalCapabilities()) {

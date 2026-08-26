@@ -261,6 +261,11 @@ describe('useComposerState host-context boundaries', () => {
     expect(targetSection).toContain('getLocalRepoProjectExecutionRuntimeContext(')
     expect(targetSection).toContain('getProjectRuntimePreflightContext(projectRuntime)')
     expect(targetSection).toContain('folderSourceRepos.find((repo) => repo.id === repoId)')
+    expect(targetSection).toContain("projectRuntime.runtime.reason === 'project-override'")
+    expect(targetSection).toContain('return undefined')
+    expect(targetSection.indexOf('if (projectRuntime) {')).toBeLessThan(
+      targetSection.indexOf('const wslDistro =')
+    )
     expect(targetSection.indexOf('const sourceRepo =')).toBeLessThan(
       targetSection.indexOf('const wslDistro =')
     )
