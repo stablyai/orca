@@ -5,7 +5,7 @@ import { createServer, type Socket } from 'node:net'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
 import { MAX_TIMER_DELAY_MS } from '../../shared/timer-delay'
-import { mapRuntimeConnectError, sendRequest } from './transport'
+import { mapRuntimeConnectError, sendRequest, shouldUseLocalTcpFallback } from './transport'
 import { RuntimeClientError } from './types'
 
 const servers = new Set<ReturnType<typeof createServer>>()
@@ -78,6 +78,28 @@ describe('runtime transport connection errors', () => {
     )
 
     expect(failure).toMatchObject({ code: 'runtime_unavailable' })
+  })
+})
+
+describe('local TCP fallback admission', () => {
+  const denied = new RuntimeClientError('runtime_permission_denied', 'denied')
+
+  it('admits only a loopback fallback after named-pipe permission denial', () => {
+    expect(shouldUseLocalTcpFallback(denied, 'named-pipe', 'tcp://127.0.0.1:54321')).toBe(true)
+  })
+
+  it.each([
+    [
+      new RuntimeClientError('runtime_unavailable', 'missing'),
+      'named-pipe',
+      'tcp://127.0.0.1:54321'
+    ],
+    [denied, 'unix', 'tcp://127.0.0.1:54321'],
+    [denied, 'named-pipe', 'tcp://0.0.0.0:54321'],
+    [denied, 'named-pipe', 'tcp://127.0.0.1:0'],
+    [denied, 'named-pipe', undefined]
+  ] as const)('rejects a non-permission or non-loopback fallback', (error, kind, endpoint) => {
+    expect(shouldUseLocalTcpFallback(error, kind, endpoint)).toBe(false)
   })
 })
 

@@ -19,18 +19,36 @@ export async function sendRequest<TResult>(
       `Runtime request timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
     )
   }
-  return await new Promise((resolve, reject) => {
-    const transport = findTransport(metadata, 'unix', 'named-pipe')
-    if (!transport) {
-      reject(
-        new RuntimeClientError(
-          'runtime_unavailable',
-          'No compatible transport found in Orca runtime metadata.'
-        )
-      )
-      return
+  const primary = findTransport(metadata, 'unix', 'named-pipe')
+  if (!primary) {
+    throw new RuntimeClientError(
+      'runtime_unavailable',
+      'No compatible transport found in Orca runtime metadata.'
+    )
+  }
+  try {
+    return await sendRequestUsingTransport(metadata, primary, method, params, timeoutMs, envelope)
+  } catch (error) {
+    const fallback = findTransport(metadata, 'local-tcp')
+    if (!shouldUseLocalTcpFallback(error, primary.kind, fallback?.endpoint)) {
+      throw error
     }
-    const socket = createConnection(transport.endpoint)
+    return await sendRequestUsingTransport(metadata, fallback!, method, params, timeoutMs, envelope)
+  }
+}
+
+function sendRequestUsingTransport<TResult>(
+  metadata: RuntimeMetadata,
+  transport: RuntimeMetadata['transports'][number],
+  method: string,
+  params: unknown,
+  timeoutMs: number,
+  envelope?: RuntimeOrchestrationEnvelope
+): Promise<RuntimeRpcResponse<TResult>> {
+  return new Promise((resolve, reject) => {
+    const endpoint = resolveLocalTransportEndpoint(transport)
+    const socket =
+      typeof endpoint === 'string' ? createConnection(endpoint) : createConnection(endpoint)
     let buffer = ''
     let settled = false
     const requestId = randomUUID()
@@ -211,4 +229,37 @@ export function mapRuntimeConnectError(
       ...(error.syscall ? { syscall: error.syscall } : {})
     }
   )
+}
+
+export function shouldUseLocalTcpFallback(
+  error: unknown,
+  primaryKind: RuntimeMetadata['transports'][number]['kind'],
+  fallbackEndpoint: string | undefined
+): boolean {
+  const endpointMatch = fallbackEndpoint
+    ? /^tcp:\/\/127\.0\.0\.1:(\d+)$/.exec(fallbackEndpoint)
+    : null
+  const port = endpointMatch ? Number(endpointMatch[1]) : 0
+  return (
+    primaryKind === 'named-pipe' &&
+    error instanceof RuntimeClientError &&
+    error.code === 'runtime_permission_denied' &&
+    Number.isInteger(port) &&
+    port >= 1 &&
+    port <= 65535
+  )
+}
+
+function resolveLocalTransportEndpoint(
+  transport: RuntimeMetadata['transports'][number]
+): string | { host: '127.0.0.1'; port: number } {
+  if (transport.kind !== 'local-tcp') {
+    return transport.endpoint
+  }
+  const match = /^tcp:\/\/127\.0\.0\.1:(\d+)$/.exec(transport.endpoint)
+  const port = match ? Number(match[1]) : 0
+  if (!match || !Number.isInteger(port) || port < 1 || port > 65535) {
+    throw new RuntimeClientError('runtime_unavailable', 'Invalid local TCP runtime endpoint.')
+  }
+  return { host: '127.0.0.1', port }
 }
