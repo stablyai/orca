@@ -45,6 +45,7 @@ import { toast } from 'sonner'
 import {
   getAccountsClaudeSearchEntries,
   getAccountsCodexSearchEntries,
+  getAccountsCustomProviderSearchEntries,
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
@@ -1987,7 +1988,9 @@ export function AccountsPane({
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
     ) : null,
-    <CustomProviderAccountsSection key="custom-providers" />
+    matchesSettingsSearch(searchQuery, getAccountsCustomProviderSearchEntries()) ? (
+      <CustomProviderAccountsSection key="custom-providers" />
+    ) : null
   ].filter(Boolean)
 
   return (

@@ -108,10 +108,16 @@ export function mergeJsonIntoDraft(
     displayName: json.displayName ?? prev.displayName,
     icon: json.icon ?? prev.icon,
     usageUrl: json.usageUrl ?? prev.usageUrl,
-    tokenEnvVar: json.tokenEnvVar ?? prev.tokenEnvVar,
+    // Why: `json` is always a full re-parse of the entire JSON textarea (see
+    // CustomProviderJsonPanel), never a partial patch — so for these optional
+    // fields, an ABSENT key unambiguously means "the user deleted this line to
+    // clear it," not "leave the old value alone." Falling back to `prev` here
+    // (as `??` does) would resurrect a deleted line the moment the panel
+    // re-serializes the draft.
+    tokenEnvVar: json.tokenEnvVar ?? '',
     mappingMode: (json.mappingMode as CustomProviderDraft['mappingMode']) ?? prev.mappingMode,
-    percentPath: json.percentPath ?? prev.percentPath,
-    usedPaths: json.usedPaths ?? prev.usedPaths,
-    limitPath: json.limitPath ?? prev.limitPath
+    percentPath: json.percentPath ?? '',
+    usedPaths: json.usedPaths ?? [],
+    limitPath: json.limitPath ?? ''
   }
 }

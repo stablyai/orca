@@ -212,6 +212,30 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsCustomProviderSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.accounts.search.a1c3e5f7b9',
+      'Custom AI Provider Accounts'
+    ),
+    description: translate(
+      'auto.components.settings.accounts.search.b2d4f6a8c0',
+      'Point Orca at an internal or corporate usage-tracking endpoint to show its usage in the status bar.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.c3e5a7b9d1', 'custom'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.9f70aa706c', 'provider'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.d4f6b8c0e2', 'endpoint'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.e5a7c9d1f3', 'usage'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.e949b08ffb',
+        'rate limit'
+      ),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.86edc96bc9', 'status bar')
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
@@ -219,5 +243,6 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsGeminiSearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
-  ...getAccountsGrokSearchEntries()
+  ...getAccountsGrokSearchEntries(),
+  ...getAccountsCustomProviderSearchEntries()
 ])

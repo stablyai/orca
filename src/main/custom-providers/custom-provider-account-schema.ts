@@ -3,7 +3,10 @@ import { z } from 'zod'
 export const CustomProviderAccount = z
   .object({
     id: z.string().min(1),
-    displayName: z.string().min(1),
+    // Why: trim before the min-length check so whitespace-only names ("   ")
+    // are rejected instead of persisted — the duplicate-name check below
+    // already treats the trimmed value as the identity.
+    displayName: z.string().trim().min(1),
     enabled: z.boolean(),
     icon: z.string().optional(),
     usageUrl: z.string().startsWith('https://', 'usageUrl must start with https://'),

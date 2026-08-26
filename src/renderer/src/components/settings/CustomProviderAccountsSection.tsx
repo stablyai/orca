@@ -194,6 +194,17 @@ export function CustomProviderAccountsSection(): React.JSX.Element {
       })
       // Why: re-enabling would otherwise show stale/no usage until the next poll.
       void refreshRateLimits()
+    } catch (err) {
+      if (mountedRef.current) {
+        toast.error(
+          err instanceof Error
+            ? err.message
+            : translate(
+                'auto.components.settings.CustomProviderAccountsSection.toggleFailed',
+                'Failed to update provider'
+              )
+        )
+      }
     } finally {
       if (mountedRef.current) {
         setBusyId(null)

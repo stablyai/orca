@@ -336,9 +336,9 @@ export class RateLimitService {
     )
     const results = await Promise.all(
       enabled.map(async (account) => {
-        const keychainToken = this.customProviderTokenResolver?.(account.id) ?? null
-        const token = resolveCustomProviderToken(account, keychainToken)
         try {
+          const keychainToken = this.customProviderTokenResolver?.(account.id) ?? null
+          const token = resolveCustomProviderToken(account, keychainToken)
           return await fetchCustomProviderUsage(account, token)
         } catch (error) {
           return {
@@ -370,10 +370,13 @@ export class RateLimitService {
     for (const id of currentIds) {
       const fresh = results.find((r) => r.accountId === id)
       const previous = this.customProviderUsage[id]
-      // Why: preserve the last successful percent on failure (a stale/error
+      // Why: preserve the last successful percent on a fetch error (a stale/error
       // indicator) rather than snapping the status-bar row to a misleading 0%.
+      // A non-'error' non-'ok' status (e.g. 'unavailable' right after the user
+      // clears their token) is an intentional state change, not a transient
+      // failure, and must be reflected immediately rather than papered over.
       const merged =
-        fresh && fresh.status !== 'ok' && previous?.usedPercent != null
+        fresh && fresh.status === 'error' && previous?.usedPercent != null
           ? { ...fresh, usedPercent: previous.usedPercent }
           : (fresh ?? previous)
       if (merged) {
@@ -492,10 +495,17 @@ export class RateLimitService {
     // endpoint — see RemoteAccountsRateLimitState. Otherwise, also await the
     // custom-provider cycle explicitly (fetchAll's internal call is
     // fire-and-forget) so the returned state reflects it, not just the fixed
-    // providers — a plain await fetchAll() alone would race this call.
+    // providers — a plain await fetchAll() alone would race this call. Both
+    // branches pass skipCustomProviders: true to fetchAll itself so it never
+    // starts its own fire-and-forget cycle on top of the one already awaited
+    // here (or intentionally skipped above), which would otherwise double-fire
+    // an authenticated request per enabled custom provider on every refresh.
     await (options?.skipCustomProviders
       ? this.fetchAll({ force: true, skipCustomProviders: true })
-      : Promise.all([this.fetchAll({ force: true }), this.fetchCustomProviders()]))
+      : Promise.all([
+          this.fetchAll({ force: true, skipCustomProviders: true }),
+          this.fetchCustomProviders()
+        ]))
     return this.getState()
   }
 

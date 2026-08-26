@@ -85,9 +85,9 @@ export function CustomProviderAccountCard({
           <span
             className={
               summary.tone === 'ok'
-                ? 'text-[11px] text-emerald-500'
+                ? 'text-[11px] text-status-success'
                 : summary.tone === 'error'
-                  ? 'text-[11px] text-red-400'
+                  ? 'text-[11px] text-destructive'
                   : 'text-[11px] text-muted-foreground'
             }
           >
@@ -101,11 +101,19 @@ export function CustomProviderAccountCard({
           checked={account.enabled}
           disabled={busy}
           onCheckedChange={(checked) => onToggleEnabled(account, checked)}
-          aria-label={translate(
-            'auto.components.settings.CustomProviderAccountCard.toggleAria',
-            'Enable {{value0}}',
-            { value0: account.displayName }
-          )}
+          aria-label={
+            account.enabled
+              ? translate(
+                  'auto.components.settings.CustomProviderAccountCard.disableAria',
+                  'Disable {{value0}}',
+                  { value0: account.displayName }
+                )
+              : translate(
+                  'auto.components.settings.CustomProviderAccountCard.toggleAria',
+                  'Enable {{value0}}',
+                  { value0: account.displayName }
+                )
+          }
         />
         <Button
           variant="ghost"

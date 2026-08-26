@@ -67,7 +67,9 @@ export function resolveJsonPath(data: unknown, path: string): PathResolution {
       }
       current = current[segment]
     } else {
-      if (!(segment in current)) {
+      // Why: `in` also matches inherited/prototype properties (e.g. "constructor"),
+      // which would resolve truthily against a response that has no such field.
+      if (!Object.hasOwn(current, segment)) {
         return { found: false }
       }
       current = (current as Record<string, unknown>)[segment]
@@ -153,6 +155,12 @@ function computeUsedPercent(
       return numericPathFailure(resolved, 'Used', path)
     }
     used += resolved.value
+  }
+  if (!Number.isFinite(used) || used < 0) {
+    return {
+      failureKind: 'out-of-range',
+      error: `Summed used value (${used}) must be a finite, non-negative number`
+    }
   }
   const limitPath = account.limitPath ?? ''
   const limitResolved = resolveNumericPath(data, limitPath)

@@ -8509,6 +8509,11 @@
         },
         "accounts": {
           "search": {
+            "a1c3e5f7b9": "Custom AI Provider Accounts",
+            "b2d4f6a8c0": "Point Orca at an internal or corporate usage-tracking endpoint to show its usage in the status bar.",
+            "c3e5a7b9d1": "custom",
+            "d4f6b8c0e2": "endpoint",
+            "e5a7c9d1f3": "usage",
             "86edc96bc9": "status bar",
             "e949b08ffb": "rate limit",
             "7e67d7d1b6": "wrk",
@@ -11345,6 +11350,7 @@
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
         },
         "CustomProviderAccountCard": {
+          "disableAria": "Disable {{value0}}",
           "disabled": "Disabled",
           "editAria": "Edit",
           "error": "Error",
@@ -11397,6 +11403,7 @@
           "removed": "Provider removed",
           "saveFailed": "Failed to save provider",
           "title": "Custom Providers",
+          "toggleFailed": "Failed to update provider",
           "updated": "Provider updated"
         },
         "CustomProviderJsonPanel": {
