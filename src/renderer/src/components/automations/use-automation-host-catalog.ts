@@ -5,6 +5,7 @@ import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
 import type { StableAutomationAuthorityRef } from '../../../../shared/automation-owner-ref'
 import { buildAutomationHostCatalog } from './automation-host-catalog'
+import { subscribeAutomationHostInvalidation } from './automation-host-invalidation-window-events'
 import { buildAutomationHostCatalogSource } from './automation-host-catalog-source'
 import {
   automationHostLoadCounts,
@@ -100,20 +101,42 @@ export function useAutomationHostCatalog(
   const repoTables = useMemo(() => groupReposByAutomationAuthority(repos), [repos])
   const repoTablesRef = useRef(repoTables)
   repoTablesRef.current = repoTables
-  const [controller] = useState<AutomationHostQueryController>(() =>
-    createAutomationHostQueryController({
-      // Scoped to the answering authority: another host's identically named repo
-      // is not evidence about this one, and its absence is not evidence either.
-      legacyPartitionContext: (authority) =>
-        automationAuthorityPartitionContext(repoTablesRef.current, authority)
-    })
+  const makeController = useCallback(
+    () =>
+      createAutomationHostQueryController({
+        // Scoped to the answering authority: another host's identically named repo
+        // is not evidence about this one, and its absence is not evidence either.
+        legacyPartitionContext: (authority) =>
+          automationAuthorityPartitionContext(repoTablesRef.current, authority),
+        // Wired by the lifecycle effect below instead: a controller built during
+        // render must hold no window subscription, or StrictMode's doubled
+        // initializer leaks a live listener per mount.
+        eventTarget: null
+      }),
+    []
   )
+  const [controller, setController] = useState<AutomationHostQueryController>(makeController)
+  // Create-in-render, dispose-in-cleanup is asymmetric under StrictMode's
+  // simulated unmount: the cleanup disposes the only controller, and a disposed
+  // controller silently drops every write invalidation — the list then never
+  // shows a create until the app reloads. The effect owns the whole lifecycle:
+  // it replaces a disposed controller and unsubscribes before disposing.
+  useEffect(() => {
+    if (controller.isDisposed()) {
+      setController(makeController())
+      return
+    }
+    const unsubscribe = subscribeAutomationHostInvalidation(controller.handleAuthorityEvent)
+    return () => {
+      unsubscribe()
+      controller.dispose()
+    }
+  }, [controller, makeController])
 
   const [cacheVersion, setCacheVersion] = useState(0)
   useEffect(() => {
     return controller.cache.subscribe(() => setCacheVersion((version) => version + 1))
   }, [controller])
-  useEffect(() => () => controller.dispose(), [controller])
 
   const orphanCount = useCallback(
     (authority: StableAutomationAuthorityRef) => controller.authorityOrphanCount(authority),

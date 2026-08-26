@@ -11,7 +11,7 @@
  */
 
 import { act } from 'react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Automation } from '../../../../shared/automations-types'
 import { hostStableKey } from '../../../../shared/automation-owner-key'
 import { unscopedAutomationListRows, type AutomationListRow } from './automation-list-row-identity'
@@ -131,7 +131,8 @@ describe('AutomationsPage create destination', () => {
     expect(api.automations.create).not.toHaveBeenCalled()
     expect(runtimeCreateCalls()).toHaveLength(1)
     expect(runtimeCreateCalls()[0]?.[2]).toMatchObject({
-      repo: RUNTIME_REPO_ID,
+      repo: `id:${RUNTIME_REPO_ID}`,
+      workspace: `id:${RUNTIME_WORKSPACE_ID}`,
       destination: { selector: { kind: 'self' } }
     })
   })
@@ -152,7 +153,7 @@ describe('AutomationsPage create destination', () => {
 
     expect(api.automations.create).not.toHaveBeenCalled()
     expect(runtimeCreateCalls()).toHaveLength(0)
-    expect(mocks.toastError).toHaveBeenCalled()
+    expect(mocks.editorDialog?.notice?.message).toBeTruthy()
     expect(mocks.editorDialog?.open).toBe(true)
   })
 
@@ -169,7 +170,7 @@ describe('AutomationsPage create destination', () => {
     // A repo with no connection ID is not evidence of local: this one is the
     // runtime's, and the desktop's Self host cannot hold an automation for it.
     expect(api.automations.create).not.toHaveBeenCalled()
-    expect(mocks.toastError).toHaveBeenCalled()
+    expect(mocks.editorDialog?.notice?.message).toBeTruthy()
     expect(mocks.editorDialog?.open).toBe(true)
   })
 
@@ -366,5 +367,81 @@ describe('AutomationsPage edit fencing', () => {
 
     expect(api.automations.update).not.toHaveBeenCalled()
     expect(mocks.editorDialog?.notice?.message).toBeTruthy()
+  })
+})
+
+describe('AutomationsPage edit dialog projects', () => {
+  it('offers the edited row’s own host projects, not the create destination’s', async () => {
+    const automation = makeAutomation({
+      id: 'a-runtime',
+      projectId: RUNTIME_REPO_ID,
+      workspaceId: RUNTIME_WORKSPACE_ID
+    })
+    // The ambient list is the desktop's and never held this record, so an
+    // id lookup there answers with nothing and the row's owner is all there is.
+    api.automations.list.mockResolvedValue([])
+    scopedList([])
+    runtimeHost([automation], [])
+    addRuntimeProject()
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      void mocks.listPanel?.openEditDialog(listedRow(automation.id))
+    })
+
+    expect(mocks.editorDialog?.isEditing).toBe(true)
+    expect(mocks.editorDialog?.repos?.map((repo) => repo.id)).toEqual([RUNTIME_REPO_ID])
+  })
+})
+
+describe('AutomationsPage create admission', () => {
+  it('keeps the create button available while every offered host is ineligible', async () => {
+    // No host has answered, so nothing resolves ready — but the dialog is where
+    // an ineligible host's repair is stated, so the button must still open it.
+    api.automations.listScoped.mockRejectedValue(new Error('offline'))
+    api.automations.list.mockResolvedValue([])
+
+    await renderPage()
+    await settleHostQueries()
+
+    expect(mocks.listPanel?.canCreateAutomation).toBe(true)
+  })
+
+  it('refuses a mismatched create destination before the hooks trust prompt', async () => {
+    // A runtime-owned project under the sole desktop destination: refused, and
+    // refused before the user is asked to trust that project's setup hooks.
+    api.automations.list.mockResolvedValue([])
+    scopedList([])
+    addRuntimeProject()
+    // A setup hook whose default policy is run-by-default, so the old save
+    // order would have raised the trust prompt before refusing the create.
+    const { checkRuntimeHooks } = await import('@/runtime/runtime-hooks-client')
+    vi.mocked(checkRuntimeHooks).mockResolvedValue({
+      status: 'ok',
+      hooks: { scripts: { setup: 'pnpm install' } }
+    } as never)
+
+    await renderPage()
+    await settleHostQueries()
+    await act(async () => {
+      mocks.listPanel?.openCreateDialog()
+    })
+    await act(async () => {
+      mocks.editorDialog?.onDraftChange((current) => ({
+        ...(current as Record<string, unknown>),
+        name: 'Sweep',
+        prompt: 'Do the sweep',
+        projectId: RUNTIME_REPO_ID,
+        workspaceMode: 'new_per_run',
+        workspaceId: ''
+      }))
+    })
+    await save()
+
+    expect(mocks.editorDialog?.notice?.message).toBeTruthy()
+    const { ensureHooksConfirmed } = await import('@/lib/ensure-hooks-confirmed')
+    expect(vi.mocked(ensureHooksConfirmed)).not.toHaveBeenCalled()
+    expect(api.automations.create).not.toHaveBeenCalled()
   })
 })

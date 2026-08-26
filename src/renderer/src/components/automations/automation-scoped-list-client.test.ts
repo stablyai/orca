@@ -31,9 +31,11 @@ const ALL_CAPABILITIES = {
   ]
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   callRuntimeRpc.mockReset()
   getRuntimeEnvironmentStatus.mockReset()
+  // Confirmed capabilities are module-level and must not leak between tests.
+  ;(await client()).resetAutomationCapabilityProbes()
 })
 
 async function client() {
@@ -130,6 +132,113 @@ describe('listScopedAutomations', () => {
     await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).rejects.not.toBeInstanceOf(
       AutomationHostScopeUnsupportedError
     )
+  })
+})
+
+describe('capability probe dedupe', () => {
+  it('shares one in-flight probe across concurrent calls to the same incarnation', async () => {
+    const { listScopedAutomations } = await client()
+    getRuntimeEnvironmentStatus.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      return ALL_CAPABILITIES
+    })
+    callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
+    await Promise.all([
+      listScopedAutomations(RUNTIME, { kind: 'self' }),
+      listScopedAutomations(RUNTIME, { kind: 'orphan' })
+    ])
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
+  })
+
+  it('never re-asks about a capability the incarnation already confirmed', async () => {
+    const { listScopedAutomations, updateAutomationForOwner } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+    callRuntimeRpc.mockResolvedValue({
+      automations: [],
+      items: [],
+      orphanCount: 0,
+      automation: { id: 'a1' }
+    })
+    await listScopedAutomations(RUNTIME, { kind: 'self' })
+    await listScopedAutomations(RUNTIME, { kind: 'orphan' })
+    // A different capability confirmed by the same status answer is also cached.
+    await updateAutomationForOwner(SSH_OWNER, 'a1', { enabled: false })
+    // Mutations intentionally re-probe: owner fencing must not trust a positive
+    // answer after an in-place runtime replacement under the same pairing.
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('re-asks after a re-pair rather than trusting the old incarnation', async () => {
+    const { listScopedAutomations } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+    callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
+    await listScopedAutomations(RUNTIME, { kind: 'self' })
+    await listScopedAutomations({ ...RUNTIME, pairingRevision: 5 }, { kind: 'self' })
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not cache an absence, so an upgraded server recovers without a re-pair', async () => {
+    const { listScopedAutomations, AutomationHostScopeUnsupportedError } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValueOnce({ capabilities: [] })
+    await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).rejects.toBeInstanceOf(
+      AutomationHostScopeUnsupportedError
+    )
+    getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+    callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
+    await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).resolves.toBeTruthy()
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
+  })
+
+  // The fence depends on this: a server downgraded in place ignores
+  // `expectedOwner`, so a confirmation must not outlive its observation window.
+  it('re-asks once a confirmation ages out', async () => {
+    vi.useFakeTimers()
+    try {
+      const { listScopedAutomations, AUTHORITY_CAPABILITY_CONFIRMATION_TTL_MS } = await client()
+      getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+      callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
+      await listScopedAutomations(RUNTIME, { kind: 'self' })
+      vi.advanceTimersByTime(AUTHORITY_CAPABILITY_CONFIRMATION_TTL_MS)
+      await listScopedAutomations(RUNTIME, { kind: 'self' })
+      expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not cache a failed probe, so the next call retries the host', async () => {
+    const { listScopedAutomations } = await client()
+    getRuntimeEnvironmentStatus.mockRejectedValueOnce(new Error('runtime_unavailable'))
+    await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).rejects.toThrow(
+      'runtime_unavailable'
+    )
+    getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+    callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
+    await expect(listScopedAutomations(RUNTIME, { kind: 'self' })).resolves.toBeTruthy()
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
+  })
+
+  it('bounds confirmed capability entries across retired environment incarnations', async () => {
+    const { listScopedAutomations } = await client()
+    getRuntimeEnvironmentStatus.mockResolvedValue(ALL_CAPABILITIES)
+    callRuntimeRpc.mockResolvedValue({ automations: [], items: [], orphanCount: 0 })
+
+    for (let index = 0; index < 32; index += 1) {
+      await listScopedAutomations(
+        { kind: 'runtime', environmentId: `env-${index}`, pairingRevision: 1 },
+        { kind: 'self' }
+      )
+    }
+    await listScopedAutomations(
+      { kind: 'runtime', environmentId: 'env-overflow', pairingRevision: 1 },
+      { kind: 'self' }
+    )
+    await listScopedAutomations(
+      { kind: 'runtime', environmentId: 'env-0', pairingRevision: 1 },
+      { kind: 'self' }
+    )
+
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(34)
   })
 })
 

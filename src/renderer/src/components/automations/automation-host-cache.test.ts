@@ -157,6 +157,18 @@ describe('automation host cache invalidation scope', () => {
     expect(cache.commit(desktopFence, { rows: [row('c')] })).toBe(true)
   })
 
+  it('drops the payload at retirement, so a revived host refetches over showing old rows', () => {
+    const cache = createCache()
+    cache.commit(cache.beginRequest(RUNTIME_SELF), { rows: [row('b')], orphanCount: 3 })
+    cache.evict(hostStableKey(RUNTIME_SELF))
+    cache.beginRequest(RUNTIME_SELF)
+    const revived = cache.getByKey(hostStableKey(RUNTIME_SELF))
+    expect(revived?.data).toEqual([])
+    expect(revived?.fetchedAt).toBeNull()
+    expect(revived?.orphanCount).toBeNull()
+    expect(cache.freshness(RUNTIME_SELF)).toBe('missing')
+  })
+
   it('evicts a departed entry and caps the retired pool', () => {
     const cache = createCache({ retiredLimit: 1 })
     cache.commit(cache.beginRequest(DESKTOP_SELF), { rows: [row('a')] })

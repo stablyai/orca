@@ -9,11 +9,7 @@
  * that would attribute other hosts' automations to the selected one.
  */
 
-import {
-  callRuntimeRpc,
-  getRuntimeEnvironmentStatus,
-  type RuntimeClientTarget
-} from '@/runtime/runtime-rpc-client'
+import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import type {
   Automation,
   AutomationCreateInput,
@@ -36,26 +32,24 @@ import type {
   AutomationOwnerPrecondition
 } from '../../../../shared/automation-owner-precondition'
 import {
+  toRuntimeAutomationCreateInput,
+  toRuntimeAutomationUpdateInput
+} from './automation-host-client'
+import {
+  assertAuthorityCapability,
+  assertOwnerFencingSupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
   AUTOMATION_LIST_HOST_SCOPE_UPDATE_REQUIRED_MESSAGE,
-  AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-  AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE,
-  type RuntimeCapability
-} from '../../../../shared/protocol-version'
-import { automationAuthorityCatalogKey } from './automation-host-catalog-types'
-import { toRuntimeAutomationUpdateInput } from './automation-host-client'
-import { automationHostDiagnostics } from './automation-host-diagnostics'
+  AutomationHostScopeUnsupportedError,
+  REQUEST_TIMEOUT_MS
+} from './automation-capability-probe'
 
-const REQUEST_TIMEOUT_MS = 15_000
-
-export class AutomationHostScopeUnsupportedError extends Error {
-  readonly code = 'unsupported_host_scope'
-
-  constructor(message: string) {
-    super(message)
-    this.name = 'AutomationHostScopeUnsupportedError'
-  }
-}
+export {
+  AutomationHostScopeUnsupportedError,
+  AUTHORITY_CAPABILITY_CONFIRMATION_TTL_MS,
+  AUTHORITY_CAPABILITY_CONFIRMATION_MAX,
+  resetAutomationCapabilityProbes
+} from './automation-capability-probe'
 
 export class AutomationListResponseError extends Error {
   readonly code = 'invalid_response'
@@ -117,41 +111,6 @@ async function callAuthority<TResult>(
       ? { expectedEnvironmentPairingRevision: authority.pairingRevision }
       : {})
   })
-}
-
-/**
- * Fails closed on a missing capability, but only on a *known* absence: an
- * unreachable authority must classify as unavailable and retry, not as an old
- * server the user is told to upgrade.
- *
- * The probe is counted here because it is counted nowhere else: it deliberately
- * re-fetches on every call and rides outside the scheduler's four-slot pool, so
- * an instrument that saw only pooled work would report half the relay traffic a
- * 50-host refresh actually costs.
- */
-async function assertAuthorityCapability(
-  authority: AutomationAuthorityRef,
-  capability: RuntimeCapability,
-  message: string
-): Promise<void> {
-  if (authority.kind !== 'runtime') {
-    return
-  }
-  automationHostDiagnostics.recordCapabilityProbe({
-    authorityKey: automationAuthorityCatalogKey(authority)
-  })
-  const status = await getRuntimeEnvironmentStatus(authority.environmentId, REQUEST_TIMEOUT_MS)
-  if (!status.capabilities?.includes(capability)) {
-    throw new AutomationHostScopeUnsupportedError(message)
-  }
-}
-
-async function assertOwnerFencingSupported(authority: AutomationAuthorityRef): Promise<void> {
-  await assertAuthorityCapability(
-    authority,
-    AUTOMATION_OWNER_FENCING_RUNTIME_CAPABILITY,
-    AUTOMATION_OWNER_FENCING_UPDATE_REQUIRED_MESSAGE
-  )
 }
 
 function validated(raw: unknown, selector: AutomationListScopeSelector): ScopedAutomationList {
@@ -328,11 +287,8 @@ export async function createAutomationForDestination(
   destination: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
-  const { projectId, workspaceId, ...rest } = input
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
-    ...rest,
-    repo: projectId,
-    workspace: input.workspaceMode === 'existing' ? (workspaceId ?? undefined) : undefined,
+    ...toRuntimeAutomationCreateInput(input),
     destination
   })
   return result.automation

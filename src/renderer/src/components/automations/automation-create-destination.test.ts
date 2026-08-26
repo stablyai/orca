@@ -4,8 +4,10 @@ import type {
   AutomationHostCatalogEntry
 } from './automation-host-catalog-types'
 import {
+  automationCreateHostOffered,
   automationCreateHostStableKey,
   automationCreateProjectMismatch,
+  automationCreateUpdateRequiredAuthorityLabels,
   preselectAutomationCreateHost,
   resolveAutomationCreateDestination,
   revalidateAutomationCreateDestination,
@@ -113,6 +115,76 @@ describe('create destination revalidation', () => {
       status: 'choice-required',
       reason: 'unselected'
     })
+  })
+})
+
+describe('offered create hosts', () => {
+  it('offers an ineligible host rather than hiding it', () => {
+    // The regression this pins: a connected host on a pre-host-scoping server
+    // is ineligible, and hiding it removed every connected host from the picker.
+    expect(
+      automationCreateHostOffered(
+        entry({
+          querySupport: 'legacy-unscoped',
+          scopeGap: 'authority-unscoped'
+        })
+      )
+    ).toBe(true)
+    expect(automationCreateHostOffered(entry({ owner: null, catalogState: 'unhydrated' }))).toBe(
+      true
+    )
+  })
+
+  it('hides only rows that can never become destinations', () => {
+    expect(automationCreateHostOffered(entry({ kind: 'orphan' }))).toBe(false)
+    expect(automationCreateHostOffered(entry({ owner: null, catalogState: 'removed' }))).toBe(false)
+  })
+
+  it('names the authorities a server update would repair, once each', () => {
+    const legacySelf = entry({
+      stableKey: 'runtime:r1:self',
+      authorityLabel: 'legacy-box',
+      querySupport: 'legacy-unscoped',
+      scopeGap: 'authority-unscoped'
+    })
+    const legacySshChild = entry({
+      stableKey: 'runtime:r1:ssh:box',
+      kind: 'ssh',
+      authorityLabel: 'legacy-box',
+      querySupport: 'legacy-unscoped',
+      scopeGap: 'authority-unscoped'
+    })
+    const incompatible = entry({
+      stableKey: 'runtime:r2:self',
+      authorityLabel: 'older-box',
+      querySupport: 'incompatible'
+    })
+    expect(
+      automationCreateUpdateRequiredAuthorityLabels([
+        entry(),
+        legacySelf,
+        legacySshChild,
+        incompatible
+      ])
+    ).toEqual(['legacy-box', 'older-box'])
+  })
+
+  it('does not blame the server for hosts another repair or none would fix', () => {
+    // Unverified since disconnect: the repair is a reconnect, not an update.
+    const unverified = entry({
+      stableKey: 'desktop:ssh:cold',
+      kind: 'ssh',
+      querySupport: 'legacy-unscoped',
+      scopeGap: 'target-unverified'
+    })
+    // Scoped but not yet hydrated: disabled, and no repair to name.
+    const unhydrated = entry({
+      stableKey: 'desktop:ssh:warm',
+      kind: 'ssh',
+      owner: null,
+      catalogState: 'unhydrated'
+    })
+    expect(automationCreateUpdateRequiredAuthorityLabels([unverified, unhydrated])).toEqual([])
   })
 })
 

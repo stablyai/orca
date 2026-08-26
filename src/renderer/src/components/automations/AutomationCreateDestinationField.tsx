@@ -11,7 +11,11 @@ import {
 import { translate } from '@/i18n/i18n'
 import { AutomationHostLabel, AutomationHostStatusBadges } from './AutomationHostBadges'
 import { Field } from './automation-page-parts'
-import { automationCreateHostEligible } from './automation-create-destination'
+import {
+  automationCreateHostEligible,
+  automationCreateHostOffered,
+  automationCreateUpdateRequiredAuthorityLabels
+} from './automation-create-destination'
 import { groupAutomationHostEntriesByAuthority } from './automation-host-picker-groups'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 
@@ -32,11 +36,12 @@ export function AutomationCreateDestinationField({
   labelClassName?: string
 }): React.JSX.Element {
   const selected = control.resolution.status === 'ready' ? control.resolution.entry : null
-  // Offered and resolved by the same predicate, so the list never contains a
-  // host that selecting would refuse (e.g. a view-only entry).
+  // Ineligible hosts stay listed but disabled: hiding them read as the host
+  // being gone, and it hid every connected host on a pre-host-scoping server.
   const groups = groupAutomationHostEntriesByAuthority(
-    control.entries.filter(automationCreateHostEligible)
+    control.entries.filter(automationCreateHostOffered)
   )
+  const updateRequiredAuthorities = automationCreateUpdateRequiredAuthorityLabels(control.entries)
   const label = translate('auto.components.automations.createDestination.label', 'Create on')
 
   return (
@@ -58,6 +63,7 @@ export function AutomationCreateDestinationField({
                 <SelectItem
                   key={entry.stableKey}
                   value={entry.stableKey}
+                  disabled={!automationCreateHostEligible(entry)}
                   data-host-stable-key={entry.stableKey}
                 >
                   <span className="flex min-w-0 items-center gap-2">
@@ -91,6 +97,19 @@ export function AutomationCreateDestinationField({
               )}
         </p>
       )}
+      {updateRequiredAuthorities.length > 0 ? (
+        // A disabled row's tooltip is unreachable, so the repair is stated here.
+        <p
+          className="text-xs text-muted-foreground"
+          data-testid="automation-create-update-required"
+        >
+          {translate(
+            'auto.components.automations.createDestination.updateRequired',
+            'Update the Orca server on {hosts} to create automations there.'
+            // Replacer fn: a literal replacement would expand `$` patterns in host labels.
+          ).replace('{hosts}', () => updateRequiredAuthorities.join(', '))}
+        </p>
+      ) : null}
     </Field>
   )
 }

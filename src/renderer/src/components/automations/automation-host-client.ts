@@ -66,11 +66,8 @@ export function getAutomationOwnerTarget(
   return getAutomationTargetFromHostId(automation.runContext?.hostId)
 }
 
-export function getAutomationCreateTarget(input: AutomationCreateInput): AutomationHostTarget {
-  return getAutomationTargetFromHostId(input.runContext?.hostId)
-}
-
-function toRuntimeAutomationCreateInput(
+/** Renames the desktop input's target fields to the wire contract every authority speaks. */
+export function toRuntimeAutomationCreateInput(
   input: AutomationCreateInput
 ): RuntimeAutomationCreateInput {
   const { projectId, workspaceId, ...rest } = input
@@ -123,17 +120,6 @@ export async function listAutomationRunsForTarget(
     { timeoutMs: 15_000 }
   )
   return result.runs
-}
-
-export async function createAutomationForTarget(input: AutomationCreateInput): Promise<Automation> {
-  const target = getAutomationCreateTarget(input)
-  const result = await callRuntimeRpc<{ automation: Automation }>(
-    target,
-    'automation.create',
-    toRuntimeAutomationCreateInput(input),
-    { timeoutMs: 15_000 }
-  )
-  return result.automation
 }
 
 export async function updateAutomationForTarget(

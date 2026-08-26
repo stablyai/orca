@@ -1,9 +1,22 @@
+import type { Automation } from '../../../../shared/automations-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 
 export const RUNTIME_REPO_ID = 'repo-2'
 export const RUNTIME_WORKSPACE_ID = 'workspace-2'
+
+/** Builds the host-scoped response used by the page harness. */
+export function selfScopedList(automations: Automation[]): Record<string, unknown> {
+  return {
+    automations,
+    items: automations.map((automation) => ({
+      automationId: automation.id,
+      selector: { kind: 'self' }
+    })),
+    orphanCount: 0
+  }
+}
 
 type RuntimeFixtureMocks = {
   state: Record<string, unknown>

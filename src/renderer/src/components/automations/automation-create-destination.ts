@@ -29,6 +29,7 @@ import {
   repoConnectionIdIn,
   type AutomationAuthorityRepoTables
 } from './automation-authority-identity'
+import { automationHostRecoveryActions } from './automation-host-status-descriptors'
 
 export type AutomationCreateDestinationChoiceReason =
   /** No host is selected and nothing may be assumed. */
@@ -59,6 +60,35 @@ export function automationCreateHostEligible(
   entry: AutomationHostCatalogEntry
 ): entry is AutomationHostCatalogEntry & { owner: AutomationOwnerRef } {
   return entry.kind !== 'orphan' && entry.owner !== null && entry.querySupport === 'scoped'
+}
+
+/**
+ * What the picker lists: a superset of eligibility on purpose. An ineligible
+ * host renders disabled with its status stated, because a host the rest of the
+ * app still shows must not silently vanish here — omission reads as the host
+ * being gone. Only rows that can never become destinations stay hidden: the
+ * orphan bucket and removed targets.
+ */
+export function automationCreateHostOffered(entry: AutomationHostCatalogEntry): boolean {
+  return entry.kind !== 'orphan' && entry.catalogState !== 'removed'
+}
+
+/**
+ * The authorities whose ineligibility a server update would repair, named so
+ * the field can say which machines need updating. A disabled row cannot explain
+ * itself — its tooltip sits behind pointer-events: none — and not every
+ * disabled host is repaired this way (an unverified target needs a reconnect),
+ * so the hint names exactly the update-repairable ones.
+ */
+export function automationCreateUpdateRequiredAuthorityLabels(
+  entries: readonly AutomationHostCatalogEntry[]
+): string[] {
+  const labels = entries
+    .filter(automationCreateHostOffered)
+    .filter((entry) => !automationCreateHostEligible(entry))
+    .filter((entry) => automationHostRecoveryActions(entry).authority === 'update-server')
+    .map((entry) => entry.authorityLabel)
+  return [...new Set(labels)]
 }
 
 export function resolveAutomationCreateDestination(

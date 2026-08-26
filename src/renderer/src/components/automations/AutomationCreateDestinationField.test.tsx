@@ -42,9 +42,29 @@ const ENTRY: AutomationHostCatalogEntry = {
   querySupport: 'scoped'
 }
 
-function control(projects: Repo[]): AutomationCreateDestinationControl {
+const LEGACY_ENTRY: AutomationHostCatalogEntry = {
+  stableRef: { authority: { kind: 'runtime', environmentId: 'r1' }, selector: { kind: 'self' } },
+  owner: {
+    authority: { kind: 'runtime', environmentId: 'r1', pairingRevision: 1 },
+    selector: { kind: 'self' }
+  },
+  stableKey: 'host:runtime:r1:self',
+  label: 'legacy-box',
+  authorityLabel: 'legacy-box',
+  kind: 'self',
+  catalogState: 'authoritative',
+  authorityHealth: 'fresh',
+  executionHealth: 'connected',
+  querySupport: 'legacy-unscoped',
+  scopeGap: 'authority-unscoped'
+}
+
+function control(
+  projects: Repo[],
+  entries: AutomationHostCatalogEntry[] = [ENTRY]
+): AutomationCreateDestinationControl {
   return {
-    entries: [ENTRY],
+    entries,
     resolution: {
       status: 'ready',
       authority: OWNER.authority,
@@ -56,11 +76,11 @@ function control(projects: Repo[]): AutomationCreateDestinationControl {
   }
 }
 
-function render(projects: Repo[]): void {
+function render(projects: Repo[], entries?: AutomationHostCatalogEntry[]): void {
   act(() => {
     root.render(
       <TooltipProvider>
-        <AutomationCreateDestinationField control={control(projects)} />
+        <AutomationCreateDestinationField control={control(projects, entries)} />
       </TooltipProvider>
     )
   })
@@ -82,5 +102,18 @@ describe('AutomationCreateDestinationField', () => {
 
     expect(emptyNote()).toBeNull()
     expect(container.textContent).toContain('Local Mac')
+  })
+
+  it('names the hosts a server update would let create, instead of hiding them', () => {
+    render([{ id: 'repo-1' } as Repo], [ENTRY, LEGACY_ENTRY])
+
+    const note = container.querySelector('[data-testid="automation-create-update-required"]')
+    expect(note?.textContent).toContain('legacy-box')
+  })
+
+  it('says nothing about updates when every offered host is eligible', () => {
+    render([{ id: 'repo-1' } as Repo])
+
+    expect(container.querySelector('[data-testid="automation-create-update-required"]')).toBeNull()
   })
 })

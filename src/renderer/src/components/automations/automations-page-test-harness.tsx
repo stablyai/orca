@@ -12,7 +12,7 @@
  * guarantees.
  */
 
-import { act, type ReactNode } from 'react'
+import { act, createElement, StrictMode, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, type Mock, vi } from 'vitest'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
@@ -25,10 +25,12 @@ import type { AutomationHostCatalogView } from './use-automation-host-catalog'
 import type { AutomationCreateDestinationControl } from './use-automation-create-destination'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { AutomationListRow } from './automation-list-row-identity'
+import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 import {
   addRuntimeProject as addRuntimeProjectFixture,
   RUNTIME_REPO_ID as RUNTIME_REPO_ID_FIXTURE,
-  RUNTIME_WORKSPACE_ID as RUNTIME_WORKSPACE_ID_FIXTURE
+  RUNTIME_WORKSPACE_ID as RUNTIME_WORKSPACE_ID_FIXTURE,
+  selfScopedList
 } from './automations-page-runtime-fixtures'
 
 export const RUNTIME_REPO_ID = RUNTIME_REPO_ID_FIXTURE
@@ -69,6 +71,7 @@ export type ListPanelProps = {
   toggleAutomation: (row: AutomationListRow) => void
   requestDeleteAutomation: (row: AutomationListRow) => void
   openCreateDialog: () => void
+  canCreateAutomation: boolean
 }
 
 export type DetailPaneProps = {
@@ -309,18 +312,6 @@ export const RUNTIME_SELF_FILTER = {
   }
 }
 
-/** The scoped-list shape every self-owned host answers with. */
-function selfScopedList(automations: Automation[]): Record<string, unknown> {
-  return {
-    automations,
-    items: automations.map((automation) => ({
-      automationId: automation.id,
-      selector: { kind: 'self' }
-    })),
-    orphanCount: 0
-  }
-}
-
 /** The local authority's automation RPC surface, served from the same programmable
  *  `api.automations` mocks; an environment target answers from `runtimeHost()` state. */
 async function answerAutomationRpc(
@@ -379,7 +370,7 @@ export function scopedList(automations: Automation[]): void {
 
 const roots: Root[] = []
 
-export async function renderPage(): Promise<{
+export async function renderPage(options?: { strict?: boolean }): Promise<{
   container: HTMLDivElement
   rerender: () => Promise<void>
 }> {
@@ -389,7 +380,12 @@ export async function renderPage(): Promise<{
   roots.push(root)
   const rerender = async (): Promise<void> => {
     await act(async () => {
-      root.render(<AutomationsPage />)
+      // Strict mounts double-invoke effects the way the dev app does, which is
+      // where a dispose-without-revive lifecycle bug becomes visible.
+      const page = options?.strict
+        ? createElement(StrictMode, null, createElement(AutomationsPage))
+        : createElement(AutomationsPage)
+      root.render(page)
     })
   }
   await rerender()
@@ -434,6 +430,8 @@ export function installAutomationsPageHarness(): void {
   beforeEach(() => {
     globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.clearAllMocks()
+    // Confirmed capabilities are module-level and must not leak between tests.
+    resetAutomationCapabilityProbes()
     // A prior test's wholesale mockImplementation must not leak forward.
     mocks.callRuntimeRpc.mockReset()
     mocks.callRuntimeRpc.mockImplementation(answerAutomationRpc)

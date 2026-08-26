@@ -626,3 +626,16 @@ describe('AutomationsPage owner conflicts', () => {
     expect(mocks.listPanel?.isActionEnabled(listedRow(automation.id), 'delete')).toBe(true)
   })
 })
+
+describe('AutomationsPage refresh independence', () => {
+  // The external-manager probe is per host and can hang on a dead provider; the
+  // automation list must settle without waiting for it.
+  it('settles the list even when the external manager probe never answers', async () => {
+    api.automations.listExternalManagerForOwner.mockReturnValue(new Promise(() => undefined))
+
+    const { container } = await renderPage()
+
+    expect(rows(container, 'automation-row')).toEqual(['Nightly'])
+    expect((mocks.listPanel as { isRefreshing?: boolean } | null)?.isRefreshing).toBe(false)
+  })
+})

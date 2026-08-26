@@ -71,6 +71,8 @@ export type AutomationHostQueryController = {
   handleAuthorityEvent: (event: AutomationAuthorityChangeEvent) => void
   /** Latest orphan count the authority reported, so the next catalog can show its orphan entry. */
   authorityOrphanCount: (authority: StableAutomationAuthorityRef) => number | null
+  /** True once disposed. A disposed controller drops every event and refresh, so a mounted owner must replace it. */
+  isDisposed: () => boolean
   dispose: () => void
 }
 
@@ -130,6 +132,7 @@ export function createAutomationHostQueryController(
     })
   let latest: AutomationHostCatalog | null = null
   let selected: string | null = null
+  let disposed = false
 
   const targetsFor = (
     catalog: AutomationHostCatalog,
@@ -161,8 +164,10 @@ export function createAutomationHostQueryController(
     }
   })
 
-  // Subscribed here rather than by the page: an unsubscribed controller silently
-  // stops refreshing on writes, which looks like stale data, not a missing wire.
+  // Subscribed here by default: an unsubscribed controller silently stops
+  // refreshing on writes, which looks like stale data, not a missing wire. A
+  // caller that opts out with `eventTarget: null` (the React hook, whose
+  // StrictMode-safe lifecycle owns the subscription) takes that duty on itself.
   const eventTarget =
     options.eventTarget === undefined ? (globalThis.window ?? null) : options.eventTarget
   const unsubscribe = eventTarget
@@ -211,7 +216,9 @@ export function createAutomationHostQueryController(
       }
       return newest?.orphanCount ?? null
     },
+    isDisposed: () => disposed,
     dispose: () => {
+      disposed = true
       unsubscribe?.()
       invalidation.dispose()
       scheduler.dispose()

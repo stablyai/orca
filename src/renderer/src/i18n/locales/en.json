@@ -15402,7 +15402,6 @@
           "rowActions": "Automation actions",
           "tableLastRun": "Last run",
           "noListMatches": "No automations match.",
-          "destinationUnavailable": "The selected automation destination is not ready. Reconnect it and try again.",
           "destinationProjectUnavailable": "Choose a project owned by the selected automation destination."
         },
         "AutomationsPageSkeleton": {
@@ -15666,7 +15665,8 @@
           "unavailable": "That host cannot hold a new automation yet. Choose another host to create this one on.",
           "stale": "{host} changed while this form was open. Choose it again before saving.",
           "projectMismatch": "That project is not on {host}. Choose a project on that host, or another host.",
-          "noProjects": "No projects are set up on {host}. Add one there, or choose another host."
+          "noProjects": "No projects are set up on {host}. Add one there, or choose another host.",
+          "updateRequired": "Update the Orca server on {hosts} to create automations there."
         }
       },
       "agent": {

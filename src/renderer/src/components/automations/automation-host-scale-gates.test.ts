@@ -34,6 +34,7 @@ import {
   type AutomationHostFetchTarget
 } from './automation-host-scheduler'
 import { AUTOMATION_HOST_REQUEST_CONCURRENCY } from './automation-host-scheduler-queue'
+import { resetAutomationCapabilityProbes } from './automation-scoped-list-client'
 
 const callRuntimeRpc = vi.fn()
 const getRuntimeEnvironmentStatus = vi.fn()
@@ -254,7 +255,10 @@ function watchLongTasks(): () => number {
   }
 }
 
-function harness(): { cache: AutomationHostCache; refresh: () => Promise<void> } {
+function harness(): {
+  cache: AutomationHostCache
+  refresh: (options?: { force?: boolean }) => Promise<void>
+} {
   const cache = createAutomationHostCache({
     catalogGeneration: () => 0,
     connectionGeneration: () => 0
@@ -265,7 +269,7 @@ function harness(): { cache: AutomationHostCache; refresh: () => Promise<void> }
     isVisible: () => true,
     scheduleRetry: () => () => {}
   })
-  return { cache, refresh: () => scheduler.refresh(ALL_REFS.map(targetFor)) }
+  return { cache, refresh: (options) => scheduler.refresh(ALL_REFS.map(targetFor), options) }
 }
 
 function snapshot(): AutomationHostDiagnosticsSnapshot {
@@ -278,6 +282,8 @@ function authorityCounters(snap: AutomationHostDiagnosticsSnapshot, index: numbe
 
 beforeEach(() => {
   automationHostDiagnostics.reset()
+  // Confirmed capabilities are module-level and must not leak between tests.
+  resetAutomationCapabilityProbes()
   wire = {
     inFlight: 0,
     maxInFlight: 0,
@@ -384,27 +390,40 @@ describe('one refresh of 50 hosts carrying 1,000 automations', () => {
 })
 
 describe('relay cost the request pool cannot see', () => {
-  // The probe is deliberate and unpooled, so the honest number for a 50-host
-  // refresh is requests plus probes — not the pooled count on its own.
-  it('counts one capability probe for every scoped list, and none for a legacy one', async () => {
+  // The probe is deliberate and unpooled, but it dedupes per authority
+  // incarnation: concurrent callers share the in-flight status.get and a
+  // confirmed capability is never re-asked, so a 50-host refresh probes each
+  // scoped authority once — not once per host.
+  it('counts one capability probe per scoped authority, and none for a legacy one', async () => {
     const { refresh } = harness()
 
     await refresh()
 
     const snap = snapshot()
     const scopedEntries = SCOPED_AUTHORITIES * ENTRIES_PER_AUTHORITY
-    expect(wire.probes).toBe(scopedEntries)
-    expect(snap.totals.capabilityProbes).toBe(scopedEntries)
+    expect(wire.probes).toBe(SCOPED_AUTHORITIES)
+    expect(snap.totals.capabilityProbes).toBe(SCOPED_AUTHORITIES)
     for (let index = 0; index < AUTHORITY_COUNT; index += 1) {
-      expect(authorityCounters(snap, index).capabilityProbes).toBe(
-        isLegacyAuthority(index) ? 0 : ENTRIES_PER_AUTHORITY
-      )
+      expect(authorityCounters(snap, index).capabilityProbes).toBe(isLegacyAuthority(index) ? 0 : 1)
     }
-    // Scoped hosts cost two round trips each, so the pooled count alone reports
-    // barely half the traffic this refresh actually put on the relay.
     expect(snap.totals.requests + snap.totals.capabilityProbes).toBe(
-      scopedEntries * 2 + (AUTHORITY_COUNT - SCOPED_AUTHORITIES)
+      scopedEntries + SCOPED_AUTHORITIES + (AUTHORITY_COUNT - SCOPED_AUTHORITIES)
     )
+  })
+
+  // The cache is per incarnation, so even a forced second refresh — which
+  // re-fetches every list — costs no probes at all.
+  it('does not probe again on a later refresh of the same incarnations', async () => {
+    const { refresh } = harness()
+
+    await refresh()
+    const probesAfterFirst = wire.probes
+    const scopedCallsAfterFirst = wire.scopedCalls
+    await refresh({ force: true })
+
+    expect(probesAfterFirst).toBe(SCOPED_AUTHORITIES)
+    expect(wire.probes).toBe(probesAfterFirst)
+    expect(wire.scopedCalls).toBeGreaterThan(scopedCallsAfterFirst)
   })
 })
 

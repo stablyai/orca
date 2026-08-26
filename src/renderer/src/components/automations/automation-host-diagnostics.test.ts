@@ -345,15 +345,18 @@ describe('automation host request counters', () => {
 })
 
 describe('unpooled capability probes', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     callRuntimeRpc.mockReset()
     getRuntimeEnvironmentStatus.mockReset()
     automationHostDiagnostics.reset()
+    // Confirmed capabilities are module-level and must not leak between tests.
+    ;(await import('./automation-scoped-list-client')).resetAutomationCapabilityProbes()
   })
 
-  // The probe rides outside the four-slot pool and always re-fetches, so an
-  // instrument blind to it would report half the relay traffic a refresh costs.
-  it('counts the status.get probe every runtime-scoped list rides on', async () => {
+  // The probe rides outside the four-slot pool, so an instrument blind to it
+  // would under-report relay traffic. It dedupes per authority incarnation:
+  // both hosts of this authority ride on one status.get.
+  it('counts the status.get probe runtime-scoped lists ride on', async () => {
     const { cache } = harness()
     getRuntimeEnvironmentStatus.mockResolvedValue({
       capabilities: [AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY]
@@ -380,9 +383,9 @@ describe('unpooled capability probes', () => {
 
     const authority =
       automationHostDiagnostics.snapshot().byAuthority[authorityKeyOf(RUNTIME_AUTHORITY)]
-    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(2)
-    // Two pooled list calls, and two round trips the pool never sees.
-    expect(authority).toMatchObject({ requests: 2, capabilityProbes: 2 })
+    expect(getRuntimeEnvironmentStatus).toHaveBeenCalledTimes(1)
+    // Two pooled list calls, and the one shared round trip the pool never sees.
+    expect(authority).toMatchObject({ requests: 2, capabilityProbes: 1 })
   })
 })
 

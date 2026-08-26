@@ -25,8 +25,9 @@ export type AutomationHostKeyCounters = {
   legacyRequests: number
   /**
    * Unpooled `status.get` capability probes, which ride outside the four-slot
-   * pool and always re-fetch. Relay traffic is `requests + capabilityProbes`;
-   * the in-flight ceiling is stated over `requests` alone.
+   * pool; probes dedupe per authority incarnation, so this counts what was
+   * actually sent. Relay traffic is `requests + capabilityProbes`; the
+   * in-flight ceiling is stated over `requests` alone.
    */
   capabilityProbes: number
   /** Callers that joined a request already in flight, keyed like `requests`. */

@@ -277,6 +277,13 @@ export function createAutomationHostCache(
         return
       }
       bump(record)
+      // Retirement exists to fence, not to display: the generations stay, the
+      // payload goes, or the retired pool holds up to 256 stale row arrays. A
+      // revived host reads as missing and refetches instead of showing old rows.
+      record.data = []
+      record.fetchedAt = null
+      record.error = null
+      record.orphanCount = null
       records.delete(stableKey)
       retired.set(stableKey, record)
       // Insertion order is LRU order here: reviving re-inserts at the end.
