@@ -97,6 +97,7 @@ export function reviewCountsByState(cards: DashboardCard[]): Map<string, number>
 
 export const REVIEW_OPTIONS: readonly DashboardReviewFilter[] = [
   'open',
+  'queued',
   'draft',
   'merged',
   'closed',
@@ -107,6 +108,8 @@ export function reviewStateLabel(state: DashboardReviewFilter): string {
   switch (state) {
     case 'open':
       return translate('dashboardPopout.filters.review.open', 'Open')
+    case 'queued':
+      return translate('dashboardPopout.filters.review.queued', 'Queued')
     case 'draft':
       return translate('dashboardPopout.filters.review.draft', 'Draft')
     case 'merged':

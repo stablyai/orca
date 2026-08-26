@@ -4,7 +4,8 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  GitPullRequestDraft
+  GitPullRequestDraft,
+  ListOrdered
 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -181,7 +182,9 @@ export default function PullRequestPage({
           ? GitPullRequestClosed
           : localState === 'draft'
             ? GitPullRequestDraft
-            : GitPullRequest
+            : localState === 'queued'
+              ? ListOrdered
+              : GitPullRequest
       : CircleDot
   const displayWorkItem = useMemo<GitHubWorkItem | null>(() => {
     if (!workItem) {

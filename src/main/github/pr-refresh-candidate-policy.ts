@@ -5,6 +5,7 @@ import type {
   GitHubPRRefreshSkippedReason,
   PRRefreshOutcome
 } from '../../shared/github/pull-request-refresh-types'
+import { isQueuedPullRequest } from '../../shared/github/pull-request-queue-state'
 import type { GitHubPRBranchLookupOptions } from './client'
 import { NO_REVIEW_REFRESH_INTERVAL_MS } from '../source-control/hosted-review-refresh-pacing'
 
@@ -138,7 +139,8 @@ export function visibleCandidateAfterOutcome(
     cachedPRState: outcome.kind === 'found' ? outcome.pr.state : null,
     cachedChecksStatus: outcome.kind === 'found' ? outcome.pr.checksStatus : null,
     cachedMergeable: outcome.kind === 'found' ? outcome.pr.mergeable : null,
-    cachedMergeStateStatus: outcome.kind === 'found' ? (outcome.pr.mergeStateStatus ?? null) : null
+    cachedMergeStateStatus: outcome.kind === 'found' ? (outcome.pr.mergeStateStatus ?? null) : null,
+    cachedMergeQueued: outcome.kind === 'found' ? isQueuedPullRequest(outcome.pr) : false
   }
 }
 
@@ -148,6 +150,13 @@ function refreshIntervalForCandidate(candidate: GitHubPRRefreshCandidate): numbe
   }
   if (candidate.cachedHasPR === false) {
     return NO_REVIEW_REFRESH_INTERVAL_MS
+  }
+  // Why: a queued PR advances, merges, or is evicted within minutes, and its position/ETA
+  // copy is only useful while current, so poll it faster than any checks cadence.
+  // `cachedMergeQueued` is the derived flag hosts set; `cachedPRState` is also checked
+  // because the renderer sends its already-derived cache state on client-initiated refreshes.
+  if (candidate.cachedMergeQueued === true || candidate.cachedPRState === 'queued') {
+    return 30_000
   }
   if (
     candidate.cachedHasPR === true &&
@@ -176,7 +185,7 @@ function hasResolvedMergeStateStatus(status: string | null | undefined): boolean
 export function isMergeabilityPendingOutcome(outcome: PRRefreshOutcome): boolean {
   return (
     outcome.kind === 'found' &&
-    outcome.pr.state === 'open' &&
+    (outcome.pr.state === 'open' || outcome.pr.state === 'queued') &&
     outcome.pr.mergeable === 'UNKNOWN' &&
     !hasResolvedMergeStateStatus(outcome.pr.mergeStateStatus)
   )

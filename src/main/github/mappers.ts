@@ -1,5 +1,5 @@
 import type { PRCheckDetail } from '../../shared/github/check-types'
-import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
+import type { CheckStatus, IssueInfo, PRWireState } from '../../shared/github/pull-request-types'
 import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
 
 // ── REST API check-runs mapping ───────────────────────────────────────
@@ -109,7 +109,9 @@ export function mapCheckConclusion(state: string): PRCheckDetail['conclusion'] {
   return null
 }
 
-export function mapPRState(state: string, isDraft?: boolean): PRInfo['state'] {
+// Why: returns the wire contract only. `queued` is never derived here — it is
+// carried as `open` + `mergeQueueEntry` and re-derived client-side.
+export function mapPRState(state: string, isDraft?: boolean): PRWireState {
   const s = state?.toUpperCase()
   if (s === 'MERGED') {
     return 'merged'

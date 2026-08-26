@@ -2346,6 +2346,18 @@
               "fbd4f57f0a": "Checks passed. Merge eligibility will be checked again before merging.",
               "4ab19a62ef": "Enable auto-merge",
               "8f6cb3772f": "Merge this pull request automatically once requirements are met"
+            },
+            "queue": {
+              "presentation": {
+                "e77682f1ad": "next to merge",
+                "54e43b657c": "#{{position}} in line",
+                "aed8678f01": "~{{duration}}",
+                "0cabcd9e02": "Queued",
+                "5c1debcfb8": "Added to the GitHub merge queue.",
+                "6c286b2fe3": "{{base}} It is {{place}} (ETA {{eta}}).",
+                "cd9e09f8b7": "{{base}} It is {{place}}.",
+                "d1a73d2387": "{{base}} ETA {{eta}}."
+              }
             }
           }
         },
@@ -5409,7 +5421,8 @@
           "e888362def": "State: Closed",
           "f394b3e86e": "State: Merged",
           "af2b07bda5": "State: {{value0}}",
-          "29df45afa2": "MR"
+          "29df45afa2": "MR",
+          "66d63eaedd": "State: Queued"
         },
         "WorktreeCardPorts": {
           "34f733dda2": "Go to Worktree",
@@ -15843,6 +15856,13 @@
                   }
                 }
               }
+            },
+            "work": {
+              "item": {
+                "status": {
+                  "da175c519c": "Queued"
+                }
+              }
             }
           },
           "hooks": {
@@ -16488,7 +16508,8 @@
             "merged": "Merged",
             "closed": "Closed",
             "unknown": "Unknown",
-            "otherProvider": "Other"
+            "otherProvider": "Other",
+            "queued": "Queued"
           },
           "ticket": {
             "workItem": "Work item",
@@ -16755,7 +16776,8 @@
         "open": "Open review",
         "draft": "Draft review",
         "merged": "Merged review",
-        "closed": "Closed review"
+        "closed": "Closed review",
+        "queued": "Queued review"
       },
       "subagents_one": "{{count}} subagent",
       "subagents_other": "{{count}} subagents"
@@ -16774,7 +16796,8 @@
         "draft": "Draft",
         "merged": "Merged",
         "closed": "Closed",
-        "none": "No review"
+        "none": "No review",
+        "queued": "Queued"
       },
       "reviewChip": "Review: {{state}}",
       "label": "Filter",

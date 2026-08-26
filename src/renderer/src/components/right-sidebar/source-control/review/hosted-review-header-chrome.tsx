@@ -1,5 +1,5 @@
 import React from 'react'
-import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { GitMerge, GitPullRequestClosed, GitPullRequestDraft, ListOrdered } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from '../../checks-panel/check-presentation'
@@ -10,6 +10,9 @@ function hostedReviewStateClass(review: HostedReviewInfo): string {
   }
   if (review.state === 'open') {
     return 'text-emerald-500/80'
+  }
+  if (review.state === 'queued') {
+    return 'text-blue-500/85'
   }
   if (review.state === 'closed') {
     return 'text-muted-foreground/60'
@@ -30,6 +33,9 @@ function hostedReviewStateIcon(
   }
   if (review.state === 'draft') {
     return GitPullRequestDraft
+  }
+  if (review.state === 'queued') {
+    return ListOrdered
   }
   return null
 }

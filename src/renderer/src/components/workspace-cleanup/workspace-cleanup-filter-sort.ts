@@ -184,7 +184,12 @@ function matchesReviewFilter(
     case 'has-review':
       return reviewInfo.hasReview
     case 'open-review':
-      return reviewInfo.hasReview && (reviewInfo.state === 'open' || reviewInfo.state === 'draft')
+      return (
+        reviewInfo.hasReview &&
+        (reviewInfo.state === 'open' ||
+          reviewInfo.state === 'queued' ||
+          reviewInfo.state === 'draft')
+      )
     case 'closed-review':
       return (
         reviewInfo.hasReview && (reviewInfo.state === 'closed' || reviewInfo.state === 'merged')
@@ -232,7 +237,11 @@ function getReviewSortRank(reviewInfo: WorkspaceCleanupReviewInfo): number {
   if (!reviewInfo.hasReview) {
     return 0
   }
-  if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
+  if (
+    reviewInfo.state === 'open' ||
+    reviewInfo.state === 'queued' ||
+    reviewInfo.state === 'draft'
+  ) {
     return 3
   }
   if (reviewInfo.state === 'unknown') {

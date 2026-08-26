@@ -149,6 +149,7 @@ export function GithubWorkItemRow({
       <div className={GITHUB_TASK_STICKY_TITLE_CELL_CLASS}>
         <div className="flex min-w-0 items-center gap-2">
           <h3 className="truncate text-[13px] font-medium text-foreground">{item.title}</h3>
+          {/* Why: `queued` is worth badging even though it is an open PR. */}
           {item.type === 'pr' && item.state !== 'open' && item.state !== 'draft' ? (
             <TaskPageGitHubWorkItemStateBadge item={item} className="shrink-0 px-1.5 py-0" />
           ) : null}

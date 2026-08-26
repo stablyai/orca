@@ -156,6 +156,7 @@ export function getPRGroupKey(
   if (pr.state === 'draft') {
     return 'in-progress'
   }
+  // Why: 'queued' falls through to in-review — it is an open PR awaiting merge.
   return 'in-review'
 }
 

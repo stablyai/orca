@@ -15,6 +15,7 @@ export function hostedReviewInfoFromGitHubPRInfo(pr: PRInfo): HostedReviewInfo {
     ...(pr.autoMergeEnabled !== undefined ? { autoMergeEnabled: pr.autoMergeEnabled } : {}),
     ...(pr.autoMergeAllowed !== undefined ? { autoMergeAllowed: pr.autoMergeAllowed } : {}),
     ...(pr.mergeQueueRequired !== undefined ? { mergeQueueRequired: pr.mergeQueueRequired } : {}),
+    ...(pr.mergeQueueEntry ? { mergeQueueEntry: pr.mergeQueueEntry } : {}),
     ...(pr.mergeStateStatus !== undefined ? { mergeStateStatus: pr.mergeStateStatus } : {}),
     ...(pr.headSha ? { headSha: pr.headSha } : {}),
     ...(pr.prRepo ? { githubRepository: pr.prRepo } : {}),

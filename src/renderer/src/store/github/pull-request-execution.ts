@@ -11,6 +11,7 @@ import type {
   PRRefreshOutcome
 } from '../../../../shared/github/pull-request-refresh-types'
 import { normalizeGitHubPRForBranchOutcome } from '../../../../shared/github/pull-request-for-branch-outcome'
+import { withDerivedPRInfoQueueState } from '../../../../shared/github/pull-request-queue-state'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { debouncedSaveCache } from './cache-persistence'
@@ -120,8 +121,10 @@ export function startPullRequestLookup(args: {
                 })
             return normalizeGitHubPRForBranchOutcome(response)
           })()
+      // Why: the wire carries `open` + `mergeQueueEntry`; derive `queued` here, at the
+      // point the value enters renderer state, so every consumer sees one representation.
       const pr: PRInfo | null =
-        outcome.kind === 'found' ? outcome.pr : outcome.kind === 'no-pr' ? null : null
+        outcome.kind === 'found' ? withDerivedPRInfoQueueState(outcome.pr) : null
       if (outcome.kind === 'upstream-error') {
         // Why: the runtime RPC path skips the coordinator broadcast that fills prRefreshStates on native, so record the classified error here for Checks parity with native (design criterion 2).
         if (runtimeRepo && prRequestGenerations.get(cacheKey) === generation) {

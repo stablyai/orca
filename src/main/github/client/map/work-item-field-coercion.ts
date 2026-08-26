@@ -1,11 +1,17 @@
 import type {
   PRMergeableState,
-  PRReviewDecision
+  PRReviewDecision,
+  PRWireState
 } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import { summarizeProviderChecks } from '../../../../shared/provider-check-summary'
 // Why: omit repoId — the main process only has the path; the renderer stamps repoId after IPC.
-export type MainWorkItem = Omit<GitHubWorkItem, 'repoId'>
+// Why the narrowed state: this type is what `github.listWorkItems` / `workItem` /
+// `workItemDetails` publish, and `queued` must never cross the wire. Queue
+// membership travels as `mergeQueueEntry`; the client derives `queued` from it
+// (see `pull-request-queue-state.ts`), so an older client reads `open` — which
+// a queued PR genuinely is.
+export type MainWorkItem = Omit<GitHubWorkItem, 'repoId' | 'state'> & { state: PRWireState }
 
 export const WORK_ITEM_PR_LIST_JSON_FIELDS =
   'number,title,state,url,labels,updatedAt,author,isDraft,headRefName,baseRefName,headRefOid,headRepositoryOwner,reviewRequests'

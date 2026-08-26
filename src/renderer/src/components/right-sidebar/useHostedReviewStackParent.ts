@@ -69,7 +69,8 @@ export function useHostedReviewStackParent({
             return
           }
           const openGitHubReview =
-            review?.provider === 'github' && (review.state === 'open' || review.state === 'draft')
+            review?.provider === 'github' &&
+            (review.state === 'open' || review.state === 'queued' || review.state === 'draft')
               ? { number: review.number, url: review.url }
               : null
           setSettled({ key: lookupKey, review: openGitHubReview })

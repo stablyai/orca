@@ -178,7 +178,8 @@ const PR_STATE_LABELS: Record<PRState, string> = {
   open: 'Open',
   merged: 'Merged',
   draft: 'Draft',
-  closed: 'Closed'
+  closed: 'Closed',
+  queued: 'Queued'
 }
 
 // State-badge color comes from the shared prStateToken so the sidebar badge and

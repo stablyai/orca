@@ -15,6 +15,7 @@ import {
   prRefreshStartedEntryKey,
   setPRRefreshStartedHostedReviewEntry
 } from './pr-result-cache'
+import { withDerivedPullRequestQueueState } from '../../../../shared/github/pull-request-queue-state'
 import { prRefreshStartedHostedReviewEntries } from './request-coordination'
 import { getRefreshAliasExecutionHostId } from './repository-routing'
 import {
@@ -32,7 +33,19 @@ export const createRefreshEventActions = (
   set: Parameters<StateCreator<AppState>>[0],
   get: Parameters<StateCreator<AppState>>[1]
 ): Pick<GitHubSlice, 'applyGitHubPRRefreshEvent'> => ({
-  applyGitHubPRRefreshEvent: (event) => {
+  applyGitHubPRRefreshEvent: (rawEvent) => {
+    // Why: the coordinator broadcast is the other boundary the wire shape arrives on.
+    // Derive `queued` once here so prCache and the hosted-review cache it feeds agree.
+    const event =
+      rawEvent.outcome?.kind === 'found'
+        ? {
+            ...rawEvent,
+            outcome: {
+              ...rawEvent.outcome,
+              pr: withDerivedPullRequestQueueState(rawEvent.outcome.pr)
+            }
+          }
+        : rawEvent
     // Why: local-repo sidebar refresh routes through the main PR coordinator, so run the same guarded diverged-merged-PR clear.
     const divergedLinkedPRClears: {
       worktreeId: string

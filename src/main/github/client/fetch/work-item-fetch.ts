@@ -10,6 +10,7 @@ import { githubHostExecOptions, type GitHubApiRepository } from '../../github-ap
 import type { GhExecOptions } from './../github-exec-scope'
 import { resolvePullRequestLookupCandidates } from './../pull-request-lookup-candidates'
 import { detectRepositoryMergeMetadata } from './../detect/repository-merge-metadata'
+import { detectPullRequestMergeQueueEntry } from './../detect/pull-request-merge-queue-entry'
 import {
   WORK_ITEM_PR_DETAIL_JSON_FIELDS,
   usersFromUnknown,
@@ -119,9 +120,16 @@ export async function fetchPullRequestWorkItem(
       const baseRefName = typeof item.baseRefName === 'string' ? item.baseRefName : undefined
       try {
         const mergeMetadata = await detectRepositoryMergeMetadata(ownerRepo, baseRefName, ghOptions)
+        // Why: single-item fetch only, and only once the base branch is known to
+        // require a queue — the list path must never fan this out per row (#12316).
+        const membership =
+          mergeMetadata.mergeQueueRequired === true && mapped.state === 'open'
+            ? await detectPullRequestMergeQueueEntry(ownerRepo, number, ghOptions)
+            : undefined
         return {
           ...mapped,
           mergeQueueRequired: mergeMetadata.mergeQueueRequired,
+          ...(membership?.mergeQueueEntry ? { mergeQueueEntry: membership.mergeQueueEntry } : {}),
           ...(mergeMetadata.autoMergeAllowed !== null
             ? { autoMergeAllowed: mergeMetadata.autoMergeAllowed }
             : {}),

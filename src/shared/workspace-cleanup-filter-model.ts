@@ -18,7 +18,13 @@ export type WorkspaceCleanupIdleSignal = 'last-visited' | 'last-activity' | 'cre
 export type WorkspaceCleanupGitState = 'clean' | 'dirty' | 'unpushed' | 'unknown'
 export type WorkspaceCleanupAgentState = 'working' | 'permission' | 'idle'
 /** `draft` is a review STATE, not a separate flag. */
-export type WorkspaceCleanupReviewState = 'open' | 'draft' | 'merged' | 'closed' | 'unknown'
+export type WorkspaceCleanupReviewState =
+  | 'open'
+  | 'queued'
+  | 'draft'
+  | 'merged'
+  | 'closed'
+  | 'unknown'
 export type WorkspaceCleanupTicketSource = 'work-item' | 'linear' | 'issue'
 export type WorkspaceCleanupBlockerMode = 'any-of' | 'none-of'
 

@@ -1,5 +1,6 @@
 import type {
   GitHubPRMergeMethodSettings,
+  PullRequestMergeQueueEntry,
   GitHubPRStack,
   PRMergeableState,
   PRReviewDecision
@@ -30,6 +31,7 @@ export type PullRequestLookupData = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  mergeQueueEntry?: PullRequestMergeQueueEntry
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   baseRefName?: string

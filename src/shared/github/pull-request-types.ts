@@ -1,4 +1,15 @@
-export type PRState = 'open' | 'closed' | 'merged' | 'draft'
+// Why: `queued` refines `open` — a review waiting in a provider merge queue (or
+// train) is still open upstream, so treat it as an active PR everywhere except
+// presentation and merge-action gating. Provider-neutral on purpose: GitLab
+// merge trains can adopt it with no type change.
+// Why not on the wire: `queued` is derived by the client from `mergeQueueEntry`,
+// never published — see `PRWireState`.
+export type PRState = 'open' | 'closed' | 'merged' | 'draft' | 'queued'
+
+// Why: hosts and clients update independently, so a host must never publish a
+// state value an older client cannot interpret. `queued` is carried across the
+// wire as `open` + `mergeQueueEntry` and re-derived client-side.
+export type PRWireState = Exclude<PRState, 'queued'>
 export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
 
@@ -18,6 +29,29 @@ export type PRConflictSummary = {
 export type GitHubRepositoryIdentity = { owner: string; repo: string; host?: string }
 
 export type GitHubPRMergeMethod = 'merge' | 'squash' | 'rebase'
+
+/**
+ * A review's membership in a provider merge queue. Its presence is the wire
+ * discriminator for the `queued` state; absence means "not queued".
+ *
+ * Why every field but `state` is optional: providers expose different subsets.
+ * GitHub's GraphQL `mergeQueueEntry` has all four; a GitLab merge train has no
+ * ETA at all and needs GraphQL `MergeTrainCar.index` for position. Consumers
+ * must drop each absent field independently rather than render a placeholder.
+ *
+ * Why `state` is `string` and not an enum: it absorbs GitHub's
+ * QUEUED/AWAITING_CHECKS/MERGEABLE/UNMERGEABLE/LOCKED and GitLab's
+ * idle/fresh/stale/merging without a type change — the same shape-reuse this
+ * repo already does for `mergeStateStatus`, which GitLab rides with its own
+ * `detailed_merge_status` values (see `gitlab-types.ts`).
+ */
+export type PullRequestMergeQueueEntry = {
+  state: string
+  position?: number | null
+  /** Seconds until the provider expects the entry to merge. Absent where unsupported. */
+  estimatedTimeToMerge?: number | null
+  enqueuedAt?: string | null
+}
 
 export type GitHubPRMergeMethodSettings = {
   defaultMethod: GitHubPRMergeMethod
@@ -60,6 +94,8 @@ export type PRInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  /** Present only while the review is actually sitting in the queue. Wire discriminator for `queued`. */
+  mergeQueueEntry?: PullRequestMergeQueueEntry
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   /** GitHub-registered stack metadata. Absent for ordinary dependent PR chains. */

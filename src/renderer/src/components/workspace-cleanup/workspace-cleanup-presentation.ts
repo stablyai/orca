@@ -2,7 +2,11 @@ import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import type { AppState } from '@/store/types'
 import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { HostedReviewInfo, HostedReviewProvider } from '../../../../shared/hosted-review'
+import type {
+  HostedReviewInfo,
+  HostedReviewProvider,
+  HostedReviewDisplayState
+} from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
@@ -31,7 +35,7 @@ export type WorkspaceCleanupFilters = {
 export type WorkspaceCleanupReviewInfo = {
   hasReview: boolean
   label: string | null
-  state: 'open' | 'closed' | 'merged' | 'draft' | 'unknown' | null
+  state: HostedReviewDisplayState | 'unknown' | null
   provider: HostedReviewProvider | null
   title: string | null
 }

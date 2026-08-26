@@ -19,6 +19,9 @@ export function getStateLabel(item: GitHubWorkItem): string {
     if (item.state === 'closed') {
       return 'Closed'
     }
+    if (item.state === 'queued') {
+      return 'Queued'
+    }
     return 'Open'
   }
   return item.state === 'closed' ? 'Closed' : 'Open'

@@ -1,5 +1,6 @@
 import type { AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
+import type { PRState } from './github/pull-request-types'
 import type { RepoIcon } from './repo-icon'
 import type { TuiAgent } from './tui-agent'
 
@@ -49,7 +50,7 @@ export function dashboardCardDisplayState(
 
 export type DashboardCardReview = {
   number: number
-  state: 'open' | 'closed' | 'merged' | 'draft'
+  state: PRState
 }
 
 export type DashboardCardSubagent = {

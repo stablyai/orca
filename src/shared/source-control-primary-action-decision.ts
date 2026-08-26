@@ -92,7 +92,7 @@ export function resolveSourceControlPrimaryActionDecision(
   }
 
   const hasStaged = stagedCount > 0
-  const hasOpenHostedReview = prState === 'open' || prState === 'draft'
+  const hasOpenHostedReview = prState === 'open' || prState === 'queued' || prState === 'draft'
 
   if (hasStaged && hasMessage) {
     return {

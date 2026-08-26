@@ -10,6 +10,8 @@ export type GitHubPRAutoMergeAvailabilityInput = {
   mergeQueueRequired?: boolean | null
 }
 
+// Why: `queued` is an open PR that is already in the merge queue — auto-merge
+// would only re-enqueue it, so it is deliberately excluded here.
 function isOpenPR(item: GitHubPRAutoMergeAvailabilityInput): boolean {
   return item.state === 'open'
 }

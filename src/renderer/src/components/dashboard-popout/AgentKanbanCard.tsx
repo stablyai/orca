@@ -5,7 +5,8 @@ import {
   GitMerge,
   GitPullRequest,
   GitPullRequestClosed,
-  GitPullRequestDraft
+  GitPullRequestDraft,
+  ListOrdered
 } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -118,6 +119,10 @@ const REVIEW_PRESENTATION = {
     icon: GitPullRequest,
     className: 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
   },
+  queued: {
+    icon: ListOrdered,
+    className: 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300'
+  },
   draft: {
     icon: GitPullRequestDraft,
     className: 'border-border bg-muted/60 text-muted-foreground'
@@ -142,6 +147,8 @@ function ReviewPill({ card }: { card: DashboardCard }): React.JSX.Element | null
     switch (card.review.state) {
       case 'open':
         return translate('dashboardPopout.card.review.open', 'Open review')
+      case 'queued':
+        return translate('dashboardPopout.card.review.queued', 'Queued review')
       case 'draft':
         return translate('dashboardPopout.card.review.draft', 'Draft review')
       case 'merged':

@@ -1,6 +1,7 @@
 import type { GitHubWorkItem, GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { withDerivedPullRequestQueueState } from '../../../shared/github/pull-request-queue-state'
 import {
   getGitHubRuntimeRepoId,
   getGitHubSourceRuntimeHost,
@@ -56,7 +57,11 @@ export async function lookupGitHubWorkItemForSource(
           number: args.number,
           type: args.type
         })
-  return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  // Why: the wire carries `open` + `mergeQueueEntry`; derive `queued` here, at the
+  // point the item enters renderer state, using the one shared derivation.
+  return item
+    ? (withDerivedPullRequestQueueState({ ...item, repoId: args.repoId }) as GitHubWorkItem)
+    : null
 }
 
 export async function lookupGitHubWorkItemByOwnerRepoForSource(
@@ -87,7 +92,21 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
           number: args.number,
           type: args.type
         })
-  return item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
+  return item
+    ? (withDerivedPullRequestQueueState({ ...item, repoId: args.repoId }) as GitHubWorkItem)
+    : null
+}
+
+// Why: details are spread over the list-provided item on the PR page, so they must
+// carry the derived state too — otherwise a queued PR flips back to Open on load.
+function withDerivedDetailsQueueState(
+  details: GitHubWorkItemDetails | null
+): GitHubWorkItemDetails | null {
+  if (!details) {
+    return null
+  }
+  const item = withDerivedPullRequestQueueState(details.item)
+  return item === details.item ? details : { ...details, item }
 }
 
 export function lookupGitHubWorkItemDetailsForSource(
@@ -105,13 +124,15 @@ export function lookupGitHubWorkItemDetailsForSource(
         type: args.type
       },
       { timeoutMs: 30_000 }
-    )
+    ).then(withDerivedDetailsQueueState)
   }
-  return window.api.gh.workItemDetails({
-    repoPath: args.repoPath,
-    repoId: args.repoId,
-    sourceContext,
-    number: args.number,
-    type: args.type
-  })
+  return window.api.gh
+    .workItemDetails({
+      repoPath: args.repoPath,
+      repoId: args.repoId,
+      sourceContext,
+      number: args.number,
+      type: args.type
+    })
+    .then(withDerivedDetailsQueueState)
 }

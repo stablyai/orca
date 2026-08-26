@@ -10,6 +10,8 @@ import type {
   GitHubRepositoryIdentity,
   PRMergeableState,
   PRReviewDecision,
+  PRState,
+  PullRequestMergeQueueEntry,
   ProviderCheckSummary
 } from './pull-request-types'
 
@@ -18,7 +20,7 @@ export type GitHubWorkItem = {
   type: 'issue' | 'pr'
   number: number
   title: string
-  state: 'open' | 'closed' | 'merged' | 'draft'
+  state: PRState
   url: string
   labels: string[]
   updatedAt: string
@@ -46,6 +48,9 @@ export type GitHubWorkItem = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  /** Wire discriminator for `queued`. Only the single-item fetch carries it —
+   *  the list path never probes, so list rows correctly read as `open`. */
+  mergeQueueEntry?: PullRequestMergeQueueEntry
   mergeMethodSettings?: GitHubPRMergeMethodSettings
   mergeStateStatus?: string | null
   maintainerCanModify?: boolean

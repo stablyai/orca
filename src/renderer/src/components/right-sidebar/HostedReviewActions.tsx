@@ -91,7 +91,10 @@ export default function HostedReviewActions({
       checksStatus: review.status,
       autoMergeEnabled: review.autoMergeEnabled,
       autoMergeAllowed: review.autoMergeAllowed,
-      mergeQueueRequired: review.mergeQueueRequired
+      mergeQueueRequired: review.mergeQueueRequired,
+      // Why: the review carries the queue entry on hosted-review-only lookups where
+      // `githubPR` is null — without it the queued label loses position/ETA.
+      mergeQueueEntry: review.mergeQueueEntry ?? githubPR?.mergeQueueEntry
     })
     if (!githubPR?.stack || !stackMergeScope) {
       return presentation
@@ -155,7 +158,7 @@ export default function HostedReviewActions({
     runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
   }, [worktree.hostId, worktree.id])
 
-  if (review.state === 'open') {
+  if (review.state === 'open' || review.state === 'queued') {
     return (
       <div className="space-y-1.5">
         <TooltipProvider delayDuration={300}>
