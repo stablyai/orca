@@ -1,9 +1,6 @@
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { MessagePriority } from '../orchestration/types'
-import {
-  isCollaborationMessageAdmitted,
-  type AdmissionPolicy
-} from './collaboration-admission'
+import { isCollaborationMessageAdmitted, type AdmissionPolicy } from './collaboration-admission'
 
 export type CollaborationTopologyStep = {
   taskId: string
@@ -41,7 +38,10 @@ export function createCollaborationTopology(
   steps: readonly CollaborationTopologyStep[]
 ): CollaborationTopology {
   if (steps.length === 0) {
-    throw new OrchestrationError('invalid_argument', 'collaboration topology requires at least one step')
+    throw new OrchestrationError(
+      'invalid_argument',
+      'collaboration topology requires at least one step'
+    )
   }
   const seenTaskIds = new Set<string>()
   const copiedSteps: CollaborationTopologyStep[] = steps.map((step) => {

@@ -159,8 +159,12 @@ describe('orchestration.collaborationPublish', () => {
 
     expect(result.subscriberTaskIds).toEqual([subscriberTaskIds[0]])
     expect(result.messageIds).toHaveLength(1)
-    expect(db.getAllMessages(buildCollaborationTaskMailboxAddress(subscriberTaskIds[0]))).toHaveLength(1)
-    expect(db.getAllMessages(buildCollaborationTaskMailboxAddress(subscriberTaskIds[1]))).toEqual([])
+    expect(
+      db.getAllMessages(buildCollaborationTaskMailboxAddress(subscriberTaskIds[0]))
+    ).toHaveLength(1)
+    expect(db.getAllMessages(buildCollaborationTaskMailboxAddress(subscriberTaskIds[1]))).toEqual(
+      []
+    )
     expect(vi.mocked(runtime.notifyMessageArrived)).toHaveBeenCalledTimes(1)
   })
 
