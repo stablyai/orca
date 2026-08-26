@@ -73,6 +73,15 @@ async function createLinkedWorktreeFixture(): Promise<{
   return { mainPath, siblingPath }
 }
 
+async function createFolderFixture(): Promise<string> {
+  const folderPath = realpathSync(
+    await mkdtemp(path.join(os.tmpdir(), 'orca-e2e-first-project-folder-'))
+  )
+  tempRoots.push(folderPath)
+  writeFileSync(path.join(folderPath, 'README.md'), '# Non-Git folder\n')
+  return folderPath
+}
+
 test.afterEach(() => {
   for (const root of tempRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
@@ -235,5 +244,57 @@ test.describe('First project terminal handoff', () => {
 
     await expect(terminalWelcome).toBeHidden()
     await expect(orcaPage.getByRole('dialog', { name: /Create worktree/i })).toBeVisible()
+  })
+
+  test('orients the first non-Git folder terminal without worktree guidance', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const folderPath = await createFolderFixture()
+    const folderPathIndex = tempRoots.indexOf(folderPath)
+    if (folderPathIndex !== -1) {
+      tempRoots.splice(folderPathIndex, 1)
+    }
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(folderPath, { recursive: true, force: true })
+    })
+
+    await orcaPage.evaluate((selectedPath) => {
+      window.__store?.getState().openModal('confirm-add-project-from-folder', {
+        folderPath: selectedPath
+      })
+    }, folderPath)
+    const addProjectDialog = orcaPage.getByRole('dialog', { name: /^Add Project$/i })
+    await expect(addProjectDialog).toBeVisible()
+    await addProjectDialog.getByRole('button', { name: /^Add Project$/ }).click()
+
+    const openAsFolderDialog = orcaPage.getByRole('dialog', { name: /Open as Folder/i })
+    await expect(openAsFolderDialog).toBeVisible()
+    await openAsFolderDialog.getByRole('button', { name: /Open as Folder/i }).click()
+
+    const terminalWelcome = orcaPage.getByRole('dialog', { name: 'ORCA' })
+    await expect(terminalWelcome).toBeVisible({ timeout: 30_000 })
+    await expect(terminalWelcome).toContainText(`Folder opened: ${path.basename(folderPath)}`)
+    await expect(terminalWelcome).toContainText('This is a normal terminal opened in')
+    await expect(terminalWelcome).not.toContainText('Branch:')
+    await expect(
+      terminalWelcome.getByRole('button', { name: /Launch an agent in this folder/i })
+    ).toBeDisabled()
+    await expect(
+      terminalWelcome.getByRole('button', { name: /Create an isolated workspace/i })
+    ).toHaveCount(0)
+    await expect
+      .poll(() =>
+        orcaPage.evaluate(() => {
+          const state = window.__store?.getState()
+          return Boolean(
+            state?.activeTabId &&
+            state.firstProjectTerminalWelcomeTabId === state.activeTabId &&
+            state.repos[0]?.kind === 'folder'
+          )
+        })
+      )
+      .toBe(true)
   })
 })

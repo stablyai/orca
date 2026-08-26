@@ -10,28 +10,12 @@ import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import { shouldShowFirstProjectTerminalWelcome } from '@/lib/first-project-terminal-welcome'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
 export function getProjectDefaultCheckout(worktrees: readonly Worktree[]): Worktree | null {
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? null
-}
-
-export function shouldShowFirstProjectTerminalWelcome({
-  onboarding,
-  projectCount
-}: {
-  onboarding: OnboardingState | null
-  projectCount: number
-}): boolean {
-  return Boolean(
-    onboarding &&
-    onboarding.closedAt !== null &&
-    !onboarding.checklist.addedRepo &&
-    !onboarding.checklist.addedFolder &&
-    projectCount === 1
-  )
 }
 
 function getProjectWorktreesForHost<T extends Worktree>(

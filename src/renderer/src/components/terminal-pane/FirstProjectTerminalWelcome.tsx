@@ -71,6 +71,7 @@ export function FirstProjectTerminalWelcome({
     [defaultAgent]
   )
   const projectLabel = repo?.displayName || repo?.path || worktree?.displayName || worktreeId
+  const isGitProject = repo?.kind !== 'folder'
   const branchLabel = worktree ? branchName(worktree.branch) || 'HEAD' : 'HEAD'
 
   useEffect(() => {
@@ -137,10 +138,14 @@ export function FirstProjectTerminalWelcome({
       }
       if (event.key === '1') {
         event.preventDefault()
-        openWorkspaceComposer()
+        if (isGitProject) {
+          openWorkspaceComposer()
+        } else if (defaultAgentAvailable) {
+          launchDefaultAgent()
+        }
         return
       }
-      if (event.key === '2' && defaultAgentAvailable) {
+      if (event.key === '2' && isGitProject && defaultAgentAvailable) {
         event.preventDefault()
         launchDefaultAgent()
         return
@@ -155,24 +160,56 @@ export function FirstProjectTerminalWelcome({
         dismissToTerminal()
       }
     },
-    [defaultAgentAvailable, dismissToTerminal, launchDefaultAgent, openWorkspaceComposer]
+    [
+      defaultAgentAvailable,
+      dismissToTerminal,
+      isGitProject,
+      launchDefaultAgent,
+      openWorkspaceComposer
+    ]
   )
 
-  const optionTwoDescription = agentsLoading
+  const agentOptionDescription = agentsLoading
     ? translate(
         'auto.components.terminalPane.FirstProjectTerminalWelcome.checkingAgent',
         'Checking whether {{value0}} is available here…',
         { value0: defaultAgentLabel ?? 'your default agent' }
       )
-    : defaultAgentAvailable
+    : defaultAgentAvailable && isGitProject
       ? translate(
           'auto.components.terminalPane.FirstProjectTerminalWelcome.currentCheckoutWarning',
           'Changes will be made directly on {{value0}}.',
           { value0: branchLabel }
         )
+      : defaultAgentAvailable
+        ? translate(
+            'auto.components.terminalPane.FirstProjectTerminalWelcome.currentFolderWarning',
+            'Changes will be made directly in this folder.'
+          )
+        : translate(
+            'auto.components.terminalPane.FirstProjectTerminalWelcome.agentUnavailable',
+            'No default agent is available here. Choose one in workspace setup.'
+          )
+  const agentOptionLabel = defaultAgentLabel
+    ? isGitProject
+      ? translate(
+          'auto.components.terminalPane.FirstProjectTerminalWelcome.launchAgent',
+          'Launch {{value0}} in this checkout',
+          { value0: defaultAgentLabel }
+        )
       : translate(
-          'auto.components.terminalPane.FirstProjectTerminalWelcome.agentUnavailable',
-          'No default agent is available here. Choose one in workspace setup.'
+          'auto.components.terminalPane.FirstProjectTerminalWelcome.launchAgentInFolder',
+          'Launch {{value0}} in this folder',
+          { value0: defaultAgentLabel }
+        )
+    : isGitProject
+      ? translate(
+          'auto.components.terminalPane.FirstProjectTerminalWelcome.launchAgentGeneric',
+          'Launch an agent in this checkout'
+        )
+      : translate(
+          'auto.components.terminalPane.FirstProjectTerminalWelcome.launchAgentInFolderGeneric',
+          'Launch an agent in this folder'
         )
   const style: WelcomeSurfaceStyle = {
     '--orca-welcome-accent': accentColor,
@@ -210,50 +247,66 @@ export function FirstProjectTerminalWelcome({
         </h2>
         <div className="mb-5 space-y-0.5">
           <p>
-            {translate(
-              'auto.components.terminalPane.FirstProjectTerminalWelcome.projectOpened',
-              'Project opened: {{value0}}',
-              { value0: projectLabel }
-            )}
+            {isGitProject
+              ? translate(
+                  'auto.components.terminalPane.FirstProjectTerminalWelcome.projectOpened',
+                  'Project opened: {{value0}}',
+                  { value0: projectLabel }
+                )
+              : translate(
+                  'auto.components.terminalPane.FirstProjectTerminalWelcome.folderOpened',
+                  'Folder opened: {{value0}}',
+                  { value0: projectLabel }
+                )}
           </p>
-          <p>
-            {translate(
-              'auto.components.terminalPane.FirstProjectTerminalWelcome.branch',
-              'Branch: {{value0}}',
-              { value0: branchLabel }
-            )}
-          </p>
+          {isGitProject ? (
+            <p>
+              {translate(
+                'auto.components.terminalPane.FirstProjectTerminalWelcome.branch',
+                'Branch: {{value0}}',
+                { value0: branchLabel }
+              )}
+            </p>
+          ) : null}
         </div>
         <p
           id="first-project-terminal-welcome-description"
           className="mb-5 max-w-2xl"
           style={{ color: optionDescriptionColor() }}
         >
-          {translate(
-            'auto.components.terminalPane.FirstProjectTerminalWelcome.explanation',
-            'This is a normal terminal. Orca works best when each task gets a separate Git worktree, so changes stay off {{value0}}.',
-            { value0: branchLabel }
-          )}
+          {isGitProject
+            ? translate(
+                'auto.components.terminalPane.FirstProjectTerminalWelcome.explanation',
+                'This is a normal terminal. Orca works best when each task gets a separate Git worktree, so changes stay off {{value0}}.',
+                { value0: branchLabel }
+              )
+            : translate(
+                'auto.components.terminalPane.FirstProjectTerminalWelcome.folderExplanation',
+                'This is a normal terminal opened in {{value0}}. Launch your coding agent here, or enter any shell command.',
+                { value0: projectLabel }
+              )}
         </p>
 
         <div className="-mx-2 space-y-1">
-          <button type="button" className={optionClassName} onClick={openWorkspaceComposer}>
-            <span className="w-4 shrink-0 font-bold text-[var(--orca-welcome-accent)]">1</span>
-            <span>
-              <span className="block font-semibold">
-                {translate(
-                  'auto.components.terminalPane.FirstProjectTerminalWelcome.isolatedWorkspace',
-                  'Create an isolated workspace (recommended)'
-                )}
+          {isGitProject ? (
+            <button type="button" className={optionClassName} onClick={openWorkspaceComposer}>
+              <span className="w-4 shrink-0 font-bold text-[var(--orca-welcome-accent)]">1</span>
+              <span>
+                <span className="block font-semibold">
+                  {translate(
+                    'auto.components.terminalPane.FirstProjectTerminalWelcome.isolatedWorkspace',
+                    'Create an isolated workspace (recommended)'
+                  )}
+                </span>
+                <span className="block" style={{ color: optionDescriptionColor() }}>
+                  {translate(
+                    'auto.components.terminalPane.FirstProjectTerminalWelcome.isolatedWorkspaceDescription',
+                    'Choose a task name and agent before Orca creates the worktree.'
+                  )}
+                </span>
               </span>
-              <span className="block" style={{ color: optionDescriptionColor() }}>
-                {translate(
-                  'auto.components.terminalPane.FirstProjectTerminalWelcome.isolatedWorkspaceDescription',
-                  'Choose a task name and agent before Orca creates the worktree.'
-                )}
-              </span>
-            </span>
-          </button>
+            </button>
+          ) : null}
 
           <button
             type="button"
@@ -261,22 +314,13 @@ export function FirstProjectTerminalWelcome({
             disabled={!defaultAgentAvailable}
             onClick={launchDefaultAgent}
           >
-            <span className="w-4 shrink-0 font-bold text-[var(--orca-welcome-accent)]">2</span>
+            <span className="w-4 shrink-0 font-bold text-[var(--orca-welcome-accent)]">
+              {isGitProject ? '2' : '1'}
+            </span>
             <span>
-              <span className="block font-semibold">
-                {defaultAgentLabel
-                  ? translate(
-                      'auto.components.terminalPane.FirstProjectTerminalWelcome.launchAgent',
-                      'Launch {{value0}} in this checkout',
-                      { value0: defaultAgentLabel }
-                    )
-                  : translate(
-                      'auto.components.terminalPane.FirstProjectTerminalWelcome.launchAgentGeneric',
-                      'Launch an agent in this checkout'
-                    )}
-              </span>
+              <span className="block font-semibold">{agentOptionLabel}</span>
               <span className="block" style={{ color: optionDescriptionColor() }}>
-                {optionTwoDescription}
+                {agentOptionDescription}
               </span>
             </span>
           </button>
@@ -300,7 +344,7 @@ export function FirstProjectTerminalWelcome({
           </button>
         </div>
 
-        {workspaceShortcut ? (
+        {isGitProject && workspaceShortcut ? (
           <p className="mt-5" style={{ color: optionDescriptionColor() }}>
             {translate(
               'auto.components.terminalPane.FirstProjectTerminalWelcome.shortcut',

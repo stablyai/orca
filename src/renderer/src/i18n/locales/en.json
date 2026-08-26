@@ -16026,7 +16026,12 @@
           "projectOpened": "Project opened: {{value0}}",
           "shortcut": "Create another workspace anytime with {{value0}}.",
           "useTerminal": "Use this terminal as-is",
-          "useTerminalDescription": "Press Enter or Escape, then run any shell command."
+          "useTerminalDescription": "Press Enter or Escape, then run any shell command.",
+          "currentFolderWarning": "Changes will be made directly in this folder.",
+          "launchAgentInFolder": "Launch {{value0}} in this folder",
+          "launchAgentInFolderGeneric": "Launch an agent in this folder",
+          "folderOpened": "Folder opened: {{value0}}",
+          "folderExplanation": "This is a normal terminal opened in {{value0}}. Launch your coding agent here, or enter any shell command."
         },
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."

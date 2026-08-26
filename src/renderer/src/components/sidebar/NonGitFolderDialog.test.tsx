@@ -3,6 +3,7 @@ import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { getDefaultOnboardingState } from '../../../../shared/constants'
 
 type ButtonCapture = {
   label: string
@@ -25,10 +26,12 @@ const mocks = vi.hoisted(() => ({
     projectHostSetups: [],
     worktreesByRepo: {} as Record<string, Worktree[]>,
     fetchWorktrees: vi.fn(),
+    showFirstProjectTerminalWelcome: vi.fn(),
     settings: {}
   },
   addRemote: vi.fn(),
   onboardingGet: vi.fn(),
+  onboardingUpdate: vi.fn(),
   activateAndRevealWorktree: vi.fn()
 }))
 
@@ -129,10 +132,11 @@ describe('NonGitFolderDialog', () => {
     mocks.state.worktreesByRepo = {}
     mocks.state.fetchWorktrees.mockResolvedValue(true)
     mocks.onboardingGet.mockResolvedValue(null)
+    mocks.onboardingUpdate.mockResolvedValue(null)
     vi.stubGlobal('window', {
       api: {
         repos: { addRemote: mocks.addRemote },
-        onboarding: { get: mocks.onboardingGet }
+        onboarding: { get: mocks.onboardingGet, update: mocks.onboardingUpdate }
       }
     })
   })
@@ -203,6 +207,38 @@ describe('NonGitFolderDialog', () => {
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalledWith(
       localWorktree.id,
       expect.anything()
+    )
+  })
+
+  it('shows the terminal welcome for the first SSH folder after completed onboarding', async () => {
+    const repo: Repo = {
+      id: 'ssh-folder',
+      path: '/srv/non-git',
+      displayName: 'SSH folder',
+      badgeColor: '#111',
+      addedAt: 1,
+      kind: 'folder',
+      connectionId: 'ssh-1'
+    }
+    const sshWorktree = makeWorktree('ssh-folder::/srv/non-git', '/srv/non-git', 'ssh:ssh-1')
+    mocks.state.modalData = { folderPath: '/srv/non-git', connectionId: 'ssh-1' }
+    mocks.addRemote.mockResolvedValue({ repo })
+    mocks.onboardingGet.mockResolvedValue({
+      ...getDefaultOnboardingState(),
+      closedAt: 1,
+      outcome: 'completed'
+    })
+    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'terminal-1' })
+    mocks.state.fetchWorktrees.mockImplementation(async () => {
+      mocks.state.worktreesByRepo = { [repo.id]: [sshWorktree] }
+      return true
+    })
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))?.onClick?.()
+
+    await vi.waitFor(() =>
+      expect(mocks.state.showFirstProjectTerminalWelcome).toHaveBeenCalledWith('terminal-1')
     )
   })
 })

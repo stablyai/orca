@@ -11,6 +11,12 @@ const mocks = vi.hoisted(() => ({
   launchAgentInNewTab: vi.fn(() => ({ tabId: 'agent-tab' })),
   openModal: vi.fn(),
   recordFeatureInteraction: vi.fn(),
+  repo: {
+    id: 'repo-1',
+    displayName: 'orca',
+    path: '/repo',
+    kind: 'git' as 'git' | 'folder'
+  },
   state: {
     settings: {
       defaultTuiAgent: 'claude',
@@ -51,7 +57,7 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/store/selectors', () => ({
-  useRepoById: () => ({ id: 'repo-1', displayName: 'orca', path: '/repo' }),
+  useRepoById: () => mocks.repo,
   useWorktreeById: () => ({
     id: 'worktree-1',
     repoId: 'repo-1',
@@ -111,6 +117,7 @@ function renderWelcome(
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.detectedIds = ['claude']
+  mocks.repo.kind = 'git'
   mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'agent-tab' })
 })
 
@@ -185,6 +192,26 @@ describe('FirstProjectTerminalWelcome', () => {
       recordInteraction: false
     })
     expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith('agent-tab')
+  })
+
+  it('orients a non-Git folder and launches its agent with option 1', () => {
+    mocks.repo.kind = 'folder'
+    renderWelcome()
+
+    expect(screen.getByText('Folder opened: orca')).toBeTruthy()
+    expect(screen.queryByText('Branch: main')).toBeNull()
+    expect(screen.queryByRole('button', { name: /Create an isolated workspace/i })).toBeNull()
+    expect(screen.getByText(/This is a normal terminal opened in orca/i)).toBeTruthy()
+
+    fireEvent.keyDown(screen.getByRole('dialog', { name: 'ORCA' }), { key: '1' })
+
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      agent: 'claude',
+      worktreeId: 'worktree-1',
+      groupId: 'group-1',
+      launchSource: 'onboarding'
+    })
+    expect(mocks.openModal).not.toHaveBeenCalled()
   })
 
   it('explains and disables direct launch when the default agent is unavailable', () => {

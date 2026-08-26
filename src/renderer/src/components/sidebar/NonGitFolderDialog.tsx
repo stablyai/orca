@@ -14,6 +14,7 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { shouldShowFirstProjectTerminalWelcome } from '@/lib/first-project-terminal-welcome'
 import { translate } from '@/i18n/i18n'
 import { upsertAddedRepoWithProjectHostSetup } from './add-repo-store-upsert'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
@@ -68,7 +69,11 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
           })
           const state = useAppStore.getState()
           const hadProjectBeforeAdd = stateBeforeAdd.repos.length > 0
-          await markOnboardingProjectAdded('addedFolder')
+          const onboardingBeforeAdd = await markOnboardingProjectAdded('addedFolder')
+          const showFirstProjectTerminalWelcome = shouldShowFirstProjectTerminalWelcome({
+            onboarding: onboardingBeforeAdd,
+            projectCount: state.repos.length
+          })
           const ownerOptions = worktreeRefreshOptions(undefined, connectionId)
           await state.fetchWorktrees(repo.id, ownerOptions)
           // Why: mirror the local non-git folder flow — without this the
@@ -90,11 +95,19 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
               hadProjectBeforeAdd,
               isNativeChatTranscriptLocalReadable(connectionId)
             )
-            activateAndRevealWorktree(folderWorktree.id, {
+            const activationResult = activateAndRevealWorktree(folderWorktree.id, {
               sidebarRevealBehavior: 'auto',
               executionHostId: ownerOptions.executionHostId,
               ...(startup ? { startup } : {})
             })
+            if (
+              !startup &&
+              showFirstProjectTerminalWelcome &&
+              activationResult &&
+              activationResult.primaryTabId
+            ) {
+              state.showFirstProjectTerminalWelcome(activationResult.primaryTabId)
+            }
           }
         } catch (err) {
           // This code path calls addRemote directly (not through the store),

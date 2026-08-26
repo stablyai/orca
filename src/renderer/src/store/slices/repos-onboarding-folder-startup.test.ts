@@ -13,17 +13,19 @@ vi.mock('../../lib/worktree-activation', () => ({
 const reposAdd = vi.fn()
 const worktreesList = vi.fn()
 const onboardingGet = vi.fn()
+const onboardingUpdate = vi.fn()
 
 beforeEach(() => {
   reposAdd.mockReset()
   worktreesList.mockReset()
   onboardingGet.mockReset()
+  onboardingUpdate.mockReset()
   worktreeActivation.activateAndRevealWorktree.mockReset()
   vi.stubGlobal('window', {
     api: {
       repos: { add: reposAdd },
       worktrees: { list: worktreesList },
-      onboarding: { get: onboardingGet }
+      onboarding: { get: onboardingGet, update: onboardingUpdate }
     }
   })
 })
@@ -80,5 +82,30 @@ describe('repo slice skipped-onboarding folder startup', () => {
       'folder-2::/folder',
       { sidebarRevealBehavior: 'auto' }
     )
+  })
+
+  it('shows the terminal welcome for the first folder after completed onboarding', async () => {
+    reposAdd.mockResolvedValue({
+      repo: {
+        id: 'folder-1',
+        path: '/first',
+        displayName: 'First',
+        addedAt: 1,
+        kind: 'folder'
+      }
+    })
+    worktreesList.mockResolvedValue([makeWorktree({ id: 'folder-1::/first', repoId: 'folder-1' })])
+    onboardingGet.mockResolvedValue({
+      ...getDefaultOnboardingState(),
+      closedAt: 1,
+      outcome: 'completed'
+    })
+    worktreeActivation.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'terminal-1' })
+    const store = createTestStore()
+
+    await store.getState().addNonGitFolder('/first')
+
+    expect(onboardingUpdate).toHaveBeenCalledWith({ checklist: { addedFolder: true } })
+    expect(store.getState().firstProjectTerminalWelcomeTabId).toBe('terminal-1')
   })
 })

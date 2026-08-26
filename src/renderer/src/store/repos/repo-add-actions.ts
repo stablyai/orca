@@ -8,6 +8,7 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '../../runtime/runtime-rp
 import { buildDismissedOnboardingFolderAgentStartup } from '@/lib/onboarding-folder-agent-startup'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
+import { shouldShowFirstProjectTerminalWelcome } from '@/lib/first-project-terminal-welcome'
 import { translate } from '@/i18n/i18n'
 import {
   getRepoExecutionHostId,
@@ -162,7 +163,11 @@ export function createRepoAddActions(
         if (!repo) {
           return null
         }
-        await markOnboardingProjectAdded('addedFolder')
+        const onboardingBeforeAdd = await markOnboardingProjectAdded('addedFolder')
+        const showFirstProjectTerminalWelcome = shouldShowFirstProjectTerminalWelcome({
+          onboarding: onboardingBeforeAdd,
+          projectCount: get().repos.length
+        })
         // Why: focus the new folder so the add is visible; lazy-import worktree-activation to avoid a circular module load (it imports the store root).
         const executionHostId =
           options?.runtimeEnvironmentId === undefined
@@ -184,11 +189,21 @@ export function createRepoAddActions(
             hadProjectBeforeAdd,
             isNativeChatTranscriptLocalReadable(repo.connectionId)
           )
-          activateAndRevealWorktree(folderWorktree.id, {
+          const activationResult = activateAndRevealWorktree(folderWorktree.id, {
             sidebarRevealBehavior: 'auto',
             ...(executionHostId ? { executionHostId } : {}),
             ...(startup ? { startup } : {})
           })
+          if (
+            !startup &&
+            showFirstProjectTerminalWelcome &&
+            activationResult &&
+            activationResult.primaryTabId
+          ) {
+            // Why: non-Git folders bypass the Git default-checkout handoff, but
+            // their first blank terminal needs the same one-time orientation.
+            get().showFirstProjectTerminalWelcome(activationResult.primaryTabId)
+          }
         }
         return repo
       } catch (err) {

@@ -9,9 +9,9 @@ import type {
 import {
   finishProjectAddWithDefaultCheckout,
   getProjectDefaultCheckout,
-  openProjectDefaultCheckout,
-  shouldShowFirstProjectTerminalWelcome
+  openProjectDefaultCheckout
 } from './project-added-default-checkout'
+import { shouldShowFirstProjectTerminalWelcome } from '@/lib/first-project-terminal-welcome'
 
 const mocks = vi.hoisted(() => ({
   state: {
