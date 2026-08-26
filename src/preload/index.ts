@@ -339,7 +339,9 @@ import type {
   ReactErrorBoundaryReportResult
 } from '../shared/crash-reporting'
 import type { RendererHeapStatistics } from '../shared/renderer-heap-statistics'
+import type { RendererProcessMemory } from '../shared/renderer-process-memory'
 import { readRendererHeapStatistics } from './renderer-heap-statistics-reader'
+import { readRendererProcessMemory } from './renderer-process-memory-reader'
 import { createUpdaterQuitAbortRelay } from '../shared/renderer-restart-preparation'
 import {
   prepareAndInvokeAppRestart,
@@ -1389,7 +1391,8 @@ const api = {
       ipcRenderer.invoke('crashReports:submit', args),
     copyLatestDiagnostics: (args?: CrashReportCopyDiagnosticsArgs) =>
       ipcRenderer.invoke('crashReports:copyLatestDiagnostics', args),
-    readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics()
+    readHeapStatistics: (): RendererHeapStatistics | null => readRendererHeapStatistics(),
+    readProcessMemory: (): Promise<RendererProcessMemory | null> => readRendererProcessMemory()
   },
 
   export: {
