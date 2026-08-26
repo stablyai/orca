@@ -632,6 +632,36 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('defers (not drops) a change made while persistence is suppressed', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    let gateOpen = false
+    const cleanup = createSessionWriteSubscriber({
+      store: useAppStore,
+      persist,
+      shouldSchedulePersist: () => gateOpen
+    })
+
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      ...makeTerminalSessionState('shell')
+    })
+    vi.advanceTimersByTime(200)
+    expect(persist).not.toHaveBeenCalled()
+
+    useAppStore.setState({ tabsByWorktree: { 'wt-1': [] } })
+    vi.advanceTimersByTime(200)
+
+    expect(persist).not.toHaveBeenCalled()
+
+    gateOpen = true
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.tabsByWorktree?.['wt-1']).toEqual([])
+    cleanup()
+  })
+
   it('coalesces multiple relevant mutations within a debounce window', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })

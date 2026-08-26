@@ -112,6 +112,38 @@ export function createSessionWriteSubscriber({
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
 
+  // Why: rebuild from the freshest store state rather than the snapshot
+  // captured when this timer was scheduled. Today this is equivalent
+  // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
+  // (the same fields gating the timer reset), so the captured `state` is
+  // already current for those fields. Calling getState() guards against a
+  // future refactor that adds a non-relevant field read to the payload
+  // builder — without this, such a change would silently start emitting
+  // stale values for that field.
+  const flush = (): void => {
+    timer = null
+    const fresh = store.getState()
+    if (!shouldPersistWorkspaceSession(fresh)) {
+      pendingChangedFields.clear()
+      return
+    }
+    if (shouldSchedulePersist && !shouldSchedulePersist()) {
+      // Why defer instead of drop: pendingChangedFields already absorbed any
+      // changes made while the gate was closed (e.g. a tab close during a
+      // snapshot apply) — clearing it here would lose that change forever.
+      // Keep rescheduling until the gate reopens.
+      timer = setTimeout(flush, debounceMs)
+      return
+    }
+    const changed = new Set(pendingChangedFields)
+    pendingChangedFields.clear()
+    const patch = buildWorkspaceSessionPatch(fresh, changed)
+    if (Object.keys(patch).length === 0) {
+      return
+    }
+    persist({ patch })
+  }
+
   const unsub = store.subscribe((state) => {
     if (!shouldPersistWorkspaceSession(state)) {
       return
@@ -138,43 +170,21 @@ export function createSessionWriteSubscriber({
       pendingChangedFields.add(field)
     }
     if (shouldSchedulePersist && !shouldSchedulePersist()) {
+      // Why defer instead of drop: `prev` above has already absorbed this
+      // change, so clearing the pending fields would lose it forever — a tab
+      // close made during a snapshot apply would never reach the session file
+      // or the remote mirror. Keep the fields and keep rescheduling until the
+      // gate reopens; the timer body re-checks the gate.
       if (timer !== null) {
         clearTimeout(timer)
-        timer = null
       }
-      pendingChangedFields.clear()
+      timer = setTimeout(flush, debounceMs)
       return
     }
     if (timer !== null) {
       clearTimeout(timer)
     }
-    timer = setTimeout(() => {
-      timer = null
-      // Why: rebuild from the freshest store state rather than the snapshot
-      // captured when this timer was scheduled. Today this is equivalent
-      // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
-      // (the same fields gating the timer reset), so the captured `state` is
-      // already current for those fields. Calling getState() guards against a
-      // future refactor that adds a non-relevant field read to the payload
-      // builder — without this, such a change would silently start emitting
-      // stale values for that field.
-      const fresh = store.getState()
-      if (!shouldPersistWorkspaceSession(fresh)) {
-        pendingChangedFields.clear()
-        return
-      }
-      if (shouldSchedulePersist && !shouldSchedulePersist()) {
-        pendingChangedFields.clear()
-        return
-      }
-      const changed = new Set(pendingChangedFields)
-      pendingChangedFields.clear()
-      const patch = buildWorkspaceSessionPatch(fresh, changed)
-      if (Object.keys(patch).length === 0) {
-        return
-      }
-      persist({ patch })
-    }, debounceMs)
+    timer = setTimeout(flush, debounceMs)
   })
 
   return () => {
