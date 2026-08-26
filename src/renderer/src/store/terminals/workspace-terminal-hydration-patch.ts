@@ -19,6 +19,7 @@ export type WorkspaceHydrationPatch = Pick<
   | 'worktreesByRepo'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'closedTerminalTabTombstonesByTabId'
   | 'automaticAgentResumeClaimsByTabId'
   | 'sleepingAgentSessionsByPaneKey'
   | 'pendingReconnectWorktreeIds'
@@ -176,6 +177,8 @@ export function targetScopedWorkspaceHydrationPatch(
       hydrated.defaultTerminalTabsAppliedByWorktreeId,
       workspaceKeys
     ),
+    // Why: already unioned with local state in hydration.ts, so pass it through as-is here.
+    closedTerminalTabTombstonesByTabId: hydrated.closedTerminalTabTombstonesByTabId,
     automaticAgentResumeClaimsByTabId: replaceHydratedRecordKeys(
       state.automaticAgentResumeClaimsByTabId,
       hydrated.automaticAgentResumeClaimsByTabId,

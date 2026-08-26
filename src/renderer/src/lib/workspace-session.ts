@@ -10,6 +10,8 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildPersistedClosedTabTombstones } from './workspace-session-closed-tab-tombstones'
+import { buildSanitizedTabsByWorktree } from './workspace-session-tabs-sanitize'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
@@ -53,6 +55,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'closedTerminalTabTombstonesByTabId'
 > & {
   activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
@@ -90,6 +93,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
+  'closedTerminalTabTombstonesByTabId',
   'sleepingAgentSessionsByPaneKey',
   'clientHostedBrowserCloseIntentsByEnvironment'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
@@ -187,22 +191,6 @@ export function buildEditorSessionData(
     activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
     markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
   }
-}
-
-export function buildSanitizedTabsByWorktree(
-  tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
-): WorkspaceSessionState['tabsByWorktree'] {
-  // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
-  return Object.fromEntries(
-    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, ...rest } = tab
-        void _unused
-        return rest
-      })
-    ])
-  )
 }
 
 export function buildTerminalSessionData(
@@ -303,6 +291,9 @@ export function buildWorkspaceSessionPayload(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined,
+    closedTerminalTabTombstonesByTabId: buildPersistedClosedTabTombstones(
+      snapshot.closedTerminalTabTombstonesByTabId
+    ),
     ...buildSleepingAgentSessionData(snapshot),
     // Why unconditional rather than omit-when-empty: a full write replaces the persisted object,
     // so an emptied map has to be written as empty or the last replay never sticks.

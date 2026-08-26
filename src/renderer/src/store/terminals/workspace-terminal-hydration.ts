@@ -1,5 +1,6 @@
 import type { WorkspaceKey } from '../../../../shared/folder-workspace-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { mergeClosedTerminalTabTombstones } from '../../../../shared/closed-terminal-tab-tombstones'
 import {
   folderWorkspaceKey,
   parseWorkspaceKey,
@@ -178,6 +179,13 @@ export function createWorkspaceTerminalHydrationActions(
           lastVisitedAtByWorktreeId: session.lastVisitedAtByWorktreeId ?? {},
           defaultTerminalTabsAppliedByWorktreeId:
             session.defaultTerminalTabsAppliedByWorktreeId ?? {},
+          // Why union instead of replace: hydration must not erase a tombstone
+          // the user just created locally while the snapshot was in flight.
+          closedTerminalTabTombstonesByTabId: mergeClosedTerminalTabTombstones(
+            s.closedTerminalTabTombstonesByTabId,
+            session.closedTerminalTabTombstonesByTabId,
+            Date.now()
+          ),
           automaticAgentResumeClaimsByTabId: {},
           sleepingAgentSessionsByPaneKey,
           pendingReconnectWorktreeIds,

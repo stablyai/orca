@@ -7,7 +7,6 @@ import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-sessio
 import {
   buildActiveConnectionIdsAtShutdown,
   buildEditorSessionData,
-  buildSanitizedTabsByWorktree,
   buildTerminalSessionData,
   type WorkspaceSessionSnapshot
 } from './workspace-session'
@@ -16,6 +15,8 @@ import {
   buildPersistedBrowserTabsByWorktree
 } from './workspace-session-browser-tabs'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
+import { buildPersistedClosedTabTombstones } from './workspace-session-closed-tab-tombstones'
+import { buildSanitizedTabsByWorktree } from './workspace-session-tabs-sanitize'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
@@ -159,6 +160,11 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
+  }
+  if (changed.has('closedTerminalTabTombstonesByTabId')) {
+    patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTabTombstones(
+      snapshot.closedTerminalTabTombstonesByTabId
+    )
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     patch.sleepingAgentSessionsByPaneKey =

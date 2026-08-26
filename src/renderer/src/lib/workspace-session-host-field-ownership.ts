@@ -39,6 +39,8 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeGroupIdByWorktree: 'worktreeKeyed',
   lastVisitedAtByWorktreeId: 'worktreeKeyed',
   defaultTerminalTabsAppliedByWorktreeId: 'worktreeKeyed',
+  // Why: tombstones are keyed by tab id and record which worktree the closed tab belonged to.
+  closedTerminalTabTombstonesByTabId: 'tabKeyed',
   activeWorkspaceKey: 'global',
   activeWorktreeIdsOnShutdown: 'worktreeArray',
   terminalLayoutsByTabId: 'tabKeyed',
