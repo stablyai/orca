@@ -42,6 +42,7 @@ import {
   CommandEmpty,
   CommandItem
 } from '@/components/ui/command'
+import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { parseGitHubIssueOrPRNumber, parseGitHubIssueOrPRLink } from '@/lib/github-links'
 import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '@/lib/new-workspace'
@@ -165,7 +166,10 @@ import {
 } from '@/components/cmd-j/palette-filter'
 import {
   capPaletteSection,
-  layoutMultiPrimaryPaletteSections
+  layoutMultiPrimaryPaletteSections,
+  PALETTE_SECTION_EXPAND_STEP,
+  PALETTE_SECTION_RENDER_CAP,
+  TYPED_QUERY_LEADING_PREVIEW
 } from '@/components/cmd-j/palette-section-render-cap'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import { runWorktreeDelete } from '@/components/sidebar/delete-worktree-flow'
@@ -286,6 +290,7 @@ type HintRow = {
   id: string
   type: 'hint'
   label: string
+  onSeeMore?: () => void
 }
 
 type CreateWorktreePaletteItem = {
@@ -855,6 +860,23 @@ function WorktreeJumpPaletteContent({
   // Why: filters reset on close — a filter that survives reopen silently hides
   // results in a surface people open reflexively.
   const [rawFilter, setRawFilter] = useState<PaletteFilterState>(EMPTY_PALETTE_FILTER)
+  const [prevQuery, setPrevQuery] = useState(query)
+  const [prevVisible, setPrevVisible] = useState(visible)
+  const [expandedSectionCaps, setExpandedSectionCaps] = useState<Record<string, number>>({})
+
+  if (prevQuery !== query || prevVisible !== visible) {
+    setPrevQuery(query)
+    setPrevVisible(visible)
+    setExpandedSectionCaps({})
+  }
+
+  const handleExpandSection = useCallback((sectionKey: string) => {
+    setExpandedSectionCaps((prev) => ({
+      ...prev,
+      [sectionKey]: (prev[sectionKey] ?? 0) + PALETTE_SECTION_EXPAND_STEP
+    }))
+  }, [])
+
   const [dialogElement, setDialogElement] = useState<HTMLElement | null>(null)
   const previousWorktreeIdRef = useRef<string | null>(null)
   const previousActiveTabTypeRef = useRef<'browser' | 'editor' | 'terminal' | 'simulator'>(
@@ -1870,27 +1892,35 @@ function WorktreeJumpPaletteContent({
   }, [hasQuery, openTabItems, worktreeItems])
 
   const paletteSections = useMemo(() => {
+    const openTabsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['open-tabs'] ?? 0)
     const openTabs = hasQuery
-      ? capPaletteSection(openTabItems)
+      ? capPaletteSection(openTabItems, openTabsCap)
       : { visible: recentTabItems, overflowCount: 0 }
     // Why: the worktree section shrinks against the recent rows to hold the empty-query list at its
     // pre-existing 10, so RECENT WORKTREES stays above the fold. An empty recent section hands the
     // whole budget to worktrees but never uncaps — a filter chip or a tab-less session used to drop
     // every open tab and mount one row per workspace.
-    const worktreeCap = hasQuery
+    const baseWorktreeCap = hasQuery
       ? Infinity
       : Math.min(
           openTabs.visible.length === 0 ? EMPTY_QUERY_ROW_BUDGET : EMPTY_QUERY_WORKTREE_CAP,
           Math.max(1, EMPTY_QUERY_ROW_BUDGET - openTabs.visible.length)
         )
+    const worktreeCap = hasQuery
+      ? PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['worktrees'] ?? 0)
+      : baseWorktreeCap + (expandedSectionCaps['worktrees'] ?? 0)
     // Why: a typed query can match hundreds of rows; capping the rendered slice
     // is what keeps a one-character search from building an unbounded DOM.
     const worktrees = hasQuery
-      ? capPaletteSection(worktreeItems)
-      : { visible: worktreeItems.slice(0, worktreeCap), overflowCount: 0 }
-    const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [])
-    const middle = capPaletteSection(hasQuery ? middleItems : [])
-    const showWorktreeHint = !hasQuery && worktreeItems.length > worktreeCap
+      ? capPaletteSection(worktreeItems, worktreeCap)
+      : {
+          visible: worktreeItems.slice(0, worktreeCap),
+          overflowCount: Math.max(0, worktreeItems.length - worktreeCap)
+        }
+    const projectTargetsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['projects'] ?? 0)
+    const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [], projectTargetsCap)
+    const middleCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['middle'] ?? 0)
+    const middle = capPaletteSection(hasQuery ? middleItems : [], middleCap)
     // Why: only interleave when both primaries have hits — a lone section keeps the
     // full hard-capped list with no floor (empty headers / wasted slots).
     const multiPrimaryFirstScreen =
@@ -1898,7 +1928,12 @@ function WorktreeJumpPaletteContent({
     const multiPrimaryLayout = multiPrimaryFirstScreen
       ? layoutMultiPrimaryPaletteSections<WorktreePaletteItem | OpenTabPaletteItem>({
           leadingItems: openTabsLeadSections ? openTabItems : worktreeItems,
-          trailingItems: openTabsLeadSections ? worktreeItems : openTabItems
+          trailingItems: openTabsLeadSections ? worktreeItems : openTabItems,
+          leadingPreviewCount:
+            TYPED_QUERY_LEADING_PREVIEW +
+            (expandedSectionCaps[openTabsLeadSections ? 'open-tabs' : 'worktrees'] ?? 0),
+          leadingHardCap: openTabsLeadSections ? openTabsCap : worktreeCap,
+          trailingHardCap: openTabsLeadSections ? worktreeCap : openTabsCap
         })
       : null
 
@@ -1911,11 +1946,11 @@ function WorktreeJumpPaletteContent({
       middleOverflowCount: middle.overflowCount,
       visibleOpenTabItems: openTabs.visible as PaletteItem[],
       openTabOverflowCount: openTabs.overflowCount,
-      showWorktreeHint,
       multiPrimaryFirstScreen,
       multiPrimaryLayout
     }
   }, [
+    expandedSectionCaps,
     worktreeItems,
     projectTargetItems,
     middleItems,
@@ -2105,7 +2140,6 @@ function WorktreeJumpPaletteContent({
       visibleProjectTargetItems,
       visibleMiddleItems,
       visibleOpenTabItems,
-      showWorktreeHint,
       worktreeOverflowCount,
       projectTargetOverflowCount,
       middleOverflowCount,
@@ -2113,16 +2147,15 @@ function WorktreeJumpPaletteContent({
       multiPrimaryFirstScreen,
       multiPrimaryLayout
     } = paletteSections
-    const pushOverflowHint = (id: string, overflowCount: number): void => {
+    const pushOverflowHint = (id: string, overflowCount: number, onSeeMore?: () => void): void => {
       if (overflowCount > 0) {
         entries.push({
           id,
           type: 'hint',
-          label: translate(
-            'worktreeJumpPalette.renderCapOverflow',
-            '{{value0}} more — scroll or keep typing to narrow',
-            { value0: overflowCount }
-          )
+          label: translate('worktreeJumpPalette.renderCapOverflow', '{{value0}} more', {
+            value0: overflowCount
+          }),
+          onSeeMore
         })
       }
     }
@@ -2172,18 +2205,9 @@ function WorktreeJumpPaletteContent({
       }
       pushWorktreesHeader()
       appendPaletteListEntries(entries, visibleWorktreeItems)
-      if (showWorktreeHint) {
-        entries.push({
-          id: '__hint_worktree_cap__',
-          type: 'hint',
-          label: translate(
-            'auto.components.WorktreeJumpPalette.dabd819ca1',
-            'Type to see all {{value0}} worktrees',
-            { value0: worktreeItems.length }
-          )
-        })
-      }
-      pushOverflowHint('__hint_worktree_overflow__', worktreeOverflowCount)
+      pushOverflowHint('__hint_worktree_overflow__', worktreeOverflowCount, () =>
+        handleExpandSection('worktrees')
+      )
     }
 
     const pushOpenTabSection = (): void => {
@@ -2192,7 +2216,9 @@ function WorktreeJumpPaletteContent({
       }
       pushOpenTabsHeader()
       appendPaletteListEntries(entries, visibleOpenTabItems)
-      pushOverflowHint('__hint_open_tab_overflow__', openTabOverflowCount)
+      pushOverflowHint('__hint_open_tab_overflow__', openTabOverflowCount, () =>
+        handleExpandSection('open-tabs')
+      )
     }
 
     const pushProjectAndMiddleSections = (): void => {
@@ -2208,7 +2234,9 @@ function WorktreeJumpPaletteContent({
           })
         }
         appendPaletteListEntries(entries, visibleProjectTargetItems)
-        pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount)
+        pushOverflowHint('__hint_project_overflow__', projectTargetOverflowCount, () =>
+          handleExpandSection('projects')
+        )
       }
       if (visibleMiddleItems.length > 0) {
         if (showMiddleHeader) {
@@ -2219,7 +2247,9 @@ function WorktreeJumpPaletteContent({
           })
         }
         appendPaletteListEntries(entries, visibleMiddleItems)
-        pushOverflowHint('__hint_middle_overflow__', middleOverflowCount)
+        pushOverflowHint('__hint_middle_overflow__', middleOverflowCount, () =>
+          handleExpandSection('middle')
+        )
       }
     }
 
@@ -2245,6 +2275,9 @@ function WorktreeJumpPaletteContent({
     // Typed query with both open tabs and worktrees: soft-split so the trailing
     // primary is not buried under ~50 leading rows (see tmp/cmd-j-recommended.html).
     if (multiPrimaryFirstScreen && multiPrimaryLayout) {
+      const leadingSectionKey = openTabsLeadSections ? 'open-tabs' : 'worktrees'
+      const trailingSectionKey = openTabsLeadSections ? 'worktrees' : 'open-tabs'
+
       const leadingHintId = openTabsLeadSections
         ? '__hint_open_tab_overflow__'
         : '__hint_worktree_overflow__'
@@ -2270,7 +2303,15 @@ function WorktreeJumpPaletteContent({
       pushLeadingHeader()
       appendPaletteListEntries(entries, multiPrimaryLayout.leadingPreview as PaletteItem[])
       // Soft more for the leading section (rows resuming below + hard-cap tail).
-      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount)
+      // Why: only actionable when rows are actually hidden — with the whole
+      // section already rendered below, expanding would just reshuffle rows.
+      pushOverflowHint(
+        leadingHintId,
+        multiPrimaryLayout.leadingMoreCount,
+        multiPrimaryLayout.leadingHardOverflowCount > 0
+          ? () => handleExpandSection(leadingSectionKey)
+          : undefined
+      )
       pushTrailingHeader()
       // Floor first, then remaining leading rows, then trailing rest — same order
       // as orderMultiPrimaryPaletteItems / keyboard selection. Each remainder
@@ -2280,6 +2321,9 @@ function WorktreeJumpPaletteContent({
       if (hasLeadingRest) {
         pushLeadingHeader(CONTINUED_SECTION_HEADER_ID_SUFFIX)
         appendPaletteListEntries(entries, multiPrimaryLayout.leadingRest as PaletteItem[])
+        pushOverflowHint(`${leadingHintId}_tail`, multiPrimaryLayout.leadingHardOverflowCount, () =>
+          handleExpandSection(leadingSectionKey)
+        )
       }
       if (multiPrimaryLayout.trailingRest.length > 0) {
         // Only re-label when the leading remainder split the trailing section.
@@ -2289,7 +2333,9 @@ function WorktreeJumpPaletteContent({
         appendPaletteListEntries(entries, multiPrimaryLayout.trailingRest as PaletteItem[])
       }
       // Trailing rest is already on screen; only hard-cap overflow needs a hint.
-      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount)
+      pushOverflowHint(trailingHintId, multiPrimaryLayout.trailingHardOverflowCount, () =>
+        handleExpandSection(trailingSectionKey)
+      )
       pushProjectAndMiddleSections()
       if (showCreateAction) {
         entries.push({ id: CREATE_WORKTREE_ITEM_ID, type: 'create-worktree' })
@@ -2317,13 +2363,13 @@ function WorktreeJumpPaletteContent({
     }
     return entries
   }, [
+    handleExpandSection,
     hasQuery,
     middleLeadsSections,
     openTabsLeadSections,
     paletteSections,
     showCreateAction,
-    taskSourceUrl,
-    worktreeItems.length
+    taskSourceUrl
   ])
 
   // Why not entry.id directly: a duplicated persisted id would repeat a React key,
@@ -3225,9 +3271,25 @@ function WorktreeJumpPaletteContent({
                 return (
                   <div
                     key={renderKey}
-                    className="mx-0.5 mt-1 px-3 py-1.5 text-[12px] italic text-muted-foreground/70"
+                    className="mx-0.5 mt-1 flex items-center gap-2 px-3 py-1.5 text-[12px] text-muted-foreground"
                   >
-                    {entry.label}
+                    <span className="truncate">{entry.label}</span>
+                    {entry.onSeeMore ? (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="xs"
+                        className="h-6 shrink-0 px-2 text-xs font-medium text-foreground hover:bg-accent"
+                        onClick={(event) => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          entry.onSeeMore?.()
+                          inputRef.current?.focus()
+                        }}
+                      >
+                        {translate('worktreeJumpPalette.seeMore', 'See more')}
+                      </Button>
+                    ) : null}
                   </div>
                 )
               }

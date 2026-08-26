@@ -221,7 +221,8 @@
       "createHint": "Create worktree from Linear issue",
       "loadingHint": "Loading Linear issue…"
     },
-    "renderCapOverflow": "{{value0}} more — scroll or keep typing to narrow",
+    "renderCapOverflow": "{{value0}} more",
+    "seeMore": "See more",
     "filter": {
       "emptyTitle": "No results match the active filter",
       "emptySubtitle": "Clear the filter above, or widen it to more hosts and projects.",
