@@ -5,10 +5,13 @@ import { translate } from '@/i18n/i18n'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
 import type { BrowserPage as BrowserPageState } from '../../../../../shared/browser-workspace-types'
 import type { BrowserRecorderStreamEvent } from '../../../../../shared/browser-recorder-automation'
-import { useBrowserRecorder, type BrowserRecorderHook } from '../useBrowserRecorder'
+import {
+  useBrowserRecorder,
+  type BrowserRecorderHook,
+  type BrowserRecorderPageContext
+} from '../useBrowserRecorder'
 import { formatBrowserRecorderStepsAsMarkdown } from '../browser-recorder-output'
 import { recorderEventPage, type BrowserRecorderStepDetail } from '../browser-recorder-types'
-import type { BrowserRecorderPageContext } from '../useBrowserRecorder'
 
 /** Maps a main-process recorder stream event onto a session log step. */
 function toRecorderStepDetail(event: BrowserRecorderStreamEvent): BrowserRecorderStepDetail {

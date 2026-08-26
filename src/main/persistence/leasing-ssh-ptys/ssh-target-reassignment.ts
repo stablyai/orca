@@ -1,6 +1,6 @@
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
@@ -13,7 +13,7 @@ import {
 } from '../../worktree-retirement-namespace'
 
 export type SshTargetReassignmentOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
@@ -22,7 +22,7 @@ export type SshTargetReassignmentOperations = {
 /** Retirement namespaces key on the endpoint a target reaches, so a rotation moves them only when
  *  the endpoint itself changed — plus any pre-identity key that embedded the row id. */
 function migrateRetirementNamespaces(
-  state: StoreOwnedPersistedState,
+  state: PersistedState,
   oldTargetId: string,
   newTargetId: string
 ): boolean {

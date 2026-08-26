@@ -48,17 +48,13 @@ import {
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
+import { BrowserError } from './browser-error'
 
 const CAPTURE_LOG_LIMIT = 1000
 
-export class BrowserError extends Error {
-  constructor(
-    readonly code: string,
-    message: string
-  ) {
-    super(message)
-  }
-}
+// Why re-exported: moved to ./browser-error so the runtime can catch it without
+// pulling Chromium in. Existing importers of this path keep working.
+export { BrowserError } from './browser-error'
 
 type TabState = {
   navigationId: string | null

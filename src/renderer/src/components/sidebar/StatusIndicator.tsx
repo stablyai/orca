@@ -1,4 +1,5 @@
 import React from 'react'
+import { Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -36,6 +37,30 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         <AgentWorkingSpinner className="size-2" />
+      </span>
+    )
+  }
+
+  if (status === 'monitoring') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <Radio className="size-3 text-yellow-500" aria-hidden="true" />
+      </span>
+    )
+  }
+
+  if (status === 'interrupted') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <span className="block size-1.5 rounded-full bg-red-500" />
       </span>
     )
   }

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { workItemsCacheKey } from './github'
+import { workItemsCacheKey } from '../github/cache-identity'
 import {
   createTestStore,
   mockApi,

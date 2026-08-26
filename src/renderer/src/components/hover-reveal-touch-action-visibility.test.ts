@@ -21,7 +21,7 @@ const HOVER_REVEAL_FILES = [
   resolve(__dirname, 'right-sidebar/ChecksPanel.tsx'),
   resolve(__dirname, 'right-sidebar/PortsPanel.tsx'),
   resolve(__dirname, 'right-sidebar/SourceControl.tsx'),
-  resolve(__dirname, 'right-sidebar/checks-panel-content.tsx'),
+  resolve(__dirname, 'right-sidebar/checks-panel/comment-row.tsx'),
   resolve(__dirname, 'settings/MobilePairingQrSection.tsx'),
   resolve(__dirname, 'settings/ShortcutBindingSubRow.tsx'),
   resolve(__dirname, 'settings/ShortcutCommandBlock.tsx'),

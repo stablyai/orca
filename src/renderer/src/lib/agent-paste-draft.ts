@@ -9,8 +9,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import {
   BRACKETED_PASTE_END,
-  BRACKETED_PASTE_START,
-  sanitizeTerminalPasteText
+  BRACKETED_PASTE_START
 } from '@/components/terminal-pane/terminal-bracketed-paste'
 import { runTerminalPtyInputTransaction } from '@/components/terminal-pane/terminal-pty-input-transaction'
 import { waitForAgentReady } from './agent-ready-wait'
@@ -35,10 +34,6 @@ export {
 export const BRACKETED_PASTE_BEGIN = BRACKETED_PASTE_START
 export { BRACKETED_PASTE_END }
 export const POST_PASTE_SUBMIT_DELAY_MS = 50
-
-export function sanitizeBracketedPasteContent(content: string): string {
-  return sanitizeTerminalPasteText(content)
-}
 
 // Why: "the tab has a PTY" and "the agent's composer accepts input" are separate
 // states with separate failure modes, so they get separate budgets. A PTY that

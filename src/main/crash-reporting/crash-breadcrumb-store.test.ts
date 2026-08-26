@@ -50,7 +50,7 @@ describe('crash breadcrumb store', () => {
   })
 
   it('caps retained high-water profiles', () => {
-    for (let index = 0; index < 5; index += 1) {
+    for (let index = 0; index < 9; index += 1) {
       recordCrashBreadcrumb('renderer_memory_highwater', {
         rendererSurface: `surface-${index}`,
         thresholdPct: 80
@@ -59,7 +59,46 @@ describe('crash breadcrumb store', () => {
 
     expect(
       getCrashBreadcrumbSnapshot().map((breadcrumb) => breadcrumb.data?.rendererSurface)
-    ).toEqual(['surface-1', 'surface-2', 'surface-3', 'surface-4'])
+    ).toEqual([
+      'surface-1',
+      'surface-2',
+      'surface-3',
+      'surface-4',
+      'surface-5',
+      'surface-6',
+      'surface-7',
+      'surface-8'
+    ])
+  })
+
+  it('retains both threshold ladders for both renderer surfaces', () => {
+    for (const rendererSurface of ['main', 'dashboard-popout']) {
+      for (const thresholdPct of [60, 80]) {
+        recordCrashBreadcrumb('renderer_memory_highwater', { rendererSurface, thresholdPct })
+      }
+      for (const thresholdPrivateMB of [600, 1000]) {
+        recordCrashBreadcrumb('renderer_memory_highwater', {
+          rendererSurface,
+          thresholdPrivateMB
+        })
+      }
+    }
+
+    expect(
+      getCrashBreadcrumbSnapshot().map((breadcrumb) => [
+        breadcrumb.data?.rendererSurface,
+        breadcrumb.data?.thresholdPct ?? breadcrumb.data?.thresholdPrivateMB
+      ])
+    ).toEqual([
+      ['main', 60],
+      ['main', 80],
+      ['main', 600],
+      ['main', 1000],
+      ['dashboard-popout', 60],
+      ['dashboard-popout', 80],
+      ['dashboard-popout', 600],
+      ['dashboard-popout', 1000]
+    ])
   })
 
   it('redacts sensitive breadcrumb fields before they can be snapshotted', () => {

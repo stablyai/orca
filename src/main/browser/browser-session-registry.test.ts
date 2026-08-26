@@ -235,6 +235,32 @@ describe('BrowserSessionRegistry', () => {
     expect(mockSession?.setDevicePermissionHandler).toHaveBeenCalled()
   })
 
+  it('applies and clears existing browser-profile policy on an opaque route partition', () => {
+    const partition =
+      'persist:orca-browser-v1-1111111111111111222222222222222233333333333333334444444444444444'
+
+    browserSessionRegistry.setupRoutePartitionPolicies(partition, 'default')
+
+    expect(sessionFromPartitionMock).toHaveBeenCalledWith(partition)
+    const configuredSession = sessionFromPartitionMock.mock.results[0]?.value
+    expect(configuredSession.setPermissionRequestHandler).toHaveBeenCalled()
+    expect(configuredSession.setPermissionCheckHandler).toHaveBeenCalled()
+
+    browserSessionRegistry.clearRoutePartitionPolicies(partition)
+    const clearedSession = sessionFromPartitionMock.mock.results.at(-1)?.value
+    expect(clearedSession.setPermissionRequestHandler).toHaveBeenCalledWith(null)
+    expect(clearedSession.setPermissionCheckHandler).toHaveBeenCalledWith(null)
+  })
+
+  it('rejects route partitions for missing browser profiles', () => {
+    const partition =
+      'persist:orca-browser-v1-aaaaaaaaaaaaaaaabbbbbbbbbbbbbbbbccccccccccccccccdddddddddddddddd'
+
+    expect(() =>
+      browserSessionRegistry.setupRoutePartitionPolicies(partition, 'missing-profile')
+    ).toThrow('browser_route_partition_profile_unavailable')
+  })
+
   it('auto-grants pointer lock for browser partitions', () => {
     browserSessionRegistry.createProfile('isolated', 'Pointer Lock Test')
     const mockSession = sessionFromPartitionMock.mock.results[0]?.value
@@ -247,6 +273,23 @@ describe('BrowserSessionRegistry', () => {
 
     expect(callback).toHaveBeenCalledWith(true)
     expect(checkHandler(null, 'pointerLock', '', {})).toBe(true)
+  })
+
+  it('auto-grants storage-access for isolated partitions', () => {
+    // Why: mirrors the pointerLock precedent directly above — the default-partition suite does not
+    // reach this install path.
+    browserSessionRegistry.createProfile('isolated', 'Storage Access Test')
+    const mockSession = sessionFromPartitionMock.mock.results[0]?.value
+    const requestHandler = mockSession.setPermissionRequestHandler.mock.calls[0][0]
+    const checkHandler = mockSession.setPermissionCheckHandler.mock.calls[0][0]
+    const callback = vi.fn()
+    const guestWc = { id: 7, getURL: vi.fn(() => 'https://example.com/') }
+
+    requestHandler(guestWc, 'storage-access', callback, {})
+
+    expect(callback).toHaveBeenCalledWith(true)
+    expect(checkHandler(null, 'storage-access', '', {})).toBe(true)
+    expect(checkHandler(null, 'top-level-storage-access', '', {})).toBe(false)
   })
 
   it('routes media permission requests through macOS TCC for isolated partitions', async () => {

@@ -35,6 +35,8 @@ import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-sele
 import { useSidebarWorktreeSortOrder } from './worktree-list/listing/use-sort-order'
 import { useVisibleSidebarWorktrees } from './worktree-list/listing/use-visible-worktrees'
 import { useWorktreeStatusMutations } from './worktree-list/drag/use-status-mutations'
+import { shouldFiltersHideAllRows } from './sidebar-empty-state-gate'
+import { buildWorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 
 type WorktreeListProps = {
   scrollOffsetRef: React.MutableRefObject<number>
@@ -104,6 +106,10 @@ const WorktreeList = React.memo(function WorktreeList({
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState, hasFilters, clearFilters } = useSidebarWorktreeFilters()
   const sortedIds = useSidebarWorktreeSortOrder({ allWorktrees, repoMap, sortBy })
+  const manualOrderCatalog = useMemo(
+    () => buildWorktreeManualOrderCatalog({ worktrees: allWorktrees, folderWorkspaces }),
+    [allWorktrees, folderWorkspaces]
+  )
   const { visibleWorktrees, pairedDeviceIdsByEnvironment } = useVisibleSidebarWorktrees({
     filterState,
     sortBy,
@@ -126,7 +132,9 @@ const WorktreeList = React.memo(function WorktreeList({
     workspaceStatuses,
     settings,
     projectGroups,
-    projectGrouping
+    projectGrouping,
+    folderWorkspaces,
+    defaultHostId
   })
   const visibleScope = useSidebarHostVisibleScope({
     filterState,
@@ -170,7 +178,12 @@ const WorktreeList = React.memo(function WorktreeList({
     sectionRows: rowModel.sectionRows,
     pinnedDisplayPolicy
   })
-  const statusMutations = useWorktreeStatusMutations({ worktreeMap, workspaceStatuses, sortBy })
+  const statusMutations = useWorktreeStatusMutations({
+    manualOrderCatalog,
+    worktreeMap,
+    workspaceStatuses,
+    sortBy
+  })
   const projectGroupDialogs = useProjectGroupDialogs({ repos, repoMap, projectGroups })
 
   const handleImmediateWorktreeActivate = useCallback((worktreeId: string, rowKey?: string) => {
@@ -233,11 +246,13 @@ const WorktreeList = React.memo(function WorktreeList({
     clearFilters
   })
 
-  const filtersHideAllRows =
-    hasFilters &&
-    visibleWorktrees.length === 0 &&
-    rowModel.placeholderRepoIds.size === 0 &&
-    externalWorktreeCards.importedWorktreesByRepo.size === 0
+  const filtersHideAllRows = shouldFiltersHideAllRows({
+    hasFilters,
+    visibleWorktreeCount: visibleWorktrees.length,
+    visibleFolderWorkspaceCount: visibleScope.visibleFolderWorkspacesForRows.length,
+    placeholderRepoCount: rowModel.placeholderRepoIds.size,
+    importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
+  })
   // Why: when active filters hide every row, the Clear Filters empty state must win over Project Group headers.
   if (rowModel.rows.length === 0 || filtersHideAllRows) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />

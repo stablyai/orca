@@ -245,6 +245,56 @@ describe('createSessionWriteSubscriber', () => {
     expect(persist).not.toHaveBeenCalled()
     cleanup()
   })
+  it('schedules no session timer for one display-title bucket in a 300-worktree fleet', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const tabsByWorktree = Object.fromEntries(
+      Array.from({ length: 300 }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [
+          worktreeId,
+          [
+            {
+              id: `tab-${index}`,
+              ptyId: `${worktreeId}@@pty-1`,
+              worktreeId,
+              title: '⠋ Codex is thinking',
+              customTitle: null,
+              color: null,
+              sortOrder: 0,
+              createdAt: 1
+            }
+          ]
+        ]
+      })
+    )
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+    useAppStore.setState({
+      workspaceSessionReady: true,
+      hydrationSucceeded: true,
+      tabsByWorktree
+    })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+    expect(vi.getTimerCount()).toBe(0)
+
+    const changedWorktreeId = 'wt-173'
+    useAppStore.setState({
+      tabsByWorktree: {
+        ...tabsByWorktree,
+        [changedWorktreeId]: [
+          {
+            ...tabsByWorktree[changedWorktreeId][0],
+            title: '⠙ Codex is thinking'
+          }
+        ]
+      }
+    })
+
+    expect(vi.getTimerCount()).toBe(0)
+    vi.advanceTimersByTime(200)
+    expect(persist).not.toHaveBeenCalled()
+    cleanup()
+  })
 
   it('persists ordinary terminal title-only changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()

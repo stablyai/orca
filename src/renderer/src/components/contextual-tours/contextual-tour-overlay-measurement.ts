@@ -44,6 +44,18 @@ const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => str
         'Automations run agent work on a schedule. Add an automation by clicking this button.'
       )
   },
+  'client-hosted-browser-intro': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',
+        'This page renders on your desktop'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
+        'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
+      )
+  },
   'automations-results': {
     title: () =>
       translate(

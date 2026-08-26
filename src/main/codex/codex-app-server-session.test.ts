@@ -29,6 +29,7 @@ describe('runCodexAppServerSession environment', () => {
     const result = await runCodexAppServerSession(
       {
         command: process.execPath,
+        cliPath: null,
         args: ['-e', server],
         envToDelete: ['CODEX_HOME'],
         timeoutMs: 5_000

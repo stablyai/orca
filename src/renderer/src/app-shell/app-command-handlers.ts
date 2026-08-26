@@ -5,6 +5,10 @@ import { requestScrollToCurrentWorkspaceRevealAndRename } from '@/lib/scroll-to-
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import { shouldShowWorktreeHistoryControls } from '../lib/titlebar-worktree-history-controls'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '../components/sidebar/useWorkspaceBoardPanel'
+import {
+  deleteHoveredWorkspaceImmediately,
+  resolveHoveredWorkspaceDeleteTarget
+} from '../components/sidebar/hovered-workspace-delete'
 import { useAppStore } from '../store'
 import type { usePluginCommands } from '@/store/plugin-panels'
 import { isGitRepoKind } from '../../../shared/repo-kind'
@@ -188,6 +192,22 @@ export function createAppCommandHandlers(
         return claim('workspace.rename', () => {
           useAppStore.getState().setSidebarOpen(true)
           requestScrollToCurrentWorkspaceRevealAndRename()
+        })
+      }
+    ],
+    [
+      'workspace.delete',
+      () => {
+        if (floatingWorkspaceFocused) {
+          return false
+        }
+        const store = useAppStore.getState()
+        const target = resolveHoveredWorkspaceDeleteTarget(store)
+        if (!target) {
+          return false
+        }
+        return claim('workspace.delete', () => {
+          deleteHoveredWorkspaceImmediately(store, target)
         })
       }
     ],

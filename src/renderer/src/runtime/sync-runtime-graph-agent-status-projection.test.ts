@@ -18,6 +18,7 @@ function referenceProjection(map: AppState['agentStatusByPaneKey']): string {
         paneKey,
         entryPaneKey: entry.paneKey,
         state: entry.state,
+        workingMode: entry.workingMode ?? null,
         prompt: entry.prompt,
         updatedAtBucket: Math.floor(entry.updatedAt / BUCKET_MS),
         stateStartedAt: entry.stateStartedAt,
@@ -65,6 +66,7 @@ describe('mobile agent-status projection equivalence', () => {
     const shapes: AppState['agentStatusByPaneKey'][] = []
     shapes.push({})
     shapes.push({ 'tab-0:leaf-0': makeEntry(0) })
+    shapes.push({ 'tab-0:leaf-0': makeEntry(0, { workingMode: 'monitoring' }) })
     const many: AppState['agentStatusByPaneKey'] = {}
     for (let index = 0; index < 12; index += 1) {
       many[`tab-${index}:leaf-0`] = makeEntry(index)

@@ -49,6 +49,22 @@ describe('startup ordering', () => {
     )
   })
 
+  it('resolves the browser hosting identity with nothing awaited before it', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const readyIndex = source.indexOf('app.whenReady().then(')
+    const initIndex = source.indexOf('initializeBrowserClientHostId(')
+
+    expect(readyIndex).toBeGreaterThanOrEqual(0)
+    expect(initIndex).toBeGreaterThan(readyIndex)
+    // Why nothing may be awaited first: the identity is stamped into the renderer's argv when the
+    // window is created, and a suspension here lets a window be created against a process-local
+    // stand-in that the durable id then contradicts. The constraint is positional, so only a source
+    // census can hold it — no behavioural test distinguishes "resolved" from "resolved in time".
+    expect(source.slice(readyIndex, initIndex)).not.toMatch(/\bawait\b/)
+    // Why the count: a second call site would leave the ordering claim above ambiguous.
+    expect(source.split('initializeBrowserClientHostId(')).toHaveLength(2)
+  })
+
   it('requires daemon authority before restored-subagent liveness runs', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
     const sweepStart = source.indexOf('function reapRestoredSubagentsWithoutLiveAgent()')

@@ -14,7 +14,8 @@ import {
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
-import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
+import { registerRepoHandlers } from '../ipc/repos'
+import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
@@ -503,7 +504,10 @@ function registerRuntimeWindowLifecycle(
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
-      send('runtime:browserDriverChanged', { browserPageId, driver })
+      send('runtime:browserDriverChanged', { browserPageId, driver }),
+    browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
+      send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
+    clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
   })
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()

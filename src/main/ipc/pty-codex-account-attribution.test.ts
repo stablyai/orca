@@ -1,10 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
+import { join } from 'node:path'
 import {
   readFileSyncMock,
   recordCodexPaneAccountMock,
   forgetCodexPaneAccountMock
 } from './pty-ipc-mock-registry'
-import { TEST_CODEX_HOME, TEST_CODEX_AUTH_JSON } from './pty-ipc-test-constants'
+import { TEST_CODEX_HOME, TEST_CODEX_AUTH_JSON, TEST_MANAGED_ROOT } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerPtyHandlers, setLocalPtyProvider } from './pty'
 
@@ -51,6 +52,12 @@ vi.mock('../codex/codex-pane-account-registry', () =>
 vi.mock('../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
+
+const MANAGED_ORIGIN_HOME = join(TEST_MANAGED_ROOT, 'origin', 'home')
+const MANAGED_CURRENT_HOME = join(TEST_MANAGED_ROOT, 'current', 'home')
+const MANAGED_SHARED_HOME = join(TEST_MANAGED_ROOT, 'shared-mirror', 'home')
+const ORIGIN_ROLLOUT = join(MANAGED_ORIGIN_HOME, 'sessions', '2026', '07', '20', 'rollout-a.jsonl')
+const SHARED_ROLLOUT = join(MANAGED_SHARED_HOME, 'sessions', '2026', '07', '20', 'rollout-a.jsonl')
 
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow } = setupPtyIpcSuite()
@@ -145,15 +152,15 @@ describe('registerPtyHandlers', () => {
       }
       return ''
     })
-    const resolveHome = vi.fn(() => '/managed/current/home')
+    const resolveHome = vi.fn(() => MANAGED_CURRENT_HOME)
     registerPtyHandlers(
       mainWindow as never,
       undefined,
       resolveHome,
       (() => ({
         codexManagedAccounts: [
-          { id: 'account-a', managedHomePath: '/managed/origin/home' },
-          { id: 'account-b', managedHomePath: '/managed/current/home' }
+          { id: 'account-a', managedHomePath: MANAGED_ORIGIN_HOME },
+          { id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }
         ]
       })) as never,
       undefined,
@@ -161,7 +168,7 @@ describe('registerPtyHandlers', () => {
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/origin/home'
+          codexHomePath: MANAGED_ORIGIN_HOME
         })
       }
     )
@@ -175,7 +182,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: ORIGIN_ROLLOUT
       }
     })
     const rejection = expect(launch).rejects.toThrow(
@@ -203,21 +210,21 @@ describe('registerPtyHandlers', () => {
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [
-        { id: 'account-a', managedHomePath: '/managed/origin/home' },
-        { id: 'account-b', managedHomePath: '/managed/current/home' }
+        { id: 'account-a', managedHomePath: MANAGED_ORIGIN_HOME },
+        { id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }
       ]
     })
     registerPtyHandlers(
       mainWindow as never,
       undefined,
-      vi.fn(() => '/managed/current/home'),
+      vi.fn(() => MANAGED_CURRENT_HOME),
       getSettings as never,
       undefined,
       undefined,
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/origin/home'
+          codexHomePath: MANAGED_ORIGIN_HOME
         })
       }
     )
@@ -231,7 +238,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: ORIGIN_ROLLOUT
       }
     })
 
@@ -240,7 +247,7 @@ describe('registerPtyHandlers', () => {
     expect(recordCodexPaneAccountMock.mock.calls).toEqual([
       ['pty-resumed', { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }]
     ])
-    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
+    expect(readFileSyncMock).toHaveBeenCalledWith(join(MANAGED_ORIGIN_HOME, 'auth.json'), 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
   it('leaves a resumed Codex pane unattributed when no account owns its home', async () => {
@@ -257,19 +264,19 @@ describe('registerPtyHandlers', () => {
     } as never)
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
-      codexManagedAccounts: [{ id: 'account-b', managedHomePath: '/managed/current/home' }]
+      codexManagedAccounts: [{ id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }]
     })
     registerPtyHandlers(
       mainWindow as never,
       undefined,
-      vi.fn(() => '/managed/current/home'),
+      vi.fn(() => MANAGED_CURRENT_HOME),
       getSettings as never,
       undefined,
       undefined,
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/shared-mirror/home'
+          codexHomePath: MANAGED_SHARED_HOME
         })
       }
     )
@@ -282,7 +289,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/shared-mirror/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: SHARED_ROLLOUT
       }
     })
 
@@ -320,22 +327,22 @@ describe('registerPtyHandlers', () => {
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
       codexManagedAccounts: [
-        { id: 'account-a', managedHomePath: '/managed/origin/home' },
-        { id: 'account-b', managedHomePath: '/managed/current/home' }
+        { id: 'account-a', managedHomePath: MANAGED_ORIGIN_HOME },
+        { id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }
       ]
     })
     handlers.clear()
     registerPtyHandlers(
       mainWindow as never,
       runtime as never,
-      vi.fn(() => '/managed/current/home'),
+      vi.fn(() => MANAGED_CURRENT_HOME),
       getSettings as never,
       undefined,
       undefined,
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/origin/home'
+          codexHomePath: MANAGED_ORIGIN_HOME
         })
       }
     )
@@ -351,7 +358,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/origin/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: ORIGIN_ROLLOUT
       }
     })
 
@@ -361,7 +368,7 @@ describe('registerPtyHandlers', () => {
         { selectionKey: 'host', accountId: 'account-a', homeRoute: 'account-home' }
       ]
     ])
-    expect(readFileSyncMock).toHaveBeenCalledWith('/managed/origin/home/auth.json', 'utf8')
+    expect(readFileSyncMock).toHaveBeenCalledWith(join(MANAGED_ORIGIN_HOME, 'auth.json'), 'utf8')
     expect(forgetCodexPaneAccountMock).not.toHaveBeenCalled()
   })
   it('leaves a runtime-controller resumed Codex pane unattributed when no account owns its home', async () => {
@@ -389,10 +396,10 @@ describe('registerPtyHandlers', () => {
     }
     const getSettings = vi.fn().mockReturnValue({
       activeCodexManagedAccountId: 'account-b',
-      codexManagedAccounts: [{ id: 'account-b', managedHomePath: '/managed/current/home' }]
+      codexManagedAccounts: [{ id: 'account-b', managedHomePath: MANAGED_CURRENT_HOME }]
     })
     handlers.clear()
-    const resolveHome = vi.fn(() => '/managed/shared-mirror/home')
+    const resolveHome = vi.fn(() => MANAGED_SHARED_HOME)
     registerPtyHandlers(
       mainWindow as never,
       runtime as never,
@@ -403,7 +410,7 @@ describe('registerPtyHandlers', () => {
       {
         prepareCodexSessionResume: async () => ({
           outcome: 'resume' as const,
-          codexHomePath: '/managed/shared-mirror/home',
+          codexHomePath: MANAGED_SHARED_HOME,
           reconcileSharedRuntimeAuth: true
         })
       }
@@ -419,7 +426,7 @@ describe('registerPtyHandlers', () => {
       resumeProviderSession: {
         key: 'session_id',
         id: 'session-a',
-        transcriptPath: '/managed/shared-mirror/home/sessions/2026/07/20/rollout-a.jsonl'
+        transcriptPath: SHARED_ROLLOUT
       }
     })
 

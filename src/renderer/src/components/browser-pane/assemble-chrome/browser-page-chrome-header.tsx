@@ -71,6 +71,7 @@ export function BrowserPageChromeHeader({
       <BrowserPageToolbar
         browserPageId={browserTab.id}
         workspaceId={workspaceId}
+        worktreeId={worktreeId}
         sessionProfileId={sessionProfileId}
         viewportPresetId={browserTab.viewportPresetId ?? null}
         isActive={isActive}

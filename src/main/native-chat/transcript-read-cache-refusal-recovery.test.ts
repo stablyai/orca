@@ -22,7 +22,9 @@ import {
   readNativeChatTranscriptCached
 } from './transcript-read-cache'
 import {
+  resetWslTranscriptFsGateForTests,
   WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS,
+  WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS,
   WSL_TRANSCRIPT_FS_SLOW_MESSAGE
 } from './wsl-transcript-fs-gate'
 
@@ -55,6 +57,8 @@ function transcriptHandle(body = BODY) {
 }
 
 beforeEach(() => {
+  // The deadline quarantines the route, and a late release never lifts it.
+  resetWslTranscriptFsGateForTests()
   clearNativeChatTranscriptCache()
   mocks.resolve.mockReset()
   mocks.stat.mockReset()
@@ -63,7 +67,8 @@ beforeEach(() => {
   mocks.resolve.mockResolvedValue(UNC_PATH)
   // The file itself never changes across the refusal and the recovery.
   mocks.stat.mockResolvedValue({ mtimeMs: 42, size: BODY.length })
-  vi.useFakeTimers()
+  // performance.now drives the route quarantine clock, so it must be faked too.
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'Date', 'performance'] })
 })
 
 afterEach(async () => {
@@ -82,7 +87,8 @@ describe('cached native chat transcript read after WSL gate refusals', () => {
     expect(await refused).toEqual({ error: WSL_TRANSCRIPT_FS_SLOW_MESSAGE })
     releaseStall?.()
     releaseStall = undefined
-    await vi.advanceTimersByTimeAsync(0)
+    // The deadline's route back-off has to expire before the retry is admitted.
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
     mocks.open.mockResolvedValue(transcriptHandle())
 
     await expect(readNativeChatTranscriptCached('claude', 'session-id')).resolves.toMatchObject({
@@ -102,7 +108,8 @@ describe('cached native chat transcript read after WSL gate refusals', () => {
 
     releaseStall?.()
     releaseStall = undefined
-    await vi.advanceTimersByTimeAsync(0)
+    // The deadline's route back-off has to expire before the retry is admitted.
+    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_ROUTE_QUARANTINE_BASE_MS)
     mocks.open.mockResolvedValue(transcriptHandle())
 
     const recovered = await readNativeChatTranscriptCached('claude', 'session-id')

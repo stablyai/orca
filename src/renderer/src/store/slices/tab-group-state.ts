@@ -184,6 +184,23 @@ export function selectHydratedActiveGroupId(
   return candidates[0]?.id
 }
 
+/**
+ * Persisted sessions can hold two tab records under one id (editor owner
+ * migration re-stamps a tab id that another record already carries). Downstream
+ * consumers key React lists by tab id, and a repeated key leaves the extra row
+ * mounted forever, so the duplicate has to die at hydration.
+ */
+export function dedupeTabsById<T extends { id: string }>(tabs: T[]): T[] {
+  const seen = new Set<string>()
+  return tabs.filter((tab) => {
+    if (seen.has(tab.id)) {
+      return false
+    }
+    seen.add(tab.id)
+    return true
+  })
+}
+
 export function dedupeTabOrder(tabIds: string[]): string[] {
   const seen = new Set<string>()
   const deduped: string[] = []

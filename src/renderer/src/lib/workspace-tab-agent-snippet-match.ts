@@ -21,6 +21,7 @@ import type { AgentMetadata } from './workspace-tab-agent-metadata'
  */
 const AGENT_SNIPPET_RANK: PaletteDocumentRank = {
   exactIntent: 1,
+  containerOnlyTokenCount: Number.MAX_SAFE_INTEGER,
   wholeQuery: 3,
   worstQuality: paletteMatchQualityRank(PALETTE_MATCH_QUALITIES.at(-1) as PaletteMatchQuality) + 1,
   usesSupportingEvidence: 1,

@@ -1,5 +1,5 @@
 import React from 'react'
-import { CircleCheck } from 'lucide-react'
+import { CircleCheck, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
@@ -17,6 +17,7 @@ import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 
 export type AgentDotState =
   | 'working'
+  | 'monitoring'
   | 'blocked'
   | 'waiting'
   | 'interrupted'
@@ -37,6 +38,8 @@ export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
       return 'Working'
+    case 'monitoring':
+      return 'Monitoring background tasks'
     case 'blocked':
       return 'Blocked'
     case 'waiting':
@@ -77,6 +80,17 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         aria-label={agentStateLabel(state)}
       >
         <AgentWorkingSpinner className={inner} />
+      </span>
+    )
+  }
+
+  if (state === 'monitoring') {
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <Radio className={cn('text-yellow-500', icon)} aria-hidden="true" />
       </span>
     )
   }

@@ -1,7 +1,12 @@
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import { splitWorktreeId } from '../../../shared/worktree/id'
+import {
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from '../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../store/types'
 
 function preserveNewerLocalTerminalFields(remote: TerminalTab, local: TerminalTab): TerminalTab {
@@ -20,7 +25,8 @@ export function mergeDirectSshRemoteWorkspaceSession(
   remote: WorkspaceSessionState,
   replaceWorktreeIds: ReadonlySet<string>,
   liveTabsByWorktree: AppState['tabsByWorktree'],
-  preserveLocalTerminalTabIds: ReadonlySet<string>
+  preserveLocalTerminalTabIds: ReadonlySet<string>,
+  replaceExecutionHostId?: ExecutionHostId
 ): WorkspaceSessionState {
   const currentTabsById = new Map(
     [...replaceWorktreeIds]
@@ -146,6 +152,25 @@ export function mergeDirectSshRemoteWorkspaceSession(
     Object.fromEntries(
       Object.entries(record ?? {}).filter(([worktreeId]) => !replaceWorktreeIds.has(worktreeId))
     )
+  const omitTargetVisitRecency = (
+    record: Record<string, number> | undefined
+  ): Record<string, number> =>
+    Object.fromEntries(
+      Object.entries(record ?? {}).filter(([key]) => {
+        const worktreeId = isWorktreeHostIdentity(key) ? getWorktreeIdFromHostIdentity(key) : key
+        if (!replaceWorktreeIds.has(worktreeId)) {
+          return true
+        }
+        // A direct SSH snapshot replaces one host's row. Legacy bare keys
+        // remain because they may be the only recency evidence for a sibling
+        // host; a qualified key is removed only for the target host.
+        return Boolean(
+          replaceExecutionHostId &&
+          (!isWorktreeHostIdentity(key) ||
+            key.slice(0, key.indexOf('|')) !== replaceExecutionHostId)
+        )
+      })
+    )
   const terminalLayoutsByTabId = {
     ...Object.fromEntries(
       Object.entries(current.terminalLayoutsByTabId).filter(
@@ -226,7 +251,7 @@ export function mergeDirectSshRemoteWorkspaceSession(
       )
     },
     lastVisitedAtByWorktreeId: {
-      ...omitTargetWorktrees(current.lastVisitedAtByWorktreeId),
+      ...omitTargetVisitRecency(current.lastVisitedAtByWorktreeId),
       ...remote.lastVisitedAtByWorktreeId
     },
     defaultTerminalTabsAppliedByWorktreeId: {

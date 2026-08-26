@@ -349,6 +349,52 @@ describe('lines ssh itself refuses to parse', () => {
     const hash = Buffer.alloc(20, 2).toString('base64')
     expect(parseKnownHostsLine(`|1|${salt}|${hash} ssh-ed25519 ${ED}`)).toBeDefined()
   })
+
+  const [, , REAL_SALT = '', REAL_HASH = ''] = HASHED_EXAMPLE_COM.split('|')
+  const hashedLine = (salt: string, hash: string): string => `|1|${salt}|${hash} ssh-ed25519 ${ED}`
+
+  // Non-obvious: every mutation below still decodes to exactly 20 bytes, so the length check above
+  // passes and the entry would be trusted — Buffer.from just skips the junk. Verified live against
+  // OpenSSH 10.2p1 with `ssh-keygen -vvv -F` on a real `ssh-keygen -H` file: the salt cases print
+  // "extract_salt: salt decode error" / "bad host hash", and the hash cases find nothing silently
+  // because ssh regenerates the canonical `|1|salt|hash` string and byte-compares it.
+  it.each([
+    ['salt with invalid characters spliced into the middle', REAL_SALT.replace(/^(.{6})/, '$1@@')],
+    ['salt with trailing junk', `${REAL_SALT}!!!`],
+    // Buffer.from accepts the base64url alphabet and yields the same 20 bytes; ssh does not.
+    ['salt in the base64url alphabet', REAL_SALT.replace(/\//g, '_').replace(/\+/g, '-')],
+    // Right length and it looks like base64, but the final character's leftover bits are set — the
+    // case a "does it look like base64" check misses and b64_pton rejects as a subliminal channel.
+    ['salt whose final character carries non-zero padding bits', `${REAL_SALT.slice(0, -2)}9=`],
+    ['salt with its base64 padding stripped', REAL_SALT.replace(/=+$/, '')]
+  ])('drops a hashed entry with a %s, as ssh does', (_label, salt) => {
+    expect(parseKnownHostsLine(hashedLine(salt, REAL_HASH))).toBeUndefined()
+  })
+
+  it.each([
+    ['invalid characters spliced into the middle', REAL_HASH.replace(/^(.{6})/, '$1@@')],
+    ['trailing junk', `${REAL_HASH}!!!`]
+  ])('drops a hashed entry whose hash has %s, as ssh does', (_label, hash) => {
+    expect(parseKnownHostsLine(hashedLine(REAL_SALT, hash))).toBeUndefined()
+  })
+
+  // Guards the cases above from passing by rejecting everything.
+  it('still accepts the unmutated ssh-keygen -H vector', () => {
+    expect(parseKnownHostsLine(hashedLine(REAL_SALT, REAL_HASH))).toBeDefined()
+  })
+
+  // Extra padding is a b64_pton error too, so the key field is held to the same exact-encoding rule.
+  it('drops a key field with extra base64 padding', () => {
+    expect(parseKnownHostsLine(`example.com ssh-ed25519 ${ED}==`)).toBeUndefined()
+  })
+
+  // The parse result IS the trust decision: a junk-salt line previously produced a full `match`.
+  it('reports unknown for a junk-salt hashed line instead of matching it', () => {
+    expect(verdict(hashedLine(REAL_SALT.replace(/^(.{6})/, '$1@@'), REAL_HASH), { key: ED })).toBe(
+      'unknown'
+    )
+    expect(verdict(hashedLine(REAL_SALT, REAL_HASH), { key: ED })).toBe('match')
+  })
 })
 
 describe('agreement with a live OpenSSH client', () => {

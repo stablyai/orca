@@ -74,17 +74,28 @@ vi.mock('@/components/new-workspace/ProjectCombobox', () => ({
 vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
   SetProjectLocationDialog: ({
     option,
-    projectName
+    projectName,
+    onClose,
+    onReady
   }: {
     option: { label: string } | null
     projectName: string
+    onClose: () => void
+    onReady: (setupId: string) => void
   }) =>
     option ? (
       <div
         data-testid="set-project-location-dialog"
         data-host={option.label}
         data-project={projectName}
-      />
+      >
+        <button type="button" onClick={onClose}>
+          Close location
+        </button>
+        <button type="button" onClick={() => onReady('setup-remote')}>
+          Complete location
+        </button>
+      </div>
     ) : null
 }))
 
@@ -234,5 +245,30 @@ describe('NewWorkspaceComposerCard set location', () => {
     expect(storeMocks.closeModal).not.toHaveBeenCalled()
     expect(storeMocks.openModal).not.toHaveBeenCalled()
     expect(storeMocks.openSettingsPage).not.toHaveBeenCalled()
+  })
+
+  it('closes the nested dialog before publishing the ready run target', () => {
+    const nestedOpenChanges: boolean[] = []
+    const setupChanges: string[] = []
+    container = renderCard({
+      onNestedDialogOpenChange: (open) => nestedOpenChanges.push(open),
+      onProjectHostSetupChange: (setupId) => setupChanges.push(setupId)
+    })
+
+    act(() => {
+      container?.querySelector<HTMLElement>('div[data-run-target-combobox-root="true"]')?.click()
+    })
+    const setLocation = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent?.includes('Set project location')
+    )
+    act(() => setLocation?.click())
+    const complete = [...document.body.querySelectorAll<HTMLButtonElement>('button')].find(
+      (button) => button.textContent === 'Complete location'
+    )
+    act(() => complete?.click())
+
+    expect(nestedOpenChanges).toEqual([true, false])
+    expect(setupChanges).toEqual(['setup-remote'])
+    expect(document.body.querySelector('[data-testid="set-project-location-dialog"]')).toBeNull()
   })
 })

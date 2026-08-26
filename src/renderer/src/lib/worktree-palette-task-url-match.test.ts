@@ -696,6 +696,29 @@ describe('matchWorktreePaletteTaskUrl', () => {
     ).toBeNull()
   })
 
+  it('carries the worktree host so the board can key the Jira match by host identity', () => {
+    // Why: the other three providers spread worktreeHostId and Jira did not, so a Jira URL
+    // recorded an unqualified identity and the board filtered every lane to empty.
+    const intent = parseCmdJTaskSourceUrl('https://acme.atlassian.net/browse/PROJ-123')
+
+    expect(
+      matchWorktreePaletteTaskUrl({
+        worktree: makeWorktree({
+          hostId: 'ssh:box',
+          linkedWorkItem: {
+            provider: 'jira',
+            type: 'issue',
+            number: 0,
+            title: 'Ticket',
+            jiraIdentifier: 'PROJ-123',
+            url: 'https://acme.atlassian.net/browse/PROJ-123'
+          }
+        }),
+        intent: intent!
+      })
+    ).toMatchObject({ worktreeHostId: 'ssh:box' })
+  })
+
   // Same host, different site path: Jira Server installs are commonly path-scoped.
   it('rejects a Jira issue URL from a different site path on the same host', () => {
     const intent = parseCmdJTaskSourceUrl('https://jira.acme.test/one/browse/PROJ-123')

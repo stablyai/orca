@@ -1,8 +1,18 @@
 /* eslint-disable max-lines -- main-process entry point; owns app lifecycle, service wiring, window creation, and hook/daemon startup with no cleaner split seam. */
 import { existsSync, statSync } from 'node:fs'
+import { randomUUID } from 'node:crypto'
 import { isAbsolute, join } from 'node:path'
 import os from 'node:os'
-import { app, BrowserWindow, dialog, ipcMain, nativeTheme, powerMonitor, type Tray } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  nativeTheme,
+  powerMonitor,
+  type Tray,
+  session
+} from 'electron'
 import { initTccPromptNotice, stopTccPromptNotice } from './macos-tcc-prompt-notice'
 import { electronApp, is } from '@electron-toolkit/utils'
 import {
@@ -11,6 +21,21 @@ import {
   getCanonicalUserDataPath,
   migrateMobilePairingDataToCanonicalUserDataPath
 } from './persistence'
+import { setAppEnvironment } from '../shared/app-environment'
+import { ElectronAppEnvironment } from './host/electron-app-environment'
+import { setPtyHostBindings } from './ipc/pty-host-bindings'
+import { electronRuntimeDesktopSurface } from './host/electron-runtime-desktop-surface'
+import { setRuntimeDesktopSurface } from './runtime/runtime-desktop-surface'
+import { electronRuntimeBrowserCommandsFactory } from './host/electron-browser-commands'
+import { setRuntimeBrowserCommandsFactory } from './runtime/runtime-browser-commands-factory'
+import { electronHttpClient } from './host/electron-http-client'
+import { setMainHttpClient } from './network/http-client'
+import { electronSpeechServiceFactories } from './host/electron-speech-services'
+import { setSpeechServiceFactories } from './speech/speech-runtime-service'
+import { setWorktreeWatcherRemoval } from './ipc/worktree-watcher-removal'
+import { setSecretStore } from '../shared/secret-store'
+import { ElectronSecretStore } from './host/electron-secret-store'
+import { reportSecretProtectionGap } from './host/secret-protection-report'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
@@ -19,6 +44,7 @@ import { applyAppIcon } from './app-icon'
 import { relaunchApp } from './app-relaunch'
 import { StatsCollector, initStatsPath } from './stats/collector'
 import { initSshHostKeyStoreFile } from './ssh/ssh-host-key-store'
+import { AgentSessionTransitionRecorder } from './stats/agent-session-transition-recorder'
 import { ClaudeUsageStore, initClaudeUsagePath } from './claude-usage/store'
 import { CodexUsageStore, initCodexUsagePath } from './codex-usage/store'
 import { OpenCodeUsageStore, initOpenCodeUsagePath } from './opencode-usage/store'
@@ -46,10 +72,10 @@ import {
   isCodexPaneHomeRouteProvenAwayFromSharedHome,
   reconcileCodexPaneAccountsWithLivePtys
 } from './codex/codex-pane-account-registry'
-import { closeAllWatchers } from './ipc/filesystem-watcher'
+import { closeAllWatchers, desktopWorktreeWatcherRemoval } from './ipc/filesystem-watcher'
 import { disposeWorktreeBaseDirectoryWatchers } from './ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from './ipc/folder-repo-git-upgrade'
-import { registerCoreHandlers } from './ipc/register-core-handlers'
+import { registerCoreHandlers } from './ipc/register-core-handlers/register-core-handlers'
 import { initObservability, shutdownObservability } from './observability'
 import { registerMobileHandlers } from './ipc/mobile'
 import { initTelemetry, shutdownTelemetry, trackAppOpenedOnce, track } from './telemetry/client'
@@ -165,7 +191,7 @@ import { maybeRedirectPackagedCliEntryLaunch } from './startup/packaged-cli-entr
 import { startFirstWindowStartupServices } from './startup/first-window-startup-services'
 import { recoverLegacyWorkerTerminalsForRendererStartup } from './startup/legacy-worker-renderer-recovery'
 import { createWslCliReconciliationStartupBarrier } from './startup/wsl-cli-reconciliation-startup-barrier'
-import { getDevInstanceIdentity } from './startup/dev-instance-identity'
+import { getDevInstanceIdentity, shouldApplyPreReadyAppName } from './startup/dev-instance-identity'
 import { hydrateShellPath, mergePathSegments } from './startup/hydrate-shell-path'
 import { createWindowsShellPathHydration } from './startup/windows-shell-path-hydration'
 import {
@@ -209,6 +235,7 @@ import {
   ensureAutoUpdaterConfigured
 } from './window/attach-main-window-services'
 import { createMainWindow, loadMainWindow } from './window/createMainWindow'
+import { shutdownPairedRuntimeBrowserClientHosts } from './browser/paired-runtime-browser-client-host-runtime'
 import {
   getDashboardPopoutWindow,
   zoomDashboardPopoutIfFocused
@@ -280,10 +307,14 @@ import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { parseWorkspaceKey } from '../shared/workspace-scope'
 import { setMigrationUnsupportedPtyListener } from './agent-hooks/migration-unsupported-pty-state'
 import { AgentBrowserBridge } from './browser/agent-browser-bridge'
+import { configureBrowserClientPageAutomationRuntime } from './browser/browser-client-page-automation-runtime'
+import { BrowserClientPageCommandError } from './browser/browser-client-page-command-failure'
 import { EmulatorBridge } from './emulator/emulator-bridge'
 import { browserCertificateTrustController, browserManager } from './browser/browser-manager'
+import { RpcDispatcher } from './runtime/rpc/dispatcher'
 import { OffscreenBrowserBackend } from './browser/offscreen-browser-backend'
 import { initializeBrowserSessionsForApp } from './browser/browser-session-startup'
+import { initializeBrowserClientHostId } from './browser/browser-client-host-id'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
@@ -293,7 +324,7 @@ import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
-import { beginSshShutdown } from './ipc/ssh'
+import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -349,7 +380,10 @@ import {
 } from '../shared/runtime-types'
 import { LocalPtyProvider } from './providers/local-pty-provider'
 import { KeybindingService } from './keybindings/keybinding-service'
-import { applyElectronProxySettings } from './network/proxy-settings'
+import {
+  applyElectronProxySettings,
+  setDefaultProxySessionResolver
+} from './network/proxy-settings'
 import { preserveAgentAuthBeforeRestart } from './agent-auth-restart-preservation'
 import { CliInstaller } from './cli/cli-installer'
 import { installLinuxBareOrcaDispatcher } from './cli/linux-bare-orca-dispatcher'
@@ -671,7 +705,15 @@ if (app.isPackaged && process.platform !== 'win32') {
   void hydrateShellPath().then((result) => {
     if (result.ok) {
       mergePathSegments(result.segments)
+      return
     }
+    // Why: on failure the seeded fallbacks stay in front. For an nvm user that is
+    // now their `default` version rather than the newest install, so it is usually
+    // survivable — but it is still not what their shell would have resolved. Name
+    // the reason so it shows up in a log bundle instead of as a missing CLI.
+    console.warn(
+      `[shell-path] login-shell probe failed (${result.failureReason}); using seeded PATH`
+    )
   })
 }
 configureDevUserDataPath(is.dev)
@@ -849,6 +891,39 @@ if (!hasSingleInstanceLock) {
 
 // Why: when another process holds the lock we've already exited; skip file-writing side effects so this transient process never touches userData.
 if (hasSingleInstanceLock) {
+  // Why first: both accessors throw until installed, and everything below this line
+  // may resolve a path or read a credential. Neither constructor touches `app` or
+  // `safeStorage` — they resolve lazily per call — so installing here changes no
+  // timing, in particular not the pre-ready Keychain service-name resolution and
+  // the app.setName ordering the userData captures below depend on.
+  setAppEnvironment(new ElectronAppEnvironment())
+  setSecretStore(new ElectronSecretStore())
+  // Why at process level, not per-window: pty.ts registers against injected surfaces so
+  // it can load without electron, and an Electron main process always has ipcMain —
+  // whether a window exists is irrelevant. Installing this in attachMainWindowServices
+  // meant `orca serve` registered its PTY handlers against no-ops before any window
+  // attached, so a paired desktop owner never received them.
+  setPtyHostBindings({ ipc: ipcMain, power: powerMonitor })
+  // Why also at process level: the runtime's notification, window-lookup and
+  // tab-create-reply channel are desktop-only. A Node host installs none and the
+  // runtime routes notifications to paired clients instead.
+  setRuntimeDesktopSurface(electronRuntimeDesktopSurface)
+  // Why here: constructing RuntimeBrowserCommands is what pulls the Chromium browser
+  // cluster into the graph. The desktop installs it; a Node host installs none and every
+  // browser RPC rejects, which capability filtering already tells clients about.
+  setRuntimeBrowserCommandsFactory(electronRuntimeBrowserCommandsFactory)
+  // Why here: proxy-settings only needed electron for `session.defaultSession`. The
+  // desktop supplies it; a Node host has no Chromium proxy config to consult, so the
+  // environment variables are the whole answer there.
+  setDefaultProxySessionResolver(() => session.defaultSession)
+  // Why here: integrations use Chromium's network stack on the desktop. A Node host
+  // falls back to the platform default, which is a real behavioural difference (proxy
+  // read from the environment, Node's user agent) rather than a transparent swap.
+  setMainHttpClient(electronHttpClient)
+  // Why here: constructing the speech services is what pulls Electron's streaming net
+  // request in. A host without them rejects speech calls rather than pretending.
+  setSpeechServiceFactories(electronSpeechServiceFactories)
+  setWorktreeWatcherRemoval(desktopWorktreeWatcherRemoval)
   // Why: couple to dev-parent only for electron-vite desktop runs; `orca serve`'s parent (CLI shim/background shell) isn't the intended server lifetime.
   const shouldCoupleToDevParent = is.dev && !isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
@@ -867,6 +942,15 @@ if (hasSingleInstanceLock) {
   initClaudeUsagePath()
   initCodexUsagePath()
   initOpenCodeUsagePath()
+  // Why: Electron resolves the macOS safeStorage Keychain service name
+  // ("<app name> Safe Storage") before `ready`, so the setName in whenReady is
+  // too late to move it — dev otherwise lands on the package.json name. Dev-only
+  // so a packaged build keeps deriving the key from its own CFBundleName.
+  // Safe here: dev always pins userData via app.setPath (configure-process.ts),
+  // so setName cannot shift the paths captured just above.
+  if (shouldApplyPreReadyAppName(devInstanceIdentity)) {
+    app.setName(devInstanceIdentity.appName)
+  }
   // Why: must precede app.whenReady() so Crashpad is installed before the
   // first renderer spawns; a CHECK before this point is still exit-code-only.
   startCrashpadCapture()
@@ -1587,6 +1671,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       providerSessionOnly,
       promptInteractionKey,
       restoredUnconfirmed,
+      observation,
       isReplay
     }) => {
       if (mainWindow?.isDestroyed()) {
@@ -1604,6 +1689,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
           receivedAt,
           stateStartedAt,
           ...(providerSession ? { providerSession } : {}),
+          ...(observation ? { observation } : {}),
           providerSessionOnly: true
         })
         return
@@ -1635,6 +1721,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         ...(providerSession ? { providerSession } : {}),
         ...(promptInteractionKey ? { promptInteractionKey } : {}),
         ...(restoredUnconfirmed ? { restoredUnconfirmed: true } : {}),
+        ...(observation ? { observation } : {}),
         ...(orchestration ? { orchestration } : {})
       }
       mainWindow?.webContents.send('agentStatus:set', statusEvent)
@@ -1832,7 +1919,8 @@ function recordProcessGoneCrash(
     reason,
     exitCode,
     expectedTeardown: getExpectedTeardownScope(webContentsId),
-    details
+    details,
+    ...(webContentsId !== undefined ? { webContentsId } : {})
   })
 }
 
@@ -2196,7 +2284,9 @@ void app.whenReady().then(async () => {
     }
   )
   electronApp.setAppUserModelId(devInstanceIdentity.appUserModelId)
-  // Why: setName drives the macOS safeStorage Keychain item name; use the stable appName (not per-branch `name`) so dev branches share one key and don't re-prompt.
+  // Why: names the app menu/About panel. Dev already applied this pre-ready (see the
+  // safeStorage note above); this call stays unconditional so packaged builds keep their
+  // existing post-ready rename, which lands after the Keychain name is already resolved.
   app.setName(devInstanceIdentity.appName)
   updateGpuAccelerationAboutPanel()
 
@@ -2231,7 +2321,16 @@ void app.whenReady().then(async () => {
   )
 
   const activeOrcaProfile = ensureActiveOrcaProfile()
+  // Why this early: the first window stamps the hosting id into its renderer's argv, so the durable
+  // read has to have happened by then or the renderer and the browser-host lease disagree.
+  initializeBrowserClientHostId(activeOrcaProfile.profileDirectory)
   store = new Store({ dataFile: activeOrcaProfile.dataFile })
+  // Why here and not at install time: the report remembers what it last said, and that
+  // state lives beside the profile data file, which does not exist until now.
+  reportSecretProtectionGap({
+    dataFile: activeOrcaProfile.dataFile,
+    force: process.env.ORCA_ALWAYS_REPORT_SECRET_PROTECTION === '1'
+  })
   // Why here: the host key store is a sidecar of the same profile, and every SSH connect consults
   // it. Left unbound it reports nothing trusted, which is safe but silently discards our own
   // accept records on every launch.
@@ -2328,7 +2427,16 @@ void app.whenReady().then(async () => {
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({
     orcaProfileId: activeOrcaProfile.profile.id,
-    profileDirectory: activeOrcaProfile.profileDirectory
+    profileDirectory: activeOrcaProfile.profileDirectory,
+    // Why: local direct-SSH partitions are scoped to targets, and the orphan
+    // sweep must see the live target list or it would clear their cookie jars.
+    listLocalSshTargetIds: () => {
+      if (!store) {
+        // Why: an empty list would read as "every SSH jar is an orphan"; throwing skips the sweep.
+        throw new Error('ssh target store unavailable at partition sweep')
+      }
+      return store.getSshTargets().map((target) => target.id)
+    }
   })
   unsubscribeSystemResumeBroadcast = registerSystemResumeBroadcast()
   agentAwakeService = new AgentAwakeService()
@@ -2446,6 +2554,16 @@ void app.whenReady().then(async () => {
   initCohortClassifier(store)
   initOnboardingCohortClassifier(store)
   stats = new StatsCollector()
+  // Agent-session stats come from hook status transitions, the same truth the
+  // sidebar and dashboard read — never from OSC terminal titles, which miss
+  // hook-only agents and count any spinner TUI as an agent (#10201).
+  const agentSessionRecorder = new AgentSessionTransitionRecorder(stats)
+  agentHookServer.subscribeEnrichedStatus((enriched) => {
+    agentSessionRecorder.onStatus(enriched)
+  })
+  agentHookServer.subscribePaneStatusClear((clear) => {
+    agentSessionRecorder.onCleared(clear)
+  })
   claudeUsage = new ClaudeUsageStore(store)
   codexUsage = new CodexUsageStore(store)
   openCodeUsage = new OpenCodeUsageStore(store)
@@ -2628,7 +2746,14 @@ void app.whenReady().then(async () => {
       agentHookServer.attestCompatibilityAuthority(candidate),
     retireAgentHookCompatibilityAuthority: (paneKey) =>
       agentHookServer.retirePaneAuthority(paneKey),
+    reconcileAgentStatusForEndedProcess: (paneKeys) => {
+      agentHookServer.reconcileEndedProcessForPaneKeys(paneKeys)
+    },
     canRecoverPersistentLocalPtys: () => getDaemonProvider() !== null,
+    // Why: evaluated per call, not captured — the RPC server that owns the device registry is
+    // constructed with this runtime and does not exist yet at this point.
+    getPairedDeviceName: (pairedDeviceId) =>
+      runtimeRpc?.getDeviceRegistry()?.getDevice(pairedDeviceId)?.name ?? null,
     // Why: source codex-home here (runs in window AND serve) so aiVault.listSessions includes managed-Codex sessions; registerCoreHandlers is window-only.
     getAdditionalAiVaultCodexHomePaths: () =>
       codexRuntimeHome ? codexRuntimeHome.getHostCodexHomePathsForSessionDiscovery() : [],
@@ -2644,6 +2769,9 @@ void app.whenReady().then(async () => {
   })
   runtime = runtimeService
   runtimeService.prepareLegacyWorkerTerminalRecovery()
+  // Why before anything can attach: a client host that reattaches to a restarted runtime is only
+  // handed its pages back if the runtime found them first.
+  runtimeService.rehydrateClientHostedBrowserPages()
   publishProviderSessionChanges(agentHookServer.getProviderSessionIdentities())
   browserManager.setBrowserGuestStateChangedListener((worktreeId) => {
     runtimeService.notifyMobileSessionTabsChanged(worktreeId)
@@ -2891,11 +3019,30 @@ void app.whenReady().then(async () => {
   starNag = new StarNagService(store, stats)
   starNag.start()
   starNag.registerIpcHandlers()
-  runtimeService.setAgentBrowserBridge(
-    new AgentBrowserBridge(browserManager, {
-      onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
-    })
-  )
+  const agentBrowserBridge = new AgentBrowserBridge(browserManager, {
+    onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
+  })
+  runtimeService.setAgentBrowserBridge(agentBrowserBridge)
+  const browserClientAutomationDispatcher = new RpcDispatcher({ runtime: runtimeService })
+  configureBrowserClientPageAutomationRuntime({
+    browserManager,
+    getAgentBrowserBridge: () => agentBrowserBridge,
+    executeRpc: async (method, params, signal) => {
+      const response = await browserClientAutomationDispatcher.dispatch(
+        {
+          id: randomUUID(),
+          authToken: 'local-browser-client-automation',
+          method,
+          params
+        },
+        { signal }
+      )
+      if (!response.ok) {
+        throw new BrowserClientPageCommandError(response.error.code)
+      }
+      return response.result
+    }
+  })
 
   // Emulator bridge (serve-sim). macOS-only feature (gated in CLI/runtime); always ship like agent-browser.
   // Why: externally started serve-sim processes must stay independent — only Orca-managed/attached helpers belong to a workspace.
@@ -3313,7 +3460,7 @@ app.on('will-quit', (e) => {
   }
   // Why: before-quit can still be aborted by renderer beforeunload; only remove the Windows tray icon on the committed quit path.
   destroySystemTray()
-  // Why: stats.flushAsync() must precede killAllPty() so still-running agents emit synthetic agent_stop events (killAllPty skips runtime.onPtyExit()). It closes them out synchronously and only defers the write.
+  // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
   starNag?.stop()
   automations?.stop()
   // Why: plugin hosts are forked children; dispose sends shutdown and
@@ -3336,6 +3483,11 @@ app.on('will-quit', (e) => {
   runtime?.getAgentBrowserBridge()?.destroyAllSessions()
   // Why: headless offscreen browser windows are main-process owned; tear them down explicitly on quit.
   runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
+  // Why (review P2-4): local SSH browser routes own loopback listeners and, on the
+  // system-ssh path, `ssh -N -D` children that would otherwise outlive the app.
+  const localSshRouteShutdown = import('./browser/local-ssh-browser-route')
+    .then((routes) => routes.closeAllLocalSshBrowserRoutes())
+    .catch(() => {})
   browserManager.setBrowserGuestStateChangedListener(null)
   const emulatorShutdown = runtime?.getEmulatorBridge()?.destroyAllSessions() ?? Promise.resolve()
   // Why immediately before store.flushAsync() with no await in between: beginSshShutdown() marks every
@@ -3351,6 +3503,8 @@ app.on('will-quit', (e) => {
     codexUsage?.flush(),
     openCodeUsage?.flush()
   ]).then(() => {})
+  const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
+  const skillUploadShutdown = runtime?.disposeSkillUploadSessions() ?? Promise.resolve()
 
   // Why: capture pid/runtimeId synchronously (before any await) so a later teardown path can't null them out mid-chain.
   const ownedPid = process.pid
@@ -3383,8 +3537,11 @@ app.on('will-quit', (e) => {
     { name: 'runtime-rpc', promise: rpcStopAndClear },
     { name: 'watchers', promise: watcherShutdown },
     { name: 'emulator', promise: emulatorShutdown },
+    { name: 'browser-client-hosts', promise: browserClientHostShutdown },
+    { name: 'local-ssh-browser-routes', promise: localSshRouteShutdown },
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
+    { name: 'skill-uploads', promise: skillUploadShutdown },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },

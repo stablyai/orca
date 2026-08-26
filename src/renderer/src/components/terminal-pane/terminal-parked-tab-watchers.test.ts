@@ -48,8 +48,12 @@ vi.mock('./pty-dispatcher', () => ({
 
 const consumePreHandlerPtyState = vi.fn()
 vi.mock('./pty-pre-handler-buffer', () => ({
-  discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId)
+  discardPreHandlerPtyState: (ptyId: string) => consumePreHandlerPtyState(ptyId),
+  hasPreHandlerPtyExit: (ptyId: string) => unownedExitPtyIds.has(ptyId)
 }))
+
+/** PTYs whose exit was delivered with no owning handler — the park handoff gap. */
+const unownedExitPtyIds = new Set<string>()
 
 type CloseTerminalTabOptions = {
   captureRecentlyClosed?: boolean
@@ -110,6 +114,7 @@ import {
   captureParkedTerminalPaneCandidates,
   disposeParkedTerminalWatchersForPtyIds,
   disposeParkedTerminalWatchersForWorktree,
+  collectParkedTerminalWatcherPtyIds,
   getParkedTerminalWatcherTabIds,
   pruneParkedTerminalWatchers,
   shouldDeferParkedPtyExitTabClose,
@@ -164,6 +169,7 @@ describe('terminal-parked-tab-watchers', () => {
   })
 
   afterEach(() => {
+    unownedExitPtyIds.clear()
     // Module-level registries persist across tests; clear them through the
     // public prune path so each test starts from an empty parked state.
     pruneParkedTerminalWatchers(new Set())
@@ -227,6 +233,23 @@ describe('terminal-parked-tab-watchers', () => {
     // Why: the tab is still tracked as parked so debug introspection
     // (window.__terminalParkingDebug) reflects every parked tab.
     expect(getParkedTerminalWatcherTabIds()).toEqual([TAB_ID])
+  })
+
+  it('never starts a watcher for a PTY that exited into the park handoff gap', () => {
+    // The pane's primary exit handler is gone from unmount and this sidecar
+    // arrives a passive effect later, so an exit landing between them is
+    // buffered and replayed to nobody. Registering anyway would make the
+    // registry claim a dead PTY is a live parked owner, and the runtime graph
+    // publishes its leaf on exactly that claim (STA-2854).
+    unownedExitPtyIds.add(PTY_ID)
+    capturePanes([{ ptyId: PTY_ID, paneId: 1, leafId: LEAF_ID, drivesTabTitle: true }])
+    syncParked({ tabs: [{ id: TAB_ID, ptyId: PTY_ID }] })
+
+    expect(startParkedTerminalByteWatcher).not.toHaveBeenCalled()
+    expect(collectParkedTerminalWatcherPtyIds().has(PTY_ID)).toBe(false)
+    // No live pane will ever overwrite this slot again, so a stranded
+    // 'working' title would pin worktree status forever.
+    expect(mockStoreState.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 1)
   })
 
   it('starts a fact watcher for snapshot-capable paired PTYs', () => {

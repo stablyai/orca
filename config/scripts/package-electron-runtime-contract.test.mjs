@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { relayArtifactFilenames } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -41,12 +42,12 @@ describe('Electron runtime package contract', () => {
     // Why: pnpm installs optional target architectures on every host; the root
     // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
-    expect(rebuildScript).toContain(
-      "rebuildPlatform === 'win32' ? ['windows-native-registry'] : []"
-    )
-    expect(ensureScript).toContain(
-      "process.platform === 'win32' ? ['windows-native-registry'] : []"
-    )
+    // Why assert the guard and the member separately: the list now carries more
+    // than one addon, so pinning the whole literal only tested its formatting.
+    expect(rebuildScript).toContain("rebuildPlatform === 'win32'")
+    expect(rebuildScript).toContain("'windows-native-registry'")
+    expect(ensureScript).toContain("process.platform === 'win32'")
+    expect(ensureScript).toContain("'windows-native-registry'")
     const packageTargets = {
       win32: createPackagedRuntimeNodeModuleResources('win32'),
       darwin: createPackagedRuntimeNodeModuleResources('darwin'),
@@ -62,6 +63,47 @@ describe('Electron runtime package contract', () => {
       expect(packageTargets[platform]).not.toEqual(
         expect.arrayContaining([
           expect.objectContaining({ to: join('node_modules', 'windows-native-registry') })
+        ])
+      )
+    }
+  })
+
+  it('keeps the native Windows process-table addon optional and platform-gated', () => {
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    const ensureScript = readFileSync(
+      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      'utf8'
+    )
+    expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
+    // Why: same rule as the registry addon -- pnpm installs optional deps on
+    // every host, so macOS/Linux must never run node-gyp for a Windows addon.
+    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('@vscode/windows-process-tree')
+    expect(rebuildScript).toContain("'@vscode/windows-process-tree'")
+    expect(ensureScript).toContain("'@vscode/windows-process-tree'")
+    // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
+    // libraries our build agents do not carry, and the enumeration stops after
+    // 1024 processes -- on a busy host that silently hides the very descendants
+    // teardown is looking for.
+    expect(packageJson.pnpm.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
+      'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+    )
+    const packageTargets = {
+      win32: createPackagedRuntimeNodeModuleResources('win32'),
+      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+      linux: createPackagedRuntimeNodeModuleResources('linux')
+    }
+    expect(packageTargets.win32).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
+      ])
+    )
+    for (const platform of ['darwin', 'linux']) {
+      expect(packageTargets[platform]).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
         ])
       )
     }
@@ -201,14 +243,15 @@ describe('Electron runtime package contract', () => {
 
     expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-ai-vault-service.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-ai-vault-service.js'))")
     expect(builderConfig).toContain("from: 'out/relay'")
-    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
-    expect(remoteCommands).toContain(
-      "joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')"
-    )
+
+    // Hashing and remote install probing are manifest-driven, so the contract
+    // is that both companions are declared once and that both sites read it.
+    expect(relayArtifactFilenames(true)).toContain('relay-watcher.js')
+    expect(relayArtifactFilenames(true)).toContain('relay-ai-vault-service.js')
+    expect(relayBuild).toContain('relayArtifactFilenames(')
+    expect(remoteCommands).toContain('relayArtifactFilenames(')
 
     const assertRelayGate = (steps, publishStepName) => {
       const names = steps.map((step) => step.name)

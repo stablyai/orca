@@ -1,3 +1,4 @@
+import { getWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
 import { matchPaletteDocument } from './palette-match/match-document'
 import { preparePaletteQuery } from './palette-match/palette-query'
 import type { MatchRange } from './palette-match/normalized-text'
@@ -24,6 +25,7 @@ import {
 import type { HostedReviewInfo } from '../../../shared/hosted-review'
 import type { Repo } from '../../../shared/repo-types'
 import type { Worktree } from '../../../shared/worktree/types'
+import { resolvePaletteRepoForWorktree } from './palette-repo-resolution'
 import {
   matchWorktreePaletteTaskUrl,
   parseCmdJTaskSourceUrl
@@ -156,6 +158,7 @@ export type WorktreePaletteSearchArgs = {
   query: string
   documents: ReadonlyMap<string, PaletteDocument>
   repoMap: ReadonlyMap<string, Repo>
+  repoMapByHostIdentity?: ReadonlyMap<string, Repo>
   checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
 }
 
@@ -178,7 +181,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
       const match = matchWorktreePaletteTaskUrl({
         worktree,
         intent: taskSourceUrl,
-        repo: args.repoMap.get(worktree.repoId),
+        repo: resolvePaletteRepoForWorktree(worktree, args.repoMap, args.repoMapByHostIdentity),
         review: args.checksReviewByWorktree?.get(worktree)
       })
       if (match) {
@@ -187,7 +190,7 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
       continue
     }
 
-    const document = args.documents.get(worktree.id)
+    const document = args.documents.get(getWorktreeHostIdentity(worktree))
     if (!document) {
       continue
     }
@@ -216,6 +219,7 @@ export function searchWorktrees(
     query,
     documents: buildWorktreePaletteDocuments(worktrees, documentSources),
     repoMap,
+    repoMapByHostIdentity: sources.repoMapByHostIdentity,
     checksReviewByWorktree: sources.checksReviewByWorktree
   })
 }
