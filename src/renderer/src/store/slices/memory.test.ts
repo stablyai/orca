@@ -34,9 +34,9 @@ function makeMemorySnapshot(overrides: Partial<MemorySnapshot> = {}): MemorySnap
 }
 
 function makeStore() {
-  return create<Pick<AppState, 'memorySnapshot' | 'memorySnapshotError' | 'fetchMemorySnapshot'>>()(
-    (...args) => createMemorySlice(...(args as Parameters<typeof createMemorySlice>))
-  )
+  return create<
+    Pick<AppState, 'memorySnapshotByHostId' | 'memorySnapshotErrorByHostId' | 'fetchMemorySnapshot'>
+  >()((...args) => createMemorySlice(...(args as Parameters<typeof createMemorySlice>)))
 }
 
 afterEach(() => {
@@ -62,11 +62,48 @@ describe('createMemorySlice', () => {
     resolveSnapshot(makeMemorySnapshot({ collectedAt: 10 }))
     await Promise.all([first, second])
 
-    expect(store.getState().memorySnapshot?.collectedAt).toBe(10)
+    expect(store.getState().memorySnapshotByHostId.local?.collectedAt).toBe(10)
     getSnapshot.mockResolvedValueOnce(makeMemorySnapshot({ collectedAt: 11 }))
     await store.getState().fetchMemorySnapshot()
 
     expect(getSnapshot).toHaveBeenCalledTimes(2)
-    expect(store.getState().memorySnapshot?.collectedAt).toBe(11)
+    expect(store.getState().memorySnapshotByHostId.local?.collectedAt).toBe(11)
+  })
+
+  it('keeps a slow remote poll from blocking the local one', async () => {
+    const getSnapshot = vi.fn((request?: { executionHostId?: string | null }) =>
+      request?.executionHostId === 'runtime:env-1'
+        ? new Promise<MemorySnapshot>(() => {})
+        : Promise.resolve(makeMemorySnapshot({ collectedAt: 20 }))
+    )
+    vi.stubGlobal('window', { api: { memory: { getSnapshot } } })
+
+    const store = makeStore()
+    void store.getState().fetchMemorySnapshot('runtime:env-1')
+    await store.getState().fetchMemorySnapshot()
+
+    expect(getSnapshot).toHaveBeenCalledTimes(2)
+    expect(store.getState().memorySnapshotByHostId.local?.collectedAt).toBe(20)
+    expect(store.getState().memorySnapshotByHostId['runtime:env-1']).toBeUndefined()
+  })
+
+  it('records a per-host error without clobbering another host', async () => {
+    const getSnapshot = vi.fn((request?: { executionHostId?: string | null }) =>
+      request?.executionHostId === 'runtime:env-1'
+        ? Promise.reject(new Error('runtime_unavailable'))
+        : Promise.resolve(makeMemorySnapshot({ collectedAt: 30 }))
+    )
+    vi.stubGlobal('window', { api: { memory: { getSnapshot } } })
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    const store = makeStore()
+    await store.getState().fetchMemorySnapshot()
+    await store.getState().fetchMemorySnapshot('runtime:env-1')
+
+    expect(store.getState().memorySnapshotErrorByHostId['runtime:env-1']).toBe(
+      'runtime_unavailable'
+    )
+    expect(store.getState().memorySnapshotErrorByHostId.local).toBeNull()
+    expect(store.getState().memorySnapshotByHostId.local?.collectedAt).toBe(30)
   })
 })

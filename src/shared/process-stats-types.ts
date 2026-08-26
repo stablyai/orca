@@ -33,6 +33,12 @@ export type SessionMemory = UsageValues & {
   sessionId: string
   paneKey: string | null
   pid: number
+  /**
+   * Terminal name as the host that owns this session reports it. Absent from a
+   * host that predates the field, and absent locally where the client resolves
+   * the name from its own tab — never read an absent value as "untitled".
+   */
+  title?: string | null
 }
 
 /** The top-level cpu/memory are the sum of sessions. */

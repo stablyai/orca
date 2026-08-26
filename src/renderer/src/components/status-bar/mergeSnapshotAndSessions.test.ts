@@ -3,6 +3,7 @@ import type { BrowserWorkspace } from '../../../../shared/browser-workspace-type
 import type { MemorySnapshot, WorktreeMemory } from '../../../../shared/process-stats-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
 import type { DaemonSession, MergeContext } from './resource-usage-merge-types'
@@ -571,5 +572,114 @@ describe('mergeSnapshotAndSessions', () => {
     })
     const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], ctx)
     expect(out[0].worktrees[0].sessions[0].bound).toBe(false)
+  })
+})
+
+describe('mergeSnapshotAndSessions — remote host scope', () => {
+  const remoteWorktree: WorktreeMemory = {
+    worktreeId: 'hetzner-repo::/srv/work/api',
+    worktreeName: 'api',
+    repoId: 'hetzner-repo',
+    repoName: 'API',
+    cpu: 12,
+    memory: 900e6,
+    history: [900e6],
+    sessions: [{ sessionId: 'remote-pty-1', paneKey: null, pid: 44, cpu: 12, memory: 900e6 }]
+  }
+
+  const remoteCtx = (overrides: Partial<MergeContext> = {}): MergeContext =>
+    baseCtx({
+      hostScope: 'remote',
+      repoRuntimeScopedById: new Map([['hetzner-repo', true]]),
+      ...overrides
+    })
+
+  it('keeps runtime-scoped rows that the local scope drops', () => {
+    const out = mergeSnapshotAndSessions(makeSnapshot([remoteWorktree]), [], remoteCtx())
+    expect(out).toHaveLength(1)
+    expect(out[0].worktrees[0].sessions[0].memory).toBe(900e6)
+  })
+
+  it('still drops runtime-scoped rows under the local scope', () => {
+    const ctx = baseCtx({ repoRuntimeScopedById: new Map([['hetzner-repo', true]]) })
+    expect(mergeSnapshotAndSessions(makeSnapshot([remoteWorktree]), [], ctx)).toEqual([])
+  })
+
+  it('marks every remote row remote without a repo connectionId', () => {
+    const out = mergeSnapshotAndSessions(makeSnapshot([remoteWorktree]), [], remoteCtx())
+    expect(out[0].hasRemoteChildren).toBe(true)
+    expect(out[0].worktrees[0].isRemote).toBe(true)
+  })
+
+  it("ignores this machine's daemon sessions", () => {
+    const localSession = {
+      id: 'local-pty-9',
+      cwd: '/Users/me/local',
+      title: 'local',
+      agentOwnership: 'absent'
+    } as unknown as DaemonSession
+    const out = mergeSnapshotAndSessions(
+      makeSnapshot([remoteWorktree]),
+      [localSession],
+      remoteCtx()
+    )
+    const sessionIds = out.flatMap((repo) =>
+      repo.worktrees.flatMap((wt) => wt.sessions.map((session) => session.sessionId))
+    )
+    expect(sessionIds).toEqual(['remote-pty-1'])
+  })
+
+  it('ignores locally rendered browser workspaces', () => {
+    const worktree = {
+      id: 'orca::/Users/me/browser-only',
+      repoId: 'orca',
+      displayName: 'browser-only'
+    } as Worktree
+    const browser = { id: 'b1', url: 'https://example.com' } as unknown as BrowserWorkspace
+    const out = mergeSnapshotAndSessions(
+      makeSnapshot([remoteWorktree]),
+      [],
+      remoteCtx({
+        browserTabsByWorktree: { [worktree.id]: [browser] },
+        worktreeById: new Map([[worktree.id, worktree]])
+      })
+    )
+    expect(out.map((repo) => repo.repoId)).toEqual(['hetzner-repo'])
+  })
+  it('names a session from the host title when no local tab owns it', () => {
+    const wt: WorktreeMemory = {
+      ...remoteWorktree,
+      sessions: [
+        {
+          sessionId: 'remote-pty-1',
+          paneKey: null,
+          pid: 44,
+          cpu: 1,
+          memory: 1,
+          title: 'build watch'
+        },
+        { sessionId: 'remote-pty-2', paneKey: null, pid: 45, cpu: 0, memory: 0 }
+      ]
+    }
+    const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], remoteCtx())
+    const labels = out[0].worktrees[0].sessions.map((session) => session.label)
+    // Why: the host names its own terminals; without that a remote row is a raw pid.
+    expect(labels).toEqual(['build watch', 'pid 45'])
+  })
+
+  it('still prefers the local tab title over the host title', () => {
+    const tabId = 'tab-remote'
+    const paneKey = makePaneKey(tabId, '11111111-2222-4333-8444-555555555555')
+    const wt: WorktreeMemory = {
+      ...remoteWorktree,
+      sessions: [
+        { sessionId: 'remote-pty-1', paneKey, pid: 44, cpu: 1, memory: 1, title: 'host name' }
+      ]
+    }
+    const ctx = remoteCtx({
+      tabsByWorktree: { [remoteWorktree.worktreeId]: [makeTab(tabId, 'Local tab name')] }
+    })
+    const out = mergeSnapshotAndSessions(makeSnapshot([wt]), [], ctx)
+    expect(out[0].worktrees[0].sessions[0].label).toBe('Local tab name')
   })
 })
