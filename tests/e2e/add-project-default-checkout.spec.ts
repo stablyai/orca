@@ -189,3 +189,51 @@ test.describe('Add project default checkout', () => {
       })
   })
 })
+
+test.describe('First project terminal handoff', () => {
+  test.use({ seedTestRepo: false })
+
+  test('explains the dark terminal and opens isolated workspace setup from the keyboard', async ({
+    orcaPage,
+    registerPostElectronShutdownCleanup
+  }) => {
+    await waitForSessionReady(orcaPage)
+    const fixture = await createLinkedWorktreeFixture()
+    const fixtureRoot = path.dirname(fixture.mainPath)
+    const fixtureRootIndex = tempRoots.indexOf(fixtureRoot)
+    if (fixtureRootIndex !== -1) {
+      tempRoots.splice(fixtureRootIndex, 1)
+    }
+    // Why: the active terminal keeps the checkout open on Windows until the
+    // Electron fixture shuts down; remove this fixture only after that release.
+    registerPostElectronShutdownCleanup(async () => {
+      rmSync(fixtureRoot, { recursive: true, force: true })
+    })
+    await orcaPage.evaluate(async () => {
+      await window.__store?.getState().updateSettings({ theme: 'dark' })
+    })
+    await expect(orcaPage.locator('html')).toHaveClass(/dark/)
+
+    await orcaPage.evaluate((folderPath) => {
+      window.__store?.getState().openModal('confirm-add-project-from-folder', { folderPath })
+    }, fixture.mainPath)
+    const addProjectDialog = orcaPage.getByRole('dialog', { name: /^Add Project$/i })
+    await expect(addProjectDialog).toBeVisible()
+    await addProjectDialog.getByRole('button', { name: /^Add Project$/ }).click()
+
+    const terminalWelcome = orcaPage.getByRole('dialog', { name: 'ORCA' })
+    await expect(terminalWelcome).toBeVisible({ timeout: 30_000 })
+    await expect(terminalWelcome).toContainText(
+      `Project opened: ${path.basename(fixture.mainPath)}`
+    )
+    await expect(terminalWelcome).toContainText('Branch: main')
+    await expect(terminalWelcome).toContainText('separate Git worktree')
+    await expect(
+      terminalWelcome.getByRole('button', { name: /Launch an agent in this checkout/i })
+    ).toBeDisabled()
+    await terminalWelcome.press('1')
+
+    await expect(terminalWelcome).toBeHidden()
+    await expect(orcaPage.getByRole('dialog', { name: /Create worktree/i })).toBeVisible()
+  })
+})

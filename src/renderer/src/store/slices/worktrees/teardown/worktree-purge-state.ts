@@ -72,6 +72,11 @@ export function buildWorktreePurgeState(
     automaticAgentResumeClaimsByTabId: omitByTabId(s.automaticAgentResumeClaimsByTabId),
     nativeChatLaunchPromptByTabId: omitByTabId(s.nativeChatLaunchPromptByTabId),
     nativeChatLaunchDraftByTabId: omitByTabId(s.nativeChatLaunchDraftByTabId),
+    firstProjectTerminalWelcomeTabId:
+      s.firstProjectTerminalWelcomeTabId &&
+      doomed.doomedTabIds.has(s.firstProjectTerminalWelcomeTabId)
+        ? null
+        : s.firstProjectTerminalWelcomeTabId,
     // Why: bulk/hydration purge runs no terminal teardown, so it must drop the per-tab pane-expand flags itself.
     expandedPaneByTabId: omitByTabId(s.expandedPaneByTabId),
     canExpandPaneByTabId: omitByTabId(s.canExpandPaneByTabId),

@@ -34,6 +34,8 @@ import type {
 } from './terminal-contracts'
 
 export type TerminalActions = {
+  showFirstProjectTerminalWelcome: (tabId: string) => void
+  dismissFirstProjectTerminalWelcome: (tabId: string) => void
   setRecentQuickCommandForGroup: (groupId: string, quickCommandId: string) => void
   claimAutomaticAgentResume: (tabId: string, claim: AutomaticAgentResumeClaim) => void
   seedNativeChatLaunchPrompt: (prompt: NativeChatLaunchPrompt) => void

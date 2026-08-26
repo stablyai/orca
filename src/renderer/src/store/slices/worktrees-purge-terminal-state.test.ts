@@ -53,6 +53,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
       expandedPaneByTabId: { 'tab-1': true, 'tab-2': false, 'tab-3': true },
       canExpandPaneByTabId: { 'tab-1': true, 'tab-2': true, 'tab-3': false },
       runtimePaneTitlesByTabId: { 'tab-1': 'claude', 'tab-3': 'bash' },
+      firstProjectTerminalWelcomeTabId: 'tab-1',
       automaticAgentResumeClaimsByTabId: {
         'tab-1': {
           worktreeId: 'repoA::/a/wt1',
@@ -124,6 +125,7 @@ describe('purgeWorktreeTerminalState direct (design §4.4)', () => {
     expect(s.expandedPaneByTabId).toEqual({ 'tab-3': true })
     expect(s.canExpandPaneByTabId).toEqual({ 'tab-3': false })
     expect(s.runtimePaneTitlesByTabId).toEqual({ 'tab-3': 'bash' })
+    expect(s.firstProjectTerminalWelcomeTabId).toBeNull()
     expect(s.automaticAgentResumeClaimsByTabId).toEqual({
       'tab-3': {
         worktreeId: 'repoA::/a/wt2',

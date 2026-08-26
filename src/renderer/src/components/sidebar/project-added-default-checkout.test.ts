@@ -9,7 +9,8 @@ import type {
 import {
   finishProjectAddWithDefaultCheckout,
   getProjectDefaultCheckout,
-  openProjectDefaultCheckout
+  openProjectDefaultCheckout,
+  shouldShowFirstProjectTerminalWelcome
 } from './project-added-default-checkout'
 
 const mocks = vi.hoisted(() => ({
@@ -26,7 +27,8 @@ const mocks = vi.hoisted(() => ({
     setShowActiveOnly: vi.fn(),
     setHideDefaultBranchWorkspace: vi.fn(),
     updateRepo: vi.fn(),
-    fetchWorktrees: vi.fn()
+    fetchWorktrees: vi.fn(),
+    showFirstProjectTerminalWelcome: vi.fn()
   },
   activateAndRevealWorktree: vi.fn(),
   onboardingGet: vi.fn(),
@@ -120,6 +122,44 @@ describe('getProjectDefaultCheckout', () => {
   })
 })
 
+describe('shouldShowFirstProjectTerminalWelcome', () => {
+  const completedOnboarding = {
+    ...getDefaultOnboardingState(),
+    closedAt: 1,
+    outcome: 'completed' as const
+  }
+
+  it('offers the handoff only for the first project after onboarding closes', () => {
+    expect(
+      shouldShowFirstProjectTerminalWelcome({
+        onboarding: completedOnboarding,
+        projectCount: 1
+      })
+    ).toBe(true)
+    expect(
+      shouldShowFirstProjectTerminalWelcome({
+        onboarding: { ...completedOnboarding, closedAt: null, outcome: null },
+        projectCount: 1
+      })
+    ).toBe(false)
+    expect(
+      shouldShowFirstProjectTerminalWelcome({
+        onboarding: completedOnboarding,
+        projectCount: 2
+      })
+    ).toBe(false)
+    expect(
+      shouldShowFirstProjectTerminalWelcome({
+        onboarding: {
+          ...completedOnboarding,
+          checklist: { ...completedOnboarding.checklist, addedFolder: true }
+        },
+        projectCount: 1
+      })
+    ).toBe(false)
+  })
+})
+
 describe('finishProjectAddWithDefaultCheckout', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -132,6 +172,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     mocks.state.detectedWorktreesByRepo = {}
     mocks.state.updateRepo.mockResolvedValue(true)
     mocks.state.fetchWorktrees.mockResolvedValue(true)
+    mocks.activateAndRevealWorktree.mockReturnValue({ primaryTabId: 'terminal-1' })
     mocks.onboardingGet.mockResolvedValue(getDefaultOnboardingState())
     mocks.onboardingUpdate.mockResolvedValue(getDefaultOnboardingState())
     vi.stubGlobal('window', {
@@ -174,6 +215,34 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       reason: 'loaded_default_checkout'
     })
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+  })
+
+  it('shows the terminal welcome after opening the first post-onboarding Git project', async () => {
+    const onboarding = {
+      ...getDefaultOnboardingState(),
+      closedAt: 1,
+      outcome: 'completed' as const
+    }
+    mocks.onboardingGet.mockResolvedValue(onboarding)
+    mocks.state.repos = [
+      {
+        id: 'repo-1',
+        path: '/repo',
+        displayName: 'orca',
+        badgeColor: '#111',
+        addedAt: 1
+      }
+    ]
+    mocks.state.worktreesByRepo = { 'repo-1': [makeWorktree()] }
+
+    await finishProjectAddWithDefaultCheckout({
+      repoId: 'repo-1',
+      source: 'local_folder_picker',
+      closeModal: vi.fn(),
+      setHideDefaultBranchWorkspace: vi.fn()
+    })
+
+    expect(mocks.state.showFirstProjectTerminalWelcome).toHaveBeenCalledWith('terminal-1')
   })
 
   it('activates only the captured host default checkout when repo IDs collide', async () => {

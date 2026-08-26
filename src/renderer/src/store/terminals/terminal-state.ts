@@ -30,6 +30,8 @@ export type TerminalState = {
   unreadTerminalTabs: Record<string, true>
   unreadTerminalPanes: Record<string, true>
   unreadAgentCompletionPanes: Record<string, true>
+  /** Runtime-only first-project handoff; never persisted or replayed after restart. */
+  firstProjectTerminalWelcomeTabId: string | null
   /** Scoped exit suppression and reference-counted shutdown ownership prevent teardown races. */
   suppressedPtyExitIds: Record<string, true>
   pendingPtyShutdownIds: Record<string, number>

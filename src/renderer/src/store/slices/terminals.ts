@@ -18,6 +18,7 @@ import { createTerminalLayoutActions } from '../terminals/terminal-layout-state'
 import { createTerminalStartupQueueActions } from '../terminals/terminal-startup-queues'
 import { createWorkspaceTerminalHydrationActions } from '../terminals/workspace-terminal-hydration'
 import { createWorkspaceTerminalReconnectActions } from '../terminals/workspace-terminal-reconnect'
+import { createTerminalFirstProjectWelcomeActions } from '../terminals/terminal-first-project-welcome-state'
 
 export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> = (set, get) => ({
   tabsByWorktree: {},
@@ -28,6 +29,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   unreadTerminalTabs: {},
   unreadTerminalPanes: {},
   unreadAgentCompletionPanes: {},
+  firstProjectTerminalWelcomeTabId: null,
   suppressedPtyExitIds: {},
   pendingPtyShutdownIds: {},
   pendingCodexPaneRestartIds: {},
@@ -61,6 +63,7 @@ export const createTerminalSlice: StateCreator<AppState, [], [], TerminalSlice> 
   cacheTimerByKey: {},
   lastTerminalInputAtByPaneKey: {},
   recentQuickCommandIdByGroup: {},
+  ...createTerminalFirstProjectWelcomeActions(set, get),
   ...createTerminalEphemeralActions(set, get),
   ...createTerminalTabCreationActions(set, get),
   ...createActiveWorkspaceTerminalActions(set, get),

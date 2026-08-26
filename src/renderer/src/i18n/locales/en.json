@@ -16011,6 +16011,23 @@
         }
       },
       "terminalPane": {
+        "FirstProjectTerminalWelcome": {
+          "agentUnavailable": "No default agent is available here. Choose one in workspace setup.",
+          "brand": "ORCA",
+          "branch": "Branch: {{value0}}",
+          "checkingAgent": "Checking whether {{value0}} is available here…",
+          "currentCheckoutWarning": "Changes will be made directly on {{value0}}.",
+          "explanation": "This is a normal terminal. Orca works best when each task gets a separate Git worktree, so changes stay off {{value0}}.",
+          "isolatedWorkspace": "Create an isolated workspace (recommended)",
+          "isolatedWorkspaceDescription": "Choose a task name and agent before Orca creates the worktree.",
+          "launchAgent": "Launch {{value0}} in this checkout",
+          "launchAgentGeneric": "Launch an agent in this checkout",
+          "launchFailed": "Could not build launch command for {{value0}}.",
+          "projectOpened": "Project opened: {{value0}}",
+          "shortcut": "Create another workspace anytime with {{value0}}.",
+          "useTerminal": "Use this terminal as-is",
+          "useTerminalDescription": "Press Enter or Escape, then run any shell command."
+        },
         "useManualTerminalWorktreeParking": {
           "cannotPark": "These terminals cannot be parked safely."
         }

@@ -197,6 +197,7 @@ import { restoreTerminalFitToDesktop, restoreTerminalFitsToDesktop } from './ter
 import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
+import { FirstProjectTerminalWelcome } from './FirstProjectTerminalWelcome'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
@@ -730,6 +731,9 @@ function TerminalPane(
   const openSpacePage = useAppStore((store) => store.openSpacePage)
   const refreshWorkspaceSpace = useAppStore((store) => store.refreshWorkspaceSpace)
   const settings = useAppStore((store) => store.settings)
+  const showFirstProjectTerminalWelcome = useAppStore(
+    (store) => store.firstProjectTerminalWelcomeTabId === tabId
+  )
   const updateSettings = useAppStore((store) => store.updateSettings)
   const requestLinkRoutingPreference = useLinkRoutingPreferenceDialog()
   const keybindings = useAppStore((store) => store.keybindings)
@@ -2902,6 +2906,16 @@ function TerminalPane(
       appSurface: effectiveAppearance?.mode,
       backgroundOpacity: settings?.terminalBackgroundOpacity
     }) ?? (titleUsesLightSurface ? '#ffffff' : '#000000')
+  const terminalForeground =
+    settings?.terminalColorOverrides?.foreground ??
+    effectiveAppearance?.theme?.foreground ??
+    (titleUsesLightSurface ? '#18181b' : '#f4f4f5')
+  const terminalAccent =
+    settings?.terminalColorOverrides?.brightGreen ??
+    settings?.terminalColorOverrides?.green ??
+    effectiveAppearance?.theme?.brightGreen ??
+    effectiveAppearance?.theme?.green ??
+    terminalForeground
 
   const terminalContentVisible = isVisible || shouldMeasureHiddenStartup
   const hiddenStartupStyle: CSSProperties = shouldMeasureHiddenStartup
@@ -3052,6 +3066,17 @@ function TerminalPane(
           })
         }}
       />
+      {showFirstProjectTerminalWelcome && isVisible && isWorktreeActive && settings ? (
+        <FirstProjectTerminalWelcome
+          tabId={tabId}
+          worktreeId={worktreeId}
+          backgroundColor={paneTitleBackground}
+          foregroundColor={terminalForeground}
+          accentColor={terminalAccent}
+          fontFamily={settings.terminalFontFamily}
+          fontSize={settings.terminalFontSize}
+        />
+      ) : null}
       {managedPanes.map((pane) => {
         const ptyId =
           paneTransportsRef.current.get(pane.id)?.getPtyId() ??

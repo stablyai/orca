@@ -195,6 +195,10 @@ export function createTerminalTabCloseActions(
         return {
           tabsByWorktree: next,
           activeTabId: s.activeTabId === tabId ? null : s.activeTabId,
+          firstProjectTerminalWelcomeTabId:
+            s.firstProjectTerminalWelcomeTabId === tabId
+              ? null
+              : s.firstProjectTerminalWelcomeTabId,
           activeTabIdByWorktree: nextActiveTabIdByWorktree,
           ptyIdsByTabId: nextPtyIdsByTabId,
           lastKnownRelayPtyIdByTabId: nextLastKnownRelay,

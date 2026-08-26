@@ -10,11 +10,28 @@ import { relativePathInsideRoot } from '../../../../shared/cross-platform-path'
 import { markOnboardingProjectAdded } from '@/lib/onboarding-project-checklist'
 import { finalizeImportedRepoAfterSkip } from './add-repo-skip-finalization'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 type DefaultCheckoutHandoffReason = EventProps<'add_repo_default_checkout_handoff'>['reason']
 
 export function getProjectDefaultCheckout(worktrees: readonly Worktree[]): Worktree | null {
   return worktrees.find((worktree) => worktree.isMainWorktree) ?? null
+}
+
+export function shouldShowFirstProjectTerminalWelcome({
+  onboarding,
+  projectCount
+}: {
+  onboarding: OnboardingState | null
+  projectCount: number
+}): boolean {
+  return Boolean(
+    onboarding &&
+    onboarding.closedAt !== null &&
+    !onboarding.checklist.addedRepo &&
+    !onboarding.checklist.addedFolder &&
+    projectCount === 1
+  )
 }
 
 function getProjectWorktreesForHost<T extends Worktree>(
@@ -181,13 +198,15 @@ export async function openProjectDefaultCheckout({
   source,
   selectedPath,
   setHideDefaultBranchWorkspace,
-  executionHostId
+  executionHostId,
+  showFirstProjectTerminalWelcome = false
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
   setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
+  showFirstProjectTerminalWelcome?: boolean
 }): Promise<void> {
   let defaultCheckout = getProjectDefaultCheckout(
     getProjectWorktreesForHost(
@@ -228,13 +247,17 @@ export async function openProjectDefaultCheckout({
       reason
     })
     const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
-    if (initialCwd || executionHostId) {
-      activateAndRevealWorktree(defaultCheckout.id, {
-        ...(initialCwd ? { initialCwd } : {}),
-        ...(executionHostId ? { executionHostId } : {})
-      })
-    } else {
-      activateAndRevealWorktree(defaultCheckout.id)
+    const activationResult =
+      initialCwd || executionHostId
+        ? activateAndRevealWorktree(defaultCheckout.id, {
+            ...(initialCwd ? { initialCwd } : {}),
+            ...(executionHostId ? { executionHostId } : {})
+          })
+        : activateAndRevealWorktree(defaultCheckout.id)
+    if (showFirstProjectTerminalWelcome && activationResult && activationResult.primaryTabId) {
+      // Why: attach before React paints the just-created terminal so first-time
+      // users see guidance instead of a one-frame blank shell.
+      useAppStore.getState().showFirstProjectTerminalWelcome(activationResult.primaryTabId)
     }
     return
   }
@@ -262,13 +285,18 @@ export async function finishProjectAddWithDefaultCheckout({
   setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
 }): Promise<void> {
-  await markOnboardingProjectAdded('addedRepo')
+  const onboardingBeforeAdd = await markOnboardingProjectAdded('addedRepo')
+  const showFirstProjectTerminalWelcome = shouldShowFirstProjectTerminalWelcome({
+    onboarding: onboardingBeforeAdd,
+    projectCount: useAppStore.getState().repos.length
+  })
   closeModal()
   await openProjectDefaultCheckout({
     repoId,
     source,
     selectedPath,
     executionHostId,
+    showFirstProjectTerminalWelcome,
     setHideDefaultBranchWorkspace
   })
 }
