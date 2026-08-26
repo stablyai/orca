@@ -13,7 +13,7 @@ const repo: Repo = {
   addedAt: 1
 }
 
-function lineage(childId: string, parentId: string): WorktreeLineage {
+function lineage(childId: string, parentId: string, createdAt = 1): WorktreeLineage {
   return {
     worktreeId: childId,
     worktreeInstanceId: `${childId}-instance`,
@@ -21,11 +21,11 @@ function lineage(childId: string, parentId: string): WorktreeLineage {
     parentWorktreeInstanceId: `${parentId}-instance`,
     origin: 'manual',
     capture: { source: 'manual-action', confidence: 'explicit' },
-    createdAt: 1
+    createdAt
   }
 }
 
-function workspaceLineage(childId: string, parentId: string): WorkspaceLineage {
+function workspaceLineage(childId: string, parentId: string, createdAt = 1): WorkspaceLineage {
   return {
     childWorkspaceKey: worktreeWorkspaceKey(childId),
     childInstanceId: `${childId}-instance`,
@@ -33,7 +33,7 @@ function workspaceLineage(childId: string, parentId: string): WorkspaceLineage {
     parentInstanceId: `${parentId}-instance`,
     origin: 'manual',
     capture: { source: 'manual-action', confidence: 'explicit' },
-    createdAt: 1
+    createdAt
   }
 }
 
@@ -125,5 +125,97 @@ describe('pruneLineageForMissingRepoWorktrees', () => {
     expect(metaById[missingParentId].instanceId).not.toBe(
       missingParentEdge.parentWorktreeInstanceId
     )
+  })
+
+  it('keeps lineage registered after the scan started, then prunes it once a later scan misses it', () => {
+    const liveParentId = 'repo-1::/repo/live-parent'
+    const newChildId = 'repo-1::/repo/new-child'
+    const scanStartedAt = 1_000
+    const newChildEdge = lineage(newChildId, liveParentId, scanStartedAt + 1)
+    const worktreeLineageById = { [newChildId]: newChildEdge }
+    const workspaceLineageByChildKey = {
+      [worktreeWorkspaceKey(newChildId)]: workspaceLineage(
+        newChildId,
+        liveParentId,
+        scanStartedAt + 1
+      )
+    }
+    const metaById = {
+      [liveParentId]: { instanceId: newChildEdge.parentWorktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, workspaceLineageByChildKey, metaById)
+    const staleScan = [
+      {
+        path: '/repo/live-parent',
+        head: 'a',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ]
+
+    pruneLineageForMissingRepoWorktrees(store as never, repo, staleScan, scanStartedAt)
+
+    expect(store.removeWorktreeLineage).not.toHaveBeenCalled()
+    expect(store.removeWorkspaceLineage).not.toHaveBeenCalled()
+    expect(worktreeLineageById[newChildId]).toBe(newChildEdge)
+
+    pruneLineageForMissingRepoWorktrees(store as never, repo, staleScan, scanStartedAt + 2)
+
+    expect(store.removeWorktreeLineage).toHaveBeenCalledWith(newChildId)
+    expect(worktreeLineageById[newChildId]).toBeUndefined()
+  })
+
+  it('leaves a mid-scan parent identity alone instead of rotating it', () => {
+    const newParentId = 'repo-1::/repo/new-parent'
+    const newChildId = 'repo-1::/repo/new-child'
+    const scanStartedAt = 1_000
+    const newEdge = lineage(newChildId, newParentId, scanStartedAt + 1)
+    const worktreeLineageById = { [newChildId]: newEdge }
+    const metaById = {
+      [newParentId]: { instanceId: newEdge.parentWorktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, {}, metaById)
+
+    pruneLineageForMissingRepoWorktrees(
+      store as never,
+      repo,
+      [
+        {
+          path: '/repo/unrelated',
+          head: 'a',
+          branch: 'main',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ],
+      scanStartedAt
+    )
+
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(metaById[newParentId].instanceId).toBe(newEdge.parentWorktreeInstanceId)
+  })
+
+  it('prunes on a trusted scan when no scan start time is supplied', () => {
+    const liveParentId = 'repo-1::/repo/live-parent'
+    const missingChildId = 'repo-1::/repo/missing-child'
+    const edge = lineage(missingChildId, liveParentId, Number.MAX_SAFE_INTEGER)
+    const worktreeLineageById = { [missingChildId]: edge }
+    const metaById = {
+      [liveParentId]: { instanceId: edge.parentWorktreeInstanceId } as WorktreeMeta
+    }
+    const store = createStore(worktreeLineageById, {}, metaById)
+
+    pruneLineageForMissingRepoWorktrees(store as never, repo, [
+      {
+        path: '/repo/live-parent',
+        head: 'a',
+        branch: 'main',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    expect(store.removeWorktreeLineage).toHaveBeenCalledWith(missingChildId)
   })
 })

@@ -34,10 +34,18 @@ function hasStoredRepoLineage(
   )
 }
 
+function registeredBeforeScan(
+  createdAt: number | undefined,
+  scanStartedAt: number | undefined
+): boolean {
+  return scanStartedAt === undefined || createdAt === undefined || createdAt <= scanStartedAt
+}
+
 export function pruneLineageForMissingRepoWorktrees(
   store: Store,
   repo: Repo,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  scanStartedAt?: number
 ): void {
   if (
     typeof store.getAllWorktreeLineage !== 'function' ||
@@ -62,7 +70,10 @@ export function pruneLineageForMissingRepoWorktrees(
     const hostId = store.getWorktreeMeta(worktreeId)?.hostId
     return hostId ? hostId === expectedHostId : repoOwners.length === 1
   }
-  for (const childWorkspaceKey of Object.keys(workspaceLineage)) {
+  for (const [childWorkspaceKey, edge] of Object.entries(workspaceLineage)) {
+    if (!registeredBeforeScan(edge.createdAt, scanStartedAt)) {
+      continue
+    }
     const childScope = parseWorkspaceKey(childWorkspaceKey)
     if (
       childScope?.type === 'worktree' &&
@@ -75,6 +86,9 @@ export function pruneLineageForMissingRepoWorktrees(
     }
   }
   for (const [childId, lineage] of Object.entries(worktreeLineage)) {
+    if (!registeredBeforeScan(lineage.createdAt, scanStartedAt)) {
+      continue
+    }
     if (
       worktreeIdBelongsToRepo(childId, repoPrefix) &&
       canMutateWorktree(childId) &&

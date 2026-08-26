@@ -58,6 +58,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       try {
         let gitWorktrees
         let freshScan = true
+        const scanStartedAt = Date.now()
         if (isFolderRepo(repo)) {
           return listVisibleFolderWorkspaces(store, repo)
         } else if (repo.connectionId) {
@@ -89,7 +90,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
         }
         if (freshScan) {
           rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-          pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+          pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanStartedAt)
         }
         loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
         return buildDetectedGitWorktrees(store, repo, gitWorktrees)
@@ -130,6 +131,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
     try {
       let gitWorktrees
       let freshScan = true
+      const scanStartedAt = Date.now()
       if (isFolderRepo(repo)) {
         return listVisibleFolderWorkspaces(store, repo)
       } else if (repo.connectionId) {
@@ -161,7 +163,7 @@ export function registerWorktreeCatalogHandlers(context: WorktreeIpcContext): vo
       }
       if (freshScan) {
         rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+        pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanStartedAt)
       }
       loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
       return buildDetectedGitWorktrees(store, repo, gitWorktrees)
