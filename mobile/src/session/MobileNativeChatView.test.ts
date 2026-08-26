@@ -94,15 +94,19 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
 
 describe('MobileNativeChatView', () => {
   let renderer: ReactTestRenderer | null = null
+  const scrollToEnd = vi.fn()
 
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    scrollToEnd.mockReset()
   })
 
   async function render(overrides: Overrides = {}): Promise<void> {
     await act(async () => {
-      renderer = create(chatViewElement(overrides))
+      renderer = create(chatViewElement(overrides), {
+        createNodeMock: (element) => (element.type === 'FlatList' ? { scrollToEnd } : null)
+      })
     })
   }
 
@@ -169,8 +173,15 @@ describe('MobileNativeChatView', () => {
     )
 
     await act(async () => jumpButton.props.onPress())
-    await update({ folded, streaming: 'First streaming chunk with more output' })
+    expect(scrollToEnd).toHaveBeenCalledWith({ animated: false })
+    scrollToEnd.mockClear()
 
+    await update({ folded, streaming: 'First streaming chunk with more output' })
+    const updatedList = renderer!.root.find((node) => node.type === 'FlatList')
+    await act(async () => updatedList.props.onContentSizeChange())
+
+    expect(scrollToEnd).toHaveBeenCalledOnce()
+    expect(scrollToEnd).toHaveBeenCalledWith({ animated: false })
     expect(
       renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Scroll to latest')
     ).toHaveLength(0)
