@@ -706,6 +706,23 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     ],
     defaultModelId: 'gpt-5.4'
   },
+  omp: {
+    id: 'omp',
+    label: 'OMP',
+    binary: 'omp',
+    // Why: Source Control AI prompts can include large staged diffs; OMP reads
+    // the prompt on stdin, avoiding cross-platform argv limits (#15646).
+    promptDelivery: 'stdin',
+    // Why: verified against omp v17 — `-p --no-session --no-tools --mode text`
+    // answers on stdout with no persisted session and no workspace writes.
+    buildArgs: () => ['-p', '--no-session', '--no-tools', '--mode', 'text'],
+    // Why: OMP resolves its model from its own config; there is no CLI model
+    // flag on this invocation, so a single config-default entry keeps the
+    // picker honest (the Kimi 'default' pattern).
+    modelSource: 'static',
+    models: [{ id: 'default', label: 'Config default' }],
+    defaultModelId: 'default'
+  },
   antigravity: {
     id: 'antigravity',
     label: 'Antigravity',

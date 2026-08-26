@@ -35,9 +35,26 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
       'copilot',
       'cursor',
       'kimi',
+      'omp',
       'opencode',
       'pi'
     ])
+  })
+
+
+  it('gives OMP a spec so a spec-less default agent cannot fail Source Control AI (#15646)', () => {
+    const spec = COMMIT_MESSAGE_AGENT_SPECS.omp
+    expect(spec).toBeDefined()
+    expect(spec?.promptDelivery).toBe('stdin')
+    expect(spec?.buildArgs({ prompt: 'p', model: 'default' })).toEqual([
+      '-p',
+      '--no-session',
+      '--no-tools',
+      '--mode',
+      'text'
+    ])
+    expect(spec?.defaultModelId).toBe('default')
+    expect(resolveCommitMessageAgentChoice(null, 'omp')).toBe('omp')
   })
 
   it('uses the strongest available defaults for core agents', () => {
