@@ -25,6 +25,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
@@ -181,6 +183,7 @@ export class RateLimitService {
     cursor: null
   }
   private grokAuthConfigured = readGrokAuthSession().status === 'ok'
+  private cursorAuthConfigured = false
   private pollInterval: number = DEFAULT_POLL_MS
   private timer: ReturnType<typeof setInterval> | null = null
   private deferredStartupRefreshTimer: ReturnType<typeof setTimeout> | null = null
@@ -393,7 +396,7 @@ export class RateLimitService {
       // Why: the cookie lives on the filesystem, not GlobalSettings; surface its presence so the renderer keeps the MiniMax bar across reloads.
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       grokAuthConfigured: this.grokAuthConfigured,
-      cursorAuthConfigured: false,
+      cursorAuthConfigured: this.cursorAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(
@@ -1585,6 +1588,7 @@ export class RateLimitService {
       | 'minimax'
       | 'grok'
       | 'antigravity'
+      | 'cursor'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1643,6 +1647,11 @@ export class RateLimitService {
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
+    const cursorAuthReadResult = await readCursorAuthSession()
+    if (signal.aborted) {
+      return
+    }
+    this.cursorAuthConfigured = cursorAuthReadResult.status === 'ok'
 
     // Discard stale data on config change — it belongs to a different session/workspace.
     const currentConfigHash = `${cookie}|${workspaceIdOverride}`
@@ -1678,7 +1687,8 @@ export class RateLimitService {
       minimax: miniMaxConfigChanged
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
-      grok: this.withFetchingStatus(previousState.grok, 'grok')
+      grok: this.withFetchingStatus(previousState.grok, 'grok'),
+      cursor: this.withFetchingStatus(previousState.cursor, 'cursor')
     })
 
     const missingWslCodexHome =
@@ -1686,6 +1696,14 @@ export class RateLimitService {
     const grokResultPromise = fetchGrokRateLimits({
       signal,
       authReadResult: grokAuthReadResult
+    }).then(
+      (value) => ({ status: 'fulfilled', value }) as const,
+      (reason) => ({ status: 'rejected', reason }) as const
+    )
+    // Why: fetched in parallel with Grok — both are independent, tokenless-until-read providers with no dedicated fetch cycle.
+    const cursorResultPromise = fetchCursorRateLimits({
+      signal,
+      authReadResult: cursorAuthReadResult
     }).then(
       (value) => ({ status: 'fulfilled', value }) as const,
       (reason) => ({ status: 'rejected', reason }) as const
@@ -1904,6 +1922,28 @@ export class RateLimitService {
     this.updateState({
       ...this.state,
       grok: this.applyStalePolicy(grok, previousState.grok)
+    })
+
+    const cursorResult = await cursorResultPromise
+    if (signal.aborted) {
+      return
+    }
+    const cursor =
+      cursorResult.status === 'fulfilled'
+        ? cursorResult.value
+        : ({
+            provider: 'cursor',
+            session: null,
+            weekly: null,
+            updatedAt: Date.now(),
+            error:
+              cursorResult.reason instanceof Error ? cursorResult.reason.message : 'Unknown error',
+            status: 'error'
+          } satisfies ProviderRateLimits)
+    this.trackActiveFailureStreak('cursor', cursor)
+    this.updateState({
+      ...this.state,
+      cursor: this.applyStalePolicy(cursor, previousState.cursor)
     })
   }
 

@@ -8,6 +8,8 @@ import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
+import { fetchCursorRateLimits } from './cursor-fetcher'
+import { readCursorAuthSession } from './cursor-auth'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   deferred,
@@ -50,6 +52,14 @@ vi.mock('./grok-fetcher', () => ({
 
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
+vi.mock('./cursor-fetcher', () => ({
+  fetchCursorRateLimits: vi.fn()
+}))
+
+vi.mock('./cursor-auth', () => ({
+  readCursorAuthSession: vi.fn(async () => ({ status: 'missing' }))
 }))
 
 vi.mock('../minimax/minimax-cookie-store', () => ({
@@ -117,6 +127,26 @@ describe('RateLimitService', () => {
     expect(fetchMiniMaxRateLimits).not.toHaveBeenCalled()
     expect(service.getState().grokAuthConfigured).toBe(true)
     expect(service.getState().grok?.status).toBe('ok')
+  })
+
+  it('fetches Cursor rate limits alongside Grok and reports auth configured', async () => {
+    const authReadResult = { status: 'ok' as const, accessToken: 'token', source: 'cli' as const }
+    vi.mocked(readCursorAuthSession).mockResolvedValue(authReadResult)
+    vi.mocked(fetchCursorRateLimits).mockResolvedValueOnce(okProvider('cursor', 42))
+    vi.mocked(fetchClaudeRateLimits).mockResolvedValueOnce(okProvider('claude', 10, Date.now()))
+    vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 20, Date.now()))
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    expect(fetchCursorRateLimits).toHaveBeenCalledWith({
+      signal: expect.any(AbortSignal),
+      authReadResult
+    })
+    const state = service.getState()
+    expect(state.cursor?.status).toBe('ok')
+    expect(state.cursor?.session?.usedPercent).toBe(42)
+    expect(state.cursorAuthConfigured).toBe(true)
   })
 
   it('does not refetch Claude when a Codex account switch is queued during fetchAll', async () => {
