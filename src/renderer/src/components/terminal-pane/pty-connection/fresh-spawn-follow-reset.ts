@@ -82,7 +82,10 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
     return tail.slice(0, TERMINAL_RENDERER_RISK_SCAN_TAIL_CHARS)
   }
 
-  session.foregroundRendererRiskOutputPrefersRenderRefresh = function (data: string): boolean {
+  session.foregroundRendererRiskOutputPrefersRenderRefresh = function (
+    data: string,
+    includeEastAsian = true
+  ): boolean {
     if (!data) {
       return false
     }
@@ -91,7 +94,7 @@ export function bindFreshSpawnFollowReset(session: ConnectPanePtySession): void 
       : data
     const prefersRefresh =
       (scanData.includes('\x1b[') || session.containsNonAsciiOutput(scanData)) &&
-      terminalOutputPrefersRenderRefresh(scanData)
+      terminalOutputPrefersRenderRefresh(scanData, { includeEastAsian })
     session.foregroundRefreshRiskScanTail = trailingIncompleteCsiSequence(scanData)
     return prefersRefresh
   }

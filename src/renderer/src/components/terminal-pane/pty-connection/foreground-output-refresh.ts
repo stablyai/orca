@@ -257,7 +257,10 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     return decision.prefersRenderRefresh
   }
 
-  session.shouldForceForegroundRenderRefresh = function (data: string): {
+  session.shouldForceForegroundRenderRefresh = function (
+    data: string,
+    includeEastAsianRendererRisk = true
+  ): {
     refresh: boolean
     inPlaceRewrite: boolean
   } {
@@ -266,7 +269,9 @@ export function bindForegroundOutputRefresh(session: ConnectPanePtySession): voi
     const recentInput =
       performance.now() - session.lastInteractiveRedrawInputAt <=
       FOREGROUND_INTERACTIVE_REDRAW_WINDOW_MS
-    if (session.foregroundRendererRiskOutputPrefersRenderRefresh(data)) {
+    if (
+      session.foregroundRendererRiskOutputPrefersRenderRefresh(data, includeEastAsianRendererRisk)
+    ) {
       return {
         refresh: true,
         inPlaceRewrite: rewriteOutputPrefersRenderRefresh

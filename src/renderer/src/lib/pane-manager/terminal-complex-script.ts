@@ -230,7 +230,10 @@ export function nativeWindowsRewriteNeedsFollowupRenderRefresh(args: {
   return args.isNativeWindowsConpty && args.isForeground && args.isInPlaceRewrite
 }
 
-export function terminalOutputPrefersRenderRefresh(data: string): boolean {
+export function terminalOutputPrefersRenderRefresh(
+  data: string,
+  options: { includeEastAsian?: boolean } = {}
+): boolean {
   if (containsBackgroundSgr(data)) {
     return true
   }
@@ -256,7 +259,10 @@ export function terminalOutputPrefersRenderRefresh(data: string): boolean {
     if (codePoint === undefined) {
       continue
     }
-    if (isRendererRiskCodePoint(codePoint)) {
+    if (
+      isRendererRiskCodePoint(codePoint) &&
+      (options.includeEastAsian !== false || !isEastAsianRendererRiskCodePoint(codePoint))
+    ) {
       return true
     }
     if (codePoint > 0xffff) {

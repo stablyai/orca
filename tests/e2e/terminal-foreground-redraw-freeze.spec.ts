@@ -85,7 +85,7 @@ async function readSchedulerDebug(page: Page): Promise<SchedulerDebugSnapshot> {
 
 async function measureRendererDuringBurst(page: Page, paneKey: string): Promise<BurstMeasurement> {
   const frames = Array.from({ length: REDRAW_FRAME_COUNT }, (_, frame) => {
-    const text = `OpenTUI active redraw #${String(frame).padStart(4, '0')}`
+    const text = `OpenTUI 中文整屏更新 #${String(frame).padStart(4, '0')}`
     const payload = 'x'.repeat(REDRAW_PAYLOAD_CHARS)
     return (
       '\x1b[?2026h' +
@@ -408,16 +408,38 @@ test.describe('Terminal foreground redraw freeze repro', () => {
 
     const { paneKey } = await waitForActivePaneHookDescriptor(orcaPage)
     await waitForTerminalPtyDataInjector(orcaPage, paneKey)
-    await resetSchedulerDebug(orcaPage)
-    const measurement = await measureRendererDuringBurst(orcaPage, paneKey)
-    const scheduler = await readSchedulerDebug(orcaPage)
-    annotateMeasurement(testInfo, measurement, scheduler)
+    const webglAttached = await forceActivePaneWebglRenderer(orcaPage)
+    if (webglAttached) {
+      await installActivePaneRefreshProbe(orcaPage)
+    }
+    try {
+      const refreshBaseline = webglAttached ? await readRefreshProbe(orcaPage) : null
+      await resetSchedulerDebug(orcaPage)
+      const measurement = await measureRendererDuringBurst(orcaPage, paneKey)
+      const scheduler = await readSchedulerDebug(orcaPage)
+      annotateMeasurement(testInfo, measurement, scheduler)
 
-    expect(measurement.injectedFrames).toBe(REDRAW_FRAME_COUNT)
-    expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
-    // Why: this is the PR #4558 contract. Once the foreground immediate budget
-    // is exhausted, throughput redraws must enter the async foreground drain.
-    expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
+      expect(measurement.injectedFrames).toBe(REDRAW_FRAME_COUNT)
+      expect(measurement.maxTimerDriftMs).toBeLessThan(MAX_RENDERER_TIMER_DRIFT_MS)
+      // Why: this is the PR #4558 contract. Once the foreground immediate budget
+      // is exhausted, throughput redraws must enter the async foreground drain.
+      expect(scheduler.deferredForegroundEnqueueCount).toBeGreaterThan(0)
+      if (refreshBaseline) {
+        const refresh = await readRefreshProbe(orcaPage)
+        const refreshDelta = subtractRefreshProbe(refresh, refreshBaseline)
+        testInfo.annotations.push({
+          type: 'terminal-synchronized-cjk-refresh-probe',
+          description: `syncWebgl=${refreshDelta.synchronousWebgl} debouncedWebgl=${refreshDelta.debouncedWebgl}`
+        })
+        expect(refreshDelta.synchronousWebgl).toBe(0)
+        expect(refreshDelta.debouncedWebgl).toBe(0)
+      }
+      await expect(orcaPage.locator('.xterm-screen:visible').first()).toBeVisible()
+    } finally {
+      if (webglAttached) {
+        await disposeActivePaneRefreshProbe(orcaPage)
+      }
+    }
   })
 
   test('captured OpenCode/OpenTUI redraw bytes do not monopolize foreground writes', async ({

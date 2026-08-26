@@ -284,6 +284,45 @@ describe('connectPanePty', () => {
     expect(refresh).toHaveBeenCalledWith(0, 39, true)
   })
 
+  it('keeps synchronized CJK frames on the normal non-Windows WebGL render path', async () => {
+    const restoreNavigator = temporarilySetNavigatorUserAgent('Mozilla/5.0 (Macintosh)')
+    try {
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport()
+      const capturedDataCallback: { current: ((data: string) => void) | null } = {
+        current: null
+      }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+
+      const pane = createPane(1)
+      const manager = createManager(1)
+      manager.hasWebglRenderer.mockReturnValue(true)
+      const refresh = vi.fn()
+      const terminal = pane.terminal as typeof pane.terminal & { refresh: typeof refresh }
+      terminal.refresh = refresh
+      terminal.write = vi.fn((_data: string, callback?: () => void) => {
+        callback?.()
+      })
+
+      connectPanePty(pane as never, manager as never, createDeps() as never)
+      await flushAsyncTicks(6)
+
+      capturedDataCallback.current?.('\x1b[?20')
+      capturedDataCallback.current?.('26h中文整屏')
+      capturedDataCallback.current?.('更新\x1b[?2026l')
+
+      expect(refresh).not.toHaveBeenCalled()
+    } finally {
+      restoreNavigator()
+    }
+  })
+
   it('refreshes renderer-risk output without clearing the shared glyph atlas', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

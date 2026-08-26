@@ -29,14 +29,13 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       session.canUseHiddenOutputSnapshot(session.transport.getPtyId()) &&
       session.shouldSnapshotHiddenCodexOutput &&
       (opts?.hiddenStartupRendererQuery === true || containsHiddenStartupRendererQuery(data))
-    const synchronizedForegroundScan =
-      session.shouldProtectNativeWindowsSynchronizedOutput && foreground
-        ? scanSynchronizedForegroundOutput(
-            data,
-            session.synchronizedForegroundMarkerTail,
-            session.synchronizedForegroundOutputActive
-          )
-        : null
+    const synchronizedForegroundScan = foreground
+      ? scanSynchronizedForegroundOutput(
+          data,
+          session.synchronizedForegroundMarkerTail,
+          session.synchronizedForegroundOutputActive
+        )
+      : null
     const synchronizedOutputStarted = synchronizedForegroundScan?.started === true
     const synchronizedOutputEnded = synchronizedForegroundScan?.ended === true
     const synchronizedForegroundOutput =
@@ -45,6 +44,8 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
         synchronizedOutputStarted ||
         synchronizedOutputEnded)
     const nextSynchronizedForegroundOutputActive = synchronizedForegroundScan?.active === true
+    const protectedSynchronizedForegroundOutput =
+      session.shouldProtectNativeWindowsSynchronizedOutput && synchronizedForegroundOutput
     // Why: xterm's DOM renderer draws the cursor as row content, so Windows cursor-only restores need row invalidation even outside DEC 2026.
     const nativeWindowsCursorRestore =
       session.shouldProtectNativeWindowsSynchronizedOutput &&
@@ -54,8 +55,14 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     if (foreground) {
       session.scheduleForegroundGridDriftCheck()
     }
+    // Why: xterm already tracks dirty rows inside an atomic DEC 2026 frame. On
+    // non-Windows WebGL, widening CJK output to the full viewport only adds GPU work.
+    const includeEastAsianRendererRisk =
+      !synchronizedForegroundOutput ||
+      session.shouldApplyWindowsRendererUnicodeRefresh ||
+      session.shouldRefreshForegroundSynchronously()
     const renderRefreshDecision = foregroundOutput
-      ? session.shouldForceForegroundRenderRefresh(data)
+      ? session.shouldForceForegroundRenderRefresh(data, includeEastAsianRendererRisk)
       : { refresh: false, inPlaceRewrite: false }
     const foregroundRenderRefreshNeeded = renderRefreshDecision.refresh
     // Why: Claude Code's in-place prompt redraws on Windows ConPTY can paint one frame late; a follow-up repaint fixes the column desync without a resize.
@@ -65,7 +72,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
       isInPlaceRewrite: renderRefreshDecision.inPlaceRewrite
     })
     // Why: recompute the latch on every synchronized START so each frame's interactivity is judged by its own open time and can't leak across a same-chunk close+open; clear only on leaving synchronized output.
-    if (synchronizedForegroundOutput && synchronizedOutputStarted) {
+    if (protectedSynchronizedForegroundOutput && synchronizedOutputStarted) {
       session.synchronizedForegroundFrameInteractive =
         performance.now() - session.lastTerminalInputAt <=
         FOREGROUND_SYNCHRONIZED_FRAME_INTERACTIVE_WINDOW_MS
@@ -74,7 +81,7 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
     }
     // Why: ConPTY can split a submit repaint's closing chunk past the 150ms window, so treat a keystroke-opened frame as latency-sensitive to drain it fast (~16-32ms) not the 1s coalesce fallback.
     const synchronizedFrameLatencySensitive =
-      synchronizedForegroundOutput && session.synchronizedForegroundFrameInteractive
+      protectedSynchronizedForegroundOutput && session.synchronizedForegroundFrameInteractive
     session.synchronizedForegroundOutputActive = nextSynchronizedForegroundOutputActive
     session.synchronizedForegroundMarkerTail = synchronizedForegroundScan?.markerTail ?? ''
     writeTerminalOutput(session.pane.terminal, data, {
@@ -89,15 +96,16 @@ export function bindWritePtyOutputToXterm(session: ConnectPanePtySession): void 
           : synchronizedFrameLatencySensitive || session.isLatencySensitiveForegroundOutput(data),
       forceForegroundRefresh:
         foregroundOutput &&
-        (synchronizedForegroundOutput ||
+        (protectedSynchronizedForegroundOutput ||
           nativeWindowsCursorRestore ||
           foregroundRenderRefreshNeeded),
       followupForegroundRefresh: nativeWindowsCursorRestore || nativeWindowsInPlaceRewriteFollowup,
       // Why: xterm already queued a WebGL frame parsing this chunk; merge the repair into it instead of rendering the grid twice.
       shouldRefreshForegroundSynchronously: session.shouldRefreshForegroundSynchronously,
       stripTransientCursorShows: session.shouldProtectNativeWindowsSynchronizedOutput && foreground,
-      coalesceForeground: synchronizedForegroundOutput && synchronizedOutputEnded,
-      holdForeground: synchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
+      coalesceForeground: protectedSynchronizedForegroundOutput && synchronizedOutputEnded,
+      holdForeground:
+        protectedSynchronizedForegroundOutput && nextSynchronizedForegroundOutputActive
     })
   }
 

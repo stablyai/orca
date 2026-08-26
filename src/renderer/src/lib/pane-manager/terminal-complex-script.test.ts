@@ -27,6 +27,16 @@ describe('terminalOutputPrefersRenderRefresh', () => {
     expect(terminalOutputPrefersRenderRefresh('Fullwidth: ＡＢＣ１２３')).toBe(true)
   })
 
+  it('can exclude only East Asian risk from an already synchronized WebGL frame', () => {
+    expect(
+      terminalOutputPrefersRenderRefresh('中文、ターミナル、터미널', { includeEastAsian: false })
+    ).toBe(false)
+    expect(terminalOutputPrefersRenderRefresh('中文 🚀', { includeEastAsian: false })).toBe(true)
+    expect(
+      terminalOutputPrefersRenderRefresh('\x1b[44m中文\x1b[0m', { includeEastAsian: false })
+    ).toBe(true)
+  })
+
   it('keeps terminal drawing glyphs on WebGL', () => {
     expect(terminalOutputPrefersRenderRefresh('⠋ Working')).toBe(false)
     expect(terminalOutputPrefersRenderRefresh('├─ file.ts')).toBe(false)
