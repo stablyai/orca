@@ -67,7 +67,15 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         )
       : undefined
     return projectRuntime ? { projectRuntime } : undefined
-  }, [activeRepoId, folderSourceRepos, projects, repos, selectedProjectGroup, settings, worktreesByRepo])
+  }, [
+    activeRepoId,
+    folderSourceRepos,
+    projects,
+    repos,
+    selectedProjectGroup,
+    settings,
+    worktreesByRepo
+  ])
 
   const parsedFolderTargetHost = parseExecutionHostId(selectedProjectGroup?.executionHostId)
 

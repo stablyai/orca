@@ -1,19 +1,14 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import {
-  getLocalAgentPreflightContext,
-  localPreflightContextKey
-} from '@/lib/local-preflight-context'
 import * as contextEviction from './local-agent-context-eviction'
 import { getLegacyLoadingPatch, getSupersededDetectPatch } from './local-agent-legacy-loading'
+import { getLocalAgentDetectionContext } from './local-agent-detection-context'
 import { createEmptyLocalDetectedAgentState } from './local-detected-agent-store-state'
 import type {
   LocalDetectedAgentInput,
   LocalDetectedAgentState
 } from './local-detected-agent-store-state'
-
 type LocalDetectedAgentStateCreator = StateCreator<AppState, [], [], LocalDetectedAgentState>
 
 export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (set, get) => {
@@ -24,21 +19,14 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
   let legacyDetectContextKey: string | null = null
   let legacyRefreshContextKey: string | null = null
   let localDetectionGeneration = 0
-
   return {
     ...createEmptyLocalDetectedAgentState(),
 
     ensureDetectedAgents: (worktreeIdOrContext?: LocalDetectedAgentInput) => {
-      const explicitContext =
-        typeof worktreeIdOrContext === 'object' && worktreeIdOrContext !== null
-          ? worktreeIdOrContext
-          : undefined
-      const worktreeId = explicitContext ? undefined : worktreeIdOrContext
-      const isFloating = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      const shouldExposeToLegacy = !explicitContext && !isFloating
-      const context =
-        explicitContext ?? getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
-      const contextKey = localPreflightContextKey(context)
+      const { context, contextKey, shouldExposeToLegacy } = getLocalAgentDetectionContext(
+        get(),
+        worktreeIdOrContext
+      )
       const existing = get().localDetectedAgentIdsByContext[contextKey]
       const inflightRefresh = refreshPromises.get(contextKey)
       if (inflightRefresh) {
@@ -101,8 +89,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             detectPromises.get(contextKey) === pending
           ) {
             failedDetectContextKeys.delete(contextKey)
-            const exposeToLegacy =
-              shouldExposeToLegacy && legacyDetectContextKey === contextKey
+            const exposeToLegacy = legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
               legacyDetectContextKey = null
               detectedContextKey = contextKey
@@ -127,8 +114,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             detectPromises.get(contextKey) === pending
           ) {
             failedDetectContextKeys.add(contextKey)
-            const exposeToLegacy =
-              shouldExposeToLegacy && legacyDetectContextKey === contextKey
+            const exposeToLegacy = legacyDetectContextKey === contextKey
             if (exposeToLegacy) {
               legacyDetectContextKey = null
             }
@@ -156,16 +142,8 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
     },
 
     refreshDetectedAgents: (worktreeIdOrContext?: LocalDetectedAgentInput) => {
-      const explicitContext =
-        typeof worktreeIdOrContext === 'object' && worktreeIdOrContext !== null
-          ? worktreeIdOrContext
-          : undefined
-      const worktreeId = explicitContext ? undefined : worktreeIdOrContext
-      const isFloating = worktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      const shouldExposeToLegacy = !explicitContext && !isFloating
-      const context =
-        explicitContext ?? getLocalAgentPreflightContext(get(), undefined, undefined, worktreeId)
-      const contextKey = localPreflightContextKey(context)
+      const { context, contextKey, explicitContext, isFloating, shouldExposeToLegacy } =
+        getLocalAgentDetectionContext(get(), worktreeIdOrContext)
       const cached = get().localDetectedAgentIdsByContext[contextKey]
       const hadUsableCache = cached != null && !failedDetectContextKeys.has(contextKey)
       const requestGeneration = localDetectionGeneration
@@ -214,8 +192,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             refreshPromises.get(contextKey) === pending
           ) {
             failedDetectContextKeys.delete(contextKey)
-            const exposeToLegacy =
-              shouldExposeToLegacy && legacyRefreshContextKey === contextKey
+            const exposeToLegacy = legacyRefreshContextKey === contextKey
             if (exposeToLegacy) {
               legacyRefreshContextKey = null
               detectedContextKey = contextKey
@@ -242,11 +219,12 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
           return typed
         })
         .catch(() => {
-          const fallback = isFloating || explicitContext
-            ? (get().localDetectedAgentIdsByContext[contextKey] ?? [])
-            : detectedContextKey !== contextKey
-              ? []
-              : (get().detectedAgentIds ?? [])
+          const fallback =
+            isFloating || explicitContext
+              ? (get().localDetectedAgentIdsByContext[contextKey] ?? [])
+              : detectedContextKey !== contextKey
+                ? []
+                : (get().detectedAgentIds ?? [])
           if (
             requestGeneration === localDetectionGeneration &&
             refreshPromises.get(contextKey) === pending
@@ -254,8 +232,7 @@ export const createLocalDetectedAgentState: LocalDetectedAgentStateCreator = (se
             if (!hadUsableCache) {
               failedDetectContextKeys.add(contextKey)
             }
-            const exposeToLegacy =
-              shouldExposeToLegacy && legacyRefreshContextKey === contextKey
+            const exposeToLegacy = legacyRefreshContextKey === contextKey
             if (exposeToLegacy) {
               legacyRefreshContextKey = null
             }
