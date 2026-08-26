@@ -21,6 +21,7 @@ import {
 } from '../claude-accounts/runtime-selection'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
+import { fetchAntigravityRateLimits } from './antigravity-cli-usage'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -1689,40 +1690,48 @@ export class RateLimitService {
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      geminiResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult,
+      antigravityResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchGeminiRateLimits(geminiCliOAuthEnabled),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          }),
+      fetchAntigravityRateLimits(signal)
+    ])
 
     if (signal.aborted) {
       return
@@ -1767,8 +1776,15 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
+    // Why: `agy` keeps its token in the OS keyring, so the CLI is the only source that
+    // describes real Antigravity quota. The Gemini mirror stays as the fallback for machines
+    // where the Antigravity CLI is not installed; a signed-out CLI still answers for itself,
+    // because blaming a missing Gemini sign-in would send the user to a dead product.
+    const antigravityCli = antigravityResult.status === 'fulfilled' ? antigravityResult.value : null
+    const antigravity =
+      antigravityCli && antigravityCli.usageMetadata?.failureKind !== 'cli-unavailable'
+        ? antigravityCli
+        : deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
