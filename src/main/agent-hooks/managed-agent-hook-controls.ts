@@ -7,6 +7,7 @@ import { normalizeDisabledTuiAgents } from '../../shared/tui-agent-selection'
 import type { GlobalSettings } from '../../shared/global-settings-types'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
+  MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
   MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS,
@@ -18,10 +19,12 @@ export { MANAGED_AGENT_HOOK_INSTALLERS } from './managed-agent-hook-registry'
 export { prepareManagedCodexHomeBeforeShellLaunch } from '../codex/managed-home-shell-preflight'
 
 type ManagedHookSettings = Partial<
-  Pick<GlobalSettings, 'agentCmdOverrides' | 'disabledTuiAgents'>
+  Pick<GlobalSettings, 'agentCmdOverrides' | 'agentStatusHooksEnabled' | 'disabledTuiAgents'>
 > | null
 
 type InstallOptions = {
+  /** Set only for an explicit user action, never for startup reconciliation. */
+  userInitiated?: boolean
   shouldHydrateShellPath?: boolean
   onInstallError?: (agent: AgentHookTarget, error: unknown) => void
   shouldContinue?: (agent: AgentHookTarget) => boolean
@@ -36,6 +39,18 @@ export function isAgentStatusHooksEnabled(
   settings: Partial<Pick<GlobalSettings, 'agentStatusHooksEnabled'>> | null | undefined
 ): boolean {
   return settings?.agentStatusHooksEnabled !== false
+}
+
+export function shouldContinueManagedHookStartup(
+  isQuitting: boolean,
+  settings: ManagedHookSettings,
+  agent: AgentHookTarget
+): boolean {
+  return (
+    !isQuitting &&
+    isAgentStatusHooksEnabled(settings) &&
+    !normalizeDisabledTuiAgents(settings?.disabledTuiAgents).includes(agent)
+  )
 }
 
 function errorStatus(agent: AgentHookTarget, error: unknown): AgentHookInstallStatus {
@@ -73,11 +88,12 @@ function selectedInstallers(options: InstallOptions): readonly ManagedAgentHookI
 
 function runInstaller(
   entry: ManagedAgentHookInstaller,
-  onInstallError: InstallOptions['onInstallError']
+  onInstallError: InstallOptions['onInstallError'],
+  userInitiated?: boolean
 ): AgentHookInstallStatus {
   const [agent, install] = entry
   try {
-    return install()
+    return install({ userInitiated })
   } catch (error) {
     console.error(`[agent-hooks] Failed to install ${agent} managed hooks:`, error)
     try {
@@ -161,7 +177,7 @@ export async function installManagedAgentHooks(
       )
       continue
     }
-    results.push(runInstaller(entry, options.onInstallError))
+    results.push(runInstaller(entry, options.onInstallError, options.userInitiated))
   }
   return results
 }
@@ -177,6 +193,23 @@ export function removeManagedAgentHooks(options: RemoveOptions = {}): AgentHookI
       return errorStatus(agent, error)
     }
   })
+}
+
+export async function removeManagedAgentHooksAsync(
+  options: RemoveOptions = {}
+): Promise<AgentHookInstallStatus[]> {
+  const allowed = options.agents ? new Set(options.agents) : null
+  return await Promise.all(
+    MANAGED_AGENT_HOOK_ASYNC_REMOVERS.filter(
+      ([agent]) => allowed === null || allowed.has(agent)
+    ).map(async ([agent, remove]) => {
+      try {
+        return await remove()
+      } catch (error) {
+        return errorStatus(agent, error)
+      }
+    })
+  )
 }
 
 export function getManagedAgentHookStatuses(): AgentHookInstallStatus[] {

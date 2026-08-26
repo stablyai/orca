@@ -90,7 +90,9 @@ import {
 import {
   applyAgentStatusHooksEnabled,
   isAgentStatusHooksEnabled,
-  removeManagedAgentHooks
+  removeManagedAgentHooks,
+  removeManagedAgentHooksAsync,
+  shouldContinueManagedHookStartup
 } from './agent-hooks/managed-agent-hook-controls'
 import { initCohortClassifier } from './telemetry/cohort-classifier'
 import { initOnboardingCohortClassifier } from './telemetry/onboarding-cohort-classifier'
@@ -323,7 +325,7 @@ import { createRuntimeAutomationRunTerminalObserver } from './automations/runtim
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
 import { registerSystemResumeBroadcast } from './system-resume-broadcast'
-import { settleTeardownWithinDeadline } from './quit-teardown-deadline'
+import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
 import { PluginService } from './plugins/plugin-service'
@@ -3079,7 +3081,7 @@ void app.whenReady().then(async () => {
         onInstallError: recordManagedHookInstallFailure,
         shouldContinue: (agent) => {
           const settings = managedHookStore.getSettings()
-          return isAgentStatusHooksEnabled(settings) && !settings.disabledTuiAgents.includes(agent)
+          return shouldContinueManagedHookStartup(isQuitting, settings, agent)
         }
       }).catch((error) => {
         console.warn('[agent-hooks] failed to reconcile managed hooks on startup:', error)
@@ -3437,6 +3439,9 @@ app.on('before-quit', () => {
 
 // Why: will-quit fires twice — first pass preventDefaults and runs teardown; second pass exits.
 let daemonDisconnectDone = false
+// Why 2s: a config delete is best-effort, not durable state.
+const GROK_HOOK_CLEANUP_DEADLINE_MS = 2_000
+
 app.on('will-quit', (e) => {
   // Why return instead of re-running teardown: the second pass is Electron re-firing after
   // our own app.quit(), so every step below already ran and every durable write already
@@ -3482,6 +3487,31 @@ app.on('will-quit', (e) => {
   pluginService = null
   setUnreadDockBadgeCount(0)
   agentHookServer.stop()
+  // Why Windows only: POSIX hooks short-circuit on ORCA_PANE_KEY, while Windows must register a
+  // bare script path that cannot express the guard and would otherwise keep spawning after quit.
+  // Why bounded here: every other teardown member carries its own ceiling, and this one reaches
+  // $GROK_HOME -- which can be a stalled network mount, where the fs calls never settle and the
+  // shared 20s deadline becomes the only thing ending the quit.
+  const grokHookCleanup =
+    process.platform === 'win32'
+      ? settleWithinMs(
+          removeManagedAgentHooksAsync({ agents: ['grok'] }),
+          GROK_HOOK_CLEANUP_DEADLINE_MS
+        ).then((settled) => {
+          if (settled.outcome === 'timed-out') {
+            console.warn('[agent-hooks] Grok hook cleanup on quit timed out')
+            return
+          }
+          if (settled.outcome === 'failed') {
+            console.warn('[agent-hooks] Grok hook cleanup on quit failed:', settled.error)
+            return
+          }
+          // Why: removers report failures as statuses, so inspect details even after fulfillment.
+          for (const status of settled.value.filter((entry) => entry.detail)) {
+            console.warn(`[agent-hooks] ${status.agent} hook cleanup on quit: ${status.detail}`)
+          }
+        })
+      : Promise.resolve()
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
   const statsFlush = stats?.flushAsync() ?? Promise.resolve()
@@ -3548,6 +3578,7 @@ app.on('will-quit', (e) => {
     { name: 'ssh', promise: sshShutdown },
     { name: 'plugin-hosts', promise: pluginHostShutdown },
     { name: 'skill-uploads', promise: skillUploadShutdown },
+    { name: 'grok-hooks', promise: grokHookCleanup },
     { name: 'codex-backfill-recovery', promise: codexBackfillRecoveryShutdown },
     { name: 'usage-cache', promise: usageCacheFlush },
     { name: 'stats', promise: statsFlush },
