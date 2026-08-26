@@ -2079,6 +2079,23 @@ type PtyControllerInventory = Readonly<{
   queriedHostIds: ReadonlySet<ExecutionHostId>
 }>
 
+type ScopedPtyControllerInventoryTarget = Readonly<{
+  worktree: ResolvedWorktree
+  provider: Readonly<{ connectionId: string | null }> | null
+}>
+
+type FolderWorkspaceOwnerHostIndex = Readonly<{
+  hostIdsById: Map<string, Set<ExecutionHostId>>
+  unresolvedIds: Set<string>
+}>
+
+type WorkspaceExecutionOwnerIndex = Readonly<{
+  repoOwnersById: Map<string, Repo[]>
+  exactHostIdsByWorktreeId: Map<string, Set<ExecutionHostId>>
+  folderHostIdsById: Map<string, Set<ExecutionHostId>>
+  unresolvedFolderIds: Set<string>
+}>
+
 type WorktreeStartupDraftPaste = {
   agent: TuiAgent
   content: string
@@ -3227,7 +3244,9 @@ export class OrcaRuntimeService {
   // reconnect-scan bounding for sequential soft freezes.
   private readonly terminalFocusNavigationCoalescer =
     new TerminalFocusNavigationCoalescer<RuntimeTerminalFocus>()
-  private pendingMobileSessionPtyInventoryRefresh: Promise<Set<string> | null> | null = null
+  // Why: inventories for different execution hosts are not interchangeable. Coalesce
+  // only callers targeting the same workspace; an all-host refresh remains its own key.
+  private pendingMobileSessionPtyInventoryRefreshes = new Map<string, Promise<Set<string> | null>>()
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
@@ -6245,9 +6264,24 @@ export class OrcaRuntimeService {
     return this.startedAt
   }
 
-  private tryGetWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId | null {
+  private tryGetWorkspaceSessionHostIdForWorktree(
+    worktreeId: string,
+    ownerIndex?: WorkspaceExecutionOwnerIndex | null
+  ): ExecutionHostId | null {
+    // Why: floating PTYs have an explicit local identity and no repo/worktree
+    // owner to resolve. Keep this sentinel path free of owner-index construction.
+    if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return LOCAL_EXECUTION_HOST_ID
+    }
     const scope = parseWorkspaceKey(worktreeId)
     if (scope?.type === 'folder') {
+      if (ownerIndex) {
+        const folderId = scope.folderWorkspaceId
+        const hostIds = ownerIndex.folderHostIdsById.get(folderId)
+        return !ownerIndex.unresolvedFolderIds.has(folderId) && hostIds?.size === 1
+          ? hostIds.values().next().value!
+          : null
+      }
       const workspace = this.store
         ?.getFolderWorkspaces?.()
         .find((entry) => entry.id === scope.folderWorkspaceId)
@@ -6257,12 +6291,43 @@ export class OrcaRuntimeService {
       if (workspace.executionHostId != null) {
         return parseExecutionHostId(workspace.executionHostId)?.id ?? null
       }
-      const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-      return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      try {
+        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
+        return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
+      } catch {
+        return null
+      }
     }
     const resolvedWorktreeId = scope?.type === 'worktree' ? scope.worktreeId : worktreeId
-    const repo = this.store?.getRepo?.(getRepoIdFromWorktreeId(resolvedWorktreeId))
-    return repo ? getRepoExecutionHostId(repo) : LOCAL_EXECUTION_HOST_ID
+    const resolvedOwnerIndex = ownerIndex ?? this.buildWorkspaceExecutionOwnerIndex()
+    const parsed = splitWorktreeIdForFilesystem(resolvedWorktreeId)
+    if (!parsed) {
+      const ownerHostIds = resolvedOwnerIndex.exactHostIdsByWorktreeId.get(resolvedWorktreeId)
+      return ownerHostIds?.size === 1
+        ? ownerHostIds.values().next().value!
+        : ownerHostIds?.size === 0 || ownerHostIds === undefined
+          ? LOCAL_EXECUTION_HOST_ID
+          : null
+    }
+    const ownerHostIds = new Set(
+      resolvedOwnerIndex.exactHostIdsByWorktreeId.get(resolvedWorktreeId) ?? []
+    )
+    const repoOwners = resolvedOwnerIndex.repoOwnersById.get(parsed.repoId) ?? []
+    const pathOwners = repoOwners.filter((repo) =>
+      isPathInsideOrEqual(repo.path, parsed.worktreePath)
+    )
+    for (const repo of pathOwners.length > 0
+      ? pathOwners
+      : ownerHostIds.size === 0
+        ? repoOwners
+        : []) {
+      ownerHostIds.add(getRepoExecutionHostId(repo))
+    }
+    return ownerHostIds.size === 0
+      ? LOCAL_EXECUTION_HOST_ID
+      : ownerHostIds.size === 1
+        ? ownerHostIds.values().next().value!
+        : null
   }
 
   private getWorkspaceSessionHostIdForWorktree(worktreeId: string): ExecutionHostId {
@@ -6272,9 +6337,212 @@ export class OrcaRuntimeService {
     }
     return hostId
   }
+  private buildFolderWorkspaceOwnerHostIndex(
+    repos: readonly Repo[],
+    projectGroups: readonly ProjectGroup[],
+    folderWorkspaces: readonly FolderWorkspace[]
+  ): FolderWorkspaceOwnerHostIndex {
+    type FolderPathTrieNode = {
+      children: Map<string, FolderPathTrieNode>
+      folderIds: string[]
+    }
+    const folderPathRoot: FolderPathTrieNode = { children: new Map(), folderIds: [] }
+    const pathConnectionIdsByFolderId = new Map<string, Set<string | null>>()
+    for (const folderWorkspace of folderWorkspaces) {
+      let node = folderPathRoot
+      for (const segment of normalizeRuntimePathForComparison(folderWorkspace.folderPath)
+        .split('/')
+        .filter(Boolean)) {
+        const child = node.children.get(segment) ?? { children: new Map(), folderIds: [] }
+        node.children.set(segment, child)
+        node = child
+      }
+      node.folderIds.push(folderWorkspace.id)
+      if (!pathConnectionIdsByFolderId.has(folderWorkspace.id)) {
+        pathConnectionIdsByFolderId.set(folderWorkspace.id, new Set())
+      }
+    }
+    const projectGroupById = new Map(projectGroups.map((group) => [group.id, group]))
+    const groupConnectionIdsByAncestorId = new Map<string, Set<string | null>>()
+    for (const repo of repos) {
+      const connectionId = repo.connectionId?.trim() || null
+      let node: FolderPathTrieNode | undefined = folderPathRoot
+      for (const folderId of node.folderIds) {
+        pathConnectionIdsByFolderId.get(folderId)?.add(connectionId)
+      }
+      for (const segment of normalizeRuntimePathForComparison(repo.path)
+        .split('/')
+        .filter(Boolean)) {
+        node = node.children.get(segment)
+        if (!node) {
+          break
+        }
+        for (const folderId of node.folderIds) {
+          pathConnectionIdsByFolderId.get(folderId)?.add(connectionId)
+        }
+      }
+      let groupId = repo.projectGroupId ?? null
+      const visitedGroupIds = new Set<string>()
+      while (groupId && !visitedGroupIds.has(groupId)) {
+        visitedGroupIds.add(groupId)
+        const connectionIds =
+          groupConnectionIdsByAncestorId.get(groupId) ?? new Set<string | null>()
+        connectionIds.add(connectionId)
+        groupConnectionIdsByAncestorId.set(groupId, connectionIds)
+        groupId = projectGroupById.get(groupId)?.parentGroupId ?? null
+      }
+    }
+    const hostIdsById = new Map<string, Set<ExecutionHostId>>()
+    const unresolvedIds = new Set<string>()
+    for (const folderWorkspace of folderWorkspaces) {
+      const explicitHost = folderWorkspace.executionHostId
+        ? parseExecutionHostId(folderWorkspace.executionHostId)
+        : null
+      if (folderWorkspace.executionHostId != null && !explicitHost) {
+        unresolvedIds.add(folderWorkspace.id)
+        continue
+      }
+      if (explicitHost?.kind === 'runtime') {
+        const hostIds = hostIdsById.get(folderWorkspace.id) ?? new Set<ExecutionHostId>()
+        hostIds.add(explicitHost.id)
+        hostIdsById.set(folderWorkspace.id, hostIds)
+        continue
+      }
+      const groupConnectionIds =
+        groupConnectionIdsByAncestorId.get(folderWorkspace.projectGroupId) ??
+        new Set<string | null>()
+      let connectionId: string | null | undefined
+      if (folderWorkspace.connectionId) {
+        const explicitConnectionId = folderWorkspace.connectionId
+        connectionId =
+          groupConnectionIds.has(null) ||
+          [...groupConnectionIds].some(
+            (candidate) => candidate !== null && candidate !== explicitConnectionId
+          )
+            ? undefined
+            : explicitConnectionId
+      } else {
+        const effectiveConnectionIds =
+          groupConnectionIds.size > 0
+            ? groupConnectionIds
+            : (pathConnectionIdsByFolderId.get(folderWorkspace.id) ?? new Set<string | null>())
+        const hasLocal = effectiveConnectionIds.has(null)
+        const sshConnectionIds = [...effectiveConnectionIds].filter(
+          (candidate): candidate is string => candidate !== null
+        )
+        connectionId =
+          (hasLocal && sshConnectionIds.length > 0) || sshConnectionIds.length > 1
+            ? undefined
+            : (sshConnectionIds[0] ?? null)
+      }
+      if (connectionId === undefined) {
+        unresolvedIds.add(folderWorkspace.id)
+        continue
+      }
+      const inferredHostId = connectionId
+        ? toSshExecutionHostId(connectionId)
+        : LOCAL_EXECUTION_HOST_ID
+      if (explicitHost && explicitHost.id !== inferredHostId) {
+        unresolvedIds.add(folderWorkspace.id)
+        continue
+      }
+      const hostIds = hostIdsById.get(folderWorkspace.id) ?? new Set<ExecutionHostId>()
+      hostIds.add(inferredHostId)
+      hostIdsById.set(folderWorkspace.id, hostIds)
+    }
+    return { hostIdsById, unresolvedIds }
+  }
 
-  private getWorkspaceSessionForWorktree(worktreeId: string): WorkspaceSessionState | null {
-    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+  private buildWorkspaceExecutionOwnerIndex(): WorkspaceExecutionOwnerIndex {
+    const repos = this.store?.getRepos?.() ?? []
+    const repoOwnersById = new Map<string, Repo[]>()
+    for (const repo of repos) {
+      const owners = repoOwnersById.get(repo.id) ?? []
+      owners.push(repo)
+      repoOwnersById.set(repo.id, owners)
+    }
+    const exactHostIdsByWorktreeId = new Map<string, Set<ExecutionHostId>>()
+    const addExactOwner = (worktreeId: string, hostId: string | undefined): void => {
+      const parsedHost = hostId ? parseExecutionHostId(hostId) : null
+      if (!parsedHost) {
+        return
+      }
+      const hostIds = exactHostIdsByWorktreeId.get(worktreeId) ?? new Set<ExecutionHostId>()
+      hostIds.add(parsedHost.id)
+      exactHostIdsByWorktreeId.set(worktreeId, hostIds)
+    }
+    for (const worktree of this.resolvedWorktreeCache?.worktrees ?? []) {
+      addExactOwner(worktree.id, worktree.hostId)
+    }
+    for (const [worktreeId, meta] of Object.entries(this.store?.getAllWorktreeMeta?.() ?? {})) {
+      addExactOwner(worktreeId, typeof meta.hostId === 'string' ? meta.hostId : undefined)
+    }
+    const folderOwnerIndex = this.buildFolderWorkspaceOwnerHostIndex(
+      repos,
+      this.store?.getProjectGroups?.() ?? [],
+      this.store?.getFolderWorkspaces?.() ?? []
+    )
+    return {
+      repoOwnersById,
+      exactHostIdsByWorktreeId,
+      folderHostIdsById: folderOwnerIndex.hostIdsById,
+      unresolvedFolderIds: folderOwnerIndex.unresolvedIds
+    }
+  }
+
+  private hasAmbiguousWorkspaceExecutionOwner(
+    worktreeId: string,
+    ownerIndex?: WorkspaceExecutionOwnerIndex | null
+  ): boolean {
+    // Floating terminals are explicitly local and cannot have duplicate catalog
+    // owners, so checking them must not construct the owner index.
+    if (worktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return false
+    }
+    const resolvedOwnerIndex = ownerIndex ?? this.buildWorkspaceExecutionOwnerIndex()
+    const workspaceScope = parseWorkspaceKey(worktreeId)
+    if (workspaceScope?.type === 'folder') {
+      const folderId = workspaceScope.folderWorkspaceId
+      return (
+        resolvedOwnerIndex.unresolvedFolderIds.has(folderId) ||
+        resolvedOwnerIndex.folderHostIdsById.get(folderId)?.size !== 1
+      )
+    }
+    const parsed = splitWorktreeIdForFilesystem(worktreeId)
+    if (!parsed) {
+      // Unparseable IDs have no path-based owner candidates to compare.
+      return (resolvedOwnerIndex.exactHostIdsByWorktreeId.get(worktreeId)?.size ?? 0) > 1
+    }
+    const ownerHostIds = new Set(resolvedOwnerIndex.exactHostIdsByWorktreeId.get(worktreeId) ?? [])
+    const repoOwners = resolvedOwnerIndex.repoOwnersById.get(parsed.repoId) ?? []
+    const pathOwners = repoOwners.filter((repo) =>
+      isPathInsideOrEqual(repo.path, parsed.worktreePath)
+    )
+    for (const repo of pathOwners.length > 0
+      ? pathOwners
+      : ownerHostIds.size === 0
+        ? repoOwners
+        : []) {
+      ownerHostIds.add(getRepoExecutionHostId(repo))
+    }
+    return ownerHostIds.size > 1
+  }
+
+  private assertUnambiguousWorkspaceExecutionOwner(
+    worktreeId: string,
+    ownerIndex?: WorkspaceExecutionOwnerIndex | null
+  ): void {
+    if (this.hasAmbiguousWorkspaceExecutionOwner(worktreeId, ownerIndex)) {
+      this.mobileSessionTabsByWorktree.delete(worktreeId)
+      throw new Error('selector_ambiguous')
+    }
+  }
+
+  private getWorkspaceSessionForWorktree(
+    worktreeId: string,
+    ownerIndex?: WorkspaceExecutionOwnerIndex | null
+  ): WorkspaceSessionState | null {
+    const hostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId, ownerIndex)
     return hostId ? (this.store?.getWorkspaceSession?.(hostId) ?? null) : null
   }
 
@@ -6347,24 +6615,19 @@ export class OrcaRuntimeService {
   }
 
   private getWorkspaceSessionHydrationTargets(
-    includeAllPersistedWorktrees: boolean
+    includeAllPersistedWorktrees: boolean,
+    ownerIndex = this.buildWorkspaceExecutionOwnerIndex()
   ): Map<string, WorkspaceSessionState> {
-    const repos = this.store?.getRepos?.() ?? []
-    const repoHostIdByRepoId = new Map(
-      repos.map((repo) => [repo.id, getRepoExecutionHostId(repo)] as const)
-    )
-    const folderHostIdByWorkspaceId = new Map(
-      (this.store?.getFolderWorkspaces?.() ?? []).map((workspace) => {
-        const connectionId = this.resolveFolderWorkspaceConnectionId(workspace)
-        return [
-          workspace.id,
-          connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
-        ] as const
-      })
-    )
     const hostIds = new Set<ExecutionHostId>([LOCAL_EXECUTION_HOST_ID])
-    for (const repo of repos) {
-      hostIds.add(getRepoExecutionHostId(repo))
+    for (const repos of ownerIndex.repoOwnersById.values()) {
+      for (const repo of repos) {
+        hostIds.add(getRepoExecutionHostId(repo))
+      }
+    }
+    for (const folderHostIds of ownerIndex.folderHostIdsById.values()) {
+      for (const hostId of folderHostIds) {
+        hostIds.add(hostId)
+      }
     }
     for (const hostId of this.store?.getWorkspaceSessionHostIds?.() ?? []) {
       hostIds.add(hostId)
@@ -6377,13 +6640,7 @@ export class OrcaRuntimeService {
         continue
       }
       for (const [worktreeId, tabs] of Object.entries(session.tabsByWorktree ?? {})) {
-        const scope = parseWorkspaceKey(worktreeId)
-        const ownerHostId =
-          scope?.type === 'folder'
-            ? (folderHostIdByWorkspaceId.get(scope.folderWorkspaceId) ?? null)
-            : (repoHostIdByRepoId.get(
-                getRepoIdFromWorktreeId(scope?.type === 'worktree' ? scope.worktreeId : worktreeId)
-              ) ?? LOCAL_EXECUTION_HOST_ID)
+        const ownerHostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId, ownerIndex)
         if (
           ownerHostId === hostId &&
           (includeAllPersistedWorktrees ||
@@ -6848,6 +7105,7 @@ export class OrcaRuntimeService {
     targetId: string,
     generation: number
   ): Promise<void> {
+    const providerHostId = toSshExecutionHostId(targetId)
     const repoIds = new Set(
       (this.store?.getRepos() ?? [])
         .filter((repo) => repo.connectionId === targetId)
@@ -6856,32 +7114,53 @@ export class OrcaRuntimeService {
     if (repoIds.size === 0) {
       return
     }
+    const workspaceSession = this.store?.getWorkspaceSession?.(providerHostId)
+    const ownerIndex = this.buildWorkspaceExecutionOwnerIndex()
     const worktreeIds = new Set<string>()
+    const publishableWorktreeIds = new Set<string>()
     for (const worktreeId of [
-      ...this.getKnownWorkspaceSessionWorktreeIds(),
+      ...Object.keys(workspaceSession?.tabsByWorktree ?? {}),
       ...this.mobileSessionTabsByWorktree.keys()
     ]) {
       const parsed = splitWorktreeId(worktreeId)
-      if (parsed && repoIds.has(parsed.repoId)) {
-        worktreeIds.add(worktreeId)
+      if (!parsed || !repoIds.has(parsed.repoId)) {
+        continue
       }
+      worktreeIds.add(worktreeId)
+      if (this.hasAmbiguousWorkspaceExecutionOwner(worktreeId, ownerIndex)) {
+        // No public mobile operation carries execution-host authority. Keep the
+        // provider-scoped liveness query, but never publish a mixed snapshot.
+        this.mobileSessionTabsByWorktree.delete(worktreeId)
+        continue
+      }
+      publishableWorktreeIds.add(worktreeId)
     }
     if (worktreeIds.size === 0) {
       return
     }
-
-    // Why: relay readiness follows PTY reattach; rebuild the HUB-owned panes before paired clients consume the connected event.
-    for (const worktreeId of worktreeIds) {
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
-        allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
-      })
+    const resolvedWorktrees = [...worktreeIds].flatMap((worktreeId) => {
+      const target = this.resolveScopedPtyControllerInventoryTarget(worktreeId, null, targetId)
+      return target?.provider?.connectionId === targetId ? [target.worktree] : []
+    })
+    if (resolvedWorktrees.length === 0) {
+      return
     }
-    await this.refreshMobileSessionPtyRecords()
+    await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees, null, undefined, targetId)
     if (this.sshRelayRecoveryGenerationByTargetId.get(targetId) !== generation) {
       return
     }
-    for (const worktreeId of worktreeIds) {
+    const refreshedOwnerIndex = this.buildWorkspaceExecutionOwnerIndex()
+    for (const worktreeId of publishableWorktreeIds) {
+      if (this.hasAmbiguousWorkspaceExecutionOwner(worktreeId, refreshedOwnerIndex)) {
+        this.mobileSessionTabsByWorktree.delete(worktreeId)
+        continue
+      }
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
+        allowAttachedWindow: true,
+        onlyRuntimeOwnedTerminals: true,
+        ownerIndex: refreshedOwnerIndex,
+        ...(workspaceSession ? { workspaceSession } : {})
+      })
       this.notifyMobileSessionTabsChangedNow(worktreeId)
     }
   }
@@ -7374,29 +7653,48 @@ export class OrcaRuntimeService {
     }
     return changed
   }
-
   async listMobileSessionTabs(
     worktreeSelector: string,
     clientNavigationId?: string
   ): Promise<RuntimeMobileSessionTabsResult> {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
+    // Floating PTYs are explicitly local and must not pay for the fleet owner
+    // catalog on every mobile poll.
+    const ownerIndex =
+      explicitWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? null
+        : this.buildWorkspaceExecutionOwnerIndex()
     if (explicitWorktreeId) {
+      this.assertUnambiguousWorkspaceExecutionOwner(explicitWorktreeId, ownerIndex)
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, {
         allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
+        onlyRuntimeOwnedTerminals: true,
+        ownerIndex
       })
-      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId)
+      this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(explicitWorktreeId, { ownerIndex })
       await this.refreshMobileSessionPtyRecords(explicitWorktreeId)
+      this.assertUnambiguousWorkspaceExecutionOwner(
+        explicitWorktreeId,
+        explicitWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+          ? null
+          : this.buildWorkspaceExecutionOwnerIndex()
+      )
       this.restoreLivePairedRendererSessionOwnedMobileTerminals(explicitWorktreeId)
       return this.getMobileSessionTabsForWorktree(explicitWorktreeId, clientNavigationId)
     }
     const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    this.assertUnambiguousWorkspaceExecutionOwner(worktree.id, ownerIndex)
     this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
       allowAttachedWindow: true,
-      onlyRuntimeOwnedTerminals: true
+      onlyRuntimeOwnedTerminals: true,
+      ownerIndex
     })
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id)
-    await this.refreshMobileSessionPtyRecords()
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, { ownerIndex })
+    await this.refreshMobileSessionPtyRecords(worktree.id)
+    this.assertUnambiguousWorkspaceExecutionOwner(
+      worktree.id,
+      this.buildWorkspaceExecutionOwnerIndex()
+    )
     this.restoreLivePairedRendererSessionOwnedMobileTerminals(worktree.id)
     return this.getMobileSessionTabsForWorktree(worktree.id, clientNavigationId)
   }
@@ -7404,14 +7702,22 @@ export class OrcaRuntimeService {
   async listAllMobileSessionTabs(
     clientNavigationId?: string
   ): Promise<RuntimeMobileSessionTabsResult[]> {
+    const ownerIndex = this.buildWorkspaceExecutionOwnerIndex()
     for (const worktreeId of this.getKnownWorkspaceSessionWorktreeIds()) {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
-        onlyRuntimeOwnedTerminals: true
+        onlyRuntimeOwnedTerminals: true,
+        ownerIndex
       })
     }
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession()
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(undefined, { ownerIndex })
     await this.refreshMobileSessionPtyRecords()
+    const refreshedOwnerIndex = this.buildWorkspaceExecutionOwnerIndex()
+    for (const worktreeId of this.mobileSessionTabsByWorktree.keys()) {
+      if (this.hasAmbiguousWorkspaceExecutionOwner(worktreeId, refreshedOwnerIndex)) {
+        this.mobileSessionTabsByWorktree.delete(worktreeId)
+      }
+    }
     return [...this.mobileSessionTabsByWorktree.values()].map((snapshot) =>
       this.projectMobileSessionTabsForClient(
         this.toMobileSessionTabsResult(snapshot),
@@ -7428,6 +7734,7 @@ export class OrcaRuntimeService {
       onlyRuntimeOwnedTerminals?: boolean
       runtimeOwnedTerminalCandidateKnown?: boolean
       workspaceSession?: WorkspaceSessionState
+      ownerIndex?: WorkspaceExecutionOwnerIndex | null
     } = {}
   ): Set<string> {
     // Why: report which worktrees were reconciled in place so callers don't
@@ -7436,10 +7743,16 @@ export class OrcaRuntimeService {
     if (this.getAvailableAuthoritativeWindow() && options.allowAttachedWindow !== true) {
       return reconciledWorktreeIds
     }
+    // `null` is an explicit sentinel used only for floating terminal hydration:
+    // unlike `undefined`, it must not fall back to constructing the owner index.
+    const ownerIndex =
+      options.ownerIndex === null
+        ? null
+        : (options.ownerIndex ?? this.buildWorkspaceExecutionOwnerIndex())
     const session =
       options.workspaceSession ??
       (worktreeId
-        ? this.getWorkspaceSessionForWorktree(worktreeId)
+        ? this.getWorkspaceSessionForWorktree(worktreeId, ownerIndex)
         : this.store?.getWorkspaceSession?.())
     if (!session) {
       return reconciledWorktreeIds
@@ -7478,6 +7791,12 @@ export class OrcaRuntimeService {
     // report repos — an unavailable list must not read as "every repo is gone".
     let liveRepoIds: Set<string> | null | undefined
     for (const [entryWorktreeId, persistedTabs] of entries) {
+      if (this.hasAmbiguousWorkspaceExecutionOwner(entryWorktreeId, ownerIndex)) {
+        // A hostless Map key cannot safely merge two execution owners. Drop any
+        // stale mixed snapshot and wait for an unambiguous owner.
+        this.mobileSessionTabsByWorktree.delete(entryWorktreeId)
+        continue
+      }
       const ownerRepoId = splitWorktreeIdForFilesystem(entryWorktreeId)?.repoId
       if (ownerRepoId) {
         if (liveRepoIds === undefined) {
@@ -9150,22 +9469,23 @@ export class OrcaRuntimeService {
   private async refreshMobileSessionPtyRecords(
     targetWorktreeId: string | null = null
   ): Promise<Set<string> | null> {
-    if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      const pending = this.pendingMobileSessionPtyInventoryRefresh
-      if (pending) {
-        return pending
-      }
-      // Why: reconnect exit bursts share one authoritative daemon inventory
-      // instead of multiplying a full cross-generation list RPC per stale tab.
-      const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
-        if (this.pendingMobileSessionPtyInventoryRefresh === refresh) {
-          this.pendingMobileSessionPtyInventoryRefresh = null
-        }
-      })
-      this.pendingMobileSessionPtyInventoryRefresh = refresh
-      return refresh
+    if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
     }
-    return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)
+    const refreshKey = targetWorktreeId ?? '\0all'
+    const pending = this.pendingMobileSessionPtyInventoryRefreshes.get(refreshKey)
+    if (pending) {
+      return pending
+    }
+    // Why: reconnect exit bursts for one workspace share one authoritative provider
+    // inventory without letting another provider's in-flight result stand in for it.
+    const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
+      if (this.pendingMobileSessionPtyInventoryRefreshes.get(refreshKey) === refresh) {
+        this.pendingMobileSessionPtyInventoryRefreshes.delete(refreshKey)
+      }
+    })
+    this.pendingMobileSessionPtyInventoryRefreshes.set(refreshKey, refresh)
+    return refresh
   }
 
   private async performMobileSessionPtyRecordsRefresh(
@@ -9174,13 +9494,24 @@ export class OrcaRuntimeService {
     if (!this.ptyController?.listProcesses && !this.ptyController?.hasPty) {
       return null
     }
-    // Why: floating PTY identity is explicit, so polling must not resolve every Git/SSH worktree.
-    const isFloatingWorkspace = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
-    const resolvedWorktrees = isFloatingWorkspace ? [] : await this.listResolvedWorktrees()
-    return await this.refreshPtyWorktreeRecordsFromController(
-      resolvedWorktrees,
-      isFloatingWorkspace ? targetWorktreeId : null
-    )
+    // Why: floating PTY identity is explicit, so polling must not resolve any Git/SSH worktree.
+    if (targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      return await this.refreshPtyWorktreeRecordsFromController([], targetWorktreeId)
+    }
+    if (targetWorktreeId) {
+      const target = this.resolveScopedPtyControllerInventoryTarget(targetWorktreeId)
+      if (!target?.provider) {
+        // Ambiguous, paired-runtime, or unavailable ownership proves no PTY absent.
+        return null
+      }
+      return await this.refreshPtyWorktreeRecordsFromController(
+        [target.worktree],
+        targetWorktreeId,
+        undefined,
+        target.provider.connectionId
+      )
+    }
+    return await this.refreshPtyWorktreeRecordsFromController(await this.listResolvedWorktrees())
   }
 
   async activateMobileSessionTab(
@@ -9199,8 +9530,14 @@ export class OrcaRuntimeService {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
+    const ownerIndex = this.buildWorkspaceExecutionOwnerIndex()
+    this.assertUnambiguousWorkspaceExecutionOwner(worktreeId, ownerIndex)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { ownerIndex })
     await this.refreshMobileSessionPtyRecords(worktreeId)
+    this.assertUnambiguousWorkspaceExecutionOwner(
+      worktreeId,
+      this.buildWorkspaceExecutionOwnerIndex()
+    )
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
     const directTab = snapshot?.tabs.find((candidate) => candidate.id === tabId)
     const tab = leafId
@@ -9262,6 +9599,18 @@ export class OrcaRuntimeService {
           } catch {
             // Why: a disabled or unresolvable agent must not make the tab
             // untappable; fall back to the plain-shell materialize.
+          }
+        }
+        const materializationOwnerIndex = this.buildWorkspaceExecutionOwnerIndex()
+        this.assertUnambiguousWorkspaceExecutionOwner(worktreeId, materializationOwnerIndex)
+        const materializationHostId = this.tryGetWorkspaceSessionHostIdForWorktree(
+          worktreeId,
+          materializationOwnerIndex
+        )
+        if (materializationHostId) {
+          const materializationHost = parseExecutionHostId(materializationHostId)
+          if (materializationHost?.kind === 'runtime') {
+            throw new Error('terminal_unavailable')
           }
         }
         try {
@@ -9551,6 +9900,38 @@ export class OrcaRuntimeService {
     })
   }
 
+  private assertMobileTerminalTabExecutionOwner(
+    worktreeId: string,
+    tab: RuntimeMobileSessionTerminalTab
+  ): void {
+    const ownerHostId = this.tryGetWorkspaceSessionHostIdForWorktree(worktreeId)
+    if (!ownerHostId) {
+      throw new Error('selector_ambiguous')
+    }
+    const ptyIds = new Set(
+      [tab.ptyId, ...Object.values(tab.parentLayout?.ptyIdsByLeafId ?? {})].filter(
+        (ptyId): ptyId is string => Boolean(ptyId)
+      )
+    )
+    for (const ptyId of ptyIds) {
+      const fromId = getPtyExecutionHost(ptyId)
+      if (fromId === 'foreign') {
+        throw new Error('terminal_host_scope_mismatch')
+      }
+      const record = this.ptysById.get(ptyId)
+      const ptyHostId =
+        fromId ??
+        (record?.connectionId
+          ? toSshExecutionHostId(record.connectionId)
+          : record
+            ? LOCAL_EXECUTION_HOST_ID
+            : null)
+      if (ptyHostId && ptyHostId !== ownerHostId && fromId === null) {
+        throw new Error('terminal_host_scope_mismatch')
+      }
+    }
+  }
+
   async closeMobileSessionTab(
     worktreeSelector: string,
     tabId: string,
@@ -9566,8 +9947,14 @@ export class OrcaRuntimeService {
     const explicitWorktreeId = this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
     const worktreeId =
       explicitWorktreeId ?? (await this.resolveWorktreeSelector(worktreeSelector)).id
-    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId)
-    const observedPtyIds = await this.refreshMobileSessionPtyRecords()
+    const ownerIndex = this.buildWorkspaceExecutionOwnerIndex()
+    this.assertUnambiguousWorkspaceExecutionOwner(worktreeId, ownerIndex)
+    this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, { ownerIndex })
+    const observedPtyIds = await this.refreshMobileSessionPtyRecords(worktreeId)
+    this.assertUnambiguousWorkspaceExecutionOwner(
+      worktreeId,
+      this.buildWorkspaceExecutionOwnerIndex()
+    )
     if (graphEpoch !== null) {
       this.assertStableReadyGraph(graphEpoch)
     }
@@ -9599,6 +9986,9 @@ export class OrcaRuntimeService {
       )
     if (!snapshot || !tab) {
       throw new Error('tab_not_found')
+    }
+    if (tab.type === 'terminal') {
+      this.assertMobileTerminalTabExecutionOwner(worktreeId, tab)
     }
     if (options.expectedTerminalHandle !== undefined) {
       const terminalIncarnationMatches =
@@ -17666,40 +18056,28 @@ export class OrcaRuntimeService {
     const explicitTargetWorktreeId = worktreeSelector
       ? this.getValidatedExplicitWorktreeIdSelector(worktreeSelector)
       : null
-    const initialResolvedWorktreeCache = this.resolvedWorktreeCache
-    const cachedResolvedWorktrees =
-      initialResolvedWorktreeCache && initialResolvedWorktreeCache.expiresAt > Date.now()
-        ? initialResolvedWorktreeCache.worktrees
-        : null
+    const cachedExplicitTargetWorktrees =
+      explicitTargetWorktreeId &&
+      this.resolvedWorktreeCache &&
+      this.resolvedWorktreeCache.expiresAt > Date.now()
+        ? this.resolvedWorktreeCache.worktrees.filter(
+            (worktree) => worktree.id === explicitTargetWorktreeId
+          )
+        : []
     const cachedExplicitTargetWorktree =
-      explicitTargetWorktreeId && cachedResolvedWorktrees
-        ? (cachedResolvedWorktrees.find((worktree) => worktree.id === explicitTargetWorktreeId) ??
-          null)
-        : null
-    const parsedExplicitTargetWorktree =
-      explicitTargetWorktreeId && !cachedExplicitTargetWorktree
-        ? this.buildResolvedWorktreeFromId(explicitTargetWorktreeId)
-        : null
+      cachedExplicitTargetWorktrees.length === 1 ? cachedExplicitTargetWorktrees[0]! : null
     const targetWorktree =
       worktreeSelector && !explicitTargetWorktreeId
         ? await this.resolveWorktreeSelector(worktreeSelector)
-        : (cachedExplicitTargetWorktree ?? parsedExplicitTargetWorktree)
+        : cachedExplicitTargetWorktree
     const targetWorktreeId = explicitTargetWorktreeId ?? targetWorktree?.id ?? null
-    const classificationResolvedWorktreeCache = this.resolvedWorktreeCache
-    const classificationResolvedWorktrees =
-      targetWorktreeId &&
-      classificationResolvedWorktreeCache &&
-      classificationResolvedWorktreeCache.expiresAt > Date.now()
-        ? includeTargetResolvedWorktree(
-            classificationResolvedWorktreeCache.worktrees,
-            targetWorktree
-          )
-        : targetWorktreeId && explicitTargetWorktreeId
-          ? this.listKnownResolvedWorktreesForExplicitTarget(targetWorktreeId, targetWorktree)
-          : null
+    const scopedInventoryTarget = targetWorktreeId
+      ? this.resolveScopedPtyControllerInventoryTarget(targetWorktreeId, targetWorktree)
+      : null
+    const resolvedTargetWorktree = scopedInventoryTarget?.worktree ?? targetWorktree
     const worktreesById =
-      targetWorktreeId && targetWorktree
-        ? new Map([[targetWorktree.id, targetWorktree]])
+      targetWorktreeId && resolvedTargetWorktree
+        ? new Map([[resolvedTargetWorktree.id, resolvedTargetWorktree]])
         : targetWorktreeId
           ? new Map()
           : await this.getResolvedWorktreeMap()
@@ -17707,18 +18085,21 @@ export class OrcaRuntimeService {
       this.assertStableReadyGraph(graphEpoch)
     }
 
-    const resolvedWorktrees =
-      targetWorktreeId && classificationResolvedWorktrees
-        ? classificationResolvedWorktrees
-        : targetWorktreeId && targetWorktree
-          ? [targetWorktree]
-          : targetWorktreeId
-            ? []
-            : [...worktreesById.values()]
-    const controllerInventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
-      resolvedWorktrees,
-      targetWorktreeId
-    )
+    // An exact workspace has exactly one execution owner. Query only that provider,
+    // while an unscoped list intentionally preserves the fleet-wide inventory.
+    const controllerInventory =
+      targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+        ? await this.refreshPtyWorktreeRecordsWithControllerInventory([], targetWorktreeId)
+        : targetWorktreeId
+          ? scopedInventoryTarget?.provider
+            ? await this.refreshPtyWorktreeRecordsWithControllerInventory(
+                [scopedInventoryTarget.worktree],
+                targetWorktreeId,
+                undefined,
+                scopedInventoryTarget.provider.connectionId
+              )
+            : null
+          : await this.refreshPtyWorktreeRecordsWithControllerInventory([...worktreesById.values()])
     const refreshedPtyLiveness = controllerInventory
       ? new Set(controllerInventory.livePtyIds)
       : null
@@ -24182,7 +24563,7 @@ export class OrcaRuntimeService {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktree.id, {
         allowAttachedWindow: true
       })
-      await this.refreshMobileSessionPtyRecords()
+      await this.refreshMobileSessionPtyRecords(worktree.id)
       this.notifyMobileSessionTabsChanged(worktree.id)
       // Why: a phone open must also wake the worktree's slept agents (experimental
       // agent sleep). Only the host renderer holds the sleeping records + wake
@@ -31064,19 +31445,23 @@ export class OrcaRuntimeService {
     worktree: ResolvedWorktree
   ): Promise<RuntimeWorktreeTerminalSleepResult> {
     const sleepDeadline = Date.now() + WORKTREE_TERMINAL_SLEEP_TIMEOUT_MS
+    const inventoryProvider = this.resolveScopedPtyControllerInventoryTarget(
+      worktree.id,
+      worktree
+    )?.provider
+    if (!inventoryProvider) {
+      throw new Error('terminal_liveness_unavailable')
+    }
     const releaseMutation = await this.acquireWorktreeTerminalMutation(worktree.id, sleepDeadline)
     const key = runtimeWorktreeIdentityKey(worktree.id)
     const existingSleepState = this.terminalSleepStateByWorktreeId.get(key)
     if (existingSleepState?.phase === 'sleeping') {
       try {
-        const resolvedWorktrees = includeTargetResolvedWorktree(
-          [...(await this.getResolvedWorktreeMap()).values()],
-          worktree
-        )
         const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
-          resolvedWorktrees,
+          [worktree],
           worktree.id,
-          sleepDeadline
+          sleepDeadline,
+          inventoryProvider.connectionId
         )
         if (!refreshedPtyLiveness) {
           throw new Error('terminal_liveness_unavailable')
@@ -31112,14 +31497,11 @@ export class OrcaRuntimeService {
     let fullyCommitted = false
     let releaseReversibleRendererStops = (): void => {}
     try {
-      const resolvedWorktrees = includeTargetResolvedWorktree(
-        [...(await this.getResolvedWorktreeMap()).values()],
-        worktree
-      )
       const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
-        resolvedWorktrees,
+        [worktree],
         worktree.id,
-        sleepDeadline
+        sleepDeadline,
+        inventoryProvider.connectionId
       )
       if (!refreshedPtyLiveness) {
         throw new Error('terminal_liveness_unavailable')
@@ -31214,9 +31596,10 @@ export class OrcaRuntimeService {
       )
 
       const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(
-        resolvedWorktrees,
+        [worktree],
         worktree.id,
-        sleepDeadline
+        sleepDeadline,
+        inventoryProvider.connectionId
       )
       if (!postStopLiveness) {
         this.commitWorktreeTerminalSleepPtys({
@@ -31354,9 +31737,19 @@ export class OrcaRuntimeService {
     if (expected.size !== 1) {
       throw new Error('terminal_exact_stop_requires_single_pty')
     }
-    const resolvedWorktrees = [...(await this.getResolvedWorktreeMap()).values()]
-    const refreshedPtyLiveness =
-      await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const inventoryProvider = this.resolveScopedPtyControllerInventoryTarget(
+      worktree.id,
+      worktree
+    )?.provider
+    if (!inventoryProvider) {
+      throw new Error('terminal_liveness_unavailable')
+    }
+    const refreshedPtyLiveness = await this.refreshPtyWorktreeRecordsFromController(
+      [worktree],
+      worktree.id,
+      undefined,
+      inventoryProvider.connectionId
+    )
     if (!refreshedPtyLiveness) {
       throw new Error('terminal_liveness_unavailable')
     }
@@ -31392,7 +31785,12 @@ export class OrcaRuntimeService {
       }
       stoppedPtyIds.push(ptyId)
     }
-    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(resolvedWorktrees)
+    const postStopLiveness = await this.refreshPtyWorktreeRecordsFromController(
+      [worktree],
+      worktree.id,
+      undefined,
+      inventoryProvider.connectionId
+    )
     if (!postStopLiveness) {
       return {
         stopped: stoppedPtyIds.length,
@@ -31727,9 +32125,12 @@ export class OrcaRuntimeService {
     }
   }
 
-  private resolveFolderWorkspaceConnectionId(workspace: FolderWorkspace): string | null {
-    const repos = this.store?.getRepos() ?? []
-    const projectGroups = this.store?.getProjectGroups?.() ?? []
+  private resolveFolderWorkspaceConnectionId(
+    workspace: FolderWorkspace,
+    catalog?: { repos: readonly Repo[]; projectGroups: readonly ProjectGroup[] }
+  ): string | null {
+    const repos = catalog?.repos ?? this.store?.getRepos() ?? []
+    const projectGroups = catalog?.projectGroups ?? this.store?.getProjectGroups?.() ?? []
     const connection = inferFolderWorkspacePathConnection({
       folderPath: workspace.folderPath,
       projectGroupId: workspace.projectGroupId,
@@ -32524,12 +32925,18 @@ export class OrcaRuntimeService {
     return this.store as unknown as Store
   }
 
-  private buildResolvedWorktreeFromId(worktreeId: string): ResolvedWorktree | null {
+  private buildResolvedWorktreeFromId(
+    worktreeId: string,
+    knownOwner?: Repo
+  ): ResolvedWorktree | null {
     const parsed = splitWorktreeIdForFilesystem(worktreeId)
     if (!parsed?.repoId || !parsed.worktreePath) {
       return null
     }
-    const repo = this.store?.getRepos().find((entry) => entry.id === parsed.repoId)
+    const repo =
+      knownOwner?.id === parsed.repoId
+        ? knownOwner
+        : this.store?.getRepos().find((entry) => entry.id === parsed.repoId)
     const git = {
       path: parsed.worktreePath,
       head: '',
@@ -32552,43 +32959,6 @@ export class OrcaRuntimeService {
       displayName: merged.displayName,
       comment: merged.comment
     }
-  }
-
-  private listKnownResolvedWorktreesForExplicitTarget(
-    targetWorktreeId: string,
-    targetWorktree: ResolvedWorktree | null
-  ): ResolvedWorktree[] {
-    if (!this.store || !targetWorktree) {
-      return []
-    }
-    const target = splitWorktreeIdForFilesystem(targetWorktreeId)
-    if (!target?.repoId || !target.worktreePath) {
-      return []
-    }
-    const worktreeIds = new Set(
-      Object.keys(this.store.getAllWorktreeMeta()).filter((worktreeId) => {
-        const parsed = splitWorktreeIdForFilesystem(worktreeId)
-        return (
-          parsed?.repoId === target.repoId &&
-          Boolean(parsed.worktreePath) &&
-          (isPathInsideOrEqual(target.worktreePath, parsed.worktreePath) ||
-            isPathInsideOrEqual(parsed.worktreePath, target.worktreePath))
-        )
-      })
-    )
-    worktreeIds.add(targetWorktreeId)
-
-    const resolved: ResolvedWorktree[] = []
-    for (const worktreeId of worktreeIds) {
-      const worktree =
-        worktreeId === targetWorktreeId
-          ? targetWorktree
-          : this.buildResolvedWorktreeFromId(worktreeId)
-      if (worktree) {
-        resolved.push(worktree)
-      }
-    }
-    return resolved
   }
 
   /** A warm fleet snapshot already answers any selector for free, so scoped scanning must yield to it. */
@@ -33102,16 +33472,248 @@ export class OrcaRuntimeService {
     return this.recordPtyWorktree(ptyId, inferredWorktreeId)
   }
 
+  /**
+   * Resolves one workspace's authoritative PTY provider without enumerating the fleet.
+   * A null provider means the row is known but this runtime cannot prove PTY absence for it.
+   */
+  private resolveScopedPtyControllerInventoryTarget(
+    targetWorktreeId: string,
+    resolvedWorktree: ResolvedWorktree | null = null,
+    requiredConnectionId?: string | null
+  ): ScopedPtyControllerInventoryTarget | null {
+    const requiredHostId =
+      requiredConnectionId === undefined
+        ? null
+        : requiredConnectionId === null
+          ? LOCAL_EXECUTION_HOST_ID
+          : toSshExecutionHostId(requiredConnectionId)
+    const workspaceScope = parseWorkspaceKey(targetWorktreeId)
+    if (workspaceScope?.type === 'folder') {
+      const folderWorkspace = this.store
+        ?.getFolderWorkspaces?.()
+        .find((workspace) => workspace.id === workspaceScope.folderWorkspaceId)
+      if (!folderWorkspace) {
+        return null
+      }
+      const worktree = resolvedWorktree ?? this.folderWorkspaceToResolvedWorktree(folderWorkspace)
+      const explicitHost =
+        folderWorkspace.executionHostId == null
+          ? null
+          : parseExecutionHostId(folderWorkspace.executionHostId)
+      if (
+        (folderWorkspace.executionHostId != null && !explicitHost) ||
+        explicitHost?.kind === 'runtime'
+      ) {
+        return { worktree, provider: null }
+      }
+      let connectionId: string | null
+      try {
+        connectionId = this.resolveFolderWorkspaceConnectionId(folderWorkspace)
+      } catch {
+        // Mixed child-repo ownership has no single provider whose absence is authoritative.
+        return { worktree, provider: null }
+      }
+      const inferredHostId = connectionId
+        ? toSshExecutionHostId(connectionId)
+        : LOCAL_EXECUTION_HOST_ID
+      if (
+        (explicitHost && explicitHost.id !== inferredHostId) ||
+        (requiredHostId && requiredHostId !== inferredHostId)
+      ) {
+        return { worktree, provider: null }
+      }
+      return {
+        worktree:
+          worktree.hostId === inferredHostId ? worktree : { ...worktree, hostId: inferredHostId },
+        provider: { connectionId }
+      }
+    }
+
+    const parsed = splitWorktreeIdForFilesystem(targetWorktreeId)
+    if (!parsed?.repoId || !parsed.worktreePath) {
+      return null
+    }
+    const repoOwners = (this.store?.getRepos() ?? []).filter((repo) => repo.id === parsed.repoId)
+    const requiredOwners = requiredHostId
+      ? repoOwners.filter((repo) => getRepoExecutionHostId(repo) === requiredHostId)
+      : repoOwners
+    let worktree = resolvedWorktree
+    if (!worktree) {
+      const cachedMatches =
+        this.resolvedWorktreeCache && this.resolvedWorktreeCache.expiresAt > Date.now()
+          ? this.resolvedWorktreeCache.worktrees.filter(
+              (candidate) =>
+                candidate.id === targetWorktreeId &&
+                (!requiredHostId || candidate.hostId === requiredHostId)
+            )
+          : []
+      const cachedHostIds = new Set(cachedMatches.map((candidate) => candidate.hostId))
+      if (cachedHostIds.size > 1) {
+        return null
+      }
+      worktree = cachedMatches[0] ?? null
+    }
+    const requiredOwnerHostIds = new Set(requiredOwners.map((repo) => getRepoExecutionHostId(repo)))
+    const repoOwnerHostIds = new Set(repoOwners.map((repo) => getRepoExecutionHostId(repo)))
+    if (!worktree && requiredOwners.length > 0 && requiredOwnerHostIds.size === 1) {
+      worktree = this.buildResolvedWorktreeFromId(targetWorktreeId, requiredOwners[0])
+    } else if (!worktree && requiredHostId === null && repoOwnerHostIds.size === 1) {
+      worktree = this.buildResolvedWorktreeFromId(targetWorktreeId, repoOwners[0])
+    }
+    if (!worktree || worktree.id !== targetWorktreeId) {
+      return null
+    }
+    const host =
+      parseExecutionHostId(worktree.hostId) ??
+      (requiredOwnerHostIds.size === 1
+        ? parseExecutionHostId(requiredOwnerHostIds.values().next().value!)
+        : null)
+    if (!host || host.kind === 'runtime' || (requiredHostId && host.id !== requiredHostId)) {
+      return { worktree, provider: null }
+    }
+    const matchingOwners = repoOwners.filter((repo) => getRepoExecutionHostId(repo) === host.id)
+    const matchingConnectionIds = new Set(
+      matchingOwners.map((owner) => owner.connectionId?.trim() || null)
+    )
+    if (matchingConnectionIds.size !== 1) {
+      return { worktree, provider: null }
+    }
+    const connectionId = matchingConnectionIds.values().next().value!
+    if (
+      (host.kind === 'local' && connectionId !== null) ||
+      (host.kind === 'ssh' && connectionId !== host.targetId) ||
+      (requiredConnectionId !== undefined && connectionId !== requiredConnectionId)
+    ) {
+      return { worktree, provider: null }
+    }
+    return { worktree, provider: { connectionId } }
+  }
+
+  /**
+   * Supplies cwd-only legacy sessions with longest-path candidates while keeping
+   * provider I/O scoped to the exact owner. Every candidate comes from memory or
+   * persisted identity; this never scans Git or contacts another provider.
+   */
+  private listScopedPtyClassificationWorktrees(
+    target: ScopedPtyControllerInventoryTarget
+  ): ResolvedWorktree[] {
+    if (!target.provider) {
+      return [target.worktree]
+    }
+    const connectionId = target.provider.connectionId
+    const providerHostId = connectionId
+      ? toSshExecutionHostId(connectionId)
+      : LOCAL_EXECUTION_HOST_ID
+    const repos = this.store?.getRepos() ?? []
+    const projectGroups = this.store?.getProjectGroups?.() ?? []
+    const repoOwnerById = new Map<string, Repo | null>()
+    for (const repo of repos) {
+      if (getRepoExecutionHostId(repo) !== providerHostId || repoOwnerById.has(repo.id)) {
+        continue
+      }
+      repoOwnerById.set(repo.id, repo)
+    }
+
+    const worktreesById = new Map<string, ResolvedWorktree>([[target.worktree.id, target.worktree]])
+    const addCandidate = (candidate: ResolvedWorktree | null): void => {
+      if (
+        !candidate ||
+        (!isPathInsideOrEqual(target.worktree.path, candidate.path) &&
+          !isPathInsideOrEqual(candidate.path, target.worktree.path))
+      ) {
+        return
+      }
+      const folderScope = parseWorkspaceKey(candidate.id)
+      if (folderScope?.type === 'folder') {
+        if (candidate.hostId === providerHostId) {
+          worktreesById.set(candidate.id, candidate)
+        }
+        return
+      }
+      const parsed = splitWorktreeIdForFilesystem(candidate.id)
+      const owner = parsed ? repoOwnerById.get(parsed.repoId) : undefined
+      if (!owner || (candidate.hostId !== undefined && candidate.hostId !== providerHostId)) {
+        return
+      }
+      worktreesById.set(candidate.id, candidate)
+    }
+
+    for (const candidate of this.resolvedWorktreeCache?.worktrees ?? []) {
+      addCandidate(candidate)
+    }
+    const providerSession = this.store?.getWorkspaceSession?.(providerHostId)
+    const knownWorktreeIds = new Set<string>([
+      ...Object.keys(this.store?.getAllWorktreeMeta?.() ?? {}),
+      ...Object.keys(providerSession?.tabsByWorktree ?? {}),
+      ...this.mobileSessionTabsByWorktree.keys(),
+      ...[...this.ptysById.values()].map((pty) => pty.worktreeId),
+      ...[...this.leaves.values()].map((leaf) => leaf.worktreeId)
+    ])
+    for (const owner of repoOwnerById.values()) {
+      if (owner) {
+        knownWorktreeIds.add(`${owner.id}${WORKTREE_ID_SEPARATOR}${owner.path}`)
+      }
+    }
+    const folderWorkspaces = this.store?.getFolderWorkspaces?.() ?? []
+    const folderOwnerIndex = this.buildFolderWorkspaceOwnerHostIndex(
+      repos,
+      projectGroups,
+      folderWorkspaces
+    )
+    for (const folderWorkspace of folderWorkspaces) {
+      if (
+        (!isPathInsideOrEqual(target.worktree.path, folderWorkspace.folderPath) &&
+          !isPathInsideOrEqual(folderWorkspace.folderPath, target.worktree.path)) ||
+        folderOwnerIndex.unresolvedIds.has(folderWorkspace.id)
+      ) {
+        continue
+      }
+      const hostIds = folderOwnerIndex.hostIdsById.get(folderWorkspace.id)
+      if (hostIds?.size !== 1) {
+        continue
+      }
+      const folderHostId = hostIds.values().next().value!
+      const folderHost = parseExecutionHostId(folderHostId)
+      if (!folderHost || folderHost.kind === 'runtime') {
+        continue
+      }
+      const folderConnectionId = folderHost.kind === 'ssh' ? folderHost.targetId : null
+      if (folderConnectionId !== connectionId) {
+        continue
+      }
+      addCandidate({
+        ...this.folderWorkspaceToResolvedWorktree(folderWorkspace),
+        hostId: folderHostId
+      })
+    }
+    for (const worktreeId of knownWorktreeIds) {
+      const workspaceScope = parseWorkspaceKey(worktreeId)
+      if (workspaceScope?.type === 'folder') {
+        // Registered folders were partitioned once above, including folders known
+        // only through connection/project-group inference.
+        continue
+      }
+      const parsed = splitWorktreeIdForFilesystem(worktreeId)
+      const owner = parsed ? repoOwnerById.get(parsed.repoId) : undefined
+      if (owner) {
+        addCandidate(this.buildResolvedWorktreeFromId(worktreeId, owner))
+      }
+    }
+    return [...worktreesById.values()]
+  }
+
   /** Synchronizes PTY tracking records with running daemon sessions, querying their foreground agent states. */
   private async refreshPtyWorktreeRecordsFromController(
     resolvedWorktrees: ResolvedWorktree[],
     targetWorktreeId: string | null = null,
-    deadline?: number
+    deadline?: number,
+    connectionId?: string | null
   ): Promise<Set<string> | null> {
     const inventory = await this.refreshPtyWorktreeRecordsWithControllerInventory(
       resolvedWorktrees,
       targetWorktreeId,
-      deadline
+      deadline,
+      connectionId
     )
     return inventory ? new Set(inventory.livePtyIds) : null
   }
@@ -33229,7 +33831,21 @@ export class OrcaRuntimeService {
     for (const ptyId of ambiguousControllerPtyIds) {
       controllerIdentityByPtyId.delete(ptyId)
     }
-    const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(resolvedWorktrees)
+    const targetResolvedWorktree = targetWorktreeId
+      ? resolvedWorktrees.find((worktree) => runtimeWorktreeIdsEqual(worktree.id, targetWorktreeId))
+      : undefined
+    const scopedTarget =
+      targetWorktreeId && targetResolvedWorktree
+        ? this.resolveScopedPtyControllerInventoryTarget(
+            targetWorktreeId,
+            targetResolvedWorktree,
+            connectionId
+          )
+        : null
+    const classificationWorktrees = scopedTarget?.provider
+      ? this.listScopedPtyClassificationWorktrees(scopedTarget)
+      : resolvedWorktrees
+    const findResolvedWorktree = createIncrementalResolvedWorktreeLookup(classificationWorktrees)
     const persistedIndexesByHostId = new Map<
       ExecutionHostId,
       {
@@ -33284,7 +33900,7 @@ export class OrcaRuntimeService {
           : (session.worktreeId ??
             persistedWorktree?.id ??
             inferredWorktreeId ??
-            findResolvedWorktreeIdForPath(resolvedWorktrees, session.cwd, targetWorktreeId))
+            findResolvedWorktreeIdForPath(classificationWorktrees, session.cwd, targetWorktreeId))
       const persistedSurface = persistedIndexes.surfaceByPtyId.get(session.id)
       const restoresExactSurface =
         persistedSurface &&
@@ -33345,6 +33961,21 @@ export class OrcaRuntimeService {
       if (connectionId !== undefined && pty.connectionId !== connectionId) {
         continue
       }
+      const ptyHostFromId = getPtyExecutionHost(pty.ptyId)
+      if (ptyHostFromId === 'foreign') {
+        continue
+      }
+      const ptyHostId =
+        ptyHostFromId ??
+        (pty.connectionId
+          ? toSshExecutionHostId(pty.connectionId)
+          : (this.tryGetWorkspaceSessionHostIdForWorktree(pty.worktreeId) ??
+            LOCAL_EXECUTION_HOST_ID))
+      if (!queriedHostIds.has(ptyHostId)) {
+        // A partial aggregate names only providers that answered. Silence from any
+        // other provider is unknown, never an authoritative absence.
+        continue
+      }
       if (!allLivePtyIds.has(pty.ptyId) && !this.leafExistsForPty(pty.ptyId)) {
         const currentVerdict = this.ptyLivenessVerdictByPtyId.get(pty.ptyId)
         if (
@@ -33352,8 +33983,8 @@ export class OrcaRuntimeService {
           currentVerdict.observedAt > livenessObservationAtStart &&
           currentVerdict.verdict.status === 'unverifiable'
         ) {
-          pty.connected = false
-          pty.disconnectedAt ??= Date.now()
+          // A newer provider failure outranks this older list response. Keep the
+          // prior lifecycle state until the owning provider answers again.
           continue
         }
         const observed = this.ptyController.hasPty?.(pty.ptyId)
@@ -33371,28 +34002,33 @@ export class OrcaRuntimeService {
           this.forgetPtyLivenessVerdict(pty.ptyId)
           continue
         }
+        if (observed === null) {
+          // The exact provider inventory already answered. A missing per-ID rescue
+          // cannot revoke that authoritative absence; retain the diagnostic only.
+          this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)
+        }
         pty.connected = false
         pty.disconnectedAt ??= Date.now()
-        // Why: this list only enumerates registered providers, so a dropped relay
-        // clears `connected` for every one of its PTYs at once. Only `false` here
-        // is an observed absence; `null` means no provider could be asked.
         if (observed === false) {
           this.forgetPtyLivenessVerdict(pty.ptyId)
-        } else if (observed === null) {
-          this.markPtyLivenessUnverifiable(pty.ptyId, NO_OBSERVING_PROVIDER_REASON)
         }
       }
     }
     // Why: runs after the hasPty rescue so a still-addressable pane keeps its receipt.
-    // A provider that failed to list is absent from `sessions`, and dropping authority on
-    // that silence would retire an orchestration handle the relay can still reach.
+    // A provider that failed to list is absent from queriedHostIds, and dropping
+    // authority on that silence would retire a handle its relay can still reach.
     for (const [ptyId, receipt] of this.restoredOrchestrationAuthorityByPtyId) {
+      const receiptHostId =
+        receipt.hostScope.kind === 'ssh'
+          ? toSshExecutionHostId(receipt.hostScope.targetId)
+          : LOCAL_EXECUTION_HOST_ID
       const inScope =
-        connectionId === undefined ||
-        (connectionId === null && receipt.hostScope.kind !== 'ssh') ||
-        (typeof connectionId === 'string' &&
-          receipt.hostScope.kind === 'ssh' &&
-          receipt.hostScope.targetId === connectionId)
+        queriedHostIds.has(receiptHostId) &&
+        (connectionId === undefined ||
+          (connectionId === null && receipt.hostScope.kind !== 'ssh') ||
+          (typeof connectionId === 'string' &&
+            receipt.hostScope.kind === 'ssh' &&
+            receipt.hostScope.targetId === connectionId))
       if (inScope && !allLivePtyIds.has(ptyId)) {
         this.restoredOrchestrationAuthorityByPtyId.delete(ptyId)
       }
@@ -33694,8 +34330,9 @@ export class OrcaRuntimeService {
       notify: false
     })
     // Why: graph sync must scan each persisted host session once, not once per workspace.
+    const ownerIndex = this.buildWorkspaceExecutionOwnerIndex()
     const worktreeSessionsToHydrate = new Map<string, WorkspaceSessionState | null>(
-      this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend))
+      this.getWorkspaceSessionHydrationTargets(Boolean(this.offscreenBrowserBackend), ownerIndex)
     )
     if (this.offscreenBrowserBackend) {
       for (const snapshot of snapshots) {
@@ -33709,6 +34346,7 @@ export class OrcaRuntimeService {
       this.hydrateHeadlessMobileSessionTabsFromWorkspaceSession(worktreeId, {
         allowAttachedWindow: true,
         onlyRuntimeOwnedTerminals: true,
+        ownerIndex,
         ...(workspaceSession ? { runtimeOwnedTerminalCandidateKnown: true, workspaceSession } : {})
       })
     }
@@ -41444,16 +42082,6 @@ function runtimeWorktreeSummaryPathKey(
   platform: NodeJS.Platform
 ): string {
   return `${repoId}\0${worktreePathComparisonKey(worktreePath, platform)}`
-}
-
-function includeTargetResolvedWorktree(
-  resolvedWorktrees: ResolvedWorktree[],
-  targetWorktree: ResolvedWorktree | null
-): ResolvedWorktree[] {
-  if (!targetWorktree || resolvedWorktrees.some((worktree) => worktree.id === targetWorktree.id)) {
-    return resolvedWorktrees
-  }
-  return [...resolvedWorktrees, targetWorktree]
 }
 
 function findResolvedWorktreeIdForPath(

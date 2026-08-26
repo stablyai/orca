@@ -17,7 +17,7 @@ vi.mock('electron', () => ({
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const TAB_ID = 'remote-tab'
-const WORKTREE_ID = 'wt-1'
+const WORKTREE_ID = 'repo-1::/repo/app'
 const PANE_KEY = makePaneKey(TAB_ID, LEAF_ID)
 const PTY_ID = 'pty-remote'
 const T0 = 1_700_000_000_000

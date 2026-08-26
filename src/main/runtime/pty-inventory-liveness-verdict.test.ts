@@ -25,6 +25,7 @@ function makeStore() {
     setWorkspaceSession: vi.fn(),
     getRepos: vi.fn(() => [
       {
+        connectionId: 'conn-1',
         id: 'repo-1',
         path: '/tmp/inventory-verdict',
         displayName: 'inventory-verdict',
