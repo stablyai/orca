@@ -16209,7 +16209,7 @@
         {
           "file": "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",
           "assertions": [
-            "explicit close unregisters the page before awaiting exact owner cleanup while unrelated pages survive",
+            "explicit close unregisters the page before awaiting exact owner cleanup while unrelated and same-ID replacement pages survive",
             "unexpected offscreen renderer destruction invokes and joins exact helper-owner cleanup",
             "backend shutdown joins every pending owner cleanup with concurrency capped at four"
           ]

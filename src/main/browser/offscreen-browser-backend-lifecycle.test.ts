@@ -124,6 +124,32 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     expect(pageWasUnregisteredBeforeRetirement).toBe(true)
   })
 
+  it('preserves a replacement page when the old window finishes closing', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(),
+      unregisterGuest: vi.fn()
+    }
+    let releaseOwnerRetirement!: () => void
+    const ownerRetirementBlocked = new Promise<void>((resolve) => {
+      releaseOwnerRetirement = resolve
+    })
+    const onPageClosed = vi.fn(() => ownerRetirementBlocked)
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({ onPageClosed })
+    })
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    const close = backend.closeTab('page-1')
+    await vi.waitFor(() => expect(onPageClosed).toHaveBeenCalledWith('page-1'))
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+
+    releaseOwnerRetirement()
+    await close
+
+    expect(backend.getWebContentsId('page-1')).toBe(2)
+    expect(browserManager.unregisterGuest).toHaveBeenCalledTimes(1)
+  })
+
   it('retires the helper when an offscreen renderer is destroyed unexpectedly', async () => {
     const browserManager = {
       registerOffscreenGuest: vi.fn(),

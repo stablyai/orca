@@ -72,9 +72,10 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     win.webContents.once('destroyed', () => {
       // Explicit close removes the page first and performs awaited cleanup;
       // only an unexpected destruction still owns the bridge retirement here.
-      if (this.windowsByPageId.get(browserPageId) === win) {
-        void this.retirePageOwner(browserPageId)
+      if (this.windowsByPageId.get(browserPageId) !== win) {
+        return
       }
+      void this.retirePageOwner(browserPageId)
       this.windowsByPageId.delete(browserPageId)
       this.browserManager.unregisterGuest(browserPageId)
     })
