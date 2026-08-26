@@ -4,7 +4,16 @@
 // emitted text is unit-testable word-for-word.
 
 import type { OrchestrationCliCommand } from '../orchestration/cli-command'
-import type { CollaborationTopology } from './collaboration-topology'
+import {
+  admittedPublishOptionsForTopic,
+  type CollaborationPublishAdmissionOption,
+  type CollaborationTopology
+} from './collaboration-topology'
+
+export type CollaborationRequiredPublishAdmission = {
+  topic: string
+  options: readonly CollaborationPublishAdmissionOption[]
+}
 
 export type CollaborationWorkerProtocolInput = {
   cli: string
@@ -12,6 +21,7 @@ export type CollaborationWorkerProtocolInput = {
   dispatchCapability?: string
   publishesTo: readonly string[]
   requiredPublishesTo: readonly string[]
+  requiredPublishAdmission?: readonly CollaborationRequiredPublishAdmission[]
   subscribesTo: readonly string[]
 }
 
@@ -40,12 +50,17 @@ export function buildCollaborationWorkerProtocolForTask(
   if (!step) {
     return undefined
   }
+  const requiredPublishesTo = step.requiredPublishesTo ?? []
   const protocol = buildCollaborationWorkerProtocol({
     cli: input.devMode ? 'orca-dev' : (input.cliCommand ?? 'orca'),
     workerHandle: input.workerHandle,
     dispatchCapability: input.dispatchCapability,
     publishesTo: step.publishesTo ?? [],
-    requiredPublishesTo: step.requiredPublishesTo ?? [],
+    requiredPublishesTo,
+    requiredPublishAdmission: requiredPublishesTo.map((topic) => ({
+      topic,
+      options: admittedPublishOptionsForTopic(input.topology!, topic)
+    })),
     subscribesTo: step.subscribesTo ?? []
   })
   return protocol === '' ? undefined : protocol
@@ -65,20 +80,24 @@ ${topicList(publishesTo)}`
   const requiredBlock =
     requiredPublishesTo.length > 0
       ? `REQUIRED publish topics - each MUST return "Published ..." before worker_done:
-${topicList(requiredPublishesTo)}
+${requiredTopicList(requiredPublishesTo, input.requiredPublishAdmission)}
+
+For each required topic, choose one of the admitted semantic-type / minimum-priority
+combinations shown above. A higher priority than the listed minimum is also valid.
 
 Required topics gate completion: every required topic above must successfully
 return "Published <id> to N subscriber(s)." with N >= 1 before you send worker_done.
-"Published <id> to 0 subscriber(s)." does not satisfy a required topic; retry with
-a task-appropriate semantic type/priority or escalate to the coordinator.`
+"Published <id> to 0 subscriber(s)." does not satisfy a required topic; if no
+admitted combination is shown, or every valid attempt reaches zero subscribers,
+escalate to the coordinator.`
       : ''
   return `=== COLLABORATION: PUBLISHER ===
 
 ${[allowedBlock, requiredBlock].filter((block) => block !== '').join('\n\n')}
 
-Publish one message per call (replace <topic> and <body>):
+Publish one message per call (replace placeholders with task-appropriate values):
   ${cli} orchestration collaboration-publish --from ${workerHandle}${capability} \\
-    --topic <topic> --semantic-type finding --priority normal \\
+    --topic <topic> --semantic-type <semantic-type> --priority <priority> \\
     --body "<message body>"
 
 Subscribers are topology-derived and never named by the publisher: the Run
@@ -127,6 +146,30 @@ identity comes from --from.`
 
 function topicList(topics: readonly string[]): string {
   return topics.map((topic) => `  - ${topic}`).join('\n')
+}
+
+function requiredTopicList(
+  topics: readonly string[],
+  guidance: readonly CollaborationRequiredPublishAdmission[] | undefined
+): string {
+  const byTopic = new Map(guidance?.map((entry) => [entry.topic, entry.options]) ?? [])
+  return topics
+    .map((topic) => {
+      const options = byTopic.get(topic)
+      if (options === undefined) {
+        return `  - ${topic}`
+      }
+      if (options.length === 0) {
+        return `  - ${topic}\n    - no admitted semantic type / priority; escalate`
+      }
+      return `  - ${topic}\n${options
+        .map(
+          (option) =>
+            `    - semantic-type ${option.semanticType}; minimum priority ${option.minPriority}`
+        )
+        .join('\n')}`
+    })
+    .join('\n')
 }
 
 function capabilityFlag(input: CollaborationWorkerProtocolInput): string {

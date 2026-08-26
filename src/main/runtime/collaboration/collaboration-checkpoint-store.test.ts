@@ -290,7 +290,7 @@ describe('prepareCollaborationCheckpoint', () => {
 })
 
 describe('ackCollaborationCheckpoint', () => {
-  it('marks unread ids read and returns duplicate false', () => {
+  it('marks only checkpoint-delivered unread ids read and returns duplicate false', () => {
     const db = new OrchestrationDb(':memory:')
     const taskId = 'task-a'
     insertCollaborationMessage(db, taskId, {
@@ -302,8 +302,50 @@ describe('ackCollaborationCheckpoint', () => {
     })
     prepareCollaborationCheckpoint(db, taskId, policy)
 
+    expect(db.getMessageById('m1')?.delivered_at).not.toBeNull()
     expect(ackCollaborationCheckpoint(db, taskId, ['m1'])).toBe(false)
     expect(db.getMessageById('m1')?.read).toBe(1)
+  })
+
+  it('rejects a valid mailbox message that was never returned by checkpoint', () => {
+    const db = new OrchestrationDb(':memory:')
+    const taskId = 'task-a'
+    insertCollaborationMessage(db, taskId, {
+      id: 'm1',
+      topic: 't',
+      semanticType: 'checkpoint',
+      producerTaskId: 'w1',
+      priority: 'urgent'
+    })
+
+    expect(() => ackCollaborationCheckpoint(db, taskId, ['m1'])).toThrow(/checkpoint|delivered/i)
+    expect(db.getMessageById('m1')?.read).toBe(0)
+    expect(db.getMessageById('m1')?.delivered_at).toBeNull()
+  })
+
+  it('rejects a valid message excluded by checkpoint limit and leaves it available later', () => {
+    const db = new OrchestrationDb(':memory:')
+    const taskId = 'task-a'
+    for (const id of ['m1', 'm2']) {
+      insertCollaborationMessage(db, taskId, {
+        id,
+        topic: 't',
+        semanticType: 'checkpoint',
+        producerTaskId: 'w1',
+        priority: 'urgent'
+      })
+    }
+
+    const first = prepareCollaborationCheckpoint(db, taskId, policy, 1)
+    expect(first.entries.map((entry) => entry.messageId)).toEqual(['m1'])
+    expect(db.getMessageById('m1')?.delivered_at).not.toBeNull()
+    expect(db.getMessageById('m2')?.delivered_at).toBeNull()
+
+    expect(() => ackCollaborationCheckpoint(db, taskId, ['m2'])).toThrow(/checkpoint|delivered/i)
+    expect(ackCollaborationCheckpoint(db, taskId, ['m1'])).toBe(false)
+
+    const second = prepareCollaborationCheckpoint(db, taskId, policy, 1)
+    expect(second.entries.map((entry) => entry.messageId)).toEqual(['m2'])
   })
 
   it('returns duplicate true when all ids are already read but belong to the mailbox', () => {

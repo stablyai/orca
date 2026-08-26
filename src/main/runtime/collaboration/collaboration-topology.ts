@@ -1,5 +1,9 @@
 import { OrchestrationError } from '../orchestration/orchestration-error'
-import type { AdmissionPolicy } from './collaboration-admission'
+import type { MessagePriority } from '../orchestration/types'
+import {
+  isCollaborationMessageAdmitted,
+  type AdmissionPolicy
+} from './collaboration-admission'
 
 export type CollaborationTopologyStep = {
   taskId: string
@@ -12,6 +16,13 @@ export type CollaborationTopologyStep = {
 export type CollaborationTopology = {
   readonly steps: readonly CollaborationTopologyStep[]
 }
+
+export type CollaborationPublishAdmissionOption = {
+  semanticType: string
+  minPriority: MessagePriority
+}
+
+const MESSAGE_PRIORITIES: readonly MessagePriority[] = ['normal', 'high', 'urgent']
 
 function dedupePreservingOrder(
   topics: readonly string[] | undefined
@@ -111,6 +122,34 @@ export function subscribersForTopic(
   return topology.steps
     .filter((step) => step.subscribesTo?.includes(topic) ?? false)
     .map((step) => step.taskId)
+}
+
+export function admittedPublishOptionsForTopic(
+  topology: CollaborationTopology,
+  topic: string
+): readonly CollaborationPublishAdmissionOption[] {
+  const policies = topology.steps
+    .filter((step) => step.subscribesTo?.includes(topic) ?? false)
+    .map((step) => step.admission)
+    .filter((policy): policy is AdmissionPolicy => policy !== undefined)
+  const seenTypes = new Set<string>()
+  const semanticTypes: string[] = []
+  for (const policy of policies) {
+    for (const semanticType of policy.acceptedTypes) {
+      if (!seenTypes.has(semanticType)) {
+        seenTypes.add(semanticType)
+        semanticTypes.push(semanticType)
+      }
+    }
+  }
+  return semanticTypes.flatMap((semanticType) => {
+    const minPriority = MESSAGE_PRIORITIES.find((priority) =>
+      policies.some((policy) =>
+        isCollaborationMessageAdmitted({ type: semanticType, priority }, policy)
+      )
+    )
+    return minPriority ? [{ semanticType, minPriority }] : []
+  })
 }
 
 export function admissionPolicyForTask(
