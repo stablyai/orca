@@ -282,4 +282,19 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
     expect(peakRetirements).toBe(4)
   })
+
+  it('closes the page even when daemon retirement throws', async () => {
+    const browserManager = { registerOffscreenGuest: vi.fn(), unregisterGuest: vi.fn() }
+    const backend = new OffscreenBrowserBackend(browserManager as never, {
+      getAgentBrowserBridge: () => ({
+        onPageClosed: vi.fn(async () => {
+          throw new Error('daemon gone')
+        })
+      })
+    })
+
+    await backend.createTab({ browserPageId: 'page-1', url: 'about:blank', worktreeId: 'wt' })
+    await expect(backend.closeTab('page-1')).resolves.toBeUndefined()
+    expect(browserManager.unregisterGuest).toHaveBeenCalledWith('page-1')
+  })
 })

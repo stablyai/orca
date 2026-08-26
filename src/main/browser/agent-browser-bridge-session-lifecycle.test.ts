@@ -64,6 +64,12 @@ overrideBridgeWebContentsLookup(AgentBrowserBridge.prototype, webContentsFromIdM
 
 const succeedWith = createSucceedWith(execFileMock, stdinWrites)
 
+function closeCallCount(): number {
+  return execFileMock.mock.calls.filter((call: unknown[]) =>
+    (call[1] as string[]).includes('close')
+  ).length
+}
+
 describe('AgentBrowserBridge', () => {
   let bridge: AgentBrowserBridge
 
@@ -453,6 +459,52 @@ describe('AgentBrowserBridge', () => {
     ).toBe(0)
   })
 
+  // Why: the daemon's own idle timer retires it between commands; a replacement still serves the
+  // page but has none of the session's network routes, so leaving them dropped is a silent wrong
+  // answer for the next request the caller expected to be stubbed (#16367).
+  it('replays intercept routes after the daemon idles out', async () => {
+    succeedWith({ ok: true })
+    await bridge.interceptEnable(['https://api.example/**'])
+
+    const sessions = (bridge as unknown as { sessions: Map<string, { lastCommandAt: number }> })
+      .sessions
+    const session = sessions.get('orca-tab-tab-1')!
+    session.lastCommandAt = Date.now() - 11 * 60 * 1000
+
+    const commandCalls: string[][] = []
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        commandCalls.push(args)
+        cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+      }
+    )
+    await bridge.snapshot()
+
+    const routeCalls = commandCalls.filter(
+      (args) => args.includes('network') && args.includes('route')
+    )
+    expect(routeCalls).toHaveLength(1)
+    expect(routeCalls[0]).toContain('https://api.example/**')
+  })
+
+  it('leaves a session alone while the daemon is still within its idle bound', async () => {
+    succeedWith({ ok: true })
+    await bridge.interceptEnable(['https://api.example/**'])
+
+    const commandCalls: string[][] = []
+    execFileMock.mockImplementation(
+      (_bin: string, args: string[], _opts: unknown, cb: ExecFileCallback) => {
+        commandCalls.push(args)
+        cb(null, JSON.stringify({ success: true, data: { snapshot: 'tree' } }), '')
+      }
+    )
+    await bridge.snapshot()
+
+    expect(
+      commandCalls.filter((args) => args.includes('network') && args.includes('route'))
+    ).toHaveLength(0)
+  })
+
   // ── destroyAllSessions ──
 
   it('makes runtime-wide session destruction terminal', async () => {
@@ -590,5 +642,48 @@ describe('AgentBrowserBridge', () => {
     expect(sessions.size).toBe(0)
     expect(CdpWsProxyMock.instances).toHaveLength(1)
     expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  // Why: quit awaits destroyAllSessions inside a 20s barrier, so an unbounded close can hold the
+  // window up for the whole deadline when the daemon is wedged (#16367).
+  it('bounds every teardown close well inside the quit barrier', async () => {
+    succeedWith({ snapshot: 'tree' })
+    await bridge.snapshot()
+
+    succeedWith(null)
+    await bridge.destroyAllSessions()
+
+    const closeCall = execFileMock.mock.calls.findLast((c: unknown[]) =>
+      (c[1] as string[]).includes('close')
+    )
+    expect((closeCall![2] as { timeout: number }).timeout).toBeLessThanOrEqual(5_000)
+  })
+
+  // Why: the daemon is already spawned by the time the name reaches pendingSessionCreation, so a
+  // quit that only walks `sessions` leaves exactly the orphan the barrier was added to prevent.
+  it('closes a session still being created when everything is torn down', async () => {
+    let releaseProxyStart: (() => void) | undefined
+    CdpWsProxyMock.mockImplementationOnce(function (this: Record<string, unknown>) {
+      this.start = vi.fn(
+        () =>
+          new Promise<string>((resolve) => {
+            releaseProxyStart = () => resolve('ws://127.0.0.1:9222')
+          })
+      )
+      this.stop = vi.fn(async () => {})
+      this.getPort = vi.fn(() => 9222)
+    })
+
+    succeedWith({ snapshot: 'tree' })
+    const inFlight = bridge.snapshot()
+    await vi.waitFor(() => expect(releaseProxyStart).toBeDefined())
+
+    // Why the baseline: session creation already spawned a stale-session `close` of its own.
+    const closesBeforeTeardown = closeCallCount()
+    const teardown = bridge.destroyAllSessions()
+    releaseProxyStart!()
+    await Promise.allSettled([inFlight, teardown])
+
+    expect(closeCallCount()).toBeGreaterThan(closesBeforeTeardown)
   })
 })

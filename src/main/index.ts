@@ -3035,6 +3035,8 @@ void app.whenReady().then(async () => {
     onTabsChanged: (worktreeId) => runtimeService.notifyMobileSessionTabsChanged(worktreeId)
   })
   runtimeService.setAgentBrowserBridge(agentBrowserBridge)
+  // Why: daemons a crashed or SIGKILL'd previous run left behind answer to nobody; nothing else reclaims them.
+  void agentBrowserBridge.sweepOrphanedSessions()
   const browserClientAutomationDispatcher = new RpcDispatcher({ runtime: runtimeService })
   configureBrowserClientPageAutomationRuntime({
     browserManager,
@@ -3534,7 +3536,10 @@ app.on('will-quit', (e) => {
   // Why: cancels relay restart/reinstall timers and kills wsl.exe children deterministically, not via stdio-pipe teardown.
   wslHookRelayManager.disposeAll()
   const statsFlush = stats?.flushAsync() ?? Promise.resolve()
-  // Why: retire headless page owners first, then sweep residual helper sessions without duplicate close fanout.
+  // Why: agent-browser daemon processes would otherwise linger after quit, holding ports and stale session state on disk.
+  // Why the barrier below: each session's close is its own agent-browser child taking hundreds of ms,
+  // so an unawaited call reaches app.quit() first and every open tab's daemon survives the quit (#16367).
+  // Why retire headless page owners first: it closes those helpers without a duplicate close fanout.
   const browserShutdown = (async (): Promise<void> => {
     await runtime?.getOffscreenBrowserBackend()?.destroyAll?.()
     await runtime?.getAgentBrowserBridge()?.destroyAllSessions()
