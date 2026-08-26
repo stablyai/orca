@@ -177,6 +177,13 @@ time to prove a PID has not been recycled — daemon identity, managed-hook
 ownership, and CPU accounting in the memory collector — still reads it through
 its own query. Those callers are not migrated.
 
+Committed private bytes have no equivalent either, and the one memory value the
+snapshot does carry is unusable for the sizes Orca now sees: `process.cc` stores
+`pmc.WorkingSetSize` into a `DWORD`, so anything above 4 GB wraps. That is the
+second reason `windows-process-resource-collector.ts` still runs its own
+`Get-CimInstance` sweep — it needs `PageFileUsage` (commit) and the CPU-time
+counters in the same pass. Migrating it to the native table would cost both.
+
 Start time is a proxy for identity, not identity. The durable answer for the
 process trees Orca itself spawns is an inherited handle: a job object names the
 tree Orca created, so no start-time comparison is needed. Those readers should

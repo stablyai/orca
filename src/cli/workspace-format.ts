@@ -16,6 +16,7 @@ export function formatMemorySnapshot(snapshot: MemorySnapshot): string {
     `collectedAt: ${new Date(snapshot.collectedAt).toISOString()}`,
     `totalMemory: ${formatByteCount(snapshot.totalMemory)}`,
     `processMemoryMetric: ${formatProcessMemoryMetric(snapshot.processMemoryMetric)}`,
+    ...formatCommitLines(snapshot),
     `totalCpu: ${formatCpu(snapshot.totalCpu)}`,
     [
       `hostUsed: ${formatByteCount(snapshot.host.usedMemory)}`,
@@ -51,9 +52,30 @@ function formatWorktreeMemoryLine(worktree: WorktreeMemory): string {
   return [
     `- ${worktree.worktreeName}`,
     `${formatByteCount(worktree.memory)}`,
+    ...(worktree.privateMemory === undefined
+      ? []
+      : [`${formatByteCount(worktree.privateMemory)} committed`]),
     `${formatCpu(worktree.cpu)}`,
     `${worktree.sessions.length} session${worktree.sessions.length === 1 ? '' : 's'}`
   ].join('  ')
+}
+
+// Why omitted rather than zeroed: a host that predates the field, or cannot read
+// commit at all, must not be printed as agents committing nothing.
+function formatCommitLines(snapshot: MemorySnapshot): string[] {
+  if (typeof snapshot.totalPrivateMemory !== 'number') {
+    return []
+  }
+  return [
+    `totalPrivateMemory: ${formatByteCount(snapshot.totalPrivateMemory)}`,
+    `processCommitMetric: ${formatProcessCommitMetric(snapshot.processCommitMetric)}`
+  ]
+}
+
+function formatProcessCommitMetric(metric: MemorySnapshot['processCommitMetric']): string {
+  return metric === 'private-bytes'
+    ? 'summed private bytes; committed memory, counted whether resident or paged out'
+    : `summed ${metric ?? 'unknown'}`
 }
 
 function formatCpu(cpu: number): string {
