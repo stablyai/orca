@@ -13116,7 +13116,7 @@
       "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending terminal query replies and 4096 UTF-16 code units. Every retained reply reaches the provider as one atomic write, and the host writes each reply the moment it accepts it, so replies reach the PTY in the order they were produced with no queue that could reorder them. A reply's own echo is contained on the output side by projecting its known echo shapes; the ESC-initial verbatim shape is matched only when complete, never held as a partial, so a query torn at its own ESC is still answered. Overflow removes only the oldest query replies, never ordinary input except the documented modified-F3/CPR byte collision, and drain failures cannot clear a newer queue generation.",
       "oracle": "Synchronously enqueue separate 10,000-entry OSC and DA1 reply floods before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. At the host boundary, defer an OSC reply and assert that separate or legacy-coalesced DA1/CPR replies flush after it in observed query order. At the remote-runtime boundary, preserve separate writes around pending ordinary input, async validation, and viewport-claim buffering. Repeat behind 10,000 ordinary inputs and exercise the text ceiling, real xterm generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13130,6 +13130,7 @@
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "src/shared/terminal-query-reply.test.ts",
         "src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "src/shared/pty-startup-reply-echo-shapes.test.ts",
         "tests/e2e/terminal-osc-color-queries.spec.ts",
         "tests/e2e/terminal-typing-latency.spec.ts",
         "tests/e2e/pty-input-write-queue-ssh.spec.ts"
@@ -13208,13 +13209,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-09",
+          "date": "2026-08-25",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
           "result": "passed",
-          "durationSeconds": 2.35,
-          "summary": "Four files and 138 tests passed, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
+          "durationSeconds": 1.05,
+          "summary": "Five files and 92 tests passed, including the live-pty echo-shape transcript, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
         },
         {
           "date": "2026-08-09",
