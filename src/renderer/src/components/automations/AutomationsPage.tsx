@@ -64,7 +64,10 @@ import type { AutomationTemplate } from './automation-templates'
 import { getAutomationTargetAvailability } from './automation-target-availability'
 import { getAutomationCreateAvailability } from './automation-create-admission'
 import { buildAutomationRunContextForRepo } from './automation-run-context'
-import { repoMatchesExternalAutomationTarget } from './automation-external-target-match'
+import {
+  repoMatchesExternalAutomationTarget,
+  getExternalAutomationTargetForRepo
+} from './automation-external-target-match'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { checkRuntimeHooks } from '@/runtime/runtime-hooks-client'
@@ -1376,10 +1379,7 @@ export default function AutomationsPage(): React.JSX.Element {
           return
         }
         const target =
-          editingExternalTarget?.manager.target ??
-          (repo.connectionId
-            ? { type: 'ssh' as const, connectionId: repo.connectionId }
-            : { type: 'local' as const })
+          editingExternalTarget?.manager.target ?? getExternalAutomationTargetForRepo(repo)
         const repoTargetMatches = repoMatchesExternalAutomationTarget(repo, target)
         if (!repoTargetMatches) {
           toast.error(
