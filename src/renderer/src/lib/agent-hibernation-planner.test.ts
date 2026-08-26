@@ -206,7 +206,7 @@ describe('agent sleep planner', () => {
   )
 
   it('requires the idle threshold and blocks input after done', () => {
-    const fresh = entry({ updatedAt: NOW - 1_000 })
+    const fresh = entry({ stateStartedAt: NOW - 1_000, updatedAt: NOW - 1_000 })
     expect(
       plannedWorktrees(snapshot({ agentStatusByPaneKey: { [fresh.paneKey]: fresh } }))
     ).toEqual([])
@@ -434,7 +434,23 @@ describe('agent sleep planner', () => {
     expect(plannedWorktrees(snapshot({ ptyIdsByTabId: { 'tab-1': [] } }))).toEqual([])
     expect(
       plannedWorktrees(
-        snapshot({ sleepingAgentSessionsByPaneKey: { [`tab-1:${LEAF}`]: {} as never } })
+        snapshot({
+          sleepingAgentSessionsByPaneKey: {
+            [`tab-1:${LEAF}`]: {
+              paneKey: `tab-1:${LEAF}`,
+              tabId: 'tab-1',
+              worktreeId: 'wt-bg',
+              agent: 'claude',
+              providerSession: { key: 'session_id', id: 'session-1' },
+              prompt: '',
+              state: 'done',
+              capturedAt: OLD,
+              updatedAt: OLD,
+              // A real sleep capture, not this pane's own live anchor.
+              origin: 'worktree-sleep'
+            } as never
+          }
+        })
       )
     ).toEqual([])
   })
@@ -675,5 +691,178 @@ describe('agent sleep planner', () => {
     expect(getEffectiveAgentHibernationIdleMs(DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1)).toBe(
       DEFAULT_AGENT_HIBERNATION_IDLE_MS + 1
     )
+  })
+})
+
+describe('live resume anchors do not block hibernation (#10238 regression)', () => {
+  // Why: setAgentStatus writes an `origin: 'live'` anchor for EVERY resumable agent the
+  // moment its turn ends, but only Pi/OMP/prime-agent were exempted from the
+  // already-sleeping rejection — so no Claude or Codex pane could ever hibernate.
+  const NON_PI_AGENTS = [
+    'claude',
+    'codex',
+    'gemini',
+    'antigravity',
+    'opencode',
+    'mimo-code',
+    'droid',
+    'grok',
+    'devin',
+    'copilot',
+    'kimi'
+  ] as const
+
+  function liveAnchor(
+    agent: string,
+    providerSession: { key: 'session_id' | 'conversation_id'; id: string }
+  ) {
+    // Shaped exactly as sleepingRecordFromEntry builds it for a completed turn.
+    return {
+      paneKey: `tab-1:${LEAF}`,
+      tabId: 'tab-1',
+      worktreeId: 'wt-bg',
+      agent,
+      providerSession,
+      prompt: '',
+      state: 'done' as const,
+      capturedAt: OLD,
+      updatedAt: OLD,
+      origin: 'live' as const
+    }
+  }
+
+  it.each(NON_PI_AGENTS)('plans a long-idle done %s pane holding only its live anchor', (agent) => {
+    // Antigravity resumes by conversation id; the rest resume by session id.
+    const providerSession =
+      agent === 'antigravity'
+        ? ({ key: 'conversation_id', id: `${agent}-conversation-1` } as const)
+        : ({ key: 'session_id', id: `${agent}-session-1` } as const)
+    const agentEntry = entry({ agentType: agent, providerSession })
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+          sleepingAgentSessionsByPaneKey: {
+            [agentEntry.paneKey]: liveAnchor(agent, providerSession) as never
+          },
+          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
+        })
+      )
+    ).toEqual([agentEntry.paneKey])
+  })
+
+  it('still refuses a pane fenced against automatic resume', () => {
+    const providerSession = { key: 'session_id' as const, id: 'claude-session-1' }
+    const agentEntry = entry({ agentType: 'claude', providerSession })
+    const fenced = {
+      ...liveAnchor('claude', providerSession),
+      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+    }
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+          sleepingAgentSessionsByPaneKey: { [agentEntry.paneKey]: fenced as never },
+          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
+        })
+      )
+    ).toEqual([])
+    // Control: the identical pane IS planned once the fence is gone, so the rejection
+    // above isolates the fence rather than some other guard.
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [agentEntry.paneKey]: agentEntry },
+          sleepingAgentSessionsByPaneKey: {
+            [agentEntry.paneKey]: liveAnchor('claude', providerSession) as never
+          },
+          ptyBindingFirstSeenAtByPaneKey: { [agentEntry.paneKey]: OLD }
+        })
+      )
+    ).toEqual([agentEntry.paneKey])
+  })
+})
+
+describe('idle clock anchors on stateStartedAt, not updatedAt', () => {
+  it('is not deferred by a done→done repaint that only advances updatedAt', () => {
+    // A metadata-less redelivery (OSC 9999 repaint / reconnect replay) bumps updatedAt
+    // while stateStartedAt correctly holds; the old anchor restarted the countdown.
+    const repainted = entry({ stateStartedAt: OLD, updatedAt: NOW })
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          agentStatusByPaneKey: { [repainted.paneKey]: repainted },
+          ptyBindingFirstSeenAtByPaneKey: { [repainted.paneKey]: OLD }
+        })
+      )
+    ).toEqual([repainted.paneKey])
+  })
+
+  it('keeps the signature stable across such a repaint so confirmation can match', () => {
+    const before = entry({ stateStartedAt: OLD, updatedAt: OLD })
+    const after = entry({ stateStartedAt: OLD, updatedAt: NOW - 1 })
+    const sigFor = (e: AgentStatusEntry): string =>
+      planAgentHibernationCandidates(
+        snapshot({
+          agentStatusByPaneKey: { [e.paneKey]: e },
+          ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
+        })
+      )[0]!.signature
+    expect(sigFor(after)).toBe(sigFor(before))
+  })
+
+  it('invalidates the signature when agent kind or resume identity changes', () => {
+    const base = entry({ stateStartedAt: OLD, updatedAt: OLD })
+    const sigFor = (e: AgentStatusEntry): string =>
+      planAgentHibernationCandidates(
+        snapshot({
+          agentStatusByPaneKey: { [e.paneKey]: e },
+          ptyBindingFirstSeenAtByPaneKey: { [e.paneKey]: OLD }
+        })
+      )[0]!.signature
+    const baseline = sigFor(base)
+    // updatedAt held constant throughout, so today's signature would NOT change.
+    expect(sigFor(entry({ stateStartedAt: OLD, updatedAt: OLD, agentType: 'codex' }))).not.toBe(
+      baseline
+    )
+    expect(
+      sigFor(
+        entry({
+          stateStartedAt: OLD,
+          updatedAt: OLD,
+          providerSession: {
+            key: 'session_id',
+            id: 'session-1',
+            transcriptPath: '/tmp/moved.jsonl'
+          }
+        })
+      )
+    ).not.toBe(baseline)
+  })
+})
+
+describe('PTY binding and boundary floors', () => {
+  it('defers a pane whose PTY binding was first seen this tick', () => {
+    // App restart / wake: main replays an ancient stateStartedAt, but the binding is new.
+    expect(
+      plannedPaneKeys(snapshot({ ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: NOW } }))
+    ).toEqual([])
+  })
+
+  it('plans it once the binding has aged past the idle window', () => {
+    expect(
+      plannedPaneKeys(snapshot({ ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: OLD } }))
+    ).toEqual([`tab-1:${LEAF}`])
+  })
+
+  it('defers a boundary done that only just became a real completion', () => {
+    expect(
+      plannedPaneKeys(
+        snapshot({
+          ptyBindingFirstSeenAtByPaneKey: { [`tab-1:${LEAF}`]: OLD },
+          boundaryResolvedAtByPaneKey: { [`tab-1:${LEAF}`]: NOW }
+        })
+      )
+    ).toEqual([])
   })
 })

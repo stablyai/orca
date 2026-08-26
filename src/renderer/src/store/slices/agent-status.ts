@@ -41,7 +41,8 @@ import {
   isOrcaDispatchPrompt,
   orchestrationLabelsMatchLiveDispatch
 } from '@/lib/agent-row-primary-text'
-import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/pi-compatible-live-recovery-record'
+import { isCompletedPiCompatibleAgentWithLiveRecoveryRecord } from '@/lib/live-resume-anchor-record'
+import { recordHibernationBoundaryResolved } from '@/lib/agent-hibernation-pane-age'
 import {
   resolveAgentPaneAuthorityKey,
   retireAgentPaneAuthorityAliases,
@@ -2387,6 +2388,17 @@ export const createAgentStatusSlice: StateCreator<AppState, [], [], AgentStatusS
             payload.prompt === existing.prompt
               ? existing.sessionBoundary
               : undefined)
+        }
+        // Why: a boundary `done` becoming a REAL completion does not advance
+        // `stateStartedAt`, so hibernation would still judge the row by its ancient
+        // anchor. Stamp it here, synchronously — sampling on the 60s coordinator tick
+        // misses a boundary written and cleared between two samples.
+        if (
+          entry.state === 'done' &&
+          entry.sessionBoundary !== true &&
+          existing?.sessionBoundary === true
+        ) {
+          recordHibernationBoundaryResolved(paneKey, updatedAt)
         }
         generatedTitleEntry.current = entry
         if (
