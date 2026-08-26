@@ -35,7 +35,6 @@ src/main/ai-vault/session-scanner-service-client.ts
 src/main/ai-vault/session-scanner-service-spawn.ts
 src/main/ai-vault/session-scanner-service-test-child.ts
 src/main/app-icon.ts
-src/main/automations/external-manager.ts
 src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge.ts
 src/main/browser/browser-cookie-import.ts

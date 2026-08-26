@@ -13901,6 +13901,7 @@
           "backToList": "全部自动化",
           "tableName": "名称",
           "tableProject": "项目",
+          "tableHost": "主机",
           "tableStatus": "状态",
           "tableActions": "操作",
           "newAutomation": "新建自动化",

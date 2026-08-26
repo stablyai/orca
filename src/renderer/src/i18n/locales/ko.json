@@ -13875,6 +13875,7 @@
           "backToList": "모든 자동화",
           "tableName": "이름",
           "tableProject": "프로젝트",
+          "tableHost": "호스트",
           "tableStatus": "상태",
           "tableActions": "작업",
           "newAutomation": "새 자동화",
