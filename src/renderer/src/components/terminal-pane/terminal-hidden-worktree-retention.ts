@@ -9,6 +9,7 @@ import {
   type TerminalColdParkPolicyOverrides
 } from './terminal-hidden-view-parking'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { createWorktreeTabBucketProjection } from '@/lib/worktree-tab-bucket-projection'
 
 // Why these sizes: a retained hidden pane costs a measured ~2.5MB of V8 heap
 // at the 5k-row default scrollback and ~19MB at 50k (plus per-pane queues),
@@ -30,17 +31,20 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_LIMIT = 4
 export const TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS = 15 * 60_000
 
-type TerminalWorktreeParkingTab = Pick<TerminalTab, 'id' | 'ptyId' | 'pendingActivationSpawn'>
-
-export function getTerminalWorktreeParkingInputsKey(
-  tabsByWorktree: Readonly<Record<string, readonly TerminalWorktreeParkingTab[]>>
-): string {
-  return JSON.stringify(
-    Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => [tab.id, tab.ptyId, tab.pendingActivationSpawn])
-    ])
-  )
+export function createTerminalWorktreeTopologyProjection(
+  onInspectBucket?: (worktreeId: string) => void
+) {
+  return createWorktreeTabBucketProjection<TerminalTab, TerminalTab>({
+    projectTab: (tab) => tab,
+    isSameProjectedTab: (previousTab, nextTab) =>
+      previousTab.id === nextTab.id &&
+      previousTab.ptyId === nextTab.ptyId &&
+      previousTab.worktreeId === nextTab.worktreeId &&
+      previousTab.pendingActivationSpawn === nextTab.pendingActivationSpawn &&
+      previousTab.generation === nextTab.generation &&
+      previousTab.startupCwd === nextTab.startupCwd,
+    onInspectBucket
+  })
 }
 
 export function hasPendingRetentionSpawnWork(

@@ -17,6 +17,9 @@ src/**/*.d.ts
 
 # Dependencies
 node_modules/
+# Why: the trailing-slash form matches directories only, so a node_modules SYMLINK (how agent
+# worktrees share an install) slipped past a bulk `git add` and got committed — twice.
+node_modules
 
 # Build output
 dist/

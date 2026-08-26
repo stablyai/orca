@@ -26,6 +26,8 @@ import { applyTerminalGpuAcceleration } from './pane-terminal-gpu-acceleration'
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import {
   markPaneComplexScriptOutput,
+  clearPaneWebglTextureAtlases,
+  presentPaneViewports,
   resetPaneWebglTextureAtlases,
   resumePaneRendering,
   setPaneGpuRenderingState,
@@ -280,6 +282,14 @@ export class PaneManager {
     resetPaneWebglTextureAtlases(this.panes.values())
   }
 
+  clearWebglTextureAtlases(): void {
+    clearPaneWebglTextureAtlases(this.panes.values())
+  }
+
+  presentForcedViewports(): void {
+    presentPaneViewports(this.panes.values())
+  }
+
   setAtlasRecoveryVisible(visible: boolean): void {
     this.atlasRecoveryVisible = visible
   }
@@ -296,8 +306,7 @@ export class PaneManager {
   }
 
   scheduleRevealPresent(): void {
-    // Why: same destroy guard as scheduleRevealRepaint, but presents without
-    // clearing the shared glyph atlas — used by the plain-refocus recovery.
+    // Why: ordinary reveal keeps the coherent canvas until DEC 2026 releases.
     schedulePaneRevealPresent(() => (this.destroyed ? [] : this.panes.values()))
   }
 

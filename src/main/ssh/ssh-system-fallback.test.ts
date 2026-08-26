@@ -268,6 +268,15 @@ describe('spawnSystemSsh', () => {
     expect(args).not.toContain('ProxyCommand=ignored')
   })
 
+  it('passes an explicit main-owned OpenSSH config as one argument', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'isolated-host', source: 'ssh-config' }), {
+      configFile: '/tmp/orca isolated/ssh_config'
+    })
+
+    expect(args.slice(0, 2)).toEqual(['-F', '/tmp/orca isolated/ssh_config'])
+    expect(args).toContain('isolated-host')
+  })
+
   it('passes explicit options for manual targets with implicit configHost', () => {
     const args = buildSshArgs(
       createTarget({

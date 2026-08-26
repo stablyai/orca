@@ -6,6 +6,10 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
 import { getSpawnArgsForWindows } from '../win32-utils'
+import {
+  buildWindowsHostInteractiveLoginSpawn,
+  type WindowsHostInteractiveLoginSpawn
+} from '../../shared/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
@@ -36,6 +40,7 @@ import { getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -211,10 +216,14 @@ function removeManagedHomeTreeSync(targetPath: string): void {
   })
 }
 
-function killLoginProcessTree(child: ChildProcess): void {
+function killLoginProcessTree(
+  child: ChildProcess,
+  interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
+): void {
+  const terminationPid = interactiveLogin?.getTerminationPid?.() ?? child.pid
   if (
     process.platform === 'win32' &&
-    typeof child.pid === 'number' &&
+    typeof terminationPid === 'number' &&
     child.exitCode === null &&
     child.signalCode === null
   ) {
@@ -222,7 +231,7 @@ function killLoginProcessTree(child: ChildProcess): void {
       // Why: child.kill() only reaches the direct child (cmd.exe for npm .cmd
       // shims); taskkill /t also ends codex descendants whose open handles on
       // the managed home make post-login file operations fail with ENOTEMPTY.
-      execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      execFileSync('taskkill', ['/pid', String(terminationPid), '/t', '/f'], {
         windowsHide: true,
         timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
         stdio: 'ignore'
@@ -1711,25 +1720,36 @@ export class CodexAccountService {
             command: 'wsl.exe',
             args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
             env: process.env,
-            codexCommand: 'codex'
+            codexCommand: 'codex',
+            interactiveLogin: null
           }
         : (() => {
             const codexCommand = resolveCodexCommand()
-            // Why: Windows codex may be a .cmd/.bat; spawn+shell:true would trigger DEP0190, so invoke cmd.exe /c explicitly.
-            const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
+            // Why: Windows host login needs a real console; otherwise inherit/hide
+            // leaves the child unable to read a paste-code / device-auth prompt.
+            const interactiveLogin =
+              process.platform === 'win32'
+                ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])
+                : null
+            const { spawnCmd, spawnArgs } = interactiveLogin
+              ? { spawnCmd: interactiveLogin.command, spawnArgs: interactiveLogin.args }
+              : getSpawnArgsForWindows(codexCommand, ['login'])
             return {
               command: spawnCmd,
               args: spawnArgs,
-              env: {
+              env: withCliRuntimeOnPath(codexCommand, {
                 ...process.env,
                 CODEX_HOME: managedHomePath
-              },
-              codexCommand
+              }),
+              codexCommand,
+              interactiveLogin
             }
           })()
       const child = spawn(spawnConfig.command, spawnConfig.args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        // Why: prevents a console window flash for .cmd/.bat entrypoints routed through cmd.exe on Windows.
+        stdio: spawnConfig.interactiveLogin
+          ? spawnConfig.interactiveLogin.stdio
+          : ['ignore', 'pipe', 'pipe'],
+        // Why: hide the outer wrapper only. A dedicated login console stays visible.
         windowsHide: true,
         env: spawnConfig.env
       })
@@ -1761,10 +1781,11 @@ export class CodexAccountService {
           clearTimeout(postAuthExitTimeout)
           postAuthExitTimeout = null
         }
-        child.stdout.off('data', appendOutput)
-        child.stderr.off('data', appendOutput)
+        child.stdout?.off('data', appendOutput)
+        child.stderr?.off('data', appendOutput)
         child.off('error', onError)
         child.off('close', onClose)
+        spawnConfig.interactiveLogin?.cleanup?.()
       }
 
       const settle = (callback: () => void): void => {
@@ -1778,7 +1799,7 @@ export class CodexAccountService {
 
       const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
       timeout = setTimeout(() => {
-        killLoginProcessTree(child)
+        killLoginProcessTree(child, spawnConfig.interactiveLogin)
         settle(() => {
           rejectPromise(timeoutError)
         })
@@ -1799,7 +1820,7 @@ export class CodexAccountService {
           }
           postAuthExitTimeout = setTimeout(() => {
             loginTreeKilledAfterAuth = true
-            killLoginProcessTree(child)
+            killLoginProcessTree(child, spawnConfig.interactiveLogin)
           }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
         }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
       }
@@ -1845,8 +1866,8 @@ export class CodexAccountService {
         })
       }
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
+      child.stdout?.on('data', appendOutput)
+      child.stderr?.on('data', appendOutput)
       child.on('error', onError)
       child.on('close', onClose)
     })

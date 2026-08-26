@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 
 const {
   handleMock,
@@ -131,7 +132,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768', deviceToken: 'device-token' }),
       'status.get',
       undefined,
-      50
+      50,
+      undefined,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(reconnectRemoteRuntimeSharedControlConnectionMock).toHaveBeenCalledWith(
       added.environment.id

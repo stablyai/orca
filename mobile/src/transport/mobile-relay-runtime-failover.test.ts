@@ -430,6 +430,46 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
+
+  it('restarts Relay promptly when an active Relay session resumes from background', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    expect(deps.openRelay).not.toHaveBeenCalled()
+
+    supervisor.setForeground(false)
+    expect(logical.getState()).toBe('disconnected')
+    expect(logical.getPendingPath()).toBeNull()
+
+    supervisor.setForeground(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
+
+  it('recovers a suspended Relay through the app-resume nudge used by manual retry', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    supervisor.setForeground(false)
+    expect(logical.getState()).toBe('disconnected')
+
+    supervisor.nudge('app-resume')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
 })
 
 // The field failure's first symptom: a real direct rpc-client dialing an

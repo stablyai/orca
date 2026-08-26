@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process'
-import { mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
@@ -9,6 +9,7 @@ import {
   isUnsupportedMergeTreeWriteTreeError
 } from './git-merge-tree-capability'
 import { isForEachRefExcludeUnsupportedError } from './git-ref-command-capabilities'
+import { isNoWriteFetchHeadUnsupportedError } from './git-fetch-head-capability'
 import {
   hasUnsupportedRevParsePathFormatEcho,
   isUnsupportedWorktreeListZError
@@ -151,6 +152,14 @@ describeBinaryCompatibility('real Git binary compatibility', () => {
   })
 
   it('recognizes ref and merge-tree compatibility boundaries', async () => {
+    const fetchHeadPath = join(repoPath, '.git', 'FETCH_HEAD')
+    await writeFile(fetchHeadPath, 'sentinel\n')
+    await expectPreferredOrRecognizedFallback(
+      ['fetch', '--no-write-fetch-head', '.', '+HEAD:refs/orca/compat/no-write-fetch-head'],
+      supports(2, 29),
+      isNoWriteFetchHeadUnsupportedError
+    )
+    await expect(readFile(fetchHeadPath, 'utf-8')).resolves.toBe('sentinel\n')
     await expectPreferredOrRecognizedFallback(
       ['for-each-ref', '--format=%(refname)', '--exclude=refs/remotes/**/HEAD', '--count=10'],
       supports(2, 42),

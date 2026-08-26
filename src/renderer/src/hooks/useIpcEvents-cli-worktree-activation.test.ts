@@ -214,7 +214,9 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} }
       }
@@ -477,7 +479,9 @@ describe('useIpcEvents CLI-created worktree activation', () => {
           getBrowserDrivers: () => Promise.resolve([]),
           onTerminalFitOverrideChanged: () => () => {},
           onTerminalDriverChanged: () => () => {},
-          onBrowserDriverChanged: () => () => {}
+          onBrowserDriverChanged: () => () => {},
+          onClientHostedBrowserRowsChanged: () => () => {},
+          getClientHostedBrowserRows: async () => []
         },
         agentStatus: { onSet: () => () => {} }
       }

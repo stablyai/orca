@@ -1,4 +1,4 @@
-import type { ExecutionHostId } from '../execution-host'
+import { parseExecutionHostId, type ExecutionHostId } from '../execution-host'
 import type { Worktree } from './types'
 
 /**
@@ -39,6 +39,23 @@ export function composeWorktreeHostIdentity(
 }
 
 /**
+ * The host back out of an identity, when the identity names one.
+ *
+ * An empty prefix (`|<worktreeId>`) stays undefined rather than defaulting to
+ * `local`: an unqualified row may be on any host, and callers use this to pick
+ * the host a destructive action runs against.
+ */
+export function getExecutionHostIdFromWorktreeHostIdentity(
+  identity: string
+): ExecutionHostId | undefined {
+  const separatorIndex = identity.indexOf(HOST_SEPARATOR)
+  if (separatorIndex <= 0) {
+    return undefined
+  }
+  return parseExecutionHostId(identity.slice(0, separatorIndex))?.id
+}
+
+/**
  * The workspace id back out of an identity.
  *
  * Exact, not best-effort: the host cannot contain the separator (see above), so
@@ -48,4 +65,13 @@ export function composeWorktreeHostIdentity(
  */
 export function getWorktreeIdFromHostIdentity(identity: string): string {
   return identity.slice(identity.indexOf(HOST_SEPARATOR) + 1)
+}
+
+/** True only for the canonical host-qualified form, not a legacy id containing `|`. */
+export function isWorktreeHostIdentity(identity: string): boolean {
+  const separator = identity.indexOf(HOST_SEPARATOR)
+  return (
+    separator === 0 ||
+    (separator > 0 && parseExecutionHostId(identity.slice(0, separator)) !== null)
+  )
 }

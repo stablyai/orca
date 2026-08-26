@@ -1,11 +1,14 @@
 import { worktreeWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
+import { removeWorktreeVisitEntries } from '@/lib/worktree-visit-recency'
 
 export function applyRemoveWorktreeSuccessState(
   set: WorktreeSliceSet,
   worktreeId: string,
-  tabIds: Set<string>
+  tabIds: Set<string>,
+  executionHostId?: ExecutionHostId
 ): void {
   set((s) => {
     const next = { ...s.worktreesByRepo }
@@ -147,14 +150,11 @@ export function applyRemoveWorktreeSuccessState(
     const nextEverActivatedWorktreeIds = s.everActivatedWorktreeIds.has(worktreeId)
       ? new Set([...s.everActivatedWorktreeIds].filter((id) => id !== worktreeId))
       : s.everActivatedWorktreeIds
-    const nextLastVisitedAtByWorktreeId =
-      worktreeId in s.lastVisitedAtByWorktreeId
-        ? (() => {
-            const next = { ...s.lastVisitedAtByWorktreeId }
-            delete next[worktreeId]
-            return next
-          })()
-        : s.lastVisitedAtByWorktreeId
+    const nextLastVisitedAtByWorktreeId = removeWorktreeVisitEntries(
+      s.lastVisitedAtByWorktreeId,
+      new Set([worktreeId]),
+      executionHostId
+    )
     return {
       worktreesByRepo: next,
       worktreeLineageById: nextLineage,

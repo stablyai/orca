@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { WebSocketServer } from 'ws'
 import { encodePairingOffer, type PairingOffer } from '../../shared/pairing'
+import type { RuntimeStatus } from '../../shared/runtime-types'
 import {
   decrypt,
   deriveSharedKey,
@@ -90,7 +91,14 @@ describe('CLI remote WebSocket transport', () => {
         automatic: false,
         reason: 'manual-service-update-required'
       },
-      capabilities: ['updater.remote-control.v1']
+      capabilities: ['updater.remote-control.v1'],
+      degradations: [
+        {
+          code: 'browser_unavailable',
+          capability: 'browser.headless.v1',
+          message: 'Browser automation is unavailable.'
+        }
+      ]
     })
     servers.push(runtime)
     const offer: PairingOffer = {
@@ -113,7 +121,8 @@ describe('CLI remote WebSocket transport', () => {
     expect(status.result.runtime).toMatchObject({
       appVersion: '1.5.0',
       remoteUpdateSupport: { automatic: false, reason: 'manual-service-update-required' },
-      capabilities: ['updater.remote-control.v1']
+      capabilities: ['updater.remote-control.v1'],
+      degradations: [expect.objectContaining({ code: 'browser_unavailable' })]
     })
   })
 
@@ -243,6 +252,7 @@ async function startTestRuntime(
       reason: 'manual-service-update-required'
     }
     capabilities?: string[]
+    degradations?: RuntimeStatus['degradations']
   } = {}
 ): Promise<TestRuntime> {
   const serverKeyPair = generateKeyPair()
@@ -314,7 +324,8 @@ async function startTestRuntime(
                   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
                 appVersion: statusOverrides.appVersion,
                 remoteUpdateSupport: statusOverrides.remoteUpdateSupport,
-                capabilities: statusOverrides.capabilities
+                capabilities: statusOverrides.capabilities,
+                degradations: statusOverrides.degradations
               },
               _meta: { runtimeId }
             }

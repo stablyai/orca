@@ -175,7 +175,7 @@ export const WorktreeRemove = WorktreeSelector.extend({
 })
 
 export const WorktreeForceDeleteBranch = WorktreeSelector.extend({
-  hostId: OptionalString,
+  hostId: OptionalExecutionHostId,
   branchName: z
     .unknown()
     .transform((v) => (typeof v === 'string' ? v : ''))

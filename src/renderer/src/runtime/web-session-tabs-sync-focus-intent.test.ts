@@ -148,10 +148,8 @@ describe('applyWebSessionTabsSnapshot', () => {
 
     expect(patch.activeTabId).toBeUndefined()
     expect(patch.activeTabIdByWorktree).toBeUndefined()
-    expect(patch.groupsByWorktree?.[WT]?.[0]).toMatchObject({
-      activeTabId: shellTabId,
-      tabOrder: [agentTabId, shellTabId]
-    })
+    // Why: client-owned placement — an ambient snapshot must not rewrite groups at all.
+    expect(patch.groupsByWorktree).toBeUndefined()
 
     const followed = applyWebSessionTabsSnapshot(
       state,

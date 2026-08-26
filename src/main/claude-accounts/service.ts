@@ -1,75 +1,26 @@
-/* eslint-disable max-lines -- Why: Claude managed accounts need one audited owner
-for login, credential capture, Keychain storage, selection, and rate-limit refresh. */
-import { createHash, randomUUID } from 'node:crypto'
-import { spawn } from 'node:child_process'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join, relative, resolve, sep } from 'node:path'
-import type {
-  ClaudeManagedAccount,
-  ClaudeManagedAccountSummary,
-  ClaudeRateLimitAccountsState
-} from '../../shared/managed-account-types'
+import type { ClaudeRateLimitAccountsState } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
-import { resolveClaudeCommand } from '../codex-cli/command'
+import { ClaudeAccountRegistration } from './claude-account-registration'
+import { ClaudeAccountSelection } from './claude-account-selection'
+import {
+  captureClaudeAuthFromConfigDir,
+  captureClaudeAuthFromExistingConfigDir,
+  readCapturedClaudeCredentials,
+  type CapturedClaudeAuth
+} from './claude-auth-capture'
+import {
+  runClaudeCommandProcess,
+  type ClaudeCommandConfig,
+  type ClaudeCommandOptions
+} from './claude-command-process'
+import { runClaudeLoginSession } from './claude-login-session'
+import {
+  ClaudeManagedAuthStorage,
+  type ClaudeManagedAuthLocation
+} from './claude-managed-auth-storage'
 import type { ClaudeRuntimeAuthService } from './runtime-auth-service'
-import {
-  getClaudeManagedAccountsRoot,
-  readClaudeManagedAuthFile,
-  resolveOwnedClaudeManagedAuthPath,
-  writeClaudeManagedAuthFile
-} from './managed-auth-path'
-import {
-  deleteActiveClaudeKeychainCredentialsStrict,
-  deleteManagedClaudeKeychainCredentials,
-  readActiveClaudeKeychainCredentials,
-  readActiveClaudeKeychainCredentialsStrict,
-  readManagedClaudeKeychainCredentials,
-  writeActiveClaudeKeychainCredentials,
-  writeManagedClaudeKeychainCredentials
-} from './keychain'
-import { beginClaudeAuthSwitch, endClaudeAuthSwitch } from './live-pty-gate'
-import { findDuplicateClaudeAccount } from './claude-duplicate-account'
-import { parseWslUncPath } from '../../shared/wsl-paths'
-import { toWindowsWslPath } from '../wsl'
-import { runWslProcess } from '../wsl/wsl-runner'
-import { buildWindowsCommandInvocation } from './windows-command-invocation'
-import {
-  getClaudeSelectionTargetForAccount,
-  getSelectedClaudeAccountIdForTarget,
-  normalizeClaudeAccountSelectionTarget,
-  normalizeClaudeRuntimeSelection,
-  pruneInvalidClaudeRuntimeSelection,
-  removeClaudeAccountIdFromSelection,
-  setSelectedClaudeAccountIdForTarget,
-  type ClaudeAccountSelectionTarget
-} from './runtime-selection'
-
-const LOGIN_TIMEOUT_MS = 180_000
-const STATUS_TIMEOUT_MS = 20_000
-const MAX_COMMAND_OUTPUT_CHARS = 4_000
-const WINDOWS_TASKKILL_TIMEOUT_MS = 5_000
-// Claude leaves the login process running after an OAuth denial; fail fast so Settings can clear loading state.
-const CLAUDE_AUTH_DENIED_PATTERN =
-  /\baccess_denied\b|authorization (?:request )?(?:was )?denied|sign-?in (?:was )?denied|login (?:was )?denied/i
-
-type ClaudeIdentity = {
-  email: string | null
-  organizationUuid: string | null
-  organizationName: string | null
-}
-
-type CapturedClaudeAuth = {
-  credentialsJson: string
-  oauthAccount: unknown
-  identity: ClaudeIdentity
-}
-
-type ManagedClaudeAuthSnapshot = {
-  credentialsJson: string | null
-  oauthAccountJson: string | null
-}
+import type { ClaudeAccountSelectionTarget } from './runtime-selection'
 
 export type ClaudeAccountAddTarget = {
   runtime?: 'host' | 'wsl'
@@ -80,68 +31,78 @@ export type ClaudeAccountImportOptions = ClaudeAccountAddTarget & {
   previousLegacyCredentialsSha256?: string | null
 }
 
-type ManagedClaudeAuthLocation = {
-  managedAuthPath: string
-  managedAuthRuntime: 'host' | 'wsl'
-  wslDistro: string | null
-  wslLinuxAuthPath: string | null
-}
-
-class DuplicateClaudeAccountError extends Error {}
-
-function shellQuote(value: string): string {
-  return `'${value.replace(/'/g, "'\\''")}'`
-}
-
 export class ClaudeAccountService {
   private mutationQueue: Promise<unknown> = Promise.resolve()
   private cancelPendingClaudeLogin: (() => boolean) | null = null
+  private readonly storage = new ClaudeManagedAuthStorage()
+  private readonly selection: ClaudeAccountSelection
+  private readonly registration: ClaudeAccountRegistration
 
   constructor(
-    private readonly store: Store,
-    private readonly rateLimits: RateLimitService,
+    store: Store,
+    rateLimits: RateLimitService,
     private readonly runtimeAuth: ClaudeRuntimeAuthService
-  ) {}
+  ) {
+    this.selection = new ClaudeAccountSelection(store, rateLimits, runtimeAuth, (accountId, path) =>
+      this.safeRemoveManagedAuth(accountId, path)
+    )
+    this.registration = new ClaudeAccountRegistration({
+      store,
+      rateLimits,
+      runtimeAuth,
+      selection: this.selection,
+      createManagedAuth: (accountId, target) => this.storage.create(accountId, target),
+      assertManagedAuth: (path, accountId) => this.storage.assertOwned(path, accountId),
+      removeManagedAuth: (accountId, path) => this.safeRemoveManagedAuth(accountId, path),
+      writeManagedAuth: (accountId, path, captured) =>
+        this.writeManagedAuth(accountId, path, captured),
+      writeCredentials: (accountId, path, value) =>
+        this.storage.writeCredentials(accountId, path, value),
+      writeOauth: (accountId, path, value) =>
+        this.storage.writeOauthAccount(accountId, path, value),
+      readSnapshot: (accountId, path) => this.storage.readSnapshot(accountId, path),
+      restoreCredentials: (accountId, path, snapshot) =>
+        this.storage.restoreCredentials(accountId, path, snapshot),
+      restoreOauth: (accountId, path, snapshot) =>
+        this.storage.restoreOauth(accountId, path, snapshot),
+      login: (location) => this.runClaudeLoginAndCapture(location),
+      captureExisting: (configDir, previousDigest) =>
+        this.captureFromExistingConfigDir(configDir, previousDigest)
+    })
+  }
 
   listAccounts(): ClaudeRateLimitAccountsState {
-    this.normalizeActiveSelection()
-    return this.getSnapshot()
+    return this.selection.list()
   }
 
   async addAccount(target?: ClaudeAccountAddTarget): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccount(target))
+    return this.serializeMutation(() => this.registration.add(target))
   }
 
-  /**
-   * Adds a managed Claude account from an already-authenticated `CLAUDE_CONFIG_DIR`
-   * instead of driving the interactive browser login here. Enables the
-   * `orca account add` CLI to run `claude login` in the user's own terminal on a
-   * headless host, then register the captured credentials without a desktop GUI.
-   */
   async addAccountFromConfigDir(
     configDir: string,
     options?: ClaudeAccountImportOptions
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doAddAccountFromConfigDir(configDir, options))
+    return this.serializeMutation(() => this.registration.addFromConfigDir(configDir, options))
   }
 
   async reauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doReauthenticateAccount(accountId))
+    return this.serializeMutation(() => this.registration.reauthenticate(accountId))
   }
 
   async removeAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doRemoveAccount(accountId))
+    return this.serializeMutation(() => this.selection.remove(accountId))
   }
 
   async selectAccount(accountId: string | null): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doSelectAccount(accountId))
+    return this.serializeMutation(() => this.selection.select(accountId))
   }
 
   async selectAccountForTarget(
     accountId: string | null,
     target?: ClaudeAccountSelectionTarget
   ): Promise<ClaudeRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doSelectAccount(accountId, target))
+    return this.serializeMutation(() => this.selection.select(accountId, target))
   }
 
   cancelPendingLogin(): boolean {
@@ -152,1123 +113,87 @@ export class ClaudeAccountService {
     return this.runtimeAuth.getRuntimeConfigDir(target)
   }
 
-  private serializeMutation<T>(fn: () => Promise<T>): Promise<T> {
-    const next = this.mutationQueue.then(fn, fn)
+  private serializeMutation<T>(operation: () => Promise<T>): Promise<T> {
+    const next = this.mutationQueue.then(operation, operation)
     this.mutationQueue = next.catch(() => {})
     return next
   }
 
-  private async doAddAccount(
-    target?: ClaudeAccountAddTarget
-  ): Promise<ClaudeRateLimitAccountsState> {
-    const accountId = randomUUID()
-    const managedAuth = await this.createManagedAuthDir(accountId, target)
-    const previousSettings = this.store.getSettings()
-    try {
-      const captured = await this.runClaudeLoginAndCapture(managedAuth)
-      return await this.persistCapturedClaudeAccount(
-        accountId,
-        managedAuth,
-        previousSettings,
-        captured
-      )
-    } catch (error) {
-      await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
-      throw error
-    }
-  }
-
-  private async doAddAccountFromConfigDir(
-    configDir: string,
-    options?: ClaudeAccountImportOptions
-  ): Promise<ClaudeRateLimitAccountsState> {
-    const accountId = randomUUID()
-    const managedAuth = await this.createManagedAuthDir(accountId, options)
-    const previousSettings = this.store.getSettings()
-    try {
-      const captured = await this.captureFromExistingConfigDir(
-        configDir,
-        options?.previousLegacyCredentialsSha256
-      )
-      return await this.persistCapturedClaudeAccount(
-        accountId,
-        managedAuth,
-        previousSettings,
-        captured
-      )
-    } catch (error) {
-      await this.cleanupFailedAdd(accountId, managedAuth.managedAuthPath, previousSettings, error)
-      throw error
-    }
-  }
-
-  // Why: capture credentials from a CLAUDE_CONFIG_DIR the caller already
-  // authenticated (e.g. a temp dir the CLI ran `claude login` into), mirroring
-  // runClaudeLoginAndCapture's capture step but without spawning the interactive
-  // login. On Linux/Windows the credentials live in a plaintext `.credentials.json`.
-  private async captureFromExistingConfigDir(
-    configDir: string,
-    previousLegacyCredentialsSha256?: string | null
-  ): Promise<CapturedClaudeAuth> {
-    const trimmed = configDir.trim()
-    if (!trimmed) {
-      throw new Error('A Claude config directory path is required.')
-    }
-    const resolvedDir = resolve(trimmed)
-    // Why: macOS keeps Claude credentials in the Keychain rather than a file, so
-    // only require `.credentials.json` off-darwin; captureAuthFromConfigDir reads
-    // the scoped Keychain item on macOS.
-    if (process.platform !== 'darwin' && !existsSync(join(resolvedDir, '.credentials.json'))) {
-      throw new Error(
-        `No Claude credentials found in ${resolvedDir}. Run \`claude login\` into this directory first.`
-      )
-    }
-    // Why: `allowFailure` covers a non-zero exit but not a spawn error, and unlike
-    // the GUI flow nothing has run `claude` in this process yet — a daemon started
-    // with a minimal PATH (launchd/systemd) would hard-fail an add the user already
-    // signed in for. Identity still resolves from the config dir's oauthAccount.
-    let status = ''
-    try {
-      status = await this.runClaudeCommand(
-        ['auth', 'status', '--json'],
-        { windowsPath: resolvedDir, linuxPath: null, wslDistro: null },
-        STATUS_TIMEOUT_MS,
-        { allowFailure: true }
-      )
-    } catch (error) {
-      console.warn('[claude-accounts] Could not read `claude auth status`:', error)
-    }
-    // Why: this post-login RPC did not observe the legacy Keychain value before
-    // login unless the CLI supplied its one-way pre-login credential baseline.
-    const currentLegacyKeychain = await readActiveClaudeKeychainCredentialsStrict()
-    return this.captureAuthFromConfigDir(
-      resolvedDir,
-      status,
-      currentLegacyKeychain,
-      previousLegacyCredentialsSha256
-    )
-  }
-
-  private async persistCapturedClaudeAccount(
-    accountId: string,
-    managedAuth: ManagedClaudeAuthLocation,
-    previousSettings: ReturnType<Store['getSettings']>,
-    captured: CapturedClaudeAuth
-  ): Promise<ClaudeRateLimitAccountsState> {
-    if (!captured.identity.email) {
-      throw new Error('Claude login completed, but Orca could not resolve the account email.')
-    }
-    // Why: duplicate rows confuse selection and rate-limit tracking; re-authentication
-    // is the supported way to refresh an account that is already managed.
-    if (
-      findDuplicateClaudeAccount(previousSettings.claudeManagedAccounts, {
-        email: captured.identity.email,
-        organizationUuid: captured.identity.organizationUuid,
-        managedAuthRuntime: managedAuth.managedAuthRuntime,
-        wslDistro: managedAuth.wslDistro
-      })
-    ) {
-      throw new DuplicateClaudeAccountError('This Claude account is already added.')
-    }
-    await this.writeManagedAuth(accountId, managedAuth.managedAuthPath, captured)
-
-    const now = Date.now()
-    const account: ClaudeManagedAccount = {
-      id: accountId,
-      email: captured.identity.email,
-      managedAuthPath: managedAuth.managedAuthPath,
-      managedAuthRuntime: managedAuth.managedAuthRuntime,
-      wslDistro: managedAuth.wslDistro,
-      wslLinuxAuthPath: managedAuth.wslLinuxAuthPath,
-      authMethod: 'subscription-oauth',
-      organizationUuid: captured.identity.organizationUuid,
-      organizationName: captured.identity.organizationName,
-      createdAt: now,
-      updatedAt: now,
-      lastAuthenticatedAt: now
-    }
-
-    const selection = normalizeClaudeRuntimeSelection(previousSettings)
-    this.store.updateSettings({
-      claudeManagedAccounts: [...previousSettings.claudeManagedAccounts, account],
-      activeClaudeManagedAccountId: selection.host,
-      activeClaudeManagedAccountIdsByRuntime: selection
-    })
-    this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
-    this.rateLimits.evictInactiveClaudeCache(accountId)
-    return this.getSnapshot()
-  }
-
-  private async rollbackAddAccount(
-    accountId: string,
-    managedAuthPath: string,
-    previousSettings: ReturnType<Store['getSettings']>
-  ): Promise<void> {
-    this.restoreClaudeSettings(previousSettings)
-    // Why: rollback is best-effort — a failed rematerialization must not skip the
-    // managed-auth cleanup below, and the caller rethrows the original add error.
-    try {
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
-    } catch (rollbackError) {
-      console.warn('[claude-accounts] Rollback rematerialization failed:', rollbackError)
-    }
-    await this.safeRemoveManagedAuth(accountId, managedAuthPath)
-  }
-
-  private async cleanupFailedAdd(
-    accountId: string,
-    managedAuthPath: string,
-    previousSettings: ReturnType<Store['getSettings']>,
-    error: unknown
-  ): Promise<void> {
-    if (error instanceof DuplicateClaudeAccountError) {
-      // Why: duplicate detection precedes writes; rollback I/O could only mask
-      // the useful duplicate-account error.
-      await this.safeRemoveManagedAuth(accountId, managedAuthPath)
-      return
-    }
-    await this.rollbackAddAccount(accountId, managedAuthPath, previousSettings)
-  }
-
-  private async doReauthenticateAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    const account = this.requireAccount(accountId)
-    const managedAuthPath = await this.assertManagedAuthPath(account.managedAuthPath, accountId)
-    const previousSettings = this.store.getSettings()
-    const previousManagedAuth = await this.readManagedAuthSnapshot(accountId, managedAuthPath)
-    const captured = await this.runClaudeLoginAndCapture({
-      managedAuthPath,
-      managedAuthRuntime: account.managedAuthRuntime ?? 'host',
-      wslDistro: account.wslDistro ?? null,
-      wslLinuxAuthPath: account.wslLinuxAuthPath ?? null
-    })
-    if (!captured.identity.email) {
-      throw new Error('Claude login completed, but Orca could not resolve the account email.')
-    }
-
-    const settings = this.store.getSettings()
-    const now = Date.now()
-    const reauthenticatedAccounts = settings.claudeManagedAccounts.map((entry) =>
-      entry.id === accountId
-        ? {
-            ...entry,
-            email: captured.identity.email!,
-            organizationUuid: captured.identity.organizationUuid,
-            organizationName: captured.identity.organizationName,
-            updatedAt: now,
-            lastAuthenticatedAt: now
-          }
-        : entry
-    )
-    let wroteManagedCredentials = false
-    try {
-      await this.writeManagedOauthAccount(accountId, managedAuthPath, captured.oauthAccount)
-      await this.writeManagedCredentials(accountId, managedAuthPath, captured.credentialsJson)
-      wroteManagedCredentials = true
-      this.store.updateSettings({ claudeManagedAccounts: reauthenticatedAccounts })
-      this.runtimeAuth.clearLastWrittenCredentialsJson(accountId)
-      this.rateLimits.evictInactiveClaudeCache(accountId)
-      await this.syncRuntimeAuthWithLivePtyGate(getClaudeSelectionTargetForAccount(account))
-      await this.rateLimits.refreshForClaudeAccountChange(
-        undefined,
-        getClaudeSelectionTargetForAccount(account)
-      )
-      return this.getSnapshot()
-    } catch (error) {
-      let restoredManagedCredentials = false
-      try {
-        await this.restoreManagedCredentialsSnapshot(
-          accountId,
-          managedAuthPath,
-          previousManagedAuth
-        )
-        restoredManagedCredentials = true
-      } catch (rollbackError) {
-        console.warn(
-          '[claude-accounts] Failed to restore managed credentials during rollback:',
-          rollbackError
-        )
-      }
-      if (restoredManagedCredentials || !wroteManagedCredentials) {
-        try {
-          await this.restoreManagedOauthSnapshot(accountId, managedAuthPath, previousManagedAuth)
-        } catch (rollbackError) {
-          console.warn(
-            '[claude-accounts] Failed to restore managed oauth metadata during rollback:',
-            rollbackError
-          )
-        }
-      }
-      if (restoredManagedCredentials) {
-        this.restoreClaudeSettings(previousSettings)
-        await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
-      } else if (wroteManagedCredentials) {
-        this.store.updateSettings({ claudeManagedAccounts: reauthenticatedAccounts })
-      } else {
-        this.restoreClaudeSettings(previousSettings)
-      }
-      throw error
-    }
-  }
-
-  private async doRemoveAccount(accountId: string): Promise<ClaudeRateLimitAccountsState> {
-    const account = this.requireAccount(accountId)
-    const settings = this.store.getSettings()
-    const nextAccounts = settings.claudeManagedAccounts.filter((entry) => entry.id !== accountId)
-    const nextSelection = removeClaudeAccountIdFromSelection(
-      normalizeClaudeRuntimeSelection(settings),
-      accountId
-    )
-    const nextActiveId =
-      settings.activeClaudeManagedAccountId === accountId ? null : nextSelection.host
-
-    try {
-      if (
-        getSelectedClaudeAccountIdForTarget(
-          settings,
-          getClaudeSelectionTargetForAccount(account)
-        ) === accountId
-      ) {
-        this.store.updateSettings({
-          activeClaudeManagedAccountId: nextActiveId,
-          activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
-        await this.syncRuntimeAuthWithLivePtyGate(getClaudeSelectionTargetForAccount(account))
-        this.store.updateSettings({ claudeManagedAccounts: nextAccounts })
-      } else {
-        this.store.updateSettings({
-          claudeManagedAccounts: nextAccounts,
-          activeClaudeManagedAccountId: nextActiveId,
-          activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
-        await this.syncRuntimeAuthWithLivePtyGate(getClaudeSelectionTargetForAccount(account))
-      }
-      await this.safeRemoveManagedAuth(accountId, account.managedAuthPath)
-      this.rateLimits.evictInactiveClaudeCache(accountId)
-      await this.rateLimits.refreshForClaudeAccountChange(
-        getSelectedClaudeAccountIdForTarget(
-          settings,
-          getClaudeSelectionTargetForAccount(account)
-        ) === accountId
-          ? accountId
-          : undefined,
-        getClaudeSelectionTargetForAccount(account)
-      )
-      return this.getSnapshot()
-    } catch (error) {
-      this.restoreClaudeSettings(settings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
-      throw error
-    }
-  }
-
-  private async doSelectAccount(
-    accountId: string | null,
-    target?: ClaudeAccountSelectionTarget
-  ): Promise<ClaudeRateLimitAccountsState> {
-    let effectiveTarget = target
-    if (accountId !== null) {
-      const account = this.requireAccount(accountId)
-      const accountTarget = getClaudeSelectionTargetForAccount(account)
-      const requestedTarget = normalizeClaudeAccountSelectionTarget(target ?? accountTarget)
-      const normalizedAccountTarget = normalizeClaudeAccountSelectionTarget(accountTarget)
-      if (
-        requestedTarget.runtime !== normalizedAccountTarget.runtime ||
-        (requestedTarget.wslDistro !== null &&
-          requestedTarget.wslDistro !== normalizedAccountTarget.wslDistro)
-      ) {
-        throw new Error('That Claude account belongs to a different runtime.')
-      }
-      effectiveTarget = accountTarget
-    }
-    const previousSettings = this.store.getSettings()
-    const selection = normalizeClaudeRuntimeSelection(previousSettings)
-    const outgoingAccountId = getSelectedClaudeAccountIdForTarget(previousSettings, effectiveTarget)
-    const nextSelection = setSelectedClaudeAccountIdForTarget(selection, accountId, effectiveTarget)
-    this.store.updateSettings({
-      activeClaudeManagedAccountId:
-        effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
-      activeClaudeManagedAccountIdsByRuntime: nextSelection
-    })
-    try {
-      await this.syncRuntimeAuthWithLivePtyGate(effectiveTarget)
-      await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId, effectiveTarget)
-      return this.getSnapshot()
-    } catch (error) {
-      this.restoreClaudeSettings(previousSettings)
-      await this.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
-      throw error
-    }
-  }
-
-  private getSnapshot(): ClaudeRateLimitAccountsState {
-    const settings = this.store.getSettings()
-    return {
-      accounts: settings.claudeManagedAccounts
-        .map((account) => this.toSummary(account))
-        .sort((a, b) => b.updatedAt - a.updatedAt),
-      activeAccountId: normalizeClaudeRuntimeSelection(settings).host,
-      activeAccountIdsByRuntime: normalizeClaudeRuntimeSelection(settings)
-    }
-  }
-
-  private toSummary(account: ClaudeManagedAccount): ClaudeManagedAccountSummary {
-    return {
-      id: account.id,
-      email: account.email,
-      managedAuthRuntime: account.managedAuthRuntime ?? 'host',
-      wslDistro: account.wslDistro ?? null,
-      authMethod: account.authMethod ?? 'unknown',
-      organizationUuid: account.organizationUuid ?? null,
-      organizationName: account.organizationName ?? null,
-      createdAt: account.createdAt,
-      updatedAt: account.updatedAt,
-      lastAuthenticatedAt: account.lastAuthenticatedAt
-    }
-  }
-
-  private requireAccount(accountId: string): ClaudeManagedAccount {
-    const account = this.store
-      .getSettings()
-      .claudeManagedAccounts.find((entry) => entry.id === accountId)
-    if (!account) {
-      throw new Error('That Claude account no longer exists.')
-    }
-    return account
-  }
-
-  private normalizeActiveSelection(): void {
-    const settings = this.store.getSettings()
-    const nextSelection = pruneInvalidClaudeRuntimeSelection(
-      normalizeClaudeRuntimeSelection(settings),
-      settings.claudeManagedAccounts
-    )
-    if (
-      nextSelection.host !== settings.activeClaudeManagedAccountId ||
-      JSON.stringify(nextSelection) !== JSON.stringify(normalizeClaudeRuntimeSelection(settings))
-    ) {
-      this.store.updateSettings({
-        activeClaudeManagedAccountId: nextSelection.host,
-        activeClaudeManagedAccountIdsByRuntime: nextSelection
-      })
-    }
-  }
-
-  private restoreClaudeSettings(settings: ReturnType<Store['getSettings']>): void {
-    this.store.updateSettings({
-      claudeManagedAccounts: settings.claudeManagedAccounts,
-      activeClaudeManagedAccountId: settings.activeClaudeManagedAccountId,
-      activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime
-    })
-  }
-
-  private async syncRuntimeAuthWithLivePtyGate(
-    target?: ClaudeAccountSelectionTarget,
-    operation?: () => Promise<void>
-  ): Promise<void> {
-    beginClaudeAuthSwitch()
-    try {
-      await (operation ? operation() : this.runtimeAuth.syncForCurrentSelection(target))
-    } finally {
-      endClaudeAuthSwitch()
-    }
-  }
-
-  private async runClaudeLoginAndCapture(
-    location: ManagedClaudeAuthLocation = {
+  private runClaudeLoginAndCapture(
+    location: ClaudeManagedAuthLocation = {
       managedAuthPath: '',
       managedAuthRuntime: 'host',
       wslDistro: null,
       wslLinuxAuthPath: null
     }
   ): Promise<CapturedClaudeAuth> {
-    const tempConfig = await this.createTemporaryClaudeConfigDir(location)
-    const loginAbortController = new AbortController()
-    this.cancelPendingClaudeLogin = () => {
-      if (loginAbortController.signal.aborted) {
-        return false
+    return runClaudeLoginSession(location, {
+      runCommand: (args, config, timeoutMs, options) =>
+        this.runClaudeCommand(args, config, timeoutMs, options),
+      capture: (configDir, status, previousLegacy) =>
+        this.captureAuthFromConfigDir(configDir, status, previousLegacy),
+      setCancel: (cancel) => {
+        this.cancelPendingClaudeLogin = cancel
       }
-      loginAbortController.abort()
-      return true
-    }
-    const previousLegacyKeychain = await readActiveClaudeKeychainCredentials()
-    let captured: CapturedClaudeAuth | null = null
-    let captureError: unknown = null
-    let cleanupError: unknown = null
-    try {
-      if (loginAbortController.signal.aborted) {
-        throw new Error('Claude sign-in was cancelled.')
-      }
-      await this.runClaudeCommand(['auth', 'login', '--claudeai'], tempConfig, LOGIN_TIMEOUT_MS, {
-        signal: loginAbortController.signal,
-        keepStdinOpen: true
-      })
-      this.cancelPendingClaudeLogin = null
-      const status = await this.runClaudeCommand(
-        ['auth', 'status', '--json'],
-        tempConfig,
-        STATUS_TIMEOUT_MS,
-        { allowFailure: true }
-      )
-      captured = await this.captureAuthFromConfigDir(
-        tempConfig.windowsPath,
-        status,
-        previousLegacyKeychain
-      )
-    } catch (error) {
-      captureError = error
-    } finally {
-      if (process.platform === 'darwin') {
-        try {
-          await deleteActiveClaudeKeychainCredentialsStrict(tempConfig.windowsPath)
-        } catch (error) {
-          console.warn('[claude-accounts] Failed to clean temporary Claude Keychain item:', error)
-        }
-      }
-      if (process.platform === 'darwin') {
-        try {
-          // Why: older Claude versions ignored CLAUDE_CONFIG_DIR and wrote the
-          // legacy active Keychain item. Preserve that external CLI state.
-          await (previousLegacyKeychain
-            ? writeActiveClaudeKeychainCredentials(previousLegacyKeychain)
-            : deleteActiveClaudeKeychainCredentialsStrict())
-        } catch (error) {
-          cleanupError = error
-        }
-      }
-      await this.removeTemporaryClaudeConfigDir(tempConfig)
-      this.cancelPendingClaudeLogin = null
-    }
-    if (captureError) {
-      throw captureError
-    }
-    if (cleanupError) {
-      throw cleanupError
-    }
-    return captured!
-  }
-
-  private async createTemporaryClaudeConfigDir(location: ManagedClaudeAuthLocation): Promise<{
-    windowsPath: string
-    linuxPath: string | null
-    wslDistro: string | null
-  }> {
-    if (location.managedAuthRuntime !== 'wsl') {
-      return {
-        windowsPath: mkdtempSync(join(tmpdir(), 'orca-claude-login-')),
-        linuxPath: null,
-        wslDistro: null
-      }
-    }
-    if (!location.wslDistro) {
-      throw new Error('Could not resolve the active WSL distribution for Claude login.')
-    }
-    const created = await runWslProcess({
-      distro: location.wslDistro,
-      loginPath: 'none',
-      shell: 'bash',
-      script: 'mktemp -d "${TMPDIR:-/tmp}/orca-claude-login.XXXXXX"',
-      timeoutMs: 5000
     })
-    const linuxPath = created.stdout.replaceAll(String.fromCharCode(0), '').trim()
-    if (created.code !== 0 || created.timedOut || !linuxPath.startsWith('/')) {
-      throw new Error('Could not create a temporary WSL Claude login directory.')
-    }
-    return {
-      windowsPath: toWindowsWslPath(linuxPath, location.wslDistro),
-      linuxPath,
-      wslDistro: location.wslDistro
-    }
   }
 
-  private async removeTemporaryClaudeConfigDir(tempConfig: {
-    windowsPath: string
-    linuxPath: string | null
-    wslDistro: string | null
-  }): Promise<void> {
-    if (tempConfig.linuxPath && tempConfig.wslDistro) {
-      try {
-        await runWslProcess({
-          distro: tempConfig.wslDistro,
-          loginPath: 'none',
-          program: 'rm',
-          args: ['-rf', '--', tempConfig.linuxPath],
-          timeoutMs: 5000
-        })
-      } catch {
-        // Best-effort cleanup.
-      }
-      return
-    }
-    rmSync(tempConfig.windowsPath, { recursive: true, force: true })
+  private runClaudeCommand(
+    args: string[],
+    configDir: ClaudeCommandConfig,
+    timeoutMs: number,
+    options?: ClaudeCommandOptions
+  ): Promise<string> {
+    return runClaudeCommandProcess(args, configDir, timeoutMs, options)
   }
 
-  private async captureAuthFromConfigDir(
+  private captureFromExistingConfigDir(
+    configDir: string,
+    previousLegacyCredentialsSha256?: string | null
+  ): Promise<CapturedClaudeAuth> {
+    return captureClaudeAuthFromExistingConfigDir(
+      configDir,
+      previousLegacyCredentialsSha256,
+      (args, config, timeoutMs, options) => this.runClaudeCommand(args, config, timeoutMs, options)
+    )
+  }
+
+  private captureAuthFromConfigDir(
     configDir: string,
     statusOutput: string,
     previousLegacyKeychain: string | null,
     previousLegacyCredentialsSha256?: string | null
   ): Promise<CapturedClaudeAuth> {
-    const credentialsJson = await this.readCapturedCredentials(
+    return captureClaudeAuthFromConfigDir(
       configDir,
+      statusOutput,
       previousLegacyKeychain,
-      previousLegacyCredentialsSha256
+      previousLegacyCredentialsSha256,
+      (path, previous, digest) => this.readCapturedCredentials(path, previous, digest)
     )
-    if (!credentialsJson) {
-      throw new Error('Claude login completed, but no OAuth credentials were captured.')
-    }
-    const oauthAccount = this.readOauthAccountFromConfigDir(configDir)
-    const identity = this.resolveIdentity(statusOutput, oauthAccount, credentialsJson)
-    return { credentialsJson, oauthAccount, identity }
   }
 
-  private async readCapturedCredentials(
+  private readCapturedCredentials(
     configDir: string,
     previousLegacyKeychain: string | null,
     previousLegacyCredentialsSha256?: string | null
   ): Promise<string | null> {
-    if (process.platform === 'darwin') {
-      const scopedCredentialsJson = await readActiveClaudeKeychainCredentialsStrict(configDir)
-      if (scopedCredentialsJson) {
-        return scopedCredentialsJson
-      }
-      const legacyCredentialsJson = await readActiveClaudeKeychainCredentialsStrict()
-      const legacyChanged =
-        previousLegacyCredentialsSha256 === undefined
-          ? legacyCredentialsJson !== previousLegacyKeychain
-          : legacyCredentialsJson !== null &&
-            createHash('sha256').update(legacyCredentialsJson).digest('hex') !==
-              previousLegacyCredentialsSha256
-      if (legacyCredentialsJson && legacyChanged) {
-        return legacyCredentialsJson
-      }
-    }
-    const credentialsPath = join(configDir, '.credentials.json')
-    return existsSync(credentialsPath) ? readFileSync(credentialsPath, 'utf-8') : null
+    return readCapturedClaudeCredentials(
+      configDir,
+      previousLegacyKeychain,
+      previousLegacyCredentialsSha256
+    )
   }
 
-  private readOauthAccountFromConfigDir(configDir: string): unknown {
-    for (const configPath of [join(configDir, '.claude.json'), join(configDir, '.config.json')]) {
-      if (!existsSync(configPath)) {
-        continue
-      }
-      try {
-        const parsed = JSON.parse(readFileSync(configPath, 'utf-8')) as Record<string, unknown>
-        if (parsed.oauthAccount) {
-          return parsed.oauthAccount
-        }
-      } catch {
-        continue
-      }
-    }
-    return null
-  }
-
-  private resolveIdentity(
-    statusOutput: string,
-    oauthAccount: unknown,
-    credentialsJson: string
-  ): ClaudeIdentity {
-    const status = this.parseJsonObject(statusOutput)
-    const oauth = this.asRecord(oauthAccount)
-    const credentials = this.parseJsonObject(credentialsJson)
-    const credentialOauth = this.asRecord(credentials?.claudeAiOauth)
-
-    return {
-      email: this.normalizeField(
-        this.readString(status, 'email') ??
-          this.readString(oauth, 'emailAddress') ??
-          this.readString(oauth, 'email') ??
-          this.readString(credentialOauth, 'email')
-      ),
-      organizationUuid: this.normalizeField(
-        this.readString(status, 'organizationUuid') ??
-          this.readString(status, 'organizationId') ??
-          this.readString(oauth, 'organizationUuid') ??
-          this.readString(oauth, 'organizationId')
-      ),
-      organizationName: this.normalizeField(
-        this.readString(status, 'organizationName') ?? this.readString(oauth, 'organizationName')
-      )
-    }
-  }
-
-  private async writeManagedAuth(
+  private writeManagedAuth(
     accountId: string,
     managedAuthPath: string,
     captured: CapturedClaudeAuth
   ): Promise<void> {
-    await this.writeManagedCredentials(accountId, managedAuthPath, captured.credentialsJson)
-    await this.writeManagedOauthAccount(accountId, managedAuthPath, captured.oauthAccount)
+    return this.storage.writeAuth(accountId, managedAuthPath, captured)
   }
 
-  private async writeManagedCredentials(
-    accountId: string,
-    managedAuthPath: string,
-    credentialsJson: string
-  ): Promise<void> {
-    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
-    if (process.platform === 'darwin') {
-      await writeManagedClaudeKeychainCredentials(accountId, credentialsJson)
-    } else {
-      writeClaudeManagedAuthFile(trustedPath, '.credentials.json', credentialsJson)
-    }
-  }
-
-  private async writeManagedOauthAccount(
-    accountId: string,
-    managedAuthPath: string,
-    oauthAccount: unknown
-  ): Promise<void> {
-    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
-    writeClaudeManagedAuthFile(
-      trustedPath,
-      'oauth-account.json',
-      `${JSON.stringify(oauthAccount, null, 2)}\n`
-    )
-  }
-
-  private async readManagedAuthSnapshot(
-    accountId: string,
-    managedAuthPath: string
-  ): Promise<ManagedClaudeAuthSnapshot> {
-    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
-    return {
-      credentialsJson:
-        process.platform === 'darwin'
-          ? await readManagedClaudeKeychainCredentials(accountId)
-          : readClaudeManagedAuthFile(trustedPath, '.credentials.json'),
-      oauthAccountJson: readClaudeManagedAuthFile(trustedPath, 'oauth-account.json')
-    }
-  }
-
-  private async restoreManagedCredentialsSnapshot(
-    accountId: string,
-    managedAuthPath: string,
-    snapshot: ManagedClaudeAuthSnapshot
-  ): Promise<void> {
-    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
-    const credentialsPath = join(trustedPath, '.credentials.json')
-    if (process.platform === 'darwin') {
-      await (snapshot.credentialsJson !== null
-        ? writeManagedClaudeKeychainCredentials(accountId, snapshot.credentialsJson)
-        : deleteManagedClaudeKeychainCredentials(accountId))
-    } else if (snapshot.credentialsJson !== null) {
-      writeClaudeManagedAuthFile(trustedPath, '.credentials.json', snapshot.credentialsJson)
-    } else {
-      rmSync(credentialsPath, { force: true })
-    }
-  }
-
-  private async restoreManagedOauthSnapshot(
-    accountId: string,
-    managedAuthPath: string,
-    snapshot: ManagedClaudeAuthSnapshot
-  ): Promise<void> {
-    const trustedPath = await this.assertManagedAuthPath(managedAuthPath, accountId)
-    const oauthPath = join(trustedPath, 'oauth-account.json')
-    if (snapshot.oauthAccountJson !== null) {
-      writeClaudeManagedAuthFile(trustedPath, 'oauth-account.json', snapshot.oauthAccountJson)
-    } else {
-      rmSync(oauthPath, { force: true })
-    }
-  }
-
-  private async createManagedAuthDir(
-    accountId: string,
-    target?: ClaudeAccountAddTarget
-  ): Promise<ManagedClaudeAuthLocation> {
-    const wslAuth = await this.tryCreateWslManagedAuthDir(accountId, target)
-    if (wslAuth) {
-      return wslAuth
-    }
-
-    const managedAuthPath = join(this.getManagedAccountsRoot(), accountId, 'auth')
-    mkdirSync(managedAuthPath, { recursive: true })
-    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), `${accountId}\n`, 'utf-8')
-    return {
-      managedAuthPath: await this.assertManagedAuthPath(managedAuthPath, accountId),
-      managedAuthRuntime: 'host',
-      wslDistro: null,
-      wslLinuxAuthPath: null
-    }
-  }
-
-  private async tryCreateWslManagedAuthDir(
-    accountId: string,
-    target?: ClaudeAccountAddTarget
-  ): Promise<ManagedClaudeAuthLocation | null> {
-    if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
-      return null
-    }
-
-    const requestedDistro = target.wslDistro?.trim() || undefined
-    const info = await runWslProcess({
-      distro: requestedDistro,
-      loginPath: 'none',
-      shell: 'bash',
-      script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
-      timeoutMs: 5000
-    })
-    const [rawDistro, rawHome] =
-      info.code === 0 && !info.timedOut
-        ? info.stdout
-            .replaceAll(String.fromCharCode(0), '')
-            .split(/\r?\n/)
-            .map((line) => line.trim())
-        : []
-    const distro = requestedDistro || rawDistro
-    const home = rawHome
-    if (!distro || !home?.startsWith('/')) {
-      throw new Error('Could not resolve the active WSL home directory for Claude login.')
-    }
-
-    const wslLinuxAuthPath = `${home.replace(/\/$/, '')}/.local/share/orca/claude-accounts/${accountId}/auth`
-    const created = await runWslProcess({
-      distro,
-      loginPath: 'none',
-      shell: 'bash',
-      script: 'mkdir -p "$1" && printf \'%s\\n\' "$2" > "$1/.orca-managed-claude-auth"',
-      args: [wslLinuxAuthPath, accountId],
-      timeoutMs: 5000
-    })
-    if (created.code !== 0 || created.timedOut) {
-      throw new Error('Could not create the managed WSL Claude auth directory.')
-    }
-
-    const managedAuthPath = toWindowsWslPath(wslLinuxAuthPath, distro)
-    return {
-      managedAuthPath: await this.assertManagedAuthPath(managedAuthPath, accountId),
-      managedAuthRuntime: 'wsl',
-      wslDistro: distro,
-      wslLinuxAuthPath
-    }
-  }
-
-  private getManagedAccountsRoot(): string {
-    const root = getClaudeManagedAccountsRoot()
-    mkdirSync(root, { recursive: true })
-    return root
-  }
-
-  private async assertManagedAuthPath(
-    candidatePath: string,
-    expectedAccountId?: string
-  ): Promise<string> {
-    const wslInfo = parseWslUncPath(candidatePath)
-    if (wslInfo) {
-      if (
-        !wslInfo.linuxPath.includes('/.local/share/orca/claude-accounts/') ||
-        !wslInfo.linuxPath.endsWith('/auth')
-      ) {
-        throw new Error('Managed WSL Claude auth storage is outside Orca account storage.')
-      }
-      if (process.platform === 'win32') {
-        try {
-          const owned = await runWslProcess({
-            distro: wslInfo.distro,
-            loginPath: 'none',
-            shell: 'bash',
-            script: [
-              'set -euo pipefail',
-              `candidate=${shellQuote(wslInfo.linuxPath)}`,
-              'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
-              'candidate_real=$(readlink -f -- "$candidate")',
-              'managed_root_real=$(readlink -f -- "$managed_root")',
-              'test -f "$candidate_real/.orca-managed-claude-auth"',
-              expectedAccountId
-                ? `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(expectedAccountId)}`
-                : 'test -n "$(cat "$candidate_real/.orca-managed-claude-auth")"',
-              'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
-            ].join('\n'),
-            timeoutMs: 5000
-          })
-          if (owned.code !== 0 || owned.timedOut) {
-            throw new Error('Managed Claude auth directory does not exist on disk.')
-          }
-          const canonicalLinuxPath = owned.stdout.trim()
-          if (!canonicalLinuxPath) {
-            throw new Error('Managed Claude auth directory does not exist on disk.')
-          }
-          return toWindowsWslPath(canonicalLinuxPath, wslInfo.distro)
-        } catch (error) {
-          throw new Error('Managed WSL Claude auth storage is outside Orca account storage.', {
-            cause: error
-          })
-        }
-      }
-      if (
-        !existsSync(candidatePath) ||
-        !existsSync(join(candidatePath, '.orca-managed-claude-auth'))
-      ) {
-        throw new Error('Managed Claude auth storage is not owned by Orca.')
-      }
-      return candidatePath
-    }
-
-    this.getManagedAccountsRoot()
-    const accountId = expectedAccountId ?? this.readManagedAuthAccountIdFromPath(candidatePath)
-    if (!accountId || (expectedAccountId && accountId !== expectedAccountId)) {
-      throw new Error('Managed Claude auth directory does not exist on disk.')
-    }
-    const trustedPath = resolveOwnedClaudeManagedAuthPath(accountId, candidatePath, {
-      adoptLegacyMarker: true
-    })
-    if (!trustedPath) {
-      throw new Error('Managed Claude auth storage is not owned by Orca.')
-    }
-    return trustedPath
-  }
-
-  private readManagedAuthAccountIdFromPath(candidatePath: string): string | null {
-    const rootPath = this.getManagedAccountsRoot()
-    const relativePath = relative(resolve(rootPath), resolve(candidatePath))
-    const parts = relativePath.split(sep)
-    return parts.length === 2 && parts[1] === 'auth' ? parts[0] : null
-  }
-
-  private async safeRemoveManagedAuth(accountId: string, candidatePath: string): Promise<void> {
-    try {
-      const managedAuthPath = await this.assertManagedAuthPath(candidatePath, accountId)
-      rmSync(resolve(managedAuthPath, '..'), { recursive: true, force: true })
-    } catch (error) {
-      console.warn('[claude-accounts] Refusing to remove untrusted managed auth:', error)
-    }
-    await deleteManagedClaudeKeychainCredentials(accountId)
-  }
-
-  private runClaudeCommand(
-    args: string[],
-    configDir: { windowsPath: string; linuxPath: string | null; wslDistro: string | null },
-    timeoutMs: number,
-    options?: { allowFailure?: boolean; signal?: AbortSignal; keepStdinOpen?: boolean }
-  ): Promise<string> {
-    return new Promise((resolvePromise, rejectPromise) => {
-      const spawnConfig =
-        configDir.linuxPath && configDir.wslDistro
-          ? {
-              command: 'wsl.exe',
-              args: [
-                '-d',
-                configDir.wslDistro,
-                '--exec',
-                'bash',
-                '-lc',
-                `export CLAUDE_CONFIG_DIR=${shellQuote(configDir.linuxPath)}; exec claude ${args.map(shellQuote).join(' ')}`
-              ],
-              env: process.env,
-              shell: false,
-              windowsVerbatimArguments: false
-            }
-          : process.platform === 'win32'
-            ? {
-                ...buildWindowsCommandInvocation(resolveClaudeCommand(), args),
-                env: {
-                  ...process.env,
-                  CLAUDE_CONFIG_DIR: configDir.windowsPath
-                },
-                shell: false
-              }
-            : {
-                command: resolveClaudeCommand(),
-                args,
-                env: {
-                  ...process.env,
-                  CLAUDE_CONFIG_DIR: configDir.windowsPath
-                },
-                shell: false,
-                windowsVerbatimArguments: false
-              }
-      const child = spawn(spawnConfig.command, spawnConfig.args, {
-        // Why: Claude's browser auth can bind its callback lifetime to stdin.
-        // Keeping stdin open prevents hidden managed-login runs from tearing down
-        // the local callback server before the browser returns.
-        stdio: [options?.keepStdinOpen ? 'pipe' : 'ignore', 'pipe', 'pipe'],
-        shell: spawnConfig.shell,
-        // On Windows this is wsl.exe or a cmd invocation; without the flag it
-        // opens a console and steals foreground on every managed login (#10488).
-        windowsHide: true,
-        windowsVerbatimArguments: spawnConfig.windowsVerbatimArguments,
-        env: spawnConfig.env,
-        // Why: Claude auth can leave browser/login descendants alive after denial.
-        // A process group lets cancellation terminate the whole POSIX login tree.
-        detached: process.platform !== 'win32'
-      })
-      const stdout = child.stdout
-      const stderr = child.stderr
-      if (!stdout || !stderr) {
-        if (options?.keepStdinOpen) {
-          child.stdin?.destroy()
-        }
-        child.kill()
-        rejectPromise(new Error('Claude command failed to open output streams.'))
-        return
-      }
-      const completesOnExit =
-        process.platform === 'win32' &&
-        configDir.linuxPath === null &&
-        configDir.wslDistro === null &&
-        args[0] === 'auth' &&
-        args[1] === 'login'
-      const completionEvent = completesOnExit ? 'exit' : 'close'
-
-      let settled = false
-      let output = ''
-      const appendOutput = (chunk: Buffer): void => {
-        output = `${output}${chunk.toString()}`
-        if (output.length > MAX_COMMAND_OUTPUT_CHARS) {
-          output = output.slice(-MAX_COMMAND_OUTPUT_CHARS)
-        }
-        if (CLAUDE_AUTH_DENIED_PATTERN.test(output)) {
-          killChild(() =>
-            settle(() => rejectPromise(new Error('Claude sign-in was denied. Please try again.')))
-          )
-        }
-      }
-      let timeout: ReturnType<typeof setTimeout> | null = null
-      const cleanupListeners = (): void => {
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
-        stdout.off('data', appendOutput)
-        stderr.off('data', appendOutput)
-        child.off('error', onError)
-        child.off(completionEvent, onDone)
-        options?.signal?.removeEventListener('abort', onAbort)
-        if (options?.keepStdinOpen) {
-          child.stdin?.destroy()
-        }
-        if (completesOnExit) {
-          stdout.destroy()
-          stderr.destroy()
-        }
-      }
-      const settle = (callback: () => void): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanupListeners()
-        callback()
-      }
-      const timeoutError = new Error('Claude sign-in took too long to finish.')
-      const cancelError = new Error('Claude sign-in was cancelled.')
-      let terminationPending = false
-      const killChild = (afterKill: () => void): void => {
-        if (terminationPending || settled) {
-          return
-        }
-        terminationPending = true
-        if (process.platform === 'win32' && child.pid) {
-          const taskkill = spawn('taskkill.exe', ['/pid', String(child.pid), '/t', '/f'], {
-            stdio: 'ignore',
-            windowsHide: true
-          })
-          let taskkillFinished = false
-          const finishTaskkill = (succeeded: boolean): void => {
-            if (taskkillFinished) {
-              return
-            }
-            taskkillFinished = true
-            clearTimeout(taskkillTimeout)
-            if (!succeeded) {
-              child.kill()
-            }
-            afterKill()
-          }
-          const taskkillTimeout = setTimeout(() => {
-            taskkill.kill()
-            finishTaskkill(false)
-          }, WINDOWS_TASKKILL_TIMEOUT_MS)
-          taskkill.once('error', () => finishTaskkill(false))
-          taskkill.once('close', (code) => finishTaskkill(code === 0))
-          return
-        }
-        if (process.platform !== 'win32' && child.pid) {
-          try {
-            process.kill(-child.pid)
-            afterKill()
-            return
-          } catch {
-            // Fall back to the direct child if the process group is unavailable.
-          }
-        }
-        child.kill()
-        afterKill()
-      }
-      timeout = setTimeout(() => {
-        killChild(() => settle(() => rejectPromise(timeoutError)))
-      }, timeoutMs)
-
-      const onAbort = (): void => {
-        killChild(() => settle(() => rejectPromise(cancelError)))
-      }
-      const onError = (error: Error): void => {
-        if (terminationPending) {
-          return
-        }
-        settle(() => rejectPromise(error))
-      }
-      const onDone = (code: number | null): void => {
-        if (terminationPending) {
-          return
-        }
-        settle(() => {
-          if (code === 0 || options?.allowFailure) {
-            resolvePromise(output)
-            return
-          }
-          const trimmedOutput = output.trim()
-          rejectPromise(
-            new Error(
-              trimmedOutput
-                ? `Claude command failed: ${trimmedOutput}`
-                : `Claude command exited with code ${code ?? 'unknown'}.`
-            )
-          )
-        })
-      }
-
-      stdout.on('data', appendOutput)
-      stderr.on('data', appendOutput)
-      child.on('error', onError)
-      // Native Windows browsers can inherit these pipes and indefinitely delay close.
-      child.on(completionEvent, onDone)
-
-      if (options?.signal?.aborted) {
-        onAbort()
-      } else {
-        options?.signal?.addEventListener('abort', onAbort, { once: true })
-      }
-    })
-  }
-
-  private parseJsonObject(value: string): Record<string, unknown> | null {
-    try {
-      const parsed = JSON.parse(value) as unknown
-      return this.asRecord(parsed)
-    } catch {
-      return null
-    }
-  }
-
-  private asRecord(value: unknown): Record<string, unknown> | null {
-    if (!value || typeof value !== 'object' || Array.isArray(value)) {
-      return null
-    }
-    return value as Record<string, unknown>
-  }
-
-  private readString(value: Record<string, unknown> | null, key: string): string | null {
-    const field = value?.[key]
-    return typeof field === 'string' ? field : null
-  }
-
-  private normalizeField(value: string | null | undefined): string | null {
-    if (!value) {
-      return null
-    }
-    const trimmed = value.trim()
-    return trimmed === '' ? null : trimmed
+  private safeRemoveManagedAuth(accountId: string, path: string): Promise<void> {
+    return this.storage.remove(accountId, path)
   }
 }

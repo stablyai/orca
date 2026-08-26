@@ -40,7 +40,7 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 
-function formatBrowserTabUrlLabel(url: string): string {
+export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
     return 'New Tab'
   }

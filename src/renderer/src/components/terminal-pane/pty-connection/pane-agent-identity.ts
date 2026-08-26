@@ -88,12 +88,45 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     }
   }
   session.deferredCommandFinishedStatusDrop = null
+  session.deferredConfirmedShellReconcile = null
+  /** The pane's foreground was proven to be a shell, so its agent exited. Unlike a user dismissal,
+   *  this must also retire the main-side per-pane caches — a surviving Claude latch resolves the
+   *  next event straight back to `working`.
+   *
+   *  Ordered by the row's `acceptedStatusSeq`, not by row identity or `updatedAt`: the confirming
+   *  process read can take seconds, an unrelated field moving in that window is not evidence the
+   *  agent is alive, and a genuinely newer row can share the anchor's millisecond. Reading the token
+   *  off the row is what makes the ordering safe — the paired drop runs FIRST and removes the row,
+   *  and a removed row means nothing reported, not "the anchor is gone".
+   *
+   *  Residual: a row deleted by some OTHER path mid-window and then rebuilt restarts its count, so a
+   *  pane armed at 1 that reports exactly once more compares equal. It needs a foreign drop inside
+   *  the confirm window; the relaunch case that would otherwise hit it is already discarded by
+   *  onCommandStarted, and the cost is retiring a pane the process table just proved is a shell. */
+  const reconcileEndedProcessIfPaneQuiet = (armedAcceptedStatusSeq: number | undefined): void => {
+    const current = useAppStore.getState().agentStatusByPaneKey[session.cacheKey]
+    if (current && current.acceptedStatusSeq !== armedAcceptedStatusSeq) {
+      return
+    }
+    // Why: main-side only. The renderer row and launch config are already owned by the deferred
+    // drop above; what that path cannot reach is the hook server's per-pane Claude latches, which
+    // `agentStatus:drop` deliberately preserves for a still-live pane. Main echoes its own clear
+    // back through the pane-status-cleared channel, so both sides stay consistent.
+    window.api?.agentStatus?.reconcileEndedProcess?.(session.cacheKey)
+  }
   session.visibleForegroundSamplePending = false
   session.visibleForegroundSampleSettled = false
-  session.settleDeferredCommandFinishedStatusDrop = (): void => {
+  session.settleDeferredCommandFinishedStatusDrop = (
+    options: { confirmedShell?: boolean } = {}
+  ): void => {
     const dropStatus = session.deferredCommandFinishedStatusDrop
+    const reconcile = session.deferredConfirmedShellReconcile
     session.deferredCommandFinishedStatusDrop = null
+    session.deferredConfirmedShellReconcile = null
     dropStatus?.()
+    if (options.confirmedShell) {
+      reconcile?.()
+    }
   }
   session.isForegroundTrackingAllowed = (id: string): boolean => {
     if (isRemoteRuntimePtyId(id) || parseAppSshPtyId(id) !== null) {
@@ -143,9 +176,11 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
         useAppStore.getState().clearAgentLaunchConfig(session.cacheKey)
         return
       }
-      session.settleDeferredCommandFinishedStatusDrop()
+      session.settleDeferredCommandFinishedStatusDrop({ confirmedShell: true })
     },
-    onCommandFinishedUnavailable: session.settleDeferredCommandFinishedStatusDrop,
+    // Why wrapped: passed bare, a caller-supplied argument would be read as `options` and could
+    // reconcile on the unavailable path, which has no proof the agent exited.
+    onCommandFinishedUnavailable: () => session.settleDeferredCommandFinishedStatusDrop(),
     onVisibleForegroundSettled: (outcome) => {
       session.visibleForegroundSamplePending = false
       session.visibleForegroundSampleSettled = outcome !== 'inconclusive'
@@ -195,10 +230,16 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     if (shouldDeferStatusDrop) {
       // Why: keep the concrete pane identity routable while the local process
       // check distinguishes a leaked nested-shell D from a genuine agent exit.
+      // Anchor the accepted-status ordinal once, here — not per rung of the confirm ladder, which
+      // can span seconds — so the gate tolerates churn across the whole window.
+      const armedAcceptedStatusSeq = entry?.acceptedStatusSeq
       session.deferredCommandFinishedStatusDrop = dropStatus
+      session.deferredConfirmedShellReconcile = () =>
+        reconcileEndedProcessIfPaneQuiet(armedAcceptedStatusSeq)
       return
     }
     session.deferredCommandFinishedStatusDrop = null
+    session.deferredConfirmedShellReconcile = null
     dropStatus()
   }
   session.sampleVisiblePaneForegroundAgent = (forceRoutingConfirmation = false): void => {

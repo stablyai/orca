@@ -27,11 +27,77 @@
       "certificateChallengeExpired": "This certificate approval expired. Retry the page to request a new one.",
       "certificateChallengeChanged": "The certificate request changed. Retry the page and review the new warning.",
       "certificateChallengeUnavailable": "This certificate request is no longer available. Retry the page to request a new one.",
-      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again."
+      "certificateProceedFailed": "Orca could not approve this certificate request. Retry the page and try again.",
+      "sshRoutedHint": "This page browses through the workspace's SSH host — the host may be disconnected or unable to reach this site.",
+      "recheckSshRoute": "Run connection check"
     },
     "guestRecovery": {
       "title": "Browser page stopped",
       "failed": "The browser page stopped unexpectedly. Retry to restore it."
+    },
+    "clientHosted": {
+      "preparationFailed": "Couldn't start the remote browser on this desktop. Check the paired connection and try again.",
+      "unavailableTitle": "Client-hosted browser unavailable",
+      "unavailableDescription": "This page is attached to a different desktop or is no longer available.",
+      "download": {
+        "started": "Downloading {{filename}}…",
+        "completed": "Downloaded {{filename}}",
+        "canceled": "Download canceled.",
+        "failed": "Couldn't finish the download."
+      },
+      "popupBlocked": "Popup blocked: {{origin}}",
+      "hostPaneOfflineTitle": "That device is no longer connected",
+      "hostPaneNamedTitle": "Showing on {{device}}",
+      "hostPaneTitle": "Showing on another device",
+      "hostPaneOfflineDescription": "This page stays listed so you can close it from here. It will come back when the device reconnects.",
+      "hostPaneDescription": "This page renders on the paired desktop that opened it.",
+      "hostRowClose": "Close hosted page",
+      "hostRowCloseFailed": "Couldn't close this page. The device hosting it may be busy — try again.",
+      "hostRowOfflineNamed": "Offline — was hosted on {{device}}",
+      "hostRowOffline": "Offline — the device hosting it quit",
+      "hostRowNamed": "Hosted on {{device}}",
+      "hostRow": "Hosted on another device"
+    },
+    "navigation": {
+      "back": "Back",
+      "forward": "Forward",
+      "reload": "Reload"
+    },
+    "reopenOnServer": {
+      "action": "Reopen on server",
+      "pending": "Reopening…",
+      "caveat": "This opens a new page on the remote host at this page’s last address. Signed-in and other transient page state may differ, and a page that came from a form submission opens blank.",
+      "failed": "Couldn't open this page on the remote host. Check the connection and try again."
+    },
+    "sshRoute": {
+      "preparingTitle": "Connecting through the SSH host",
+      "errorTitle": "SSH browser routing unavailable",
+      "errorDescription": "Pages in this workspace browse through its SSH host, and that connection is not available right now.",
+      "retry": "Retry",
+      "tryAnyway": "Try anyway",
+      "browseLocally": "Browse from this device instead",
+      "forwardingBlockedTitle": "The SSH server blocks browser traffic",
+      "sshUnavailableTitle": "SSH connection unavailable",
+      "forwardingBlockedDescription": "This server refuses TCP forwarding (often “AllowTcpForwarding no” in its sshd config), which browsing through it requires. Ask its administrator to allow forwarding, or browse from this device instead.",
+      "sshUnavailableDescription": "Pages in this workspace browse through its SSH host, and that connection isn't available right now. Reconnect the host, then retry.",
+      "showDetails": "Show details"
+    },
+    "sshEgress": {
+      "routedTooltip": "Browsing through {{value0}}",
+      "localTooltip": "Browsing from this device, not {{value0}}",
+      "localChip": "This device",
+      "routedDetail": "Network traffic and DNS go through the workspace's SSH host.",
+      "localDetail": "Pages load from this machine and its network.",
+      "settingsLink": "Routing settings"
+    },
+    "remoteEgress": {
+      "clientHostedTooltip": "Browsing through {{value0}}",
+      "streamedTooltip": "Browsing on {{value0}}",
+      "clientHostedDetail": "The page renders on this device. Network traffic and DNS go through the remote host.",
+      "streamedDetail": "The page runs on the remote host and streams to this device."
+    },
+    "remote": {
+      "findUnavailable": "Find in page is not available while this page streams from the remote host."
     }
   },
   "githubChecks": {
@@ -71,6 +137,37 @@
       "needsAttention": {
         "label": "Needs Attention",
         "description": "An external tool flags a worktree as needing your attention."
+      }
+    },
+    "browser": {
+      "clientHostedRemote": {
+        "title": "Host remote browser pages on this device",
+        "description": "Render remote workspace pages on this desktop; network traffic still goes through the remote host. Applies to new pages only.",
+        "optionDevice": "This device",
+        "optionDeviceTooltip": "Pages render on this desktop, so input and popups behave natively.",
+        "optionServer": "Server (streamed)",
+        "optionServerTooltip": "Pages render on the remote server and stream to this device.",
+        "rowTitle": "Remote server workspaces",
+        "rowDescription": "Where pages render. Traffic always goes through the remote server. Applies to new pages only."
+      },
+      "sshWorkspaceRouting": {
+        "title": "Browse through SSH workspace hosts",
+        "description": "Browser pages in SSH workspaces send their traffic through the workspace's SSH host, with DNS resolved there. Off means pages browse from this machine.",
+        "disabledHosts": "Hosts browsing from this device instead:",
+        "enableHost": "Route again",
+        "optionHost": "SSH host",
+        "optionHostTooltip": "Traffic and DNS go through the workspace's SSH host.",
+        "optionDevice": "This device",
+        "optionDeviceTooltip": "Pages browse from this machine's network.",
+        "rowTitle": "SSH workspaces",
+        "rowDescription": "Where browser traffic leaves from. Pages always render on this device.",
+        "useHost": "Use SSH host",
+        "probeSkippedHosts": "Hosts routed without the connection check (Try anyway):",
+        "probeAgain": "Check again"
+      },
+      "remoteBrowsing": {
+        "heading": "Remote browsing",
+        "headingDescription": "Where remote workspace pages render, and where their network traffic leaves from."
       }
     }
   },
@@ -309,7 +406,10 @@
             "9d6e531da6": "Workspace no longer exists.",
             "changedSinceConfirmation": "Workspace changed after confirmation. Refresh to review it before removing.",
             "hostCollision": "Error: this workspace exists on multiple hosts at the same path",
-            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again."
+            "hostUnresolved": "Orca cannot tell which host owns this workspace. Refresh projects and review it again.",
+            "gitStatusUnavailable": "Orca couldn't check this workspace's git status. Try again, or delete it from its host-specific sidebar or project list.",
+            "gitStatusUnavailableOlderPeer": "Orca couldn't match this git-status failure to a host. Update the older connected peer, or delete the workspace from its host-specific sidebar or project list.",
+            "forceNeedsApproval": "Review and confirm this workspace before force deleting it."
           }
         },
         "worktrees": {
@@ -801,7 +901,12 @@
               "undecryptableUnknown": "{{value0}} cookies could not be decrypted and were skipped. Close the source browser completely and try the import again.",
               "unrecognizedWarning": "The cookie import finished with a warning this version of Orca does not recognize. Update Orca to see the details, then check this profile before relying on its cookies.",
               "undecryptableUnrecognizedReason": "{{value0}} cookies could not be decrypted and were skipped for a reason this version of Orca does not recognize. Update Orca to see the details, then try the import again.",
-              "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca."
+              "partitionSkipped": "{{value0}} cookies were not imported because their site-partition could not be read. Sign in to those sites again in Orca.",
+              "locationClientHosted": "Read from this device and stored here for the {{value0}} workspace.",
+              "locationRemoteHost": "Read from browsers on {{value0}} and stored there.",
+              "googleCookiesSkippedLocal": "Google cookies were not imported. Open a browser in Orca with this profile, then sign into Google.",
+              "googleCookiesSkippedClientHosted": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile — it opens on this device — then sign into Google.",
+              "googleCookiesSkippedRemoteWorkspace": "Google cookies were not imported. Open a browser tab in the {{value0}} workspace with this profile, then sign into Google."
             }
           }
         }
@@ -3760,13 +3865,9 @@
             }
           },
           "CaffeinateStatusSegment": {
-            "on": "On",
-            "auto": "Agent",
-            "off": "Off",
             "active": "Active",
             "inactive": "Inactive",
-            "ariaLabel": "Caffeinate, {{status}}",
-            "title": "Caffeinate",
+            "ariaLabel": "{{title}}, {{status}}",
             "onDescription": "Keep this computer awake continuously",
             "autoDescription": "Stay awake while an agent is working",
             "offDescription": "Allow normal system sleep behavior"
@@ -4154,7 +4255,8 @@
           "retry": "Retry",
           "remoteShareNotice": "These skills live on {{host}}. Open Skills on that machine to share them.",
           "viewSwitch": "Show",
-          "searchLinks": "Search links"
+          "searchLinks": "Search links",
+          "deleteSkills": "Delete skills…"
         },
         "SkillFreshnessNudge": {
           "titleOne": "An installed Orca skill is out of date",
@@ -4360,7 +4462,8 @@
           "27672470d9": "Opening the link does not install anything. Review the immutable version first.",
           "66cff7a804": "https://app.orca.dev/skills/share/…",
           "93eb0fe8c7": "Orca skill link",
-          "releaseNotes": "Release notes:"
+          "releaseNotes": "Release notes:",
+          "targetHeader": "Installation Target"
         },
         "SkillInstallTargetFields": {
           "8e6a972229": "No workspaces are known on this machine.",
@@ -4379,6 +4482,10 @@
           "0785d0a503": "— update required",
           "8562dd1e6e": "This computer",
           "b8a0b706ad": "Machine"
+        },
+        "SkillInstallWorkspaceCombobox": {
+          "search": "Search workspaces...",
+          "empty": "No workspaces found."
         },
         "SkillShareReviewContent": {
           "e3caf6baeb": "Revoking this link blocks future access. It does not remove copies already installed on recipients’ machines.",
@@ -4482,7 +4589,9 @@
           "detailSource": "Source",
           "detailContents": "Contents",
           "skillActions": "Actions for {{value0}}",
-          "viewDetails": "View details"
+          "viewDetails": "View details",
+          "deleteSkill": "Delete…",
+          "notDeletable": "Not deletable"
         },
         "SkillSelectionBar": {
           "selectAll": "Select all {{count}} eligible",
@@ -4522,7 +4631,15 @@
           "retryOne": "Retry {{count}} skill",
           "retryOther": "Retry {{count}} skills",
           "linkOne": "{{count}} link",
-          "linkOther": "{{count}} links"
+          "linkOther": "{{count}} links",
+          "deleteOne": "Delete {{count}} skill",
+          "deleteOther": "Delete {{count}} skills",
+          "deletedOne": "Deleted {{count}} skill",
+          "deletedOther": "Deleted {{count}} skills",
+          "deleteFolderOne": "{{count}} folder",
+          "deleteFolderOther": "{{count}} folders",
+          "deleteLinkOne": "{{count}} link",
+          "deleteLinkOther": "{{count}} links"
         },
         "host": {
           "local": "This machine",
@@ -4580,7 +4697,15 @@
           "supportingFileWarning": "The selected skills include {{fileCount}} beyond SKILL.md.",
           "agentAccessWarning": "Skills contain instructions your agent may follow. Continue only if you trust the source of this share link.",
           "fileBinary": "binary",
-          "fileRunnable": "runnable"
+          "fileRunnable": "runnable",
+          "agentsCountBadge": "{{count}} selected",
+          "agentsCountLabel": "{{count}} {{label}}",
+          "targetAgentsHeader": "Target Agents",
+          "deselectAll": "Deselect optional",
+          "selectAll": "Select all",
+          "canonicalHeader": "Standard Agents (Always Included)",
+          "canonicalExplanation": "These agents natively read {{root}}, which Orca installs to by default:",
+          "additionalAgentsHeader": "Additional Agent Directories"
         },
         "filter": {
           "allAgents": "All agents",
@@ -4591,7 +4716,8 @@
           "exitTooltip": "Exit selection · Esc",
           "title": "Select skills to share",
           "selectAll": "Select all {{count}} eligible",
-          "clear": "Clear"
+          "clear": "Clear",
+          "deleteTitle": "Select skills to delete"
         },
         "SkillDetailDialog": {
           "agents": "Agents",
@@ -4645,6 +4771,32 @@
           "supportingFilesDescription": "Includes readable reference files beyond the main instructions.",
           "runnableFilesDescription": "Includes scripts that an agent may run with your access.",
           "binaryFilesDescription": "Includes opaque assets and an executable binary."
+        },
+        "SkillDelete": {
+          "dismissResults": "Dismiss",
+          "reasonBundled": "Bundled with Orca — it would be restored",
+          "reasonPlugin": "Installed by a plugin — remove the plugin instead",
+          "reasonUnowned": "This skill lives outside Orca’s skill folders — delete it where it is stored",
+          "reasonMissing": "This skill is no longer on disk",
+          "reasonStale": "This skill changed since the list was loaded — refresh and try again",
+          "blockedLine": "{{count}} × {{reason}}",
+          "resultLine": "{{count}} × {{label}}",
+          "statusSkipped": "Skipped",
+          "statusBusy": "Busy — another skill operation is in progress",
+          "statusPartial": "Partly removed — some files are still on disk under a hidden name",
+          "statusFailed": "Failed — nothing changed",
+          "statusDeleted": "Deleted",
+          "confirmHost": "On {{host}}.",
+          "confirmPermanent": "This cannot be undone.",
+          "failed": "Could not delete skills",
+          "hostUnavailable": "Could not reach the selected machine. Refresh and try again.",
+          "hostUnresolved": "Still finding the machine that owns these skills.",
+          "hostUpdateRequired": "Update Orca on the selected machine to delete skills.",
+          "nothingOne": "That skill cannot be deleted from here.",
+          "nothingOther": "None of the {{count}} selected skills can be deleted from here.",
+          "placementSummaryParts": "Removes {{parts}} across {{roots}}.",
+          "placementJoin": " and ",
+          "retainedSource": "The skill itself stays at {{path}}."
         }
       },
       "sidebar": {
@@ -14720,6 +14872,16 @@
                       "title": "Find the results",
                       "body": "Runs show when automations ran, what happened, and where to inspect their output."
                     }
+                  },
+                  "client": {
+                    "hosted": {
+                      "browser": {
+                        "intro": {
+                          "title": "This page renders on your desktop",
+                          "body": "Remote browser tabs now render on this device. Network traffic still goes through the remote host."
+                        }
+                      }
+                    }
                   }
                 }
               }
@@ -14951,6 +15113,9 @@
               }
             }
           },
+          "download": {
+            "savedToRemote": "Saved to {{value1}} on {{value2}}"
+          },
           "annotate": {
             "use": {
               "browser": {
@@ -15013,6 +15178,10 @@
           "2d82246d23": "Day",
           "0e1de0358b": "Month",
           "77e96bded6": "Weekday"
+        },
+        "AutomationPromptDisclosure": {
+          "showLess": "Show less",
+          "showMore": "Show more"
         },
         "AutomationDetail": {
           "007c8ad874": "Prompt",
@@ -15882,6 +16051,12 @@
         "expiredCompact": "Expired",
         "typeMarkdown": "Markdown",
         "typeHtml": "HTML"
+      },
+      "BrowserCookieImportMachineNotice": {
+        "clientLabel": "Browsers on this device",
+        "remoteLabel": "Browsers on {{value0}}",
+        "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
+        "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
       }
     },
     "i18n": {
@@ -16232,7 +16407,62 @@
           "measuringSizesProgress": "Scanning {{value0}}/{{value1}}",
           "measuringSizes": "Scanning sizes",
           "measureSizesFailed": "Could not scan workspace sizes",
-          "selectedCount": "{{value0}} selected"
+          "selectedCount": "{{value0}} selected",
+          "gitStatusCheckFailed": "Git status check failed",
+          "gitStatusUnverified": "Git status could not be verified",
+          "deleteAnyway": "Delete anyway",
+          "forceDeleteProjectionOne": "{{count}} workspace currently shows risk and may need a force delete",
+          "forceDeleteProjectionMany": "{{count}} workspaces currently show risk and may need a force delete",
+          "selectionWithheldOne": "1 selected workspace is hidden by the current filters and was deselected.",
+          "selectionWithheld": "{{value0}} selected workspaces are hidden by the current filters and were deselected.",
+          "selectAllCountOne": "Select 1 safety-checked workspace",
+          "selectAllCount": "Select all {{value0}} safety-checked workspaces",
+          "appliedFilters": "Applied filters",
+          "removeFilter": "Remove filter {{value0}}",
+          "chip": {
+            "idleDays": "Idle {{value0}}d+",
+            "neverVisited": "Never visited",
+            "minSize": "At least {{value0}} MB",
+            "maxSize": "At most {{value0}} MB",
+            "excludesUnsized": "Measured only",
+            "excludesStatusless": "Has a status",
+            "list": "{{value0}}: {{value1}}",
+            "triState": "{{value0}}: {{value1}}",
+            "only": "Only",
+            "exclude": "Excluded",
+            "minAhead": "Ahead {{value0}}+",
+            "minBehind": "Behind {{value0}}+",
+            "branchQuery": "Branch: {{value0}}",
+            "pathPrefix": "Path: {{value0}}",
+            "presence": "{{value0}}: {{value1}}",
+            "has": "Has",
+            "none": "None",
+            "completelyEmpty": "Nothing to lose",
+            "selectableOnly": "Deletable only",
+            "kind": {
+              "status": "Status",
+              "agent": "Agent",
+              "git": "Git",
+              "review": "Review",
+              "reviewState": "Review state",
+              "reviewProvider": "Provider",
+              "ticket": "Ticket",
+              "ticketSource": "Ticket source",
+              "context": "Context",
+              "host": "Host",
+              "repo": "Repo",
+              "blocker": "Blocker",
+              "tier": "Safety",
+              "dismissed": "Ignored",
+              "archived": "Archived",
+              "pinned": "Pinned",
+              "unread": "Unread",
+              "comment": "Comment",
+              "prunable": "Prunable",
+              "locked": "Locked",
+              "retainedAgents": "Finished agents"
+            }
+          }
         },
         "scan": {
           "progress": "Scanning workspaces ({{value0}}/{{value1}})",
@@ -16245,7 +16475,9 @@
           "readyManyOne": "{{value0}} workspaces found, with 1 cleanup suggestion.",
           "readyManyMany": "{{value0}} workspaces found, with {{value1}} cleanup suggestions.",
           "fallbackRepository": "a repository",
-          "gitListFailed": "Git could not list worktrees"
+          "gitListFailed": "Git could not list worktrees",
+          "readyOne": "1 workspace found.",
+          "readyMany": "{{value0}} workspaces found."
         },
         "relativeTime": {
           "never": "Never",

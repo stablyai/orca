@@ -475,9 +475,14 @@ function loadNativeModule(moduleName) {
   }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
+    const { assertNodePtyJobOwnership } = projectRequire(
+      './config/scripts/node-pty-job-ownership.cjs'
+    )
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
-    const native = loadNativeModule(getNodePtyNativeModuleName())
+    const nativeName = getNodePtyNativeModuleName()
+    const native = loadNativeModule(nativeName)
     assertNodePtyWindowsConptyRuntime(native.dir)
+    assertNodePtyJobOwnership({ nativeName, native })
     if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +

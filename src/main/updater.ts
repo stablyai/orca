@@ -21,6 +21,7 @@ import { killAllPty } from './ipc/pty'
 import { withUpdaterSpan } from './observability/instrumentation'
 import { loadElectronAutoUpdater, type ElectronAutoUpdater } from './electron-updater-loader'
 import { writeMainThreadDiagnosticMarker } from './diagnostics/main-thread-churn-probe'
+import { runWithLaunchPath } from './startup/hydrate-shell-path'
 import {
   beginMacUpdateDownload,
   deferMacQuitUntilInstallerReady,
@@ -788,7 +789,9 @@ async function performQuitAndInstall(): Promise<void> {
       // Why: BaseUpdater logs child stderr but drops it from the 'error' event, so retain it for the span of this call.
       beginLinuxPackageInstallDiagnosticCapture(getTrackedLinuxPackageArtifact()?.path ?? null)
       try {
-        getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+        runWithLaunchPath(() =>
+          getAutoUpdater().quitAndInstall(supervisorOwnsRelaunch, !supervisorOwnsRelaunch)
+        )
       } finally {
         const diagnostic = endLinuxPackageInstallDiagnosticCapture()
         // Why: a synchronous 'error' already consumed and reset this attempt; re-stashing would leak it into the next one.

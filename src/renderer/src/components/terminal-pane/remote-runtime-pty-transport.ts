@@ -377,6 +377,20 @@ export function createRemoteRuntimePtyTransport(
       pendingClaimQueryReplyCount += 1
     }
   }
+  // Why: clearing the claim flag without draining strands the queued bytes.
+  const flushPendingClaimInput = (stream: RemoteRuntimeMultiplexedTerminal): void => {
+    const queued = pendingClaimInput
+    pendingViewportClaim = false
+    pendingClaimInput = []
+    pendingClaimQueryReplyCount = 0
+    for (const segment of queued) {
+      stream.sendInput(segment.text)
+    }
+    for (const resolve of viewportClaimReadyWaiters) {
+      resolve(true)
+    }
+    viewportClaimReadyWaiters.clear()
+  }
   // Why: tab/leaf ids are shared by paired viewers; the instance suffix keeps one viewer's refresh off peer records.
   const clientId = `desktop:${tabId ?? 'tab'}:${leafId ?? 'leaf'}:${createBrowserUuid()}`
   const terminalCreateMutationId = createBrowserUuid()
@@ -1338,8 +1352,8 @@ export function createRemoteRuntimePtyTransport(
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
     if (claim ? stream?.claimViewport(cols, rows) : stream?.resize(cols, rows)) {
-      if (claim) {
-        pendingViewportClaim = false
+      if (claim && stream) {
+        flushPendingClaimInput(stream)
       }
       return
     }
@@ -1953,17 +1967,6 @@ export function createRemoteRuntimePtyTransport(
     // Why: a viewport change during the subscribe round-trip hit the no-op one-shot fallback; replay the latest viewport so the PTY isn't stuck at subscribe-time size.
     if (pendingViewportClaim && desiredViewport) {
       nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
-      pendingViewportClaim = false
-      const queuedInput = pendingClaimInput
-      pendingClaimInput = []
-      pendingClaimQueryReplyCount = 0
-      for (const segment of queuedInput) {
-        nextStream.sendInput(segment.text)
-      }
-      for (const resolve of viewportClaimReadyWaiters) {
-        resolve(true)
-      }
-      viewportClaimReadyWaiters.clear()
     } else if (
       desiredViewport &&
       (desiredViewport.cols !== subscribedViewport?.cols ||
@@ -1971,6 +1974,8 @@ export function createRemoteRuntimePtyTransport(
     ) {
       nextStream.resize(desiredViewport.cols, desiredViewport.rows)
     }
+    // Why: a live claim may already have cleared the flag, so drain on every install.
+    flushPendingClaimInput(nextStream)
   }
 
   const transport: PtyTransport = {

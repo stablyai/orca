@@ -2,7 +2,12 @@ diff --git a/binding.gyp b/binding.gyp
 index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
 --- a/binding.gyp
 +++ b/binding.gyp
-@@ -5,9 +5,6 @@
+@@ -1,13 +1,10 @@
+ {
+   'target_defaults': {
+     'dependencies': [
+-      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
++      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
      ],
      'conditions': [
        ['OS=="win"', {
@@ -12,6 +17,39 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
+@@ -42,32 +39,6 @@
+             '-lshlwapi'
+           ],
+         },
+-        {
+-          'target_name': 'conpty_console_list',
+-          'sources' : [
+-            'src/win/conpty_console_list.cc'
+-          ],
+-        },
+-        {
+-          'target_name': 'pty',
+-          'include_dirs' : [
+-            '<!(node -p "require(\'node-addon-api\').include_dir")',
+-            'deps/winpty/src/include',
+-          ],
+-          # Disabled due to winpty
+-          'msvs_disabled_warnings': [ 4506, 4530 ],
+-          'dependencies' : [
+-            'deps/winpty/src/winpty.gyp:winpty-agent',
+-            'deps/winpty/src/winpty.gyp:winpty',
+-          ],
+-          'sources' : [
+-            'src/win/winpty.cc',
+-            'src/win/path_util.cc'
+-          ],
+-          'libraries': [
+-            '-lshlwapi'
+-          ],
+-        }
+       ]
+     }, { # OS!="win"
+       'targets': [
 @@ -88,6 +85,16 @@
                'libraries!': [
                  '-lutil'

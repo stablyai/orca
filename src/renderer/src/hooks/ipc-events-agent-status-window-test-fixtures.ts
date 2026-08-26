@@ -109,6 +109,8 @@ export function buildWindowApi(args: {
         onTerminalFitOverrideChanged: () => () => {},
         onTerminalDriverChanged: () => () => {},
         onBrowserDriverChanged: () => () => {},
+        onClientHostedBrowserRowsChanged: () => () => {},
+        getClientHostedBrowserRows: async () => [],
         ...args.runtime
       },
       ssh: {

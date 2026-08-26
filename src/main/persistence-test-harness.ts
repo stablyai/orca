@@ -1,26 +1,22 @@
 import { mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { vi } from 'vitest'
 import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 import type { Project, ProjectHostSetup } from '../shared/project-types'
 import type { Repo } from '../shared/repo-types'
 import type { TerminalTab } from '../shared/terminal-tab-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../shared/worktree/lineage-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../shared/workspace-scope'
+import { Store } from './persistence/loading-store/store'
+import { initDataPath } from './persistence/loading-store/user-data-path'
 
 // Shared mutable state so the electron mock can reference a per-test directory
 export const testState = { dir: '' }
 
-/** Reset modules and dynamically import Store so the data-file path picks up the current testState.dir */
-export async function createStore() {
-  vi.resetModules()
-  // Why here and not a per-file vi.mock('electron'): the data-file path resolves through
-  // AppEnvironment now, and it must point at this test's dir rather than the global
-  // fake's shared one. Re-installed after resetModules so the fresh graph sees it.
+/** Create a profile store without rebuilding its large module graph inside each test timeout. */
+export function createStore(): Store {
   installFakeAppEnvironment({ getPath: () => testState.dir })
-  const { Store, initDataPath } = await import('./persistence')
   initDataPath()
-  return new Store()
+  return new Store({ dataFile: dataFile() })
 }
 
 export async function withPlatform<T>(platform: NodeJS.Platform, fn: () => Promise<T>): Promise<T> {

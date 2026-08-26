@@ -1,0 +1,28 @@
+import type { ComposerModel } from './composer-model'
+
+export type QuickSubmitPreparationInput = Pick<
+  ComposerModel,
+  | 'branchAutoNameRef'
+  | 'branchNameOverridePreservesNameEdits'
+  | 'checkedHooksContextKey'
+  | 'commitHookCheckIfCurrent'
+  | 'enableIssueAutomation'
+  | 'isSubmissionCancelled'
+  | 'loadHookCheckForRepo'
+  | 'name'
+  | 'note'
+  | 'prepareQuickSubmitSource'
+  | 'repoId'
+  | 'resolvedSetupDecision'
+  | 'selectedRepo'
+  | 'selectedRepoExecutionHostId'
+  | 'selectedRepoHookContextKey'
+  | 'selectedRepoIsGit'
+  | 'setAdvancedOpen'
+  | 'setLoadedIssueCommand'
+  | 'settings'
+  | 'setupConfig'
+  | 'setupDecision'
+  | 'setupPolicy'
+  | 'smartNameMode'
+>

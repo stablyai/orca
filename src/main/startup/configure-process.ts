@@ -4,6 +4,7 @@ import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { getVersionManagerBinPaths } from '../codex-cli/command'
 import { getMainE2EConfig } from '../e2e-config'
+import { DISABLED_CHROMIUM_FEATURES } from './disabled-chromium-features'
 
 const DEV_PARENT_SHUTDOWN_GRACE_MS = 3000
 const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
@@ -67,7 +68,7 @@ export function configureElectronNetworkCompatibility(
 }
 
 export function disableUnsupportedChromiumFeatures(): void {
-  appendDisabledChromiumFeatures(['FedCm'])
+  appendDisabledChromiumFeatures([...DISABLED_CHROMIUM_FEATURES])
 }
 
 function appendDisabledChromiumFeatures(features: string[]): void {

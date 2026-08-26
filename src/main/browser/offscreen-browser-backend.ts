@@ -157,14 +157,24 @@ export class OffscreenBrowserBackend implements BrowserBackend {
         }
         reject(new Error(`${errorDescription} (${errorCode})`))
       }
+      const onDestroyed = (): void => {
+        if (settled) {
+          return
+        }
+        settled = true
+        cleanup()
+        resolve()
+      }
       const cleanup = (): void => {
         clearTimeout(timer)
         wc.removeListener('did-finish-load', onFinish)
         wc.removeListener('did-fail-load', onFail)
+        wc.removeListener('destroyed', onDestroyed)
       }
 
       wc.on('did-finish-load', onFinish)
       wc.on('did-fail-load', onFail)
+      wc.once('destroyed', onDestroyed)
       void wc.loadURL(url).catch(() => {
         // loadURL rejects on aborted navigations; did-fail-load handles the rest.
       })

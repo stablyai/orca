@@ -97,4 +97,15 @@ describe('renderer error report attribution', () => {
     expect(text).toContain('boundary_id')
     expect(text.indexOf('Attribution: unreliable')).toBeLessThan(text.indexOf('Details:'))
   })
+
+  it('does not dedupe identical errors from separate renderer windows', async () => {
+    const first = makeStore()
+    const second = makeStore()
+
+    const firstResult = await recordRendererErrorReport(first.store, baseArgs(), 11)
+    const secondResult = await recordRendererErrorReport(second.store, baseArgs(), 22)
+
+    expect(firstResult).toMatchObject({ ok: true, deduped: false })
+    expect(secondResult).toMatchObject({ ok: true, deduped: false })
+  })
 })

@@ -89,6 +89,33 @@ describe('mobile endpoint supervisor nudges', () => {
     supervisor.stop()
   })
 
+  it('restarts a disconnected Relay immediately on an app-resume retry', async () => {
+    const logical = new FakeLogicalClient('disconnected', 'relay')
+    const openRelay = vi
+      .fn()
+      .mockReturnValueOnce(new FakeRelaySession('disconnected', new RelayOuterError(4408)))
+      .mockReturnValueOnce(new FakeRelaySession('connected'))
+    const deps = dependencies({
+      openRelay,
+      openDirect: vi.fn(() => new FakeSession('disconnected')),
+      randomBytes: () => new Uint8Array([128, 0])
+    })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(openRelay).toHaveBeenCalledOnce()
+
+    // Manual retry uses the same app-resume nudge as a background/foreground cycle.
+    supervisor.nudge('app-resume')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(openRelay).toHaveBeenCalledTimes(2)
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
   it('leaves physical relay probing to the session watchdog', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies()

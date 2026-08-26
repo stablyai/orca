@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: runtime behavior is stateful and cross-cutting, so these tests stay in one file to preserve the end-to-end invariants around handles, waits, and graph sync. */
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest'
 import { RuntimeBrowserCommands } from './orca-runtime-browser'
-import { setRuntimeBrowserCommandsFactory } from './runtime-browser-commands-factory'
+import {
+  setRuntimeBrowserCommandsFactory,
+  setRuntimeBrowserUnavailableCause
+} from './runtime-browser-commands-factory'
 import { setRuntimeDesktopSurface } from './runtime-desktop-surface'
 import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import type * as GitUsernameModule from '../git/git-username'
@@ -65,6 +68,10 @@ import {
   type RuntimeTerminalAgentStatusEvent
 } from './orca-runtime'
 import { RUNTIME_GRAPH_RELOAD_TIMEOUT_MS } from './runtime-graph-reload-lifecycle'
+import { getRuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
+import { getBrowserHostLeaseRegistry } from './browser-host-lease-registry-instance'
+import type { BrowserClientHostCommandEvent } from '../../shared/browser-client-host-protocol'
+import type { RuntimeBrowserClientPlacement } from '../../shared/runtime-browser-placement'
 import {
   appendRecentPtyPathCandidates,
   recentTerminalPathCandidatesIncludePath,
@@ -687,6 +694,7 @@ function resetRuntimeTestMocks(): void {
   // production installs this at the Electron entry. A Node host installs none and the
   // browser RPCs reject rather than silently succeeding.
   setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host))
+  setRuntimeBrowserUnavailableCause(null)
   // Why: the runtime's notification, window lookup and tab-create-reply channel are
   // injected now, so the electron mock alone is inert. Back the surface with the same
   // mocks so every existing expectation still holds.
@@ -1280,6 +1288,13 @@ function setInMemoryOrchestrationMessages(
   db: InMemoryOrchestrationMessages
 ): void {
   runtime.setOrchestrationDb(db as unknown as OrchestrationDb)
+}
+
+function pendingMailPointerRepoints(runtime: OrcaRuntimeService): number {
+  const internals = runtime as unknown as {
+    mailPointerRepointScheduler: { pendingCount: number }
+  }
+  return internals.mailPointerRepointScheduler.pendingCount
 }
 
 function bindSinglePtyRun(db: InMemoryOrchestrationMessages, terminalHandle: string): string {
@@ -2331,6 +2346,33 @@ describe('OrcaRuntimeService', () => {
     expect(capabilities).toContain('browser.headless.v1')
     expect(capabilities).toContain('browser.certificate-trust.v1')
   })
+
+  it('advertises only while headless browser commands remain live', () => {
+    let available = true
+    setRuntimeBrowserCommandsFactory((host) => new RuntimeBrowserCommands(host), {
+      headless: true,
+      isAvailable: () => available
+    })
+    const status = createRuntime().getStatus()
+
+    expect(status.capabilities).toContain('browser.headless.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(status.degradations).toBeUndefined()
+
+    available = false
+    const degraded = createRuntime().getStatus()
+    expect(degraded.capabilities).not.toContain('browser.headless.v1')
+    // A provider that resolved and then died is a health failure, never a config mistake.
+    expect(degraded.degradations).toEqual([
+      {
+        code: 'browser_unavailable',
+        capability: 'browser.headless.v1',
+        reason: 'provider_unhealthy',
+        message: 'The browser provider started but is no longer answering health checks.'
+      }
+    ])
+  })
   it('surfaces live offscreen load failures in headless browser snapshots', () => {
     const runtime = createRuntime()
     runtime.setOffscreenBrowserBackend({ createTab: vi.fn(), closeTab: vi.fn() })
@@ -2384,6 +2426,166 @@ describe('OrcaRuntimeService', () => {
         }
       })
     )
+  })
+
+  it('synthesizes runtime-owned client pages without a server browser backend', () => {
+    const runtime = createRuntime()
+    getRuntimeBrowserPageRegistry(runtime).publishClientPage({
+      browserPageId: 'page-client',
+      workspaceId: TEST_WORKTREE_ID,
+      browserProfileId: 'profile-a',
+      executionHostKey: 'execution-a',
+      placement: {
+        kind: 'client',
+        browserHostClientId: 'host-a',
+        browserHostGeneration: 3,
+        pageHostGeneration: 9
+      },
+      url: 'https://remote.internal/',
+      title: 'Remote app',
+      loading: false,
+      canGoBack: true,
+      canGoForward: false,
+      active: true
+    })
+
+    expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([
+      {
+        type: 'browser',
+        id: 'page-client',
+        title: 'Remote app',
+        browserWorkspaceId: 'page-client',
+        browserPageId: 'page-client',
+        browserProfileId: 'profile-a',
+        executionHostKey: 'execution-a',
+        placement: {
+          kind: 'client',
+          browserHostClientId: 'host-a',
+          browserHostGeneration: 3,
+          pageHostGeneration: 9
+        },
+        url: 'https://remote.internal/',
+        loading: false,
+        canGoBack: true,
+        canGoForward: false,
+        isActive: true
+      }
+    ])
+  })
+
+  it('publishes a runtime-owned client page through the session-tab listener', () => {
+    const runtime = createRuntime()
+    runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, {
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:1',
+      snapshotVersion: 1,
+      activeGroupId: 'group-1',
+      activeTabId: null,
+      activeTabType: null,
+      tabGroups: [{ id: 'group-1', activeTabId: null, tabOrder: [] }],
+      tabs: []
+    })
+    const snapshots: RuntimeMobileSessionTabsResult[] = []
+    const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => snapshots.push(snapshot))
+    getRuntimeBrowserPageRegistry(runtime).publishClientPage({
+      browserPageId: 'page-client',
+      workspaceId: TEST_WORKTREE_ID,
+      browserProfileId: 'profile-a',
+      executionHostKey: 'execution-a',
+      placement: {
+        kind: 'client',
+        browserHostClientId: 'host-a',
+        browserHostGeneration: 3,
+        pageHostGeneration: 9
+      },
+      url: 'about:blank',
+      loading: true,
+      active: true
+    })
+
+    runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
+
+    expect(snapshots.at(-1)?.tabs).toContainEqual(
+      expect.objectContaining({
+        type: 'browser',
+        browserPageId: 'page-client',
+        loading: true,
+        placement: expect.objectContaining({
+          kind: 'client',
+          browserHostClientId: 'host-a',
+          pageHostGeneration: 9
+        })
+      })
+    )
+    unsubscribe()
+  })
+
+  it('preserves a live client page across headed renderer graph updates and prunes it after retirement', async () => {
+    const runtime = createRuntime()
+    const pages = getRuntimeBrowserPageRegistry(runtime)
+    const placement = {
+      kind: 'client' as const,
+      browserHostClientId: 'host-a',
+      browserHostGeneration: 3,
+      pageHostGeneration: 9
+    }
+    runtime.attachWindow(1)
+    const rendererSnapshot = (snapshotVersion: number) => ({
+      worktree: TEST_WORKTREE_ID,
+      publicationEpoch: 'renderer:client-page-preservation',
+      snapshotVersion,
+      activeGroupId: 'group-1',
+      activeTabId: null,
+      activeTabType: null,
+      tabGroups: [{ id: 'group-1', activeTabId: null, tabOrder: [] }],
+      tabs: []
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot(1)]
+    })
+    pages.publishClientPage({
+      browserPageId: 'page-client',
+      workspaceId: TEST_WORKTREE_ID,
+      browserProfileId: 'profile-a',
+      executionHostKey: 'execution-a',
+      placement,
+      url: 'https://remote.internal/',
+      loading: false,
+      active: true
+    })
+    runtime.notifyMobileSessionTabsChanged(TEST_WORKTREE_ID)
+
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot(2)]
+    })
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot(3)]
+    })
+
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ browserPageId: 'page-client', placement })
+    ])
+
+    expect(pages.retirePage('page-client', placement)).toBe(true)
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot(3)]
+    })
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+
+    runtime.syncWindowGraph(1, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [rendererSnapshot(4)]
+    })
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
   })
 
   it('detects headless browser-tab changes by field, treating absent and null loadError alike', () => {
@@ -2458,11 +2660,100 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getStatus().capabilities).toContain('browser.certificate-trust.v1')
   })
 
-  it('does not advertise certificate trust when no browser backend is available', () => {
+  it('declares browser unavailability when no browser provider resolves', async () => {
+    setRuntimeBrowserCommandsFactory(null)
     const runtime = createRuntime()
+    const status = runtime.getStatus()
 
-    expect(runtime.getStatus().capabilities).not.toContain('browser.certificate-trust.v1')
-    expect(runtime.getStatus().capabilities).not.toContain('browser.screencast.v1')
+    expect(status.capabilities).not.toContain('browser.headless.v1')
+    expect(status.capabilities).not.toContain('browser.certificate-trust.v1')
+    expect(status.capabilities).not.toContain('browser.screencast.v1')
+    expect(status.degradations).toEqual([
+      {
+        code: 'browser_unavailable',
+        capability: 'browser.headless.v1',
+        reason: 'unknown',
+        message:
+          'Browser automation is unavailable on this host, and the cause could not be determined.'
+      }
+    ])
+    const browserCalls = Object.entries(runtime).filter(
+      ([name, value]) => /^browser[A-Z]/.test(name) && typeof value === 'function'
+    )
+    expect(browserCalls.length).toBeGreaterThan(50)
+    for (const [name, call] of browserCalls) {
+      const invoke =
+        name === 'browserScreencast'
+          ? () =>
+              (call as CallableFunction)(
+                { format: 'jpeg' },
+                { sendBinary: () => true, emit: () => undefined }
+              )
+          : () => (call as CallableFunction)({})
+      await expect(Promise.resolve().then(invoke)).rejects.toMatchObject({
+        code: 'browser_unavailable'
+      })
+    }
+  })
+
+  it('reports the driver as missing instead of telling a configured operator to configure it', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'driver_missing' })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toEqual({
+      code: 'browser_unavailable',
+      capability: 'browser.headless.v1',
+      reason: 'driver_missing',
+      message:
+        'ORCA_BROWSER_EXECUTABLE is set, but the bundled agent-browser driver is missing or not executable on this host, so Chromium cannot be driven.'
+    })
+    // The whole point: never send someone to set a variable they already set.
+    expect(degradation?.message).not.toMatch(/set ORCA_BROWSER_EXECUTABLE/)
+  })
+
+  it('carries the underlying error to the client when a provider failed to start', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({
+      reason: 'electron_start_failed',
+      detail: 'sidecar exited with code 1'
+    })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toEqual({
+      code: 'browser_unavailable',
+      capability: 'browser.headless.v1',
+      reason: 'electron_start_failed',
+      detail: 'sidecar exited with code 1',
+      message:
+        'The installed Electron browser provider failed to start. (sidecar exited with code 1)'
+    })
+  })
+
+  it('blames the missing desktop window when a renderer-backed factory is installed', () => {
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    expect(degradation).toMatchObject({
+      reason: 'desktop_window_unavailable',
+      message: 'Browser automation on this host needs a desktop window, and none is available.'
+    })
+  })
+
+  it('keeps the degradation wire-safe for peers that predate structured causes', () => {
+    setRuntimeBrowserCommandsFactory(null)
+    setRuntimeBrowserUnavailableCause({ reason: 'executable_not_found', detail: '/nope/chromium' })
+
+    const [degradation] = createRuntime().getStatus().degradations ?? []
+
+    // Old clients read only these three: the closed code must not move and the human
+    // sentence must stand alone without the optional fields.
+    expect(degradation?.code).toBe('browser_unavailable')
+    expect(degradation?.capability).toBe('browser.headless.v1')
+    expect(degradation?.message).toBe(
+      'ORCA_BROWSER_EXECUTABLE points at a path that does not exist. (/nope/chromium)'
+    )
   })
 
   it('closes a worktree’s offscreen browser pages when its metadata is removed (leak fix)', () => {
@@ -2483,6 +2774,183 @@ describe('OrcaRuntimeService', () => {
     expect(closeTab).toHaveBeenCalledWith('page-b')
     expect(closeTab).toHaveBeenCalledTimes(2)
   })
+
+  it('closes a worktree’s client-hosted browser pages when its metadata is removed (leak fix)', async () => {
+    const runtime = createRuntime()
+    const host = attachClientBrowserHost(runtime)
+    const removed = await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
+    const survivor = await publishClientHostedPage(
+      runtime,
+      host,
+      'page-other',
+      `${TEST_REPO_ID}::/tmp/other`
+    )
+
+    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+
+    expect(host.takeCommands()).toEqual([
+      expect.objectContaining({
+        browserPageId: 'page-removed',
+        pageHostGeneration: removed.pageHostGeneration,
+        command: {
+          type: 'closePage',
+          targetAuthority: {
+            authorityRuntimeId: runtime.getRuntimeId(),
+            authorityEpoch: getBrowserHostLeaseRegistry(runtime).authorityEpoch,
+            browserHostClientId: removed.browserHostClientId,
+            browserHostGeneration: removed.browserHostGeneration,
+            pageHostGeneration: removed.pageHostGeneration
+          }
+        }
+      })
+    ])
+    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
+    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-other')?.placement).toEqual(
+      survivor
+    )
+  })
+
+  it('does not republish a removed worktree’s client tabs to a same-id recreate', async () => {
+    const runtime = createRuntime()
+    const host = attachClientBrowserHost(runtime)
+    await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
+
+    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+
+    // The store's surviving metadata stands in for a recreate at the same path: the ID resolves again.
+    expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+  })
+
+  it('drops a client page record even when its close command cannot be issued', async () => {
+    const runtime = createRuntime()
+    const host = attachClientBrowserHost(runtime)
+    await publishClientHostedPage(runtime, host, 'page-removed', TEST_WORKTREE_ID)
+    // The client's command transport is gone but its lease has not fenced yet.
+    host.detachDelivery()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    runtime['removeWorktreeMetadataAndHistory'](store as never, TEST_WORKTREE_ID)
+
+    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-removed')).toBeUndefined()
+    expect(runtime['buildHeadlessMobileSessionBrowserTabs'](TEST_WORKTREE_ID)).toEqual([])
+    // The close really did fail, and its rejection was reported rather than left unhandled.
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        expect.stringContaining('could not close its client page'),
+        expect.objectContaining({
+          browserPageId: 'page-removed',
+          error: expect.objectContaining({ message: 'browser_host_command_delivery_required' })
+        })
+      )
+    )
+    warn.mockRestore()
+  })
+
+  it('leaves client-hosted pages alone when another host still owns the same worktree id', async () => {
+    const runtimeStore = {
+      ...store,
+      getWorktreeMeta: () => ({ ...store.getWorktreeMeta(TEST_WORKTREE_ID), hostId: 'local' }),
+      removeWorktreeMeta: vi.fn()
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const host = attachClientBrowserHost(runtime)
+    const placement = await publishClientHostedPage(runtime, host, 'page-kept', TEST_WORKTREE_ID)
+
+    runtime['removeWorktreeMetadataAndHistory'](
+      runtimeStore as never,
+      TEST_WORKTREE_ID,
+      'runtime:env-b'
+    )
+
+    expect(host.takeCommands()).toEqual([])
+    expect(getRuntimeBrowserPageRegistry(runtime).getPage('page-kept')?.placement).toEqual(
+      placement
+    )
+  })
+
+  function attachClientBrowserHost(runtime: OrcaRuntimeService) {
+    const leases = getBrowserHostLeaseRegistry(runtime)
+    let commands: BrowserClientHostCommandEvent[] = []
+    const { lease } = leases.attach({
+      browserHostClientId: 'host-a',
+      connectionId: 'connection-a',
+      pairedDeviceId: 'device-a',
+      hostCapabilities: ['webview'],
+      pageCommandProtocolVersion: 1,
+      pageInventoryProtocolVersion: 1,
+      pageInventory: [],
+      pageReconciliationProtocolVersion: 1
+    })
+    const identity = {
+      authorityEpoch: lease.authorityEpoch,
+      browserHostClientId: lease.browserHostClientId,
+      browserHostGeneration: lease.browserHostGeneration,
+      pairedDeviceId: lease.pairedDeviceId
+    }
+    const detachDelivery = leases.attachCommandDelivery(identity, (event) => commands.push(event))
+    return {
+      detachDelivery,
+      takeCommands(): BrowserClientHostCommandEvent[] {
+        const taken = commands
+        commands = []
+        return taken
+      },
+      settleLatest(): void {
+        const command = commands.at(-1)
+        if (!command) {
+          throw new Error('no command was delivered to the client host')
+        }
+        leases.settleClientPageCommand(
+          { ...identity, connectionId: lease.connectionId },
+          {
+            authorityRuntimeId: command.authorityRuntimeId,
+            authorityEpoch: command.authorityEpoch,
+            browserHostClientId: command.browserHostClientId,
+            browserHostGeneration: command.browserHostGeneration,
+            pageCommandProtocolVersion: command.pageCommandProtocolVersion,
+            ...(command.pageReconciliationProtocolVersion
+              ? { pageReconciliationProtocolVersion: command.pageReconciliationProtocolVersion }
+              : {}),
+            browserPageId: command.browserPageId,
+            pageHostGeneration: command.pageHostGeneration,
+            commandSequence: command.commandSequence,
+            commandId: command.commandId,
+            result: { status: 'completed' }
+          }
+        )
+      }
+    }
+  }
+
+  async function publishClientHostedPage(
+    runtime: OrcaRuntimeService,
+    host: ReturnType<typeof attachClientBrowserHost>,
+    browserPageId: string,
+    workspaceId: string
+  ): Promise<RuntimeBrowserClientPlacement> {
+    const creation = getBrowserHostLeaseRegistry(runtime).createClientPage({
+      browserPageId,
+      browserHostClientId: 'host-a',
+      pairedDeviceId: 'device-a',
+      browserProfileId: 'profile-a',
+      executionHostKey: 'native:runtime-a:7'
+    })
+    host.settleLatest()
+    const placement = await creation
+    getRuntimeBrowserPageRegistry(runtime).publishClientPage({
+      browserPageId,
+      workspaceId,
+      browserProfileId: 'profile-a',
+      executionHostKey: 'native:runtime-a:7',
+      placement,
+      url: 'https://remote.internal/',
+      loading: false,
+      active: true
+    })
+    host.takeCommands()
+    return placement
+  }
 
   it('preserves bare-id runtime state when removing a different qualified owner', () => {
     const removeWorktreeMeta = vi.fn()
@@ -19893,9 +20361,9 @@ describe('OrcaRuntimeService', () => {
         ptysById: Map<string, { lastOscTitle: string | null; lastAgentStatus: string | null }>
       }
     ).ptysById.get('pty-1')
-    expect(pty?.lastOscTitle).toBe('Pi')
+    expect(pty?.lastOscTitle).toBe('π - my-project')
     expect(pty?.lastAgentStatus).toBe('idle')
-    // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the raw OSC frame; bare "Pi" must still classify as idle after normalize.
+    // Why: worktree.ps / mobile re-detect from stored lastOscTitle, not the raw OSC frame; the preserved π title must still classify as idle after normalize.
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
   })
 
@@ -19922,7 +20390,7 @@ describe('OrcaRuntimeService', () => {
         applySeededAgentStatus: (ptyId: string, title: string) => void
       }
     ).applySeededAgentStatus('pty-1', 'π - my-project')
-    expect(pty?.lastOscTitle).toBe('Pi')
+    expect(pty?.lastOscTitle).toBe('π - my-project')
     expect(detectAgentStatusFromTitle(pty?.lastOscTitle ?? '')).toBe('idle')
   })
 
@@ -25740,7 +26208,7 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs[0]).toEqual(
       expect.objectContaining({
         type: 'terminal',
-        title: '\u280b OMP'
+        title: '\u280b OMP - tmp'
       })
     )
     expect(result.tabs[0]).not.toHaveProperty('launchAgent')
@@ -28260,6 +28728,188 @@ describe('OrcaRuntimeService', () => {
       runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'browser-workspace-1')
     ).rejects.toThrow('runtime_unavailable')
     expect(forgetTabs).not.toHaveBeenCalled()
+  })
+
+  it.each([false, true])(
+    'retires client-hosted session tabs through their selected engine when offscreen=%s',
+    async (withOffscreen) => {
+      const runtime = new OrcaRuntimeService(store)
+      const pages = getRuntimeBrowserPageRegistry(runtime)
+      const placement = {
+        kind: 'client' as const,
+        browserHostClientId: 'host-a',
+        browserHostGeneration: 3,
+        pageHostGeneration: 9
+      }
+      pages.publishClientPage({
+        browserPageId: 'client-page-1',
+        workspaceId: TEST_WORKTREE_ID,
+        browserProfileId: 'default',
+        executionHostKey: 'native:runtime-a:1',
+        placement,
+        url: 'https://remote.internal/',
+        loading: false,
+        active: true
+      })
+      const closeOffscreenTab = vi.fn()
+      if (withOffscreen) {
+        runtime.setOffscreenBrowserBackend({
+          createTab: vi.fn(),
+          closeTab: closeOffscreenTab
+        })
+      }
+      runtime.syncWindowGraph(0, {
+        tabs: [],
+        leaves: [],
+        mobileSessionTabs: [
+          {
+            worktree: TEST_WORKTREE_ID,
+            publicationEpoch: 'headless:test',
+            snapshotVersion: 1,
+            activeGroupId: 'group-1',
+            activeTabId: 'client-page-1',
+            activeTabType: 'browser',
+            tabs: [
+              {
+                type: 'browser',
+                id: 'client-page-1',
+                title: 'Client page',
+                browserWorkspaceId: 'client-page-1',
+                browserPageId: 'client-page-1',
+                browserProfileId: 'default',
+                executionHostKey: 'native:runtime-a:1',
+                placement,
+                url: 'https://remote.internal/',
+                loading: false,
+                canGoBack: false,
+                canGoForward: false,
+                isActive: true
+              }
+            ]
+          }
+        ]
+      })
+      const closeClientPage = vi
+        .spyOn(runtime, 'browserTabClose')
+        .mockImplementation(async ({ page }) => {
+          expect(pages.retirePage(page!, placement)).toBe(true)
+          return { closed: true }
+        })
+
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+        expect.objectContaining({ browserPageId: 'client-page-1', placement })
+      ])
+      await expect(
+        runtime.closeMobileSessionTab(`id:${TEST_WORKTREE_ID}`, 'client-page-1')
+      ).resolves.toEqual({ closed: true })
+
+      expect(closeClientPage).toHaveBeenCalledWith({
+        worktree: `id:${TEST_WORKTREE_ID}`,
+        page: 'client-page-1'
+      })
+      expect(closeOffscreenTab).not.toHaveBeenCalled()
+      expect(pages.getPage('client-page-1')).toBeUndefined()
+      expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([])
+    }
+  )
+
+  it('closes an offscreen browser without overwriting a concurrent session update', async () => {
+    const closeProof = deferred<void>()
+    const closeOffscreenTab = vi.fn(() => closeProof.promise)
+    const closeSessionTab = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setOffscreenBrowserBackend({
+      createTab: vi.fn(),
+      closeTab: closeOffscreenTab
+    })
+    runtime.setNotifier({
+      worktreesChanged: vi.fn(),
+      reposChanged: vi.fn(),
+      activateWorktree: vi.fn(),
+      createTerminal: vi.fn(),
+      revealTerminalSession: vi.fn(),
+      splitTerminal: vi.fn(),
+      renameTerminal: vi.fn(),
+      focusTerminal: vi.fn(),
+      closeTerminal: vi.fn(),
+      closeSessionTab,
+      sleepWorktree: vi.fn(),
+      terminalFitOverrideChanged: vi.fn(),
+      terminalDriverChanged: vi.fn()
+    })
+    const browserTab = {
+      type: 'browser' as const,
+      id: 'offscreen-page-1',
+      title: 'Offscreen page',
+      browserWorkspaceId: 'offscreen-page-1',
+      browserPageId: 'offscreen-page-1',
+      url: 'https://remote.internal/',
+      loading: false,
+      canGoBack: false,
+      canGoForward: false,
+      isActive: true
+    }
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:test',
+          snapshotVersion: 1,
+          activeGroupId: 'group-1',
+          activeTabId: browserTab.id,
+          activeTabType: 'browser',
+          tabs: [browserTab]
+        }
+      ]
+    })
+
+    const closing = runtime.closeMobileSessionTab(
+      `id:${TEST_WORKTREE_ID}`,
+      browserTab.browserPageId
+    )
+    await vi.waitFor(() => expect(closeOffscreenTab).toHaveBeenCalledWith(browserTab.browserPageId))
+
+    runtime.syncWindowGraph(0, {
+      tabs: [],
+      leaves: [],
+      mobileSessionTabs: [
+        {
+          worktree: TEST_WORKTREE_ID,
+          publicationEpoch: 'headless:test',
+          snapshotVersion: 2,
+          activeGroupId: 'group-1',
+          activeTabId: browserTab.id,
+          activeTabType: 'browser',
+          tabs: [
+            browserTab,
+            {
+              type: 'markdown',
+              id: 'notes',
+              title: 'Notes',
+              filePath: '/worktree/notes.md',
+              relativePath: 'notes.md',
+              language: 'markdown',
+              mode: 'edit',
+              isDirty: false,
+              sourceFileId: 'notes.md',
+              sourceFilePath: '/worktree/notes.md',
+              sourceRelativePath: 'notes.md',
+              documentVersion: '1',
+              isActive: false
+            }
+          ]
+        }
+      ]
+    })
+    closeProof.resolve()
+    await expect(closing).resolves.toEqual({ closed: true })
+
+    expect(closeSessionTab).not.toHaveBeenCalled()
+    expect((await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)).tabs).toEqual([
+      expect.objectContaining({ id: 'notes', type: 'markdown' })
+    ])
   })
 
   it('creates mobile session terminals in a headless runtime server', async () => {
@@ -35065,6 +35715,7 @@ describe('OrcaRuntimeService', () => {
     const firstStart = deferred<{
       subscriptionId: string
       ready: never
+      flushPendingFrame: () => void
       session: { stop: () => void; done: Promise<void> }
     }>()
     const firstDone = deferred<void>()
@@ -35091,6 +35742,7 @@ describe('OrcaRuntimeService', () => {
             active: true
           }
         },
+        flushPendingFrame: () => {},
         session: { stop: secondStop, done: secondDone.promise }
       })
       .mockResolvedValueOnce({
@@ -35108,6 +35760,7 @@ describe('OrcaRuntimeService', () => {
             active: true
           }
         },
+        flushPendingFrame: () => {},
         session: { stop: thirdStop, done: thirdDone.promise }
       })
 
@@ -35139,6 +35792,7 @@ describe('OrcaRuntimeService', () => {
     firstStart.resolve({
       subscriptionId: 'browser-screencast:page-1:first',
       ready: {} as never,
+      flushPendingFrame: () => {},
       session: { stop: firstStop, done: firstDone.promise }
     })
     await first
@@ -35163,46 +35817,37 @@ describe('OrcaRuntimeService', () => {
     expect(thirdStop).toHaveBeenCalledTimes(1)
   })
 
-  it('cancels an active same-page browser screencast before another connection starts', async () => {
+  it('keeps same-page screencasts alive for independent connections', async () => {
     const runtime = createRuntime()
     const firstDone = deferred<void>()
     const secondDone = deferred<void>()
     const firstStop = vi.fn(() => firstDone.resolve())
     const secondStop = vi.fn(() => secondDone.resolve())
+    const ready = (subscriptionId: string) => ({
+      type: 'ready' as const,
+      subscriptionId,
+      browserPageId: 'page-1',
+      format: 'jpeg' as const,
+      tab: {
+        browserPageId: 'page-1',
+        index: 0,
+        url: 'about:blank',
+        title: 'Browser',
+        active: true
+      }
+    })
     const browserScreencast = vi
       .fn()
       .mockResolvedValueOnce({
         subscriptionId: 'browser-screencast:page-1:first',
-        ready: {
-          type: 'ready',
-          subscriptionId: 'browser-screencast:page-1:first',
-          browserPageId: 'page-1',
-          format: 'jpeg',
-          tab: {
-            browserPageId: 'page-1',
-            index: 0,
-            url: 'about:blank',
-            title: 'Browser',
-            active: true
-          }
-        },
+        ready: ready('browser-screencast:page-1:first'),
+        flushPendingFrame: () => {},
         session: { stop: firstStop, done: firstDone.promise }
       })
       .mockResolvedValueOnce({
         subscriptionId: 'browser-screencast:page-1:second',
-        ready: {
-          type: 'ready',
-          subscriptionId: 'browser-screencast:page-1:second',
-          browserPageId: 'page-1',
-          format: 'jpeg',
-          tab: {
-            browserPageId: 'page-1',
-            index: 0,
-            url: 'about:blank',
-            title: 'Browser',
-            active: true
-          }
-        },
+        ready: ready('browser-screencast:page-1:second'),
+        flushPendingFrame: () => {},
         session: { stop: secondStop, done: secondDone.promise }
       })
 
@@ -35227,18 +35872,21 @@ describe('OrcaRuntimeService', () => {
       { connectionId: 'conn-2', sendBinary: vi.fn(), emit: secondEmit }
     )
 
-    await vi.waitFor(() => expect(firstStop).toHaveBeenCalledTimes(1))
-    await first
     await vi.waitFor(() =>
       expect(secondEmit).toHaveBeenCalledWith(
         expect.objectContaining({ subscriptionId: 'browser-screencast:page-1:second' })
       )
     )
     expect(browserScreencast).toHaveBeenCalledTimes(2)
+    expect(firstStop).not.toHaveBeenCalled()
 
     runtime.cleanupSubscription('browser-screencast:page-1:second')
     await second
+    expect(firstStop).not.toHaveBeenCalled()
     expect(secondStop).toHaveBeenCalledTimes(1)
+    runtime.cleanupSubscription('browser-screencast:page-1:first')
+    await first
+    expect(firstStop).toHaveBeenCalledTimes(1)
   })
 
   it('dedupes async subscription cleanup and retains a failed cleanup for retry', async () => {
@@ -35413,16 +36061,23 @@ describe('OrcaRuntimeService', () => {
     expect(cleanup).toHaveBeenCalledTimes(1)
   })
 
-  it('does not deliver or accept browser screencast frames before ready', async () => {
+  it('refuses browser screencast frames before ready and replays them once it is emitted', async () => {
     const runtime = createRuntime()
     const done = deferred<void>()
     const stop = vi.fn(() => done.resolve())
     const startupFrame = new Uint8Array([1, 2, 3])
     const sendBinary = vi.fn()
     const emit = vi.fn()
+    let pendingFrame: Uint8Array | null = null
+    let gatedSend!: (bytes: Uint8Array) => boolean | void
     const browserScreencast = vi.fn(
       async (_params: unknown, stream: { sendBinary: typeof sendBinary }) => {
-        expect(stream.sendBinary(startupFrame)).toBe(false)
+        gatedSend = stream.sendBinary
+        // Why: a joining subscriber's viewport snapshot is captured here, before the caller
+        // has emitted ready, so the fan-out retains what the gate refuses.
+        if (gatedSend(startupFrame) === false) {
+          pendingFrame = startupFrame
+        }
         expect(sendBinary).not.toHaveBeenCalled()
         return {
           subscriptionId: 'browser-screencast:page-1:first',
@@ -35437,6 +36092,13 @@ describe('OrcaRuntimeService', () => {
               url: 'about:blank',
               title: 'Browser',
               active: true
+            }
+          },
+          flushPendingFrame: () => {
+            const bytes = pendingFrame
+            pendingFrame = null
+            if (bytes) {
+              gatedSend(bytes)
             }
           },
           session: { stop, done: done.promise }
@@ -35456,7 +36118,9 @@ describe('OrcaRuntimeService', () => {
     await vi.waitFor(() =>
       expect(emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'ready' }))
     )
-    expect(sendBinary).not.toHaveBeenCalled()
+    // The gate still refuses the frame on arrival; it reaches the client only via the
+    // post-ready replay, so a static page does not leave the subscriber frameless.
+    expect(sendBinary).toHaveBeenCalledExactlyOnceWith(startupFrame)
 
     runtime.cleanupSubscription('browser-screencast:page-1:first')
     await task
@@ -35712,7 +36376,7 @@ describe('OrcaRuntimeService', () => {
 
       await vi.advanceTimersByTimeAsync(20_000)
       expect(pendingReads).not.toHaveBeenCalled()
-      expect(vi.getTimerCount()).toBe(0)
+      expect(pendingMailPointerRepoints(runtime)).toBe(0)
 
       runtime.onPtyData('pty-1', '\x1b]0;Codex done\x07', 101)
       expect(pendingReads).toHaveBeenCalledTimes(1)
@@ -35799,7 +36463,7 @@ describe('OrcaRuntimeService', () => {
             typeof payload === 'string' && payload.includes('orca orchestration check')
         )
       ).toHaveLength(1)
-      expect(vi.getTimerCount()).toBe(0)
+      expect(pendingMailPointerRepoints(runtime)).toBe(0)
       db.close()
     } finally {
       vi.useRealTimers()
@@ -37709,6 +38373,261 @@ describe('OrcaRuntimeService', () => {
       })
     ])
     expect(summary).toMatchObject({ hasHostSidebarActivity: true, status: 'working' })
+  })
+
+  it('projects monitoring for folder workspaces without assuming a git worktree', async () => {
+    const now = Date.now()
+    const folderWorkspace = makeFolderWorkspace({ name: 'GG' })
+    const projectGroup = makeFolderProjectGroup({ name: 'Store' })
+    const runtime = new OrcaRuntimeService(
+      createFolderWorkspaceRuntimeStore(folderWorkspace, projectGroup) as never,
+      undefined,
+      {
+        getAgentStatusSnapshot: () => [
+          {
+            paneKey: 'folder-pane',
+            worktreeId: TEST_FOLDER_WORKSPACE_KEY,
+            state: 'working',
+            workingMode: 'monitoring',
+            prompt: 'watch tests',
+            agentType: 'claude',
+            connectionId: null,
+            receivedAt: now,
+            stateStartedAt: now - 100
+          }
+        ]
+      }
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_FOLDER_WORKSPACE_KEY)
+
+    expect(summary).toMatchObject({
+      workspaceKind: 'folder-workspace',
+      status: 'working',
+      workingMode: 'monitoring'
+    })
+  })
+  it('projects monitoring over a title-derived working status', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'claude working' })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
+  })
+  it('keeps hook monitoring mode when a newer mode-less OSC row reports the same work', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - 100,
+          stateStartedAt: now - 200
+        }
+      ]
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"watch tests","agentType":"claude"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working', workingMode: 'monitoring' })
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({
+        state: 'working',
+        workingMode: 'monitoring',
+        prompt: 'watch tests'
+      })
+    ])
+  })
+  it('does not carry hook monitoring mode into a newer OSC turn', async () => {
+    const now = Date.now()
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: 'tab-1:1',
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'tab-1',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now - 100,
+          stateStartedAt: now - 200
+        }
+      ]
+    })
+    syncSinglePty(runtime)
+    runtime.onPtyData(
+      'pty-1',
+      '\x1b]9999;{"state":"working","prompt":"fix tests","agentType":"claude"}\x07',
+      1
+    )
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ state: 'working', prompt: 'fix tests' })
+    ])
+  })
+  it('keeps title-only foreground work ahead of monitoring in another pane', async () => {
+    const now = Date.now()
+    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
+    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `monitoring-tab:${monitoringLeafId}`,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId: 'monitoring-tab',
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'monitoring-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: monitoringLeafId,
+          layout: null
+        },
+        {
+          tabId: 'foreground-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: foregroundLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'monitoring-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: monitoringLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'monitoring-pty',
+          paneTitle: 'claude'
+        },
+        {
+          tabId: 'foreground-tab',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: foregroundLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'foreground-pty',
+          paneTitle: 'claude working'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
+    expect(summary?.agents).toEqual([
+      expect.objectContaining({ paneKey: `monitoring-tab:${monitoringLeafId}` })
+    ])
+  })
+  it('keeps title-only foreground work ahead of monitoring in another split pane', async () => {
+    const now = Date.now()
+    const tabId = 'split-tab'
+    const monitoringLeafId = '33333333-3333-4333-8333-333333333333'
+    const foregroundLeafId = '44444444-4444-4444-8444-444444444444'
+    const runtime = new OrcaRuntimeService(store, undefined, {
+      getAgentStatusSnapshot: () => [
+        {
+          paneKey: `${tabId}:${monitoringLeafId}`,
+          worktreeId: TEST_WORKTREE_ID,
+          tabId,
+          state: 'working',
+          workingMode: 'monitoring',
+          prompt: 'watch tests',
+          agentType: 'claude',
+          connectionId: null,
+          receivedAt: now,
+          stateStartedAt: now - 100
+        }
+      ]
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'Claude',
+          activeLeafId: monitoringLeafId,
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: monitoringLeafId,
+          paneRuntimeId: 1,
+          ptyId: 'monitoring-pty',
+          paneTitle: 'claude'
+        },
+        {
+          tabId,
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: foregroundLeafId,
+          paneRuntimeId: 2,
+          ptyId: 'foreground-pty',
+          paneTitle: 'claude working'
+        }
+      ]
+    })
+
+    const { worktrees } = await runtime.getWorktreePs()
+    const summary = worktrees.find((worktree) => worktree.worktreeId === TEST_WORKTREE_ID)
+
+    expect(summary).toMatchObject({ status: 'working' })
+    expect(summary).not.toHaveProperty('workingMode')
   })
 
   it('suppresses restored-unconfirmed hook rows from worktree.ps', async () => {
@@ -50569,7 +51488,14 @@ describe('OrcaRuntimeService', () => {
       runtime.setAgentBrowserBridge({
         tabSwitch: tabSwitchMock,
         captureStart: captureStartMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-2', 2]]))
+        getRegisteredTabs: vi.fn(() => new Map([['page-2', 2]])),
+        tabList: vi.fn(() => ({
+          tabs: [
+            { browserPageId: 'page-0', index: 0, url: 'about:blank', title: '', active: false },
+            { browserPageId: 'page-1', index: 1, url: 'about:blank', title: '', active: false },
+            { browserPageId: 'page-2', index: 2, url: 'about:blank', title: '', active: true }
+          ]
+        }))
       } as never)
 
       await expect(runtime.browserTabSwitch({ page: 'page-2' })).resolves.toEqual({
@@ -50593,7 +51519,10 @@ describe('OrcaRuntimeService', () => {
 
       runtime.setAgentBrowserBridge({
         tabSwitch: tabSwitchMock,
-        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]]))
+        getRegisteredTabs: vi.fn(() => new Map([['page-1', 1]])),
+        tabList: vi.fn(() => ({
+          tabs: [{ browserPageId: 'page-1', index: 0, url: 'about:blank', title: '', active: true }]
+        }))
       } as never)
 
       await expect(runtime.browserTabSwitch({ page: 'page-1', focus: true })).resolves.toEqual({

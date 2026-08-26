@@ -1,8 +1,6 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react'
 import { cn } from '@/lib/utils'
 import {
-  ArrowLeft,
-  ArrowRight,
   Crosshair,
   ExternalLink,
   Loader2,
@@ -22,9 +20,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { translate } from '@/i18n/i18n'
 import type { BrowserReloadTrigger } from '../navigate/browser-reload-action'
-import BrowserAddressBar from './BrowserAddressBar'
+import { BrowserNavigationControlRow } from './browser-navigation-control-row'
 import { BrowserImportHintButton } from './BrowserImportHintButton'
 import { BrowserToolbarMenu } from './BrowserToolbarMenu'
+import { SshEgressIndicator } from './browser-egress-indicator'
 import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
 import { destroyPersistentWebview } from '../host-guest/webview-registry'
 import { readBrowserHtmlArtifactRequest } from '../describe-page/browser-artifact-upload'
@@ -35,6 +34,7 @@ import type { GrabIntent } from '../describe-page/browser-page-types'
 export function BrowserPageToolbar({
   browserPageId,
   workspaceId,
+  worktreeId,
   sessionProfileId,
   viewportPresetId,
   isActive,
@@ -70,6 +70,7 @@ export function BrowserPageToolbar({
 }: {
   browserPageId: string
   workspaceId: string
+  worktreeId: string
   sessionProfileId: string | null
   viewportPresetId: BrowserViewportPresetId | null
   isActive: boolean
@@ -104,94 +105,81 @@ export function BrowserPageToolbar({
   externalUrl: string | null
 }): React.JSX.Element {
   return (
-    <div
-      className="relative z-10 flex items-center gap-2 border-b border-border/70 bg-background/95 px-3 py-1.5"
-      data-contextual-tour-target="browser-toolbar"
+    <BrowserNavigationControlRow
+      controls={{
+        canGoBack,
+        canGoForward,
+        loading,
+        goBack: () => webviewRef.current?.goBack(),
+        goForward: () => webviewRef.current?.goForward(),
+        reload: () => runReloadTrigger('button'),
+        navigate: navigateToUrl
+      }}
+      addressBarValue={addressBarValue}
+      onAddressBarChange={setAddressBarValue}
+      onSubmitAddressBar={submitAddressBar}
+      addressBarInputRef={addressBarInputRef}
+      dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
+      addressBarLeadingIcon={<SshEgressIndicator worktreeId={worktreeId} />}
+      reloadControl={
+        <DropdownMenu modal={false} open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
+          {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
+          <Tooltip open={reloadMenuOpen ? false : undefined}>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-7 w-7"
+                  aria-label={reloadButtonLabel}
+                  // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
+                  // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
+                  onPointerDown={(e) => {
+                    if (e.button === 0) {
+                      e.preventDefault()
+                    }
+                  }}
+                  // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
+                  // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      runReloadTrigger('button')
+                    }
+                  }}
+                  onClick={() => runReloadTrigger('button')}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setReloadMenuOpen(true)
+                  }}
+                >
+                  {loading ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
+                </Button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={4}>
+              {reloadButtonLabel}
+              {/* Why: the chord maps to plain reload(), which is not what Stop or Retry do — only hint when they match. */}
+              {reloadShortcut && reloadButtonLabelKind === 'reload' ? ` · ${reloadShortcut}` : ''}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="start" alignOffset={-4}>
+            <DropdownMenuItem onClick={() => runReloadTrigger('reload')}>
+              {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
+              <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => runReloadTrigger('hard-reload')}>
+              {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
+              <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      }
     >
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-7 w-7"
-        onClick={() => webviewRef.current?.goBack()}
-        disabled={!canGoBack}
-      >
-        <ArrowLeft className="size-4" />
-      </Button>
-      <Button
-        size="icon"
-        variant="ghost"
-        className="h-7 w-7"
-        onClick={() => webviewRef.current?.goForward()}
-        disabled={!canGoForward}
-      >
-        <ArrowRight className="size-4" />
-      </Button>
-      <DropdownMenu modal={false} open={reloadMenuOpen} onOpenChange={setReloadMenuOpen}>
-        {/* Why: suppress the tooltip while the menu is open — both anchor below the button and would overlap. */}
-        <Tooltip open={reloadMenuOpen ? false : undefined}>
-          <TooltipTrigger asChild>
-            <DropdownMenuTrigger asChild>
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-7 w-7"
-                aria-label={reloadButtonLabel}
-                // Why: preventDefault suppresses Radix's open-on-left-click (composeEventHandlers skips its
-                // handler once defaultPrevented), keeping left-click on the primary action and the menu on right-click.
-                onPointerDown={(e) => {
-                  if (e.button === 0) {
-                    e.preventDefault()
-                  }
-                }}
-                // Why: same trick for Radix's open-on-Enter/Space, which would otherwise preventDefault the
-                // synthesized click and strand keyboard users. ArrowDown still falls through to open the menu.
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault()
-                    runReloadTrigger('button')
-                  }
-                }}
-                onClick={() => runReloadTrigger('button')}
-                onContextMenu={(e) => {
-                  e.preventDefault()
-                  setReloadMenuOpen(true)
-                }}
-              >
-                {loading ? (
-                  <Loader2 className="size-4 animate-spin" />
-                ) : (
-                  <RefreshCw className="size-4" />
-                )}
-              </Button>
-            </DropdownMenuTrigger>
-          </TooltipTrigger>
-          <TooltipContent side="bottom" sideOffset={4}>
-            {reloadButtonLabel}
-            {/* Why: the chord maps to plain reload(), which is not what Stop or Retry do — only hint when they match. */}
-            {reloadShortcut && reloadButtonLabelKind === 'reload' ? ` · ${reloadShortcut}` : ''}
-          </TooltipContent>
-        </Tooltip>
-        <DropdownMenuContent align="start" alignOffset={-4}>
-          <DropdownMenuItem onClick={() => runReloadTrigger('reload')}>
-            {translate('auto.components.browser.pane.BrowserPane.0e080d820e', 'Reload')}
-            <DropdownMenuShortcut>{reloadShortcut}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => runReloadTrigger('hard-reload')}>
-            {translate('auto.components.browser.pane.BrowserPane.a1f3c2e4b5', 'Hard Reload')}
-            <DropdownMenuShortcut>{hardReloadShortcut}</DropdownMenuShortcut>
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      <BrowserAddressBar
-        value={addressBarValue}
-        onChange={setAddressBarValue}
-        onSubmit={submitAddressBar}
-        onNavigate={navigateToUrl}
-        inputRef={addressBarInputRef}
-        dismissSuggestionsRef={dismissAddressBarSuggestionsRef}
-      />
-
       <BrowserImportHintButton profileId={sessionProfileId} />
 
       <Tooltip>
@@ -320,6 +308,6 @@ export function BrowserPageToolbar({
         onDestroyWebview={() => destroyPersistentWebview(browserPageId)}
         isActive={isActive}
       />
-    </div>
+    </BrowserNavigationControlRow>
   )
 }

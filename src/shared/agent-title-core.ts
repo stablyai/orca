@@ -5,7 +5,9 @@ import {
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
+import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
 
@@ -139,6 +141,19 @@ export function isClaudeManagementTitle(title: string): boolean {
 
 export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
+}
+
+const CLAUDE_IDENTITY_FRAME_RE =
+  /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+export function isClaudeIdentityFrameSegment(title: string): boolean {
+  return CLAUDE_IDENTITY_FRAME_RE.test(
+    stripLeadingAgentTitleDecorationOrEmpty(title).trim().toLowerCase()
+  )
+}
+
+export function isClaudeIdentityFrameTitle(title: string): boolean {
+  return getWrapperTitleSegments(title).some(isClaudeIdentityFrameSegment)
 }
 
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own
