@@ -169,7 +169,8 @@ function parseCronField(args: {
       end = parseCronNumber(endPart, args.names ?? null, args.field)
     } else {
       start = parseCronNumber(rangePart, args.names ?? null, args.field)
-      end = start
+      // Why: `5/15` is the `5-<max>/15` shorthand; ending at `start` dropped the step.
+      end = stepPart === undefined ? start : args.max
     }
 
     const normalizedStart = args.normalize?.(start) ?? start
