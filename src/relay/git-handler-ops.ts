@@ -182,6 +182,7 @@ export async function branchCompare(
       // compare error makes the source-control panel look broken.
       summary.changedFiles = 0
       summary.commitsAhead = 0
+      summary.commitsBehind = 0
       summary.status = 'ready'
       return { summary, entries: [] }
     }
@@ -215,10 +216,12 @@ export async function branchCompare(
   try {
     const [entries, { stdout: countOut }] = await Promise.all([
       loadBranchChanges(mergeBase, headOid),
-      git(['rev-list', '--count', `${baseOid}..${headOid}`], worktreePath)
+      git(['rev-list', '--left-right', '--count', `${baseOid}...${headOid}`], worktreePath)
     ])
     summary.changedFiles = entries.length
-    summary.commitsAhead = Number.parseInt(countOut.trim(), 10) || 0
+    const [behindOut = '', aheadOut = ''] = countOut.trim().split(/\s+/)
+    summary.commitsAhead = Number.parseInt(aheadOut, 10) || 0
+    summary.commitsBehind = Number.parseInt(behindOut, 10) || 0
     summary.status = 'ready'
     return { summary, entries }
   } catch (error) {
