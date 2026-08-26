@@ -14,12 +14,13 @@ export function failWorkerStartWithReceipt(args: {
   error: unknown
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
+  effects?: unknown[]
 }): unknown {
   const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
-    ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
-    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+    ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason, args.effects)
+    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason, args.effects)
   return {
     runId: args.runId,
     taskId: args.taskId,

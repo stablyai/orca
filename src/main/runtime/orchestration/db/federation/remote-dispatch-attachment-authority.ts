@@ -90,17 +90,18 @@ export function failRemoteAttachment(
   dispatchId: string,
   stage: string,
   reason: string,
-  unknown: boolean
+  unknown: boolean,
+  effects?: unknown[]
 ): RemoteDispatchAttachmentRow {
   const state = unknown ? 'start_unknown' : 'failed'
   const result = this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
        SET state = ?, stage = ?, last_error = ?, capability_hash = NULL,
-           updated_at = datetime('now')
+           effects = COALESCE(?, effects), updated_at = datetime('now')
        WHERE dispatch_id = ? AND state = 'starting'`
     )
-    .run(state, stage, reason, dispatchId)
+    .run(state, stage, reason, effects ? JSON.stringify(effects) : null, dispatchId)
   if (result.changes !== 1) {
     throw new OrchestrationError(
       'dispatch_inactive',

@@ -16,6 +16,10 @@ import {
   persistFederatedSetupWaitOutcome
 } from './orchestration-federation-setup'
 import { FederationAttachStartParams } from './orchestration-federation-start-schema'
+import {
+  dispatchInputAcceptedEffect,
+  dispatchInputFailedEffect
+} from './orchestration-dispatch-input-verdict'
 import { failFederatedAttachmentWithReceipt } from './orchestration-federation-start-receipt'
 import { prepareFederationAttachmentWorkerStart } from './orchestration-worker-start-validation'
 
@@ -225,25 +229,25 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           effects
         })
         failedStage = 'dispatch_input'
-        await runtime.sendTerminalAgentPrompt(
-          terminalHandle,
-          buildDispatchPreamble({
-            taskId: params.taskId,
-            dispatchId: params.dispatchId,
-            taskSpec: params.taskSpec,
-            coordinatorHandle: 'Run home (relayed by Orca)',
-            workerHandle: terminalHandle,
-            dispatchCapability: capability,
-            devMode: params.devMode,
-            cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
-          })
-        )
-        effects.push({
-          kind: 'dispatch_input',
-          role: 'agent',
-          id: terminalHandle,
-          state: 'accepted'
-        })
+        try {
+          await runtime.sendTerminalAgentPrompt(
+            terminalHandle,
+            buildDispatchPreamble({
+              taskId: params.taskId,
+              dispatchId: params.dispatchId,
+              taskSpec: params.taskSpec,
+              coordinatorHandle: 'Run home (relayed by Orca)',
+              workerHandle: terminalHandle,
+              dispatchCapability: capability,
+              devMode: params.devMode,
+              cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+            })
+          )
+        } catch (error) {
+          effects.push(dispatchInputFailedEffect(terminalHandle, error))
+          throw error
+        }
+        effects.push(dispatchInputAcceptedEffect(terminalHandle))
         const attachment = db.markRemoteAttachmentReady(params.dispatchId, effects)
         monitorFederatedSetup({ ...setupStage, runtime })
         return {
@@ -266,7 +270,8 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
           failedStage,
           error,
           setup,
-          launch: launch.receipt
+          launch: launch.receipt,
+          effects
         })
       }
     }

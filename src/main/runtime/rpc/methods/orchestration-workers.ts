@@ -1,5 +1,9 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
+import {
+  dispatchInputAcceptedEffect,
+  dispatchInputFailedEffect
+} from './orchestration-dispatch-input-verdict'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
@@ -231,13 +235,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           devMode: params.devMode,
           cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
         })
-        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
-        effects.push({
-          kind: 'dispatch_input',
-          role: 'agent',
-          id: terminalHandle,
-          state: 'accepted'
-        })
+        try {
+          await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
+        } catch (error) {
+          effects.push(dispatchInputFailedEffect(terminalHandle, error))
+          throw error
+        }
+        effects.push(dispatchInputAcceptedEffect(terminalHandle))
         const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
         monitorWorkerSetup({
           runtime,
@@ -269,7 +273,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           failedStage,
           error,
           setup: setupReceipt,
-          launch: launch.receipt
+          launch: launch.receipt,
+          effects
         })
       }
     }

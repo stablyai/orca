@@ -37,7 +37,8 @@ export function failWorkerStart(
   this: OrchestrationDb,
   dispatchId: string,
   stage: string,
-  reason: string
+  reason: string,
+  effects?: unknown[]
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -57,10 +58,11 @@ export function failWorkerStart(
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = 'failed', stage = ?, last_error = ?, updated_at = datetime('now')
+         SET state = 'failed', stage = ?, last_error = ?,
+             effects = COALESCE(?, effects), updated_at = datetime('now')
          WHERE dispatch_id = ?`
       )
-      .run(stage, reason, dispatchId)
+      .run(stage, reason, effects ? JSON.stringify(effects) : null, dispatchId)
     this.db
       .prepare(
         `UPDATE tasks SET status = 'failed', completed_at = datetime('now')
@@ -83,7 +85,8 @@ export function markWorkerStartUnknown(
   this: OrchestrationDb,
   dispatchId: string,
   stage: string,
-  reason: string
+  reason: string,
+  effects?: unknown[]
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -95,10 +98,11 @@ export function markWorkerStartUnknown(
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = 'start_unknown', stage = ?, last_error = ?, updated_at = datetime('now')
+         SET state = 'start_unknown', stage = ?, last_error = ?,
+             effects = COALESCE(?, effects), updated_at = datetime('now')
          WHERE dispatch_id = ?`
       )
-      .run(stage, reason, dispatchId)
+      .run(stage, reason, effects ? JSON.stringify(effects) : null, dispatchId)
     this.db
       .prepare(
         `UPDATE dispatch_contexts

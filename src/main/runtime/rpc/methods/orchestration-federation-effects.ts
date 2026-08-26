@@ -12,6 +12,8 @@ export type FederationEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+  cause?: string
+  detail?: string
 }
 
 export function appendFederationTerminalEffects(
