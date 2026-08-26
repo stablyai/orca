@@ -37,6 +37,7 @@ import {
   type TerminalTitleFactMeta,
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
+import { createOsc133CommandFinishedScanner } from '../../shared/terminal-osc133-command-finished'
 import { getDecorativeAgentTitleSignature } from '../../shared/agent-decorative-title-signature'
 import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
 import type {
@@ -2406,6 +2407,7 @@ type TerminalWaiter = {
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
   pollInterval: NodeJS.Timeout | null
+  dataCleanup: (() => void) | null
   abortCleanup: (() => void) | null
 }
 
@@ -15721,8 +15723,8 @@ export class OrcaRuntimeService {
       pty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(pty.ptyId, false)
       pty.disconnectedAt = Date.now()
-      pty.lastExitCode = exitCode
-      pty.lastExitCause = exitCause
+      pty.lastExitCode = preservesAbnormalSshSurface ? null : exitCode
+      pty.lastExitCause = preservesAbnormalSshSurface ? null : exitCause
       if (exitCode >= 0 || options?.hostExitConfirmed === true) {
         // A real wait status from the owning host is the death certificate; the
         // synthetic -1 we emit on a failed/unroutable stop is not.
@@ -15750,8 +15752,8 @@ export class OrcaRuntimeService {
       this.detachedPreAllocatedLeaves.delete(ptyId)
       leaf.connected = false
       leaf.writable = false
-      leaf.lastExitCode = exitCode
-      leaf.lastExitCause = exitCause
+      leaf.lastExitCode = preservesAbnormalSshSurface ? null : exitCode
+      leaf.lastExitCause = preservesAbnormalSshSurface ? null : exitCause
       leaf.lastAgentStatusObservedLive = false
       this.resolveExitWaiters(leaf)
       const leafHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
@@ -20010,13 +20012,24 @@ export class OrcaRuntimeService {
       condition?: RuntimeTerminalWaitCondition
       timeoutMs?: number
       signal?: AbortSignal
+      superviseCommandExit?: boolean
     }
   ): Promise<RuntimeTerminalWait> {
     const condition = options?.condition ?? 'exit'
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
-      if (condition === 'exit' && !pty.pty.connected) {
-        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      if (!pty.pty.connected) {
+        if (this.getPtyLivenessVerdict(pty.pty.ptyId)?.status === 'unverifiable') {
+          return buildUnverifiableTerminalWaitResult(handle, condition)
+        }
+        return condition === 'exit'
+          ? buildPtyTerminalWaitResult(handle, condition, pty.pty)
+          : buildPrematureTerminalExitWaitResult(
+              handle,
+              condition,
+              pty.pty.lastExitCode,
+              pty.pty.lastExitCause
+            )
       }
       const ptyWaitText = buildTerminalWaitText(
         pty.pty.tailBuffer,
@@ -20051,6 +20064,7 @@ export class OrcaRuntimeService {
           reject,
           timeout: null,
           pollInterval: null,
+          dataCleanup: null,
           abortCleanup: null
         }
         if (!this.bindTerminalWaiterAbort(waiter, options?.signal)) {
@@ -20069,12 +20083,30 @@ export class OrcaRuntimeService {
           this.waitersByHandle.set(handle, waiters)
         }
         waiters.add(waiter)
+        if (condition === 'tui-idle' && options?.superviseCommandExit === true) {
+          this.startTuiIdleCommandExitWatch(waiter, pty.pty.ptyId)
+          if (!waiters.has(waiter)) {
+            return
+          }
+        }
         const live = this.getLivePtyForHandle(handle)
         if (!live) {
           this.removeWaiter(waiter)
           reject(new Error('terminal_handle_stale'))
-        } else if (condition === 'exit' && !live.pty.connected) {
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+        } else if (!live.pty.connected) {
+          this.resolveWaiter(
+            waiter,
+            this.getPtyLivenessVerdict(live.pty.ptyId)?.status === 'unverifiable'
+              ? buildUnverifiableTerminalWaitResult(handle, condition)
+              : condition === 'exit'
+                ? buildPtyTerminalWaitResult(handle, condition, live.pty)
+                : buildPrematureTerminalExitWaitResult(
+                    handle,
+                    condition,
+                    live.pty.lastExitCode,
+                    live.pty.lastExitCause
+                  )
+          )
         } else if (condition === 'tui-idle') {
           const livePtyWaitText = buildTerminalWaitText(
             live.pty.tailBuffer,
@@ -20102,8 +20134,23 @@ export class OrcaRuntimeService {
     }
     const { leaf } = this.getLiveLeafForHandle(handle)
 
-    if (condition === 'exit' && getTerminalState(leaf) === 'exited') {
-      return buildTerminalWaitResult(handle, condition, leaf)
+    if (
+      !leaf.connected &&
+      leaf.ptyId &&
+      this.getPtyLivenessVerdict(leaf.ptyId)?.status === 'unverifiable'
+    ) {
+      return buildUnverifiableTerminalWaitResult(handle, condition)
+    }
+
+    if (getTerminalState(leaf) === 'exited') {
+      return condition === 'exit'
+        ? buildTerminalWaitResult(handle, condition, leaf)
+        : buildPrematureTerminalExitWaitResult(
+            handle,
+            condition,
+            leaf.lastExitCode,
+            leaf.lastExitCause
+          )
     }
 
     const leafWaitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
@@ -20148,6 +20195,7 @@ export class OrcaRuntimeService {
         reject,
         timeout: null,
         pollInterval: null,
+        dataCleanup: null,
         abortCleanup: null
       }
 
@@ -20169,14 +20217,36 @@ export class OrcaRuntimeService {
         this.waitersByHandle.set(handle, waiters)
       }
       waiters.add(waiter)
+      if (condition === 'tui-idle' && leaf.ptyId && options?.superviseCommandExit === true) {
+        this.startTuiIdleCommandExitWatch(waiter, leaf.ptyId)
+        if (!waiters.has(waiter)) {
+          return
+        }
+      }
 
       // Why: the handle may go stale or exit in the small gap between the first
       // validation and waiter registration. Re-checking here keeps wait --for
       // exit honest instead of hanging on a terminal that already changed.
       try {
         const live = this.getLiveLeafForHandle(handle)
-        if (getTerminalState(live.leaf) === 'exited') {
-          this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
+        if (
+          !live.leaf.connected &&
+          live.leaf.ptyId &&
+          this.getPtyLivenessVerdict(live.leaf.ptyId)?.status === 'unverifiable'
+        ) {
+          this.resolveWaiter(waiter, buildUnverifiableTerminalWaitResult(handle, condition))
+        } else if (getTerminalState(live.leaf) === 'exited') {
+          this.resolveWaiter(
+            waiter,
+            condition === 'exit'
+              ? buildTerminalWaitResult(handle, condition, live.leaf)
+              : buildPrematureTerminalExitWaitResult(
+                  handle,
+                  condition,
+                  live.leaf.lastExitCode,
+                  live.leaf.lastExitCause
+                )
+          )
         } else if (condition === 'tui-idle') {
           const liveLeafWaitText = buildTerminalWaitText(
             live.leaf.tailBuffer,
@@ -35883,13 +35953,25 @@ export class OrcaRuntimeService {
     if (!waiters || waiters.size === 0) {
       return
     }
+    const livenessUnverifiable =
+      leaf.ptyId != null && this.getPtyLivenessVerdict(leaf.ptyId)?.status === 'unverifiable'
     for (const waiter of [...waiters]) {
+      if (livenessUnverifiable) {
+        this.resolveWaiter(waiter, buildUnverifiableTerminalWaitResult(handle, waiter.condition))
+        continue
+      }
       if (waiter.condition === 'exit') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'exit', leaf))
       } else {
-        // Why: after exit, conditions like tui-idle can never be satisfied — reject now instead of spinning the poll until timeout on a dead process.
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        this.resolveWaiter(
+          waiter,
+          buildPrematureTerminalExitWaitResult(
+            handle,
+            waiter.condition,
+            leaf.lastExitCode,
+            leaf.lastExitCause
+          )
+        )
       }
     }
   }
@@ -35926,14 +36008,51 @@ export class OrcaRuntimeService {
     if (!waiters || waiters.size === 0) {
       return
     }
+    const livenessUnverifiable = this.getPtyLivenessVerdict(ptyId)?.status === 'unverifiable'
     for (const waiter of [...waiters]) {
+      if (livenessUnverifiable) {
+        this.resolveWaiter(waiter, buildUnverifiableTerminalWaitResult(handle, waiter.condition))
+        continue
+      }
       if (waiter.condition === 'exit') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'exit', pty))
       } else {
-        this.removeWaiter(waiter)
-        waiter.reject(new Error('terminal_exited'))
+        this.resolveWaiter(
+          waiter,
+          buildPrematureTerminalExitWaitResult(
+            handle,
+            waiter.condition,
+            pty.lastExitCode,
+            pty.lastExitCause
+          )
+        )
       }
     }
+  }
+
+  private startTuiIdleCommandExitWatch(waiter: TerminalWaiter, ptyId: string): void {
+    let commandStarted = false
+    const scanner = createOsc133CommandFinishedScanner(
+      (exitCode) => {
+        if (!commandStarted || !this.waitersByHandle.get(waiter.handle)?.has(waiter)) {
+          return
+        }
+        this.resolveWaiter(
+          waiter,
+          buildPrematureTerminalExitWaitResult(waiter.handle, waiter.condition, exitCode)
+        )
+      },
+      () => {
+        commandStarted = true
+      }
+    )
+    waiter.dataCleanup = this.subscribeToTerminalData(ptyId, scanner.scan)
+    const replay = this.recentPtyOutputById.get(ptyId)?.read()
+    if (replay) {
+      scanner.scan(replay)
+    }
+    // A startup command can predate waiter registration; its next completion is still terminal.
+    commandStarted = true
   }
 
   private isPtyKnownExited(ptyId: string): boolean {
@@ -36289,6 +36408,8 @@ export class OrcaRuntimeService {
     if (waiter.pollInterval) {
       clearInterval(waiter.pollInterval)
     }
+    waiter.dataCleanup?.()
+    waiter.dataCleanup = null
     if (waiter.abortCleanup) {
       waiter.abortCleanup()
       waiter.abortCleanup = null
@@ -40970,6 +41091,35 @@ function buildTerminalWait(
     exitCode,
     ...(exitCause ? { exitCause } : {}),
     ...(blockedReason ? { blockedReason } : {})
+  }
+}
+
+function buildPrematureTerminalExitWaitResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition,
+  exitCode: number | null,
+  exitCause?: TerminalExitCause | null
+): RuntimeTerminalWait {
+  return {
+    handle,
+    condition,
+    satisfied: false,
+    status: 'exited',
+    exitCode,
+    ...(exitCause ? { exitCause } : {})
+  }
+}
+
+function buildUnverifiableTerminalWaitResult(
+  handle: string,
+  condition: RuntimeTerminalWaitCondition
+): RuntimeTerminalWait {
+  return {
+    handle,
+    condition,
+    satisfied: false,
+    status: 'unknown',
+    exitCode: null
   }
 }
 

@@ -20,6 +20,11 @@ import {
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { getAgentReadinessFailure } from './orchestration-agent-readiness'
+import {
+  attachExitedWorkerTerminalAuthority,
+  releaseFailedWorkerStartTerminal
+} from './orchestration-worker-start-terminal-release'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -126,6 +131,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       let terminalHandle = params.terminal
       let terminalRevealWarning: string | undefined
       let failedStage = 'terminal_create'
+      let releaseExitedTerminal = false
       let setupReceipt: WorkerSetupReceipt = {
         requested: 'not_applicable',
         effective: 'not_applicable',
@@ -196,18 +202,27 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
-          timeoutMs: params.timeoutMs ?? 60_000
+          timeoutMs: params.timeoutMs ?? 60_000,
+          superviseCommandExit: true
         })
         persistWorkerSetupWaitOutcome({ ...setupStage, wait })
-        if (!wait.satisfied) {
+        let readinessFailure = getAgentReadinessFailure(wait)
+        if (readinessFailure) {
+          const diagnostic = await runtime
+            .readTerminal(terminalHandle, { limit: 20 })
+            .catch(() => null)
+          readinessFailure = getAgentReadinessFailure(wait, diagnostic?.tail) ?? readinessFailure
           if (setupReceipt.state === 'failed') {
             failedStage = 'setup_wait'
           }
-          throw new Error(
-            wait.blockedReason
-              ? `Agent startup blocked: ${wait.blockedReason}`
-              : `Agent did not become ready (${wait.status}).`
-          )
+          if (wait.status === 'unknown') {
+            throw new OrchestrationError('operation_unknown', readinessFailure)
+          }
+          releaseExitedTerminal = wait.status === 'exited' && !params.terminal
+          if (releaseExitedTerminal) {
+            attachExitedWorkerTerminalAuthority(runtime, setupStage)
+          }
+          throw new Error(readinessFailure)
         }
         const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
         const capability = db.prepareStartingWorkerAuthority({
@@ -261,7 +276,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})
         }
       } catch (error) {
-        return failWorkerStartWithReceipt({
+        const failure = failWorkerStartWithReceipt({
           db,
           runId: run.id,
           taskId: task.id,
@@ -270,7 +285,16 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           error,
           setup: setupReceipt,
           launch: launch.receipt
-        })
+        }) as Record<string, unknown>
+        return releaseExitedTerminal
+          ? releaseFailedWorkerStartTerminal({
+              runtime,
+              db,
+              dispatchId: started.dispatch.id,
+              failedStage,
+              failure
+            })
+          : failure
       }
     }
   })
