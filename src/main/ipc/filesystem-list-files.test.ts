@@ -335,6 +335,27 @@ describe('filesystem-list-files', () => {
     }
   })
 
+  it('kills local rg scans when a paired listing is cancelled', async () => {
+    const p1 = createMockProcess()
+    const p2 = createMockProcess()
+    spawnMock.mockImplementation((_cmd, args: string[]) => (isIgnoredRgPass(args) ? p2 : p1))
+    const controller = new AbortController()
+    const cancellation = new FileListingCancelledError('superseded')
+    const promise = listQuickOpenFiles(
+      '/mock/root',
+      {} as unknown as Store,
+      undefined,
+      controller.signal
+    )
+    await flushMicrotasks()
+
+    controller.abort(cancellation)
+
+    await expect(promise).rejects.toBe(cancellation)
+    expect(p1.kill).toHaveBeenCalledOnce()
+    expect(p2.kill).toHaveBeenCalledOnce()
+  })
+
   it('filters out .next, .cache, .stably, .vscode, .idea', async () => {
     const p1 = createMockProcess()
     const p2 = createMockProcess()

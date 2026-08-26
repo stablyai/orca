@@ -19,6 +19,10 @@ import {
 import { startSkillPhaseOperation } from './skill-operation-observability'
 import { WslSkillInstallFilesystem } from './skill-wsl-install-filesystem'
 import { readSkillPlacementRecoveryJournal } from './skill-placement-recovery-journal'
+import {
+  readSkillDeleteRecoveryJournal,
+  recoverSkillDeleteTransaction
+} from './skill-delete/recovery'
 import { recoverSkillPlacementTransaction } from './skill-placement-transaction'
 
 const MAX_PENDING_TRANSACTION_JOURNALS = 64
@@ -30,6 +34,7 @@ type PendingTransaction = {
   install: boolean
   removal: boolean
   placement: boolean
+  delete: boolean
 }
 
 export type SkillTransactionStartupRecoveryReport = {
@@ -49,7 +54,7 @@ function failureCode(error: unknown): string {
 
 async function scanJournalDirectory(
   stateDirectory: string,
-  directoryName: 'journals' | 'removal-journals' | 'placement-journals'
+  directoryName: 'journals' | 'removal-journals' | 'placement-journals' | 'delete-journals'
 ): Promise<{
   candidates: { canonicalPath: string; journalKey: string }[]
   failures: { journalKey: string; code: string }[]
@@ -109,14 +114,15 @@ function pendingTransactions(
   const pending = new Map<string, PendingTransaction>()
   const add = (
     candidate: { canonicalPath: string; journalKey: string },
-    kind: 'install' | 'removal' | 'placement'
+    kind: 'install' | 'removal'
   ): void => {
     const current = pending.get(candidate.canonicalPath) ?? {
       canonicalPath: candidate.canonicalPath,
       journalKey: candidate.journalKey,
       install: false,
       removal: false,
-      placement: false
+      placement: false,
+      delete: false
     }
     current[kind] = true
     pending.set(candidate.canonicalPath, current)
@@ -126,13 +132,38 @@ function pendingTransactions(
   return [...pending.values()]
 }
 
+/** Merged after the map-based dedupe so a kind that shares a canonical path with
+ *  an install or removal joins that transaction rather than racing it. */
+function mergeJournalCandidates(
+  pending: PendingTransaction[],
+  candidates: readonly { canonicalPath: string; journalKey: string }[],
+  kind: 'placement' | 'delete'
+): void {
+  for (const candidate of candidates) {
+    const current = pending.find((entry) => entry.canonicalPath === candidate.canonicalPath)
+    if (current) {
+      current[kind] = true
+      continue
+    }
+    pending.push({
+      ...candidate,
+      install: false,
+      removal: false,
+      placement: false,
+      delete: false,
+      [kind]: true
+    })
+  }
+}
+
 async function recoverPendingSkillTransactionsUnobserved(
   stateDirectory: string
 ): Promise<SkillTransactionStartupRecoveryReport> {
-  const [installs, removals, placements, extractions, locks] = await Promise.all([
+  const [installs, removals, placements, deletes, extractions, locks] = await Promise.all([
     scanJournalDirectory(stateDirectory, 'journals'),
     scanJournalDirectory(stateDirectory, 'removal-journals'),
     scanJournalDirectory(stateDirectory, 'placement-journals'),
+    scanJournalDirectory(stateDirectory, 'delete-journals'),
     recoverPendingSkillExtractions(stateDirectory),
     reclaimDeadSkillInstallLocks(stateDirectory)
   ])
@@ -141,6 +172,7 @@ async function recoverPendingSkillTransactionsUnobserved(
       installs.candidates.length +
       removals.candidates.length +
       placements.candidates.length +
+      deletes.candidates.length +
       extractions.scanned,
     recovered: extractions.recovered,
     orphanedExtractionsRecovered: extractions.recovered,
@@ -149,24 +181,20 @@ async function recoverPendingSkillTransactionsUnobserved(
       ...installs.failures,
       ...removals.failures,
       ...placements.failures,
+      ...deletes.failures,
       ...extractions.failures
     ],
     truncated:
       installs.truncated ||
       removals.truncated ||
       placements.truncated ||
+      deletes.truncated ||
       extractions.truncated ||
       locks.truncated
   }
   const pending = pendingTransactions(installs.candidates, removals.candidates)
-  for (const placement of placements.candidates) {
-    const current = pending.find((candidate) => candidate.canonicalPath === placement.canonicalPath)
-    if (current) {
-      current.placement = true
-    } else {
-      pending.push({ ...placement, install: false, removal: false, placement: true })
-    }
-  }
+  mergeJournalCandidates(pending, placements.candidates, 'placement')
+  mergeJournalCandidates(pending, deletes.candidates, 'delete')
   for (const pendingTransaction of pending) {
     let releaseLock: (() => Promise<void>) | null = null
     try {
@@ -182,11 +210,15 @@ async function recoverPendingSkillTransactionsUnobserved(
       const placementJournal = pendingTransaction.placement
         ? await readSkillPlacementRecoveryJournal(stateDirectory, pendingTransaction.canonicalPath)
         : null
+      const deleteJournal = pendingTransaction.delete
+        ? await readSkillDeleteRecoveryJournal(stateDirectory, pendingTransaction.canonicalPath)
+        : null
       const distros = new Set(
         [
           installJournal?.receipt.wslDistro,
           removalJournal?.receipt.wslDistro,
-          placementJournal?.wslDistro
+          placementJournal?.wslDistro,
+          deleteJournal?.wslDistro
         ].filter((distro): distro is string => Boolean(distro))
       )
       if (distros.size > 1 || (distros.size && process.platform !== 'win32')) {
@@ -200,6 +232,12 @@ async function recoverPendingSkillTransactionsUnobserved(
             ...(placementJournal?.actions.map((action) => action.rootPath) ?? [])
           ])
         : undefined
+      // Why explicit rather than only widening the constructor list: the delete
+      // journal is the sole record of which roots its moves are allowed to
+      // touch, and replay must be authorized for them before it operates.
+      if (deleteJournal) {
+        filesystem?.authorizeRoots(deleteJournal.allowedRoots)
+      }
       if (removalJournal) {
         await recoverSkillRemovalTransaction(
           stateDirectory,
@@ -218,6 +256,14 @@ async function recoverPendingSkillTransactionsUnobserved(
       }
       if (placementJournal) {
         await recoverSkillPlacementTransaction(
+          stateDirectory,
+          pendingTransaction.canonicalPath,
+          filesystem
+        )
+        report.recovered += 1
+      }
+      if (deleteJournal) {
+        await recoverSkillDeleteTransaction(
           stateDirectory,
           pendingTransaction.canonicalPath,
           filesystem

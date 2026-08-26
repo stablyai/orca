@@ -152,6 +152,24 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).not.toContain('data-repo-header-collapse-affordance=""')
   })
 
+  it('uncollapses pinned reveal for a descendant that only lives under a pinned parent', () => {
+    const child = makeWorktree({
+      id: 'child-of-pinned',
+      instanceId: 'child-of-pinned-instance',
+      displayName: 'Child of pinned',
+      branch: 'child',
+      sortOrder: 2
+    })
+
+    expect(
+      getPinnedWorktreeRevealCollapsedGroupKeys({
+        worktree: child,
+        collapsedGroups: new Set(['pinned', 'all']),
+        inPinnedSection: true
+      })
+    ).toEqual(['pinned'])
+  })
+
   it('uncollapses pinned reveal through the pinned section after host expansion', () => {
     const worktree = makeWorktree({
       id: 'pinned-ssh',

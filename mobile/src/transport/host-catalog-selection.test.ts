@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { selectConnectableHostProfiles } from './host-catalog-selection'
+import { selectConnectableHostProfiles, sortHostsByLastConnected } from './host-catalog-selection'
 import type { HostCatalogEntry, HostProfile } from './types'
 
 const profile: HostProfile = {
@@ -35,5 +35,28 @@ describe('selectConnectableHostProfiles', () => {
         unavailable('host-missing', 'missing')
       ])
     ).toEqual([profile])
+  })
+
+  it('sorts hosts by recency without copied-array methods or input mutation', () => {
+    const hosts = [
+      { ...profile, id: 'oldest', lastConnected: 1 },
+      { ...profile, id: 'newest', lastConnected: 3 },
+      { ...profile, id: 'middle', lastConnected: 2 }
+    ]
+    const descriptor = Object.getOwnPropertyDescriptor(Array.prototype, 'toSorted')
+    Reflect.deleteProperty(Array.prototype, 'toSorted')
+
+    try {
+      expect(sortHostsByLastConnected(hosts).map((host) => host.id)).toEqual([
+        'newest',
+        'middle',
+        'oldest'
+      ])
+      expect(hosts.map((host) => host.id)).toEqual(['oldest', 'newest', 'middle'])
+    } finally {
+      if (descriptor) {
+        Reflect.defineProperty(Array.prototype, 'toSorted', descriptor)
+      }
+    }
   })
 })

@@ -109,10 +109,12 @@ describe('openMobileEmulatorTab', () => {
       worktree: 'wt-1',
       focus: false
     })
+    expect(getSimulatorTabForWorktree).toHaveBeenCalledWith('wt-1', 'local')
     expect(ensureSimulatorTab).toHaveBeenCalledWith('wt-1', {
       placement: 'rightSplit',
       targetGroupId: 'group-1',
-      surfacePane: true
+      surfacePane: true,
+      executionHostId: 'local'
     })
     expect(consumePrelaunchedSimulatorSession('wt-1')).toEqual(mockAttachResult.info)
   })

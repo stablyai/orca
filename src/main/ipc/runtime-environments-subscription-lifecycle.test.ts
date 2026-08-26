@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
 
 const {
@@ -176,7 +177,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'terminal.subscribe',
       { terminal: 't1' },
       25,
-      expect.any(Object)
+      expect.any(Object),
+      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
     )
     expect(sent).toEqual([
       expect.objectContaining({ subscriptionId: result.subscriptionId, type: 'response' }),

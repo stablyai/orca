@@ -14,7 +14,7 @@ import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
 import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
 import {
   requestSshPtyAttach,
-  reattachSshPtySessionWithExitFence,
+  reattachSshPtySessionForSpawn,
   type PtySourceRecoveryRequest,
   type SshPtyAttachResult
 } from './ssh-pty-session-reattach'
@@ -22,7 +22,6 @@ import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
-import { SSH_SESSION_EXPIRED_ERROR } from './ssh-pty-errors'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
 
 // Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
@@ -91,36 +90,18 @@ export class SshPtyProvider implements IPtyProvider {
       }
     }
     if (opts.sessionId) {
-      let result: Awaited<ReturnType<typeof reattachSshPtySessionWithExitFence>> | undefined
-      try {
-        result = await reattachSshPtySessionWithExitFence({
-          mux: this.mux,
-          connectionId: this.connectionId,
-          sessionId: opts.sessionId,
-          options: opts,
-          exitRaceTracker: this.spawnExitRaces,
-          installSourceActivation: (relayPtyId, activation) =>
-            this.outputState.installReceivingActivation(relayPtyId, activation),
-          rememberPtyIncarnation: (relayPtyId, incarnationId) =>
-            this.outputState.rememberPtyIncarnation(relayPtyId, incarnationId)
-        })
-        if (result.sourceRecovery?.status === 'restoreRequired') {
-          throw new Error(
-            `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(this.connectionId, result.id)}`
-          )
-        }
-        this.livePtyIds.add(result.id)
-        result.sourceActivationLease?.commit()
-        const {
-          sourceActivationLease: _lease,
-          sourceRecovery: _sourceRecovery,
-          ...spawnResult
-        } = result
-        return spawnResult
-      } catch (error) {
-        result?.sourceActivationLease?.rollback()
-        throw error
-      }
+      return await reattachSshPtySessionForSpawn({
+        mux: this.mux,
+        connectionId: this.connectionId,
+        sessionId: opts.sessionId,
+        options: opts,
+        exitRaceTracker: this.spawnExitRaces,
+        installSourceActivation: (relayPtyId, activation) =>
+          this.outputState.installReceivingActivation(relayPtyId, activation),
+        rememberPtyIncarnation: (relayPtyId, incarnationId) =>
+          this.outputState.rememberPtyIncarnation(relayPtyId, incarnationId),
+        acceptLivePty: (relayPtyId) => this.livePtyIds.add(relayPtyId)
+      })
     }
 
     const supportsCreateOperation = opts.agentSessionCreateOperationId
@@ -149,6 +130,10 @@ export class SshPtyProvider implements IPtyProvider {
       acceptLivePty: (id) => this.livePtyIds.add(id),
       toAppPtyId: this.toAppPtyId
     })
+  }
+
+  async deleteWorktreeHistory(worktreeId: string): Promise<void> {
+    await this.mux.request('pty.deleteWorktreeHistory', { worktreeId })
   }
 
   async supportsAgentSessionClaims(options: { signal?: AbortSignal } = {}): Promise<boolean> {

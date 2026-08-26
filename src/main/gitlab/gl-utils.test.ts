@@ -19,6 +19,9 @@ import {
   classifyJobLogError,
   classifyListFetchError,
   classifyListIssuesError,
+  acquire,
+  release,
+  GITLAB_ADMISSION_TIMEOUT_MS,
   getIssueProjectRef,
   parseGlabJsonList,
   isMissingJobLogError,
@@ -322,6 +325,31 @@ describe('gitlab project ref resolution', () => {
       path: 'after/orca'
     })
     expect(sshExecMock).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('GitLab operation admission', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    // Drain any slots held by the saturation test before the next test.
+    for (let i = 0; i < 4; i += 1) {
+      release()
+    }
+  })
+
+  it('expires queued work instead of retaining it behind saturated operations', async () => {
+    vi.useFakeTimers()
+    await Promise.all(Array.from({ length: 4 }, () => acquire()))
+
+    const queued = acquire()
+    const rejection = expect(queued).rejects.toThrow(
+      'Timed out waiting for a GitLab operation slot.'
+    )
+    await vi.advanceTimersByTimeAsync(GITLAB_ADMISSION_TIMEOUT_MS)
+    await rejection
+
+    release()
+    await expect(acquire()).resolves.toBeUndefined()
   })
 })
 

@@ -310,7 +310,6 @@ function Settings(): React.JSX.Element {
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
   const settingsProjectSetupSelection = useAppStore((s) => s.settingsProjectSetupSelection)
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
-  const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
@@ -1206,12 +1205,10 @@ function Settings(): React.JSX.Element {
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
-        searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
         // Why: deep-links open panes/modals that own focus; plain entry lands in search.
         searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
-        onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
       />
 

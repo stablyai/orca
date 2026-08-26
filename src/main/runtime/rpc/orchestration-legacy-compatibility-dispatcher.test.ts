@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
+import { applyEscalationToDispatch } from '../orchestration/coordinator-escalation-triage'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
@@ -51,7 +52,10 @@ describe('legacy compatibility through RpcDispatcher', () => {
         harness.dispatcher,
         request(
           'orchestration.send',
-          escalationParams(harness),
+          {
+            ...escalationParams(harness),
+            payload: JSON.stringify({ taskId: harness.taskId })
+          },
           evidence('worker', valid),
           `${transport}-${valid}`
         ),
@@ -75,6 +79,15 @@ describe('legacy compatibility through RpcDispatcher', () => {
           legacyCompatibility: { replayed: false }
         }
       })
+      const message = (response as { result: { message: { id: string; payload: string } } }).result
+        .message
+      expect(JSON.parse(message.payload)).toMatchObject({
+        taskId: harness.taskId,
+        dispatchId: harness.dispatchId
+      })
+      applyEscalationToDispatch(harness.db, harness.db.getMessageById(message.id)!, () => {})
+      expect(harness.db.getTask(harness.taskId)?.status).toBe('ready')
+      expect(harness.db.getDispatchContextById(harness.dispatchId)?.status).toBe('failed')
       expect(counts(harness.db)).toEqual({
         ...before,
         messages: before.messages + 1,

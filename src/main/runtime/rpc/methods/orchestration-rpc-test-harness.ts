@@ -30,6 +30,9 @@ export function createOrchestrationRpcHarness() {
     vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null
     )
+    vi.spyOn(runtime, 'getLiveTerminalPaneKey').mockImplementation((handle) =>
+      runtime.getTerminalPaneKey(handle)
+    )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
       handle.startsWith('term_') ? `runtime_test:${handle}:1` : null
     )

@@ -228,6 +228,7 @@ export default function EditorFileTab({
     <div
       ref={setNodeRef}
       data-tab-id={file.tabId ?? file.id}
+      data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...dragListeners}

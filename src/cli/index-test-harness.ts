@@ -83,6 +83,31 @@ export async function createChildProcessModuleMock(spawnMock: Mock) {
   }
 }
 
+/** Registers a paired environment so `--host runtime:<id>` routes there instead of being rejected. */
+export function pairRuntimeEnvironment(listEnvironmentsMock: Mock, id: string, name = id): void {
+  listEnvironmentsMock.mockReturnValue([
+    {
+      id,
+      name,
+      createdAt: 1,
+      updatedAt: 1,
+      lastUsedAt: null,
+      runtimeId: null,
+      endpoints: [
+        {
+          id: `ws-${id}`,
+          kind: 'websocket',
+          label: 'WebSocket',
+          endpoint: 'ws://127.0.0.1:6768',
+          deviceToken: 'token',
+          publicKeyB64: 'pk'
+        }
+      ],
+      preferredEndpointId: `ws-${id}`
+    }
+  ])
+}
+
 /** Installs the env-var save/restore + mock-reset hooks shared by the CLI worktree-awareness suites. */
 export function useWorktreeAwarenessEnvironment(mocks: WorktreeAwarenessMocks): void {
   const originalTerminalHandle = process.env.ORCA_TERMINAL_HANDLE

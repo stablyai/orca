@@ -645,7 +645,10 @@ describe('OrcaRuntimeRpcServer', () => {
       undefined,
       remoteRpcContentBudget('req_git_diff')
     )
-    expect(mocks.browserTabCreate).toHaveBeenCalledWith({ worktree: 'id:wt-1', url: 'about:blank' })
+    expect(mocks.browserTabCreate).toHaveBeenCalledWith(
+      { worktree: 'id:wt-1', url: 'about:blank' },
+      { pairedDeviceId: mobile.deviceId, clientKind: 'mobile' }
+    )
     expect(mocks.browserSetViewport).toHaveBeenCalledWith({
       worktree: 'id:wt-1',
       page: 'page-1',

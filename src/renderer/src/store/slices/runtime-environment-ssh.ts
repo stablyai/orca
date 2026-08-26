@@ -287,6 +287,31 @@ export function selectRuntimeAwareSshStatus(
   return bucket.connectionStates.get(targetId)?.status ?? null
 }
 
+/**
+ * The failure detail behind the status, when there is one.
+ *
+ * Mirrors selectRuntimeAwareSshStatus exactly so the pair cannot disagree about which source they
+ * read. Null whenever the status selector would return null, so a caller never pairs a detail with
+ * a status it did not come from.
+ */
+export function selectRuntimeAwareSshError(
+  state: RuntimeAwareSshReadState,
+  environmentId: string | null,
+  targetId: string
+): string | null {
+  if (environmentId === null) {
+    return state.sshConnectionStates.get(targetId)?.error ?? null
+  }
+  if (!isEnvironmentReachable(state, environmentId)) {
+    return null
+  }
+  const bucket = state.sshStateByEnvironment.get(environmentId)
+  if (!bucket?.targetsHydrated) {
+    return null
+  }
+  return bucket.connectionStates.get(targetId)?.error ?? null
+}
+
 export function selectRuntimeAwareSshTargetLabel(
   state: RuntimeAwareSshReadState,
   environmentId: string | null,

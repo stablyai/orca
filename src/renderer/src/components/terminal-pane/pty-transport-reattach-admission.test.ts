@@ -254,7 +254,7 @@ describe('createIpcPtyTransport', () => {
     expect(onDataCallback).toHaveBeenCalledWith('final output')
     expect(onExitCallback).toHaveBeenCalledWith(17)
     expect(onDisconnect).toHaveBeenCalledTimes(1)
-    expect(onPtyExit).toHaveBeenCalledWith(sessionId)
+    expect(onPtyExit).toHaveBeenCalledWith(sessionId, 17)
     expect(transport.isConnected()).toBe(false)
   })
 

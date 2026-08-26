@@ -1,6 +1,27 @@
 import type { PairingRelay } from '../../../src/shared/mobile-relay-pairing-offer'
 import { RelayMovedSchema } from '../../../src/shared/mobile-relay-phone-protocol'
 
+export class RelayDirectorMoveNotNewerError extends Error {
+  readonly cellUrl: string
+  readonly assignmentEpoch: number
+  readonly currentCellUrl: string
+  readonly currentAssignmentEpoch: number
+
+  constructor(args: {
+    cellUrl: string
+    assignmentEpoch: number
+    currentCellUrl: string
+    currentAssignmentEpoch: number
+  }) {
+    super('relay director move was not strictly newer')
+    this.name = 'RelayDirectorMoveNotNewerError'
+    this.cellUrl = args.cellUrl
+    this.assignmentEpoch = args.assignmentEpoch
+    this.currentCellUrl = args.currentCellUrl
+    this.currentAssignmentEpoch = args.currentAssignmentEpoch
+  }
+}
+
 export function resolvePairingInviteThroughDirector(args: {
   relay: PairingRelay
   timeoutMs?: number
@@ -38,8 +59,19 @@ export function resolvePairingInviteThroughDirector(args: {
         return
       }
       const moved = RelayMovedSchema.safeParse(value)
-      if (!moved.success || moved.data.assignmentEpoch <= args.relay.assignmentEpoch) {
-        finish(new Error('relay director move was not strictly newer'))
+      if (!moved.success) {
+        finish(new Error('invalid relay director move'))
+        return
+      }
+      if (moved.data.assignmentEpoch <= args.relay.assignmentEpoch) {
+        finish(
+          new RelayDirectorMoveNotNewerError({
+            cellUrl: moved.data.cellUrl,
+            assignmentEpoch: moved.data.assignmentEpoch,
+            currentCellUrl: args.relay.cellUrl,
+            currentAssignmentEpoch: args.relay.assignmentEpoch
+          })
+        )
         return
       }
       settled = true

@@ -21,53 +21,60 @@ function isRendererDocumentNavigation(currentUrl: string, nextUrl: string): bool
 }
 
 export function registerRendererDocumentNavigation(
-  webContents: Pick<WebContents, 'getURL' | 'on'>,
+  webContents: Pick<WebContents, 'getURL' | 'isLoadingMainFrame' | 'on'>,
   onStarted: () => (() => void) | void
 ): void {
-  const pendingUrls: string[] = []
+  let documentGeneration = 0
+  let fenceGeneration = 0
+  let fenceActive = false
   let cancelReload: (() => void) | null = null
-  const cancelPending = (url: string): void => {
-    const index = pendingUrls.indexOf(url)
-    if (index !== -1) {
-      pendingUrls.splice(index, 1)
+  const restoreSurvivingDocument = (): void => {
+    if (
+      !fenceActive ||
+      fenceGeneration !== documentGeneration ||
+      webContents.isLoadingMainFrame()
+    ) {
+      return
     }
-    if (pendingUrls.length === 0) {
-      const cancel = cancelReload
-      cancelReload = null
-      cancel?.()
-    }
+    fenceActive = false
+    const cancel = cancelReload
+    cancelReload = null
+    cancel?.()
   }
   // Why: did-start-loading also fires for blocked external links whose renderer document survives.
   webContents.on('did-start-navigation', (_event, url, isSameDocument, isMainFrame) => {
     if (isMainFrame && !isSameDocument && isRendererDocumentNavigation(webContents.getURL(), url)) {
-      if (pendingUrls.length === 0) {
+      if (!fenceActive) {
+        fenceActive = true
+        fenceGeneration = documentGeneration
         cancelReload = onStarted() ?? null
       }
-      pendingUrls.push(url)
     }
   })
   webContents.on(
     'did-fail-provisional-load',
-    (_event, _errorCode, _errorDescription, validatedUrl, isMainFrame) => {
+    (_event, _errorCode, _errorDescription, _validatedUrl, isMainFrame) => {
       if (!isMainFrame) {
         return
       }
-      cancelPending(validatedUrl)
+      queueMicrotask(restoreSurvivingDocument)
     }
   )
-  webContents.on('will-navigate', (event, url, _sameDocument, isMainFrame) => {
+  webContents.on('will-navigate', (event, _url, _sameDocument, isMainFrame) => {
     if (!isMainFrame) {
       return
     }
     queueMicrotask(() => {
       if (event.defaultPrevented) {
-        cancelPending(url)
+        restoreSurvivingDocument()
       }
     })
   })
+  webContents.on('did-stop-loading', restoreSurvivingDocument)
   webContents.on('did-frame-navigate', (_event, _url, _code, _status, isMainFrame) => {
     if (isMainFrame) {
-      pendingUrls.length = 0
+      documentGeneration += 1
+      fenceActive = false
       cancelReload = null
     }
   })

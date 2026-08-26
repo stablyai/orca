@@ -23,6 +23,26 @@ export type ObservedSkillPackage = {
   treeEntries: SkillGitTreeFileEntry[]
 }
 
+export function observedSkillPackagesMatch(
+  left: ObservedSkillPackage,
+  right: ObservedSkillPackage
+): boolean {
+  return (
+    left.files.length === right.files.length &&
+    left.files.every((file, index) => {
+      const other = right.files[index]
+      return (
+        file.path === other.path &&
+        file.size === other.size &&
+        file.executable === other.executable &&
+        file.classification === other.classification &&
+        file.exactSha256 === other.exactSha256 &&
+        file.identitySha256 === other.identitySha256
+      )
+    })
+  )
+}
+
 // Why: package identity compares a live user directory against a tree the generator read
 // from a clean checkout, so anything the OS deposits on its own counts as drift the user
 // never caused. One Finder visit writes .DS_Store, and that alone made the copy
@@ -172,11 +192,17 @@ export async function observeSkillPackage(
   packageRoot: string,
   limits: SkillPackageObservationLimits = SKILL_PACKAGE_OBSERVATION_LIMITS,
   executablePaths?: ReadonlySet<string>,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  platform: NodeJS.Platform = process.platform,
+  inferShebangExecutables = false
 ): Promise<ObservedSkillPackage> {
   const files: ObservedSkillFile[] = []
   const treeEntries: SkillGitTreeFileEntry[] = []
   const caseFoldedPaths = new Map<string, string>()
+  const normalizedExecutablePaths =
+    platform === 'win32' && executablePaths
+      ? new Set([...executablePaths].map((path) => path.toLocaleLowerCase('en-US')))
+      : executablePaths
   let entryCount = 0
   let totalBytes = 0
 
@@ -258,9 +284,11 @@ export async function observeSkillPackage(
           signal
         )
         totalBytes += bytes.length
-        const executable = executablePaths
-          ? executablePaths.has(manifestPath)
-          : (fileStat.mode & 0o111) !== 0
+        const executable = normalizedExecutablePaths
+          ? normalizedExecutablePaths.has(platform === 'win32' ? folded : manifestPath)
+          : platform === 'win32' && inferShebangExecutables
+            ? bytes.subarray(0, 2).equals(Buffer.from('#!'))
+            : (fileStat.mode & 0o111) !== 0
         files.push(describeObservedSkillFile(manifestPath, bytes, executable))
         treeEntries.push({ path: manifestPath, executable, blobSha: gitBlobSha(bytes) })
       } else {

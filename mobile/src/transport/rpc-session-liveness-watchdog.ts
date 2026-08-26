@@ -52,6 +52,13 @@ export class RpcSessionLivenessWatchdog {
     this.armIdle(identity)
   }
 
+  // Wall-clock stamp of the last frame that actually arrived; 0 before the first
+  // start(). Unlike a timer deadline this survives a JS suspension, so callers can
+  // tell how stale their knowledge of the peer really is.
+  getLastInboundAt(): number {
+    return this.lastInboundAt
+  }
+
   noteAuthenticatedInbound(identity: RpcSessionIdentity): void {
     if (this.identity !== identity) {
       return

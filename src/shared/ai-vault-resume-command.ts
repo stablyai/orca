@@ -3,10 +3,12 @@
 // and (when known) the live tab's shell.
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
 import {
+  clearEnvCommand,
   commandSeparator,
   isPosixStartupShell,
   quoteStartupArg,
-  type AgentStartupShell
+  type AgentStartupShell,
+  withoutEnvCommand
 } from './tui-agent-startup-shell'
 import type { AiVaultAgent, AiVaultSession } from './ai-vault-types'
 
@@ -19,6 +21,7 @@ export function buildAiVaultResumeCommand(args: {
   codexHome?: string | null
   resumeFilePath?: string | null
   shell?: AgentStartupShell
+  clearEnvNames?: readonly string[]
 }): string {
   const { agent, sessionId, cwd, platform, commandOverride, codexHome, resumeFilePath, shell } =
     args
@@ -45,7 +48,8 @@ export function buildAiVaultResumeCommand(args: {
     cwd,
     platform,
     codexHome,
-    shell
+    shell,
+    clearEnvNames: args.clearEnvNames
   })
 }
 
@@ -54,42 +58,69 @@ export function buildAiVaultResumeShellCommand(args: {
   cwd: string | null
   platform: NodeJS.Platform
   codexHome?: string | null
+  /** Env names the agent must not inherit. Applied as a prefix on the agent
+   *  itself, never on the whole `cd … && agent` chain — `cd` is a shell builtin
+   *  that `env` cannot run, and a child `cd` would not move the agent anyway. */
+  clearEnvNames?: readonly string[]
   // Why: the QUEUED resume command is typed into the live tab shell, so its
   // cd/env prefix must match that shell. Shell-less persisted commands keep the
   // legacy self-contained `cmd /d /s /c` wrapper.
   shell?: AgentStartupShell
 }): string {
-  const { cwd, platform, codexHome, shell } = args
+  const { cwd, platform, codexHome, shell, clearEnvNames } = args
 
   // Why: shell-aware commands are parsed by a known running shell, while
   // shell-less persisted commands keep the legacy self-contained cmd wrapper.
-  if (platform === 'win32' && shell && shell !== 'cmd') {
+  // PowerShell routes here whatever the platform: it is the shell, not the
+  // host, that decides which grammar the line has to be written in.
+  if (shell === 'powershell' || (platform === 'win32' && shell && shell !== 'cmd')) {
     return buildResumeShellCommandForShell({
       resumeCommand: args.resumeCommand,
       cwd,
       codexHome: codexHome?.trim() || null,
-      shell
+      shell,
+      clearEnvNames
     })
   }
 
-  const resumeCommand = `${codexHomeEnvPrefix(codexHome?.trim() || null, platform)}${
-    args.resumeCommand
+  const resolvedCodexHome = codexHome?.trim() || null
+  // Why filter: the prefix and the removal name the same variable, and `env -u`
+  // strips what the assignment just set, so an unfiltered list would silently
+  // resume against the real home. Keeping the assignment authoritative matches
+  // the old `clear…; CODEX_HOME=x agent` ordering.
+  const clearNames = resolvedCodexHome
+    ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
+    : clearEnvNames
+  // Why the two placements differ: `set -u` aborts on the unbound `$fish_pid`
+  // the POSIX clear statement has to test, so there it must not precede the
+  // agent — `env -u` carries the removal on the agent itself. cmd has no such
+  // hazard, and keeping its clear ahead of the `cd` preserves `cd … && agent`,
+  // so a failed `cd` still cannot run the agent in the wrong directory.
+  // Keyed on the shell, not the platform: the shell is what picks the grammar.
+  const dialect = shell ?? (platform === 'win32' ? 'cmd' : 'posix')
+  const clearsOnAgent = clearNames?.length && isPosixStartupShell(dialect)
+  const resumeCommand = `${codexHomeEnvPrefix(resolvedCodexHome, platform, shell)}${
+    clearsOnAgent ? withoutEnvCommand(clearNames, args.resumeCommand, dialect) : args.resumeCommand
   }`
+  const clearPrefix =
+    clearNames?.length && !clearsOnAgent
+      ? `${clearEnvCommand(clearNames, dialect)}${commandSeparator(dialect)}`
+      : ''
   if (platform === 'win32' && shell === 'cmd') {
     // Why: an interactive cmd splits the doubled quotes required by a nested
     // `cmd /s /c` wrapper, so queued commands must use direct cmd syntax.
-    return cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand
+    return `${clearPrefix}${cwd ? `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}` : resumeCommand}`
   }
   if (!cwd) {
-    return resumeCommand
+    return `${clearPrefix}${resumeCommand}`
   }
 
   if (platform === 'win32') {
-    const inner = `cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}`
+    const inner = `${clearPrefix}cd /d ${quoteWindowsCmdArg(cwd)} && ${resumeCommand}`
     return `cmd /d /s /c ${quoteWindowsCmdArg(inner)}`
   }
 
-  return `cd ${quoteShellArg(cwd, platform)} && ${resumeCommand}`
+  return `cd ${quoteResumeArg(cwd, platform, shell)} && ${resumeCommand}`
 }
 
 function buildResumeShellCommandForShell(args: {
@@ -97,18 +128,33 @@ function buildResumeShellCommandForShell(args: {
   cwd: string | null
   codexHome: string | null
   shell: Exclude<AgentStartupShell, 'cmd'>
+  clearEnvNames?: readonly string[]
 }): string {
-  const { cwd, codexHome, shell } = args
+  const { cwd, codexHome, shell, clearEnvNames } = args
   if (isPosixStartupShell(shell)) {
     // Why: git-bash on a Windows host runs a POSIX shell, so reuse the same
     // inline-env + `cd '<cwd>'` prefix as the non-Windows path.
     const envPrefix = codexHome ? `CODEX_HOME=${quoteStartupArg(codexHome, shell)} ` : ''
-    const command = `${envPrefix}${args.resumeCommand}`
+    // Why filter: see the twin in buildAiVaultResumeShellCommand — `env -u`
+    // would strip the home the prefix just set.
+    const clearNames = codexHome
+      ? clearEnvNames?.filter((name) => name !== 'CODEX_HOME')
+      : clearEnvNames
+    const command = `${envPrefix}${
+      clearNames?.length
+        ? withoutEnvCommand(clearNames, args.resumeCommand, shell)
+        : args.resumeCommand
+    }`
     return cwd ? `cd ${quoteStartupArg(cwd, shell)} && ${command}` : command
   }
 
   const separator = commandSeparator(shell)
   const segments: string[] = []
+  // Why ahead of Set-Location: PowerShell has no `set -u` expansion hazard, so
+  // the removal keeps its original leading position.
+  if (clearEnvNames?.length) {
+    segments.push(clearEnvCommand(clearEnvNames, shell))
+  }
   if (cwd) {
     segments.push(`Set-Location -LiteralPath ${quoteStartupArg(cwd, shell)}`)
   }
@@ -184,21 +230,37 @@ function buildAgentResumeInvocation(
   }
 }
 
-function codexHomeEnvPrefix(codexHome: string | null, platform: NodeJS.Platform): string {
+function codexHomeEnvPrefix(
+  codexHome: string | null,
+  platform: NodeJS.Platform,
+  shell?: AgentStartupShell
+): string {
   if (!codexHome) {
     return ''
   }
   if (platform === 'win32') {
     return `set ${quoteWindowsCmdArg(`CODEX_HOME=${codexHome}`)} && `
   }
-  return `CODEX_HOME=${quoteShellArg(codexHome, platform)} `
+  // fish accepts the `NAME=value cmd` prefix (3.1+), but not sh's quoting.
+  return `CODEX_HOME=${quoteResumeArg(codexHome, platform, shell)} `
 }
 
+/** Quotes for the live shell when one is known, else for the platform's default. */
+function quoteResumeArg(
+  value: string,
+  platform: NodeJS.Platform,
+  shell?: AgentStartupShell
+): string {
+  return shell ? quoteStartupArg(value, shell) : quoteShellArg(value, platform)
+}
+
+/** Why not the sh `'\''` idiom here: this is the same resume command the shell
+ *  branch above builds, and fish reads that idiom differently — it would halve
+ *  backslashes in a path and reject a trailing one. Deferring to
+ *  `quoteStartupArg` keeps one spelling regardless of whether a caller happened
+ *  to pass a shell. */
 function quoteShellArg(value: string, platform: NodeJS.Platform): string {
-  if (platform === 'win32') {
-    return quoteWindowsCmdArg(value)
-  }
-  return `'${value.replace(/'/g, `'\\''`)}'`
+  return platform === 'win32' ? quoteWindowsCmdArg(value) : quoteStartupArg(value, 'posix')
 }
 
 function quoteWindowsCmdArg(value: string): string {

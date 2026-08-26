@@ -10,7 +10,7 @@ const {
   spawnMock,
   prepareMacosTccLoginShellMock,
   resolveAgentForegroundProcessMock,
-  readWindowsConptyProcessIdsMock,
+  readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
   isWslAvailableAsyncMock,
   wslUncDirectoryExistsMock,
@@ -24,7 +24,7 @@ const {
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
-  readWindowsConptyProcessIdsMock: vi.fn(),
+  readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
   isWslAvailableAsyncMock: vi.fn(),
   wslUncDirectoryExistsMock: vi.fn(),
@@ -38,6 +38,8 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   chmodSync: vi.fn(),
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   constants: { X_OK: 1 }
 }))
 
@@ -83,8 +85,8 @@ vi.mock('./agent-foreground-process', () => ({
     resolveAgentForegroundProcessMock(...args)
 }))
 
-vi.mock('./windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: (...args: unknown[]) => readWindowsConptyProcessIdsMock(...args)
+vi.mock('./windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args)
 }))
 
 vi.mock('../wsl', () => ({
@@ -137,7 +139,7 @@ describe('LocalPtyProvider', () => {
       writeFileSyncMock,
       prepareMacosTccLoginShellMock,
       resolveAgentForegroundProcessMock,
-      readWindowsConptyProcessIdsMock,
+      readWindowsPtyJobProcessIdsMock,
       killWithDescendantSweepMock,
       isWslAvailableAsyncMock,
       wslUncDirectoryExistsMock,
@@ -292,12 +294,12 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[1]).toEqual([
         '-d',
         'Debian',
-        '--',
+        '--exec',
         'sh',
         '-c',
         expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
       ])
-      expect(spawnCall[1][5]).toContain('exec "\\$_orca_wsl_shell" -l')
+      expect(spawnCall[1][5]).toContain('exec "$_orca_wsl_shell" -l')
       expect(spawnCall[2].env.HISTFILE).toContain('terminal-history-wsl/Debian')
     })
 
@@ -321,7 +323,7 @@ describe('LocalPtyProvider', () => {
         expect(spawnCall[1]).toEqual([
           '-d',
           'Debian',
-          '--',
+          '--exec',
           'sh',
           '-c',
           expect.stringContaining(`cd '${cwd}'`)
@@ -371,7 +373,7 @@ describe('LocalPtyProvider', () => {
       expect(spawnCall[1]).toEqual([
         '-d',
         'Ubuntu',
-        '--',
+        '--exec',
         'sh',
         '-c',
         expect.stringContaining("cd '/mnt/c/Users/jin/repo'")
@@ -517,7 +519,14 @@ describe('LocalPtyProvider', () => {
 
       expect(spawnMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'sh', '-c', expect.stringContaining("cd '/home/jin/repo/subdir'")],
+        [
+          '-d',
+          'Ubuntu',
+          '--exec',
+          'sh',
+          '-c',
+          expect.stringContaining("cd '/home/jin/repo/subdir'")
+        ],
         expect.objectContaining({ cwd: expect.any(String) })
       )
     })

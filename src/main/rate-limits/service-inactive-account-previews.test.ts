@@ -10,6 +10,13 @@ import {
   resetRateLimitProviderMocks
 } from './rate-limit-service-test-harness'
 
+function inactiveCodexAccount(id: string, managedHomePath: string) {
+  return {
+    id,
+    resolveHome: () => ({ kind: 'ready' as const, managedHomePath })
+  }
+}
+
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
   fetchManagedAccountUsage: vi.fn()
@@ -84,7 +91,7 @@ describe('RateLimitService', () => {
 
   it('aborts inactive Codex preview fetches on stop', async () => {
     const service = new RateLimitService()
-    const account = { id: 'account-1', managedHomePath: '/tmp/account-1/home' }
+    const account = inactiveCodexAccount('account-1', '/tmp/account-1/home')
     const capturedSignals: { codex?: AbortSignal } = {}
     service.setInactiveCodexAccountsResolver(() => [account])
     vi.mocked(fetchCodexRateLimits).mockImplementation(
@@ -116,7 +123,7 @@ describe('RateLimitService', () => {
     const wslCodexHome =
       '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-accounts\\a\\home'
     service.setInactiveCodexAccountsResolver(() => [
-      { id: 'account-1', managedHomePath: wslCodexHome }
+      inactiveCodexAccount('account-1', wslCodexHome)
     ])
     vi.mocked(fetchCodexRateLimits).mockResolvedValueOnce(okProvider('codex', 33, Date.now()))
 
@@ -140,6 +147,52 @@ describe('RateLimitService', () => {
         isFetching: false
       }
     ])
+  })
+
+  it('skips an unavailable inactive home without dropping its cache and recovers later', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-08-17T12:00:00Z'))
+    try {
+      const service = new RateLimitService()
+      let unavailable = false
+      service.setInactiveCodexAccountsResolver(() => [
+        {
+          id: 'account-1',
+          resolveHome: () =>
+            unavailable
+              ? { kind: 'skip' as const }
+              : { kind: 'ready' as const, managedHomePath: '/tmp/account-1/home' }
+        }
+      ])
+      vi.mocked(fetchCodexRateLimits)
+        .mockResolvedValueOnce(okProvider('codex', 33, Date.now()))
+        .mockResolvedValueOnce(okProvider('codex', 67, Date.now()))
+
+      await service.fetchInactiveCodexAccountsOnOpen()
+      unavailable = true
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      await service.fetchInactiveCodexAccountsOnOpen()
+
+      expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+      expect(service.getState().inactiveCodexAccounts).toEqual([
+        expect.objectContaining({
+          accountId: 'account-1',
+          isFetching: false,
+          rateLimits: expect.objectContaining({
+            session: expect.objectContaining({ usedPercent: 33 })
+          })
+        })
+      ])
+
+      unavailable = false
+      await vi.advanceTimersByTimeAsync(10 * 60_000)
+      await service.fetchInactiveCodexAccountsOnOpen()
+
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
+      expect(service.getState().inactiveCodexAccounts[0]?.rateLimits?.session?.usedPercent).toBe(67)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('allows usage-panel Fable supplements for inactive Claude account previews', async () => {
@@ -181,7 +234,7 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
     service.setInactiveCodexAccountsResolver(() => [
-      { id: 'account-1', managedHomePath: '/tmp/account-1/home' }
+      inactiveCodexAccount('account-1', '/tmp/account-1/home')
     ])
     vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
 
@@ -199,8 +252,8 @@ describe('RateLimitService', () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
     let inactiveAccounts = [
-      { id: 'account-a', managedHomePath: '/tmp/account-a/home' },
-      { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+      inactiveCodexAccount('account-a', '/tmp/account-a/home'),
+      inactiveCodexAccount('account-b', '/tmp/account-b/home')
     ]
     service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
     vi.mocked(fetchCodexRateLimits).mockReturnValueOnce(accountFetch.promise)
@@ -208,11 +261,10 @@ describe('RateLimitService', () => {
     const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
     await Promise.resolve()
     expect(service.getState().inactiveCodexAccounts).toEqual([
-      { accountId: 'account-a', rateLimits: null, updatedAt: 0, isFetching: true },
-      { accountId: 'account-b', rateLimits: null, updatedAt: 0, isFetching: true }
+      { accountId: 'account-a', rateLimits: null, updatedAt: 0, isFetching: true }
     ])
 
-    inactiveAccounts = [{ id: 'account-a', managedHomePath: '/tmp/account-a/home' }]
+    inactiveAccounts = [inactiveCodexAccount('account-a', '/tmp/account-a/home')]
     service.evictInactiveCodexCache('account-b')
     accountFetch.resolve(okProvider('codex', 64, Date.now()))
     await fetchOnOpen
@@ -234,9 +286,12 @@ describe('RateLimitService', () => {
   it('does not recache an inactive Codex account that becomes active during fetch-on-open', async () => {
     const service = new RateLimitService()
     const accountFetch = deferred<ProviderRateLimits>()
-    let inactiveAccounts = [{ id: 'account-b', managedHomePath: '/tmp/account-b/home' }]
+    let inactiveAccounts = [inactiveCodexAccount('account-b', '/tmp/account-b/home')]
     service.setInactiveCodexAccountsResolver(() => inactiveAccounts)
-    service.setCodexHomePathResolver(() => '/tmp/account-b/home')
+    service.setCodexHomePathResolver(() => ({
+      kind: 'ready',
+      codexHomePath: '/tmp/account-b/home'
+    }))
     vi.mocked(fetchCodexRateLimits)
       .mockReturnValueOnce(accountFetch.promise)
       .mockResolvedValueOnce(okProvider('codex', 7, Date.now()))
@@ -258,7 +313,7 @@ describe('RateLimitService', () => {
   it('keeps the inactive Codex debounce across an account switch instead of re-probing', async () => {
     const service = new RateLimitService()
     service.setInactiveCodexAccountsResolver(() => [
-      { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+      inactiveCodexAccount('account-b', '/tmp/account-b/home')
     ])
     vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 10))
 
@@ -280,8 +335,8 @@ describe('RateLimitService', () => {
     try {
       const service = new RateLimitService()
       service.setInactiveCodexAccountsResolver(() => [
-        { id: 'account-a', managedHomePath: '/tmp/account-a/home' },
-        { id: 'account-b', managedHomePath: '/tmp/account-b/home' }
+        inactiveCodexAccount('account-a', '/tmp/account-a/home'),
+        inactiveCodexAccount('account-b', '/tmp/account-b/home')
       ])
       vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 5))
 
@@ -295,6 +350,34 @@ describe('RateLimitService', () => {
       await vi.advanceTimersByTimeAsync(1)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
       await fetchOnOpen
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not start another inactive Codex batch during the inter-account stagger', async () => {
+    vi.useFakeTimers()
+    try {
+      const service = new RateLimitService()
+      service.setInactiveCodexAccountsResolver(() => [
+        inactiveCodexAccount('account-a', '/tmp/account-a/home'),
+        inactiveCodexAccount('account-b', '/tmp/account-b/home')
+      ])
+      vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 5))
+
+      const fetchOnOpen = service.fetchInactiveCodexAccountsOnOpen()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+      expect(service.getState().inactiveCodexAccounts).toEqual([
+        expect.objectContaining({ accountId: 'account-a', isFetching: false })
+      ])
+
+      await service.fetchInactiveCodexAccountsOnOpen()
+      expect(fetchCodexRateLimits).toHaveBeenCalledOnce()
+
+      await vi.advanceTimersByTimeAsync(2_000)
+      await fetchOnOpen
+      expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
     } finally {
       vi.useRealTimers()
     }

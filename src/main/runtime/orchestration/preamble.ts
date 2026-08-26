@@ -104,8 +104,8 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   # Ask the coordinator a question and block until it answers.
   #
   # BEHAVIOR RULE #1 (MUST NOT VIOLATE):
-  # NEVER use AskUserQuestion; use \`${cli} orchestration ask\` or send
-  # --type decision_gate. AskUserQuestion opens a local TUI prompt that the
+  # NEVER use AskUserQuestion; use \`${cli} orchestration ask\`.
+  # AskUserQuestion opens a local TUI prompt that the
   # coordinator cannot see and cannot answer — your session will hang forever
   # waiting on a human. Every interactive question goes through \`ask\` below.
   #
@@ -123,7 +123,7 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
   ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
     --type escalation --subject "Blocked: <reason>" \\
     --body "<details>" \\
-    --task-id ${params.taskId}
+    --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
 
   # Check for messages from the coordinator:
   ${cli} orchestration check --terminal ${params.workerHandle}

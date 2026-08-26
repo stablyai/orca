@@ -302,6 +302,38 @@ describe('stable logical RPC client', () => {
     expect(paths).toEqual(['relay', null])
   })
 
+  it('publishes supervisor Relay attempts without replacing the physical retry count', () => {
+    const direct = new FakeSession('reconnecting')
+    direct.getReconnectAttempt = () => 5
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const attempts: number[] = []
+    client.onConnectionPathChange(() => attempts.push(client.getReconnectAttempt()))
+
+    client.setRecoveryPath('relay', 3)
+    expect(client.getReconnectAttempt()).toBe(5)
+
+    client.setRecoveryAttempt(7)
+    expect(client.getReconnectAttempt()).toBe(7)
+    expect(attempts).toEqual([5, 7])
+
+    client.setRecoveryPath(null)
+    expect(client.getReconnectAttempt()).toBe(5)
+    expect(attempts).toEqual([5, 7, 5])
+  })
+
+  it('notifies connection-path subscribers when the pairing-rejected latch flips', () => {
+    const direct = new FakeSession('reconnecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const rejected: boolean[] = []
+    client.onConnectionPathChange(() => rejected.push(client.isPairingRejected()))
+
+    client.setPairingRejected(true)
+    client.setPairingRejected(true)
+    client.setPairingRejected(false)
+
+    expect(rejected).toEqual([true, false])
+  })
+
   it('does not revive a stale recovery path after a connection later drops', () => {
     const direct = new FakeSession('reconnecting')
     const client = createStableLogicalRpcClient(direct, 'tailscale')

@@ -10,6 +10,7 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -70,6 +71,8 @@ export type PtySpawnOptions = {
    *  Existing-session attach paths must stay false so recovery checks do not
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
+  /** Host setting forwarded additively to the process owner; old owners ignore it. */
+  historyIsolationEnabled?: boolean
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */
@@ -119,6 +122,8 @@ export type IPtyProvider = {
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
   recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Process-owner cleanup for history stored outside the workspace tree. */
+  deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   /** Explicit false selects pre-claim legacy spawn for a preserved old daemon. */
@@ -213,6 +218,12 @@ export type IPtyProvider = {
   onData(callback: (payload: PtyDataEvent) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
   onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+    callback: (payload: {
+      id: string
+      code: number
+      incarnationId?: PtyIncarnationId
+      /** Absent when the provider predates exit causes; readers must not infer one from `code`. */
+      cause?: TerminalExitCause
+    }) => void
   ): () => void
 }

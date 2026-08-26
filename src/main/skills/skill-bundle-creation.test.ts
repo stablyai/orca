@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { chmod, mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -36,6 +36,32 @@ afterEach(async () => {
 })
 
 describe('skill bundle creation and extraction', () => {
+  it('verifies manifest executable paths without Windows mode bits', async () => {
+    const root = await temporaryDirectory()
+    const source = await createSkill(root, 'script-skill', 'Script')
+    const script = join(source, 'run.sh')
+    await writeFile(script, '#!/bin/sh\necho ok\n')
+    await chmod(script, 0o700)
+    const created = await createSkillBundleArchive({
+      sources: [{ sourceDirectory: source }],
+      archivePath: join(root, 'bundle.tar.gz'),
+      packageId: 'package_windows',
+      versionId: 'version_windows',
+      bundleName: 'windows-bundle'
+    })
+    expect(created.manifest.skills[0].files).toContainEqual(
+      expect.objectContaining({ path: 'run.sh', executable: true })
+    )
+
+    await expect(
+      extractSkillBundleArchive({
+        archivePath: created.archivePath,
+        destinationDirectory: join(root, 'windows-extracted'),
+        platform: 'win32'
+      })
+    ).resolves.toMatchObject({ manifest: { bundleName: 'windows-bundle' } })
+  })
+
   it('round trips multiple skills through an Agent Plugins compatible root', async () => {
     const root = await temporaryDirectory()
     const alpha = await createSkill(root, 'alpha-skill', 'Alpha')

@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { FloatingBrowserSlot } from './FloatingBrowserSlot'
-import { getBrowserOverlaySlotViewport } from '@/components/browser-pane/browser-page-viewport'
+import { getBrowserOverlaySlotViewport } from '@/components/browser-pane/host-guest/browser-page-viewport'
 import type { BrowserTab } from '../../../../shared/browser-workspace-types'
 
 // Why: BrowserPane mounts a real Electron <webview> we can't run in jsdom; stub

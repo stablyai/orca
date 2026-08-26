@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION } from '../../shared/protocol-version'
+import {
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  MIN_COMPATIBLE_RUNTIME_SERVER_VERSION
+} from '../../shared/protocol-version'
 import * as environmentStore from '../../shared/runtime-environment-store'
 import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
 
@@ -130,6 +133,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
       'runtimeEnvironments:connect',
+      'runtimeEnvironments:prepareBrowserClientHostPlacement',
       'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
@@ -152,6 +156,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
       'runtimeEnvironments:connect',
+      'runtimeEnvironments:prepareBrowserClientHostPlacement',
       'runtimeEnvironments:getStatus',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
@@ -250,7 +255,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' }),
       'status.get',
       undefined,
-      15_000
+      15_000,
+      undefined,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(environmentStore.listEnvironments(userDataPath)).toHaveLength(1)
   })

@@ -30,10 +30,15 @@ export type AgentStatusApi = {
   getMigrationUnsupportedSnapshot: () => Promise<MigrationUnsupportedPtyEntry[]>
   /** Drop a paneKey from the main-process hook cache and on-disk last-status file. Fire-and-forget. */
   drop: (paneKey: string) => void
+  /** Retire a pane whose agent process is proven gone — clears the row AND the per-pane caches a
+   *  dismissal deliberately keeps. Not `drop`: that one is a user dismissal of a live pane's row. */
+  reconcileEndedProcess: (paneKey: string) => void
   /** Drop every cached hook status under one terminal tab prefix. Fire-and-forget. */
   dropByTabPrefix: (tabId: string) => void
   /** Permanently retire one pane's hook authority while siblings stay live. */
   retirePaneAuthority: (paneKey: string) => void
+  /** Lift one pane's retirement fence when a live PTY re-attaches to it. Closed tabs stay retired. */
+  restorePaneAuthority: (paneKey: string) => void
   /** Move hook authority when a live pane is detached into another tab. */
   transferPaneAuthority: (args: { fromPaneKey: string; toPaneKey: string; ptyId?: string }) => void
 }

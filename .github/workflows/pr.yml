@@ -16,15 +16,57 @@ permissions:
   contents: read
 
 jobs:
+  # Why: a README/docs-only PR used to start the full matrix (32 test shards,
+  # two package jobs, typecheck, git compat, xterm, shell contracts). Path
+  # filters on `on.pull_request` would drop the `verify` check entirely; this
+  # detector keeps verify as the required aggregate and skips the expensive jobs.
+  code_paths:
+    name: detect code-relevant changes
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Classify changed paths
+        id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # Why --no-renames: name-only rename detection can report only the destination.
+          # A code file moved under docs/ must still expose its code-side deletion.
+          CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE_SHA" "$HEAD_SHA")"
+          echo "Changed paths:"
+          printf '%s\n' "$CHANGED"
+          SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs)"
+          echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
+          echo "should_run=$SHOULD_RUN"
+
   static_analysis:
     name: static analysis
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -74,6 +116,15 @@ jobs:
       - name: Enforce max-lines ratchet
         run: pnpm run check:max-lines-ratchet
 
+      - name: Enforce runtime Electron-import ratchet
+        run: pnpm run check:runtime-electron-ratchet
+
+      # Why both: the ratchet proves nothing reachable from the runtime imports electron,
+      # which is a property of the import graph. This proves the Node artifact it enables
+      # actually boots, pairs, creates a worktree and round-trips a real PTY.
+      - name: Boot orcad and round-trip a terminal
+        run: pnpm run smoke:orcad-terminal
+
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 
@@ -122,7 +173,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Reject new root-level files and folders
@@ -132,6 +187,8 @@ jobs:
         run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
 
   typecheck:
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -142,10 +199,24 @@ jobs:
 
       - uses: ./.github/actions/install-node-dependencies
 
-      - run: pnpm typecheck
+      # Why: every project is `composite`, so tsc already writes a .tsbuildinfo that lets
+      # the next run skip unchanged files. CI threw it away each time. The key is per-SHA
+      # so each run saves its own; restore-keys inherit the newest prior graph to diff against.
+      - name: Cache TypeScript incremental state
+        uses: actions/cache@v5
+        with:
+          path: config/*.tsbuildinfo
+          key: tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-${{ github.sha }}
+          restore-keys: |
+            tsbuildinfo-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json') }}-
+            tsbuildinfo-${{ runner.os }}-
+
+      - run: pnpm run typecheck
 
   git_compatibility:
     name: Git compatibility
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -155,20 +226,35 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
+
+      # Why: the 2.25.5 lane is a source build of a pinned tarball, so it produced the
+      # same binary on every PR for minutes of runner time. The key carries the version
+      # because that is the only input; the sha256 assertion below still guards the
+      # tarball on the miss path that actually builds.
+      - name: Cache baseline Git build
+        uses: actions/cache@v5
+        with:
+          path: ~/.cache/orca-git-compat/git-2.25.5
+          key: git-compat-baseline-${{ runner.os }}-${{ runner.arch }}-2.25.5
 
       - name: Verify Git binary compatibility matrix
         run: |
           pids=()
           (
             archive="$RUNNER_TEMP/git-2.25.5.tar.gz"
-            source="$RUNNER_TEMP/git-2.25.5"
-            curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
-            echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
-              | sha256sum --check
-            mkdir -p "$source"
-            tar -xzf "$archive" -C "$source" --strip-components=1
-            make -C "$source" -j"$(nproc)" \
-              NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+            source="$HOME/.cache/orca-git-compat/git-2.25.5"
+            if [ ! -x "$source/git" ]; then
+              curl -fsSL https://www.kernel.org/pub/software/scm/git/git-2.25.5.tar.gz -o "$archive"
+              echo "41662c52fc16fec4963bfc41075e71f8ead6b5e386797eb6f9a1111ff95a8ddf  $archive" \
+                | sha256sum --check
+              mkdir -p "$source"
+              tar -xzf "$archive" -C "$source" --strip-components=1
+              make -C "$source" -j"$(nproc)" \
+                NO_GETTEXT=YesPlease NO_TCLTK=YesPlease NO_PYTHON=YesPlease git
+              # Why: the linked binaries are what the next run needs; the objects that
+              # produced them are most of the tree and would bloat the cache entry.
+              find "$source" -name '*.o' -delete
+            fi
             ORCA_GIT_COMPAT_BINARY="$source/git" ORCA_GIT_COMPAT_VERSION="2.25.5" \
               pnpm exec vitest run --config config/vitest.config.ts \
               src/shared/git-binary-compatibility.test.ts
@@ -194,9 +280,46 @@ jobs:
           done
           exit "$status"
 
+  xterm_patch_sync:
+    name: xterm patch sync
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      # Why: the check rebuilds xterm.js from a pinned upstream commit. Caching the
+      # npm metadata and the shallow clone turns a ~4 min cold run into well under a
+      # minute; the key is the manifest, so a commit or toolchain bump invalidates it.
+      - name: Restore upstream xterm build inputs
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.npm
+            ${{ runner.temp }}/xterm-patch-build/upstream/.git
+          key: xterm-upstream-${{ hashFiles('config/patches/xterm-upstream.json') }}
+
+      - name: Verify xterm patches match the pinned upstream build
+        env:
+          WORK_DIR: ${{ runner.temp }}/xterm-patch-build
+        run: node config/scripts/regenerate-xterm-patches.mjs --check --work-dir="$WORK_DIR"
+
   shell_contracts:
     name: shell contracts
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    # Why: this job's cost is almost entirely package download, and a stalled mirror has
+    # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
+    # is generous; it exists so a wedge fails the job instead of holding the whole run
+    # open for the 6h GitHub default — which also blocks `gh run rerun --failed`.
+    timeout-minutes: 15
     env:
       # Why: the suites below gate their live fish tests on the binary, which is
       # right on a developer machine and wrong here — this job is a required check
@@ -224,20 +347,46 @@ jobs:
           # non-zero and would red this required check over something unrelated to the
           # PR. Every fish outcome is judged by the version gate below instead, so only
           # the zsh install (which has no such gate) stays fatal here.
-          sudo apt-get update || true
           # Why retry only here: adding the PPA is the network-flaky step, and the
           # version gate below is fatal, so a transient Launchpad blip would
           # otherwise red a required check on PRs unrelated to shells.
+          # Why -n: add-apt-repository refreshes every configured repo on its own. With
+          # an update on each side of it this step refreshed them three times over, and
+          # the Azure archive mirror alone costs ~15-30s a pass. The PPA index is the
+          # only thing the repo list gains here, and the single update below fetches it.
+          # Why bound acquisition: measured on a *passing* run, this step spent 40s
+          # fetching 11.4 MB of index and then 2m17s fetching 8.9 MB of packages at
+          # 65 kB/s — it is dominated by download throughput, not by work. apt applies
+          # no wall-clock bound to a stalled mirror, so a slow Launchpad or archive
+          # host wedges the step for tens of minutes. This job is a required check, so
+          # a wedge holds the entire run open and blocks `gh run rerun --failed`.
+          # Bounded timeouts plus retries turn an unbounded hang into a fast, legible
+          # failure. Set in apt.conf.d rather than on each command line so the two
+          # invocations below stay exactly as pr-workflow-parallelism.test.mjs parses
+          # them. Retries are 1, not 3: a first attempt at these bounds already multiplied
+          # 30s x 3 retries across every index file into a ~15 minute stall on a dead
+          # mirror, which is worse than failing once and moving on.
+          sudo tee /etc/apt/apt.conf.d/99-orca-shell-contracts >/dev/null <<'APTCONF'
+          Acquire::http::Timeout "15";
+          Acquire::https::Timeout "15";
+          Acquire::Retries "1";
+          APTCONF
           for attempt in 1 2 3; do
-            sudo add-apt-repository -y ppa:fish-shell/release-4 && break
+            sudo add-apt-repository -y -n ppa:fish-shell/release-4 && break
             echo "add-apt-repository attempt ${attempt} failed; retrying" >&2
-            sudo add-apt-repository -y -r ppa:fish-shell/release-4 || true
+            sudo add-apt-repository -y -n -r ppa:fish-shell/release-4 || true
             sleep 5
           done
-          sudo apt-get update || true
+          # Why a wall-clock bound on each command: apt's Acquire timeouts are per-connection,
+          # so a dead mirror costs timeout x retries x every index file. Measured: the archive
+          # mirror stalled with zero bytes and the step burned 14m26s before the job bound
+          # killed it. `timeout` is the only thing that bounds the command as a whole.
+          # The update is already tolerant by design (see above), so bounding it just caps
+          # what a dead mirror can cost before the install runs against whatever index exists.
+          timeout 120 sudo apt-get update || true
           # Why both shells on one line: pr-workflow-parallelism.test.mjs parses only the
           # first install command in this step to prove the lane really installs them.
-          sudo apt-get install -y zsh fish
+          timeout 300 sudo apt-get install -y zsh fish
 
       # Separate from the install so the failure names the contract, not an apt error.
       # ORCA_REQUIRE_FISH re-checks this at test time; this step just fails in seconds
@@ -265,16 +414,24 @@ jobs:
             src/main/daemon/shell-ready.test.ts \
             src/main/daemon/node-pty-fd-leak.test.ts \
             src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts \
-            src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            src/main/pty/codex-shell-launch-preflight.test.ts \
+            src/main/pty/omp-shell-wrapper-alias-safety.test.ts \
             src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            src/main/shell-startup-feature-channel.test.ts \
+            src/main/terminal-history-fish-session.node-pty.test.ts \
+            src/main/zsh-scoped-histfile.live-shell.test.ts \
+            src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
   test:
     name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -304,18 +461,62 @@ jobs:
             --exclude=src/main/daemon/shell-ready.test.ts \
             --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
             --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-startup-file-behavior.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-discovery.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-zdotdir-normalization.test.ts \
             --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
             --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/main/shell-startup-feature-channel.test.ts \
+            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
+            --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
+            --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
             --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
             --exclude=src/shared/posix-command-path-lookup.test.ts \
             --exclude=tests/e2e/cross-version-wire/** \
             --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
 
+  # Why a separate job: the test needs a real Chrome, and the 32-way `test` matrix
+  # would pay for it 32 times to run one file in whichever shard it landed in.
+  orcad_browser:
+    name: orcad browser provider
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # Why no native-runtime: the provider drives the prebuilt agent-browser binary
+      # shipped in node_modules and never touches node-pty.
+      - uses: ./.github/actions/install-node-dependencies
+
+      # Why the runner's Google Chrome and not its chromium: Ubuntu 24.04 only ships an
+      # AppArmor userns profile for the Chrome .deb, so chromium dies with "No usable
+      # sandbox" and the provider passes no --no-sandbox. Why fail instead of skip: an
+      # unset ORCA_BROWSER_EXECUTABLE is exactly how this test went uncovered for so long.
+      - name: Resolve Chrome for the browser provider
+        run: |
+          set -euo pipefail
+          chrome="$(command -v google-chrome || command -v google-chrome-stable || true)"
+          if [ -z "$chrome" ]; then
+            echo "::error::No Google Chrome on the runner; the browser provider test would silently skip."
+            exit 1
+          fi
+          "$chrome" --version
+          echo "ORCA_BROWSER_EXECUTABLE=$chrome" >> "$GITHUB_ENV"
+
+      - name: Test external Chromium browser provider
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            src/main/orcad/external-chromium-browser-process.integration.test.ts
+
   cross-version-wire:
     name: cross-version wire compatibility
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -325,7 +526,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
@@ -334,11 +539,16 @@ jobs:
 
       # A path filter that matches nothing exits 1 ("No test files found"), so this
       # lane cannot report success while running zero tests.
-      - name: Old/new client and server terminal journey
-        run: pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
+      - name: Old/new client and server compatibility journeys
+        run: >-
+          pnpm exec vitest run --config config/vitest.config.ts
+          tests/e2e/cross-version-wire/cross-version-browser-placement.unit.test.ts
+          tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts
 
   managed_hook_node18:
     name: managed hooks on Node 18
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -362,6 +572,8 @@ jobs:
 
   package:
     name: package
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -383,6 +595,15 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: electron
+
+      - name: Test Linux Electron lifecycle boundary
+        run: >-
+          xvfb-run --auto-servernum pnpm exec vitest run --config config/vitest.config.ts
+          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
+          src/main/browser/browser-route-tcp-egress.electron.test.ts
+          src/main/browser/browser-route-webrtc-egress.electron.test.ts
+          src/main/browser/browser-route-h3-egress.electron.test.ts
+          src/main/browser/browser-route-dns-prefetch.electron.test.ts
 
       - name: Build package inputs
         run: |
@@ -423,6 +644,8 @@ jobs:
 
   package_windows:
     name: package (windows)
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
 
@@ -456,17 +679,49 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Why: node-pty prefers its upstream prebuild, which does not contain
+      # Orca's Windows patch, so the job-object exports would be absent and the
+      # suite below would test an unpatched binary. build_from_source removes
+      # the prebuild, and the package's postinstall restores the ConPTY runtime
+      # files that a bare node-gyp rebuild would miss.
+      - name: Rebuild node-pty from patched source
+        env:
+          npm_config_build_from_source: 'true'
+        run: pnpm rebuild node-pty
+
       - name: Test Windows-specific boundaries
         run: >-
           pnpm exec vitest run --config config/vitest.config.ts
+          config/scripts/rebuild-native-deps.test.mjs
+          src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
+          src/main/browser/browser-route-tcp-egress.electron.test.ts
+          src/main/browser/browser-route-webrtc-egress.electron.test.ts
+          src/main/browser/browser-route-h3-egress.electron.test.ts
+          src/main/browser/browser-route-dns-prefetch.electron.test.ts
+          src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
+          src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
+          src/shared/child-process/windows-command-line.win32.test.ts
+          src/main/windows/windows-pty-job.win32.test.ts
+          src/main/windows/windows-host-job.win32.test.ts
+          src/main/wsl/wsl-runner.test.ts
+          src/main/wsl/wsl-guest-environment.test.ts
+          src/main/wsl/wsl-invocation-boundary.test.ts
+          src/main/wsl/wsl-executable-path.win32.test.ts
+          src/main/wsl/wsl-w1-w3-contract.test.ts
+          src/shared/source-scan/source-tree-scan.test.ts
           src/main/cli/wsl-cli-powershell-boundary.test.ts
           src/main/orca-profiles/profile-index-store.test.ts
           src/main/runtime/repo-worktree-admin-fingerprint.test.ts
           src/main/runtime/worktree-scan-admin-fingerprint-gate.test.ts
           src/shared/secure-file-fsync-flags.test.ts
+          src/main/ipc/pty-codex-account-attribution.test.ts
+          src/main/ipc/pty-spawn-env-codex-resume-provenance.test.ts
 
+      # Why the :parallel variant: identical to build:release except the three
+      # electron-vite targets overlap instead of running back to back. The Linux package
+      # job already packages and smoke-tests an AppImage built that way.
       - name: Build package inputs
-        run: pnpm run build:release
+        run: pnpm run build:release:parallel
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
@@ -476,6 +731,9 @@ jobs:
           ORCA_REUSE_PREPARED_NATIVE_RUNTIME: '1'
         run: pnpm exec electron-builder --config config/electron-builder.config.cjs --dir
 
+      - name: Smoke packaged Windows PTY native capability
+        run: pnpm run smoke:windows-pty-native-capability -- --exe=dist/win-unpacked/Orca.exe
+
       - name: Smoke packaged CLI
         run: node config/scripts/smoke-packaged-cli.mjs --app-dir=dist/win-unpacked
 
@@ -483,8 +741,9 @@ jobs:
   # release runs retain full-suite coverage.
   e2e-paths:
     name: detect changed e2e specs
+    needs: [code_paths]
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft != true
+    if: github.event.pull_request.draft != true && needs.code_paths.outputs.should_run == 'true'
     # Why: detector only needs to read the checkout; do not inherit repo defaults.
     permissions:
       contents: read
@@ -495,7 +754,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
         with:
+          # Why blob:none: full history is needed for the merge-base diff, but historical
+          # file contents are not. Blobs are ~89% of this repo's pack, and Git fetches the
+          # few this job actually reads on demand.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
 
       - name: Filter changed E2E specs
@@ -505,11 +768,9 @@ jobs:
           BASE="${{ github.event.pull_request.base.sha }}"
           HEAD="${{ github.event.pull_request.head.sha }}"
           CHANGED="$(git diff --name-only --diff-filter=AMCR --merge-base "$BASE" "$HEAD")"
-          TEST_FILES="$(printf '%s\n' "$CHANGED" | grep -E '^tests/e2e/.*\.spec\.ts$' || true)"
-          if printf '%s\n' "$CHANGED" | grep -Eq '^src/(main/ephemeral-vm-(runtime-(service|provisioning-persistence)|failed-start-cleanup)|shared/(ephemeral-vm-runtime-(store|feature-store|rollback-projection|runtimes)|ephemeral-vm-recipes|orca-yaml-hook-types))\.ts$'; then
-            TEST_FILES="$(printf '%s\n%s\n' "$TEST_FILES" 'tests/e2e/ephemeral-vm-provisioned-root.spec.ts' | sort -u)"
-          fi
-          TEST_FILES_JSON="$(printf '%s\n' "$TEST_FILES" | jq --raw-input --slurp --compact-output 'split("\n") | map(select(length > 0))')"
+          # Source routes are executable contracts so a test can prove exact
+          # authorities, exclusions, and sentinels without evaluating workflow shell.
+          TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
@@ -533,12 +794,15 @@ jobs:
   verify:
     if: always()
     needs:
+      - code_paths
       - static_analysis
       - root_directory_guard
       - typecheck
       - git_compatibility
+      - xterm_patch_sync
       - shell_contracts
       - test
+      - orcad_browser
       - managed_hook_node18
       - package
       - package_windows
@@ -555,23 +819,56 @@ jobs:
       # checked outside the loop or it would excuse the jobs above.
       - name: Require successful checks
         env:
+          CODE_PATHS: ${{ needs.code_paths.result }}
+          SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
           TEST: ${{ needs.test.result }}
+          ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
+          if [ "$CODE_PATHS" != "success" ]; then
+            exit 1
+          fi
+          if [ "$SHOULD_RUN" != "true" ]; then
+            echo "Docs-only change; expensive PR checks skipped."
+            if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
+              exit 1
+            fi
+            for result in \
+              "$STATIC_ANALYSIS" \
+              "$TYPECHECK" \
+              "$GIT_COMPATIBILITY" \
+              "$XTERM_PATCH_SYNC" \
+              "$SHELL_CONTRACTS" \
+              "$TEST" \
+              "$ORCAD_BROWSER" \
+              "$MANAGED_HOOK_NODE18" \
+              "$PACKAGE" \
+              "$PACKAGE_WINDOWS"; do
+              if [ "$result" != "skipped" ]; then
+                exit 1
+              fi
+            done
+            exit 0
+          fi
+          # Require success when the PR has code-relevant changes
           for result in \
+            "$CODE_PATHS" \
             "$STATIC_ANALYSIS" \
             "$ROOT_DIRECTORY_GUARD" \
             "$TYPECHECK" \
             "$GIT_COMPATIBILITY" \
+            "$XTERM_PATCH_SYNC" \
             "$SHELL_CONTRACTS" \
             "$TEST" \
+            "$ORCAD_BROWSER" \
             "$MANAGED_HOOK_NODE18" \
             "$PACKAGE" \
             "$PACKAGE_WINDOWS"; do

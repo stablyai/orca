@@ -1,3 +1,4 @@
+import { PTY_LIVE_NOTE, describeUnconfirmedStop } from '../shared/pty-liveness-verdict'
 import type {
   RuntimeTerminalClose,
   RuntimeTerminalCreate,
@@ -112,8 +113,21 @@ export function formatTerminalShow(result: { terminal: RuntimeTerminalShow }): s
     `ptyId: ${terminal.ptyId ?? 'none'}`,
     `connected: ${terminal.connected}`,
     `writable: ${terminal.writable}`,
+    // Why listed above the preview: the preview is where a reader would otherwise have to
+    // spot the prompt by eye, which is the work this line exists to remove.
+    `agentWait: ${formatAgentWait(terminal.agentWait)}`,
     `preview: ${terminal.preview || '<empty>'}`
   ].join('\n')
+}
+
+function formatAgentWait(agentWait: RuntimeTerminalShow['agentWait']): string {
+  if (agentWait === undefined) {
+    return 'unknown (not evaluated)'
+  }
+  if (!agentWait) {
+    return 'none'
+  }
+  return `${agentWait.reason ?? 'interactive prompt'} (via ${agentWait.source})`
 }
 
 export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): string {
@@ -126,11 +140,19 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
   const header = [
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
+    ...(terminal.source ? [`source: ${terminal.source}`] : []),
     ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
     ...oldestCursor,
     ...latestCursor,
     ...(terminal.truncated ? ['warning: older output is no longer retained'] : []),
-    ...(limitedWarning ? [limitedWarning] : [])
+    ...(limitedWarning ? [limitedWarning] : []),
+    // Why: the caller asked for the rendered screen; say plainly that this is not it rather
+    // than let repaint fragments be read as what the terminal displayed.
+    ...(terminal.source === 'screen-unavailable'
+      ? [
+          'warning: no rendered screen was available, so this is accumulated output; repainted lines may appear as stacked fragments'
+        ]
+      : [])
   ]
   return [...header, '', ...terminal.tail].join('\n')
 }
@@ -185,12 +207,25 @@ export function formatTerminalFocus(result: { focus: RuntimeTerminalFocus }): st
   return `Focused terminal ${result.focus.handle} (tab ${result.focus.tabId}).`
 }
 
+/** "PTY killed." is a claim of observed death, so only a confirmed kill earns it. */
+function describePtyStop(close: RuntimeTerminalClose): string {
+  if (close.ptyKilled) {
+    return ' PTY killed.'
+  }
+  if (close.ptyStopVerdict === 'live') {
+    return ` ${PTY_LIVE_NOTE}`
+  }
+  if (close.ptyStopVerdict === 'unverifiable') {
+    return ` ${describeUnconfirmedStop(close.ptyStopReason ?? 'its host could not be reached')}`
+  }
+  return ''
+}
+
 export function formatTerminalClose(result: { close: RuntimeTerminalClose }): string {
   if (result.close.closeMode === 'tab') {
     return `Closed terminal tab ${result.close.tabId} (${result.close.handle}).`
   }
-  const ptyNote = result.close.ptyKilled ? ' PTY killed.' : ''
-  return `Closed terminal ${result.close.handle}.${ptyNote}`
+  return `Closed terminal ${result.close.handle}.${describePtyStop(result.close)}`
 }
 
 export function formatTerminalWait(result: { wait: RuntimeTerminalWait }): string {

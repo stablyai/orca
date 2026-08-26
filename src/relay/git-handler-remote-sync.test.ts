@@ -3,7 +3,7 @@
  * sync, fast-forward, and the narrow review-head fetches for GitHub pull
  * requests and GitLab merge requests.
  */
-import { describe, expect, it, beforeEach, afterEach } from 'vitest'
+import { describe, expect, it, beforeEach, afterEach, vi } from 'vitest'
 import * as fs from 'node:fs/promises'
 import * as path from 'node:path'
 import { mkdtempSync, writeFileSync } from 'node:fs'
@@ -14,16 +14,20 @@ import { gitInit, gitCommit, type MockDispatcher } from './git-handler-test-setu
 import {
   createGitHandlerRelay,
   createGitTempDir,
-  removeGitTempDir
+  removeGitTempDir,
+  type GitSpyTarget
 } from './git-handler-test-harness'
 
 describe('GitHandler', () => {
   let dispatcher: MockDispatcher
   let tmpDir: string
+  let gitTarget: GitSpyTarget
 
   beforeEach(() => {
     tmpDir = createGitTempDir()
-    ;({ dispatcher } = createGitHandlerRelay())
+    const relay = createGitHandlerRelay()
+    dispatcher = relay.dispatcher
+    gitTarget = relay.handler as unknown as GitSpyTarget
   })
 
   afterEach(async () => {
@@ -152,6 +156,252 @@ describe('GitHandler', () => {
       } finally {
         await fs.rm(bareDir, { recursive: true, force: true })
       }
+    })
+
+    it('rebases from the original fork point after a remote force-push', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-rebase-bare-'))
+      const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-rebase-producer-'))
+      const producerDir = path.join(producerParent, 'repo')
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'base')
+        const branch = execFileSync('git', ['branch', '--show-current'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        const forkPoint = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', '--set-upstream', 'origin', branch], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+
+        execFileSync('git', ['clone', bareDir, producerDir], { stdio: 'pipe' })
+        execFileSync('git', ['checkout', branch], { cwd: producerDir, stdio: 'pipe' })
+        execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['config', 'user.name', 'Test'], { cwd: producerDir, stdio: 'pipe' })
+        writeFileSync(path.join(producerDir, 'discarded.txt'), 'discarded')
+        gitCommit(producerDir, 'discarded remote commit')
+        execFileSync('git', ['push'], { cwd: producerDir, stdio: 'pipe' })
+        execFileSync('git', ['fetch', 'origin'], { cwd: tmpDir, stdio: 'pipe' })
+
+        execFileSync('git', ['checkout', '-b', 'feature', `origin/${branch}`], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        writeFileSync(path.join(tmpDir, 'topic.txt'), 'topic')
+        gitCommit(tmpDir, 'topic commit')
+
+        execFileSync('git', ['reset', '--hard', forkPoint], { cwd: producerDir, stdio: 'pipe' })
+        writeFileSync(path.join(producerDir, 'replacement.txt'), 'replacement')
+        gitCommit(producerDir, 'replacement remote commit')
+        execFileSync('git', ['push', '--force', 'origin', branch], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+
+        await dispatcher.callRequest('git.rebaseFromBase', {
+          worktreePath: tmpDir,
+          baseRef: `origin/${branch}`
+        })
+
+        await expect(fs.access(path.join(tmpDir, 'replacement.txt'))).resolves.toBeUndefined()
+        await expect(fs.access(path.join(tmpDir, 'topic.txt'))).resolves.toBeUndefined()
+        await expect(fs.access(path.join(tmpDir, 'discarded.txt'))).rejects.toThrow()
+        expect(
+          execFileSync('git', ['rev-parse', `origin/${branch}`], {
+            cwd: tmpDir,
+            encoding: 'utf-8'
+          }).trim()
+        ).toBe(
+          execFileSync('git', ['rev-parse', branch], {
+            cwd: producerDir,
+            encoding: 'utf-8'
+          }).trim()
+        )
+        expect(
+          execFileSync('git', ['for-each-ref', '--format=%(refname)', 'refs/orca/rebase'], {
+            cwd: tmpDir,
+            encoding: 'utf-8'
+          }).trim()
+        ).toBe('')
+      } finally {
+        await Promise.all([
+          fs.rm(bareDir, { recursive: true, force: true }),
+          fs.rm(producerParent, { recursive: true, force: true })
+        ])
+      }
+    }, 15_000)
+
+    it('rebases the selected linked worktree without moving the source worktree', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-linked-rebase-bare-'))
+      const producerParent = mkdtempSync(path.join(tmpdir(), 'relay-git-linked-rebase-producer-'))
+      const producerDir = path.join(producerParent, 'repo')
+      const targetParent = mkdtempSync(path.join(tmpdir(), 'relay-git-linked-rebase-target-'))
+      const targetDir = path.join(targetParent, 'feature')
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(tmpDir)
+        writeFileSync(path.join(tmpDir, 'base.txt'), 'base')
+        gitCommit(tmpDir, 'base')
+        const baseBranch = execFileSync('git', ['branch', '--show-current'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+        execFileSync('git', ['push', '--set-upstream', 'origin', baseBranch], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['worktree', 'add', '-b', 'feature', targetDir, 'HEAD'], {
+          cwd: tmpDir,
+          stdio: 'pipe'
+        })
+        writeFileSync(path.join(targetDir, 'topic.txt'), 'topic')
+        gitCommit(targetDir, 'topic')
+        writeFileSync(path.join(tmpDir, 'source-dirty.txt'), 'leave me alone')
+        const sourceHeadBefore = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        }).trim()
+        const sourceStatusBefore = execFileSync('git', ['status', '--short'], {
+          cwd: tmpDir,
+          encoding: 'utf-8'
+        })
+
+        execFileSync('git', ['clone', bareDir, producerDir], { stdio: 'pipe' })
+        execFileSync('git', ['config', 'user.email', 'test@test.com'], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['config', 'user.name', 'Test'], { cwd: producerDir, stdio: 'pipe' })
+        execFileSync('git', ['checkout', baseBranch], { cwd: producerDir, stdio: 'pipe' })
+        writeFileSync(path.join(producerDir, 'latest.txt'), 'latest')
+        gitCommit(producerDir, 'latest base')
+        const latestBaseOid = execFileSync('git', ['rev-parse', 'HEAD'], {
+          cwd: producerDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['push', 'origin', baseBranch], { cwd: producerDir, stdio: 'pipe' })
+
+        await dispatcher.callRequest('git.rebaseFromBase', {
+          worktreePath: targetDir,
+          baseRef: `origin/${baseBranch}`
+        })
+
+        expect(execFileSync('git', ['rev-parse', 'HEAD'], { cwd: tmpDir }).toString().trim()).toBe(
+          sourceHeadBefore
+        )
+        expect(execFileSync('git', ['status', '--short'], { cwd: tmpDir, encoding: 'utf-8' })).toBe(
+          sourceStatusBefore
+        )
+        expect(
+          execFileSync('git', ['rev-parse', 'HEAD~1'], { cwd: targetDir, encoding: 'utf-8' }).trim()
+        ).toBe(latestBaseOid)
+        expect(
+          execFileSync('git', ['reflog', '-1', '--format=%gs'], {
+            cwd: targetDir,
+            encoding: 'utf-8'
+          })
+        ).toContain('rebase (finish)')
+        expect(
+          execFileSync('git', ['for-each-ref', '--format=%(refname)', 'refs/orca/rebase'], {
+            cwd: targetDir,
+            encoding: 'utf-8'
+          }).trim()
+        ).toBe('')
+      } finally {
+        await Promise.all([
+          fs.rm(bareDir, { recursive: true, force: true }),
+          fs.rm(producerParent, { recursive: true, force: true }),
+          fs.rm(targetParent, { recursive: true, force: true })
+        ])
+      }
+    }, 15_000)
+
+    it('fast-forwards an unborn branch from the selected remote base', async () => {
+      const bareDir = mkdtempSync(path.join(tmpdir(), 'relay-git-unborn-bare-'))
+      const producerDir = mkdtempSync(path.join(tmpdir(), 'relay-git-unborn-producer-'))
+      try {
+        execFileSync('git', ['init', '--bare'], { cwd: bareDir, stdio: 'pipe' })
+        gitInit(producerDir)
+        writeFileSync(path.join(producerDir, 'base.txt'), 'base')
+        gitCommit(producerDir, 'base')
+        const branch = execFileSync('git', ['branch', '--show-current'], {
+          cwd: producerDir,
+          encoding: 'utf-8'
+        }).trim()
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], {
+          cwd: producerDir,
+          stdio: 'pipe'
+        })
+        execFileSync('git', ['push', 'origin', branch], { cwd: producerDir, stdio: 'pipe' })
+
+        gitInit(tmpDir)
+        execFileSync('git', ['remote', 'add', 'origin', bareDir], { cwd: tmpDir, stdio: 'pipe' })
+
+        await dispatcher.callRequest('git.rebaseFromBase', {
+          worktreePath: tmpDir,
+          baseRef: `origin/${branch}`
+        })
+
+        await expect(fs.access(path.join(tmpDir, 'base.txt'))).resolves.toBeUndefined()
+        expect(execFileSync('git', ['rev-parse', '--verify', 'HEAD'], { cwd: tmpDir })).toBeTruthy()
+      } finally {
+        await Promise.all([
+          fs.rm(bareDir, { recursive: true, force: true }),
+          fs.rm(producerDir, { recursive: true, force: true })
+        ])
+      }
+    })
+
+    it('cancels the active rebase fetch and still removes its private ref', async () => {
+      const controller = new AbortController()
+      let rejectFetch!: (error: Error) => void
+      const fetchStarted = new Promise<void>((resolve) => {
+        vi.spyOn(gitTarget, 'git').mockImplementation(async (args, _cwd, options) => {
+          if (args[0] === 'remote') {
+            return { stdout: 'origin\n', stderr: '' }
+          }
+          if (args[0] === 'merge-base') {
+            return { stdout: 'fork-point\n', stderr: '' }
+          }
+          if (args[0] === 'fetch') {
+            resolve()
+            return new Promise((_resolve, reject) => {
+              rejectFetch = reject
+              options?.signal?.addEventListener('abort', () => reject(new Error('aborted')), {
+                once: true
+              })
+            })
+          }
+          return { stdout: '', stderr: '' }
+        })
+      })
+
+      const request = dispatcher.callRequest(
+        'git.rebaseFromBase',
+        { worktreePath: tmpDir, baseRef: 'origin/main' },
+        { isStale: () => false, signal: controller.signal }
+      )
+      await fetchStarted
+      controller.abort()
+      await expect(request).rejects.toThrow('aborted')
+
+      const calls = vi.mocked(gitTarget.git).mock.calls
+      expect(calls.some(([args]) => args[0] === 'rebase')).toBe(false)
+      const cleanup = calls.find(([args]) => args[0] === 'update-ref')
+      expect(cleanup).toBeDefined()
+      expect(cleanup?.[2]?.signal).toBeUndefined()
+      expect(rejectFetch).toBeTypeOf('function')
     })
 
     it('fetches the explicit publish target remote', async () => {

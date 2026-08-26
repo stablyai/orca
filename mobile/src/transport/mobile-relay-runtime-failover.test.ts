@@ -91,6 +91,7 @@ class FakeRelaySession extends FakeSession implements MobileRelayRpcSession {
 class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
   private path: MobileConnectionPath
   private recoveryPath: MobileConnectionPath | null = null
+  private recoveryAttempt = 0
   private generation = 1
   private readonly pathListeners = new Set<() => void>()
 
@@ -106,17 +107,52 @@ class FakeLogicalClient extends FakeSession implements StableLogicalRpcClient {
     }
     this.path = path
     this.recoveryPath = null
+    this.recoveryAttempt = 0
     this.generation += 1
     // Connected-state publication carries the migration cleanup.
     this.publishState('connected')
   })
   suspendActiveSession = vi.fn(() => this.publishState('disconnected'))
+  getReconnectAttempt = () => (this.getPendingPath() === 'relay' ? this.recoveryAttempt : 0)
   getActivePath = () => this.path
   getPendingPath = () => (this.getState() === 'connected' ? null : this.recoveryPath)
-  setRecoveryPath = vi.fn((path: MobileConnectionPath | null) => {
+  setRecoveryPath = vi.fn((path: MobileConnectionPath | null, attempt?: number) => {
     const previous = this.getPendingPath()
+    const previousAttempt = this.getReconnectAttempt()
     this.recoveryPath = path
-    if (previous !== this.getPendingPath()) {
+    if (path === null) {
+      this.recoveryAttempt = 0
+    } else if (attempt !== undefined) {
+      this.recoveryAttempt = attempt
+    }
+    if (previous !== this.getPendingPath() || previousAttempt !== this.getReconnectAttempt()) {
+      for (const listener of this.pathListeners) {
+        listener()
+      }
+    }
+  })
+  private pairingRejected = false
+  setPairingRejected = vi.fn((rejected: boolean) => {
+    if (this.pairingRejected === rejected) {
+      return
+    }
+    this.pairingRejected = rejected
+    for (const listener of this.pathListeners) {
+      listener()
+    }
+  })
+  isPairingRejected = () => this.pairingRejected
+  // Mirrors LogicalClientConnectionPath.clearAfterConnected.
+  publishState(state: ConnectionState): void {
+    if (state === 'connected') {
+      this.pairingRejected = false
+    }
+    super.publishState(state)
+  }
+  setRecoveryAttempt = vi.fn((attempt: number) => {
+    const previous = this.getReconnectAttempt()
+    this.recoveryAttempt = attempt
+    if (previous !== this.getReconnectAttempt()) {
       for (const listener of this.pathListeners) {
         listener()
       }
@@ -266,7 +302,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     await vi.advanceTimersByTimeAsync(60_000)
 
     expect(deps.openRelay).toHaveBeenCalledOnce()
-    expect(logical.setRecoveryPath).toHaveBeenCalledWith('relay')
+    expect(logical.setRecoveryPath).toHaveBeenCalledWith('relay', 0)
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
@@ -392,6 +428,46 @@ describe('relay runtime recovery without direct connectivity', () => {
 
     expect(openRelay).toHaveBeenCalledTimes(2)
     expect(logical.getActivePath()).toBe('relay')
+    supervisor.stop()
+  })
+
+  it('restarts Relay promptly when an active Relay session resumes from background', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    expect(deps.openRelay).not.toHaveBeenCalled()
+
+    supervisor.setForeground(false)
+    expect(logical.getState()).toBe('disconnected')
+    expect(logical.getPendingPath()).toBeNull()
+
+    supervisor.setForeground(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
+
+  it('recovers a suspended Relay through the app-resume nudge used by manual retry', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    supervisor.setForeground(false)
+    expect(logical.getState()).toBe('disconnected')
+
+    supervisor.nudge('app-resume')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getPendingPath()).toBeNull()
     supervisor.stop()
   })
 })

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  findInstallerAssetName,
   formatAdhocVersion,
   formatDailyVersion,
   formatHourlyVersion,
@@ -7,6 +8,7 @@ import {
   getReleaseRepoForChannel,
   getVersionChannel,
   hasDedicatedReleaseRepo,
+  hasInstallableArtifactForPlatform,
   isAdhocVersion,
   isChannelSupportedOnPlatform,
   isDailyVersion,
@@ -16,8 +18,10 @@ import {
   parseDailyVersionStamp,
   parseDevBuildStamp,
   parseHourlyVersionStamp,
+  requiresManualDevChannelInstall,
   sortReleaseBuildsNewestFirst,
-  type ReleaseBuild
+  type ReleaseBuild,
+  type ReleaseChannel
 } from './release-channel'
 import { compareAppVersions } from './app-version'
 
@@ -155,15 +159,83 @@ describe('release channel', () => {
     expect(parseDevBuildStamp('1.4.160')).toBeNull()
   })
 
-  // Why: all dev workflows are macOS-only, so the channels have no artifact to
-  // offer elsewhere. Both the picker and the main-process check read this, so a
-  // regression here would silently re-expose an uninstallable channel.
-  it('offers the dev channels only on macOS', () => {
+  // Why: the dev workflows build macOS and Windows but not Linux, so a Linux
+  // install has no artifact to offer. Both the picker and the main-process check
+  // read this, so a regression here would silently expose an uninstallable
+  // channel.
+  it('offers the dev channels on macOS and Windows but not Linux', () => {
     for (const channel of ['hourly', 'daily', 'adhoc'] as const) {
       expect(isChannelSupportedOnPlatform(channel, 'darwin')).toBe(true)
+      expect(isChannelSupportedOnPlatform(channel, 'win32')).toBe(true)
       expect(isChannelSupportedOnPlatform(channel, 'linux')).toBe(false)
-      expect(isChannelSupportedOnPlatform(channel, 'win32')).toBe(false)
     }
+  })
+
+  // The whole Windows story in one test. electron-updater verifies a downloaded
+  // installer against the publisherName baked into the *installed* app, so a
+  // signed stable/RC rejects an unsigned dev installer and no future build can
+  // fix the copies already out there. Dev builds carry no publisherName, so
+  // everything leaving a dev channel — including the way back to stable — works.
+  it('requires a manual install only when entering a dev channel from a signed Windows build', () => {
+    const manual = (runningChannel: ReleaseChannel | null, targetChannel: ReleaseChannel) =>
+      requiresManualDevChannelInstall({ platform: 'win32', runningChannel, targetChannel })
+
+    expect(manual('stable', 'adhoc')).toBe(true)
+    expect(manual('rc', 'hourly')).toBe(true)
+    expect(manual('stable', 'daily')).toBe(true)
+    // Unparseable version: assume signed, which sends the user to a download
+    // that works rather than an update that fails on a signature error.
+    expect(manual(null, 'adhoc')).toBe(true)
+
+    // Already unsigned — the updater skips verification entirely from here.
+    expect(manual('adhoc', 'hourly')).toBe(false)
+    expect(manual('hourly', 'adhoc')).toBe(false)
+    expect(manual('hourly', 'stable')).toBe(false)
+    expect(manual('adhoc', 'rc')).toBe(false)
+
+    // Not a dev channel at all.
+    expect(manual('stable', 'rc')).toBe(false)
+    expect(manual('rc', 'stable')).toBe(false)
+  })
+
+  // Why: macOS dev builds are signed and notarized like a release, so the
+  // updater installs them over a stable build with no manual step.
+  it('never requires a manual install off Windows', () => {
+    for (const platform of ['darwin', 'linux'] as const) {
+      expect(
+        requiresManualDevChannelInstall({
+          platform,
+          runningChannel: 'stable',
+          targetChannel: 'adhoc'
+        })
+      ).toBe(false)
+    }
+  })
+
+  it('detects an installable artifact from the platform update manifest', () => {
+    expect(hasInstallableArtifactForPlatform('win32', ['latest.yml'])).toBe(true)
+    expect(hasInstallableArtifactForPlatform('win32', ['latest-mac.yml'])).toBe(false)
+    expect(hasInstallableArtifactForPlatform('darwin', ['latest-mac.yml'])).toBe(true)
+    expect(hasInstallableArtifactForPlatform('darwin', ['latest.yml'])).toBe(false)
+    expect(hasInstallableArtifactForPlatform('linux', ['latest-linux-arm64.yml'])).toBe(true)
+    expect(hasInstallableArtifactForPlatform('linux', [])).toBe(false)
+    // An unknown platform must not hide every build; a download-time error is a
+    // better failure than an empty picker with no explanation.
+    expect(hasInstallableArtifactForPlatform('freebsd', [])).toBe(true)
+  })
+
+  it('finds the directly runnable installer for a platform', () => {
+    const assets = [
+      'latest.yml',
+      'orca-windows-setup.exe',
+      'orca-macos-arm64.dmg',
+      'orca-linux.AppImage'
+    ]
+    expect(findInstallerAssetName('win32', assets)).toBe('orca-windows-setup.exe')
+    expect(findInstallerAssetName('darwin', assets)).toBe('orca-macos-arm64.dmg')
+    expect(findInstallerAssetName('linux', assets)).toBe('orca-linux.AppImage')
+    expect(findInstallerAssetName('win32', ['latest.yml'])).toBeNull()
+    expect(findInstallerAssetName('freebsd', assets)).toBeNull()
   })
 
   it('offers stable and rc on every platform', () => {
@@ -192,7 +264,8 @@ describe('release channel', () => {
       channel: 'hourly',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`
+      releaseUrl: `https://github.com/stablyai/orca-hourly/releases/tag/v${version}`,
+      installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([
       build('1.4.160-hourly.202607280900'),
@@ -237,7 +310,8 @@ describe('release channel', () => {
       channel: 'adhoc',
       name: null,
       publishedAt: null,
-      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`
+      releaseUrl: `https://github.com/stablyai/orca-adhoc/releases/tag/v${version}`,
+      installerUrl: null
     })
     const sorted = sortReleaseBuildsNewestFirst([
       build('1.4.160-adhoc.20260728140502'),

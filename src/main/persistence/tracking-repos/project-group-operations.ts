@@ -6,11 +6,10 @@ import {
   normalizeProjectGroupName
 } from '../../../shared/project-groups'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import { removeWorkspaceSessionOwner } from '../restoring-sessions/session-owner-removal'
 
 export type ProjectGroupMutationOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   scheduleSave: () => void
   removeWorkspaceLineageForFolderParent: (folderWorkspaceId: string) => void
   pruneMobileClientTabSelections: (matchesWorktreeId: (worktreeId: string) => boolean) => void

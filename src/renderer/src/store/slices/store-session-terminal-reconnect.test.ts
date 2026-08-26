@@ -5,6 +5,7 @@ import { createTestStore, makeWorktree, makeTab, makeLayout } from './store-test
 import { computeVisibleWorktreeIds } from '@/components/sidebar/visible-worktrees'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { createStoreSessionMockApi } from './store-session-test-harness'
+import type { DirectSshAuthority, SshProviderEpoch } from '../../../../shared/ssh-types'
 
 // Mock sonner (imported by repos.ts)
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -457,5 +458,191 @@ describe('reconnectPersistedTerminals', () => {
         worktreeLineageById: {}
       })
     ).toEqual([])
+  })
+  it('leaves reconnect state untouched when cancellation is already signaled', async () => {
+    const store = createDaemonEnabledStore()
+    const worktreeId = 'repo1::/path/wt1'
+    const tab = makeTab({ id: 'tab1', worktreeId, ptyId: null })
+    store.setState({
+      tabsByWorktree: { [worktreeId]: [tab] },
+      ptyIdsByTabId: { tab1: [] },
+      pendingReconnectWorktreeIds: [worktreeId],
+      pendingReconnectTabByWorktree: { [worktreeId]: ['tab1'] },
+      pendingReconnectPtyIdByTabId: { tab1: 'old-pty-1' },
+      deferredSshSessionIdsByTabId: { tab1: 'deferred-pty-1' },
+      workspaceSessionReady: false
+    })
+    const before = store.getState()
+    const controller = new AbortController()
+    controller.abort()
+
+    await store.getState().reconnectPersistedTerminals(controller.signal)
+
+    const after = store.getState()
+    expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
+    expect(after.ptyIdsByTabId).toBe(before.ptyIdsByTabId)
+    expect(after.pendingReconnectWorktreeIds).toBe(before.pendingReconnectWorktreeIds)
+    expect(after.pendingReconnectTabByWorktree).toBe(before.pendingReconnectTabByWorktree)
+    expect(after.pendingReconnectPtyIdByTabId).toBe(before.pendingReconnectPtyIdByTabId)
+    expect(after.deferredSshSessionIdsByTabId).toBe(before.deferredSshSessionIdsByTabId)
+    expect(after.workspaceSessionReady).toBe(false)
+  })
+  it('leaves reconnect state untouched when cancellation arrives before final publication', async () => {
+    const store = createDaemonEnabledStore()
+    const worktreeId = 'repo1::/path/wt1'
+    store.setState({
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab1', worktreeId, ptyId: null })]
+      },
+      ptyIdsByTabId: { tab1: [] },
+      pendingReconnectWorktreeIds: [worktreeId],
+      pendingReconnectTabByWorktree: { [worktreeId]: ['tab1'] },
+      pendingReconnectPtyIdByTabId: { tab1: 'old-pty-1' },
+      deferredSshSessionIdsByTabId: { tab1: 'deferred-pty-1' },
+      workspaceSessionReady: false
+    })
+    const before = store.getState()
+    const controller = new AbortController()
+    let abortReads = 0
+    Object.defineProperty(controller.signal, 'aborted', {
+      configurable: true,
+      get: () => {
+        abortReads += 1
+        return abortReads > 1
+      }
+    })
+
+    await store.getState().reconnectPersistedTerminals(controller.signal)
+
+    const after = store.getState()
+    expect(abortReads).toBe(2)
+    expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
+    expect(after.ptyIdsByTabId).toBe(before.ptyIdsByTabId)
+    expect(after.pendingReconnectWorktreeIds).toBe(before.pendingReconnectWorktreeIds)
+    expect(after.pendingReconnectTabByWorktree).toBe(before.pendingReconnectTabByWorktree)
+    expect(after.pendingReconnectPtyIdByTabId).toBe(before.pendingReconnectPtyIdByTabId)
+    expect(after.deferredSshSessionIdsByTabId).toBe(before.deferredSshSessionIdsByTabId)
+    expect(after.workspaceSessionReady).toBe(false)
+  })
+
+  it('leaves scoped reconnect state untouched when direct SSH authority is stale at entry', async () => {
+    const store = createDaemonEnabledStore()
+    const targetId = 'ssh-1'
+    const worktreeId = 'repo1::/remote/wt1'
+    const staleAuthority: DirectSshAuthority = {
+      targetId,
+      providerEpoch: 'epoch-1' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    store.setState({
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab1', worktreeId, ptyId: null })]
+      },
+      ptyIdsByTabId: { tab1: [] },
+      pendingReconnectWorktreeIds: [worktreeId],
+      pendingReconnectTabByWorktree: { [worktreeId]: ['tab1'] },
+      pendingReconnectPtyIdByTabId: { tab1: 'ssh:ssh-1@@relay-1' },
+      deferredSshSessionIdsByTabId: { tab1: 'ssh:ssh-1@@deferred-1' },
+      sshConnectionStates: new Map([
+        [
+          targetId,
+          {
+            targetId,
+            status: 'connected',
+            error: null,
+            reconnectAttempt: 0,
+            providerEpoch: staleAuthority.providerEpoch,
+            connectionGeneration: 2
+          }
+        ]
+      ]),
+      workspaceSessionReady: false
+    })
+    const before = store.getState()
+
+    await store.getState().reconnectPersistedTerminals(undefined, {
+      directSshAuthority: staleAuthority,
+      workspaceKeys: [worktreeId]
+    })
+
+    const after = store.getState()
+    expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
+    expect(after.ptyIdsByTabId).toBe(before.ptyIdsByTabId)
+    expect(after.pendingReconnectWorktreeIds).toBe(before.pendingReconnectWorktreeIds)
+    expect(after.pendingReconnectTabByWorktree).toBe(before.pendingReconnectTabByWorktree)
+    expect(after.pendingReconnectPtyIdByTabId).toBe(before.pendingReconnectPtyIdByTabId)
+    expect(after.deferredSshSessionIdsByTabId).toBe(before.deferredSshSessionIdsByTabId)
+    expect(after.workspaceSessionReady).toBe(before.workspaceSessionReady)
+  })
+
+  it('leaves scoped reconnect state untouched when direct SSH authority rotates before publication', async () => {
+    const store = createDaemonEnabledStore()
+    const targetId = 'ssh-1'
+    const worktreeId = 'repo1::/remote/wt1'
+    const authority: DirectSshAuthority = {
+      targetId,
+      providerEpoch: 'epoch-1' as SshProviderEpoch,
+      connectionGeneration: 1
+    }
+    let authorityReads = 0
+    const currentAuthorityState = {
+      targetId,
+      status: 'connected' as const,
+      error: null,
+      reconnectAttempt: 0,
+      providerEpoch: authority.providerEpoch,
+      connectionGeneration: authority.connectionGeneration
+    }
+    const rotatedAuthorityState = {
+      ...currentAuthorityState,
+      connectionGeneration: 2
+    }
+    const sshConnectionStates = new Map([[targetId, currentAuthorityState]])
+    const originalGet = sshConnectionStates.get.bind(sshConnectionStates)
+    sshConnectionStates.get = ((key: string) => {
+      authorityReads += 1
+      return authorityReads >= 4 ? rotatedAuthorityState : originalGet(key)
+    }) as typeof sshConnectionStates.get
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0,
+          connectionId: targetId
+        }
+      ],
+      worktreesByRepo: {
+        repo1: [makeWorktree({ id: worktreeId, repoId: 'repo1', path: '/remote/wt1' })]
+      },
+      tabsByWorktree: {
+        [worktreeId]: [makeTab({ id: 'tab1', worktreeId, ptyId: null })]
+      },
+      ptyIdsByTabId: { tab1: [] },
+      pendingReconnectWorktreeIds: [worktreeId],
+      pendingReconnectTabByWorktree: { [worktreeId]: ['tab1'] },
+      pendingReconnectPtyIdByTabId: { tab1: 'ssh:ssh-1@@relay-1' },
+      deferredSshSessionIdsByTabId: {},
+      sshConnectionStates,
+      workspaceSessionReady: false
+    })
+    const before = store.getState()
+
+    await store.getState().reconnectPersistedTerminals(undefined, {
+      directSshAuthority: authority,
+      workspaceKeys: [worktreeId]
+    })
+
+    const after = store.getState()
+    expect(authorityReads).toBeGreaterThanOrEqual(4)
+    expect(after.tabsByWorktree).toBe(before.tabsByWorktree)
+    expect(after.ptyIdsByTabId).toBe(before.ptyIdsByTabId)
+    expect(after.pendingReconnectWorktreeIds).toBe(before.pendingReconnectWorktreeIds)
+    expect(after.pendingReconnectTabByWorktree).toBe(before.pendingReconnectTabByWorktree)
+    expect(after.pendingReconnectPtyIdByTabId).toBe(before.pendingReconnectPtyIdByTabId)
+    expect(after.deferredSshSessionIdsByTabId).toBe(before.deferredSshSessionIdsByTabId)
+    expect(after.workspaceSessionReady).toBe(false)
   })
 })

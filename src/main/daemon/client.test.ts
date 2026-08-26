@@ -7,6 +7,7 @@ import { mkdtempSync, writeFileSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
 import type { DaemonPendingRequests } from './daemon-client-pending-requests'
 import { encodeNdjson, NDJSON_MAX_LINE_BYTES, NdjsonLineTooLongError } from './ndjson'
+import { DaemonConnectionLostError } from './types'
 import type { HelloMessage, DaemonRequest, DaemonEvent } from './types'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -407,6 +408,67 @@ describe('DaemonClient', () => {
 
       const result = await client.request('listSessions', undefined)
       expect(result).toEqual({ sessions: [] })
+    })
+
+    it('survives a cancelCreateOrAttach the daemon refuses', async () => {
+      // Why: v1-v10 daemons have no cancel case and answer with an error. Escalating
+      // that to a disconnect would reject every sibling session's in-flight request.
+      const received: string[] = []
+      await startMockDaemon({
+        onControlMessage: (msg) => {
+          const req = msg as { id: string; type: string }
+          received.push(req.type)
+          return req.type === 'cancelCreateOrAttach'
+            ? encodeNdjson({
+                id: req.id,
+                ok: false,
+                error: 'Unknown request type: cancelCreateOrAttach'
+              })
+            : null
+        }
+      })
+      const disconnected = vi.fn()
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      client.onDisconnected(disconnected)
+
+      const sibling = client.request('listSessions', undefined)
+      const siblingRejected = vi.fn()
+      void sibling.catch(siblingRejected)
+      const abort = new AbortController()
+      const spawn = client.request('createOrAttach', { sessionId: 'aborted' }, 30_000, abort.signal)
+      void spawn.catch(() => {})
+
+      await waitFor(() => received.includes('createOrAttach') && received.includes('listSessions'))
+      abort.abort()
+      await waitFor(() => received.includes('cancelCreateOrAttach'))
+      await new Promise((r) => setTimeout(r, 50))
+
+      expect(client.isConnected()).toBe(true)
+      expect(disconnected).not.toHaveBeenCalled()
+      expect(siblingRejected).not.toHaveBeenCalled()
+    })
+
+    it('rejects in-flight requests as DaemonConnectionLostError when the socket dies', async () => {
+      // Why: the error class is the only signal separating "the wire is gone" from
+      // "the daemon answered with an error"; requestDaemonRpc keys the decision to
+      // tear down the shared connection off it.
+      const serverSockets: Socket[] = []
+      await startMockDaemon({ onControlMessage: () => null })
+      server.on('connection', (socket) => serverSockets.push(socket))
+
+      client = new DaemonClient({ socketPath, tokenPath })
+      await client.ensureConnected()
+      const inFlight = client.request('listSessions', undefined)
+      const rejected = expect(inFlight).rejects.toBeInstanceOf(DaemonConnectionLostError)
+
+      await waitFor(() => serverSockets.length > 0)
+      for (const socket of serverSockets) {
+        socket.destroy()
+      }
+
+      await rejected
     })
 
     it('rejects on error response', async () => {

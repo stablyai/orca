@@ -11,7 +11,11 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
-  reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+  reauthenticate: (args: {
+    accountId: string
+    /** Local-only: activate the re-authed account when its runtime lane had no selection. */
+    activateIfSelectionWasEmpty?: boolean
+  }) => Promise<CodexRateLimitAccountsState>
   remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
   select: (args: {
     accountId: string | null

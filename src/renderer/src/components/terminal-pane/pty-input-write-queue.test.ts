@@ -192,6 +192,18 @@ describe('pty input write queue', () => {
     ])
   })
 
+  it('keeps all query replies atomic for host-side ordering (#13892)', async () => {
+    const { writes, queue } = createRecordingQueue()
+    const replies = ['\x1b[?1;2c', '\x1b[1;1R']
+
+    for (const reply of replies) {
+      expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
+    }
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.data)).toEqual(replies)
+  })
+
   it('does not coalesce a color-scheme reply with a following keystroke', async () => {
     const { writes, queue } = createRecordingQueue()
     const reply = mode2031SequenceFor('dark')
@@ -234,6 +246,28 @@ describe('pty input write queue', () => {
     ])
     expect(replyWrites.every((write) => needsCookedEchoSafeQueryReply(write.data))).toBe(true)
     expect(writes.at(-1)?.data).toBe('k')
+  })
+
+  it('applies the same bound to DA1 replies kept atomic for ordering', async () => {
+    const { writes, pendingYields, queue } = createParkedQueue()
+    const replies = Array.from({ length: 10_000 }, (_, index) => `\x1b[?${index};2c`)
+
+    for (const reply of replies) {
+      expect(queue.enqueueQueryReply('pty-1', reply)).toBe(true)
+    }
+    expect(queue.enqueue('pty-1', 'k')).toBe(true)
+
+    await Promise.resolve()
+    for (let turn = 0; turn < PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES; turn += 1) {
+      await releaseNextWrite(writes, pendingYields)
+    }
+    await queue.waitForDrain()
+
+    expect(writes.map((write) => write.data)).toEqual([
+      replies[0],
+      ...replies.slice(-PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES),
+      'k'
+    ])
   })
 
   it('drops the oldest reply-only payload when the reply text budget fills', async () => {
@@ -490,7 +524,7 @@ describe('pty input write queue', () => {
 
     // Same intercept shape as LocalPtyProvider.write / Session.write / relay writeData.
     const hostWrite = (_id: string, data: string): void => {
-      if (extractOnlyCookedEchoSafeQueryReplies(data) && ingress.answerLiveQueryReply(data)) {
+      if (ingress.answerLiveQueryReply(data)) {
         return
       }
       masterWrites.push(`RAW:${data}`)

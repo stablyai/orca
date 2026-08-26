@@ -3,6 +3,7 @@ import type { RpcContext } from '../core'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { buildInjectRejectionMessage } from './orchestration-inject-rejection-message'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -389,7 +390,7 @@ describe('orchestration RPC methods', () => {
           to: 'term_a',
           inject: true
         })
-      ).rejects.toThrow('no recognized agent detected')
+      ).rejects.toThrow(buildInjectRejectionMessage('term_a'))
     })
 
     it('rejects dispatch to occupied terminal', async () => {

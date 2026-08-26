@@ -659,6 +659,9 @@ describe('orchestration RPC methods', () => {
 
     it('keeps waiting for requested types when an unrelated status arrives', async () => {
       setup()
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'coord' ? 'tab_wait:leaf_wait' : null
+      )
 
       const waitPromise = call('orchestration.check', {
         terminal: 'coord',
@@ -686,13 +689,13 @@ describe('orchestration RPC methods', () => {
         from: 'worker',
         to: 'coord',
         subject: 'needs attention',
-        type: 'escalation',
+        type: 'question',
         run: activeRunId
       })
 
       const result = await waitPromise
       expect(result.count).toBe(1)
-      expect(result.messages[0].type).toBe('escalation')
+      expect(result.messages[0].type).toBe('question')
     })
 
     it('does not mark existing messages read when the check starts aborted', async () => {

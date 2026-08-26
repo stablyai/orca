@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { setRuntimeBrowserCommandsFactory } from '../../runtime-browser-commands-factory'
 import {
   CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS,
   CLIPBOARD_TEXT_WRITE_MAX_BYTES,
@@ -17,6 +18,36 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('browser RPC methods', () => {
+  it('passes authenticated caller identity to client page creation outside the payload', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      browserTabCreate: vi.fn().mockResolvedValue({ browserPageId: 'page-1' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_CORE_METHODS })
+    const replies: string[] = []
+    const params = {
+      worktree: 'id:wt-1',
+      placement: { kind: 'client', browserHostClientId: 'host-a' }
+    }
+
+    await dispatcher.dispatchStreaming(
+      makeRequest('browser.tabCreate', params),
+      (reply) => {
+        replies.push(reply)
+      },
+      {
+        clientKind: 'runtime',
+        pairedDeviceId: 'device-a'
+      }
+    )
+
+    expect(JSON.parse(replies[0]!)).toMatchObject({ ok: true })
+    expect(runtime.browserTabCreate).toHaveBeenCalledWith(params, {
+      pairedDeviceId: 'device-a',
+      clientKind: 'runtime'
+    })
+  })
+
   it('validates profile user-agent modes', () => {
     expect(
       ProfileCreate.safeParse({ label: 'Google', scope: 'isolated', userAgentMode: 'native' })
@@ -68,7 +99,8 @@ describe('browser RPC methods', () => {
       makeRequest('browser.profileImportFromBrowser', {
         profileId: 'profile-1',
         browserFamily: 'chrome',
-        browserProfile: 'Default'
+        browserProfile: 'Default',
+        supportsPartitionSkippedCookies: true
       })
     )
 
@@ -78,11 +110,14 @@ describe('browser RPC methods', () => {
       page: 'page-1',
       url: 'https://example.com'
     })
-    expect(runtime.browserTabCreate).toHaveBeenCalledWith({
-      worktree: 'id:wt-1',
-      url: 'https://example.com',
-      profileId: 'profile-1'
-    })
+    expect(runtime.browserTabCreate).toHaveBeenCalledWith(
+      {
+        worktree: 'id:wt-1',
+        url: 'https://example.com',
+        profileId: 'profile-1'
+      },
+      { clientKind: undefined }
+    )
     expect(runtime.browserTabSwitch).toHaveBeenCalledWith({
       worktree: 'id:wt-1',
       index: 0,
@@ -92,7 +127,8 @@ describe('browser RPC methods', () => {
     expect(runtime.browserProfileImportFromBrowser).toHaveBeenCalledWith({
       profileId: 'profile-1',
       browserFamily: 'chrome',
-      browserProfile: 'Default'
+      browserProfile: 'Default',
+      supportsPartitionSkippedCookies: true
     })
   })
 
@@ -153,6 +189,32 @@ describe('browser RPC methods', () => {
       cleanupSubscription: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
+    setRuntimeBrowserCommandsFactory(() => ({}) as never)
+
+    try {
+      const response = await dispatcher.dispatch(
+        makeRequest('browser.screencast.unsubscribe', {
+          subscriptionId: 'browser-screencast:page-1:test'
+        })
+      )
+
+      expect(runtime.cleanupSubscription).toHaveBeenCalledWith('browser-screencast:page-1:test')
+      expect(response).toMatchObject({
+        ok: true,
+        result: { unsubscribed: true }
+      })
+    } finally {
+      setRuntimeBrowserCommandsFactory(null)
+    }
+  })
+
+  it('rejects browser screencast unsubscribe when no provider resolved', async () => {
+    setRuntimeBrowserCommandsFactory(null)
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      cleanupSubscription: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: BROWSER_SCREENCAST_METHODS })
 
     const response = await dispatcher.dispatch(
       makeRequest('browser.screencast.unsubscribe', {
@@ -160,11 +222,11 @@ describe('browser RPC methods', () => {
       })
     )
 
-    expect(runtime.cleanupSubscription).toHaveBeenCalledWith('browser-screencast:page-1:test')
     expect(response).toMatchObject({
-      ok: true,
-      result: { unsubscribed: true }
+      ok: false,
+      error: { code: 'browser_unavailable' }
     })
+    expect(runtime.cleanupSubscription).not.toHaveBeenCalled()
   })
 
   it('routes browser session and environment controls to the runtime server', async () => {

@@ -181,6 +181,7 @@ describe('orchestration federated setup evidence', () => {
     await expect(
       workerShow.handler(workerShow.params!.parse({ dispatch: started.dispatch.id }), { runtime })
     ).resolves.toMatchObject({
+      observation: { status: 'live', exactWorker: true },
       worker: {
         state: 'ready',
         stage: 'input_accepted',

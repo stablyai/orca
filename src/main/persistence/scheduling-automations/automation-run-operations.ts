@@ -10,7 +10,6 @@ import {
   nextAutomationRunNumber,
   pruneAutomationRuns
 } from '../../../shared/automation-run-retention'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
 import {
   normalizeAutomationPrecheckResult,
   normalizeAutomationRunOutputSnapshot,
@@ -20,7 +19,7 @@ import {
 } from './automation-context-migration'
 
 export type AutomationRunOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   flush: () => void
   recordManualRun: () => void
   getWorkspaceDisplayName: (workspaceId: string | null | undefined) => string | null

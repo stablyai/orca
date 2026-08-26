@@ -18,8 +18,8 @@ mkdirSync(fixtureBin)
 writeFileSync(
   fakeCodex,
   process.platform === 'win32'
-    ? `@echo off\r\n"${process.execPath}" "${fixtureScript}" --fake-agent --report "%ORCA_FAKE_AGENT_REPORT%" --marker "%ORCA_FAKE_AGENT_MARKER%" --allow-unframed-paste\r\n`
-    : `#!/usr/bin/env sh\nexec "${process.execPath}" "${fixtureScript}" --fake-agent --report "$ORCA_FAKE_AGENT_REPORT" --marker "$ORCA_FAKE_AGENT_MARKER"\n`,
+    ? `@echo off\r\n"${process.execPath}" "${fixtureScript}" --fake-agent --report "%ORCA_FAKE_AGENT_REPORT%" --marker "%ORCA_FAKE_AGENT_MARKER%" --allow-unframed-paste %*\r\n`
+    : `#!/usr/bin/env sh\nexec "${process.execPath}" "${fixtureScript}" --fake-agent --report "$ORCA_FAKE_AGENT_REPORT" --marker "$ORCA_FAKE_AGENT_MARKER" "$@"\n`,
   'utf8'
 )
 if (process.platform !== 'win32') {
@@ -27,6 +27,7 @@ if (process.platform !== 'win32') {
 }
 
 test.use({
+  seedTestRepo: false,
   orcaAppExtraEnv: {
     PATH: `${fixtureBin}${path.delimiter}${process.env.PATH ?? ''}`,
     ORCA_FAKE_AGENT_REPORT: fixtureReport,
@@ -85,5 +86,106 @@ test('CLI text plus Enter waits for a slow agent composer before submitting', as
     pasteFramingRequired: process.platform !== 'win32',
     ...(process.platform === 'win32' ? {} : { hasBracketedPasteFrame: true }),
     markerReceived: true
+  })
+})
+
+test('CLI reports a swallowed Enter without submitting a second Enter', async ({
+  electronApp,
+  orcaPage,
+  testRepoPath
+}) => {
+  test.setTimeout(90_000)
+  await waitForSessionReady(orcaPage)
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const repoRoot = process.cwd()
+  let stdout = ''
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'tests', 'tools', 'repro-terminal-send-submit.mjs'),
+        '--cli',
+        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        '--worktree',
+        testRepoPath,
+        '--agent-command',
+        'codex --swallow-first-enter',
+        '--expect-stalled',
+        '--report',
+        fixtureReport,
+        '--marker',
+        fixtureMarker,
+        '--discard-report'
+      ],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, ORCA_DEV_USER_DATA_PATH: userDataDir },
+        timeout: 60_000
+      }
+    )
+    stdout = result.stdout
+  } catch (error) {
+    const failed = error as Error & { stdout?: string; stderr?: string }
+    throw new Error([failed.message, failed.stdout, failed.stderr].filter(Boolean).join('\n'))
+  }
+
+  expect(JSON.parse(stdout)).toMatchObject({
+    rescueSent: false,
+    sendErrorCode: 'agent_prompt_stalled',
+    contractOk: true,
+    submitted: false,
+    prematureEnters: 0,
+    receivedEnters: 1,
+    swallowedEnters: 1,
+    markerReceived: true
+  })
+})
+
+test('CLI does not write prompt bytes into an active permission dialog', async ({
+  electronApp,
+  orcaPage,
+  testRepoPath
+}) => {
+  test.setTimeout(90_000)
+  await waitForSessionReady(orcaPage)
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const repoRoot = process.cwd()
+  let stdout = ''
+  try {
+    const result = await execFileAsync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'tests', 'tools', 'repro-terminal-send-submit.mjs'),
+        '--cli',
+        path.join(repoRoot, 'config', 'scripts', 'orca-dev.mjs'),
+        '--worktree',
+        testRepoPath,
+        '--expect-blocked',
+        '--report',
+        fixtureReport,
+        '--marker',
+        fixtureMarker,
+        '--discard-report'
+      ],
+      {
+        cwd: repoRoot,
+        env: { ...process.env, ORCA_DEV_USER_DATA_PATH: userDataDir },
+        timeout: 60_000
+      }
+    )
+    stdout = result.stdout
+  } catch (error) {
+    const failed = error as Error & { stdout?: string; stderr?: string }
+    throw new Error([failed.message, failed.stdout, failed.stderr].filter(Boolean).join('\n'))
+  }
+
+  expect(JSON.parse(stdout)).toMatchObject({
+    rescueSent: false,
+    sendErrorCode: 'agent_prompt_blocked',
+    contractOk: true,
+    submitted: false,
+    receivedBytes: 0,
+    receivedEnters: 0,
+    markerReceived: false
   })
 })

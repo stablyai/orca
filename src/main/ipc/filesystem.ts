@@ -139,6 +139,7 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import { QuickOpenPathRanker } from '../../shared/quick-open-path-search'
 import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
@@ -148,6 +149,8 @@ import {
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const BINARY_PROBE_BYTES = 8192
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
+// 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
+const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 // Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
 const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
@@ -1115,6 +1118,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
         excludePaths?: string[]
         requestToken?: string
+        maxResults?: number
+        searchQuery?: string
       }
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
@@ -1126,8 +1131,29 @@ export function registerFilesystemHandlers(
             return []
           }
           // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
+          if (
+            args.searchQuery !== undefined &&
+            provider.supportsQuickOpenSearch &&
+            !(await provider.supportsQuickOpenSearch({ signal: controller?.signal }))
+          ) {
+            const legacyFiles = await provider.listFiles(args.rootPath, {
+              excludePaths: args.excludePaths,
+              maxResults: QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT,
+              signal: controller?.signal
+            })
+            const ranker = new QuickOpenPathRanker(
+              args.searchQuery,
+              args.maxResults ?? QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT
+            )
+            for (const file of legacyFiles) {
+              ranker.consider(file)
+            }
+            return ranker.result().paths
+          }
           return await provider.listFiles(args.rootPath, {
             excludePaths: args.excludePaths,
+            ...(args.maxResults === undefined ? {} : { maxResults: args.maxResults }),
+            ...(args.searchQuery === undefined ? {} : { searchQuery: args.searchQuery }),
             signal: controller?.signal
           })
         }

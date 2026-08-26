@@ -50,6 +50,7 @@ import type {
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
 import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
+import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 const EXEC_TIMEOUT_MS = 90_000
@@ -578,6 +579,7 @@ export class AgentBrowserBridge {
   // Why: screenshot prep mutates shared paintability across tabs; serialize globally so concurrent captures don't blank each other.
   private screenshotTurn: Promise<void> = Promise.resolve()
   private readonly agentBrowserBin: string
+  private readonly agentBrowserEnv: NodeJS.ProcessEnv
   // Why: stash intercept patterns from a swap-destroyed session, keyed by name, so the next session restores them.
   private readonly pendingInterceptRestore = new Map<string, string[]>()
   // Why: promise-lock so two concurrent ensureSession calls don't both create the session entry.
@@ -591,6 +593,11 @@ export class AgentBrowserBridge {
     private readonly options: AgentBrowserBridgeOptions = {}
   ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
+    this.agentBrowserEnv = createAgentBrowserProcessEnvironment({
+      inheritedEnv: process.env,
+      platform: process.platform,
+      userDataPath: app.getPath('userData')
+    })
   }
 
   // ── Tab tracking ──
@@ -2604,7 +2611,15 @@ export class AgentBrowserBridge {
         child = execFile(
           this.agentBrowserBin,
           ['--session', sessionName, 'close'],
-          { timeout: STALE_SESSION_CLOSE_TIMEOUT_MS },
+          // Why windowsHide: agent-browser is console-subsystem and Orca's main
+          // process owns no console, so each spawn gets a fresh visible conhost
+          // that takes foreground -- keystrokes typed into a terminal at that
+          // moment land in the black box (#14543).
+          {
+            env: this.agentBrowserEnv,
+            timeout: STALE_SESSION_CLOSE_TIMEOUT_MS,
+            windowsHide: true
+          },
           (error) =>
             finish(
               error
@@ -2667,9 +2682,12 @@ export class AgentBrowserBridge {
         {
           timeout: execOptions?.timeoutMs ?? EXEC_TIMEOUT_MS,
           maxBuffer: 50 * 1024 * 1024,
+          // Why windowsHide: see the stale-session close above -- every
+          // agent-browser invocation would otherwise flash a console (#14543).
+          windowsHide: true,
           env: execOptions?.envOverrides
-            ? { ...process.env, ...execOptions.envOverrides }
-            : process.env
+            ? { ...this.agentBrowserEnv, ...execOptions.envOverrides }
+            : this.agentBrowserEnv
         },
         (error, stdout, stderr) => {
           if (session && session.activeProcess === child) {

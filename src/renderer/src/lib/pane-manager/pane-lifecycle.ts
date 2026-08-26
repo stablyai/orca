@@ -20,10 +20,6 @@ import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
-import {
-  disposePaneTerminalBackgroundObserver,
-  observePaneTerminalBackground
-} from './pane-background-compositing'
 
 // ---------------------------------------------------------------------------
 // Pane creation, terminal open/close, addon management
@@ -48,7 +44,6 @@ export function openTerminal(pane: ManagedPaneInternal): void {
 
   // Open terminal into DOM
   terminal.open(xtermContainer)
-  observePaneTerminalBackground(pane)
   // Why: terminal.element sits under the padded xterm container. Pane-level
   // placement keeps the hover URL on the true bottom-left window corner.
   container.appendChild(linkTooltip)
@@ -180,7 +175,6 @@ export function disposePane(
     pane.pendingInitialFitRafId = null
   }
   cancelPendingWebglRefresh(pane)
-  disposePaneTerminalBackgroundObserver(pane)
   detachPaneFitResizeObserver(pane)
   if (pane.panePointerDownHandler) {
     pane.container.removeEventListener('pointerdown', pane.panePointerDownHandler)

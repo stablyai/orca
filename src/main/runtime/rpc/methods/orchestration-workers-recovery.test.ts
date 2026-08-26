@@ -3,6 +3,14 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((promiseResolve) => {
+    resolve = promiseResolve
+  })
+  return { promise, resolve }
+}
+
 describe('orchestration worker recovery', () => {
   let db: OrchestrationDb
   let runtime: OrcaRuntimeService
@@ -30,7 +38,8 @@ describe('orchestration worker recovery', () => {
     })
     vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_worker',
-      closed: true
+      tabId: 'tab-worker',
+      ptyKilled: true
     } as never)
   })
 
@@ -63,7 +72,8 @@ describe('orchestration worker recovery', () => {
       processIncarnation: 'runtime:pty:1',
       worktreeId: 'repo::worktree',
       setupState: 'not_applicable',
-      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }]
+      effects: [{ kind: 'terminal', action: 'created', id: 'term_worker' }],
+      terminalOwnership: 'created'
     })
     if (ready) {
       db.markWorkerDispatchReady(started.dispatch.id)
@@ -80,7 +90,7 @@ describe('orchestration worker recovery', () => {
       call('orchestration.workerShow', { dispatch: dispatch.id })
     ).resolves.toMatchObject({
       worker: { state: 'ready' },
-      observation: { status: 'running', exactWorker: true },
+      observation: { status: 'live', exactWorker: true },
       terminal: { handle: 'term_worker' }
     })
     await expect(
@@ -102,6 +112,39 @@ describe('orchestration worker recovery', () => {
     })
     expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
     expect(db.getTask(task.id)?.status).toBe('blocked')
+  })
+
+  it('keeps an in-flight stop fenced during runtime-epoch reconciliation', async () => {
+    const { dispatch } = createWorker('previous_runtime')
+    const pendingObservation = deferred<Awaited<ReturnType<OrcaRuntimeService['showTerminal']>>>()
+    vi.mocked(runtime.showTerminal)
+      .mockReturnValueOnce(pendingObservation.promise)
+      .mockResolvedValue({
+        handle: 'term_worker',
+        worktreeId: 'repo::worktree',
+        connected: true,
+        status: 'running'
+      } as never)
+
+    const stop = call('orchestration.workerStop', { dispatch: dispatch.id })
+    await vi.waitFor(() => expect(runtime.showTerminal).toHaveBeenCalledTimes(1))
+    await expect(
+      call('orchestration.workerShow', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({ worker: { state: 'stopping' } })
+    await expect(call('orchestration.workerAbandon', { dispatch: dispatch.id })).rejects.toThrow(
+      'is stopping; wait for worker-stop to settle before abandoning'
+    )
+
+    pendingObservation.resolve({
+      handle: 'term_worker',
+      worktreeId: 'repo::worktree',
+      connected: true,
+      status: 'running'
+    } as never)
+    await expect(stop).resolves.toMatchObject({
+      state: 'stopped',
+      processAction: 'closed_agent_terminal'
+    })
   })
 
   it('does not adopt or stop a same-looking pane with a new process incarnation', async () => {
@@ -183,7 +226,7 @@ describe('orchestration worker recovery', () => {
 
   it('turns an interrupted stop into unknown after runtime restart', async () => {
     const { task, dispatch } = createWorker('previous_runtime')
-    db.beginWorkerStop(dispatch.id)
+    db.beginWorkerStop(dispatch.id, 'previous_runtime')
 
     await expect(
       call('orchestration.workerShow', { dispatch: dispatch.id })
@@ -212,7 +255,7 @@ describe('orchestration worker recovery', () => {
       }
     })
     db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', 'response lost')
-    db.beginWorkerStop(started.dispatch.id)
+    db.beginWorkerStop(started.dispatch.id, runtime.getRuntimeId())
     db.markWorkerStopUnknown(started.dispatch.id, 'stop response lost')
     vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
       environmentId: 'environment_windows',
