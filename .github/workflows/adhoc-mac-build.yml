@@ -1,16 +1,15 @@
-name: Adhoc macOS Dev Build
+name: Adhoc macOS + Windows Dev Build
 
-# Why: lets anyone cut a signed macOS build of an unlanded branch so the team can
-# actually run an experimental feature for a few days, instead of reasoning about
-# it from a diff. Hourly covers main; this covers everything that is not main yet.
+# Why: lets anyone cut installable macOS and Windows builds of a trusted repo ref
+# so the team can run an experimental feature instead of reasoning from a diff.
+# Hourly covers current main; this covers experiments and on-demand validation.
 #
-# Deliberately narrow scope, same trade as hourly:
-#   - macOS only. Other platforms keep using RC/stable.
+# Deliberately narrow scope:
+#   - macOS and Windows desktop installers. Linux keeps using RC/stable.
 #   - No tests, no lint, no e2e. PR CI and release-cut remain the gates.
-#   - Signed AND notarized, exactly like a release. macOS anchors a notarized
-#     app's TCC grants on identifier + team rather than on its cdhash, so those
-#     grants survive an update; an unnotarized build reads as a new client and
-#     silently loses file access under Documents/Desktop/Downloads.
+#   - macOS is signed and notarized so TCC grants survive updates.
+#   - Windows is unsigned; the published release notes explain the one-time
+#     SmartScreen/manual-install requirement.
 #
 # Artifacts publish to stablyai/orca-adhoc — separate from both orca and
 # orca-hourly. Separate from orca because the main repo's releases atom feed
@@ -310,7 +309,6 @@ jobs:
           (SmartScreen will warn about an unknown publisher). Every later switch,
           including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
-
 
       - name: Publish adhoc macOS artifacts
         uses: nick-fields/retry@v4
