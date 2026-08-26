@@ -108,12 +108,38 @@ or listed there with the reason its absence is safe. That test exists because
 #15749 shipped this gap: the relay tests injected a fake module through
 `__setWindowsProcessTreeLoaderForTests`, so nothing exercised the real require.
 
-The native fast path stays unavailable on relay hosts until we ship our own
-patched `.node` as a relay asset — the addon is N-API, so one binary per
-`RELAY_BUILD_PLATFORMS` Windows arch would load against whatever Node the remote
-runs, and `config/relay-assets/` already carries a shipped-with-the-relay file
-for node-pty. That is a packaging change, not a code change, and it is a real
-gap tracked separately.
+## Shipping the native reader to a relay anyway
+
+The scan is the floor, not the destination: it costs ~1.4 s and a `powershell.exe`
+where the addon costs ~57 ms. Release builds therefore compile the addon and ship
+it as an optional relay artifact.
+
+`config/scripts/build-windows-process-tree-relay-addon.mjs` builds it from the
+source pnpm has already patched, on a Windows runner, and refuses to run if
+either patch hunk is missing — the Spectre hunk fails loudly, but the
+1024-process hunk fails *silently*, so the source is checked rather than the
+install trusted. It also reads the PE machine field of the output, because a
+cross-build that quietly emitted host arch would ship a binary the target cannot
+load.
+
+Windows arm64 cross-compiles from the x64 runner — verified on real hardware,
+producing `IMAGE_FILE_MACHINE_ARM64` (0xaa64) against x64's 0x8664. It needs the
+optional *MSVC v143 ARM64 build tools* component; without it node-gyp fails with
+`MSB8020`, which is why the addon build runs before the long packaging step.
+`ORCA_REQUIRE_RELAY_NATIVE_ADDONS` is a per-arch list so a future arch can be
+added best-effort before it is promoted to required.
+
+`windows-process-table.ts` binds the bare addon directly rather than the package
+wrapper. That wrapper adds only a queue over `getProcessList`, and that queue is
+the wedge described above — it latches a module-global `requestInProgress` with
+no try/catch. This module already holds a single-flight and a deadline, so going
+straight to the addon drops the duplicate.
+
+The artifact is optional in `RELAY_ARTIFACTS`: hashed when present, so a relay
+carrying it never shares an immutable directory with one that does not, and
+never probed, because requiring a file only a Windows build machine can produce
+would make a correct relay read as MISSING and redeploy forever. A relay built
+on any other OS keeps using the scan.
 
 ## Why the package is patched
 
