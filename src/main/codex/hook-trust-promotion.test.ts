@@ -39,6 +39,10 @@ vi.mock('os', async (importOriginal) => {
   }
 })
 
+import {
+  restoreCodexTrustSessionsForTests,
+  stubCodexTrustSessionsForTests
+} from './hook-service-test-harness'
 import { CodexHookService } from './hook-service'
 
 let tmpHome: string
@@ -50,6 +54,7 @@ beforeEach(() => {
   userDataDir = mkdtempSync(join(tmpdir(), 'orca-codex-user-data-'))
   previousUserDataPath = process.env.ORCA_USER_DATA_PATH
   process.env.ORCA_USER_DATA_PATH = userDataDir
+  stubCodexTrustSessionsForTests()
   homedirMock.mockReturnValue(tmpHome)
   getPathMock.mockImplementation((name: string) => {
     if (name === 'userData') {
@@ -60,6 +65,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  restoreCodexTrustSessionsForTests()
   rmSync(tmpHome, { recursive: true, force: true })
   rmSync(userDataDir, { recursive: true, force: true })
   if (previousUserDataPath === undefined) {
