@@ -15,6 +15,7 @@ import {
 } from './terminal-linkifier-hover-reset-on-mouseleave'
 import { installTerminalLinkifierHoverResetOnWrite } from './terminal-linkifier-hover-reset-on-write'
 import { attachDomRendererFocusClassSync } from './pane-dom-focus-class-sync'
+import { attachDomBlockFill } from './terminal-dom-block-fill'
 import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-webgl-renderer'
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
@@ -99,6 +100,7 @@ export function openTerminal(pane: ManagedPaneInternal): void {
   pane.compositionHandler = installTerminalImeCandidateAnchor(terminal)
 
   pane.focusClassSyncCleanup = attachDomRendererFocusClassSync(terminal.element)
+  pane.domBlockFillCleanup = attachDomBlockFill(terminal)
 
   if (pane.gpuRenderingEnabled) {
     attachWebgl(pane)
@@ -188,6 +190,8 @@ export function disposePane(
   pane.paneDragCleanup = null
   pane.focusClassSyncCleanup?.()
   pane.focusClassSyncCleanup = null
+  pane.domBlockFillCleanup?.()
+  pane.domBlockFillCleanup = null
   pane.terminalScrollIntentDisposable?.dispose()
   pane.terminalScrollIntentDisposable = null
   pane.linkifierHoverResetDisposable?.dispose()

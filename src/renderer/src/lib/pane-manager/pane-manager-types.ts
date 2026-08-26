@@ -176,6 +176,8 @@ export type ManagedPaneInternal = {
   compositionHandler: (() => void) | null
   // Stored so disposePane() can remove DOM-renderer focus synchronization.
   focusClassSyncCleanup?: (() => void) | null
+  // GPU-off DOM renderer: fill uniform ▀/█ runs so OpenCode's composer is flush.
+  domBlockFillCleanup?: (() => void) | null
   // Stored so disposePane() can remove user-scroll intent listeners.
   terminalScrollIntentDisposable?: IDisposable | null
   // Stored so disposePane() can detach the streamed-output hover-cache reset
