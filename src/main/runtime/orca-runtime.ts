@@ -2002,6 +2002,8 @@ type RuntimePtyController = {
   }>
   write(ptyId: string, data: string): boolean
   writeWithSettlement?(ptyId: string, data: string): Promise<boolean>
+  /** Renderer-accepted keystrokes only (`writePtyInput`); orchestration pointer writes must not stamp this. */
+  lastUserInputAt?(ptyId: string): number | undefined
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */
@@ -3317,7 +3319,10 @@ export class OrcaRuntimeService {
       isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
       redriveMailbox: (mailboxHandle, reservedTypes) =>
         this.deliverPendingMessagesForHandle(mailboxHandle, reservedTypes),
-      writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data)
+      writePty: (ptyId, data) => this.writeOrchestrationPointerPty(ptyId, data),
+      lastUserInputAt: (ptyId) => this.ptyController?.lastUserInputAt?.(ptyId),
+      isOrcaWindowFocused: () => BrowserWindow.getFocusedWindow?.() != null,
+      now: () => performance.now()
     })
   private readonly orchestrationMailboxNotifications =
     new OrchestrationMailboxNotificationCoordinator<MessageWaiter>({

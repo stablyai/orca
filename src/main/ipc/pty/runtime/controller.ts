@@ -1,4 +1,5 @@
 import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { lastInputAtByPty } from '../delivery/visibility-state'
 import { claimRuntimePaneCreate, makePaneSpawnReservationKey } from '../pane/spawn-reservation'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
 import { spawnPtyFromRuntimeController } from './spawn'
@@ -41,6 +42,8 @@ export function installPtyRuntimeController(deps: PtyRuntimeControllerDeps): voi
     adoptStablePane,
     spawn: async (args) => spawnPtyFromRuntimeController(deps, args),
     write: (ptyId, data) => writePtyFromRuntimeController(ptyId, data),
+    // Why: renderer keystrokes only; orchestration pointer writes must not stamp this.
+    lastUserInputAt: (ptyId) => lastInputAtByPty.get(ptyId),
     probePtyLiveness: (ptyId) => probePtyLivenessFromRuntimeController(deps, ptyId),
     // Why: subscriber-driven ingestion for daemon sessions no renderer pane
     // ever attached. Local daemon sessions only — SSH panes have their own
