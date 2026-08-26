@@ -407,6 +407,96 @@ describe('resolveAgentForegroundProcess', () => {
     ).resolves.toEqual({ available: true, processName: null })
   })
 
+  it('reports a foreign anchor when its pid now runs an unrecognized command', async () => {
+    // Pid reuse inside the pane's job: the row proves a different process
+    // (command lines are immutable), so job membership must stop confirming it.
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockWindowsRows([
+      { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 999, ppid: 100, name: 'node.exe', commandLine: 'node server.js' }
+    ])
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        anchorProcessId: 999
+      })
+    ).resolves.toEqual({
+      available: true,
+      processName: 'powershell.exe',
+      anchorPidForeign: true
+    })
+  })
+
+  it('detects a foreign anchor even when the squatter is orphaned out of the descendant walk', async () => {
+    // The recycled pid's creator exited, so the row is not a ppid-descendant of
+    // the shell — but it can still be the job member holding the anchor pid.
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockWindowsRows([
+      { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 999, ppid: 500, name: 'node.exe', commandLine: 'node server.js' }
+    ])
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        anchorProcessId: 999
+      })
+    ).resolves.toEqual({
+      available: true,
+      processName: 'powershell.exe',
+      anchorPidForeign: true
+    })
+  })
+
+  it('flags an anchor recycled by a DIFFERENT agent as foreign', async () => {
+    // The squatter recognizes as an agent — just not the cached one.
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockWindowsRows([
+      { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 999, ppid: 500, name: 'node.exe', commandLine: 'node /usr/bin/codex' }
+    ])
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        anchorProcessId: 999,
+        anchorProcessName: 'claude'
+      })
+    ).resolves.toEqual({
+      available: true,
+      processName: 'powershell.exe',
+      anchorPidForeign: true
+    })
+  })
+
+  it('does not flag an anchor whose row still recognizes as the cached agent', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockWindowsRows([
+      { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 999, ppid: 500, name: 'node.exe', commandLine: 'node C:\\npm\\claude' }
+    ])
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        anchorProcessId: 999,
+        anchorProcessName: 'claude'
+      })
+    ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
+  })
+
+  it('treats a query-denied anchor row as inconclusive, never foreign', async () => {
+    // A denied query yields command === name; the agent may just be unreadable.
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockWindowsRows([
+      { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 999, ppid: 100, name: 'node.exe', commandLine: '' }
+    ])
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        anchorProcessId: 999
+      })
+    ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
+  })
+
   it('treats a Windows snapshot missing the requested shell as unavailable', async () => {
     Object.defineProperty(process, 'platform', { value: 'win32' })
     mockWindowsRows([
@@ -508,9 +598,39 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(
       resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
         fresh: true,
-        readWindowsConptyProcessIds: async () => new Set([100, 101])
+        readWindowsConsoleAttachedProcessIds: async () => new Set([100, 101])
       })
-    ).resolves.toEqual({ available: true, processName: 'droid' })
+    ).resolves.toEqual({
+      available: true,
+      processName: 'droid',
+      processId: 101
+    })
+  })
+
+  it('fails closed when console attachment cannot be read', async () => {
+    // The filter exists to DROP descendants that left the console. If it cannot
+    // tell which ones those are, publishing the unfiltered list would grant a
+    // detached process the pane's identity. #16419 briefly made this fall open
+    // and nothing caught it, because no test drove the null.
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    mockWindowsRows([
+      { pid: 200, ppid: 199, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 201, ppid: 200, name: 'droid.exe', commandLine: 'droid' },
+      { pid: 202, ppid: 200, name: 'agy.exe', commandLine: 'agy' }
+    ])
+
+    const reader = vi.fn(async () => null)
+
+    const resolution = await resolveAgentForegroundProcessWithAvailability(200, 'powershell.exe', {
+      fresh: true,
+      readWindowsConsoleAttachedProcessIds: reader
+    })
+
+    expect(reader).toHaveBeenCalledTimes(1)
+    // available:false is the fail-closed signal; the wrapper then substitutes
+    // the shell fallback rather than publishing an unverified agent identity.
+    expect(resolution.available).toBe(false)
+    expect(resolution.processName).toBe('powershell.exe')
   })
 
   it('recognizes a Windows shell-rooted agent when only one candidate matches the worktree path', async () => {
@@ -655,15 +775,19 @@ describe('resolveAgentForegroundProcess', () => {
         commandLine: 'droid'
       }
     ])
-    const readWindowsConptyProcessIds = vi.fn(async () => new Set([100, 101, 999]))
+    const readWindowsConsoleAttachedProcessIds = vi.fn(async () => new Set([100, 101, 999]))
 
     await expect(
       resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
         fresh: true,
-        readWindowsConptyProcessIds
+        readWindowsConsoleAttachedProcessIds
       })
-    ).resolves.toEqual({ available: true, processName: 'droid' })
-    expect(readWindowsConptyProcessIds).toHaveBeenCalledTimes(1)
+    ).resolves.toEqual({
+      available: true,
+      processName: 'droid',
+      processId: 101
+    })
+    expect(readWindowsConsoleAttachedProcessIds).toHaveBeenCalledTimes(1)
   })
 
   it('excludes a detached Windows Droid descendant from byte authority', async () => {
@@ -686,7 +810,7 @@ describe('resolveAgentForegroundProcess', () => {
     await expect(
       resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
         fresh: true,
-        readWindowsConptyProcessIds: async () => new Set([100, 999])
+        readWindowsConsoleAttachedProcessIds: async () => new Set([100, 999])
       })
     ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
   })
@@ -701,14 +825,14 @@ describe('resolveAgentForegroundProcess', () => {
         commandLine: 'powershell.exe'
       }
     ])
-    const readWindowsConptyProcessIds = vi.fn(async () => new Set([100, 999]))
+    const readWindowsConsoleAttachedProcessIds = vi.fn(async () => new Set([100, 999]))
 
     await expect(
       resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
         fresh: true,
-        readWindowsConptyProcessIds
+        readWindowsConsoleAttachedProcessIds
       })
     ).resolves.toEqual({ available: true, processName: 'powershell.exe' })
-    expect(readWindowsConptyProcessIds).not.toHaveBeenCalled()
+    expect(readWindowsConsoleAttachedProcessIds).not.toHaveBeenCalled()
   })
 })

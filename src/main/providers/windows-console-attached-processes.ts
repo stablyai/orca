@@ -4,7 +4,7 @@ const CONPTY_PROCESS_LIST_TIMEOUT_MS = 3_000
 
 type ProcessListMessage = { consoleProcessList?: unknown }
 
-type WindowsConptyMembershipDeps = {
+type WindowsConsoleAttachedProcessDeps = {
   forkProcess?: typeof fork
   resolveAgentPath?: () => string
   timeoutMs?: number
@@ -15,12 +15,25 @@ function resolveNodePtyConsoleListAgent(): string {
 }
 
 /**
- * Returns normalized console membership, or null when the probe is unavailable.
- * A root-only set proves the shell is alone because successful raw results include the helper.
+ * Processes ATTACHED TO THIS PANE'S CONSOLE, or null when unavailable.
+ *
+ * Distinct from job membership on purpose. `GetConsoleProcessList` must be
+ * called from a process attached to that console, and a process can hold only
+ * one console at a time -- which is why node-pty answers it from a separate
+ * process, and why this still forks.
+ *
+ * Only the candidate FILTER may use this. That filter exists to drop a
+ * descendant which detached from the console (`Start-Process`, a GUI child), and
+ * the job object deliberately still contains those, so the job cannot answer it
+ * -- see docs/windows-wsl-root-cause-plan.html, "Use B".
+ *
+ * This is not the fork storm in #10857: it runs only when a recognized agent
+ * candidate already exists, not on every foreground poll. Bounding it to one
+ * pooled, supervised helper is the remaining half of that fix.
  */
-export function readWindowsConptyProcessIds(
+export function readWindowsConsoleAttachedProcessIds(
   rootPid: number,
-  deps: WindowsConptyMembershipDeps = {}
+  deps: WindowsConsoleAttachedProcessDeps = {}
 ): Promise<ReadonlySet<number> | null> {
   if (!Number.isSafeInteger(rootPid) || rootPid <= 0) {
     return Promise.resolve(null)

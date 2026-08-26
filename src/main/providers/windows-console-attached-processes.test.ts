@@ -1,6 +1,15 @@
+/*
+ * Coverage for the FORKING console-attachment reader.
+ *
+ * These assertions moved here with the code when the job-object reader took
+ * over the polling path (#16419). They cover the module that caused #10857 --
+ * the bounded timeout, the single kill, spawn errors, malformed messages and
+ * helper-pid removal -- so none of it is left untested just because the file
+ * it used to live in now answers a different question.
+ */
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 
 function forkWith(event: 'message' | 'error' | 'none', value?: unknown, pid?: number) {
   const child = new EventEmitter() as EventEmitter & {
@@ -24,12 +33,12 @@ function forkWith(event: 'message' | 'error' | 'none', value?: unknown, pid?: nu
   return { child, forkProcess: forkProcess as never }
 }
 
-describe('readWindowsConptyProcessIds', () => {
+describe('readWindowsConsoleAttachedProcessIds', () => {
   it('returns exact console membership from the fixed node-pty helper', async () => {
     const { forkProcess } = forkWith('message', [999, 101, 202, 303], 999)
 
     await expect(
-      readWindowsConptyProcessIds(101, {
+      readWindowsConsoleAttachedProcessIds(101, {
         forkProcess,
         resolveAgentPath: () => '/fixed/node-pty/conpty_console_list_agent.js'
       })
@@ -49,31 +58,33 @@ describe('readWindowsConptyProcessIds', () => {
     ['unavailable helper pid', [101, 202], undefined]
   ])('fails closed for %s', async (_label, processIds, helperPid) => {
     const { forkProcess } = forkWith('message', processIds, helperPid)
-    await expect(readWindowsConptyProcessIds(101, { forkProcess })).resolves.toBeNull()
+    await expect(readWindowsConsoleAttachedProcessIds(101, { forkProcess })).resolves.toBeNull()
   })
 
   it('returns root-only membership when only the helper and shell are attached', async () => {
     const { forkProcess } = forkWith('message', [999, 101], 999)
-    await expect(readWindowsConptyProcessIds(101, { forkProcess })).resolves.toEqual(new Set([101]))
+    await expect(readWindowsConsoleAttachedProcessIds(101, { forkProcess })).resolves.toEqual(
+      new Set([101])
+    )
   })
 
   it('reports membership excluding the helper when a real child is attached', async () => {
     const { forkProcess } = forkWith('message', [999, 101, 202], 999)
-    await expect(readWindowsConptyProcessIds(101, { forkProcess })).resolves.toEqual(
+    await expect(readWindowsConsoleAttachedProcessIds(101, { forkProcess })).resolves.toEqual(
       new Set([101, 202])
     )
   })
 
   it('handles helper spawn errors without an unhandled child error', async () => {
     const { forkProcess } = forkWith('error')
-    await expect(readWindowsConptyProcessIds(101, { forkProcess })).resolves.toBeNull()
+    await expect(readWindowsConsoleAttachedProcessIds(101, { forkProcess })).resolves.toBeNull()
   })
 
   it('kills a silent helper at the bounded timeout', async () => {
     vi.useFakeTimers()
     try {
       const { child, forkProcess } = forkWith('none')
-      const result = readWindowsConptyProcessIds(101, { forkProcess, timeoutMs: 10 })
+      const result = readWindowsConsoleAttachedProcessIds(101, { forkProcess, timeoutMs: 10 })
       await vi.advanceTimersByTimeAsync(10)
       await expect(result).resolves.toBeNull()
       expect(child.kill).toHaveBeenCalledTimes(1)
@@ -89,7 +100,7 @@ describe('readWindowsConptyProcessIds', () => {
       child.kill.mockImplementation(() => {
         queueMicrotask(() => child.emit('error', new Error('kill failed')))
       })
-      const result = readWindowsConptyProcessIds(101, { forkProcess, timeoutMs: 10 })
+      const result = readWindowsConsoleAttachedProcessIds(101, { forkProcess, timeoutMs: 10 })
       await vi.advanceTimersByTimeAsync(10)
       await expect(result).resolves.toBeNull()
       expect(child.listenerCount('error')).toBe(0)

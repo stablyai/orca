@@ -64,9 +64,13 @@ import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
+import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { terminatePtyJob } from '../windows/windows-pty-job'
-import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
+import {
+  canRevalidateCachedAgentWithoutScan,
+  judgeCachedAgentJobEvidence
+} from './windows-cached-agent-revalidation'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
@@ -120,7 +124,12 @@ const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
-const ptyLastRecognizedForeground = new Map<string, string>()
+// `pid` anchors the identity to the row that proved it (null when ambiguous);
+// `at` is the last confirmation, so unanchored job evidence -- only a superset -- cannot hold it forever.
+const ptyLastRecognizedForeground = new Map<
+  string,
+  { name: string; pid: number | null; at: number }
+>()
 const ptyTerminalHandle = new Map<string, string>()
 const ptyWorktreeId = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
@@ -1406,24 +1415,47 @@ export class LocalPtyProvider implements IPtyProvider {
       proc.process || null,
       ptyShellName.get(id)
     )
-    const cachedAgent = ptyLastRecognizedForeground.get(id) ?? null
-    let consoleMembershipUnavailable = false
-    // Why: console membership preserves a live cached agent without the whole-table scan (incomplete under Windows load).
+    const cachedEntry = ptyLastRecognizedForeground.get(id)
+    const cachedAgent = cachedEntry?.name ?? null
+    let paneMembershipUnavailable = false
+    let cachedAgentAliveInJob = false
+    // Why: job membership preserves a live cached agent without the whole-table
+    // scan (incomplete under Windows load). Job, not console: this asks "is
+    // anything besides the shell alive?", which needs no console attachment and
+    // so needs no forked helper (#10857).
     if (
       process.platform === 'win32' &&
-      canConfirmAgentFromConsolePresence(cachedAgent, fallbackProcess)
+      canRevalidateCachedAgentWithoutScan(cachedAgent, fallbackProcess)
     ) {
       try {
-        const consoleProcessIds = await readWindowsConptyProcessIds(proc.pid)
+        const paneProcessIds = readWindowsPtyJobProcessIds(proc)
         if (ptyProcesses.get(id) !== proc) {
           return null
         }
-        if (consoleProcessIds !== null && consoleProcessIds.size > 1 && cachedAgent !== null) {
+        const verdict = judgeCachedAgentJobEvidence({
+          jobProcessIds: paneProcessIds,
+          shellPid: proc.pid,
+          anchorProcessId: cachedEntry?.pid ?? null,
+          identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)
+        })
+        if (verdict === 'confirmed' || verdict === 'unproven') {
           return cachedAgent
         }
-        consoleMembershipUnavailable = consoleProcessIds === null
+        if (verdict === 'exited') {
+          // The shell stands alone in a complete, inescapable job list: no
+          // successor is possible, so the identity retires before the scan.
+          ptyLastRecognizedForeground.delete(id)
+        } else if (verdict === 'anchor-exited' && cachedEntry) {
+          // The recognized process died but another member remains -- a
+          // leftover, or a restarted successor. Keep the name as unanchored,
+          // age-bounded evidence and let this cycle's scan decide: deleting
+          // here made a degraded scan read a mid-restart agent as an exit.
+          ptyLastRecognizedForeground.set(id, { ...cachedEntry, pid: null })
+        }
+        cachedAgentAliveInJob = verdict === 'recheck'
+        paneMembershipUnavailable = verdict === 'unavailable'
       } catch {
-        consoleMembershipUnavailable = true
+        paneMembershipUnavailable = true
       }
     }
     try {
@@ -1431,7 +1463,10 @@ export class LocalPtyProvider implements IPtyProvider {
         proc.pid,
         fallbackProcess,
         {
-          contextPaths: ptyAgentForegroundContextPaths.get(id)
+          contextPaths: ptyAgentForegroundContextPaths.get(id),
+          ...(cachedEntry?.pid != null
+            ? { anchorProcessId: cachedEntry.pid, anchorProcessName: cachedEntry.name }
+            : {})
         }
       )
       // Why: the scan can outlive PTY teardown/id reuse; stale results must not resurrect cache for a foreign id.
@@ -1439,20 +1474,40 @@ export class LocalPtyProvider implements IPtyProvider {
         return null
       }
       // Why: a degraded scan reporting shell-as-foreground fires a false "agent done"; keep last recognized agent instead.
-      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id) ?? null
+      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id)?.name ?? null
       const resolvedAgent = resolution.processName
         ? recognizeAgentProcessFromCommandLine(resolution.processName)
         : null
-      // Why: incomplete snapshot + unavailable console probe isn't exit proof; only shell-only membership may clear the cache.
-      const stable = resolveStableForegroundProcess(
-        consoleMembershipUnavailable && resolvedAgent === null
+      // A recycled anchor pid keeps job membership truthful but the identity
+      // dead; the scan proving the pid now runs a non-agent settles it.
+      const anchorContradicted = resolution.anchorPidForeign === true
+      // Why: incomplete snapshot + unavailable job read isn't exit proof; and an
+      // anchor pid still alive in the job outranks a snapshot that lost its row.
+      const stableResolution =
+        (paneMembershipUnavailable || cachedAgentAliveInJob) &&
+        !anchorContradicted &&
+        resolvedAgent === null
           ? { ...resolution, available: false }
-          : resolution,
-        lastRecognizedAgent
-      )
-      if (stable.lastRecognizedAgent) {
-        ptyLastRecognizedForeground.set(id, stable.lastRecognizedAgent)
-      } else {
+          : resolution
+      const stable = resolveStableForegroundProcess(stableResolution, lastRecognizedAgent)
+      if (stable.lastRecognizedAgent && stableResolution.available) {
+        // Only a positive recognition restarts the age bound.
+        ptyLastRecognizedForeground.set(id, {
+          name: stable.lastRecognizedAgent,
+          pid:
+            stable.lastRecognizedAgent === resolution.processName
+              ? (resolution.processId ?? null)
+              : null,
+          at: Date.now()
+        })
+      } else if (stable.lastRecognizedAgent && cachedAgentAliveInJob && !anchorContradicted) {
+        // The anchor pid in the job is proof of life; restamp so the
+        // short-circuit resumes instead of scanning on every call.
+        const entry = ptyLastRecognizedForeground.get(id)
+        if (entry) {
+          ptyLastRecognizedForeground.set(id, { ...entry, at: Date.now() })
+        }
+      } else if (!stable.lastRecognizedAgent) {
         ptyLastRecognizedForeground.delete(id)
       }
       return stable.processName
@@ -1461,7 +1516,7 @@ export class LocalPtyProvider implements IPtyProvider {
         return null
       }
       // Why: an inspection error is a degraded read; fall back to last recognized agent (null reads as an exit).
-      return ptyLastRecognizedForeground.get(id) ?? null
+      return ptyLastRecognizedForeground.get(id)?.name ?? null
     }
   }
 
@@ -1480,7 +1535,8 @@ export class LocalPtyProvider implements IPtyProvider {
           ...(process.platform === 'win32'
             ? {
                 forceProcessScan: true,
-                readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+                readWindowsConsoleAttachedProcessIds: () =>
+                  readWindowsConsoleAttachedProcessIds(proc.pid)
               }
             : {})
         }
