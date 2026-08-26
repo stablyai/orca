@@ -6,7 +6,7 @@ import {
   type GitLineStats
 } from '../../../shared/git-uncommitted-line-stats'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitStatusReadOptionsForWorktree } from '../git-runtime-options'
+import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 
 async function runNumstat(
@@ -26,7 +26,7 @@ async function runNumstat(
         '-M'
       ],
       {
-        ...gitStatusReadOptionsForWorktree(worktreePath, options),
+        ...gitReadOptionsForWorktree(worktreePath, options),
         env: gitOptionalLocksDisabledEnv()
       }
     )

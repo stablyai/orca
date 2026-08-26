@@ -15,7 +15,7 @@ import {
 import { gitOptionalLocksDisabledEnv, gitStreamStdout } from '../runner'
 import { findExistingWorktreeSymlinkPaths } from '../worktree-symlink-detection'
 import type { GetStatusOptions } from './get-status-options'
-import { gitDiffReadDedupe, statusReadLeaseOwner } from './git-read-cache-invalidation'
+import { statusReadLeaseOwner } from './git-read-cache-invalidation'
 import { detectConflictOperation } from './git-conflict-operation'
 import { parseUnmergedEntry } from './status-conflict-entries'
 import { getEffectiveUpstreamStatusCacheKey } from './effective-upstream-status-cache'
@@ -37,8 +37,10 @@ export async function getStatus(
   worktreePath: string,
   options: GetStatusOptions = {}
 ): Promise<GitStatusResult> {
-  gitDiffReadDedupe.clear()
-  // Why: dedupe only concurrent identical reads; after settle, callers must run a fresh read.
+  // Why nothing is cleared here: a status poll is a read. Dropping the in-flight diff entry
+  // mid-read only made a concurrent identical request start duplicate git work, and the
+  // settled diff cache is keyed on stamped git state, which a read cannot change anyway.
+  // Mutations invalidate both, through invalidateGitReadCaches.
   const cacheKey = getStatusReadKey(worktreePath, options)
   return statusReadLeaseOwner.lease(cacheKey, options.signal, (sharedSignal) =>
     runGetStatus(worktreePath, { ...options, signal: sharedSignal })

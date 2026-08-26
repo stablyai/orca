@@ -211,6 +211,7 @@ import {
 } from './startup/single-instance-lock'
 import { startEventLoopStallProbe } from './startup/event-loop-stall-probe'
 import { startMainThreadChurnProbe } from './diagnostics/main-thread-churn-probe'
+import { settledDiffCache } from './git/source-control/git-read-cache-invalidation'
 import { parseSkillShareId } from '../shared/skill-share-link'
 import { SkillShareDeepLinkState } from './startup/skill-share-deep-link-state'
 import {
@@ -740,7 +741,9 @@ if (startupDiagnosticsEnabled) {
   startEventLoopStallProbe()
 }
 // Self-gated on ORCA_MAIN_THREAD_DIAGNOSTICS; runs the whole session to catch steady-state churn (issue #7576).
-startMainThreadChurnProbe()
+// Why the diff-cache counters ride along: a stamp the filesystem reports unstably makes the cache
+// look exactly like a cold start, and only the hit/miss/unprovable split tells the two apart.
+startMainThreadChurnProbe({ extraStats: () => ({ diffCache: settledDiffCache.stats() }) })
 
 function focusExistingWindow(): void {
   focusExistingMainWindow({
