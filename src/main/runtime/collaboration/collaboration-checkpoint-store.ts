@@ -65,6 +65,9 @@ export function prepareCollaborationCheckpoint(
       body: row.body
     }
   })
+  if (entries.length > 0) {
+    db.markAsDelivered(entries.map((entry) => entry.messageId))
+  }
 
   return { entries, filteredMessageIds: filtered }
 }
@@ -92,6 +95,12 @@ export function ackCollaborationCheckpoint(
       throw new OrchestrationError(
         'invalid_argument',
         `message ${messageIds[i]} has no valid collaboration payload`
+      )
+    }
+    if (row.delivered_at === null) {
+      throw new OrchestrationError(
+        'invalid_argument',
+        `message ${messageIds[i]} was not delivered by collaboration checkpoint`
       )
     }
   }
