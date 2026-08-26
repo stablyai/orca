@@ -37,16 +37,59 @@ Measured on Windows 11 with 1050 processes (p50 / p95):
 | + memory + command line | 30.6 ms | 33.7 ms |
 | `Get-CimInstance` via PowerShell | 706 ms | 723 ms |
 
+Those CIM numbers are from a 1050-process host. The scan scales with process
+count: on a 1486-process Windows SSH host it measured **1.36 s** and produced
+**4.8 MiB** of JSON, against the fallback's 3 s and 8 MiB limits. Both limits
+match the pre-#15749 reader, so relay hosts are at parity rather than newly at
+risk — but the headroom is roughly 2x on time and 1.7x on bytes, not the ~4x the
+706 ms figure implies. On overflow the output is truncated, the JSON fails to
+parse, and the read rejects, so a busy host loses the table rather than
+receiving a wrong one.
+
 ## The relay has no binding, and falls back
 
 Relay deployment installs only `node-pty` and `@parcel/watcher` on the remote
 host (`RELAY_NATIVE_DEPS` in `src/main/ssh/ssh-relay-deploy.ts`), so a Windows
 machine used as an SSH host has no `@vscode/windows-process-tree` at all. It is
-not added there on purpose: the package ships no prebuilds, so installing it
-would put a from-source `node-gyp` build — MSVC, the SDK, and the same
-Spectre-mitigated libraries described below — on the critical path of every
-Windows relay deploy, where today none is needed. pnpm patches also do not cross
-SSH, so the remote would get the unpatched 1024-process cap regardless.
+not added there on purpose. Both ways of installing it fail, and both were
+checked on a real Windows SSH host with 1486 processes:
+
+**Installing it normally rebuilds from source, and that build fails.** The
+tarball carries a `binding.gyp`, so npm runs `node-gyp rebuild` regardless of
+what is already compiled inside it. On a host that *already had* MSVC Build
+Tools 2022 installed, that build still failed:
+
+```
+error MSB8040: Spectre-mitigated libraries are required for this project.
+```
+
+That is the requirement the `binding.gyp` hunk of our patch deletes, and the
+patch cannot reach a remote host — pnpm patches do not cross SSH. Relay deploy
+would then break outright rather than degrade: `installNativeDeps` throws on
+failure, and the toolchain-skip retry is gated to Linux.
+
+**Skipping the build and using the shipped binary returns a truncated table.**
+Contrary to what this file used to claim, the published 0.8.0 tarball *does*
+contain `build/Release/windows_process_tree.node` — an MSVC build directory that
+looks accidentally published (`.obj` and `.tlog` files ship with it). It is
+N-API, so it loads on any modern Node. But it predates our patch and still has
+the `process_count < 1024` cap, so on that 1486-process host:
+
+```
+LOADED OK
+rows=1024
+selfPid=21964 present=false
+```
+
+Exactly 1024 rows, with the querying process itself among the missing. The
+self-presence guard rejects that, so the fallback engages anyway — but only on
+hosts busy enough to cross the cap. That is worse than no binding at all: it
+works on a quiet machine and fails silently under load, which is precisely the
+shape of bug that survives testing.
+
+So the constraint is not that no binary exists to ship. It is that the only
+binary available to ship is the broken one, and building the good one needs a
+toolchain the remote does not have.
 
 Instead, `windows-process-table.ts` falls back to
 `readWindowsProcessRowsWithCim` (`windows-process-table-cim-scan.ts`), the
@@ -65,8 +108,12 @@ or listed there with the reason its absence is safe. That test exists because
 #15749 shipped this gap: the relay tests injected a fake module through
 `__setWindowsProcessTreeLoaderForTests`, so nothing exercised the real require.
 
-The native fast path stays unavailable on relay hosts until the toolchain or a
-prebuild story is solved. That is a real gap, tracked separately.
+The native fast path stays unavailable on relay hosts until we ship our own
+patched `.node` as a relay asset — the addon is N-API, so one binary per
+`RELAY_BUILD_PLATFORMS` Windows arch would load against whatever Node the remote
+runs, and `config/relay-assets/` already carries a shipped-with-the-relay file
+for node-pty. That is a packaging change, not a code change, and it is a real
+gap tracked separately.
 
 ## Why the package is patched
 
