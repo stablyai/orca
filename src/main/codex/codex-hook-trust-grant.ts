@@ -41,7 +41,17 @@ import { isCodexStateDbBackfillPending } from './codex-state-db'
 // The legacy lane remains available while a short, host-scoped cooldown runs.
 export const CODEX_TRUST_GRANT_TRANSIENT_RETRY_INTERVAL_MS = 5 * 60_000
 
-/** Ops escape hatch (not a setting): forces the unchanged fallback lane. */
+/**
+ * Ops escape hatch (not a setting): forces the unchanged fallback lane for the
+ * *managed* grant only.
+ *
+ * Scope, because the name reads broader than it is: the real-home rebase
+ * (`mutateRealHomeHooksPreservingUserTrust`) still runs its own inspect/repair
+ * app-server sessions when Orca's insertion shifts a user's hook positions, and
+ * does not read this flag. That is unchanged from before the grant went async —
+ * those sessions simply used to block the main thread instead. Widening the flag
+ * to cover the rebase is a follow-up, not something this constant already does.
+ */
 const DISABLE_ENV_FLAG = 'ORCA_DISABLE_CODEX_TRUST_RPC'
 
 export type { CodexManagedTrustGrantPlan }
