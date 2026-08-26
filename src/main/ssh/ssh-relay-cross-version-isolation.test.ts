@@ -196,6 +196,8 @@ describe('cross-version isolation', () => {
     // — never a write, mkdir, chmod, touch, rm, node launch, or socket poll.
     // This prevents a future refactor that accidentally writes to the v1 dir
     // (e.g. shared install-complete, upload over symlink) from passing.
+    // The one non-probe exception is the orphan-retire signal (#13614): a
+    // SIGTERM addressed to the daemon process, which never writes the v1 dir.
     const v1Refs = allCmds.filter((c) => c.includes('relay-0.1.0+111111111111'))
     for (const cmd of v1Refs) {
       const isReadOnlyProbe =
@@ -205,7 +207,8 @@ describe('cross-version isolation', () => {
         /\btest -f\b/.test(cmd) ||
         /\btest -S\b/.test(cmd) ||
         /\bfor f in .*\.sock\b/.test(cmd)
-      expect(isReadOnlyProbe, `unexpected v1 reference: ${cmd}`).toBe(true)
+      const isOrphanRetireSignal = cmd.includes('kill -TERM') && cmd.includes('command -v lsof')
+      expect(isReadOnlyProbe || isOrphanRetireSignal, `unexpected v1 reference: ${cmd}`).toBe(true)
     }
   })
 })

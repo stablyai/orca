@@ -38,6 +38,7 @@ import {
 } from './ssh-remote-platform'
 import { windowsRelayPipePathsForSocketName } from './ssh-relay-endpoints'
 import { isUnconfirmedSshCommandTermination } from './ssh-relay-exec-command'
+import { tryRetireOrphanedRelay } from './ssh-relay-retire'
 import { isSshSessionLimitError } from './ssh-session-limit-error'
 
 // Single source of truth for GC and the version-dir parser; matches both the new and legacy relay-dir layouts.
@@ -323,7 +324,13 @@ async function isCandidateSafeToRemove(
 
   const sockAlive = await hasLiveRelaySocket(conn, dir, host, options)
   if (sockAlive) {
-    return false
+    // Why: a live socket in a superseded version dir is the #13614 upgrade orphan —
+    // the current daemon already owns its own versioned path, so retire the old one
+    // (gracefully, never with a connected client) instead of skipping GC forever.
+    const retired = await tryRetireOrphanedRelay(conn, dir, host)
+    if (!retired || (await hasLiveRelaySocket(conn, dir, host, options))) {
+      return false
+    }
   }
   return true
 }

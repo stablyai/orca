@@ -751,13 +751,15 @@ describe('gcOldRelayVersions', () => {
       .mockResolvedValueOnce('OPEN')
       .mockResolvedValueOnce('COMPLETE')
       .mockRejectedValueOnce(new Error('liveness probe failed'))
+      .mockResolvedValueOnce('KEEP')
       .mockResolvedValueOnce('OPEN')
       .mockResolvedValueOnce('COMPLETE')
       .mockResolvedValueOnce('INCONCLUSIVE')
+      .mockResolvedValueOnce('KEEP')
 
     await gcOldRelayVersions(conn, '/home/u', '/home/u/.orca-remote/relay-0.1.0+bbb')
 
-    expect(mockExec).toHaveBeenCalledTimes(7)
+    expect(mockExec).toHaveBeenCalledTimes(9)
   })
 
   it('probes Windows GC liveness by connecting to named pipes, not process command lines', async () => {
