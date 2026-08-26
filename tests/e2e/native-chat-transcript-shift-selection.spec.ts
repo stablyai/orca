@@ -12,6 +12,8 @@ const FIRST = 'Alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha alpha
 const MIDDLE = 'Bravo bravo bravo bravo bravo bravo bravo bravo bravo bravo bravo.'
 const LAST = 'Charlie charlie charlie charlie charlie charlie charlie charlie.'
 
+/** Turns on the experimental native chat view and mirrors the new settings into
+ *  the renderer store, so the pane can be toggled to chat without a restart. */
 async function enableNativeChatSetting(page: Page): Promise<void> {
   await page.evaluate(async () => {
     const nextSettings = await window.api.settings.set({ experimentalNativeChat: true })
@@ -19,6 +21,10 @@ async function enableNativeChatSetting(page: Page): Promise<void> {
   })
 }
 
+/** Points the pane at a finished agent session backed by `transcriptPath`. The
+ *  status is `idle` on purpose: a settled transcript keeps the selection test
+ *  free of streaming re-renders, so a lost selection can only come from pointer
+ *  handling. */
 async function seedIdleStatus(
   page: Page,
   args: { paneKey: string; worktreeId: string; sessionId: string; transcriptPath: string }
@@ -37,6 +43,8 @@ async function seedIdleStatus(
   }, args)
 }
 
+/** Flips the unified terminal tab into chat view, which is what portals the
+ *  native chat overlay into the terminal pane container. */
 async function toggleTerminalTabToChatView(
   page: Page,
   args: { tabId: string; worktreeId: string }
@@ -57,6 +65,10 @@ async function toggleTerminalTabToChatView(
   }, args)
 }
 
+/** A settled transcript whose three assistant turns are visually distinct
+ *  (FIRST / MIDDLE / LAST). The middle turn is the assertion target: it can only
+ *  appear in the selection if shift-click extended across it rather than
+ *  starting a new selection. */
 function transcript(sessionId: string): string {
   const base = new Date()
   const lines = [

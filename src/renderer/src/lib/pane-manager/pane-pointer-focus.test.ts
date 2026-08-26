@@ -39,6 +39,9 @@ describe('shouldFocusTerminalFromPanePointerDown', () => {
 })
 
 describe('shouldFocusTerminalFromPanePointerDown against real pane DOM', () => {
+  /** The real pane DOM shape: an xterm instance with its hidden helper textarea,
+   *  plus a sibling overlay portaled in beside it. `overlayAttributes` is where
+   *  the `data-pane-prevent-terminal-focus` opt-out is applied or omitted. */
   function paneContainer(overlayAttributes: string): HTMLElement {
     const container = document.createElement('div')
     container.innerHTML = `
