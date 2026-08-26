@@ -27,6 +27,7 @@ describe('resolveNestedWorkerMaxDepth', () => {
     ['fractional', 1.5],
     ['NaN', Number.NaN],
     ['Infinity', Number.POSITIVE_INFINITY],
+    ['unsafe integer', Number.MAX_SAFE_INTEGER + 1],
     ['null', null]
   ])('falls back to the default for %s', (_label, value) => {
     expect(resolveNestedWorkerMaxDepth({ nestedWorkerMaxDepth: value as unknown as number })).toBe(

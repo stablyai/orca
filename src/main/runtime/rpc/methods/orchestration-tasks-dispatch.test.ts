@@ -433,6 +433,30 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
+    it('dry-run previews the same sub-dispatch section as a real dispatch', async () => {
+      setup()
+      vi.spyOn(runtime, 'getNestedWorkerMaxDepth').mockReturnValue(2)
+      const task = db.createTask({ spec: 'work' })
+
+      const preview = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        dryRun: true,
+        from: 'term_coord'
+      })) as { preamble: string }
+      const dispatched = (await call('orchestration.dispatch', {
+        task: task.id,
+        to: 'term_a',
+        returnPreamble: true,
+        from: 'term_coord'
+      })) as { preamble: string }
+
+      const section = (preamble: string) =>
+        preamble.match(/=== SUB-DISPATCH ===[\s\S]*?(?=\n=== TASK ===)/)?.[0]
+      expect(section(preview.preamble)).toBeDefined()
+      expect(section(preview.preamble)).toBe(section(dispatched.preamble))
+    })
+
     it('returnPreamble includes preamble in the response', async () => {
       setup()
       const task = db.createTask({ spec: 'work' })

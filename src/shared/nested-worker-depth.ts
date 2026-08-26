@@ -23,11 +23,11 @@ export function nestedWorkerDepthExceededMessage(childDepth: number, maxDepth: n
 
 export const NESTED_WORKER_DEPTH_EXCEEDED_NEXT_STEPS: readonly string[] = [
   'Do the work in this terminal instead of dispatching a sub-worker.',
-  'To allow deeper nesting, open Settings → Agents in the Orca desktop app and raise "Nested worker depth".'
+  'To allow deeper nesting, open Settings → Orchestration in the Orca desktop app and raise "Nested worker depth".'
 ]
 
 /**
- * Clamp to a usable integer. Anything that is not a whole number >= 1 falls back
+ * Clamp to a usable integer. Anything that is not a safe whole number >= 1 falls back
  * to the default rather than disabling the fence: a malformed setting must not
  * be a way to get unlimited nesting.
  */
@@ -35,7 +35,7 @@ export function resolveNestedWorkerMaxDepth(
   settings: Pick<GlobalSettings, 'nestedWorkerMaxDepth'> | null | undefined
 ): number {
   const raw = settings?.nestedWorkerMaxDepth
-  if (typeof raw !== 'number' || !Number.isInteger(raw) || raw < 1) {
+  if (typeof raw !== 'number' || !Number.isSafeInteger(raw) || raw < 1) {
     return NESTED_WORKER_MAX_DEPTH_DEFAULT
   }
   return raw

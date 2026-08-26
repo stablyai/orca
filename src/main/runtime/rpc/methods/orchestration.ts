@@ -1618,9 +1618,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
       // Why: dry-run previews the preamble without mutating state, so it skips the ready-status check and uses a placeholder dispatchId.
       if (params.dryRun) {
+        const maxDepth = runtime.getNestedWorkerMaxDepth()
+        const previewDepth = db.resolveChildDispatchDepth(
+          resolveDispatchCreator(runtime, params.from),
+          maxDepth
+        )
         const preamble = buildDispatchPreamble({
           taskId: task.id,
           dispatchId: 'ctx_dryrun',
+          canDispatchSubWorkers: previewDepth < maxDepth,
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle: params.to ?? 'worker',
@@ -1685,6 +1691,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
       const preamble = buildDispatchPreamble({
         taskId: task.id,
         dispatchId: ctx.id,
+        canDispatchSubWorkers: ctx.depth < runtime.getNestedWorkerMaxDepth(),
         taskSpec: task.spec,
         coordinatorHandle: params.from ?? 'coordinator',
         workerHandle: to,
@@ -1733,6 +1740,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
           taskId: task.id,
           // Why: use the real ctx.id when present so the preview matches what was injected; placeholder when no dispatch has occurred yet.
           dispatchId: ctx?.id ?? 'ctx_preview',
+          canDispatchSubWorkers: (ctx?.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
           taskSpec: task.spec,
           coordinatorHandle: params.from ?? 'coordinator',
           workerHandle,

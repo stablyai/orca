@@ -234,6 +234,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
 
         failedStage = 'dispatch_input'
         const preamble = buildDispatchPreamble({
+          canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,
           dispatchId: started.dispatch.id,
           taskSpec: task.spec,

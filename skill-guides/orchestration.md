@@ -182,7 +182,7 @@ A dispatched worker normally cannot dispatch sub-workers. Attempting it fails wi
 `nested_worker_depth_exceeded` and a message telling the worker to complete the task
 itself. Do that — do not try to route around it.
 
-The limit is a number, not an on/off switch. `Settings -> Agents -> Nested worker depth`
+The limit is a number, not an on/off switch. `Settings -> Orchestration -> Nested worker depth`
 sets how many generations are allowed:
 
 - `1` (default): a coordinator dispatches workers; those workers do not dispatch.
