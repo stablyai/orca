@@ -1,5 +1,9 @@
 import { getDefaultWorkspaceSession } from './constants'
-import type { RemoteWorkspaceSession, RemoteWorkspaceTerminalTab } from './remote-workspace-types'
+import type {
+  RemoteClosedTabTombstone,
+  RemoteWorkspaceSession,
+  RemoteWorkspaceTerminalTab
+} from './remote-workspace-types'
 import type { TerminalTab } from './terminal-tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { splitWorktreeId } from './worktree/id'
@@ -109,6 +113,19 @@ export function exportRemoteWorkspaceSession(
     }
   }
 
+  const closedTabTombstonesByTabId: Record<string, RemoteClosedTabTombstone> = {}
+  for (const [tabId, tombstone] of Object.entries(
+    session.closedTerminalTabTombstonesByTabId ?? {}
+  )) {
+    if (!options.isTargetWorktree(tombstone.worktreeId)) {
+      continue
+    }
+    const worktreePath = worktreePathFromId(tombstone.worktreeId)
+    if (worktreePath) {
+      closedTabTombstonesByTabId[tabId] = { closedAt: tombstone.closedAt, worktreePath }
+    }
+  }
+
   return {
     activeWorktreePath,
     activeTabId,
@@ -131,7 +148,9 @@ export function exportRemoteWorkspaceSession(
         )
       : undefined,
     lastVisitedAtByWorktreePath,
-    defaultTerminalTabsAppliedByWorktreePath
+    defaultTerminalTabsAppliedByWorktreePath,
+    closedTabTombstonesByTabId:
+      Object.keys(closedTabTombstonesByTabId).length > 0 ? closedTabTombstonesByTabId : undefined
   }
 }
 
@@ -199,6 +218,19 @@ export function importRemoteWorkspaceSession(
     }
   }
 
+  const closedTerminalTabTombstonesByTabId: Record<
+    string,
+    { closedAt: number; worktreeId: string }
+  > = {}
+  for (const [tabId, tombstone] of Object.entries(remote.closedTabTombstonesByTabId ?? {})) {
+    const worktreeId = resolvePath(tombstone.worktreePath)
+    // Why dropped when unresolvable: tabs of an unresolvable worktree are
+    // dropped by this import too, so there is nothing left to protect here.
+    if (worktreeId) {
+      closedTerminalTabTombstonesByTabId[tabId] = { closedAt: tombstone.closedAt, worktreeId }
+    }
+  }
+
   return {
     ...session,
     activeRepoId: activeWorktreeId ? (splitWorktreeId(activeWorktreeId)?.repoId ?? null) : null,
@@ -222,6 +254,10 @@ export function importRemoteWorkspaceSession(
         )
       : undefined,
     lastVisitedAtByWorktreeId,
-    defaultTerminalTabsAppliedByWorktreeId
+    defaultTerminalTabsAppliedByWorktreeId,
+    closedTerminalTabTombstonesByTabId:
+      Object.keys(closedTerminalTabTombstonesByTabId).length > 0
+        ? closedTerminalTabTombstonesByTabId
+        : undefined
   }
 }
