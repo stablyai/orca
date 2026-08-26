@@ -22,6 +22,7 @@ import {
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
 import { fetchAntigravityRateLimits } from './antigravity-cli-usage'
+import type { LocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -229,6 +230,7 @@ export class RateLimitService {
   }
   // Why: resolved per cycle — the local-account runtime policy can flip between fetches.
   private kimiHomeResolver: KimiHomeResolver | null = null
+  private antigravityRuntimeTargetResolver: (() => LocalAccountRuntimeTarget) | null = null
   private claudeAuthPreparationResolver: ClaudeAuthPreparationResolver | null = null
   private claudeFetchTarget: NormalizedClaudeAccountSelectionTarget = {
     runtime: 'host',
@@ -285,6 +287,10 @@ export class RateLimitService {
 
   setKimiHomeResolver(resolver: KimiHomeResolver): void {
     this.kimiHomeResolver = resolver
+  }
+
+  setAntigravityRuntimeTargetResolver(resolver: () => LocalAccountRuntimeTarget): void {
+    this.antigravityRuntimeTargetResolver = resolver
   }
 
   // Why: resolving a WSL home probes wsl.exe, so it must not run before the other
@@ -1730,7 +1736,10 @@ export class RateLimitService {
             groupId: miniMaxGroupId,
             models: miniMaxModels
           }),
-      fetchAntigravityRateLimits(signal)
+      fetchAntigravityRateLimits({
+        target: this.antigravityRuntimeTargetResolver?.(),
+        signal
+      })
     ])
 
     if (signal.aborted) {
