@@ -39,6 +39,12 @@ function parseSessionNames(stdout: string): string[] {
  * Windows gets none at all (named pipes make the directory moot); both cases
  * skip the sweep rather than run a `session list` that could close a daemon Orca
  * does not own, and stay bounded by `AGENT_BROWSER_IDLE_TIMEOUT_MS` instead.
+ *
+ * `ORCA_DISABLE_AGENT_BROWSER_SWEEP=1` turns it off in the field. The other two
+ * behaviours this PR adds are already recoverable without a build — the idle bound
+ * is an env passthrough an operator can raise, and the quit close is bounded by its
+ * own timeout — but a sweep that closes the wrong daemon, or spawns one process per
+ * stale name on a profile with hundreds, would otherwise need a revert.
  */
 export async function sweepOrphanedAgentBrowserSessions(options: {
   binaryPath: string
@@ -46,7 +52,7 @@ export async function sweepOrphanedAgentBrowserSessions(options: {
   ownsSocketDirectory: boolean
   isSessionLive?: (sessionName: string) => boolean
 }): Promise<string[]> {
-  if (!options.ownsSocketDirectory) {
+  if (!options.ownsSocketDirectory || process.env.ORCA_DISABLE_AGENT_BROWSER_SWEEP === '1') {
     return []
   }
   let listed: string[]
