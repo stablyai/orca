@@ -52,6 +52,7 @@ async function dispatch(
     runtime,
     task: db.getTask(taskId)!,
     targetHandle: 'term_a',
+    nestedWorkerMaxDepth: Number.MAX_SAFE_INTEGER,
     baseDrift: null,
     coordinatorHandle: 'coord',
     worktree: undefined,

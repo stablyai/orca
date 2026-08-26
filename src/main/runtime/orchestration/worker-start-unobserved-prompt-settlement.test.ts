@@ -7,7 +7,12 @@ let db: OrchestrationDb
 
 function startWorker(spec: string): { taskId: string; dispatchId: string; capability: string } {
   const task = db.createTask({ spec })
-  const started = db.createStartingWorkerDispatch({ taskId: task.id, startOptions: {} })
+  const started = db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: Number.MAX_SAFE_INTEGER,
+    taskId: task.id,
+    startOptions: {}
+  })
   const capability = db.mintDispatchCapability({
     dispatchId: started.dispatch.id,
     paneKey: WORKER_PANE_KEY,
