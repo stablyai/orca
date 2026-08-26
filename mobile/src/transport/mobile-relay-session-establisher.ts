@@ -39,7 +39,7 @@ export class MobileRelaySessionEstablisher {
       adoptBundle: (bundle: MobileRelayCredentialBundle) => void
       // Hysteresis stamp + rotation-pending clear + recovery log line.
       recordMigration: () => void
-      // Owns the stopped/background null-out so a late resolve never re-arms a stale timer.
+      // Owns the stopped/disconnected guard so late bookkeeping cannot arm a stale timer.
       scheduleLease: (expiry: number | null) => void
       scheduleDirectProbe: () => void
       onBookkeepingError: (error: Error) => void

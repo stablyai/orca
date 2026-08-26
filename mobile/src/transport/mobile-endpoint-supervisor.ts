@@ -4,6 +4,7 @@ import { RelayReconnectController } from './mobile-relay-reconnect-controller'
 import { RelayLeaseRotationTimer } from './mobile-relay-lease-rotation-timer'
 import { MobileEndpointHysteresis } from './mobile-endpoint-hysteresis'
 import {
+  liveRelayLeaseExpiry,
   persistRelayHost,
   suspendRelayIfStillConnected
 } from './mobile-endpoint-supervisor-support'
@@ -93,16 +94,16 @@ export class MobileEndpointSupervisor {
         this.host = await persistRelayHost(this.host, resolved, dependencies.saveHost)
       },
       bundle: () => this.bundle,
-      adoptBundle: (bundle) => {
-        this.bundle = bundle
-      },
+      adoptBundle: (bundle) => (this.bundle = bundle),
       recordMigration: () => {
         this.relayRotationPending = false
         this.hysteresis.recordMigration(dependencies.now())
         this.logRelay('runtime channel migrated to relay')
       },
       scheduleLease: (expiry) =>
-        this.leaseRotation.scheduleFromLease(this.isActive() ? expiry : null),
+        this.leaseRotation.scheduleFromLease(
+          liveRelayLeaseExpiry(this.logical, this.stopped, expiry)
+        ),
       scheduleDirectProbe: () => this.directProbe.schedule(),
       onBookkeepingError: (error) =>
         this.logRelay('relay bookkeeping failed after migration', error.message.slice(0, 80)),
@@ -114,9 +115,7 @@ export class MobileEndpointSupervisor {
       host: () => this.host,
       canSchedule: () => this.isActive() && this.logical.getActivePath() === 'relay',
       canAttempt: () => this.isActive() && !this.operationInFlight,
-      beginOperation: () => {
-        this.operationInFlight = true
-      },
+      beginOperation: () => (this.operationInFlight = true),
       migrate: (client, path) => this.logical.migrateTo(client, path),
       onDirectMigrated: async () => {
         this.leaseRotation.clear()
