@@ -9123,20 +9123,22 @@ export class OrcaRuntimeService {
     targetWorktreeId: string | null = null
   ): Promise<PtyControllerInventory | null> {
     if (targetWorktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
-      const pending = this.pendingMobileSessionPtyInventoryRefreshByTarget.get(targetWorktreeId)
+      // Non-floating refreshes all query the aggregate controller inventory;
+      // coalesce targeted and all-worktree callers so they cannot invalidate
+      // one another through the shared aggregate generation fence.
+      const refreshKey = null
+      const pending = this.pendingMobileSessionPtyInventoryRefreshByTarget.get(refreshKey)
       if (pending) {
         return pending
       }
       // Why: reconnect exit bursts share one authoritative daemon inventory
       // instead of multiplying a full cross-generation list RPC per stale tab.
       const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
-        if (
-          this.pendingMobileSessionPtyInventoryRefreshByTarget.get(targetWorktreeId) === refresh
-        ) {
-          this.pendingMobileSessionPtyInventoryRefreshByTarget.delete(targetWorktreeId)
+        if (this.pendingMobileSessionPtyInventoryRefreshByTarget.get(refreshKey) === refresh) {
+          this.pendingMobileSessionPtyInventoryRefreshByTarget.delete(refreshKey)
         }
       })
-      this.pendingMobileSessionPtyInventoryRefreshByTarget.set(targetWorktreeId, refresh)
+      this.pendingMobileSessionPtyInventoryRefreshByTarget.set(refreshKey, refresh)
       return refresh
     }
     return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)

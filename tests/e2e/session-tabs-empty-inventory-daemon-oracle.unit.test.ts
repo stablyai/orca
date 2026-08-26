@@ -23,12 +23,18 @@ import { applyWebSessionTabsStorePatch } from '../../src/renderer/src/runtime/we
 const ENVIRONMENT_ID = 'env-live-unpublished'
 const WORKTREE = 'repo1::/path/wt1'
 
-function createWriterSubprocess(pid: number): SubprocessHandle & { exit: () => void } {
+type WriterSubprocess = SubprocessHandle & {
+  write: ReturnType<typeof vi.fn<(data: string) => void>>
+  exit: () => void
+}
+
+function createWriterSubprocess(pid: number): WriterSubprocess {
   let onExit: ((code: number) => void) | null = null
+  const write = vi.fn<(data: string) => void>()
   return {
     pid,
     getForegroundProcess: () => 'codex',
-    write: vi.fn(),
+    write,
     resize: vi.fn(),
     kill: vi.fn(),
     terminateOwnedTree: () => 'unavailable',
@@ -131,7 +137,7 @@ describe('unpublished empty inventory daemon oracle', () => {
     await host.dispose()
   })
 
-  it('goes red when unconditional empty hydration releases the resume dispatch', async () => {
+  it('records legacy unconditional empty hydration releasing the resume dispatch', async () => {
     const subprocesses: ReturnType<typeof createWriterSubprocess>[] = []
     const host = new TerminalHost({
       spawnSubprocess: () => {

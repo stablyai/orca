@@ -51,6 +51,9 @@ export async function listSessionTabsInventory(context: RpcContext): Promise<Ses
     ) {
       throw error
     }
+    if (signal?.aborted) {
+      throw new Error('client_disconnected')
+    }
     return projectInventory(
       { snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId) },
       context

@@ -100,7 +100,40 @@ describe('authoritative session tab inventory publication', () => {
     expect(collect).toHaveBeenCalledOnce()
   })
 
-  it('does not reuse a targeted PTY refresh as the all-host authority census', async () => {
+  it('retries publication churn until one inventory observes a stable epoch', async () => {
+    const runtime = createInventoryRuntime()
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+    const inventory = {
+      snapshots: [],
+      ptyInventory: {
+        livePtyIds: new Set<string>(),
+        allLivePtyIds: new Set<string>(),
+        terminalIdentityByPtyId: new Map(),
+        queriedHostIds: new Set(['local'])
+      }
+    }
+    let collections = 0
+    vi.spyOn(
+      runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
+      'collectAllMobileSessionTabs'
+    ).mockImplementation(async () => {
+      collections += 1
+      if (collections <= 3) {
+        expect(runtime.markRendererReloading(1)).not.toBeNull()
+        runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
+      }
+      return inventory
+    })
+
+    await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({
+      snapshots: [],
+      authoritative: true
+    })
+    expect(collections).toBe(4)
+  })
+
+  it('coalesces targeted and all-host PTY refreshes behind one aggregate census', async () => {
     const runtime = createInventoryRuntime()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
@@ -110,29 +143,25 @@ describe('authoritative session tab inventory publication', () => {
       terminalIdentityByPtyId: new Map(),
       queriedHostIds: new Set(['local'])
     }
-    const resolvers = new Map<string, (inventory: typeof emptyInventory) => void>()
+    let resolveRefresh: ((inventory: typeof emptyInventory) => void) | undefined
     const internals = runtime as unknown as {
       refreshMobileSessionPtyInventory: (targetWorktreeId?: string | null) => Promise<unknown>
       performMobileSessionPtyRecordsRefresh: (targetWorktreeId: string | null) => Promise<unknown>
     }
     const perform = vi.spyOn(internals, 'performMobileSessionPtyRecordsRefresh').mockImplementation(
-      (targetWorktreeId) =>
+      () =>
         new Promise((resolve) => {
-          resolvers.set(targetWorktreeId ?? 'all', resolve)
+          resolveRefresh = resolve
         })
     )
 
-    const targeted = internals.refreshMobileSessionPtyInventory('repo::/target')
-    await Promise.resolve()
     const allHosts = runtime.listAllMobileSessionTabsInventory()
     await Promise.resolve()
+    const targeted = internals.refreshMobileSessionPtyInventory('repo::/target')
+    await Promise.resolve()
 
-    expect(perform.mock.calls.map(([targetWorktreeId]) => targetWorktreeId)).toEqual([
-      'repo::/target',
-      null
-    ])
-    resolvers.get('repo::/target')?.(emptyInventory)
-    resolvers.get('all')?.(emptyInventory)
+    expect(perform).toHaveBeenCalledOnce()
+    resolveRefresh?.(emptyInventory)
 
     await targeted
     await expect(allHosts).resolves.toEqual({ snapshots: [], authoritative: true })

@@ -5,6 +5,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { SESSION_TAB_METHODS } from './session-tabs'
+import { listSessionTabsInventory } from './session-tabs-inventory'
 
 function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
@@ -154,6 +155,25 @@ describe('session tabs inventory RPC methods', () => {
     expect(JSON.parse(messages[0]!).result).toEqual({
       snapshots: [expect.objectContaining({ worktree: 'wt-local' })]
     })
+  })
+
+  it('does not start the legacy fallback after the caller disconnects', async () => {
+    const legacyListAll = vi.fn()
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
+      listAllMobileSessionTabsInventory: vi.fn(async () => {
+        throw new Error('terminal_liveness_unavailable')
+      }),
+      listAllMobileSessionTabs: legacyListAll
+    } as unknown as OrcaRuntimeService
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(listSessionTabsInventory({ runtime, signal: controller.signal })).rejects.toThrow(
+      'client_disconnected'
+    )
+    expect(legacyListAll).not.toHaveBeenCalled()
   })
 
   it('lets the final authoritative inventory subsume prior-epoch updates', async () => {
