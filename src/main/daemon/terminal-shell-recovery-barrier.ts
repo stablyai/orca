@@ -1,4 +1,5 @@
 import { POST_REPLAY_DEAD_TUI_RESET } from '../../shared/terminal-mode-reset-profiles'
+import { TerminalShellCleanExitConfirmation } from './terminal-shell-clean-exit-confirmation'
 import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 import type { PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import type { TerminalOwner } from '../../shared/terminal-owner'
@@ -47,10 +48,7 @@ export class TerminalShellRecoveryBarrier {
   private pendingEpisode = 0
   private bailTimer: ReturnType<typeof setTimeout> | null = null
   private idleWaiters: (() => void)[] = []
-  private cleanConfirmInFlight = false
-  private cleanConfirmAttempt = 0
-  private cleanConfirmWaiters: (() => void)[] = []
-  private latestCleanCandidateGeneration: number | undefined
+  private readonly cleanExit: TerminalShellCleanExitConfirmation
   private disposed = false
 
   constructor(opts: TerminalShellRecoveryBarrierOptions) {
@@ -59,6 +57,13 @@ export class TerminalShellRecoveryBarrier {
     this.isAlive = opts.isAlive
     this.maxQueuedBytes = opts.maxQueuedBytes ?? MAX_QUEUED_BYTES
     this.maxPendingMs = opts.maxPendingMs ?? MAX_PENDING_MS
+    this.cleanExit = new TerminalShellCleanExitConfirmation({
+      scanner: this.scanner,
+      confirmShellForeground: opts.confirmShellForeground,
+      deadlineMs: () => this.maxPendingMs,
+      isDisposed: () => this.disposed,
+      isAlive: opts.isAlive
+    })
   }
 
   accept(emission: PtyIngressEmission): void {
@@ -88,10 +93,6 @@ export class TerminalShellRecoveryBarrier {
     return this.scanner.owner === 'shell'
   }
 
-  seedOwner(owner: TerminalOwner | undefined): void {
-    this.scanner.seedOwner(owner)
-  }
-
   /** Synchronous bail for teardown: resolves the current episode as refuted so
    *  the queued bytes reach the emulator and records before a final snapshot.
    *  Queue replay can re-enter pending on a nested trigger, so drain to
@@ -100,6 +101,27 @@ export class TerminalShellRecoveryBarrier {
     for (let guard = 0; this.pending && guard < 16; guard += 1) {
       this.finishPending(this.pendingEpisode, false)
     }
+    if (!this.pending) {
+      return
+    }
+    // Pathological episode storm: stop rescanning but never drop bytes — the
+    // scanner's model is stale from here on, which teardown never reads again.
+    const queued = this.queue
+    this.queue = []
+    this.queuedBytes = 0
+    this.pending = false
+    if (this.bailTimer) {
+      clearTimeout(this.bailTimer)
+      this.bailTimer = null
+    }
+    for (const emission of queued) {
+      try {
+        this.releaseDownstream(emission)
+      } catch {
+        // One throwing client must not cost the rest of the queue its delivery.
+      }
+    }
+    this.resolveIdleWaiters()
   }
 
   /** Resolves when the current recovery episode (if any) has settled. Bounded
@@ -123,19 +145,17 @@ export class TerminalShellRecoveryBarrier {
     const deadline = setTimeout(() => {
       deadlineHit = true
       this.resolveIdleWaiters()
-      this.drainCleanConfirmWaiters()
+      this.cleanExit.drainWaiters()
     }, this.maxPendingMs)
     deadline.unref?.()
     try {
       while (
-        (this.pending || this.cleanConfirmInFlight) &&
+        (this.pending || this.cleanExit.inFlight) &&
         this.scanner.generation <= target &&
         !this.disposed &&
         !deadlineHit
       ) {
-        await (this.pending
-          ? this.idle()
-          : new Promise<void>((resolve) => this.cleanConfirmWaiters.push(resolve)))
+        await (this.pending ? this.idle() : this.cleanExit.waitSettled())
       }
     } finally {
       clearTimeout(deadline)
@@ -154,13 +174,13 @@ export class TerminalShellRecoveryBarrier {
     this.queuedBytes = 0
     this.pending = false
     this.resolveIdleWaiters()
-    this.drainCleanConfirmWaiters()
+    this.cleanExit.drainWaiters()
   }
 
   private scanAndRelease(emission: PtyIngressEmission): void {
     const events = this.scanner.scan(emission.data)
     if (events.cleanExitCandidate) {
-      this.startCleanExitConfirmation(events.cleanExitCandidate.generation)
+      this.cleanExit.start(events.cleanExitCandidate.generation)
     }
     const end = events.uncleanDeathTriggerEnd
     if (end === undefined) {
@@ -211,7 +231,7 @@ export class TerminalShellRecoveryBarrier {
     while (rest.length > 0) {
       const events = this.scanner.scan(rest)
       if (events.cleanExitCandidate) {
-        this.startCleanExitConfirmation(events.cleanExitCandidate.generation)
+        this.cleanExit.start(events.cleanExitCandidate.generation)
       }
       if (events.uncleanDeathTriggerEnd === undefined) {
         return
@@ -304,71 +324,6 @@ export class TerminalShellRecoveryBarrier {
     this.queuedBytes += emission.data.length
     if (this.queuedBytes > this.maxQueuedBytes) {
       this.finishPending(this.pendingEpisode, false)
-    }
-  }
-
-  private startCleanExitConfirmation(generation: number): void {
-    this.latestCleanCandidateGeneration = generation
-    if (this.cleanConfirmInFlight || this.disposed) {
-      return
-    }
-    this.cleanConfirmInFlight = true
-    const requested = generation
-    const attempt = ++this.cleanConfirmAttempt
-    // Why the deadline: a proof that never settles must not wedge the in-flight
-    // flag for the session's life, silently ignoring every later candidate.
-    const deadline = setTimeout(
-      () => this.retireCleanConfirmAttempt(attempt, requested),
-      this.maxPendingMs
-    )
-    deadline.unref?.()
-    // Why the guard: the callback is injected; a synchronous throw must not
-    // strand cleanConfirmInFlight (mirrors enterPending).
-    let proof: Promise<boolean>
-    try {
-      proof = this.confirmShellForeground()
-    } catch {
-      proof = Promise.resolve(false)
-    }
-    void proof
-      .then((confirmed) => {
-        // A retired attempt's late verdict is inert: an unsettled proof already
-        // read as no owner, and flipping it afterwards would race fresh bytes.
-        if (attempt === this.cleanConfirmAttempt && confirmed && !this.disposed && this.isAlive()) {
-          this.scanner.trySetOwner(requested)
-        }
-      })
-      .catch(() => {})
-      .finally(() => {
-        clearTimeout(deadline)
-        this.retireCleanConfirmAttempt(attempt, requested)
-      })
-  }
-
-  private retireCleanConfirmAttempt(attempt: number, requested: number): void {
-    if (attempt !== this.cleanConfirmAttempt) {
-      return
-    }
-    this.cleanConfirmAttempt += 1
-    this.cleanConfirmInFlight = false
-    const latest = this.latestCleanCandidateGeneration
-    if (
-      latest !== undefined &&
-      latest !== requested &&
-      latest === this.scanner.generation &&
-      !this.disposed
-    ) {
-      // One superseding candidate can still be current; stale ones are not retried.
-      this.startCleanExitConfirmation(latest)
-    }
-    this.drainCleanConfirmWaiters()
-  }
-
-  private drainCleanConfirmWaiters(): void {
-    const waiters = this.cleanConfirmWaiters
-    this.cleanConfirmWaiters = []
-    for (const waiter of waiters) {
-      waiter()
     }
   }
 

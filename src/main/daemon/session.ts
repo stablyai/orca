@@ -275,10 +275,11 @@ export class Session {
   }
 
   prepareForFinalSnapshot(): string {
-    // Why first: a teardown checkpoint mid-episode must not lose the barrier's queued prompt bytes.
-    this.recoveryBarrier.flushPending()
     const held = this.shellReady.releaseHeldBytes()
     this.startupIngress.snapshotBarrier()
+    // Why last: snapshotBarrier can emit held spans into the barrier, and a
+    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
+    this.recoveryBarrier.flushPending()
     return held
   }
 

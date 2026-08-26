@@ -68,4 +68,40 @@ describe('createOrAttach cancellation during ownership settling', () => {
     sub.exit()
     await host.dispose()
   })
+
+  it('respawns a fresh session when the shell exits during the settle await', async () => {
+    const subs: ReturnType<typeof createSubprocess>[] = []
+    const host = new TerminalHost({
+      spawnSubprocess: async () => {
+        const sub = createSubprocess()
+        subs.push(sub)
+        return sub.handle
+      }
+    })
+    await host.createOrAttach({
+      sessionId: 's1',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+
+    // Open a recovery episode so the attach path's settle await actually pends,
+    // then let the shell die behind the dead TUI — the pre-settle sync path
+    // would have respawned here, never thrown SessionNotFoundError.
+    subs[0]!.emit('\x1b[?1049hTUI\x1b]133;D;137\x07')
+    const reattach = host.createOrAttach({
+      sessionId: 's1',
+      cols: 80,
+      rows: 24,
+      streamClient: { onData: vi.fn(), onExit: vi.fn() }
+    })
+    subs[0]!.exit()
+    subs[0]!.confirm(false)
+
+    await expect(reattach).resolves.toMatchObject({ isNew: true })
+    expect(subs).toHaveLength(2)
+
+    subs[1]!.exit()
+    await host.dispose()
+  })
 })

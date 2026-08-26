@@ -40,9 +40,9 @@ export async function createOrAttachTerminalSession(
 
   if (existing && existing.isAlive && !existing.isTerminating) {
     await existing.settleShellOwnershipConfirmation()
+    const current = deps.sessions.get(opts.sessionId)
     if (
-      deps.sessions.get(opts.sessionId) !== existing ||
-      !existing.isAlive ||
+      (current !== undefined && current !== existing) ||
       existing.isTerminating ||
       deps.sessionTeardown.get(opts.sessionId)
     ) {
@@ -53,18 +53,23 @@ export async function createOrAttachTerminalSession(
     if (opts.isCanceled?.()) {
       throw new TerminalAttachCanceledError(opts.sessionId)
     }
-    const snapshot = existing.getSnapshot()
-    existing.detachAllClients()
-    const token = existing.attachClient(opts.streamClient)
-    return {
-      isNew: false,
-      snapshot,
-      pid: existing.pid,
-      shellState: existing.shellState,
-      incarnationId: existing.incarnationId,
-      ...getDaemonSessionResultMetadata(existing),
-      attachToken: token
+    if (current === existing && existing.isAlive) {
+      const snapshot = existing.getSnapshot()
+      existing.detachAllClients()
+      const token = existing.attachClient(opts.streamClient)
+      return {
+        isNew: false,
+        snapshot,
+        pid: existing.pid,
+        shellState: existing.shellState,
+        incarnationId: existing.incarnationId,
+        ...getDaemonSessionResultMetadata(existing),
+        attachToken: token
+      }
     }
+    // The shell exited (and was possibly reaped) during the settle await: fall
+    // through to the dead-session respawn below — the pre-settle sync path
+    // would have spawned a fresh shell here, never thrown.
   }
 
   if (existing?.isAlive && existing.isTerminating) {

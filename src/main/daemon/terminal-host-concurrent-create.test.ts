@@ -73,25 +73,31 @@ describe('concurrent createOrAttach across the async spawn', () => {
     await host.dispose()
   })
 
-  it('does not respawn when a live session exits while ownership proof settles', async () => {
+  it('respawns when a live session exits while ownership proof settles', async () => {
     let resolveConfirmation: ((confirmed: boolean) => void) | undefined
-    const subprocess = mockSubprocess({
+    const first = mockSubprocess({
       confirmShellForeground: vi.fn(
         () => new Promise<boolean>((resolve) => void (resolveConfirmation = resolve))
       )
     })
-    const spawnSubprocess = vi.fn(async () => subprocess)
+    const spawnSubprocess = vi
+      .fn<() => Promise<SubprocessHandle>>()
+      .mockResolvedValueOnce(first)
+      .mockImplementation(async () => mockSubprocess())
     const host = new TerminalHost({ spawnSubprocess })
     await host.createOrAttach(createOptions('settle-exit'))
-    subprocess.emitData('\x1b[?1049hTUI\x1b]133;D;137\x07')
-    await vi.waitFor(() => expect(subprocess.confirmShellForeground).toHaveBeenCalledOnce())
+    first.emitData('\x1b[?1049hTUI\x1b]133;D;137\x07')
+    await vi.waitFor(() => expect(first.confirmShellForeground).toHaveBeenCalledOnce())
 
     const attach = host.createOrAttach(createOptions('settle-exit'))
-    subprocess.emitExit(137)
+    first.emitExit(137)
     resolveConfirmation?.(false)
 
-    await expect(attach).rejects.toThrow('Session not found: settle-exit')
-    expect(spawnSubprocess).toHaveBeenCalledOnce()
+    // createOrAttach's contract is create-on-dead: the pre-settle sync path
+    // respawned here, and a death inside the settle window must match it.
+    // Deliberate kills still throw via the isTerminating/teardown guards.
+    await expect(attach).resolves.toMatchObject({ isNew: true })
+    expect(spawnSubprocess).toHaveBeenCalledTimes(2)
     await host.dispose()
   })
 

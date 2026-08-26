@@ -9,12 +9,14 @@ function passthrough(data: string, rawStartSeq = 0): PtyIngressEmission {
 }
 
 function createBarrier(confirm: () => Promise<boolean>, maxPendingMs?: number) {
-  return new TerminalShellRecoveryBarrier({
+  const released: string[] = []
+  const barrier = new TerminalShellRecoveryBarrier({
     confirmShellForeground: confirm,
-    release: () => {},
+    release: (emission) => released.push(emission.data),
     isAlive: () => true,
     ...(maxPendingMs !== undefined ? { maxPendingMs } : {})
   })
+  return Object.assign(barrier, { released })
 }
 
 describe('clean-exit confirmation retirement', () => {
@@ -54,5 +56,17 @@ describe('clean-exit confirmation retirement', () => {
     await vi.waitFor(() => expect(calls).toBe(2))
     await barrier.awaitProofSettled()
     expect(barrier.getOwner()).toBe('shell')
+  })
+
+  it('flushPending releases every byte of an episode storm past the rescan bound', () => {
+    const barrier = createBarrier(() => new Promise(() => {}))
+    const episode = '\x1b[?1049hT\x1b]133;D;1\x07x'
+    const storm = episode.repeat(40)
+    barrier.accept(passthrough(storm))
+    barrier.flushPending()
+
+    // Past the 16-pass rescan bound the remainder is released verbatim; the
+    // bound trades scanner-model fidelity at teardown, never bytes.
+    expect(barrier.released.join('')).toBe(storm)
   })
 })
