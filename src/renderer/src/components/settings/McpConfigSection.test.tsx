@@ -118,6 +118,31 @@ describe('McpConfigSection Parallel preset', () => {
     )
   })
 
+  it.each([
+    ['Add Parallel Search', 'Add MCP config', PARALLEL_SEARCH_MCP_CONFIG],
+    ['Add MCP config', 'Add Parallel Search', MCP_STARTER_CONFIG]
+  ])('does not allow %s to race another preset write', async (first, second, content) => {
+    let finishWrite: (() => void) | undefined
+    mocks.writeFile.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finishWrite = resolve
+      })
+    )
+    await renderSection()
+    const firstButton = screen.getByRole('button', { name: first })
+    const secondButton = screen.getByRole('button', { name: second })
+    fireEvent.click(firstButton)
+    fireEvent.click(firstButton)
+    fireEvent.click(secondButton)
+    fireEvent.click(secondButton)
+    await act(async () => finishWrite?.())
+    expect(mocks.writeFile).toHaveBeenCalledExactlyOnceWith({
+      filePath: '/test/workspace/.mcp.json',
+      content,
+      connectionId: undefined
+    })
+  })
+
   it('hides both creation actions when an existing config is detected', async () => {
     mocks.readDir.mockResolvedValue([{ name: '.mcp.json', isDirectory: false }])
     await renderSection()
@@ -126,5 +151,38 @@ describe('McpConfigSection Parallel preset', () => {
     )
     expect(screen.queryByRole('button', { name: 'Add MCP config' })).not.toBeInTheDocument()
     expect(mocks.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('does not write while an existing config is still being inspected', async () => {
+    let finishInspection: ((entries: { name: string; isDirectory: boolean }[]) => void) | undefined
+    mocks.readDir.mockReturnValue(
+      new Promise((resolve) => {
+        finishInspection = resolve
+      })
+    )
+    await renderSection()
+    const button = screen.getByRole('button', { name: 'Add Parallel Search' })
+    fireEvent.click(button)
+    fireEvent.click(button)
+    await act(async () => finishInspection?.([{ name: '.mcp.json', isDirectory: false }]))
+    expect(mocks.writeFile).not.toHaveBeenCalled()
+  })
+
+  it('allows another preset after a failed write', async () => {
+    mocks.writeFile.mockRejectedValueOnce(new Error('Permission denied'))
+    await renderSection()
+    fireEvent.click(screen.getByRole('button', { name: 'Add Parallel Search' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm Parallel Search' }))
+    const emptyButton = screen.getByRole('button', { name: 'Add MCP config' })
+    await waitFor(() => expect(emptyButton).toBeEnabled())
+    fireEvent.click(emptyButton)
+    fireEvent.click(emptyButton)
+    await waitFor(() =>
+      expect(mocks.writeFile).toHaveBeenLastCalledWith({
+        filePath: '/test/workspace/.mcp.json',
+        content: MCP_STARTER_CONFIG,
+        connectionId: undefined
+      })
+    )
   })
 })

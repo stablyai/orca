@@ -46,6 +46,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
   )
   const [configs, setConfigs] = useState<LoadedMcpConfigInspection[]>([])
   const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
   const [createConfirm, setCreateConfirm] = useState<'empty' | 'parallel' | null>(null)
   const createConfirmResetTimerRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
@@ -181,10 +182,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     setActiveView('terminal')
   }
 
-  const handleCreateStarter = async (
-    preset: 'empty' | 'parallel',
-    content: string
-  ): Promise<void> => {
+  const handleCreateStarter = async (preset: 'empty' | 'parallel'): Promise<void> => {
+    if (!canCreateStarter || loading || creating) {
+      return
+    }
     if (createConfirm !== preset) {
       clearCreateConfirmResetTimer()
       setCreateConfirm(preset)
@@ -198,6 +199,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
     }
 
     const target = joinPath(targetRootPath, '.mcp.json')
+    setCreating(true)
     try {
       const sshExpectation = connectionId
         ? captureDirectSshMutationExpectation(useAppStore.getState(), connectionId)
@@ -206,7 +208,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       // guess per-agent directory layouts or mutate agent-specific files.
       await window.api.fs.writeFile({
         filePath: target,
-        content,
+        content: preset === 'parallel' ? PARALLEL_SEARCH_MCP_CONFIG : MCP_STARTER_CONFIG,
         connectionId,
         ...sshExpectation
       })
@@ -239,6 +241,10 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
       )
     } catch (error) {
       toast.error(extractIpcErrorMessage(error, 'Failed to create MCP config.'))
+    } finally {
+      if (mountedRef.current) {
+        setCreating(false)
+      }
     }
   }
 
@@ -268,6 +274,7 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
           <Button
             variant="ghost"
             size="icon-sm"
+            disabled={loading || creating}
             onClick={() => void loadConfigs()}
             aria-label={translate(
               'auto.components.settings.McpConfigSection.f34c152dc0',
@@ -286,7 +293,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
                 variant={createConfirm === 'parallel' ? 'default' : 'outline'}
                 size="sm"
                 className="gap-1.5"
-                onClick={() => void handleCreateStarter('parallel', PARALLEL_SEARCH_MCP_CONFIG)}
+                disabled={loading || creating}
+                onClick={() => void handleCreateStarter('parallel')}
                 aria-describedby={parallelDisclosureId}
               >
                 <Plus className="size-3.5" />
@@ -304,7 +312,8 @@ export function McpConfigSection({ repo }: McpConfigSectionProps): React.JSX.Ele
                 variant={createConfirm === 'empty' ? 'default' : 'outline'}
                 size="sm"
                 className="gap-1.5"
-                onClick={() => void handleCreateStarter('empty', MCP_STARTER_CONFIG)}
+                disabled={loading || creating}
+                onClick={() => void handleCreateStarter('empty')}
               >
                 <Plus className="size-3.5" />
                 {createConfirm === 'empty'
