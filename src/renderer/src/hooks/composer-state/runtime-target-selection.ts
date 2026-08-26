@@ -12,6 +12,7 @@ import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import {
   getLocalRepoProjectExecutionRuntimeContext,
+  getProjectRuntimePreflightContext,
   getWslDistroFromPath,
   localPreflightContextKey
 } from '@/lib/local-preflight-context'
@@ -54,11 +55,7 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
     if (!selectedProjectGroup?.parentPath) {
       return undefined
     }
-    const wslDistro = getWslDistroFromPath(selectedProjectGroup.parentPath)
-    if (wslDistro) {
-      return { wslDistro }
-    }
-    const sourceRepo = folderSourceRepos[0]
+    const sourceRepo = folderSourceRepos.find((repo) => repo.id === repoId) ?? folderSourceRepos[0]
     const projectRuntime = sourceRepo
       ? getLocalRepoProjectExecutionRuntimeContext(
           { activeRepoId, activeWorktreeId: null, projects, repos, settings, worktreesByRepo },
@@ -66,12 +63,17 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
           CLIENT_PLATFORM
         )
       : undefined
-    return projectRuntime ? { projectRuntime } : undefined
+    if (projectRuntime) {
+      return getProjectRuntimePreflightContext(projectRuntime)
+    }
+    const wslDistro = getWslDistroFromPath(selectedProjectGroup.parentPath)
+    return wslDistro ? { wslDistro } : undefined
   }, [
     activeRepoId,
     folderSourceRepos,
     projects,
     repos,
+    repoId,
     selectedProjectGroup,
     settings,
     worktreesByRepo

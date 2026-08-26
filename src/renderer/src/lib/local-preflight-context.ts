@@ -22,6 +22,7 @@ import {
 } from './local-preflight-context-cache'
 
 export { localPreflightContextKey } from './local-preflight-context-key'
+export { getProjectRuntimePreflightContext } from './local-preflight-context-cache'
 export type { LocalPreflightContext } from './local-preflight-context-cache'
 export {
   _getProjectRuntimePreflightContextCacheSizeForTest,
@@ -114,7 +115,7 @@ export function getLocalRepoProjectExecutionRuntimeContext(
   state: LocalProjectRuntimeState,
   repoId: string | null | undefined,
   appPlatform: NodeJS.Platform = getRendererAppPlatform(),
-  wslContext: LocalProjectRuntimeWslContext = {}
+  wslContext: LocalProjectRuntimeWslContext = getCachedLocalProjectRuntimeWslContext()
 ): ProjectExecutionRuntimeResolution | undefined {
   if (appPlatform !== 'win32' || !repoId) {
     return undefined

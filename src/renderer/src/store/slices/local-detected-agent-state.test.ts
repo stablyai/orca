@@ -81,6 +81,33 @@ describe('local detected agent context lifecycle', () => {
     unsubscribe()
   })
 
+  it('publishes a Floating-first refresh to a later ordinary caller', async () => {
+    let resolveRefresh: (result: {
+      agents: string[]
+      pathSource: string
+      pathFailureReason: string
+    }) => void = () => {}
+    refreshAgents.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveRefresh = resolve
+      })
+    )
+    const store = createTestStore([])
+
+    const floating = store.getState().refreshDetectedAgents(FLOATING_TERMINAL_WORKTREE_ID)
+    const ordinary = store.getState().ensureDetectedAgents()
+    expect(ordinary).toBe(floating)
+
+    resolveRefresh({
+      agents: ['codex'],
+      pathSource: 'process_env',
+      pathFailureReason: 'none'
+    })
+    await expect(Promise.all([floating, ordinary])).resolves.toEqual([['codex'], ['codex']])
+    expect(store.getState().detectedAgentIds).toEqual(['codex'])
+    expect(store.getState().isRefreshingAgents).toBe(false)
+  })
+
   it('evicts removed project contexts without retaining settled loading entries', async () => {
     const repo1 = makeRepo('repo-1')
     const repo2 = makeRepo('repo-2')

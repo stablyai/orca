@@ -259,6 +259,11 @@ describe('useComposerState host-context boundaries', () => {
 
     expect(targetSection).toContain('getWslDistroFromPath(selectedProjectGroup.parentPath)')
     expect(targetSection).toContain('getLocalRepoProjectExecutionRuntimeContext(')
+    expect(targetSection).toContain('getProjectRuntimePreflightContext(projectRuntime)')
+    expect(targetSection).toContain('folderSourceRepos.find((repo) => repo.id === repoId)')
+    expect(targetSection.indexOf('const sourceRepo =')).toBeLessThan(
+      targetSection.indexOf('const wslDistro =')
+    )
     expect(targetSection).toContain('localPreflightContextKey(folderTargetLocalPreflightContext)')
     expect(targetSection).toContain('localPreflightContext: folderTargetLocalPreflightContext')
   })
