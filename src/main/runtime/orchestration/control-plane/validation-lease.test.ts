@@ -90,13 +90,15 @@ describe('B9 validation lease protects an in-flight gate', () => {
   it('frees the scope on release and makes a duplicate release a no-op', () => {
     const cp = store()
     acquire(cp)
-    expect(releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_1', nowMs: NOW + 5 })).toEqual(
-      { released: true }
-    )
-    expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW + 6 })).toEqual({ allowed: true })
-    expect(releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_1', nowMs: NOW + 7 })).toEqual(
-      { released: false }
-    )
+    expect(
+      releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_1', nowMs: NOW + 5 })
+    ).toEqual({ released: true })
+    expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW + 6 })).toEqual({
+      allowed: true
+    })
+    expect(
+      releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_1', nowMs: NOW + 7 })
+    ).toEqual({ released: false })
   })
 
   it('ignores a release from a lease id that does not own the scope', () => {

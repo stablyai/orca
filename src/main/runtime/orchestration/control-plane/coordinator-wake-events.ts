@@ -33,8 +33,7 @@ export const WAKE_REASON_PAYLOAD_KEY = 'wakeReason'
 
 export function isCoordinatorWakeReason(value: unknown): value is CoordinatorWakeReason {
   return (
-    typeof value === 'string' &&
-    (COORDINATOR_WAKE_REASONS as readonly string[]).includes(value)
+    typeof value === 'string' && (COORDINATOR_WAKE_REASONS as readonly string[]).includes(value)
   )
 }
 

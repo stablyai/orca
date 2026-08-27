@@ -87,10 +87,18 @@ export function canReuseGateReceipt(args: {
   }
   const receipt = args.receipt
   if (!receipt) {
-    return { reuse: false, code: 'no_receipt', reason: `No receipt recorded for gate ${args.current.gateId}.` }
+    return {
+      reuse: false,
+      code: 'no_receipt',
+      reason: `No receipt recorded for gate ${args.current.gateId}.`
+    }
   }
   if (receipt.result !== 'PASS') {
-    return { reuse: false, code: 'receipt_failed', reason: `Gate ${args.current.gateId} last recorded FAIL.` }
+    return {
+      reuse: false,
+      code: 'receipt_failed',
+      reason: `Gate ${args.current.gateId} last recorded FAIL.`
+    }
   }
   if (receipt.finalSha !== args.current.finalSha) {
     return {

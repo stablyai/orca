@@ -41,7 +41,9 @@ describe('B6 completion receipt validation', () => {
   it('rejects a PASS receipt produced against an older SHA and names the gate', () => {
     expect(
       validateCompletionReceipt(
-        claim({ receipt: { sha: OLDER, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' } }),
+        claim({
+          receipt: { sha: OLDER, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
+        }),
         expected
       )
     ).toMatchObject({ ok: false, code: 'stale_receipt_sha', gate: 'receipt_sha' })
@@ -50,7 +52,9 @@ describe('B6 completion receipt validation', () => {
   it('rejects a FAIL receipt', () => {
     expect(
       validateCompletionReceipt(
-        claim({ receipt: { sha: HEAD, result: 'FAIL', policyVersion: 'v1', commandIdentity: 'pnpm test' } }),
+        claim({
+          receipt: { sha: HEAD, result: 'FAIL', policyVersion: 'v1', commandIdentity: 'pnpm test' }
+        }),
         expected
       )
     ).toMatchObject({ ok: false, code: 'receipt_failed', gate: 'receipt_result' })
@@ -81,7 +85,9 @@ describe('B6 completion receipt validation', () => {
   })
 
   it('rejects a missing or malformed final HEAD', () => {
-    expect(validateCompletionReceipt(claim({ headSha: '', claimedSha: '' }), expected)).toMatchObject({
+    expect(
+      validateCompletionReceipt(claim({ headSha: '', claimedSha: '' }), expected)
+    ).toMatchObject({
       ok: false,
       code: 'missing_head_sha'
     })

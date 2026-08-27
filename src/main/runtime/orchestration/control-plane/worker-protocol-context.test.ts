@@ -5,7 +5,9 @@ import {
   renderWorkerBootstrap
 } from './worker-protocol-context'
 
-function context(overrides: Partial<Parameters<typeof buildWorkerProtocolContext>[0]['identity']> = {}) {
+function context(
+  overrides: Partial<Parameters<typeof buildWorkerProtocolContext>[0]['identity']> = {}
+) {
   return buildWorkerProtocolContext({
     identity: {
       taskId: 'task_1',
@@ -73,7 +75,9 @@ describe('B5 retained re-engagement is a delta, not the manual again', () => {
     })
     expect(delta).toContain('Task: task_1 -> task_2')
     expect(delta).toContain('Dispatch: ctx_1 -> ctx_2')
-    expect(delta).toContain('orchestration report --from term_worker --task task_2 --dispatch ctx_2')
+    expect(delta).toContain(
+      'orchestration report --from term_worker --task task_2 --dispatch ctx_2'
+    )
   })
 
   it('is materially smaller than the fresh bootstrap and repeats none of its rules', () => {

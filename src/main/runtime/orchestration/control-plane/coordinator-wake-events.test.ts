@@ -26,7 +26,10 @@ describe('B3 the coordinator wakes only for actionable events', () => {
     for (const reason of ['stalled', 'crashed', 'review_complete', 'ci_blocker'] as const) {
       expect(
         classifyWakeReason(
-          message({ type: 'escalation', payload: JSON.stringify({ [WAKE_REASON_PAYLOAD_KEY]: reason }) })
+          message({
+            type: 'escalation',
+            payload: JSON.stringify({ [WAKE_REASON_PAYLOAD_KEY]: reason })
+          })
         )
       ).toBe(reason)
     }
@@ -34,7 +37,15 @@ describe('B3 the coordinator wakes only for actionable events', () => {
 
   it('covers every declared wake reason', () => {
     expect([...COORDINATOR_WAKE_REASONS].sort()).toEqual(
-      ['ci_blocker', 'crashed', 'escalation', 'question', 'review_complete', 'stalled', 'worker_done'].sort()
+      [
+        'ci_blocker',
+        'crashed',
+        'escalation',
+        'question',
+        'review_complete',
+        'stalled',
+        'worker_done'
+      ].sort()
     )
     expect([...COORDINATOR_WAKE_MESSAGE_TYPES].sort()).toEqual(
       ['escalation', 'question', 'worker_done'].sort()
@@ -42,12 +53,19 @@ describe('B3 the coordinator wakes only for actionable events', () => {
   })
 
   it('negative control: status, heartbeat, dispatch, handoff and merge_ready never wake', () => {
-    for (const type of ['status', 'heartbeat', 'dispatch', 'handoff', 'merge_ready', 'decision_gate'] as const) {
+    for (const type of [
+      'status',
+      'heartbeat',
+      'dispatch',
+      'handoff',
+      'merge_ready',
+      'decision_gate'
+    ] as const) {
       expect(classifyWakeReason(message({ type }))).toBeNull()
     }
-    expect(shouldWakeCoordinator([message({ type: 'heartbeat' }), message({ type: 'status' })])).toBe(
-      false
-    )
+    expect(
+      shouldWakeCoordinator([message({ type: 'heartbeat' }), message({ type: 'status' })])
+    ).toBe(false)
   })
 
   it('an empty wait is not a wake event', () => {
@@ -59,7 +77,9 @@ describe('B3 the coordinator wakes only for actionable events', () => {
     expect(
       classifyWakeReason(message({ type: 'escalation', payload: '{"wakeReason":"nonsense"}' }))
     ).toBe('escalation')
-    expect(classifyWakeReason(message({ type: 'escalation', payload: 'not json' }))).toBe('escalation')
+    expect(classifyWakeReason(message({ type: 'escalation', payload: 'not json' }))).toBe(
+      'escalation'
+    )
     // A non-escalation row cannot smuggle itself into the wake set via payload.
     expect(
       classifyWakeReason(message({ type: 'status', payload: '{"wakeReason":"crashed"}' }))

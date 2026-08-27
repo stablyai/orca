@@ -115,7 +115,9 @@ function isStale(evidence: RouteEvidence, query: CertificationQuery): boolean {
   if (query.currentCommitSha && evidence.commitSha !== query.currentCommitSha) {
     return true
   }
-  return Boolean(query.currentRuntimeVersion) && evidence.runtimeVersion !== query.currentRuntimeVersion
+  return (
+    Boolean(query.currentRuntimeVersion) && evidence.runtimeVersion !== query.currentRuntimeVersion
+  )
 }
 
 function newestPerKind(

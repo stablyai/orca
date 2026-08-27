@@ -137,7 +137,9 @@ describe('B10 one bounded state query', () => {
     expect(
       build(message({ type: 'escalation', payload: '{"wakeReason":"crashed"}' })).nextLegalActions
     ).toEqual(['resolve_escalation'])
-    expect(build(message({ type: 'worker_done' })).nextLegalActions).toEqual(['validate_completion'])
+    expect(build(message({ type: 'worker_done' })).nextLegalActions).toEqual([
+      'validate_completion'
+    ])
   })
 
   it('reports a route whose certification is not current and offers recertification', () => {
@@ -156,7 +158,10 @@ describe('B10 one bounded state query', () => {
     db = new OrchestrationDb(':memory:')
     const store = new ControlPlaneStore(db)
     const task = db.createTask({ spec: 'historical' })
-    const report = describeOutcomeState({ runId: task.run_id, taskId: task.id }, { store, task, nowMs: NOW })
+    const report = describeOutcomeState(
+      { runId: task.run_id, taskId: task.id },
+      { store, task, nowMs: NOW }
+    )
     expect(report.identity.legacyUnbound).toBe(true)
     expect(report.nextLegalActions).toEqual(['admit_outcome'])
   })
@@ -165,7 +170,14 @@ describe('B10 one bounded state query', () => {
     const { store, task, dispatch } = setup()
     const report = describeOutcomeState(
       { runId: task.run_id, taskId: task.id, dispatchId: dispatch.id },
-      { store, task, dispatch, routeEvidence: passingEvidence(), routeIdentity: IDENTITY, nowMs: NOW }
+      {
+        store,
+        task,
+        dispatch,
+        routeEvidence: passingEvidence(),
+        routeIdentity: IDENTITY,
+        nowMs: NOW
+      }
     )
     expect(report.liveness.verdict).toBe('unverifiable')
   })
@@ -173,7 +185,11 @@ describe('B10 one bounded state query', () => {
   it('stays bounded: one event, one liveness verdict, no worker list and no transcript', () => {
     const { store, task, dispatch } = setup()
     const many = Array.from({ length: 50 }, (_unused, index) =>
-      message({ id: `msg_${index}`, type: index % 2 === 0 ? 'status' : 'escalation', sequence: index })
+      message({
+        id: `msg_${index}`,
+        type: index % 2 === 0 ? 'status' : 'escalation',
+        sequence: index
+      })
     )
     const report = describeOutcomeState(
       { runId: task.run_id, taskId: task.id, dispatchId: dispatch.id },

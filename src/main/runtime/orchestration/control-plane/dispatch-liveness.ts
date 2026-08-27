@@ -84,7 +84,8 @@ export function classifyDispatchLiveness(
   }
   if (evidence.providerExit) {
     const detail =
-      evidence.providerExit.signal ?? (evidence.providerExit.code === null ? 'unknown' : String(evidence.providerExit.code))
+      evidence.providerExit.signal ??
+      (evidence.providerExit.code === null ? 'unknown' : String(evidence.providerExit.code))
     return {
       verdict: 'exited',
       activity: 'crashed',
@@ -214,7 +215,11 @@ export function sweepDispatchLiveness(
     store.putLivenessMarker(marker)
     markers.push(marker)
     if (wakeReason && !alreadyWoke) {
-      wakes.push({ dispatchId: input.dispatchId, reason: wakeReason, detail: classification.reason })
+      wakes.push({
+        dispatchId: input.dispatchId,
+        reason: wakeReason,
+        detail: classification.reason
+      })
     }
   }
   return { markers, wakes }

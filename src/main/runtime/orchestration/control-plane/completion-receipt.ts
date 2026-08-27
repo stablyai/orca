@@ -203,15 +203,22 @@ export function parseCompletionClaim(
   if (receiptRaw && typeof receiptRaw === 'object' && !Array.isArray(receiptRaw)) {
     const receiptRecord = receiptRaw as Record<string, unknown>
     const sha = typeof receiptRecord.sha === 'string' ? receiptRecord.sha : null
-    const result = receiptRecord.result === 'PASS' || receiptRecord.result === 'FAIL' ? receiptRecord.result : null
+    const result =
+      receiptRecord.result === 'PASS' || receiptRecord.result === 'FAIL'
+        ? receiptRecord.result
+        : null
     if (sha && result) {
       receipt = {
         sha,
         result,
         policyVersion:
-          typeof receiptRecord.policyVersion === 'string' ? receiptRecord.policyVersion : 'unversioned',
+          typeof receiptRecord.policyVersion === 'string'
+            ? receiptRecord.policyVersion
+            : 'unversioned',
         commandIdentity:
-          typeof receiptRecord.commandIdentity === 'string' ? receiptRecord.commandIdentity : 'unspecified'
+          typeof receiptRecord.commandIdentity === 'string'
+            ? receiptRecord.commandIdentity
+            : 'unspecified'
       }
     }
   }

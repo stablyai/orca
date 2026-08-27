@@ -82,9 +82,14 @@ describe('CORRECTION 1 scrubbed model-performance ledger', () => {
     const rows = log.list()
     expect(rows).toHaveLength(1)
     expect(rows[0].correction_rounds).toBe(3)
-    expect(modelPerformanceEntryId({ outcomeId: 'out_1', dispatchId: 'ctx_1', role: 'builder', identity: IDENTITY })).toBe(
-      rows[0].entry_id
-    )
+    expect(
+      modelPerformanceEntryId({
+        outcomeId: 'out_1',
+        dispatchId: 'ctx_1',
+        role: 'builder',
+        identity: IDENTITY
+      })
+    ).toBe(rows[0].entry_id)
   })
 
   it('keeps a builder record and a reviewer record for the same Dispatch apart', () => {
@@ -119,14 +124,16 @@ describe('CORRECTION 1 scrubbed model-performance ledger', () => {
     ])
     expect(new Set(Object.keys(row))).toEqual(structuralKeys)
     // No notes/body/summary/transcript column exists to scrub.
-    expect(Object.keys(row).some((key) => /note|body|summary|transcript|customer|email/i.test(key))).toBe(
-      false
-    )
+    expect(
+      Object.keys(row).some((key) => /note|body|summary|transcript|customer|email/i.test(key))
+    ).toBe(false)
   })
 
   it('accepts only the two evidence-backed provenance values', () => {
     const log = ledger()
-    expect(log.record(entry({ provenance: 'imported_evidence' })).provenance).toBe('imported_evidence')
+    expect(log.record(entry({ provenance: 'imported_evidence' })).provenance).toBe(
+      'imported_evidence'
+    )
     expect(() =>
       log.record(entry({ provenance: 'prompt_claim' as ModelPerformanceEntry['provenance'] }))
     ).toThrow()
@@ -144,7 +151,12 @@ describe('CORRECTION 1 scrubbed model-performance ledger', () => {
   it('records UNKNOWN-shaped measurements as null rather than inventing a number', () => {
     const log = ledger()
     const row = log.record(
-      entry({ wallClockMs: null, toolCalls: null, contextTokensUsed: null, firstPassResult: 'UNKNOWN' })
+      entry({
+        wallClockMs: null,
+        toolCalls: null,
+        contextTokensUsed: null,
+        firstPassResult: 'UNKNOWN'
+      })
     )
     expect(row.wall_clock_ms).toBeNull()
     expect(row.tool_calls).toBeNull()

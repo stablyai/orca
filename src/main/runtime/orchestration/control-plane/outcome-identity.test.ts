@@ -83,7 +83,9 @@ describe('B2 one outcome, one durable Run', () => {
       ok: false,
       error: { code: 'run_bound_to_other_outcome' }
     })
-    expect(requireOutcomeMatch(cp, { runId: 'run_1', outcomeId: 'out_1' })).toMatchObject({ ok: true })
+    expect(requireOutcomeMatch(cp, { runId: 'run_1', outcomeId: 'out_1' })).toMatchObject({
+      ok: true
+    })
   })
 })
 

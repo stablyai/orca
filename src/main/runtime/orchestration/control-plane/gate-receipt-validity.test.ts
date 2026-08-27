@@ -35,7 +35,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('reuses a PASS receipt when every bound input is unchanged', () => {
     const cp = store()
-    recordGateReceipt(cp, { scopeKey: 'wt_1', inputs: inputs(), result: 'PASS', recordedAt: RECORDED_AT })
+    recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'PASS',
+      recordedAt: RECORDED_AT
+    })
     expect(
       canReuseGateReceipt({ receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'), current: inputs() })
     ).toMatchObject({ reuse: true })
@@ -43,7 +48,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('invalidates the receipt when the final SHA moves', () => {
     const cp = store()
-    recordGateReceipt(cp, { scopeKey: 'wt_1', inputs: inputs(), result: 'PASS', recordedAt: RECORDED_AT })
+    recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'PASS',
+      recordedAt: RECORDED_AT
+    })
     expect(
       canReuseGateReceipt({
         receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'),
@@ -54,7 +64,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('invalidates the receipt when a bound input hash changes, and names the input', () => {
     const cp = store()
-    recordGateReceipt(cp, { scopeKey: 'wt_1', inputs: inputs(), result: 'PASS', recordedAt: RECORDED_AT })
+    recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'PASS',
+      recordedAt: RECORDED_AT
+    })
     const verdict = canReuseGateReceipt({
       receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'),
       current: inputs({ inputHashes: { 'src/a.ts': 'h1', 'src/b.ts': 'CHANGED' } })
@@ -65,7 +80,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('invalidates the receipt when the policy version or the command identity changes', () => {
     const cp = store()
-    recordGateReceipt(cp, { scopeKey: 'wt_1', inputs: inputs(), result: 'PASS', recordedAt: RECORDED_AT })
+    recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'PASS',
+      recordedAt: RECORDED_AT
+    })
     const receipt = findGateReceipt(cp, 'wt_1', 'unit-tests')
     expect(
       canReuseGateReceipt({ receipt, current: inputs({ policyVersion: 'gates-v4' }) })
@@ -77,7 +97,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('never reuses a FAIL receipt or a missing one', () => {
     const cp = store()
-    recordGateReceipt(cp, { scopeKey: 'wt_1', inputs: inputs(), result: 'FAIL', recordedAt: RECORDED_AT })
+    recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'FAIL',
+      recordedAt: RECORDED_AT
+    })
     expect(
       canReuseGateReceipt({ receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'), current: inputs() })
     ).toMatchObject({ reuse: false, code: 'receipt_failed' })
@@ -89,7 +114,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('high-risk policy reruns the full gate set even when nothing changed', () => {
     const cp = store()
-    recordGateReceipt(cp, { scopeKey: 'wt_1', inputs: inputs(), result: 'PASS', recordedAt: RECORDED_AT })
+    recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'PASS',
+      recordedAt: RECORDED_AT
+    })
     expect(
       canReuseGateReceipt({
         receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'),
@@ -101,7 +131,12 @@ describe('B8 gate receipts bind deterministic inputs', () => {
 
   it('re-recording the same gate result is idempotent, not a duplicate row', () => {
     const cp = store()
-    const spec = { scopeKey: 'wt_1', inputs: inputs(), result: 'PASS' as const, recordedAt: RECORDED_AT }
+    const spec = {
+      scopeKey: 'wt_1',
+      inputs: inputs(),
+      result: 'PASS' as const,
+      recordedAt: RECORDED_AT
+    }
     recordGateReceipt(cp, spec)
     recordGateReceipt(cp, spec)
     expect(cp.listGateReceipts('wt_1')).toHaveLength(1)

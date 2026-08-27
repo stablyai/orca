@@ -139,7 +139,10 @@ export function checkRouteEligibility(
     }
   }
   if (!route.roles.includes(requirement.role)) {
-    return { code: 'role_not_eligible', reason: `Route ${key} is not eligible for ${requirement.role}.` }
+    return {
+      code: 'role_not_eligible',
+      reason: `Route ${key} is not eligible for ${requirement.role}.`
+    }
   }
   if (!route.sessionModes.includes(requirement.sessionMode)) {
     return {
@@ -164,7 +167,10 @@ export function checkRouteEligibility(
     }
   }
   if (route.readiness.availability === 'unavailable') {
-    return { code: 'provider_unavailable', reason: `Route ${key} reports the provider unavailable.` }
+    return {
+      code: 'provider_unavailable',
+      reason: `Route ${key} reports the provider unavailable.`
+    }
   }
   if (route.readiness.quota.state === 'exhausted') {
     return { code: 'quota_exhausted', reason: `Route ${key} reports its quota exhausted.` }
@@ -200,7 +206,14 @@ export function admitRoute(request: AdmissionRequest): RouteAdmission {
     reason: string
   ): RouteAdmission => ({
     ok: false,
-    error: { code, routeKey: key, role: requirement.role, sessionMode: requirement.sessionMode, state, reason }
+    error: {
+      code,
+      routeKey: key,
+      role: requirement.role,
+      sessionMode: requirement.sessionMode,
+      state,
+      reason
+    }
   })
 
   if (!effective) {
@@ -274,7 +287,12 @@ export function listAdmissibleRoutes(
 
 export type RouteSelection =
   | { ok: true; route: RouteRow }
-  | { ok: false; code: 'no_candidate_order' | 'no_admissible_candidate'; reason: string; rejected: RouteAdmissionError[] }
+  | {
+      ok: false
+      code: 'no_candidate_order' | 'no_admissible_candidate'
+      reason: string
+      rejected: RouteAdmissionError[]
+    }
 
 /** Automatic fallback. Walks the caller's explicit candidate order and takes
  *  the first currently-admissible one. Orca contributes no preference: with no

@@ -108,7 +108,10 @@ describe('B1 certification is derived from evidence, never asserted', () => {
       effective: row.identity,
       requirement: { role: 'builder', sessionMode: 'fresh' }
     })
-    expect(admission).toMatchObject({ ok: false, error: { code: 'route_untested', state: 'UNTESTED' } })
+    expect(admission).toMatchObject({
+      ok: false,
+      error: { code: 'route_untested', state: 'UNTESTED' }
+    })
   })
 
   it('excludes a FAILed route and a STALE route from admission and from fallback', () => {
@@ -116,7 +119,12 @@ describe('B1 certification is derived from evidence, never asserted', () => {
     const staleRoute = route({ identity: identity({ model: 'haiku-4.5' }) })
     const healthy = route({ identity: identity({ model: 'opus-5' }) })
     const evidence = [
-      ...fullEvidence({ identity: failing.identity, role: 'builder', sessionMode: 'fresh', outcome: 'FAIL' }),
+      ...fullEvidence({
+        identity: failing.identity,
+        role: 'builder',
+        sessionMode: 'fresh',
+        outcome: 'FAIL'
+      }),
       // Stale: evidence bound to a SHA that is no longer current.
       ...fullEvidence({
         identity: staleRoute.identity,
@@ -167,7 +175,10 @@ describe('B1 certification is derived from evidence, never asserted', () => {
   })
 
   it('covers every declared evidence kind across the two session modes', () => {
-    const covered = new Set([...requiredEvidenceKinds('fresh'), ...requiredEvidenceKinds('retained')])
+    const covered = new Set([
+      ...requiredEvidenceKinds('fresh'),
+      ...requiredEvidenceKinds('retained')
+    ])
     for (const kind of ROUTE_EVIDENCE_KINDS) {
       expect(covered.has(kind)).toBe(true)
     }
@@ -264,9 +275,9 @@ describe('B1 identity and readiness fail closed', () => {
 
   it('rejects retained re-engagement on a route that only supports fresh sessions', () => {
     const row = route({ sessionModes: ['fresh'] })
-    expect(
-      checkRouteEligibility(row, { role: 'builder', sessionMode: 'retained' })
-    ).toMatchObject({ code: 'session_mode_unsupported' })
+    expect(checkRouteEligibility(row, { role: 'builder', sessionMode: 'retained' })).toMatchObject({
+      code: 'session_mode_unsupported'
+    })
   })
 
   it('refuses a launcher-supported but hook-rejected route', () => {
@@ -296,10 +307,12 @@ describe('B1 identity and readiness fail closed', () => {
         quota: { state: 'exhausted', resetAt: UNKNOWN, remainingFraction: UNKNOWN }
       }
     })
-    expect(checkRouteEligibility(unavailable, { role: 'builder', sessionMode: 'fresh' })).toMatchObject(
-      { code: 'provider_unavailable' }
-    )
-    expect(checkRouteEligibility(exhausted, { role: 'builder', sessionMode: 'fresh' })).toMatchObject({
+    expect(
+      checkRouteEligibility(unavailable, { role: 'builder', sessionMode: 'fresh' })
+    ).toMatchObject({ code: 'provider_unavailable' })
+    expect(
+      checkRouteEligibility(exhausted, { role: 'builder', sessionMode: 'fresh' })
+    ).toMatchObject({
       code: 'quota_exhausted'
     })
   })
@@ -318,7 +331,10 @@ describe('B1 identity and readiness fail closed', () => {
 
 describe('CORRECTION 1 model-agnostic selection', () => {
   const rows = [
-    route({ identity: identity({ agent: 'grok', model: 'grok-4.6', reasoning: null }), reasoningModes: [] }),
+    route({
+      identity: identity({ agent: 'grok', model: 'grok-4.6', reasoning: null }),
+      reasoningModes: []
+    }),
     route({ identity: identity({ agent: 'claude', model: 'opus-5' }) }),
     route({ identity: identity({ agent: 'codex', model: 'gpt-5.6-sol' }) })
   ]
@@ -405,7 +421,9 @@ describe('CORRECTION 1 model-agnostic selection', () => {
     })
     expect(selection).toMatchObject({ ok: false, code: 'no_admissible_candidate' })
     expect(selection.ok === false && selection.rejected).toHaveLength(3)
-    expect(selection.ok === false && selection.rejected.every((entry) => entry.code === 'route_untested')).toBe(true)
+    expect(
+      selection.ok === false && selection.rejected.every((entry) => entry.code === 'route_untested')
+    ).toBe(true)
   })
 })
 

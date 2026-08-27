@@ -1,7 +1,11 @@
 import type { DispatchContextRow, MessageRow, TaskRow } from '../types'
 import type { ControlPlaneStore, OutcomeRow } from './control-plane-store'
 import { classifyWakeReason, type CoordinatorWakeReason } from './coordinator-wake-events'
-import { readLivenessMarker, type LivenessActivity, type LivenessVerdict } from './dispatch-liveness'
+import {
+  readLivenessMarker,
+  type LivenessActivity,
+  type LivenessVerdict
+} from './dispatch-liveness'
 import {
   resolveRouteCertification,
   type CertificationState,
@@ -112,7 +116,9 @@ function pickLastMeaningfulEvent(
   return null
 }
 
-function resolveNextLegalActions(report: Omit<OutcomeStateReport, 'nextLegalActions'>): NextLegalAction[] {
+function resolveNextLegalActions(
+  report: Omit<OutcomeStateReport, 'nextLegalActions'>
+): NextLegalAction[] {
   const actions: NextLegalAction[] = []
   if (!report.identity.outcomeId) {
     actions.push('admit_outcome')

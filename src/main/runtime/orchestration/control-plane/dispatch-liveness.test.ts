@@ -100,7 +100,11 @@ describe('B4 sweep, marker and wake behaviour', () => {
     expect(first.wakes).toEqual([
       expect.objectContaining({ dispatchId: 'ctx_1', reason: 'stalled' })
     ])
-    const second = sweepDispatchLiveness(cp, [{ dispatchId: 'ctx_1', evidence: stalled }], NOW + 1000)
+    const second = sweepDispatchLiveness(
+      cp,
+      [{ dispatchId: 'ctx_1', evidence: stalled }],
+      NOW + 1000
+    )
     expect(second.wakes).toEqual([])
   })
 
@@ -113,16 +117,20 @@ describe('B4 sweep, marker and wake behaviour', () => {
     )
     expect(crashed.wakes).toEqual([expect.objectContaining({ reason: 'crashed' })])
     // A later sweep with healthy evidence must not resurrect the Dispatch.
-    const after = sweepDispatchLiveness(cp, [{ dispatchId: 'ctx_1', evidence: evidence() }], NOW + 5000)
+    const after = sweepDispatchLiveness(
+      cp,
+      [{ dispatchId: 'ctx_1', evidence: evidence() }],
+      NOW + 5000
+    )
     expect(after.markers[0]).toMatchObject({ activity: 'crashed', terminal: 1 })
     expect(after.wakes).toEqual([])
   })
 
   it('negative control: a healthy sweep produces no wake at all', () => {
     const cp = store()
-    expect(sweepDispatchLiveness(cp, [{ dispatchId: 'ctx_1', evidence: evidence() }], NOW).wakes).toEqual(
-      []
-    )
+    expect(
+      sweepDispatchLiveness(cp, [{ dispatchId: 'ctx_1', evidence: evidence() }], NOW).wakes
+    ).toEqual([])
   })
 
   it('re-arms the marker expiry on every sweep and degrades to unverifiable once it lapses', () => {
@@ -138,7 +146,11 @@ describe('B4 sweep, marker and wake behaviour', () => {
       expired: true
     })
     // Re-arming with a fresh sweep restores the live verdict.
-    sweepDispatchLiveness(cp, [{ dispatchId: 'ctx_1', evidence: evidence({ activeToolCall: true }) }], lapsed)
+    sweepDispatchLiveness(
+      cp,
+      [{ dispatchId: 'ctx_1', evidence: evidence({ activeToolCall: true }) }],
+      lapsed
+    )
     expect(readLivenessMarker(cp, 'ctx_1', lapsed + 10)).toMatchObject({ verdict: 'live' })
   })
 
