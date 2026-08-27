@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 import {
   createCollaborationTopology,
   type CollaborationTopology
@@ -79,7 +80,7 @@ describe('orchestration.collaborationCheckpoint', () => {
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     }).id
     taskId = createTask('subscriber')
-    dispatchId = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY).id
+    dispatchId = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY).id
     if (buildTopology) {
       registerCollaborationRuntimeTopology(runtime, runId, buildTopology())
     }

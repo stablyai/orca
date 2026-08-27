@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RpcContext } from '../core'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 import { createCollaborationTopology } from '../../collaboration/collaboration-topology'
 import { registerCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import { COLLABORATION_PUBLISH_METHODS } from './collaboration-publish'
@@ -40,7 +41,7 @@ describe('collaboration worker completion guard', () => {
     })
     const producer = db.createTask({ spec: 'producer', runId: run.id })
     const subscriber = db.createTask({ spec: 'subscriber', runId: run.id })
-    const dispatch = db.createDispatchContext(producer.id, 'term_producer', PRODUCER_PANE)
+    const dispatch = createRootDispatch(db, producer.id, 'term_producer', PRODUCER_PANE)
     registerCollaborationRuntimeTopology(
       runtime,
       run.id,

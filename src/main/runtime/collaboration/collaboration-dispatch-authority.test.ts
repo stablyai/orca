@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationDb } from '../orchestration/db'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import { requireLocalCollaborationDispatchAuthority } from './collaboration-dispatch-authority'
 
@@ -33,7 +34,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('returns the active dispatch for the assignee terminal without a capability hash', () => {
     const taskId = setup()
-    const dispatch = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    const dispatch = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
 
     const resolved = requireLocalCollaborationDispatchAuthority(runtime, 'term_worker')
 
@@ -42,7 +43,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('returns the active dispatch when the orchestration capability verifies', () => {
     const taskId = setup()
-    const dispatch = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    const dispatch = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
     const capability = db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: WORKER_PANE_KEY,
@@ -64,7 +65,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('throws dispatch_inactive for a terminal that is not the dispatch assignee', () => {
     const taskId = setup()
-    db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
 
     expect(() => requireLocalCollaborationDispatchAuthority(runtime, 'term_other')).toThrowError(
       expect.objectContaining({ code: 'dispatch_inactive' })
@@ -73,7 +74,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('throws dispatch_capability_invalid with the DB reason when the capability is wrong', () => {
     const taskId = setup()
-    const dispatch = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    const dispatch = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
     db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: WORKER_PANE_KEY,
@@ -92,7 +93,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('throws dispatch_capability_invalid when the dispatch has a capability but none was provided', () => {
     const taskId = setup()
-    const dispatch = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    const dispatch = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
     db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: WORKER_PANE_KEY,
@@ -106,7 +107,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('rejects a valid capability from a different pane (no caller-supplied identity)', () => {
     const taskId = setup()
-    const dispatch = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    const dispatch = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
     const capability = db.mintDispatchCapability({
       dispatchId: dispatch.id,
       paneKey: WORKER_PANE_KEY,
@@ -129,7 +130,7 @@ describe('requireLocalCollaborationDispatchAuthority', () => {
 
   it('throws sender_not_assignee when the assignee handle moved to a different pane without a capability', () => {
     const taskId = setup()
-    db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY)
+    createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY)
     vi.mocked(runtime.getTerminalPaneKey).mockImplementation((h) =>
       h === 'term_worker' ? OTHER_PANE_KEY : null
     )
