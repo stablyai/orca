@@ -493,3 +493,55 @@ describe('BOOTSTRAP OPENS ONLY THE UNTESTED CASE', () => {
     expect(admit(stale, true)).toMatchObject({ ok: false })
   })
 })
+
+/** An alias resolves to whatever the host CLI has installed today, so its
+ *  EFFECTIVE identity can only be learned by launching and observing it.
+ *  Refusing the launch is the same closed loop as demanding certification before
+ *  any launch: the route could never become exact. The bootstrap opens the
+ *  launch; certification still needs the observed identity. */
+describe('AN ALIAS CAN BE LAUNCHED TO BE OBSERVED, BUT NEVER CERTIFIED UNSEEN', () => {
+  const aliasRoute = route({ identity: identity({ model: 'opus' }), identityProof: 'alias' })
+
+  it('refuses an alias for ordinary certified routing', () => {
+    expect(
+      checkRouteEligibility(aliasRoute, { role: 'builder', sessionMode: 'fresh' })
+    ).toMatchObject({
+      code: 'identity_proof_insufficient'
+    })
+  })
+
+  it('permits the alias only under a verified certification intent', () => {
+    expect(
+      checkRouteEligibility(aliasRoute, { role: 'builder', sessionMode: 'fresh' }, true)
+    ).toBeNull()
+  })
+
+  it('still refuses everything eligibility exists to refuse, bootstrap or not', () => {
+    const noHook = route({ hookSupported: false, identityProof: 'alias' })
+    expect(
+      checkRouteEligibility(noHook, { role: 'builder', sessionMode: 'fresh' }, true)
+    ).toMatchObject({ code: 'launcher_hook_drift' })
+    const wrongRole = route({ roles: ['reviewer'], identityProof: 'alias' })
+    expect(
+      checkRouteEligibility(wrongRole, { role: 'builder', sessionMode: 'fresh' }, true)
+    ).toMatchObject({ code: 'role_not_eligible' })
+  })
+
+  it('an alias still cannot reach PASS: certification needs the observed identity', () => {
+    // Full evidence minus the one kind that records what actually launched.
+    const partial = fullEvidence({
+      identity: aliasRoute.identity,
+      role: 'builder',
+      sessionMode: 'fresh'
+    }).filter((record) => record.kind !== 'effective_model_identity')
+    const admission = admitRoute({
+      ...baseAdmission,
+      registry: [aliasRoute],
+      evidence: partial,
+      requested: aliasRoute.identity,
+      effective: aliasRoute.identity,
+      requirement: { role: 'builder', sessionMode: 'fresh' }
+    })
+    expect(admission.ok).toBe(false)
+  })
+})

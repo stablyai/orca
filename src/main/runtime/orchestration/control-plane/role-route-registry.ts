@@ -112,7 +112,9 @@ export type EligibilityFailure = { code: RouteAdmissionCode; reason: string }
  *  no clock, no registry position. */
 export function checkRouteEligibility(
   route: RouteRow,
-  requirement: RouteRequirement
+  requirement: RouteRequirement,
+  /** Set only under a verified certification intent. See `admitRoute`. */
+  bootstrapUncertified = false
 ): EligibilityFailure | null {
   const key = routeKey(route.identity)
   if (isExcludedWorkerAgent(route.identity.agent)) {
@@ -132,7 +134,13 @@ export function checkRouteEligibility(
       reason: `Route ${key} is launcher-supported but not a managed agent-hook target.`
     }
   }
-  if (route.identityProof !== 'exact') {
+  // Why a bootstrap may pass: a family alias resolves to whatever the host CLI
+  // has installed today, so the EFFECTIVE identity can only be learned by
+  // launching and observing it. Refusing the launch outright is the same closed
+  // loop as demanding certification before any launch — the route could never
+  // become exact. Certification still requires `effective_model_identity`
+  // evidence, so an unresolved alias can be launched but never certified.
+  if (route.identityProof !== 'exact' && !bootstrapUncertified) {
     return {
       code: 'identity_proof_insufficient',
       reason: `Route ${key} identity proof is ${route.identityProof}; an alias is not exact identity.`
@@ -240,7 +248,11 @@ export function admitRoute(request: AdmissionRequest): RouteAdmission {
   if (!route) {
     return fail('route_unknown', 'UNTESTED', `Route ${key} is not in the registry.`)
   }
-  const eligibility = checkRouteEligibility(route, requirement)
+  const eligibility = checkRouteEligibility(
+    route,
+    requirement,
+    request.bootstrapUncertified === true
+  )
   if (eligibility) {
     return fail(eligibility.code, 'UNTESTED', eligibility.reason)
   }

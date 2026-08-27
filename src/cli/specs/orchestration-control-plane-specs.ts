@@ -42,6 +42,29 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'certification-intent'],
+    summary: "Mint the single-use intent that permits a never-certified route's first launch",
+    usage:
+      'orca orchestration certification-intent --task <task_id> --worktree <worktree_id> --agent <agent> [--model <id>] [--reasoning <level>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'task',
+      'worktree',
+      'agent',
+      'model',
+      'reasoning',
+      'run',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'Certification evidence is produced BY a real launch, so a route with none can never be certified without one launch that has no certification yet. This intent is that launch, and nothing more.',
+      'The runtime matches the intent against the exact Run, Task, outcome, worktree, route and build it is about to launch, so it authorises one specific start rather than a class of them.',
+      'Single-use, UNTESTED routes only. A route that already FAILED or whose evidence went STALE is still refused, and the Dispatch it authorises can never advance a real outcome.',
+      'Minting requires the coordinator terminal currently bound to that Run, in that worktree. Refused for --on (federated) and --terminal (retained) starts.'
+    ]
+  },
+  {
     path: ['orchestration', 'route-truth'],
     summary: 'Ask native Orca what it can actually launch for one agent/model route',
     usage:
