@@ -154,6 +154,11 @@ function resolveNextLegalActions(
   return actions
 }
 
+/** Anything that is not still awaiting or running work is settled. */
+function isSettledDispatchStatus(status: DispatchContextRow['status'] | undefined): boolean {
+  return status !== undefined && status !== 'pending' && status !== 'dispatched'
+}
+
 export function describeOutcomeState(
   selector: OutcomeStateSelector,
   sources: OutcomeStateSources
@@ -191,7 +196,12 @@ export function describeOutcomeState(
     },
     lastMeaningfulEvent: pickLastMeaningfulEvent(sources.recentMessages ?? []),
     liveness: dispatchId
-      ? readLivenessMarker(sources.store, dispatchId, sources.nowMs)
+      ? readLivenessMarker(
+          sources.store,
+          dispatchId,
+          sources.nowMs,
+          isSettledDispatchStatus(sources.dispatch?.status)
+        )
       : {
           verdict: 'unverifiable',
           activity: 'working',

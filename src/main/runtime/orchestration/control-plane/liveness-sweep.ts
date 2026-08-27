@@ -18,7 +18,9 @@ import {
 /** B4 (correction 2) — the production owner of runtime liveness.
  *
  *  Trigger: `runLivenessSweep` is called by the durable `orchestration.await`
- *  wait on its own runtime interval, and once per `orchestration.state` query.
+ *  wait on its own runtime interval. The `orchestration.state` recovery query
+ *  does NOT sweep — it is read-only, and a sweep publishes wakes — so it reads
+ *  the Dispatch's own settled status alongside the marker instead.
  *  There is no unconditional background timer: a Run with no waiter and no
  *  recovery query has nothing to wake, and its marker correctly ages out to
  *  `unverifiable` instead of asserting health.

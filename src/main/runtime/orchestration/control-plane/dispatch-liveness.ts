@@ -226,12 +226,26 @@ export function sweepDispatchLiveness(
 }
 
 /** A marker past its expiry proves nothing; report it as unverifiable rather
- *  than replaying an old `live`. */
+ *  than replaying an old `live`.
+ *
+ *  `settled` is the Dispatch's own lifecycle verdict, which outranks any marker:
+ *  a Dispatch that died between two sweeps keeps its last non-terminal marker
+ *  until the TTL, and reporting that as `live` is the false `live` this module
+ *  exists to prevent. Callers that hold the Dispatch row must pass it. */
 export function readLivenessMarker(
   store: ControlPlaneStore,
   dispatchId: string,
-  nowMs: number
+  nowMs: number,
+  settled?: boolean
 ): { verdict: LivenessVerdict; activity: LivenessActivity; reason: string; expired: boolean } {
+  if (settled) {
+    return {
+      verdict: 'exited',
+      activity: 'settled',
+      reason: 'Dispatch reached a settled lifecycle state.',
+      expired: false
+    }
+  }
   const marker = store.getLivenessMarker(dispatchId)
   if (!marker) {
     return {
