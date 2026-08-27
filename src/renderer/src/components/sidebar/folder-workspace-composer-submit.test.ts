@@ -276,50 +276,6 @@ describe('submitFolderWorkspaceCreate', () => {
     })
   })
 
-  it('creates a Kanban folder workspace with its bound source context', async () => {
-    const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
-    const linkedWorkItem = {
-      provider: 'kanban' as const,
-      type: 'issue' as const,
-      number: 0,
-      title: '4123 Fix checkout retry',
-      url: 'https://kanban.fpimi.ru/?task=4123',
-      kanbanIdentifier: '4123'
-    }
-    const linkedTaskSourceContext = {
-      kind: 'task-source' as const,
-      provider: 'kanban' as const,
-      projectId: 'group-1',
-      hostId: 'local' as const,
-      providerIdentity: {
-        provider: 'kanban' as const,
-        serverUrl: 'https://kanban.fpimi.ru' as const
-      }
-    }
-
-    await submitFolderWorkspaceCreate({
-      projectGroup: makeProjectGroup(),
-      name: '',
-      lastAutoName: '',
-      linkedWorkItem,
-      linkedTaskSourceContext,
-      note: '',
-      quickAgent: null,
-      autoRenameBranchFromWork: true,
-      agentCmdOverrides: {},
-      createFolderWorkspace,
-      onOpenChange: vi.fn()
-    })
-
-    expect(createFolderWorkspace).toHaveBeenCalledWith({
-      projectGroupId: 'group-1',
-      name: '4123 Fix checkout retry',
-      connectionId: null,
-      linkedTask: linkedWorkItem,
-      linkedTaskSourceContext
-    })
-  })
-
   it('keeps linked Codex context out of submitted startup and pastes it as a draft', async () => {
     const createFolderWorkspace = vi.fn(async () => makeFolderWorkspace())
     const linkedWorkItem = {

@@ -6,7 +6,7 @@ import {
   normalizeAutomationPrecheckTimeoutSeconds
 } from '../../../../shared/automation-precheck'
 import { normalizeExecutionHostId } from '../../../../shared/execution-host'
-import type { TaskProviderIdentity as SharedTaskProviderIdentity } from '../../../../shared/task-source-context'
+import { TaskSourceContextSchema } from '../../../../shared/task-source-context-schema'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import {
   OptionalBoolean,
@@ -54,30 +54,10 @@ const OptionalNullablePlainString = z
   .pipe(z.union([z.string(), z.null(), z.undefined()]))
   .optional()
 
-const TaskProviderIdentity = z
-  .custom<SharedTaskProviderIdentity>(
-    (value) =>
-      value !== null &&
-      typeof value === 'object' &&
-      'provider' in value &&
-      ['github', 'gitlab', 'linear', 'jira', 'kanban'].includes(String(value.provider))
-  )
-  .optional()
-  .nullable()
-
-const TaskSourceContext = z
-  .object({
-    kind: z.literal('task-source'),
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira', 'kanban']),
-    projectId: requiredString('Missing source project id'),
-    hostId: ExecutionHostId,
-    projectHostSetupId: OptionalNullablePlainString,
-    repoId: OptionalNullablePlainString,
-    providerIdentity: TaskProviderIdentity,
-    accountLabel: OptionalNullablePlainString
-  })
-  .optional()
-  .nullable()
+// Why: the source context (including its provider identity — e.g. the fixed
+// Kanban server) is normalized by the shared schema instead of a provider-
+// discriminator-only check, so a forged identity never crosses the RPC.
+const TaskSourceContext = TaskSourceContextSchema.nullable().optional()
 
 const WorkspaceRunContext = z
   .object({

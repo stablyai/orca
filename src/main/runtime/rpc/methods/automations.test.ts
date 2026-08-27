@@ -192,4 +192,38 @@ describe('automation RPC methods', () => {
       })
     )
   })
+
+  it('rejects a Kanban source context whose serverUrl is not the fixed server', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    for (const serverUrl of [
+      'https://attacker.example',
+      'http://kanban.fpimi.ru',
+      'https://kanban.fpimi.ru.evil.example'
+    ]) {
+      const result = await dispatcher.dispatch(
+        makeRequest('automation.create', {
+          name: 'Kanban review',
+          prompt: 'Review changes',
+          agentId: 'codex',
+          repo: 'repo-1',
+          rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+          dtstart: 1,
+          sourceContext: {
+            kind: 'task-source',
+            provider: 'kanban',
+            projectId: 'project-1',
+            hostId: 'local',
+            providerIdentity: { provider: 'kanban', serverUrl }
+          }
+        })
+      )
+      expect(result).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    }
+    expect(runtime.createAutomation).not.toHaveBeenCalled()
+  })
 })
