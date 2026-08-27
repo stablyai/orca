@@ -142,6 +142,22 @@ export async function getBrowserWorktreeSelector(
   }
 }
 
+function readExplicitTerminalHandle(flags: Map<string, string | boolean>): string | undefined {
+  if (!flags.has('terminal')) {
+    return undefined
+  }
+  const explicit = flags.get('terminal')
+  if (typeof explicit === 'string' && explicit.length > 0) {
+    return explicit
+  }
+  // Why: `--terminal "$HANDLE"` with an empty expansion is not omission. Scripts
+  // that treat a successful read as "this pane" would otherwise hit another tab.
+  throw new RuntimeClientError(
+    'invalid_argument',
+    '--terminal requires a non-empty handle. Omit --terminal to target the active terminal in the current worktree.'
+  )
+}
+
 // Why: mirrors browser's implicit active-tab targeting. When --terminal is
 // omitted, resolve the active terminal in the current worktree so commands
 // like `orca terminal send --text "hello" --enter` Just Work.
@@ -150,7 +166,7 @@ export async function getTerminalHandle(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
-  const explicit = getOptionalStringFlag(flags, 'terminal')
+  const explicit = readExplicitTerminalHandle(flags)
   if (explicit) {
     return explicit
   }
