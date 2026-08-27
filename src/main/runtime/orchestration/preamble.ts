@@ -1,4 +1,8 @@
 import type { OrchestrationCliCommand } from './cli-command'
+import {
+  buildWorkerProtocolContext,
+  renderRetainedDispatchDelta
+} from './control-plane/worker-protocol-context'
 
 export type PreambleParams = {
   taskId: string
@@ -12,6 +16,10 @@ export type PreambleParams = {
   taskSpec: string
   coordinatorHandle: string
   workerHandle: string
+  // Why: bound in the runtime-generated context so a worker never has to infer
+  // which Run or business outcome its Dispatch belongs to (§B5).
+  runId?: string
+  outcomeId?: string
   devMode?: boolean
   // Why: packaged WSL panes install the scoped launcher as `orca-ide`;
   // other execution hosts keep their existing bare `orca` bridge.
@@ -35,17 +43,14 @@ export type PreambleParams = {
   canDispatchSubWorkers?: boolean
 }
 
-// Why: 5 minutes is frequent enough that the coordinator's stale-heartbeat
-// check (threshold 10 min) catches a hung worker within one tick, and
-// infrequent enough to avoid inbox spam on long tasks. One constant so
-// cadence tuning is a single-line change (Q1 in DESIGN_DOC_PREAMBLE_FIX.md).
-const HEARTBEAT_INTERVAL_MIN = 5
-
 // Why: the dispatch preamble teaches agents about Orca's CLI commands for
-// structured communication. Behavioral rules (body summary, heartbeat cadence,
-// no-AskUserQuestion) live as inline comments above the relevant CLI example,
-// not as a separate prose block — LLM readers anchor on examples and skim
-// trailing prose, so rules must land at the point of use.
+// structured communication. Behavioral rules (body summary, no-AskUserQuestion)
+// live as inline comments above the relevant CLI example, not as a separate
+// prose block — LLM readers anchor on examples and skim trailing prose, so
+// rules must land at the point of use.
+//
+// Liveness is deliberately absent: the runtime owns it from process/session
+// state, so there is no model-generated heartbeat cadence to teach (§B4).
 export function buildDispatchPreamble(params: PreambleParams): string {
   // Why: in dev mode, agents must use orca-dev to connect to the dev runtime's
   // socket. Without this, agents inside the dev Electron app would call the
@@ -58,50 +63,45 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   const capabilityFlag = params.dispatchCapability
     ? ` --dispatch-capability ${params.dispatchCapability}`
     : ''
+  // Why --from is explicit: focus is not lifecycle authority, so the typed
+  // operations must name the dispatched terminal rather than rely on the
+  // worker pane's environment surviving a restart.
+  const bind = `--from ${params.workerHandle} --task ${params.taskId} --dispatch ${params.dispatchId}`
+  const identity = [
+    `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
+    `Your task ID is: ${params.taskId}`,
+    `Your dispatch ID is: ${params.dispatchId}`,
+    params.runId ? `Your Run ID is: ${params.runId}` : null,
+    params.outcomeId ? `Your outcome ID is: ${params.outcomeId}` : null
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n')
 
   const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: ${params.coordinatorHandle}
-Your task ID is: ${params.taskId}
+${identity}
 
 You talk to the coordinator only through the CLI commands below. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
+
+Orca tracks your liveness from your own process and session state. You do not
+send liveness signals on a timer and you do not poll in a loop.
 
 === CLI COMMANDS ===
 
   # Report the terminal task outcome (REQUIRED exactly once).
   #
-  # RULE: --body must be a 3-sentence executive summary (what you did,
-  # what you found, what's left). Never send an empty body; the coordinator
-  # reads the body first and only opens artifacts if it needs more detail.
-  # If you produced a long-form artifact, include its path as
-  # payload.reportPath so the coordinator can find it without a file search.
+  # RULE: --body must be a 3-sentence summary (what you did, what you found,
+  # what's left). Never send an empty body; the coordinator reads the body
+  # first and only opens artifacts if it needs more detail.
   #
-  # RULE: send worker_done exactly once. Use --outcome succeeded when the
-  # requested work is done, or replace it with --outcome failed when it is not.
-  # Never encode failure only in prose and never silently exit.
-  # Include BOTH taskId and dispatchId in the payload so a late completion
-  # from a failed retry cannot complete the current dispatch.
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
-    --type worker_done --subject "<short status>" \\
+  # RULE: report exactly once. Use --outcome succeeded when the requested work
+  # is done, or replace it with --outcome failed when it is not. Never encode
+  # failure only in prose and never silently exit.
+  ${cli} orchestration report ${bind}${capabilityFlag} \\
+    --outcome succeeded \\
     --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} --outcome succeeded \\
     --files-modified "path/a,path/b" \\
     --report-path "<optional: path to the full artifact>"
-
-  # BEHAVIOR RULE: send a heartbeat every ${HEARTBEAT_INTERVAL_MIN} minutes
-  # while actively working on the task. The coordinator uses this to
-  # distinguish "still thinking" from "hung / crashed." Skip heartbeats only
-  # while blocked inside \`check --wait\` or \`ask\` — those calls are
-  # themselves liveness signals.
-  #
-  # Include BOTH taskId and dispatchId in the payload: the coordinator
-  # attributes the heartbeat to the specific dispatch context, not just
-  # the task, so a straggler heartbeat from a previously-failed dispatch
-  # cannot mask a hung retry.
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
-    --type heartbeat --subject "alive" \\
-    --task-id ${params.taskId} --dispatch-id ${params.dispatchId} \\
-    --phase "<short: investigating|implementing|reviewing|waiting>"
 
   # Ask the coordinator a question and block until it answers.
   #
@@ -122,10 +122,9 @@ Slack, GitHub comments, or any other channel to reach a human during the run.
 
   # Escalate a blocker or failure (pre-completion, when you need the
   # coordinator to do something before you can continue):
-  ${cli} orchestration send --from ${params.workerHandle}${capabilityFlag} \\
-    --type escalation --subject "Blocked: <reason>" \\
-    --body "<details>" \\
-    --task-id ${params.taskId} --dispatch-id ${params.dispatchId}
+  ${cli} orchestration escalate ${bind}${capabilityFlag} \\
+    --subject "Blocked: <reason>" \\
+    --body "<details>"
 
   # Check for messages from the coordinator:
   ${cli} orchestration check --terminal ${params.workerHandle}
@@ -148,6 +147,36 @@ ${postDoneInstructions}`
 ${params.taskSpec}`
 }
 
+/** Re-engagement input for a worker whose session Orca retained. It carries the
+ *  dispatch delta and the task only — the worker already has the protocol, so
+ *  resending the full manual just buries the new task (§B5). */
+export function buildRetainedDispatchDelta(
+  params: PreambleParams & { previousTaskId: string; previousDispatchId: string }
+): string {
+  const context = buildWorkerProtocolContext({
+    identity: {
+      taskId: params.taskId,
+      dispatchId: params.dispatchId,
+      runId: params.runId ?? null,
+      outcomeId: params.outcomeId ?? null,
+      coordinatorHandle: params.coordinatorHandle,
+      workerHandle: params.workerHandle,
+      dispatchCapability: params.dispatchCapability
+    },
+    cli: params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  })
+  const delta = renderRetainedDispatchDelta({
+    context,
+    previous: { taskId: params.previousTaskId, dispatchId: params.previousDispatchId }
+  })
+  const drift =
+    params.baseDrift && params.baseDrift.behind > 0 ? buildDriftSection(params.baseDrift) : ''
+  return `${delta}${drift}
+
+=== TASK ===
+${params.taskSpec}`
+}
+
 function buildPostWorkerDoneInstructions({
   cli,
   workerKind
@@ -158,9 +187,9 @@ function buildPostWorkerDoneInstructions({
   // Why: re-dispatch reaches idle agents as terminal input; inbox polling
   // after completion cannot receive that new TASK block and looks hung.
   if (workerKind === 'bare-shell') {
-    return `=== AFTER YOU SEND worker_done ===
+    return `=== AFTER YOU REPORT ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
+Reporting ends your turn for this task. Your dispatched work is complete:
 stop and take no further actions — do NOT start new or unrelated work,
 do NOT run a sleep/poll loop, and do NOT keep calling
 \`${cli} orchestration check\`. The coordinator has already recorded your
@@ -171,9 +200,9 @@ prompt for Orca to reuse; if the coordinator has more for you it will
 dispatch or prompt another worker with a fresh TASK block.`
   }
 
-  return `=== AFTER YOU SEND worker_done ===
+  return `=== AFTER YOU REPORT ===
 
-worker_done ends your turn for this task. Your dispatched work is complete:
+Reporting ends your turn for this task. Your dispatched work is complete:
 stop, return to an idle prompt, and take no further actions — do NOT start
 new or unrelated work, do NOT run a sleep/poll loop, and do NOT keep calling
 \`${cli} orchestration check\`. The coordinator has already recorded your
@@ -186,8 +215,9 @@ Dispatch IDs. Never refuse a direct user request because you were a worker.
 
 Do not exit the shell. Your terminal stays available, and if the
 coordinator has more for you it will re-engage this terminal with a fresh
-preamble + TASK block, which arrives as new input. Treat that as supervised
-work under the new Dispatch; ignore stale follow-ups from the settled task.`
+dispatch delta + TASK block, which arrives as new input. Treat that as
+supervised work under the new Dispatch; ignore stale follow-ups from the
+settled task.`
 }
 
 // Why the whole section is omitted rather than softened when nesting is off: a
@@ -204,7 +234,7 @@ and start each one:
   ${cli} orchestration task-create --spec "<sub-task>" --json
   ${cli} orchestration worker-start --task <task_id> --worktree current --agent <agent> --json
 
-You own those sub-workers: wait for their worker_done, and do not report your own
+You own those sub-workers: wait for their completion, and do not report your own
 until they have settled. Nesting is capped, so a sub-worker of yours may not be
 able to dispatch further.
 ---`

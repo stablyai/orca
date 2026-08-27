@@ -23,6 +23,7 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import { ORCHESTRATION_CONTROL_PLANE_STATE_METHODS } from './orchestration-control-plane-state'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import {
   resolveBareOrchestrationRecipient,
@@ -1914,6 +1915,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   }),
 
   ...ORCHESTRATION_GATE_METHODS,
+  ...ORCHESTRATION_CONTROL_PLANE_STATE_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

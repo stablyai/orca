@@ -11,7 +11,9 @@ import { ORCHESTRATION_RESET_HANDLER } from './orchestration/reset-handler'
 import { ORCHESTRATION_RUN_HANDLERS } from './orchestration/run-handlers'
 import { ORCHESTRATION_SEND_HANDLER } from './orchestration/message-send-handler'
 import { ORCHESTRATION_TASK_HANDLERS } from './orchestration/task-handlers'
+import { ORCHESTRATION_STATE_HANDLER } from './orchestration/state-handler'
 import { ORCHESTRATION_WORKER_LAUNCH_HANDLER } from './orchestration/worker-launch-handler'
+import { ORCHESTRATION_WORKER_OPERATION_HANDLERS } from './orchestration/worker-operation-handlers'
 import { ORCHESTRATION_WORKER_OBSERVATION_HANDLERS } from './orchestration/worker-observation-handlers'
 import { ORCHESTRATION_WORKER_TERMINAL_HANDLERS } from './orchestration/worker-terminal-handlers'
 
@@ -28,5 +30,7 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_QUESTION_HANDLER,
   ...ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS,
   ...ORCHESTRATION_GATE_HANDLERS,
-  ...ORCHESTRATION_RESET_HANDLER
+  ...ORCHESTRATION_RESET_HANDLER,
+  ...ORCHESTRATION_WORKER_OPERATION_HANDLERS,
+  ...ORCHESTRATION_STATE_HANDLER
 }

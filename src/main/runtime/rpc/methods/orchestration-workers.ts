@@ -1,4 +1,6 @@
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
@@ -20,6 +22,7 @@ import {
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { assertWorkerStartRouteAdmitted } from './orchestration-worker-route-admission'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { resolveOrchestrationCaller } from './orchestration-run-scope'
 
@@ -54,6 +57,15 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       }
 
       if (params.on) {
+        // Why here too: a federated worker is still a worker route, and an
+        // outcome-admitted Run must not reach a remote host on an uncertified one.
+        assertWorkerStartRouteAdmitted({
+          handle: db,
+          runId: run.id,
+          agent: isTuiAgent(params.agent) ? params.agent : undefined,
+          model: params.model,
+          effort: params.effort
+        })
         return startFederatedWorker({
           params,
           runtime,
@@ -68,6 +80,15 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const createsWorktree =
         requestedWorktree === 'new-child' || requestedWorktree === 'new-top-level'
       const { agent, launch } = prepareLocalWorkerStart({ params, createsWorktree, runtime })
+      // Why before any effect: an uncertified route must fail admission, not
+      // fail halfway through worktree and terminal creation.
+      assertWorkerStartRouteAdmitted({
+        handle: db,
+        runId: run.id,
+        agent,
+        model: params.model,
+        effort: params.effort
+      })
 
       const coordinatorTerminal = await runtime.showTerminal(params.from)
       const creationWorktree = createsWorktree
@@ -237,6 +258,10 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,
           dispatchId: started.dispatch.id,
+          runId: run.id,
+          // Why bound here: the worker's completion receipt must claim the same
+          // outcome the Run was admitted under, and it cannot infer it.
+          outcomeId: new ControlPlaneStore(db).getOutcomeByRun(run.id)?.outcome_id,
           taskSpec: task.spec,
           coordinatorHandle: params.from,
           workerHandle: terminalHandle,
