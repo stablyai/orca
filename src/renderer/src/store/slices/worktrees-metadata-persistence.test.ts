@@ -394,4 +394,38 @@ describe('worktree remote runtime mutations', () => {
     expect(subscriber).toHaveBeenCalledTimes(1)
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledTimes(2)
   })
+
+  it('persists a same-id manual rank to every owning host', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/same/path'
+    const local = makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'local' })
+    const remote = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      hostId: 'runtime:env-1'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set-manual-order',
+      ok: true,
+      result: { worktree: { ...remote, manualOrder: 9000 } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ worktreesByRepo: { repo1: [local, remote] } } as Partial<AppState>)
+
+    await store.getState().updateWorktreesMeta(new Map([[worktreeId, { manualOrder: 9000 }]]))
+
+    expect(store.getState().worktreesByRepo.repo1.map((row) => row.manualOrder)).toEqual([
+      9000, 9000
+    ])
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId,
+      updates: { manualOrder: 9000 }
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
+      selector: 'env-1',
+      method: 'worktree.set',
+      params: { worktree: `id:${worktreeId}`, manualOrder: 9000 },
+      timeoutMs: 15_000
+    })
+  })
 })

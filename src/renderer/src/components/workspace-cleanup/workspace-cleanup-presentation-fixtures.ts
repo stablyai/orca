@@ -3,7 +3,10 @@ import { translate } from '@/i18n/i18n'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { WorkspaceCleanupCandidate } from '../../../../shared/workspace-cleanup'
+import {
+  applyWorkspaceCleanupPolicy,
+  type WorkspaceCleanupCandidate
+} from '../../../../shared/workspace-cleanup'
 import type { WorkspaceCleanupFilters } from './workspace-cleanup-presentation'
 
 export const NOW = 1_700_000_000_000
@@ -27,7 +30,7 @@ export const DEFAULT_FILTERS: WorkspaceCleanupFilters = {
 export function makeCandidate(
   overrides: Partial<WorkspaceCleanupCandidate> = {}
 ): WorkspaceCleanupCandidate {
-  return {
+  return applyWorkspaceCleanupPolicy({
     worktreeId: 'repo-1::/repo/alpha',
     repoId: 'repo-1',
     repoName: 'Repo',
@@ -35,8 +38,6 @@ export function makeCandidate(
     displayName: 'alpha',
     branch: 'alpha',
     path: '/repo/alpha',
-    tier: 'ready',
-    selectedByDefault: true,
     reasons: ['idle-clean'],
     blockers: [],
     lastActivityAt: NOW - 40 * 24 * 60 * 60 * 1000,
@@ -56,7 +57,7 @@ export function makeCandidate(
     },
     fingerprint: 'fingerprint',
     ...overrides
-  }
+  })
 }
 
 export function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {

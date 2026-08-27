@@ -4,6 +4,8 @@ import type { WorkspaceKey } from './folder-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
+import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
+import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 
 /** Minimal subset of OpenFile persisted across restarts.
  *  Only edit-mode files are saved — diffs, conflict reviews, and other
@@ -57,6 +59,18 @@ export type WorkspaceSessionState = {
   browserPagesByWorkspace?: Record<string, BrowserPage[]>
   /** Per-worktree active browser workspace ID at shutdown. */
   activeBrowserTabIdByWorktree?: Record<string, string | null>
+  /**
+   * Runtime-authored: the client-hosted logical pages this runtime owns, keyed by worktree ID.
+   * Written and read only by the runtime that is the pages' authority — the desktop's own
+   * `browserPagesByWorkspace` rows are the client-side half of the same tabs.
+   */
+  clientHostedBrowserPagesByWorktree?: Record<string, PersistedClientHostedBrowserPage[]>
+  /**
+   * Client-authored: closes of client-hosted pages that could not reach their owning runtime,
+   * keyed by runtime environment ID. Replayed on reconnect so persistence cannot resurrect a tab
+   * the user deliberately closed while the host was down.
+   */
+  clientHostedBrowserCloseIntentsByEnvironment?: Record<string, ClientHostedBrowserCloseIntent[]>
   /** Per-worktree active tab type (terminal vs editor vs browser) at shutdown. */
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Global browser URL history for address bar autocomplete. */
@@ -84,7 +98,9 @@ export type WorkspaceSessionState = {
    *  and worktreeNavHistory (Back/Forward stack). See
    *  docs/cmd-j-empty-query-ordering.md. Absent in sessions written by
    *  older builds — hydration tolerates missing/partial maps and the
-   *  active worktree is seeded on first restore. */
+   *  active worktree is seeded on first restore. New host-qualified keys use
+   *  `${executionHostId}|${worktreeId}`; legacy bare keys remain readable
+   *  during migration and remote snapshot projection. */
   lastVisitedAtByWorktreeId?: Record<string, number>
   /** Worktrees whose repo-defined default terminal tabs have already been
    *  considered. Persisted so closing all tabs and re-opening the workspace

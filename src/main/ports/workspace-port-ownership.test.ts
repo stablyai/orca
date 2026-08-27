@@ -7,12 +7,66 @@ vi.mock('./local-workspace-port-scanner', () => ({
   scanWorkspacePorts: scanWorkspacePortsMock
 }))
 
+function workspacePortScan(pid: number, port: number) {
+  return {
+    platform: 'win32' as const,
+    scannedAt: 0,
+    ports: [
+      {
+        id: `127.0.0.1:${port}:${pid}`,
+        bindHost: '127.0.0.1',
+        connectHost: '127.0.0.1',
+        port,
+        pid,
+        protocol: 'http' as const,
+        kind: 'workspace' as const,
+        worktreeId: worktrees[0]!.id
+      }
+    ]
+  }
+}
+
 const worktrees = [{ id: 'repo::/repo', repoId: 'repo', displayName: 'main', path: '/repo' }]
 
 describe('killWorkspacePort', () => {
   afterEach(() => {
     scanWorkspacePortsMock.mockReset()
     vi.restoreAllMocks()
+  })
+
+  it('reports success when the listener exited before the signal landed', async () => {
+    // Why: the re-scan authorizes the pid, then the dev server exits on its own
+    // before `kill` runs. The port is free -- which is what Stop asked for --
+    // but the raw ESRCH surfaced as "Stop failed" on a port that was gone.
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('kill ESRCH'), { code: 'ESRCH' })
+    })
+    scanWorkspacePortsMock.mockResolvedValue(workspacePortScan(123, 5173))
+
+    expect(await killWorkspacePort(worktrees, { pid: 123, port: 5173 })).toEqual({ ok: true })
+  })
+
+  it('still reports a real failure to stop', async () => {
+    vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('kill EPERM'), { code: 'EPERM' })
+    })
+    scanWorkspacePortsMock.mockResolvedValue(workspacePortScan(123, 5173))
+
+    expect(await killWorkspacePort(worktrees, { pid: 123, port: 5173 })).toEqual({
+      ok: false,
+      reason: 'kill EPERM'
+    })
+  })
+
+  it('signals the pid the socket scan named, which is the listener itself', async () => {
+    // Why pinned: netstat -ano / lsof report the process that owns the socket,
+    // not a supervising wrapper, so escalating this to a tree kill would reach
+    // descendants nobody asked to stop without freeing anything extra.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    scanWorkspacePortsMock.mockResolvedValue(workspacePortScan(123, 5173))
+
+    expect(await killWorkspacePort(worktrees, { pid: 123, port: 5173 })).toEqual({ ok: true })
+    expect(killSpy).toHaveBeenCalledExactlyOnceWith(123, 'SIGTERM')
   })
 
   // Regression for #11161 review: on an EDR-hooked host the background poller

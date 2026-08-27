@@ -213,4 +213,40 @@ describe('buildHydratedTabState referential repair', () => {
 
     expect(leafGroupIds(result.layoutByWorktree.w1)).toEqual(['g1', 'g2'])
   })
+
+  it('collapses a persisted layout that repeats one group across leaves', () => {
+    const result = buildHydratedTabState(
+      {
+        ...makeBaseSession(),
+        unifiedTabs: { w1: [tab('t1', 'g1', 0), tab('t2', 'g2', 1)] },
+        tabGroups: {
+          w1: [
+            { id: 'g1', worktreeId: 'w1', activeTabId: 't1', tabOrder: ['t1'] },
+            { id: 'g2', worktreeId: 'w1', activeTabId: 't2', tabOrder: ['t2'] }
+          ]
+        },
+        tabGroupLayouts: {
+          w1: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', groupId: 'g1' },
+            second: {
+              type: 'split',
+              direction: 'horizontal',
+              first: { type: 'leaf', groupId: 'g1' },
+              second: {
+                type: 'split',
+                direction: 'horizontal',
+                first: { type: 'leaf', groupId: 'g2' },
+                second: { type: 'leaf', groupId: 'g1' }
+              }
+            }
+          }
+        }
+      },
+      new Set(['w1'])
+    )
+
+    expect(leafGroupIds(result.layoutByWorktree.w1)).toEqual(['g1', 'g2'])
+  })
 })

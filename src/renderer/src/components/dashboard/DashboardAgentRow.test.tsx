@@ -348,6 +348,26 @@ describe('DashboardAgentRow', () => {
     expect(activeToolMarkup).toContain('ListDir')
   })
 
+  it('renders monitoring without a spinner or active tool line', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          workingMode: 'monitoring',
+          prompt: '',
+          toolName: 'Bash',
+          toolInput: 'pnpm dev'
+        }
+      )
+    )
+
+    expect(markup).toContain('Monitoring background tasks')
+    expect(markup).toContain('lucide-radio')
+    expect(classTokens(markup)).toContain('text-yellow-500')
+    expect(markup).not.toContain('data-agent-spinner')
+    expect(markup).not.toContain('data-agent-row-tool-slot')
+  })
+
   it('names what a blocked approval is waiting on', () => {
     const markup = renderRow(
       makeAgent(

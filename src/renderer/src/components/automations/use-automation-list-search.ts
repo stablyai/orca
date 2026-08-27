@@ -1,45 +1,72 @@
-import { useDeferredValue, useEffect, useMemo } from 'react'
-import type { Automation } from '../../../../shared/automations-types'
-import { getAutomationRunRepoId } from '../../../../shared/automation-run-identity'
+import { useDeferredValue, useEffect, useMemo, useRef } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
+import { resolveAutomationListSearchQuery } from './automation-list-search'
+import type { AutomationListRow } from './automation-list-row-identity'
 import {
-  automationListSearchIndexMatches,
-  buildAutomationListSearchIndex,
-  buildAutomationProjectSearchText,
-  resolveAutomationListSearchQuery,
-  truncateAutomationListSearchField,
-  AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS,
-  type AutomationListSearchFields,
-  type AutomationListSearchIndex
-} from './automation-list-search'
+  buildAutomationListSearchRowFingerprint,
+  buildAutomationListSearchRows,
+  buildAutomationSearchRowSources,
+  buildExternalAutomationSearchRowSources,
+  matchAutomationListSearchRowKeys,
+  type AutomationListSearchRow,
+  type AutomationListSearchRowSource,
+  type AutomationWorkspaceNameLookup
+} from './automation-list-search-rows'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
-import { getExternalProviderLabel } from './external-automation-display'
+
+/** Counts the empty-state view consumes, so it never recomputes what search already knows. */
+export type AutomationListSearchCounts = {
+  hostRowCount: number
+  visibleRowCount: number
+  searchActive: boolean
+}
+
+/**
+ * Rebuilds indexes only when the fingerprint changes, so a refresh tick that
+ * replaces arrays with equal search content re-renders without re-indexing.
+ * The cache is keyed by fingerprint rather than array identity, which useMemo
+ * cannot express on its own.
+ */
+function useAutomationSearchRows(
+  sources: AutomationListSearchRowSource[]
+): AutomationListSearchRow[] {
+  const fingerprint = useMemo(() => buildAutomationListSearchRowFingerprint(sources), [sources])
+  const cacheRef = useRef<{ fingerprint: string; rows: AutomationListSearchRow[] } | null>(null)
+  if (!cacheRef.current || cacheRef.current.fingerprint !== fingerprint) {
+    cacheRef.current = { fingerprint, rows: buildAutomationListSearchRows(sources) }
+  }
+  return cacheRef.current.rows
+}
 
 export function useAutomationListSearch({
   listSearchQuery,
-  automations,
+  rows,
   externalAutomationEntries,
   repoMap,
-  selectedId,
+  worktreeMap,
+  selectedRowKey,
   selectedExternalKey,
-  selectAutomationId,
+  selectAutomationRow,
   selectExternalKey
 }: {
   listSearchQuery: string
-  automations: readonly Automation[]
+  rows: readonly AutomationListRow[]
   externalAutomationEntries: readonly ExternalAutomationListEntry[]
   repoMap: ReadonlyMap<string, Repo>
-  selectedId: string | null
+  worktreeMap?: AutomationWorkspaceNameLookup
+  /** The row currently on screen, not the bare id: two hosts can hold that id. */
+  selectedRowKey: string | null
   selectedExternalKey: string | null
-  selectAutomationId: (automationId: string | null) => void
+  selectAutomationRow: (rowKey: string | null) => void
   selectExternalKey: (externalKey: string | null) => void
 }): {
   isListSearchQueryTooLarge: boolean
   isListSearchActive: boolean
-  filteredAutomations: readonly Automation[]
+  filteredRows: readonly AutomationListRow[]
   filteredExternalAutomationEntries: readonly ExternalAutomationListEntry[]
   hasListItems: boolean
   hasFilteredListItems: boolean
+  searchCounts: AutomationListSearchCounts
 } {
   // Why: keep the input snappy; matching is deferred so caret never waits on
   // index scans. Only the normalized active query can fire a search.
@@ -60,127 +87,55 @@ export function useAutomationListSearch({
     deferredListSearchResolution.status === 'active' ? deferredListSearchResolution.query : null
   const isListSearchActive = activeListSearchQuery !== null
 
-  // Why: fingerprint includes id + search fields so refresh ticks that only
-  // change nextRunAt / usage do not rebuild indexes or re-run matching. Prompts
-  // are truncated to the indexed prefix so each tick stays O(bound) per row.
-  const automationSearchFingerprint = useMemo(
-    () =>
-      automations
-        .map((automation) => {
-          const repo = repoMap.get(getAutomationRunRepoId(automation))
-          const project = buildAutomationProjectSearchText({
-            displayName: repo?.displayName,
-            path: repo?.path
-          })
-          const prompt = truncateAutomationListSearchField(
-            automation.prompt,
-            AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS
-          )
-          return `${automation.id}\u0001${automation.name}\u0001${project}\u0001${prompt}`
-        })
-        .join('\u0000'),
-    [automations, repoMap]
+  const automationSearchSources = useMemo(
+    () => buildAutomationSearchRowSources(rows, { repoMap, worktreeMap }),
+    [rows, repoMap, worktreeMap]
   )
-  const automationSearchRows = useMemo((): {
-    id: string
-    index: AutomationListSearchIndex
-  }[] => {
-    return automations.map((automation) => {
-      const repo = repoMap.get(getAutomationRunRepoId(automation))
-      return {
-        id: automation.id,
-        index: buildAutomationListSearchIndex({
-          name: automation.name,
-          project: buildAutomationProjectSearchText({
-            displayName: repo?.displayName,
-            path: repo?.path
-          }),
-          prompt: automation.prompt
-        })
-      }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint is the rebuild gate
-  }, [automationSearchFingerprint])
+  const automationSearchRows = useAutomationSearchRows(automationSearchSources)
 
-  const externalAutomationSearchFingerprint = useMemo(
-    () =>
-      externalAutomationEntries
-        .map((entry) => {
-          const prompt = truncateAutomationListSearchField(
-            entry.job.prompt ?? entry.job.promptPreview ?? '',
-            AUTOMATION_LIST_SEARCH_PROMPT_MAX_CODE_UNITS
-          )
-          return `${entry.key}\u0001${entry.job.name}\u0001${getExternalProviderLabel(entry.manager)}\u0001${entry.manager.targetLabel}\u0001${entry.job.workdir ?? ''}\u0001${prompt}`
-        })
-        .join('\u0000'),
+  const externalAutomationSearchSources = useMemo(
+    () => buildExternalAutomationSearchRowSources(externalAutomationEntries),
     [externalAutomationEntries]
   )
-  const externalAutomationSearchRows = useMemo((): {
-    key: string
-    index: AutomationListSearchIndex
-  }[] => {
-    return externalAutomationEntries.map((entry) => {
-      const fields: AutomationListSearchFields = {
-        name: entry.job.name,
-        project: [
-          getExternalProviderLabel(entry.manager),
-          entry.manager.targetLabel,
-          entry.job.workdir
-        ]
-          .filter(Boolean)
-          .join(' '),
-        prompt: entry.job.prompt ?? entry.job.promptPreview ?? ''
-      }
-      return { key: entry.key, index: buildAutomationListSearchIndex(fields) }
-    })
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fingerprint is the rebuild gate
-  }, [externalAutomationSearchFingerprint])
+  const externalAutomationSearchRows = useAutomationSearchRows(externalAutomationSearchSources)
 
   // Why: matching runs only when the normalized query or search content changes —
   // never on relativeNow / nextRunAt / usage refresh alone.
-  const filteredAutomationIds = useMemo((): readonly string[] | null => {
-    if (activeListSearchQuery === null) {
-      return null
-    }
-    const ids: string[] = []
-    for (const row of automationSearchRows) {
-      if (automationListSearchIndexMatches(row.index, activeListSearchQuery)) {
-        ids.push(row.id)
-      }
-    }
-    return ids
-  }, [activeListSearchQuery, automationSearchRows])
+  const filteredRowKeys = useMemo(
+    (): readonly string[] | null =>
+      activeListSearchQuery === null
+        ? null
+        : matchAutomationListSearchRowKeys(automationSearchRows, activeListSearchQuery),
+    [activeListSearchQuery, automationSearchRows]
+  )
 
-  const filteredExternalAutomationKeys = useMemo((): readonly string[] | null => {
-    if (activeListSearchQuery === null) {
-      return null
-    }
-    const keys: string[] = []
-    for (const row of externalAutomationSearchRows) {
-      if (automationListSearchIndexMatches(row.index, activeListSearchQuery)) {
-        keys.push(row.key)
-      }
-    }
-    return keys
-  }, [activeListSearchQuery, externalAutomationSearchRows])
+  const filteredExternalAutomationKeys = useMemo(
+    (): readonly string[] | null =>
+      activeListSearchQuery === null
+        ? null
+        : matchAutomationListSearchRowKeys(externalAutomationSearchRows, activeListSearchQuery),
+    [activeListSearchQuery, externalAutomationSearchRows]
+  )
 
-  const filteredAutomations = useMemo((): readonly Automation[] => {
-    if (filteredAutomationIds === null) {
-      return automations
+  const filteredRows = useMemo((): readonly AutomationListRow[] => {
+    if (filteredRowKeys === null) {
+      return rows
     }
-    if (filteredAutomationIds.length === 0) {
+    if (filteredRowKeys.length === 0) {
       return []
     }
-    const byId = new Map(automations.map((automation) => [automation.id, automation]))
-    const next: Automation[] = []
-    for (const id of filteredAutomationIds) {
-      const automation = byId.get(id)
-      if (automation) {
-        next.push(automation)
+    // Keyed by row, not automation id: a bare-id map holds one entry for two
+    // hosts' copies, so one host's row would be dropped and the other doubled.
+    const byKey = new Map(rows.map((row) => [row.key, row]))
+    const next: AutomationListRow[] = []
+    for (const key of filteredRowKeys) {
+      const row = byKey.get(key)
+      if (row) {
+        next.push(row)
       }
     }
     return next
-  }, [automations, filteredAutomationIds])
+  }, [rows, filteredRowKeys])
 
   const filteredExternalAutomationEntries = useMemo((): readonly ExternalAutomationListEntry[] => {
     if (filteredExternalAutomationKeys === null) {
@@ -200,9 +155,8 @@ export function useAutomationListSearch({
     return next
   }, [externalAutomationEntries, filteredExternalAutomationKeys])
 
-  const hasListItems = automations.length + externalAutomationEntries.length > 0
-  const hasFilteredListItems =
-    filteredAutomations.length + filteredExternalAutomationEntries.length > 0
+  const hostRowCount = rows.length + externalAutomationEntries.length
+  const visibleRowCount = filteredRows.length + filteredExternalAutomationEntries.length
 
   // Why: when search hides the current row, move selection to the first visible
   // match so list highlight and detail stay aligned. No matches → keep detail.
@@ -212,21 +166,21 @@ export function useAutomationListSearch({
     }
     const localVisible =
       selectedExternalKey === null &&
-      selectedId != null &&
-      filteredAutomations.some((automation) => automation.id === selectedId)
+      selectedRowKey != null &&
+      filteredRows.some((row) => row.key === selectedRowKey)
     const externalVisible =
       selectedExternalKey != null &&
       filteredExternalAutomationEntries.some((entry) => entry.key === selectedExternalKey)
     if (localVisible || externalVisible) {
       return
     }
-    const firstLocal = filteredAutomations[0]
+    const firstLocal = filteredRows[0]
     if (firstLocal) {
       if (selectedExternalKey !== null) {
         selectExternalKey(null)
       }
-      if (selectedId !== firstLocal.id) {
-        selectAutomationId(firstLocal.id)
+      if (selectedRowKey !== firstLocal.key) {
+        selectAutomationRow(firstLocal.key)
       }
       return
     }
@@ -236,20 +190,23 @@ export function useAutomationListSearch({
     }
   }, [
     activeListSearchQuery,
-    filteredAutomations,
+    filteredRows,
     filteredExternalAutomationEntries,
-    selectAutomationId,
+    selectAutomationRow,
     selectExternalKey,
     selectedExternalKey,
-    selectedId
+    selectedRowKey
   ])
 
   return {
     isListSearchQueryTooLarge,
     isListSearchActive,
-    filteredAutomations,
+    filteredRows,
     filteredExternalAutomationEntries,
-    hasListItems,
-    hasFilteredListItems
+    hasListItems: hostRowCount > 0,
+    hasFilteredListItems: visibleRowCount > 0,
+    // Why: the empty-state view reads rows-before and rows-after from here
+    // rather than recomputing either count from its own props.
+    searchCounts: { hostRowCount, visibleRowCount, searchActive: isListSearchActive }
   }
 }

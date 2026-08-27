@@ -16,6 +16,14 @@ export type { AgentForegroundResolutionOptions } from './windows-agent-foregroun
 export type AgentForegroundProcessResolution = {
   available: boolean
   processName: string | null
+  /**
+   * Windows: pid of the process a recognized name belongs to — a liveness
+   * anchor callers may check against the pane's job. Absent when the name is a
+   * fallback, ambiguous, or resolved on POSIX (where `+` already marks it).
+   */
+  processId?: number
+  /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
+  anchorPidForeign?: boolean
 }
 
 function collectDescendants<Row extends { pid: number; ppid: number }>(
@@ -86,7 +94,12 @@ export async function resolveAgentForegroundProcessWithAvailability(
         resolution.processName ??
         (options.forceProcessScan && recognizeAgentProcessFromCommandLine(fallbackProcess)
           ? null
-          : fallbackProcess)
+          : fallbackProcess),
+      // The anchor only travels with the name it proved, never with a fallback.
+      ...(resolution.processName !== null && resolution.processId !== undefined
+        ? { processId: resolution.processId }
+        : {}),
+      ...(resolution.anchorPidForeign ? { anchorPidForeign: true } : {})
     }
   }
 

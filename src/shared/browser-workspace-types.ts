@@ -67,6 +67,11 @@ export type BrowserPage = {
   // Why: remote-owned worktrees can still host client-local fallback browser
   // pages until headless remote runtimes support real browser panes.
   browserRuntimeEnvironmentId?: string | null
+  // Why: the runtime page id lives only in the in-memory handle map, so without persisting it a
+  // relaunch cannot reclaim the host's page and falls through to creating a blank one.
+  remoteBrowserPageId?: string | null
+  /** The remote page was hosted by this desktop, not the runtime; it must not restore as streamed. */
+  remoteBrowserPageClientHosted?: boolean
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
 }

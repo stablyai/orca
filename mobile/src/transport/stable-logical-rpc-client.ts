@@ -160,6 +160,7 @@ export function createStableLogicalRpcClient(
     getState: () => state,
     getReconnectAttempt: () => connectionPath.reconnectAttempt(activeSession.getReconnectAttempt()),
     getLastConnectedAt: () => activeSession.getLastConnectedAt(),
+    getLastInboundAt: () => activeSession.getLastInboundAt?.() ?? null,
     onStateChange(listener) {
       stateListeners.add(listener)
       return () => stateListeners.delete(listener)

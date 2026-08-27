@@ -52,8 +52,3 @@ Ensure no issues in: Security, Cross-platoform support (Linux, Windows, Mac), Re
 - [ ] Self-reviewed for correctness, security, and performance
 - [ ] Cross-platform, SSH/remote, and path/shortcut impact considered (or N/A)
 - [ ] `pnpm lint`, `pnpm typecheck`, `pnpm test`, and `pnpm build` pass (or CI will cover; local preferred)
-
-## Author
-
-- X / Twitter: @your_handle
-  <!-- Optional but appreciated -->

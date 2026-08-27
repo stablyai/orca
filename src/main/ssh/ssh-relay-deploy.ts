@@ -697,7 +697,10 @@ function uploadStageNamespaceIfSupported(
 
 const NODE_PTY_VERSION = '1.1.0'
 const NODE_PTY_CONSOLE_LIST_PATCH_FILENAME = 'node-pty-1.1.0-console-list-agent-patch.cjs'
-const RELAY_NATIVE_DEPS = {
+// Exported for the relay-native-dependency-coverage test, which asserts every
+// native addon the relay bundle imports is either installed here or explicitly
+// declared as degrading without it.
+export const RELAY_NATIVE_DEPS = {
   'node-pty': NODE_PTY_VERSION,
   '@parcel/watcher': '2.5.6'
 } as const

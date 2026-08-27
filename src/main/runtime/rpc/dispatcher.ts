@@ -1,6 +1,5 @@
 import {
   buildRegistry,
-  formatZodError,
   isStreamingMethod,
   type RpcAnyMethod,
   type RpcEnvelopeMeta,
@@ -9,8 +8,6 @@ import {
   type RpcResponse
 } from './core'
 
-import type { FeatureInteractionId } from '../../../shared/feature-interactions'
-import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import { errorResponse, successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
@@ -24,7 +21,11 @@ import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
 import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
-import { invalidArgumentResponse, mapDispatcherError } from './dispatcher-error-response'
+import { mapDispatcherError } from './dispatcher-error-response'
+import { parseRpcRequestParams } from './dispatcher-request-parsing'
+import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
+import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
+import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -61,7 +62,7 @@ export class RpcDispatcher {
       return migrationFence
     }
 
-    const parsedParams = this.parseParams(request, method, meta)
+    const parsedParams = parseRpcRequestParams(request, method, meta)
     if (parsedParams.error) {
       return parsedParams.error
     }
@@ -79,6 +80,21 @@ export class RpcDispatcher {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
+      const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
+        this.runtime,
+        request.method,
+        parsedParams.value
+      )
+      if (clientHostedBrowser.handled) {
+        recordRuntimeFeatureInteraction(
+          this.runtime,
+          request.method,
+          clientHostedBrowser.result,
+          undefined,
+          request.params
+        )
+        return successResponse(request.id, meta, clientHostedBrowser.result)
+      }
       const compatibility = await this.legacyOrchestration.tryHandle(
         request,
         parsedParams.value,
@@ -163,7 +179,7 @@ export class RpcDispatcher {
       return
     }
 
-    const parsedParams = this.parseParams(request, method, meta)
+    const parsedParams = parseRpcRequestParams(request, method, meta)
     if (parsedParams.error) {
       reply(JSON.stringify(parsedParams.error))
       return
@@ -171,6 +187,22 @@ export class RpcDispatcher {
 
     if (!isStreamingMethod(method)) {
       try {
+        const clientHostedBrowser = await routeDispatcherClientHostedBrowserRpc(
+          this.runtime,
+          request.method,
+          parsedParams.value
+        )
+        if (clientHostedBrowser.handled) {
+          recordRuntimeFeatureInteraction(
+            this.runtime,
+            request.method,
+            clientHostedBrowser.result,
+            undefined,
+            request.params
+          )
+          reply(JSON.stringify(successResponse(request.id, meta, clientHostedBrowser.result)))
+          return
+        }
         const compatibility = await this.legacyOrchestration.tryHandle(
           request,
           parsedParams.value,
@@ -209,6 +241,7 @@ export class RpcDispatcher {
             pairing: options?.pairing,
             sendBinary: options?.sendBinary,
             registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
+            registerBinaryMessageHandler: options?.registerBinaryMessageHandler,
             legacyCoordinatorRunId,
             legacyCoordinatorAuthority: legacyCoordinator?.authority,
             revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
@@ -237,19 +270,12 @@ export class RpcDispatcher {
       return
     }
 
-    const recordedStreamingFeatureInteractions = new Set<FeatureInteractionId>()
-    const emit = (result: unknown): void => {
-      recordRuntimeFeatureInteraction(
-        this.runtime,
-        request.method,
-        result,
-        recordedStreamingFeatureInteractions,
-        request.params
-      )
-      const response = successResponse(request.id, meta, result)
-      response.streaming = true
-      reply(JSON.stringify(response))
-    }
+    const { emit, recordedFeatureInteractions } = createDispatcherStreamingFeatureEmitter(
+      this.runtime,
+      request,
+      meta,
+      reply
+    )
 
     try {
       const result = await method.handler(
@@ -266,7 +292,8 @@ export class RpcDispatcher {
           orchestrationCapability: request.orchestrationCapability,
           pairing: options?.pairing,
           sendBinary: options?.sendBinary,
-          registerBinaryStreamHandler: options?.registerBinaryStreamHandler
+          registerBinaryStreamHandler: options?.registerBinaryStreamHandler,
+          registerBinaryMessageHandler: options?.registerBinaryMessageHandler
         },
         emit
       )
@@ -274,7 +301,7 @@ export class RpcDispatcher {
         this.runtime,
         request.method,
         result,
-        recordedStreamingFeatureInteractions,
+        recordedFeatureInteractions,
         request.params
       )
     } catch (error) {
@@ -282,32 +309,7 @@ export class RpcDispatcher {
     }
   }
 
-  private parseParams(
-    request: RpcRequest,
-    method: RpcAnyMethod,
-    meta: RpcEnvelopeMeta
-  ): { value: unknown; error?: undefined } | { value?: undefined; error: RpcResponse } {
-    if (method.params === null) {
-      return { value: undefined }
-    }
-    const rawParams = request.params ?? {}
-    const result = method.params.safeParse(rawParams)
-    if (!result.success) {
-      return {
-        error: invalidArgumentResponse(request, meta, formatZodError(result.error))
-      }
-    }
-    return { value: result.data }
-  }
-
   private meta(): RpcEnvelopeMeta {
     return { runtimeId: this.runtime.getRuntimeId() }
   }
-}
-
-function needsLocalCallerFingerprint(request: RpcRequest, params: unknown): boolean {
-  return (
-    request.method.startsWith('orchestration.federation') ||
-    (!!request.orchestrationRequestId && isOrchestrationMutation(request.method, params))
-  )
 }

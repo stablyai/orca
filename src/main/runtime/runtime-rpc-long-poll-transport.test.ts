@@ -14,6 +14,7 @@ import {
   waitFor,
   seedSupervisedAskWorkers
 } from './runtime-rpc-test-harness'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -129,7 +130,7 @@ describe('OrcaRuntimeRpcServer', () => {
         coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
       })
       const task = db.createTask({ spec: 'Wait for an answer', runId: run.id })
-      db.createDispatchContext(task.id, 'term_asker', askerPaneKey)
+      createRootDispatch(db, task.id, 'term_asker', askerPaneKey)
       const server = new OrcaRuntimeRpcServer({
         runtime,
         userDataPath,

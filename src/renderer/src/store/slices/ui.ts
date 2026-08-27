@@ -2,9 +2,10 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar-route'
+import { settleEvictedModalData } from './modal-slot-dismissal'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
-  findPrevLiveWorktreeHistoryIndex
+  rewindHistoryIndexPastView
 } from './worktree-nav-history'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
@@ -88,6 +89,12 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
+import {
+  ALL_AUTOMATION_HOSTS_FILTER,
+  parsePersistedAutomationHostFilter,
+  toPersistedAutomationHostFilter,
+  type AutomationHostFilter
+} from '../../../../shared/automation-host-filter'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -896,6 +903,9 @@ export type UISlice = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
+  /** Automations page host filter, in stable form. Never written from an unhydrated catalog. */
+  automationHostFilter: AutomationHostFilter
+  setAutomationHostFilter: (filter: AutomationHostFilter) => void
   manualRepoOrder: ManualRepoOrderEntry[]
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
@@ -1482,20 +1492,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }))
   },
   closeAutomationsPage: () =>
-    set((state) => {
-      const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
-      let nextHistoryIndex = state.worktreeNavHistoryIndex
-      if (currentEntry === 'automations') {
-        const prev = findPrevLiveWorktreeHistoryIndex(state)
-        if (prev !== null) {
-          nextHistoryIndex = prev
-        }
-      }
-      return {
-        activeView: state.previousViewBeforeAutomations,
-        worktreeNavHistoryIndex: nextHistoryIndex
-      }
-    }),
+    set((state) => ({
+      activeView: state.previousViewBeforeAutomations,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations')
+    })),
   openSpacePage: () => {
     get().recordFeatureInteraction?.('workspace-cleanup')
     set((state) => ({
@@ -1508,41 +1508,51 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeSpace
     })),
-  openSkillsPage: () =>
+  openSkillsPage: () => {
+    get().recordViewVisit('skills')
     set((state) => ({
       activeView: 'skills',
       previousViewBeforeSkills:
         state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
-    })),
+    }))
+  },
   closeSkillsPage: () =>
     set((state) => ({
-      activeView: state.previousViewBeforeSkills
+      activeView: state.previousViewBeforeSkills,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'skills')
     })),
-  openSkillShare: (shareId) =>
+  openSkillShare: (shareId) => {
+    get().recordViewVisit('skills')
     set((state) => ({
       activeView: 'skills',
       previousViewBeforeSkills:
         state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
       pendingSkillShareId: shareId
-    })),
+    }))
+  },
   clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
-  openSkillsSharedLinks: () =>
+  openSkillsSharedLinks: () => {
+    get().recordViewVisit('skills')
     set((state) => ({
       activeView: 'skills',
       previousViewBeforeSkills:
         state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
       pendingSkillsSharedView: true
-    })),
+    }))
+  },
   clearPendingSkillsSharedView: () => set({ pendingSkillsSharedView: false }),
-  openArtifactsPage: () =>
+  openArtifactsPage: () => {
+    get().recordViewVisit('artifacts')
     set((state) => ({
       activeView: 'artifacts',
       previousViewBeforeArtifacts:
         state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
-    })),
+    }))
+  },
   closeArtifactsPage: () =>
     set((state) => ({
-      activeView: state.previousViewBeforeArtifacts
+      activeView: state.previousViewBeforeArtifacts,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
     })),
   openMobilePage: () =>
     set((state) => ({
@@ -1621,12 +1631,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (modal === 'add-repo' || modal === 'create-worktree') {
       get().recordFeatureInteraction?.('workspace-creation')
     }
+    const evicted = get().modalData
     set({
       activeModal: modal,
       modalData: data
     })
+    settleEvictedModalData(evicted)
   },
-  closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  closeModal: () => {
+    const evicted = get().modalData
+    set({ activeModal: 'none', modalData: {} })
+    settleEvictedModalData(evicted)
+  },
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>
     set((s) => {
@@ -2109,6 +2125,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceHostOrder })
     window.api.ui.set({ workspaceHostOrder }).catch(console.error)
   },
+  automationHostFilter: ALL_AUTOMATION_HOSTS_FILTER,
+  setAutomationHostFilter: (filter) => {
+    window.api.ui
+      .set({ automationHostFilter: toPersistedAutomationHostFilter(filter) })
+      .catch(console.error)
+    set({ automationHostFilter: filter })
+  },
   manualRepoOrder: [],
 
   hideDefaultBranchWorkspace: false,
@@ -2523,6 +2546,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
+        // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
+        automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
         manualRepoOrder,
         // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
         repos: orderedRepos,
@@ -2625,7 +2650,11 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why the normalizer rather than a cast: this blob is hand-editable and
         // may come from an older or newer build; it degrades field by field
         // instead of bricking the cleanup dialog.
-        workspaceCleanupBrowse: normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse),
+        // Why: a sync broadcast can carry stale browse state while its writer is debounced.
+        workspaceCleanupBrowse:
+          source === 'startup'
+            ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
+            : s.workspaceCleanupBrowse,
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'

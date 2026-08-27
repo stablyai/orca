@@ -24,7 +24,7 @@ export function wrapRuntimeHomeHookCommand(
   const powershellFallback = options.neutralJsonWhenMissing ? "; Write-Output '{}'" : ''
   const powershellCommand = `$homePath = $env:HOME -replace '^/([A-Za-z])/', '$1:/'; $scriptPath = Join-Path $homePath '.orca\\agent-hooks\\${scriptBaseName}.cmd'; if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null${powershellFallback}; exit 0`
   const encodedCommand = encodeWindowsPowerShellHookCommand(powershellCommand)
-  // Why: the Git Bash and native Windows launchers must suppress windows identically (#14815).
+  // Why: the Git Bash and native Windows launchers must spell the same switches — window suppression (#14815) and an AV verdict on the shape (#16003) both hit either path.
   const powershellInvocation = `${powershell} ${WINDOWS_POWERSHELL_HOOK_SWITCHES} -EncodedCommand ${encodedCommand}`
   const encodedWindowsBranch = `if [ -f ${powershell} ]; then ${powershellInvocation}; else ${missingScriptFallback}; fi`
   const windowsBranch = `if [ -f ${windowsScript} ]; then case "\${HOME-}" in ${WINDOWS_GIT_BASH_RUNTIME_HOME_UNSAFE}) ${encodedWindowsBranch} ;; *) ${windowsScript} ;; esac; else ${missingScriptFallback}; fi`

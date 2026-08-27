@@ -211,3 +211,32 @@ describe('normalizeImageTranscriptMessages', () => {
     expect(normalizeImageTranscriptMessages([assistant])).toEqual([assistant])
   })
 })
+
+describe('normalizeNativeChatUserText control bytes', () => {
+  it('drops the Ctrl+U a TUI pasted in front of the prompt', () => {
+    expect(normalizeNativeChatUserText('\u0015run the tests')).toBe('run the tests')
+  })
+
+  it('drops control bytes that landed inside the prompt', () => {
+    expect(normalizeNativeChatUserText('run\u0015 the\u0000 tests')).toBe('run the tests')
+  })
+
+  it('still finds the image marker behind a leading control byte', () => {
+    expect(normalizeNativeChatUserText('\u0015[Image #1] describe this')).toBe('describe this')
+  })
+
+  // Remove a bracketed-paste wrapper as one sequence so its printable tail cannot survive.
+  it('drops a bracketed-paste wrapper, not just its ESC introducer', () => {
+    expect(normalizeNativeChatUserText('\u001b[200~/tmp/orca-paste-1.png\u001b[201~')).toBe(
+      '/tmp/orca-paste-1.png'
+    )
+  })
+
+  it('preserves bracketed-paste-looking text without an ESC introducer', () => {
+    expect(normalizeNativeChatUserText('[200~literal[201~')).toBe('[200~literal[201~')
+  })
+
+  it('leaves tabs, newlines and carriage returns to the whitespace collapse', () => {
+    expect(normalizeNativeChatUserText('run\tthe\r\ntests')).toBe('run the tests')
+  })
+})

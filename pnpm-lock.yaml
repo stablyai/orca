@@ -8,6 +8,9 @@ overrides:
   monaco-editor>dompurify: 3.4.13
 
 patchedDependencies:
+  '@vscode/windows-process-tree@0.8.0':
+    hash: 73a90530e6b95c05dac50f2c48787fb51cb292587773016ebe57eb05e41075a0
+    path: config/patches/@vscode__windows-process-tree@0.8.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.287':
     hash: 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
     path: config/patches/@xterm__addon-ligatures@0.11.0-beta.287.patch
@@ -20,8 +23,11 @@ patchedDependencies:
   '@xterm/xterm@6.1.0-beta.287':
     hash: 46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7
     path: config/patches/@xterm__xterm@6.1.0-beta.287.patch
+  lint-staged@16.4.0:
+    hash: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
+    path: config/patches/lint-staged@16.4.0.patch
   node-pty@1.1.0:
-    hash: 8fc49f17011b6611a5b8c00e83a6f12e14e75aada2b0ef26dc5393f8376d20e8
+    hash: 9c665d9e41571341cb8986607d531b953a7f32c0dd60e1e74e633c098d80f2c1
     path: config/patches/node-pty@1.1.0.patch
 
 importers:
@@ -63,7 +69,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=8fc49f17011b6611a5b8c00e83a6f12e14e75aada2b0ef26dc5393f8376d20e8)
+        version: 1.1.0(patch_hash=9c665d9e41571341cb8986607d531b953a7f32c0dd60e1e74e633c098d80f2c1)
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
@@ -274,7 +280,7 @@ importers:
         version: 0.16.45
       lint-staged:
         specifier: ^16.4.0
-        version: 16.4.0
+        version: 16.4.0(patch_hash=7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673)
       lowlight:
         specifier: ^3.3.0
         version: 3.3.0
@@ -399,6 +405,9 @@ importers:
         specifier: ^5.0.14
         version: 5.0.14(@types/react@19.2.17)(react@19.2.7)(use-sync-external-store@1.6.0(react@19.2.7))
     optionalDependencies:
+      '@vscode/windows-process-tree':
+        specifier: 0.8.0
+        version: 0.8.0(patch_hash=73a90530e6b95c05dac50f2c48787fb51cb292587773016ebe57eb05e41075a0)
       sherpa-onnx-darwin-arm64:
         specifier: 1.12.37
         version: 1.12.37
@@ -3375,6 +3384,9 @@ packages:
   '@vitest/utils@4.1.5':
     resolution: {integrity: sha512-76wdkrmfXfqGjueGgnb45ITPyUi1ycZ4IHgC2bhPDUfWHklY/q3MdLOAB+TF1e6xfl8NxNY0ZYaPCFNWSsw3Ug==}
 
+  '@vscode/windows-process-tree@0.8.0':
+    resolution: {integrity: sha512-TI+h2GRwX+igD/YYJMQQVAFcsCNSg7Te2yYxQpKMzwto5RsJ8d2KKgOeur/p/6sAOQwZvopiTDOClyTHEn9MhQ==}
+
   '@xmldom/xmldom@0.8.13':
     resolution: {integrity: sha512-KRYzxepc14G/CEpEGc3Yn+JKaAeT63smlDr+vjB8jRfgTBBI9wRj/nkQEO+ucV8p8I9bfKLWp37uHgFrbntPvw==}
     engines: {node: '>=10.0.0'}
@@ -5422,6 +5434,10 @@ packages:
 
   node-addon-api@4.3.0:
     resolution: {integrity: sha512-73sE9+3UaLYYFmDsFZnqCInzPyh3MqIwZO9cw58yIqAZhONrrabrYyYe3TuIqtIiOuTXVhsGau8hcrhhwSsDIQ==}
+
+  node-addon-api@7.1.0:
+    resolution: {integrity: sha512-mNcltoe1R8o7STTegSOHdnJNN7s5EUvhoS7ShnTHDyOSd+8H+UdWODq6qSv67PjC8Zc5JRT8+oLAMCr0SIXw7g==}
+    engines: {node: ^16 || ^18 || >= 20}
 
   node-addon-api@7.1.1:
     resolution: {integrity: sha512-5m3bsyrjFWE1xf7nz7YXdN4udnVtXK6/Yfgn5qnahL6bCkf2yKt4k3nuTKAtT4r3IG8JNR2ncsIMdZuAzJjHQQ==}
@@ -9589,6 +9605,11 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
+  '@vscode/windows-process-tree@0.8.0(patch_hash=73a90530e6b95c05dac50f2c48787fb51cb292587773016ebe57eb05e41075a0)':
+    dependencies:
+      node-addon-api: 7.1.0
+    optional: true
+
   '@xmldom/xmldom@0.8.13': {}
 
   '@xterm/addon-fit@0.12.0-beta.287(@xterm/xterm@6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7))':
@@ -11374,7 +11395,7 @@ snapshots:
 
   linkifyjs@4.3.2: {}
 
-  lint-staged@16.4.0:
+  lint-staged@16.4.0(patch_hash=7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673):
     dependencies:
       commander: 14.0.3
       listr2: 9.0.5
@@ -12001,6 +12022,9 @@ snapshots:
   node-addon-api@4.3.0:
     optional: true
 
+  node-addon-api@7.1.0:
+    optional: true
+
   node-addon-api@7.1.1: {}
 
   node-api-version@0.2.1:
@@ -12022,7 +12046,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=8fc49f17011b6611a5b8c00e83a6f12e14e75aada2b0ef26dc5393f8376d20e8):
+  node-pty@1.1.0(patch_hash=9c665d9e41571341cb8986607d531b953a7f32c0dd60e1e74e633c098d80f2c1):
     dependencies:
       node-addon-api: 7.1.1
 

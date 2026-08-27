@@ -66,6 +66,65 @@ describe('orchestration RPC methods', () => {
       })
     }
 
+    it('rejects a declared caller that disagrees with complete attested evidence', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_coord' || handle === 'term_other'
+          ? coordinatorPaneKey
+          : handle === 'term_worker'
+            ? 'tab_worker:leaf_worker'
+            : null
+      )
+      const attestedEvidence = {
+        terminalHandle: 'term_attested',
+        paneKey: 'tab_attested:leaf_attested',
+        launchToken: 'attested-launch-token'
+      } as const
+      vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockReturnValue({
+        terminalHandle: attestedEvidence.terminalHandle,
+        paneKey: attestedEvidence.paneKey,
+        processIncarnation: 'runtime_test:attested:1',
+        launchTokenHash: 'attested-launch-token-hash',
+        hostScope: { kind: 'local', hostId: 'local' }
+      })
+      ctx = { ...ctx, orchestrationCompatibilityEvidence: attestedEvidence }
+      const task = db.createTask({ spec: 'mismatched caller' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_other',
+          agent: 'codex'
+        })
+      ).rejects.toMatchObject({ code: 'consumer_fenced' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
+    })
+
+    it('deliberately permits present but unverifiable restored-terminal evidence', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      // Restored/adopted terminals have no launch token, so verification returns null; this
+      // fail-open is deliberate compatibility behavior, not an oversight.
+      const task = db.createTask({ spec: 'restored caller limitation' })
+      ctx = {
+        ...ctx,
+        orchestrationCompatibilityEvidence: {
+          terminalHandle: 'term_worker',
+          paneKey: 'tab_worker:leaf_worker'
+        }
+      }
+
+      const result = (await call('orchestration.workerStart', {
+        task: task.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { state: string }
+
+      expect(result.state).toBe('ready')
+      expect(db.getDispatchContext(task.id)).toBeDefined()
+    })
+
     it('starts a fresh agent in the coordinator current worktree', async () => {
       setup()
       mockCurrentWorkerStart()

@@ -66,38 +66,35 @@ export function getAutomationOwnerTarget(
   return getAutomationTargetFromHostId(automation.runContext?.hostId)
 }
 
-export function getAutomationCreateTarget(input: AutomationCreateInput): AutomationHostTarget {
-  return getAutomationTargetFromHostId(input.runContext?.hostId)
-}
-
-function toRuntimeAutomationCreateInput(
+/** Renames the desktop input's target fields to the wire contract every authority speaks. */
+export function toRuntimeAutomationCreateInput(
   input: AutomationCreateInput
 ): RuntimeAutomationCreateInput {
   const { projectId, workspaceId, ...rest } = input
   return {
     ...rest,
-    repo: projectId,
-    workspace: input.workspaceMode === 'existing' ? (workspaceId ?? undefined) : undefined
+    // Machine selectors must not fall back to path/name matching on a remote host.
+    repo: `id:${projectId}`,
+    workspace: input.workspaceMode === 'existing' && workspaceId ? `id:${workspaceId}` : undefined
   }
 }
-
-function toRuntimeAutomationUpdateInput(
+/** Renames the desktop input's target fields to the wire contract every authority speaks. */
+export function toRuntimeAutomationUpdateInput(
   input: AutomationUpdateInput
 ): RuntimeAutomationUpdateInput {
   const { projectId, workspaceId, ...rest } = input
   return {
     ...rest,
-    ...(projectId !== undefined ? { repo: projectId } : {}),
-    ...(workspaceId !== undefined ? { workspace: workspaceId ?? undefined } : {})
+    ...(projectId !== undefined ? { repo: `id:${projectId}` } : {}),
+    ...(workspaceId !== undefined
+      ? { workspace: workspaceId ? `id:${workspaceId}` : undefined }
+      : {})
   }
 }
 
 export async function listAutomationsForTarget(
   target: AutomationHostTarget
 ): Promise<Automation[]> {
-  if (target.kind === 'local') {
-    return await window.api.automations.list()
-  }
   const result = await callRuntimeRpc<{ automations: Automation[] }>(
     target,
     'automation.list',
@@ -107,34 +104,22 @@ export async function listAutomationsForTarget(
   return result.automations
 }
 
+/**
+ * One automation's history, never a host's. Usage totals for the list come from
+ * the authority's own list projection; fetching every run to compute them made
+ * the page's cost scale with retained history rather than with what is on screen.
+ */
 export async function listAutomationRunsForTarget(
   target: AutomationHostTarget,
-  automationId?: string
+  automationId: string
 ): Promise<AutomationRun[]> {
-  if (target.kind === 'local') {
-    return await window.api.automations.listRuns(automationId ? { automationId } : undefined)
-  }
   const result = await callRuntimeRpc<{ runs: AutomationRun[] }>(
     target,
     'automation.runs',
-    automationId ? { automationId } : {},
+    { automationId },
     { timeoutMs: 15_000 }
   )
   return result.runs
-}
-
-export async function createAutomationForTarget(input: AutomationCreateInput): Promise<Automation> {
-  const target = getAutomationCreateTarget(input)
-  if (target.kind === 'local') {
-    return await window.api.automations.create(input)
-  }
-  const result = await callRuntimeRpc<{ automation: Automation }>(
-    target,
-    'automation.create',
-    toRuntimeAutomationCreateInput(input),
-    { timeoutMs: 15_000 }
-  )
-  return result.automation
 }
 
 export async function updateAutomationForTarget(
@@ -143,9 +128,6 @@ export async function updateAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<Automation> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'local') {
-    return await window.api.automations.update({ id: automation.id, updates })
-  }
   const result = await callRuntimeRpc<{ automation: Automation }>(
     target,
     'automation.update',
@@ -160,10 +142,6 @@ export async function deleteAutomationForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<void> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'local') {
-    await window.api.automations.delete({ id: automation.id })
-    return
-  }
   await callRuntimeRpc(target, 'automation.delete', { id: automation.id }, { timeoutMs: 15_000 })
 }
 
@@ -172,9 +150,6 @@ export async function runAutomationNowForTarget(
   sourceTarget?: AutomationHostTarget | null
 ): Promise<AutomationRun> {
   const target = getAutomationOwnerTarget(automation, sourceTarget)
-  if (target.kind === 'local') {
-    return await window.api.automations.runNow({ id: automation.id })
-  }
   const result = await callRuntimeRpc<{ run: AutomationRun }>(
     target,
     'automation.runNow',

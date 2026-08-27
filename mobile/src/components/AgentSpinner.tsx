@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react'
+import { Radio } from 'lucide-react-native'
 import { Animated, Easing, StyleSheet, View } from 'react-native'
+import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
 
 type WorktreeStatus = 'working' | 'active' | 'permission' | 'done' | 'inactive'
 
@@ -17,11 +19,18 @@ const STATUS_COLORS: Record<WorktreeStatus, string> = {
   inactive: 'rgba(115,115,115,0.4)'
 }
 
-export function AgentSpinner({ status }: { status: WorktreeStatus }) {
+export function AgentSpinner({
+  status,
+  workingMode
+}: {
+  status: WorktreeStatus
+  workingMode?: AgentWorkingMode
+}) {
   const spinValue = useRef(new Animated.Value(0)).current
+  const monitoring = status === 'working' && workingMode === 'monitoring'
 
   useEffect(() => {
-    if (status === 'working') {
+    if (status === 'working' && !monitoring) {
       const animation = Animated.loop(
         Animated.timing(spinValue, {
           toValue: 1,
@@ -34,9 +43,17 @@ export function AgentSpinner({ status }: { status: WorktreeStatus }) {
       return () => animation.stop()
     }
     spinValue.setValue(0)
-  }, [status, spinValue])
+  }, [monitoring, status, spinValue])
 
   const color = STATUS_COLORS[status] ?? STATUS_COLORS.inactive
+
+  if (monitoring) {
+    return (
+      <View style={styles.wrapper} accessibilityLabel="Monitoring background tasks">
+        <Radio size={12} color={STATUS_COLORS.working} />
+      </View>
+    )
+  }
 
   if (status === 'working') {
     const rotate = spinValue.interpolate({

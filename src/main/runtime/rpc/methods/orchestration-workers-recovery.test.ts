@@ -61,6 +61,8 @@ describe('orchestration worker recovery', () => {
     })
     const task = db.createTask({ spec: 'recover worker', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       runtimeEpoch
@@ -206,6 +208,8 @@ describe('orchestration worker recovery', () => {
     })
     const task = db.createTask({ spec: 'interrupted', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       runtimeEpoch: 'previous_runtime'
@@ -244,6 +248,8 @@ describe('orchestration worker recovery', () => {
     })
     const task = db.createTask({ spec: 'stop remote worker', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       runtimeEpoch: runtime.getRuntimeId(),

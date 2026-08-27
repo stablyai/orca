@@ -51,6 +51,33 @@ describe('Copilot hook normalization', () => {
     expect(result?.payload.prompt).toBe('camel event')
   })
 
+  it('captures the Copilot provider session from SessionStart and Stop', () => {
+    const sessionId = '940237d9-c712-48e8-bca1-fd75fc4a8d4b'
+    const started = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hook_event_name: 'SessionStart', session_id: sessionId }),
+      'production'
+    )
+    expect(started?.providerSession).toEqual({ key: 'session_id', id: sessionId })
+
+    const stopped = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hook_event_name: 'Stop', session_id: sessionId }),
+      'production'
+    )
+    expect(stopped?.payload.state).toBe('done')
+    expect(stopped?.providerSession).toEqual({ key: 'session_id', id: sessionId })
+  })
+
+  it('captures the Copilot provider session from a camelCase sessionId', () => {
+    const result = _internals.normalizeHookPayload(
+      'copilot',
+      buildBody({ hookEventName: 'agentStop', sessionId: 'copilot-camel' }),
+      'production'
+    )
+    expect(result?.providerSession).toEqual({ key: 'session_id', id: 'copilot-camel' })
+  })
+
   it('infers Copilot user prompt payloads that omit hook_event_name', () => {
     const result = _internals.normalizeHookPayload(
       'copilot',

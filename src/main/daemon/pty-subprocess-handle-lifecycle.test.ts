@@ -69,12 +69,14 @@ vi.mock('../providers/agent-foreground-process', () => ({
 // fake timers; default to "shell-only" so the degraded-scan guard falls through
 // to its existing retirement logic (the degraded-scan behavior itself is
 // covered in pty-subprocess-foreground-degraded-scan.test.ts).
-vi.mock('../providers/windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: () => Promise.resolve(new Set([12345]))
+vi.mock('../providers/windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: () => new Set([12345]),
+  isWindowsPtyJobReadable: () => true
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
 import { mockPtyProcess, useDaemonPtySubprocessEnv } from './pty-subprocess-test-harness'
+import { __setConptyJobNativeForTests } from '../windows/windows-pty-job'
 
 describe('createPtySubprocess', () => {
   useDaemonPtySubprocessEnv({
@@ -408,6 +410,36 @@ describe('createPtySubprocess', () => {
         expect(proc.destroy).not.toHaveBeenCalled()
       } finally {
         killSpy.mockRestore()
+        restorePlatform(origPlatform)
+      }
+    })
+
+    it('forceKill after a Windows kill() escalates to the job instead of giving up', async () => {
+      // Why: skipping the second native kill is right (it double-closes ConPTY),
+      // but it made forceKill a permanent no-op, so a wedged ConPTY -- which
+      // never fires onExit -- could not be escalated at all (#9854). The job
+      // terminates the tree without touching the handle node-pty owns.
+      const terminateJob = vi.fn().mockReturnValue(true)
+      __setConptyJobNativeForTests(() => ({
+        terminateJob,
+        listJobProcessIds: vi.fn(),
+        assignCurrentProcessToJob: vi.fn().mockReturnValue(true)
+      }))
+      const proc = mockPtyProcess(123456) as ReturnType<typeof mockPtyProcess> & { _pty: number }
+      proc._pty = 11
+      spawnMock.mockReturnValue(proc)
+      const origPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+      try {
+        const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+        handle.kill()
+        handle.forceKill()
+
+        expect(terminateJob).toHaveBeenCalledWith(11, 123456)
+        // Still exactly one native kill: the escalation must not double-close.
+        expect(proc.kill).toHaveBeenCalledOnce()
+      } finally {
+        __setConptyJobNativeForTests()
         restorePlatform(origPlatform)
       }
     })

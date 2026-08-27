@@ -11,6 +11,7 @@ import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const COORDINATOR_HANDLE = 'term_legacy_coord'
 const COORDINATOR_PANE = 'tab_coord:44444444-4444-4444-8444-444444444444'
@@ -45,7 +46,7 @@ function createHarness(): Harness {
     spec: 'legacy assignment',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
-  const dispatch = before.createDispatchContext(task.id, WORKER_HANDLE, WORKER_PANE)
+  const dispatch = createRootDispatch(before, task.id, WORKER_HANDLE, WORKER_PANE)
   before.close()
 
   const raw = new Database(dbPath)

@@ -12,8 +12,11 @@ import {
 } from '@/lib/feature-education-telemetry'
 import { isContextualTourAllowedForModal } from './contextual-tour-gate'
 import {
+  areContextualTourRenderStatesEqual,
   getContextualTourCleanupOutcome,
-  measureContextualTourOverlayRenderState
+  hasContextualTourTargetMoved,
+  measureContextualTourOverlayRenderState,
+  type MeasuredContextualTourTarget
 } from './contextual-tour-overlay-measurement'
 import {
   ContextualTourOverlaySurface,
@@ -24,6 +27,7 @@ import {
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
+import { BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 
 export function ContextualTourOverlay(): JSX.Element | null {
   const activeTourId = useAppStore((s) => s.activeContextualTourId)
@@ -49,9 +53,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
   const setSidebarOpen = useAppStore((s) => s.setSidebarOpen)
   const openTaskPage = useAppStore((s) => s.openTaskPage)
   const openModal = useAppStore((s) => s.openModal)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const [renderState, setRenderState] = useState<ActiveTourRenderState | null>(null)
-  const [measureVersion, setMeasureVersion] = useState(0)
   const panelRef = useRef<HTMLElement | null>(null)
+  const measuredTargetRef = useRef<MeasuredContextualTourTarget | null>(null)
   const markedTourIdRef = useRef<string | null>(null)
   const previousFocusRef = useRef<HTMLElement | null>(null)
   const focusedStepRef = useRef<string | null>(null)
@@ -136,23 +142,9 @@ export function ContextualTourOverlay(): JSX.Element | null {
     onboardingVisible
   ])
 
-  useEffect(() => {
-    if (!activeTourId) {
-      return
-    }
-    const scheduleMeasure = (): void => setMeasureVersion((version) => version + 1)
-    window.addEventListener('resize', scheduleMeasure)
-    window.addEventListener('scroll', scheduleMeasure, true)
-    const interval = window.setInterval(scheduleMeasure, 500)
-    return () => {
-      window.removeEventListener('resize', scheduleMeasure)
-      window.removeEventListener('scroll', scheduleMeasure, true)
-      window.clearInterval(interval)
-    }
-  }, [activeTourId])
-
-  useLayoutEffect(() => {
+  const measureTourOverlay = useCallback((): void => {
     if (!activeTour || activeTourId === null) {
+      measuredTargetRef.current = null
       setRenderState(null)
       return
     }
@@ -170,6 +162,11 @@ export function ContextualTourOverlay(): JSX.Element | null {
       measurement.kind === 'render' ? measurement.telemetryTotalSteps : 0
     )
 
+    if (measurement.kind !== 'render') {
+      // Why: drop the old target so the next scroll runs a full pass instead of
+      // probing an element the step no longer uses (and may have detached).
+      measuredTargetRef.current = null
+    }
     if (measurement.kind === 'advance') {
       advanceContextualTour()
       return
@@ -183,7 +180,15 @@ export function ContextualTourOverlay(): JSX.Element | null {
       return
     }
 
-    setRenderState(measurement.renderState)
+    measuredTargetRef.current = {
+      element: measurement.renderState.targetElement,
+      rect: measurement.renderState.rect
+    }
+    setRenderState((previous) =>
+      areContextualTourRenderStatesEqual(previous, measurement.renderState)
+        ? previous
+        : measurement.renderState
+    )
   }, [
     activeStepIndex,
     activeTour,
@@ -192,9 +197,51 @@ export function ContextualTourOverlay(): JSX.Element | null {
     cancelContextualTour,
     emitContextualTourOutcome,
     keybindings,
-    measureVersion,
     sidebarOpen
   ])
+
+  useEffect(() => {
+    if (!activeTourId) {
+      return
+    }
+    // Why: all three triggers land on one frame, and scroll — which the
+    // capture-phase listener receives for every scrollable pane in the app —
+    // pays one rect read unless the tour's own target actually moved. Step
+    // targets appearing or vanishing are still caught by the 500ms pass.
+    let frame: number | null = null
+    let fullPassQueued = false
+    const scheduleMeasure = (fullPass: boolean): void => {
+      fullPassQueued = fullPassQueued || fullPass
+      if (frame !== null) {
+        return
+      }
+      frame = window.requestAnimationFrame(() => {
+        frame = null
+        const runFullPass = fullPassQueued
+        fullPassQueued = false
+        if (runFullPass || hasContextualTourTargetMoved(measuredTargetRef.current)) {
+          measureTourOverlay()
+        }
+      })
+    }
+    const scheduleTargetMeasure = (): void => scheduleMeasure(false)
+    const scheduleFullMeasure = (): void => scheduleMeasure(true)
+    window.addEventListener('resize', scheduleFullMeasure)
+    window.addEventListener('scroll', scheduleTargetMeasure, true)
+    const interval = window.setInterval(scheduleFullMeasure, 500)
+    return () => {
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame)
+      }
+      window.removeEventListener('resize', scheduleFullMeasure)
+      window.removeEventListener('scroll', scheduleTargetMeasure, true)
+      window.clearInterval(interval)
+    }
+  }, [activeTourId, measureTourOverlay])
+
+  useLayoutEffect(() => {
+    measureTourOverlay()
+  }, [measureTourOverlay])
 
   useEffect(() => {
     if (!activeTourId || !renderState || markedTourIdRef.current === activeTourId) {
@@ -315,6 +362,14 @@ export function ContextualTourOverlay(): JSX.Element | null {
       setSidebarOpen,
       openTaskPage,
       openModal,
+      openClientHostedBrowserSettings: () => {
+        openSettingsTarget({
+          pane: 'browser',
+          repoId: null,
+          sectionId: BROWSER_CLIENT_HOSTED_REMOTE_SETTINGS_TARGET_ID
+        })
+        openSettingsPage()
+      },
       openWorkspaceComposer: openWorkspaceCreationComposerWithTourHandoff,
       dispatchTerminalPaneSplit: requestActiveTerminalPaneSplit,
       schedule: (callback) => {

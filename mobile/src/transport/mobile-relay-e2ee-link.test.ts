@@ -59,4 +59,114 @@ describe('MobileRelayE2eeLink', () => {
     )
     expect(socket.close).toHaveBeenCalledOnce()
   })
+
+  it('keeps a typed close code when transport error precedes close', () => {
+    const socket = new ThrowingSocket()
+    const onError = vi.fn()
+    new MobileRelayE2eeLink({
+      endpoint: {
+        cellUrl: 'https://relay-c1.onorca.dev',
+        relayHostId: 'AbCdEf0123_-xyZ9'
+      },
+      credential: 'credential',
+      expectedCredentialKind: 'resume',
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'desktop-key',
+      onAuthenticated: vi.fn(),
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onError,
+      createSocket: () => socket as unknown as WebSocket
+    })
+
+    socket.onerror?.()
+    socket.onclose?.({ code: 4409 })
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_4409' }))
+  })
+
+  it('classifies an opaque close after transport error as 1006', () => {
+    const socket = new ThrowingSocket()
+    const onError = vi.fn()
+    new MobileRelayE2eeLink({
+      endpoint: {
+        cellUrl: 'https://relay-c1.onorca.dev',
+        relayHostId: 'AbCdEf0123_-xyZ9'
+      },
+      credential: 'credential',
+      expectedCredentialKind: 'resume',
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'desktop-key',
+      onAuthenticated: vi.fn(),
+      onText: vi.fn(),
+      onBinary: vi.fn(),
+      onError,
+      createSocket: () => socket as unknown as WebSocket
+    })
+
+    socket.onerror?.()
+    socket.onclose?.({ code: 0 })
+
+    expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_1006' }))
+  })
+
+  it('bounds an error when the platform never emits close', async () => {
+    vi.useFakeTimers()
+    try {
+      const socket = new ThrowingSocket()
+      const onError = vi.fn()
+      const link = new MobileRelayE2eeLink({
+        endpoint: {
+          cellUrl: 'https://relay-c1.onorca.dev',
+          relayHostId: 'AbCdEf0123_-xyZ9'
+        },
+        credential: 'credential',
+        expectedCredentialKind: 'resume',
+        deviceToken: 'device-token',
+        desktopPublicKeyB64: 'desktop-key',
+        onAuthenticated: vi.fn(),
+        onText: vi.fn(),
+        onBinary: vi.fn(),
+        onError,
+        createSocket: () => socket as unknown as WebSocket
+      })
+      socket.onerror?.()
+      await vi.advanceTimersByTimeAsync(250)
+
+      expect(onError).toHaveBeenCalledWith(expect.objectContaining({ message: 'relay_outer_1006' }))
+      link.close()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('cancels the missing-close timer when explicitly closed', async () => {
+    vi.useFakeTimers()
+    try {
+      const socket = new ThrowingSocket()
+      const onError = vi.fn()
+      const link = new MobileRelayE2eeLink({
+        endpoint: {
+          cellUrl: 'https://relay-c1.onorca.dev',
+          relayHostId: 'AbCdEf0123_-xyZ9'
+        },
+        credential: 'credential',
+        expectedCredentialKind: 'resume',
+        deviceToken: 'device-token',
+        desktopPublicKeyB64: 'desktop-key',
+        onAuthenticated: vi.fn(),
+        onText: vi.fn(),
+        onBinary: vi.fn(),
+        onError,
+        createSocket: () => socket as unknown as WebSocket
+      })
+      socket.onerror?.()
+      link.close()
+      await vi.advanceTimersByTimeAsync(250)
+
+      expect(onError).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { exec, execFile } from 'node:child_process'
+import { exec } from 'node:child_process'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
@@ -8,8 +8,9 @@ import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { getSetupEnvVars } from './setup-hook-env-vars'
 import { iterateLfScriptLines } from './setup-runner-script-text'
 import { promptGuardShellEnv } from './git/runner'
+import { dropIncoherentCondaActivationEnv } from './pty/conda-activation-env'
 import { toLinuxPath } from './wsl'
-import { addWorktreeSetupWslInteropEnv } from './pty/wsl-orca-env'
+import { runWslProcess } from './wsl/wsl-runner'
 import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
@@ -131,77 +132,63 @@ export function runHook(
   const wslInfo = getHookWslContext(cwd, runtimeTarget)
 
   if (wslInfo) {
-    // Why: use execFile to bypass cmd.exe, which mangles single-quote escaping of %, ^, &, |, etc.
-    const escapedCwd = wslInfo.linuxPath.replace(/'/g, "'\\''")
-    const escapedScript = script.replace(/'/g, "'\\''")
-    const bashCmd = `cd '${escapedCwd}' && ${escapedScript}`
     // Why: hook scripts run inside WSL, so translate the ORCA_* Windows UNC paths to Linux paths.
     const envVars = getSetupEnvVars(repo, cwd)
     const wslEnv: Record<string, string> = {}
     for (const [key, value] of Object.entries(envVars)) {
       wslEnv[key] = toLinuxPath(value)
     }
-    const hookEnv: NodeJS.ProcessEnv = { ...process.env, ...wslEnv }
-    // Why: wsl.exe only imports Windows env vars named in WSLENV; without
-    // registering them the setup vars never reach the guest (#9206).
-    addWorktreeSetupWslInteropEnv(hookEnv)
-
-    return new Promise((resolve) => {
-      let child: ReturnType<typeof execFile> | null = null
-      let settled = false
-
-      const finish = (error: Error | null, stdout = '', stderr = ''): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        clearTimeout(timeout)
-        if (error) {
-          console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, error.message)
-          resolve({
-            success: false,
-            output: `${stdout}\n${stderr}\n${error.message}`.trim()
-          })
-        } else {
-          console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
-          resolve({
-            success: true,
-            output: `${stdout}\n${stderr}`.trim()
-          })
-        }
+    // Why: same unattended-git guard as the non-WSL branch below (issue
+    // #7652) — only the guard flags and any indexed git-config protocol are
+    // meant to reach the guest; askpass stays host-side, same as before.
+    const guardedEnv = promptGuardShellEnv(wslEnv)
+    const guestEnv: Record<string, string> = { ...wslEnv }
+    for (const [key, value] of Object.entries(guardedEnv)) {
+      if (
+        value !== undefined &&
+        (key === 'GIT_TERMINAL_PROMPT' ||
+          key === 'GCM_INTERACTIVE' ||
+          key.startsWith('GIT_CONFIG_'))
+      ) {
+        guestEnv[key] = value
       }
+    }
 
-      // Why: execFile's timeout only signals wsl.exe; force-unblock after HOOK_TIMEOUT if no callback arrives.
-      const timeout = setTimeout(() => {
-        child?.kill()
-        finish(new Error(`Hook timed out after ${HOOK_TIMEOUT}ms.`))
-      }, HOOK_TIMEOUT)
-
-      try {
-        const distroArgs = wslInfo.distro ? ['-d', wslInfo.distro] : []
-        child = execFile(
-          'wsl.exe',
-          [...distroArgs, '--exec', 'bash', '-c', bashCmd],
-          {
-            timeout: HOOK_TIMEOUT,
-            encoding: 'utf-8',
-            // Why: same unattended-git guard as the non-WSL branch below
-            // (issue #7652) — WSL repos are the likeliest to hit the GCM
-            // popup, and the guard's WSLENV registration is what carries it
-            // across the wsl.exe boundary. Wrap hookEnv (not a fresh env) so
-            // the setup-var WSLENV entries registered above (#9206) are kept —
-            // promptGuardShellEnv appends its own keys to the existing WSLENV.
-            env: promptGuardShellEnv(hookEnv)
-          },
-          (error, stdout, stderr) => {
-            finish(error ?? null, stdout, stderr)
-          }
-        )
-      } catch (error) {
-        finish(error instanceof Error ? error : new Error(String(error)))
-      }
+    return runWslProcess({
+      distro: wslInfo.distro ?? undefined,
+      loginPath: 'preferred',
+      script,
+      // Why pinned: these are user-authored orca.yaml scripts and the native
+      // path runs /bin/bash. Defaulting to sh would fail bash-only hooks on WSL
+      // only -- a downgrade the user never asked for.
+      shell: 'bash',
+      cwd: wslInfo.linuxPath,
+      env: guestEnv,
+      timeoutMs: HOOK_TIMEOUT
     })
+      .then((result) => {
+        if (result.timedOut) {
+          const message = `Hook timed out after ${HOOK_TIMEOUT}ms.`
+          console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, message)
+          return { success: false, output: `${result.stdout}\n${result.stderr}\n${message}`.trim() }
+        }
+        if (result.code !== 0) {
+          const message = `Command failed with exit code ${result.code}.`
+          console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, message)
+          return { success: false, output: `${result.stdout}\n${result.stderr}\n${message}`.trim() }
+        }
+        console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
+        return { success: true, output: `${result.stdout}\n${result.stderr}`.trim() }
+      })
+      .catch((error: unknown) => {
+        const message = error instanceof Error ? error.message : String(error)
+        console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, message)
+        return { success: false, output: message }
+      })
   }
+
+  const shellHookEnv: NodeJS.ProcessEnv = { ...process.env, ...getSetupEnvVars(repo, cwd) }
+  dropIncoherentCondaActivationEnv(shellHookEnv)
 
   return new Promise((resolve) => {
     exec(
@@ -211,10 +198,7 @@ export function runHook(
         timeout: HOOK_TIMEOUT,
         shell: getHookShell(),
         // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
-        env: promptGuardShellEnv({
-          ...process.env,
-          ...getSetupEnvVars(repo, cwd)
-        })
+        env: promptGuardShellEnv(shellHookEnv)
       },
       (error, stdout, stderr) => {
         if (error) {

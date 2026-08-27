@@ -6,7 +6,7 @@
  * fans out, and it must never be able to reject the IPC handler it runs inside.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ReposModule from './repos'
+import type * as ReposChangedNotificationModule from './repos/repos-changed-notification'
 
 const { handleMock, mockStore } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -45,18 +45,18 @@ const handlers: HandlerMap = new Map()
 const mainWindow = { isDestroyed: () => false, webContents: { send: vi.fn() } }
 
 /** Fresh module instance per test so the module-scoped notifier holder starts unset. */
-async function registerHandlersWithoutNotifier(): Promise<typeof ReposModule> {
+async function registerHandlersWithoutNotifier(): Promise<typeof ReposChangedNotificationModule> {
   vi.resetModules()
   const repos = await import('./repos')
   repos.registerRepoHandlers(mainWindow as never, mockStore as never)
-  return repos
+  return import('./repos/repos-changed-notification')
 }
 
 async function registerHandlersWithNotifier(
   notifyReposChangedForRemoteClients: () => void
 ): Promise<void> {
-  const repos = await registerHandlersWithoutNotifier()
-  repos.setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients } as never)
+  const notification = await registerHandlersWithoutNotifier()
+  notification.setRepoRemoteClientNotifier({ notifyReposChangedForRemoteClients } as never)
 }
 
 beforeEach(() => {

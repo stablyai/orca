@@ -70,8 +70,9 @@ vi.mock('../providers/agent-foreground-process', () => ({
 // fake timers; default to "shell-only" so the degraded-scan guard falls through
 // to its existing retirement logic (the degraded-scan behavior itself is
 // covered in pty-subprocess-foreground-degraded-scan.test.ts).
-vi.mock('../providers/windows-conpty-process-membership', () => ({
-  readWindowsConptyProcessIds: () => Promise.resolve(new Set([12345]))
+vi.mock('../providers/windows-pty-job-membership', () => ({
+  readWindowsPtyJobProcessIds: () => new Set([12345]),
+  isWindowsPtyJobReadable: () => true
 }))
 
 import { createPtySubprocess } from './pty-subprocess'
@@ -310,6 +311,41 @@ describe('createPtySubprocess', () => {
 
     const env = spawnMock.mock.calls.at(-1)?.[2].env
     expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+
+  it('does not forward a half-activated conda env from the daemon process env', async () => {
+    // Why here as well as the main process: the daemon fork composes its own
+    // inherited env, which main never sees, so it is the default terminal's
+    // only chance to drop a CONDA_SHLVL sentinel left without a prefix (#14195).
+    const proc = mockPtyProcess()
+    spawnMock.mockReturnValue(proc)
+    const saved = {
+      CONDA_SHLVL: process.env.CONDA_SHLVL,
+      CONDA_PREFIX: process.env.CONDA_PREFIX,
+      CONDA_DEFAULT_ENV: process.env.CONDA_DEFAULT_ENV,
+      CONDA_EXE: process.env.CONDA_EXE
+    }
+    delete process.env.CONDA_PREFIX
+    process.env.CONDA_SHLVL = '1'
+    process.env.CONDA_DEFAULT_ENV = 'base'
+    process.env.CONDA_EXE = '/opt/miniconda3/bin/conda'
+
+    try {
+      await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    } finally {
+      for (const [key, value] of Object.entries(saved)) {
+        if (value === undefined) {
+          delete process.env[key]
+        } else {
+          process.env[key] = value
+        }
+      }
+    }
+
+    const env = spawnMock.mock.calls.at(-1)?.[2].env
+    expect(env.CONDA_SHLVL).toBeUndefined()
+    expect(env.CONDA_DEFAULT_ENV).toBeUndefined()
+    expect(env.CONDA_EXE).toBe('/opt/miniconda3/bin/conda')
   })
 
   it('does not inherit legacy attribution state from a pre-upgrade daemon', async () => {

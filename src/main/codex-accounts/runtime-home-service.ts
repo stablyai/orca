@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: keeps Codex's whole runtime-home contract in one place so account-switch semantics don't drift across launch/login/quota paths. */
+import { quotePosixShell } from '../../shared/wsl-login-shell-command'
 import {
   appendFileSync,
   copyFileSync,
@@ -58,7 +59,7 @@ import {
   prepareSystemConfigForFreshRuntimeMirror,
   syncSystemConfigIntoManagedCodexHome
 } from '../codex/codex-config-mirror'
-import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWslUncPath, toLinuxPath } from '../../shared/wsl-paths'
 import {
   getWslSelectionKey,
   getSelectedCodexAccountIdForTarget,
@@ -70,8 +71,10 @@ import { getDefaultWslDistro, getWslHome } from '../wsl'
 import { hasCustomCodexHomeOverrideForLaunch } from '../codex/codex-real-home-path'
 import {
   hasCompletedCodexSessionBackfillMarker,
-  invalidateCodexSessionBackfillMarker
+  markCodexSessionBackfillMarkerPending
 } from '../codex/codex-session-backfill-marker'
+import { getCodexSessionBackfillDate } from '../codex/codex-session-backfill-scan-dates'
+import type { CodexSessionBackfillDate } from '../codex/codex-session-backfill-types'
 import { resolveCodexSessionBackfillPaths } from '../codex/codex-session-backfill'
 import {
   ManagedCodexHomeTemporarilyUnavailableError,
@@ -304,18 +307,30 @@ export class CodexRuntimeHomeService {
     )
   }
 
-  prepareHostSystemDefaultSessionMigrationPass(): boolean {
+  prepareHostSystemDefaultSessionMigrationPass(
+    scanDates: readonly CodexSessionBackfillDate[] = []
+  ): boolean {
     const paths = resolveCodexSessionBackfillPaths(
       resolveHostCodexSessionSourceHome(this.store.getSettings())
     )
+    const target = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
     if (
       this.hostSystemDefaultSessionMigrationPending &&
-      this.pendingHostSystemDefaultSessionMigrationTarget !== paths.systemSessionsRoot
+      this.pendingHostSystemDefaultSessionMigrationTarget !== target
     ) {
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan = true
-      this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
+      this.pendingHostSystemDefaultSessionMigrationTarget = target
     }
-    invalidateCodexSessionBackfillMarker(paths.markerPath)
+    // Why: the launch creates rollouts for these dates; record them durably so a
+    // force-quit recovers a bounded window instead of re-walking all history.
+    const markerOwesFullScan = markCodexSessionBackfillMarkerPending(
+      paths.markerPath,
+      paths.systemSessionsRoot,
+      scanDates.length > 0 ? scanDates : [getCodexSessionBackfillDate()]
+    )
+    // Why: the marker is the only place an overflowed pending window survives a
+    // restart, so its demand has to reach this pass rather than die in the file.
+    this.pendingHostSystemDefaultSessionMigrationNeedsFullScan ||= markerOwesFullScan
     return this.pendingHostSystemDefaultSessionMigrationNeedsFullScan
   }
 
@@ -341,14 +356,14 @@ export class CodexRuntimeHomeService {
     return account
   }
 
-  // Why: session discovery must surface a managed account's own rollouts wherever
-  // they physically live. Every host managed home is a live CODEX_HOME, so scan
-  // them all.
-  private getManagedHostAccountHomesForSessionDiscovery(): string[] {
+  // Why: session discovery must surface every account's own rollouts wherever they live.
+  private getManagedAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
     const homes: string[] = []
     for (const account of settings.codexManagedAccounts) {
-      if (this.getWslManagedHomePath(account)) {
+      const wslHome = this.getWslManagedHomePath(account)
+      if (wslHome) {
+        homes.push(wslHome)
         continue
       }
       const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
@@ -357,6 +372,12 @@ export class CodexRuntimeHomeService {
       }
     }
     return homes
+  }
+
+  private getManagedHostAccountHomesForSessionDiscovery(): string[] {
+    return this.getManagedAccountHomesForSessionDiscovery().filter(
+      (home) => parseWslUncPath(home) === null
+    )
   }
 
   private prepareSelfContainedManagedHomeForLaunch(
@@ -525,7 +546,9 @@ export class CodexRuntimeHomeService {
       )
       this.pendingHostSystemDefaultSessionMigrationNeedsFullScan =
         !hasCompletedCodexSessionBackfillMarker(paths.markerPath, paths.systemSessionsRoot)
-      this.pendingHostSystemDefaultSessionMigrationTarget = paths.systemSessionsRoot
+      this.pendingHostSystemDefaultSessionMigrationTarget = normalizeRuntimePathForComparison(
+        paths.systemSessionsRoot
+      )
       this.hostSystemDefaultSessionMigrationPending = true
     }
     return this.prepareHostSystemDefaultSessionMigrationPass()
@@ -566,10 +589,8 @@ export class CodexRuntimeHomeService {
       // mirror, so include the real root for both directly-routed host lanes.
       homes.push(getSystemCodexHomePath())
     }
-    // Why: each managed host account runs in its own self-contained home, so
-    // its rollouts live there rather than in the shared mirror. Scan every such
-    // home so account-scoped sessions still surface in the AI Vault.
-    for (const perAccountHome of this.getManagedHostAccountHomesForSessionDiscovery()) {
+    // Why: account-scoped rollouts live in each account's own home, including WSL.
+    for (const perAccountHome of this.getManagedAccountHomesForSessionDiscovery()) {
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)
@@ -756,7 +777,11 @@ export class CodexRuntimeHomeService {
       systemHomePath,
       managedHomePath: runtimeHomePath
     })
-    syncSystemConfigIntoManagedCodexHome({ runtimeHomePath, systemHomePath })
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath,
+      systemHomePath,
+      systemConfigDir: toLinuxPath(systemHomePath)
+    })
   }
 
   // Why: `null` is a real value here — it means "use the system-default lane".
@@ -1224,27 +1249,25 @@ export class CodexRuntimeHomeService {
         '-lc',
         [
           'set -e',
-          `if [ ! -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
-          `elif [ -e ${this.quoteBashString(activeLinuxPath)} ] && [ ! -L ${this.quoteBashString(activeLinuxPath)} ]; then :`,
+          `if [ ! -e ${quotePosixShell(activeLinuxPath)} ] && [ ! -L ${quotePosixShell(activeLinuxPath)} ]; then :`,
+          `elif [ -e ${quotePosixShell(activeLinuxPath)} ] && [ ! -L ${quotePosixShell(activeLinuxPath)} ]; then :`,
           'else',
-          `mkdir -p ${this.quoteBashString(activeLinuxParentPath)}`,
-          `rm -rf -- ${this.quoteBashString(nextLinuxPath)}`,
-          `ln -s -- ${this.quoteBashString(runtimeWsl.linuxPath)} ${this.quoteBashString(nextLinuxPath)}`,
-          `mv -Tf -- ${this.quoteBashString(nextLinuxPath)} ${this.quoteBashString(activeLinuxPath)}`,
+          `mkdir -p ${quotePosixShell(activeLinuxParentPath)}`,
+          `rm -rf -- ${quotePosixShell(nextLinuxPath)}`,
+          `ln -s -- ${quotePosixShell(runtimeWsl.linuxPath)} ${quotePosixShell(nextLinuxPath)}`,
+          `mv -Tf -- ${quotePosixShell(nextLinuxPath)} ${quotePosixShell(activeLinuxPath)}`,
           'fi'
         ].join('\n')
       ],
-      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000 }
+      // wsl.exe is console-subsystem: without this a GUI-launched Orca flashes
+      // a conhost and steals foreground for up to the timeout (#10488).
+      { stdio: ['ignore', 'pipe', 'pipe'], timeout: 5000, windowsHide: true }
     )
   }
 
   private dirnameLinuxPath(value: string): string {
     const index = value.lastIndexOf('/')
     return index > 0 ? value.slice(0, index) : '/'
-  }
-
-  private quoteBashString(value: string): string {
-    return `'${value.replace(/'/g, `'\\''`)}'`
   }
 
   private joinWslPath(basePath: string, ...segments: string[]): string {

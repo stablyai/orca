@@ -2,7 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 
 const {
   handleMock,
@@ -163,14 +166,16 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'browser.screencast',
       { pageId: 'page-1' },
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
     )
     expect(subscribeRemoteRuntimeRequestMock).toHaveBeenCalledWith(
       expect.any(Object),
       'terminal.multiplex',
       { client: { id: 'client-1' } },
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })
@@ -351,7 +356,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'session.tabs.subscribeAll',
       undefined,
       15_000,
-      expect.any(Object)
+      expect.any(Object),
+      { clientCapabilities: ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES }
     )
     expect(subscribeRemoteRuntimeSharedControlRequestMock).not.toHaveBeenCalled()
   })

@@ -118,7 +118,7 @@ export async function runCodexSessionIndexHeal(
     }
   }
 
-  const pending = collectPendingHealThreads(paths)
+  const pending = await collectPendingHealThreads(paths)
   const summary: CodexSessionIndexHealSummary = {
     outcome: 'completed',
     pendingThreads: pending.length,
@@ -267,6 +267,7 @@ function buildNativeHealInvocation(
   return {
     command: spawnCmd,
     args: spawnArgs,
+    cliPath: command,
     // Why: pin the real home explicitly — nested Orca launches can inherit a
     // managed CODEX_HOME from the daemon environment, which would index the
     // wrong sqlite DB.

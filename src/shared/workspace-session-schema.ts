@@ -26,6 +26,9 @@ import {
   browserPageSchema,
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
+import { clientHostedBrowserCloseIntentSchema } from './client-hosted-browser-close-intent'
+import { persistedClientHostedBrowserPageSchema } from './client-hosted-browser-page-record'
+import { persistedOpenFileSchema } from './workspace-session-editor-schema'
 import { sleepingAgentSessionsByPaneKeySchema } from './workspace-session-sleeping-agents'
 import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from './zod-salvage'
 
@@ -120,11 +123,16 @@ const tabContentTypeSchema = z.enum([
 
 const workspaceVisibleTabTypeSchema = z.enum(['terminal', 'editor', 'browser', 'simulator'])
 
+const executionHostIdSchema = z.custom<ExecutionHostId>(
+  (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
+)
+
 const tabSchema = z.object({
   id: z.string(),
   entityId: z.string(),
   groupId: z.string(),
   worktreeId: z.string(),
+  executionHostId: executionHostIdSchema.optional(),
   contentType: tabContentTypeSchema,
   label: z.string(),
   generatedLabel: z.string().nullable().optional(),
@@ -142,6 +150,8 @@ const tabSchema = z.object({
   color: z.string().nullable(),
   sortOrder: z.number(),
   createdAt: z.number(),
+  // Why: corrupt optional recency must not discard the whole persisted tab.
+  lastFocusedAt: z.number().finite().nonnegative().optional().catch(undefined),
   isPreview: z.boolean().optional(),
   isPinned: z.boolean().optional(),
   // Why: persist the per-tab native-chat view mode so 'chat' survives reload /
@@ -178,22 +188,6 @@ const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
   ])
 )
 
-// ─── Editor ─────────────────────────────────────────────────────────
-
-const persistedOpenFileSchema = z.object({
-  filePath: z.string(),
-  relativePath: z.string(),
-  worktreeId: z.string(),
-  language: z.string(),
-  isPreview: z.boolean().optional(),
-  runtimeEnvironmentId: z.string().nullable().optional(),
-  externalSshTargetId: z.string().trim().min(1).optional(),
-  dirtyDraftContent: z.string().optional(),
-  lastKnownDiskSignature: z.string().optional(),
-  readOnly: z.boolean().optional(),
-  liveTail: z.boolean().optional()
-})
-
 // ─── Workspace session ──────────────────────────────────────────────
 
 const terminalSurfaceTombstoneSchema = z.object({
@@ -212,11 +206,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   activeWorkspaceKey: salvagedOptional('activeWorkspaceKey', workspaceKeySchema.nullable()),
   activeWorkspaceExecutionHostId: salvagedOptional(
     'activeWorkspaceExecutionHostId',
-    z
-      .custom<ExecutionHostId>(
-        (value) => typeof value === 'string' && Boolean(parseExecutionHostId(value))
-      )
-      .nullable()
+    executionHostIdSchema.nullable()
   ),
   activeWorktreeId: salvagedField('activeWorktreeId', z.string().nullable(), () => null),
   activeTabId: salvagedField('activeTabId', z.string().nullable(), () => null),
@@ -257,6 +247,14 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   activeBrowserTabIdByWorktree: salvagedOptional(
     'activeBrowserTabIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string().nullable())
+  ),
+  clientHostedBrowserPagesByWorktree: salvagedOptional(
+    'clientHostedBrowserPagesByWorktree',
+    salvagingRecord(worktreeIdSchema, salvagingArray(persistedClientHostedBrowserPageSchema))
+  ),
+  clientHostedBrowserCloseIntentsByEnvironment: salvagedOptional(
+    'clientHostedBrowserCloseIntentsByEnvironment',
+    salvagingRecord(z.string().min(1), salvagingArray(clientHostedBrowserCloseIntentSchema))
   ),
   activeTabTypeByWorktree: salvagedOptional(
     'activeTabTypeByWorktree',

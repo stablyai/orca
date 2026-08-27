@@ -467,6 +467,32 @@ describe('Store', () => {
     ).toBe(222)
   })
 
+  it('removeProjectForHost on local prunes the unqualified host-identity visit key', async () => {
+    const store = await createStore()
+    store.addRepo(makeRepo({ id: 'shared', path: '/repo' }))
+    store.addRepo(
+      makeRepo({
+        id: 'shared',
+        path: '/repo',
+        connectionId: 'ssh-a',
+        executionHostId: 'ssh:ssh-a'
+      })
+    )
+    // No meta for this worktree, so only the unqualified host-identity key names it. The host split
+    // parks that canonical unknown-host form in the local partition; leaving it behind after a local
+    // removal re-materializes an orphaned workspace next launch.
+    store.setWorkspaceSession({
+      ...getDefaultWorkspaceSession(),
+      lastVisitedAtByWorktreeId: { '|shared::/repo/wt-orphan': 111 }
+    })
+
+    store.removeProjectForHost('shared', 'local')
+
+    expect(
+      store.getWorkspaceSession().lastVisitedAtByWorktreeId?.['|shared::/repo/wt-orphan']
+    ).toBeUndefined()
+  })
+
   it('removeProjectForHost prunes only the removed host when a third host also shares the owner key', async () => {
     const store = await createStore()
     // Same repo id + path on local and two SSH hosts, so the owner key

@@ -26,6 +26,7 @@ import { buildTerminalKeyboardProtocolOptions } from '@/lib/pane-manager/termina
 import { resolvePaneKeyboardProtocolAgent } from './terminal-keyboard-protocol-pane-agent'
 import { useAppStore } from '@/store'
 import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-terminal-recovery'
+import type { PaneProcessExit } from './pty-connection-types'
 import {
   createFilePathLinkProvider,
   getTerminalFileOpenHint,
@@ -292,6 +293,7 @@ type UseTerminalPaneLifecycleDeps = {
   onPtyExitRef: React.RefObject<(ptyId: string) => void>
   onAgentExitedRef: React.RefObject<(leafId: string) => void>
   onPtyErrorRef?: React.RefObject<(paneId: number, message: string) => void>
+  onPaneProcessDied?: (processExit: PaneProcessExit) => void
   onPtyRecoveryStateRef?: React.RefObject<
     (paneId: number, state: PtyTransportRecoveryState | null) => void
   >
@@ -478,6 +480,55 @@ function resolveTerminalHomePathFromEnv(env: Record<string, string> | undefined)
   return homeDrive && homePath ? `${homeDrive}${homePath}` : null
 }
 
+/**
+ * Whether this pane's startup is the tab's queued command rather than a payload a split borrowed.
+ *
+ * Why reference identity and not truthiness: setup/issue splits assign their own one-shot object to
+ * the same `deps.startup` field, so "has a startup" would let a split pane spend a command it never
+ * runs — and a split's payload can be structurally identical to the queued one (STA-4876).
+ */
+export function paneOwnsQueuedStartup(
+  paneStartup: object | null | undefined,
+  queuedStartup: object | null | undefined
+): boolean {
+  return queuedStartup != null && paneStartup === queuedStartup
+}
+
+/**
+ * The callback that spends the tab's queued startup command, or `undefined` when this pane does
+ * not own it.
+ *
+ * Why one-shot: `onPtySpawn` fires on every fresh spawn a pane makes — hibernation wake, the
+ * respawn ladder — but only the first carried the queued command. A command queued onto the tab
+ * afterwards belongs to that later launch, and spending it here would drop it undelivered.
+ *
+ * Why `isStillQueued` on top of that guard: the replacement can also arrive before this pane's very
+ * first spawn, so the slot is only spent while it still holds the command this pane launched.
+ */
+export function createQueuedStartupConsumer(
+  paneStartup: object | null | undefined,
+  queuedStartup: object | null | undefined,
+  consume: () => void,
+  isStillQueued: () => boolean
+): (() => void) | undefined {
+  if (!paneOwnsQueuedStartup(paneStartup, queuedStartup)) {
+    return undefined
+  }
+  let spent = false
+  return () => {
+    if (spent) {
+      return
+    }
+    // Why spent regardless: this pane's launch is its one chance at the slot; a later spawn of the
+    // same pane must not spend whatever command took its place.
+    spent = true
+    if (!isStillQueued()) {
+      return
+    }
+    consume()
+  }
+}
+
 /** Scopes `deps.startup` to a single call of `splitPane()`, clearing it in `finally` so later splits do not replay the payload. */
 export function splitPaneWithOneShotStartup<TPane>(
   deps: SplitWithStartupDeps,
@@ -602,7 +653,10 @@ export function retireMountedTerminalPaneSurface(args: {
   ) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearTabPtyId: (tabId: string, ptyId: string) => void
-  transport?: { detach?: () => void; destroy?: () => void }
+  transport?: {
+    detach?: (options?: { preserveExitObserver?: boolean }) => void
+    destroy?: () => void
+  }
 }): void {
   args.retireAgentPaneAuthority(args.paneKey, {
     preserveSleepingAgentSession: true
@@ -611,7 +665,10 @@ export function retireMountedTerminalPaneSurface(args: {
     args.syncPanePtyLayoutBinding(args.paneId, null)
     args.clearTabPtyId(args.tabId, args.ptyId)
   }
-  args.transport?.detach?.()
+  // preserveExitObserver:false — a retired surface keeps its PTY alive but starts no parked
+  // watcher, so a preserved observer would pin the disposed pane's xterm for the whole session
+  // (the entries only die on real PTY exit). The buffered exit drains into a successor mount.
+  args.transport?.detach?.({ preserveExitObserver: false })
 }
 
 /** Wires mounted terminal panes to renderer state and terminal event handling. */
@@ -649,6 +706,7 @@ export function useTerminalPaneLifecycle({
   onPtyExitRef,
   onAgentExitedRef,
   onPtyErrorRef,
+  onPaneProcessDied,
   onPtyRecoveryStateRef,
   clearTabPtyId,
   consumeSuppressedPtyExit,
@@ -891,6 +949,7 @@ export function useTerminalPaneLifecycle({
       onPtyExitRef,
       onAgentExitedRef,
       onPtyErrorRef,
+      onPaneProcessDied,
       onPtyRecoveryStateRef,
       clearTabPtyId,
       consumeSuppressedPtyExit,
@@ -1053,6 +1112,7 @@ export function useTerminalPaneLifecycle({
             pendingCandidateKeyReleaseActive: pendingCandidateReleaseGuardActive,
             linuxOrphanCandidateDigitGuardActive:
               linuxCandidateClassification.candidateDigitGuardActive,
+            hangulPreedit: imeCompositionTracker.isHangulPreedit(),
             isMac,
             isLinux
           }
@@ -1294,8 +1354,18 @@ export function useTerminalPaneLifecycle({
           }
         }
         applyAppearance(manager)
+        const onQueuedStartupSpawned = createQueuedStartupConsumer(
+          ptyDeps.startup,
+          startupWithSetupSplitWait,
+          () => useAppStore.getState().consumeTabStartupCommand(tabId),
+          // Why `startup` and not startupWithSetupSplitWait: setup-split hands the pane a copy, so only
+          // the raw prop still matches the object the store holds. Read and consume run in one
+          // synchronous step, so nothing can queue in between.
+          () => useAppStore.getState().pendingStartupByTabId[tabId] === startup
+        )
         const panePtyBinding = connectPanePty(pane, manager, {
           ...ptyDeps,
+          ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
           // Why: spread order matters — spawnHints.cwd (source pane) must override ptyDeps.cwd (worktree root) so splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
           restoredPtyIdByLeafId: spawnHints?.ptyId
@@ -1430,7 +1500,10 @@ export function useTerminalPaneLifecycle({
         if (transport && !isRetiredSurface) {
           if (isDetachedToTab) {
             // Why: detach hands the PTY to a new tab, so drop renderer listeners without process teardown.
-            transport.detach?.()
+            // preserveExitObserver:false for the same reason as unmount — the destination tab's
+            // registerExit re-owns the exit, and a preserved observer would pin this pane's xterm
+            // until then (forever if the destination never mounts).
+            transport.detach?.({ preserveExitObserver: false })
           } else {
             const ptyId = suppressIntentionalPaneCloseExit(
               transport,
@@ -1887,12 +1960,21 @@ export function useTerminalPaneLifecycle({
       captureParkedTerminalPaneCandidates(
         tabId,
         worktreeId,
-        manager.getPanes().map((capturedPane) => ({
-          ptyId: paneTransports.get(capturedPane.id)?.getPtyId() ?? null,
-          paneId: capturedPane.id,
-          leafId: capturedPane.leafId,
-          drivesTabTitle: manager.getActivePane()?.id === capturedPane.id
-        }))
+        manager.getPanes().map((capturedPane) => {
+          const capturedPtyId = paneTransports.get(capturedPane.id)?.getPtyId() ?? null
+          const capturedBinding = panePtyBindings.get(capturedPane.id) as
+            | (IDisposable & { isUntouchedFreshSpawnPty?: (ptyId: string) => boolean })
+            | undefined
+          return {
+            ptyId: capturedPtyId,
+            paneId: capturedPane.id,
+            leafId: capturedPane.leafId,
+            drivesTabTitle: manager.getActivePane()?.id === capturedPane.id,
+            untouchedFreshSpawn:
+              capturedPtyId !== null &&
+              (capturedBinding?.isUntouchedFreshSpawnPty?.(capturedPtyId) ?? false)
+          }
+        })
       )
       for (const transport of paneTransports.values()) {
         const ptyId = transport.getPtyId()
@@ -1905,7 +1987,10 @@ export function useTerminalPaneLifecycle({
           })
         ) {
           // Why: tab-move rehome and web-mirror remount unmount a still-live tab; detach preserves the running PTY so the remount reattaches without restarting the shell.
-          transport.detach?.()
+          // preserveExitObserver:false — the session-bound exit observer closes over the disposed pane's xterm
+          // (~14MB/pane pinned in the ptyId-keyed dispatcher maps until exit). Detached exit is owned by the
+          // parked watcher sidecar; without a watcher it buffers and drains into the next mount's registerExit.
+          transport.detach?.({ preserveExitObserver: false })
         } else {
           // Why: un-attached transports have no PTY ID; destroy so an in-flight spawn resolves to a killed PTY, not a revived stale binding after unmount.
           transport.destroy?.()

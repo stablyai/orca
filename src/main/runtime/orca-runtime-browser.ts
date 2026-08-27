@@ -53,12 +53,24 @@ import type {
   BrowserCertificateProceedResult,
   BrowserSessionUserAgentMode
 } from '../../shared/browser-workspace-types'
+import type { BrowserNetworkExecutionHost } from '../../shared/browser-client-host-protocol'
+import type { BrowserPageCreationPlacement } from '../../shared/browser-client-host-placement'
+import type { ExecutionHostId } from '../../shared/execution-host'
+import { browserNetworkExecutionHostKey } from '../browser/browser-network-execution-route'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import type { BrowserBackend } from '../browser/browser-backend'
 import { browserCertificateTrustController, browserManager } from '../browser/browser-manager'
 import { BrowserError } from '../browser/cdp-bridge'
 import { startBrowserScreencast } from '../browser/browser-screencast-stream'
-import type { BrowserScreencastSession } from '../browser/browser-screencast-stream-types'
+import {
+  browserScreencastFrameBudgetsEqual,
+  mergeBrowserScreencastFrameBudgets
+} from '../browser/browser-screencast-frame-budget'
+import type {
+  BrowserScreencastFrameBudget,
+  BrowserScreencastSession,
+  BrowserScreencastViewport
+} from '../browser/browser-screencast-stream-types'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import {
   detectInstalledBrowsers,
@@ -70,6 +82,29 @@ import {
   waitForWorktreeTabRegistration
 } from '../ipc/browser-tab-registration-wait'
 import { sendRemoteBrowserScreencastFrame } from './remote-browser-screencast-frame-admission'
+import {
+  INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY,
+  recordScreencastSubscriberSend,
+  screencastSubscriberIsGhost,
+  type ScreencastSubscriberDeliveryState
+} from './browser-screencast-ghost-subscriber-eviction'
+import {
+  publishCreatedBrowserSessionTab,
+  publishSwitchedBrowserSessionTab,
+  resolveBrowserTabCreateFocus,
+  type BrowserSessionTabSelectionOptions
+} from './browser-tab-create-publication'
+import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type { BrowserHostLeaseRegistry } from './browser-host-lease-registry'
+import {
+  closeRuntimeBrowserClientPage,
+  createRuntimeBrowserClientPage,
+  navigateRuntimeBrowserClientPage
+} from './runtime-browser-client-page-creation'
+import type {
+  RuntimeBrowserClientPage,
+  RuntimeBrowserPageRegistry
+} from './runtime-browser-page-registry'
 
 export type BrowserCommandTargetParams = {
   worktree?: string
@@ -102,12 +137,74 @@ type BrowserScreencastParams = {
 type BrowserScreencastStartResult = {
   subscriptionId: string
   ready: Extract<BrowserScreencastResult, { type: 'ready' }>
-  session: BrowserScreencastSession
+  // The frame budget belongs to the shared page, not to one subscriber's handle.
+  session: Omit<BrowserScreencastSession, 'updateFrameBudget'>
+  // Why: callers gate frames until they have emitted `ready`, and the snapshot captured
+  // for a joining subscriber lands inside that window. This replays it once the gate opens.
+  flushPendingFrame: () => void
+}
+
+type ActiveBrowserScreencastSubscriber = {
+  sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
+  emit?: (event: BrowserScreencastResult) => void
+  done: Promise<void>
+  resolveDone: () => void
+  viewport: BrowserScreencastViewport
+  budget: BrowserScreencastFrameBudget
+  pendingFrame: Uint8Array<ArrayBufferLike> | null
+  // Why: identifies the viewer across reconnects, which the RPC connectionId cannot — a new
+  // socket never reuses the old id, so a reconnecting device would stack a second subscription.
+  pairedDeviceId?: string
+  delivery: ScreencastSubscriberDeliveryState
 }
 
 type ActiveBrowserScreencastPage = {
-  stop: () => void
-  done: Promise<void>
+  format: 'jpeg' | 'png'
+  session: BrowserScreencastSession | null
+  started: Promise<BrowserScreencastSession>
+  stopping: boolean
+  subscribers: Map<string, ActiveBrowserScreencastSubscriber>
+  viewportOwnerSubscriptionId: string | null
+  appliedBudget: BrowserScreencastFrameBudget
+}
+
+async function applySharedScreencastFrameBudget(
+  active: ActiveBrowserScreencastPage,
+  session: BrowserScreencastSession
+): Promise<void> {
+  const merged = mergeBrowserScreencastFrameBudgets(
+    Array.from(active.subscribers.values(), (subscriber) => subscriber.budget)
+  )
+  if (!merged || browserScreencastFrameBudgetsEqual(merged, active.appliedBudget)) {
+    return
+  }
+  active.appliedBudget = merged
+  await session.updateFrameBudget(merged)
+}
+
+function normalizeScreencastViewport(params: BrowserScreencastParams): BrowserScreencastViewport {
+  return {
+    viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
+    viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
+    deviceScaleFactor: clampOptionalNumber(params.deviceScaleFactor, 1, 4),
+    mobile: params.mobile === true
+  }
+}
+
+function normalizeScreencastFrameBudget(
+  params: BrowserScreencastParams
+): BrowserScreencastFrameBudget {
+  return {
+    quality: clampInteger(params.quality, 10, 100, 70),
+    maxWidth: clampInteger(params.maxWidth, 320, 3840, 1440),
+    maxHeight: clampInteger(params.maxHeight, 240, 2160, 1200),
+    everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
+    minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0)
+  }
+}
+
+function hasScreencastViewportSize(viewport: BrowserScreencastViewport): boolean {
+  return viewport.viewportWidth !== undefined && viewport.viewportHeight !== undefined
 }
 
 function clampInteger(
@@ -146,7 +243,23 @@ function clampOptionalNumber(
 
 export type RuntimeBrowserCommandHost = {
   getAgentBrowserBridge(): AgentBrowserBridge | null
-  resolveWorktreeSelector(selector: string): Promise<{ id: string }>
+  resolveWorktreeSelector(selector: string): Promise<{
+    id: string
+    repoId?: string
+    hostId?: ExecutionHostId
+  }>
+  resolveBrowserWorkspace(selector: string): Promise<{
+    id: string
+    repoId?: string
+    hostId?: ExecutionHostId
+  }>
+  resolveBrowserNetworkExecutionHost(worktree?: {
+    id: string
+    repoId?: string
+    hostId?: ExecutionHostId
+  }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
+  getBrowserHostLeaseRegistry(): BrowserHostLeaseRegistry
+  getRuntimeBrowserPageRegistry(): RuntimeBrowserPageRegistry
   getAuthoritativeWindow(): BrowserWindow
   getAvailableAuthoritativeWindow(): BrowserWindow | null
   // Why: headless serve backs pages with a main-process offscreen backend; null when the environment can't support offscreen browsing.
@@ -155,15 +268,15 @@ export type RuntimeBrowserCommandHost = {
   markHeadlessBrowserSessionTabActive?(
     worktreeId: string | undefined,
     browserPageId: string,
-    targetGroupId?: string
+    options?: BrowserSessionTabSelectionOptions
   ): void
   notifyHeadlessBrowserSessionTabsChanged?(worktreeId: string): void
+  /** True when a runtime-owned session row for that page existed and was retired. */
+  retireRuntimeOwnedBrowserSessionTab?(worktreeId: string, browserPageId: string): boolean | void
 }
 
 export class RuntimeBrowserCommands {
-  private readonly activeScreencastPageIds = new Set<string>()
   private readonly activeScreencastsByPageId = new Map<string, ActiveBrowserScreencastPage>()
-  private readonly stoppingScreencastPageIds = new Map<string, Promise<void>>()
 
   constructor(private readonly host: RuntimeBrowserCommandHost) {}
 
@@ -173,6 +286,24 @@ export class RuntimeBrowserCommands {
       throw new BrowserError('browser_no_tab', 'No browser session is active')
     }
     return bridge
+  }
+
+  /**
+   * Retires a session row for a page nothing here can close any more.
+   *
+   * A client-hosted page whose runtime record is gone -- released as unrecoverable, or created by a
+   * build that kept its records in memory only -- still leaves a row every paired device can see,
+   * and every close path below is keyed on a live guest this runtime does not have. Without this
+   * the row's X fails closed and the ghost outlives the browser it named.
+   */
+  private retireGhostBrowserSessionRow(
+    worktreeId: string | undefined,
+    browserPageId: string
+  ): boolean {
+    return (
+      worktreeId !== undefined &&
+      this.host.retireRuntimeOwnedBrowserSessionTab?.(worktreeId, browserPageId) === true
+    )
   }
 
   private hasLiveRegisteredBrowserTab(
@@ -454,130 +585,202 @@ export class RuntimeBrowserCommands {
     )
   }
 
+  // The single leave path: an explicit stop, a ghost eviction and a same-device replacement all
+  // unwind through here, so viewport hand-off, budget release and stream teardown cannot drift.
+  private leaveScreencastSubscriber(
+    active: ActiveBrowserScreencastPage,
+    subscriptionId: string,
+    session: BrowserScreencastSession
+  ): void {
+    const subscriber = active.subscribers.get(subscriptionId)
+    if (!subscriber) {
+      return
+    }
+    active.subscribers.delete(subscriptionId)
+    subscriber.resolveDone()
+    if (active.viewportOwnerSubscriptionId === subscriptionId) {
+      const fallback = Array.from(active.subscribers.entries()).findLast(([, candidate]) =>
+        hasScreencastViewportSize(candidate.viewport)
+      )
+      active.viewportOwnerSubscriptionId = fallback?.[0] ?? null
+      if (fallback) {
+        void session.updateViewport(fallback[1].viewport).catch(() => {})
+      }
+    }
+    if (active.subscribers.size === 0) {
+      active.stopping = true
+      session.stop()
+      return
+    }
+    // Why: a departed subscriber's caps would otherwise pin the shared stream for
+    // the rest of its life, long after the client that asked for them is gone.
+    void applySharedScreencastFrameBudget(active, session).catch(() => {})
+  }
+
   async browserScreencast(
     params: BrowserScreencastParams,
     stream: {
       sendBinary: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
       emit?: (event: BrowserScreencastResult) => void
+      pairedDeviceId?: string
     }
   ): Promise<BrowserScreencastStartResult> {
+    if (await this.resolveClientHostedBrowserPage(params)) {
+      throw new BrowserError(
+        'browser_error',
+        'Client-hosted browser pages do not support server screencast.'
+      )
+    }
     const target = await this.resolveBrowserCommandTarget(params)
     const { browserPageId, webContents: guest } = this.resolveBrowserPageWebContents(
       target.worktreeId,
       target.browserPageId
     )
-    let stopping = this.stoppingScreencastPageIds.get(browserPageId)
-    if (stopping) {
-      await stopping
-    }
+    const subscriptionId = `browser-screencast:${browserPageId}:${randomUUID()}`
+    const viewport = normalizeScreencastViewport(params)
+    const budget = normalizeScreencastFrameBudget(params)
+    let resolveSubscriberDone!: () => void
+    const subscriberDone = new Promise<void>((resolve) => {
+      resolveSubscriberDone = resolve
+    })
+    let createdPageStream = false
     let active = this.activeScreencastsByPageId.get(browserPageId)
-    while (active) {
-      // Why: CDP allows one Page.startScreencast per page, so a new subscriber takes over a stale/hidden client instead of erroring.
-      active.stop()
-      await active.done
-      stopping = this.stoppingScreencastPageIds.get(browserPageId)
-      if (stopping) {
-        await stopping
-      }
+    while (active?.stopping) {
+      await active.session?.done
       active = this.activeScreencastsByPageId.get(browserPageId)
     }
-    this.activeScreencastPageIds.add(browserPageId)
-    const format = params.format
-    const subscriptionId = `browser-screencast:${browserPageId}:${randomUUID()}`
-    let session: BrowserScreencastSession | null = null
-    let resolveActiveDone!: () => void
-    const activeDone = new Promise<void>((resolve) => {
-      resolveActiveDone = resolve
-    })
-    let cancelledBeforeStart = false
-    const activeRecord: ActiveBrowserScreencastPage = {
-      stop: () => {
-        if (session) {
-          session.stop()
-          return
-        }
-        cancelledBeforeStart = true
-      },
-      done: activeDone
-    }
-    this.activeScreencastsByPageId.set(browserPageId, activeRecord)
-    try {
-      session = await startBrowserScreencast(guest, {
-        format,
-        quality: clampInteger(params.quality, 10, 100, 70),
-        maxWidth: clampInteger(params.maxWidth, 320, 3840, 1440),
-        maxHeight: clampInteger(params.maxHeight, 240, 2160, 1200),
-        viewportWidth: clampOptionalInteger(params.viewportWidth, 320, 3840),
-        viewportHeight: clampOptionalInteger(params.viewportHeight, 240, 2160),
-        deviceScaleFactor: clampOptionalNumber(params.deviceScaleFactor, 1, 4),
-        mobile: params.mobile === true,
-        everyNthFrame: clampInteger(params.everyNthFrame, 1, 10, 2),
-        minFrameIntervalMs: clampInteger(params.minFrameIntervalMs, 0, 1000, 0),
-        onFrame: (bytes) => sendRemoteBrowserScreencastFrame(stream.sendBinary, bytes),
-        onEvent: stream.emit,
-        onError: (message) => stream.emit?.({ type: 'error', message })
-      })
-      if (cancelledBeforeStart) {
-        session.stop()
-        await session.done
-        throw new BrowserError('browser_error', 'Browser screencast was cancelled.')
-      }
-    } catch (error) {
-      this.activeScreencastPageIds.delete(browserPageId)
-      if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
-        this.activeScreencastsByPageId.delete(browserPageId)
-      }
-      resolveActiveDone()
-      throw error
-    }
-    let stoppingPromise: Promise<void> | null = null
-    const clearPageGate = (): void => {
-      this.activeScreencastPageIds.delete(browserPageId)
-      if (this.activeScreencastsByPageId.get(browserPageId) === activeRecord) {
-        this.activeScreencastsByPageId.delete(browserPageId)
-      }
-      if (
-        stoppingPromise &&
-        this.stoppingScreencastPageIds.get(browserPageId) === stoppingPromise
-      ) {
-        this.stoppingScreencastPageIds.delete(browserPageId)
-      }
-      resolveActiveDone()
-    }
-    const markStopping = (): void => {
-      if (stoppingPromise || !session) {
-        return
-      }
-      // Why: mobile can unsubscribe and instantly resubscribe on rotation; new streams wait for CDP teardown instead of failing already-active.
-      stoppingPromise = session.done.finally(clearPageGate)
-      this.stoppingScreencastPageIds.set(browserPageId, stoppingPromise)
-    }
-    void session.done.finally(() => {
-      clearPageGate()
-    })
-
-    try {
-      return {
-        subscriptionId,
-        session: {
-          done: session.done,
-          stop: () => {
-            markStopping()
-            session?.stop()
+    if (!active) {
+      createdPageStream = true
+      const subscribers = new Map<string, ActiveBrowserScreencastSubscriber>()
+      const record = {
+        format: params.format,
+        session: null,
+        stopping: false,
+        subscribers,
+        viewportOwnerSubscriptionId: null,
+        appliedBudget: budget
+      } as ActiveBrowserScreencastPage
+      record.started = startBrowserScreencast(guest, {
+        format: params.format,
+        ...budget,
+        ...viewport,
+        onFrame: (bytes) => {
+          const ghosts: string[] = []
+          for (const [subscriptionId, subscriber] of record.subscribers) {
+            // A slow viewer drops this frame without stalling every other viewer, but the
+            // newest refusal is retained so a gate that opens later can still be filled.
+            const delivered = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
+            subscriber.pendingFrame = delivered ? null : bytes
+            subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, delivered)
+            if (screencastSubscriberIsGhost(subscriber.delivery)) {
+              ghosts.push(subscriptionId)
+            }
+          }
+          // Evicting after the fan-out keeps a teardown that stops the session from cutting the
+          // remaining viewers out of this frame.
+          for (const subscriptionId of ghosts) {
+            if (record.session) {
+              this.leaveScreencastSubscriber(record, subscriptionId, record.session)
+            }
+          }
+          return true
+        },
+        onEvent: (event) => {
+          for (const subscriber of record.subscribers.values()) {
+            subscriber.emit?.(event)
           }
         },
-        ready: {
-          type: 'ready',
-          subscriptionId,
-          browserPageId,
-          format,
-          tab: this.describeBrowserTab(browserPageId, target.worktreeId)
+        onError: (message) => {
+          for (const subscriber of record.subscribers.values()) {
+            subscriber.emit?.({ type: 'error', message })
+          }
+        }
+      })
+      active = record
+      this.activeScreencastsByPageId.set(browserPageId, record)
+      void record.started
+        .then((session) => {
+          record.session = session
+          return session.done
+        })
+        .finally(() => {
+          if (this.activeScreencastsByPageId.get(browserPageId) === record) {
+            this.activeScreencastsByPageId.delete(browserPageId)
+          }
+          for (const subscriber of record.subscribers.values()) {
+            subscriber.resolveDone()
+          }
+          record.subscribers.clear()
+        })
+        .catch(() => {})
+    }
+    active.subscribers.set(subscriptionId, {
+      sendBinary: stream.sendBinary,
+      emit: stream.emit,
+      done: subscriberDone,
+      resolveDone: resolveSubscriberDone,
+      viewport,
+      budget,
+      pendingFrame: null,
+      pairedDeviceId: stream.pairedDeviceId,
+      delivery: INITIAL_SCREENCAST_SUBSCRIBER_DELIVERY
+    })
+    // Why: normalizeScreencastViewport keeps undefined dimensions, so a sizeless
+    // subscriber taking ownership would clear the emulation for every viewer.
+    if (hasScreencastViewportSize(viewport)) {
+      active.viewportOwnerSubscriptionId = subscriptionId
+    }
+    let session: BrowserScreencastSession
+    try {
+      session = await active.started
+    } catch (error) {
+      active.subscribers.delete(subscriptionId)
+      resolveSubscriberDone()
+      throw error
+    }
+    // Why: a device that force-quit and reconnected arrives on a fresh socket, so the
+    // connection-keyed replacement upstream cannot see its old subscription. Run this after the
+    // joiner is registered — the page then never empties mid-replacement and stops the stream.
+    if (stream.pairedDeviceId !== undefined) {
+      // Deleting the entry being visited is well defined for a Map, and no other entry is touched.
+      for (const [candidateId, candidate] of active.subscribers) {
+        if (candidateId !== subscriptionId && candidate.pairedDeviceId === stream.pairedDeviceId) {
+          this.leaveScreencastSubscriber(active, candidateId, session)
         }
       }
-    } catch (error) {
-      markStopping()
-      session.stop()
-      throw error
+    }
+    if (!createdPageStream) {
+      if (active.viewportOwnerSubscriptionId === subscriptionId) {
+        await session.updateViewport(viewport)
+      }
+      await applySharedScreencastFrameBudget(active, session)
+    }
+    return {
+      subscriptionId,
+      flushPendingFrame: () => {
+        const subscriber = active.subscribers.get(subscriptionId)
+        const bytes = subscriber?.pendingFrame
+        if (!subscriber || !bytes) {
+          return
+        }
+        const delivered = sendRemoteBrowserScreencastFrame(subscriber.sendBinary, bytes)
+        subscriber.pendingFrame = delivered ? null : bytes
+        // The replay is this subscriber's first chance to reach its socket, so it is also where
+        // an eviction-eligible delivery history starts.
+        subscriber.delivery = recordScreencastSubscriberSend(subscriber.delivery, delivered)
+      },
+      session: {
+        done: subscriberDone,
+        stop: () => this.leaveScreencastSubscriber(active, subscriptionId, session),
+        updateViewport: session.updateViewport
+      },
+      ready: {
+        type: 'ready',
+        subscriptionId,
+        browserPageId,
+        format: active.format,
+        tab: this.describeBrowserTab(browserPageId, target.worktreeId)
+      }
     }
   }
 
@@ -593,11 +796,21 @@ export class RuntimeBrowserCommands {
   }
 
   async browserTabList(params: { worktree?: string }): Promise<BrowserTabListResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const result = this.requireAgentBrowserBridge().tabList(worktreeId)
-    return {
-      tabs: result.tabs.map((tab) => this.enrichBrowserTabInfo(tab))
+    const workspaceId = params.worktree
+      ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
+      : undefined
+    const clientPages = this.host.getRuntimeBrowserPageRegistry().listPages(workspaceId)
+    let bridgeWorktreeId = workspaceId
+    if (this.host.getAgentBrowserBridge()) {
+      try {
+        bridgeWorktreeId = await this.resolveBrowserWorktreeId(params.worktree)
+      } catch (error) {
+        if (clientPages.length === 0) {
+          throw error
+        }
+      }
     }
+    return { tabs: this.listLogicalBrowserTabs(bridgeWorktreeId, clientPages) }
   }
 
   async browserProceedCertificate(
@@ -611,17 +824,28 @@ export class RuntimeBrowserCommands {
   }
 
   async browserTabShow(params: { page: string; worktree?: string }): Promise<BrowserTabShowResult> {
+    const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(params.page)
+    if (clientPage) {
+      await this.assertClientPageWorkspace(clientPage, params.worktree)
+      const tab = this.listLogicalBrowserTabs(
+        clientPage.workspaceId,
+        this.host.getRuntimeBrowserPageRegistry().listPages(clientPage.workspaceId)
+      ).find((candidate) => candidate.browserPageId === clientPage.browserPageId)
+      if (!tab) {
+        throw new BrowserError('browser_tab_not_found', `Browser page ${params.page} was not found`)
+      }
+      return { tab }
+    }
     const target = await this.resolveBrowserCommandTarget(params)
     return { tab: this.describeBrowserTab(params.page, target.worktreeId) }
   }
 
   async browserTabCurrent(params: { worktree?: string }): Promise<BrowserTabCurrentResult> {
-    const worktreeId = await this.resolveBrowserWorktreeId(params.worktree)
-    const browserPageId = this.requireAgentBrowserBridge().getActivePageId(worktreeId)
-    if (!browserPageId) {
+    const tab = (await this.browserTabList(params)).tabs.find((candidate) => candidate.active)
+    if (!tab) {
       throw new BrowserError('browser_no_tab', 'No browser tab open in this worktree')
     }
-    return { tab: this.describeBrowserTab(browserPageId, worktreeId) }
+    return { tab }
   }
 
   async browserTabSwitch(
@@ -630,16 +854,56 @@ export class RuntimeBrowserCommands {
       focus?: boolean
     } & BrowserCommandTargetParams
   ): Promise<BrowserTabSwitchResult> {
-    const target = await this.resolveBrowserCommandTarget(params)
-    const bridge = this.requireAgentBrowserBridge()
-    const result = await bridge.tabSwitch(params.index, target.worktreeId, target.browserPageId)
-    if (params.focus) {
-      // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
-      const worktreeId =
-        target.worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
-      this.notifyRendererBrowserPaneFocus(worktreeId, result.browserPageId)
+    const listed = await this.browserTabList({ worktree: params.worktree })
+    const switchedIndex = params.page
+      ? listed.tabs.findIndex((tab) => tab.browserPageId === params.page)
+      : (params.index ?? -1)
+    const selected = listed.tabs[switchedIndex]
+    if (!selected) {
+      const label = params.page ? `Browser page ${params.page}` : `Tab index ${params.index}`
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `${label} out of range (0-${listed.tabs.length - 1})`
+      )
     }
-    return result
+    const clientPage = this.host.getRuntimeBrowserPageRegistry().getPage(selected.browserPageId)
+    if (clientPage) {
+      this.host
+        .getRuntimeBrowserPageRegistry()
+        .activatePage(clientPage.browserPageId, clientPage.placement)
+      publishSwitchedBrowserSessionTab(this.host, {
+        placementKind: 'client',
+        browserPageId: clientPage.browserPageId,
+        worktreeId: clientPage.workspaceId,
+        focus: params.focus
+      })
+      return { switched: switchedIndex, browserPageId: clientPage.browserPageId }
+    }
+    const bridge = this.requireAgentBrowserBridge()
+    const worktreeId =
+      typeof selected.worktreeId === 'string'
+        ? selected.worktreeId
+        : params.worktree
+          ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
+          : undefined
+    const result = await bridge.tabSwitch(undefined, worktreeId, selected.browserPageId)
+    this.host.getRuntimeBrowserPageRegistry().deactivateGlobal()
+    if (worktreeId) {
+      this.host.getRuntimeBrowserPageRegistry().deactivateWorkspace(worktreeId)
+    }
+    // Why: scope focus to the tab's owning worktree; the renderer never yanks the user across worktrees on this signal (see focusBrowserTabInWorktree).
+    const focusWorktreeId =
+      worktreeId ?? browserManager.getWorktreeIdForTab(result.browserPageId) ?? undefined
+    publishSwitchedBrowserSessionTab(this.host, {
+      placementKind: 'bridge',
+      browserPageId: result.browserPageId,
+      worktreeId: focusWorktreeId,
+      focus: params.focus
+    })
+    if (params.focus) {
+      this.notifyRendererBrowserPaneFocus(focusWorktreeId, result.browserPageId)
+    }
+    return { ...result, switched: switchedIndex }
   }
 
   async browserHover(
@@ -1296,19 +1560,32 @@ export class RuntimeBrowserCommands {
     )
   }
 
-  async browserTabCreate(params: {
-    url?: string
-    worktree?: string
-    page?: string
-    profileId?: string
-    waitForRegistration?: boolean
-    activate?: boolean
-    targetGroupId?: string
-  }): Promise<{ browserPageId: string }> {
+  async browserTabCreate(
+    params: {
+      url?: string
+      worktree?: string
+      page?: string
+      profileId?: string
+      waitForRegistration?: boolean
+      activate?: boolean
+      navigation?: RuntimeNavigationTarget
+      targetGroupId?: string
+      placement?: BrowserPageCreationPlacement
+    },
+    caller?: { pairedDeviceId?: string; clientKind?: 'mobile' | 'runtime' }
+  ): Promise<{ browserPageId: string }> {
     const url = params.url ?? 'about:blank'
-    const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+    const focus = resolveBrowserTabCreateFocus({
+      activate: params.activate,
+      navigation: params.navigation,
+      clientKind: caller?.clientKind
+    })
+    const worktree = params.worktree
+      ? params.placement?.kind === 'client'
+        ? await this.host.resolveBrowserWorkspace(params.worktree)
+        : await this.host.resolveWorktreeSelector(params.worktree)
       : undefined
+    const worktreeId = worktree?.id
     const sessionPartition = browserSessionRegistry.resolveKnownPartition(params.profileId)
     if (!sessionPartition) {
       throw new BrowserError(
@@ -1316,28 +1593,95 @@ export class RuntimeBrowserCommands {
         `Browser profile ${params.profileId} was not found`
       )
     }
+    if (params.placement?.kind === 'client') {
+      if (!caller?.pairedDeviceId) {
+        throw new BrowserError(
+          'forbidden',
+          'Client-hosted browser pages require an authenticated paired runtime.'
+        )
+      }
+      if (!worktree) {
+        throw new BrowserError(
+          'invalid_argument',
+          'Client-hosted browser pages require an explicit workspace.'
+        )
+      }
+      const browserPageId = params.page ?? randomUUID()
+      const executionHost = await this.host.resolveBrowserNetworkExecutionHost(worktree)
+      const authority = this.host.getBrowserHostLeaseRegistry()
+      const browserProfileId = params.profileId ?? browserSessionRegistry.getDefaultProfile().id
+      const created = await createRuntimeBrowserClientPage(authority, {
+        browserPageId,
+        browserHostClientId: params.placement.browserHostClientId,
+        pairedDeviceId: caller.pairedDeviceId,
+        browserProfileId,
+        executionHost,
+        workspaceId: worktree.id
+      })
+      const pages = this.host.getRuntimeBrowserPageRegistry()
+      pages.publishClientPage({
+        browserPageId,
+        workspaceId: worktree.id,
+        browserProfileId,
+        executionHostKey: browserNetworkExecutionHostKey(executionHost),
+        placement: created.placement,
+        pairedDeviceId: caller.pairedDeviceId,
+        url: 'about:blank',
+        loading: url !== 'about:blank',
+        active: focus.startsActive
+      })
+      publishCreatedBrowserSessionTab(this.host, {
+        placementKind: 'client',
+        browserPageId,
+        worktreeId: worktree.id,
+        focus,
+        clientNavigationId: caller.pairedDeviceId,
+        targetGroupId: params.targetGroupId
+      })
+      if (url !== 'about:blank') {
+        try {
+          await navigateRuntimeBrowserClientPage(authority, {
+            browserPageId,
+            placement: created.placement,
+            url
+          })
+          pages.updatePage(browserPageId, created.placement, { url, loading: false })
+        } catch {
+          pages.updatePage(browserPageId, created.placement, { loading: false })
+        }
+        this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktree.id)
+      }
+      return { browserPageId }
+    }
     // Why: headless serve has no renderer <webview>, so back the page with a main-process offscreen WebContents instead.
     if (!this.host.getAvailableAuthoritativeWindow()) {
       const offscreen = this.host.getOffscreenBrowserBackend()
       if (!offscreen) {
         throw new BrowserError('browser_error', 'This host does not support browser panes.')
       }
-      return this.createBrowserTabOffscreen(
-        offscreen,
+      // Why: the offscreen backend registers synchronously, so there is no webview-mount wait.
+      const created = await offscreen.createTab({
         url,
         worktreeId,
-        params.profileId,
-        params.activate,
-        params.targetGroupId,
-        params.page
-      )
+        profileId: params.profileId,
+        ...(params.page ? { browserPageId: params.page } : {})
+      })
+      publishCreatedBrowserSessionTab(this.host, {
+        placementKind: 'offscreen',
+        browserPageId: created.browserPageId,
+        worktreeId,
+        focus,
+        ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
+        targetGroupId: params.targetGroupId
+      })
+      return { browserPageId: created.browserPageId }
     }
     const { browserPageId } = await this.createBrowserTabInRenderer(
       url,
       worktreeId,
       params.profileId,
       params.profileId ? sessionPartition : undefined,
-      params.activate,
+      focus.focusesHost,
       params.page
     )
 
@@ -1350,12 +1694,15 @@ export class RuntimeBrowserCommands {
       }
     }
 
-    // Why: auto-activate the new tab so subsequent commands target it without an explicit switch.
     const bridge = this.requireAgentBrowserBridge()
-    const wcId = bridge.getRegisteredTabs(worktreeId).get(browserPageId)
-    if (wcId != null) {
-      bridge.setActiveTab(wcId, worktreeId)
-    }
+    publishCreatedBrowserSessionTab(this.host, {
+      placementKind: 'renderer',
+      browserPageId,
+      worktreeId,
+      focus,
+      ...(caller?.pairedDeviceId ? { clientNavigationId: caller.pairedDeviceId } : {}),
+      targetGroupId: params.targetGroupId
+    })
 
     // Why: the webview loads about:blank first; route navigation through the bridge so its registered owner remains authoritative.
     if (url && url !== 'about:blank') {
@@ -1607,8 +1954,64 @@ export class RuntimeBrowserCommands {
     page?: string
     worktree?: string
   }): Promise<{ closed: boolean }> {
-    const bridge = this.requireAgentBrowserBridge()
-    const explicitPage = typeof params.page === 'string' && params.page.length > 0
+    const pages = this.host.getRuntimeBrowserPageRegistry()
+    let clientPage = params.page ? pages.getPage(params.page) : undefined
+    if (clientPage) {
+      await this.assertClientPageWorkspace(clientPage, params.worktree)
+    } else if (!params.page) {
+      const workspaceId = params.worktree
+        ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
+        : undefined
+      if (pages.listPages(workspaceId).length > 0) {
+        const tab =
+          params.index !== undefined
+            ? (await this.browserTabList({ worktree: params.worktree })).tabs[params.index]
+            : (await this.browserTabCurrent({ worktree: params.worktree })).tab
+        clientPage = tab ? pages.getPage(tab.browserPageId) : undefined
+      }
+    }
+    if (clientPage) {
+      const authority = this.host.getBrowserHostLeaseRegistry()
+      // Why: a retained page whose host quit has no placement left to command, and asking the
+      // absent host first would refuse the close and strand the tab with no way to dismiss it.
+      if (authority.getPlacement(clientPage.browserPageId)) {
+        await closeRuntimeBrowserClientPage(authority, {
+          browserPageId: clientPage.browserPageId,
+          placement: clientPage.placement
+        })
+      }
+      if (!pages.retirePage(clientPage.browserPageId, clientPage.placement)) {
+        throw new Error('browser_page_placement_stale')
+      }
+      if (this.host.retireRuntimeOwnedBrowserSessionTab) {
+        this.host.retireRuntimeOwnedBrowserSessionTab(
+          clientPage.workspaceId,
+          clientPage.browserPageId
+        )
+      } else {
+        this.host.notifyHeadlessBrowserSessionTabsChanged?.(clientPage.workspaceId)
+      }
+      return { closed: true }
+    }
+    const namedPageId =
+      typeof params.page === 'string' && params.page.length > 0 ? params.page : null
+    const explicitPage = namedPageId !== null
+    const bridge = this.host.getAgentBrowserBridge()
+    if (!bridge) {
+      // Why before the refusal: a runtime with no browser session cannot be holding this page
+      // either, but it can still be carrying the session row that names it.
+      if (
+        namedPageId &&
+        params.worktree &&
+        this.retireGhostBrowserSessionRow(
+          (await this.host.resolveWorktreeSelector(params.worktree)).id,
+          namedPageId
+        )
+      ) {
+        return { closed: true }
+      }
+      throw new BrowserError('browser_no_tab', 'No browser session is active')
+    }
     const worktreeId = explicitPage
       ? params.worktree
         ? (await this.host.resolveWorktreeSelector(params.worktree)).id
@@ -1616,8 +2019,8 @@ export class RuntimeBrowserCommands {
       : await this.resolveBrowserWorktreeId(params.worktree)
 
     let tabId: string | null = null
-    if (typeof params.page === 'string' && params.page.length > 0) {
-      tabId = params.page
+    if (namedPageId !== null) {
+      tabId = namedPageId
     } else if (params.index !== undefined) {
       const tabs = bridge.getRegisteredTabs(worktreeId)
       const entries = [...tabs.entries()]
@@ -1645,6 +2048,9 @@ export class RuntimeBrowserCommands {
         return { closed: false }
       }
       if (explicitPage && !bridge.getRegisteredTabs(worktreeId).has(resolvedTabId)) {
+        if (this.retireGhostBrowserSessionRow(worktreeId, resolvedTabId)) {
+          return { closed: true }
+        }
         const scope = worktreeId ? ' in this worktree' : ''
         throw new BrowserError(
           'browser_tab_not_found',
@@ -1652,10 +2058,22 @@ export class RuntimeBrowserCommands {
         )
       }
       await offscreen.closeTab(resolvedTabId)
+      // Why: closeTab only destroys the guest; without retirement, paired clients keep a
+      // dead session tab until an unrelated republish (closeMobileSessionTab already retires).
+      if (worktreeId) {
+        if (this.host.retireRuntimeOwnedBrowserSessionTab) {
+          this.host.retireRuntimeOwnedBrowserSessionTab(worktreeId, resolvedTabId)
+        } else {
+          this.host.notifyHeadlessBrowserSessionTabsChanged?.(worktreeId)
+        }
+      }
       return { closed: true }
     }
 
     if (!authoritativeWindow && tabId && !bridge.getRegisteredTabs(worktreeId).has(tabId)) {
+      if (this.retireGhostBrowserSessionRow(worktreeId, tabId)) {
+        return { closed: true }
+      }
       const scope = worktreeId ? ' in this worktree' : ''
       throw new BrowserError('browser_tab_not_found', `Browser page ${tabId} was not found${scope}`)
     }
@@ -1710,6 +2128,76 @@ export class RuntimeBrowserCommands {
     }
   }
 
+  private listLogicalBrowserTabs(
+    worktreeId: string | undefined,
+    clientPages: readonly RuntimeBrowserClientPage[]
+  ): BrowserTabListResult['tabs'] {
+    const clientPageActive = clientPages.some((page) => page.active)
+    const bridge = this.host.getAgentBrowserBridge()
+    const serverTabs =
+      bridge && typeof bridge.tabList === 'function'
+        ? bridge.tabList(worktreeId).tabs.map((tab) => ({
+            ...this.enrichBrowserTabInfo(tab),
+            active: clientPageActive ? false : tab.active
+          }))
+        : []
+    const clientTabs = clientPages.map((page, offset) => {
+      const profile =
+        browserSessionRegistry.getProfile(page.browserProfileId) ??
+        browserSessionRegistry.getDefaultProfile()
+      return {
+        browserPageId: page.browserPageId,
+        index: serverTabs.length + offset,
+        url: page.url,
+        title: page.title,
+        active: page.active,
+        loadError: null,
+        certificateFailure: null,
+        worktreeId: page.workspaceId,
+        profileId: profile.id,
+        profileLabel: profile.label
+      }
+    })
+    const tabs = [...serverTabs, ...clientTabs]
+    if (tabs.length > 0 && !tabs.some((tab) => tab.active)) {
+      tabs[0] = { ...tabs[0]!, active: true }
+    }
+    return tabs.map((tab, index) => ({ ...tab, index }))
+  }
+
+  private async assertClientPageWorkspace(
+    page: RuntimeBrowserClientPage,
+    selector: string | undefined
+  ): Promise<void> {
+    if (!selector) {
+      return
+    }
+    const workspace = await this.host.resolveBrowserWorkspace(selector)
+    if (workspace.id !== page.workspaceId) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Browser page ${page.browserPageId} was not found in this worktree`
+      )
+    }
+  }
+
+  private async resolveClientHostedBrowserPage(
+    params: BrowserCommandTargetParams
+  ): Promise<RuntimeBrowserClientPage | undefined> {
+    const pages = this.host.getRuntimeBrowserPageRegistry()
+    if (params.page) {
+      const page = pages.getPage(params.page)
+      if (page) {
+        await this.assertClientPageWorkspace(page, params.worktree)
+      }
+      return page
+    }
+    const workspaceId = params.worktree
+      ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
+      : undefined
+    return pages.listPages(workspaceId).find((page) => page.active)
+  }
+
   private describeBrowserTab(
     browserPageId: string,
     explicitWorktreeId?: string
@@ -1726,34 +2214,6 @@ export class RuntimeBrowserCommands {
       )
     }
     return this.enrichBrowserTabInfo(tab)
-  }
-
-  // Why: headless serve path — the offscreen backend registers synchronously, so there is no webview-mount wait.
-  private async createBrowserTabOffscreen(
-    offscreen: BrowserBackend,
-    url: string,
-    worktreeId?: string,
-    profileId?: string,
-    activate?: boolean,
-    targetGroupId?: string,
-    requestedPageId?: string
-  ): Promise<{ browserPageId: string }> {
-    const { browserPageId } = await offscreen.createTab({
-      url,
-      worktreeId,
-      profileId,
-      ...(requestedPageId ? { browserPageId: requestedPageId } : {})
-    })
-    const bridge = this.host.getAgentBrowserBridge()
-    const wcId = bridge?.getRegisteredTabs(worktreeId).get(browserPageId)
-    if (bridge && wcId != null) {
-      bridge.setActiveTab(wcId, worktreeId)
-    }
-    // Why: only user-initiated creates (activate:true) mark the tab active; agent/background creates must not yank a connected client to it.
-    if (activate === true) {
-      this.host.markHeadlessBrowserSessionTabActive?.(worktreeId, browserPageId, targetGroupId)
-    }
-    return { browserPageId }
   }
 
   private async createBrowserTabInRenderer(

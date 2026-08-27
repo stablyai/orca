@@ -1,7 +1,7 @@
 import { EventEmitter } from 'node:events'
 import type { IncomingHttpHeaders, IncomingMessage } from 'node:http'
 import { describe, expect, it, vi } from 'vitest'
-import { readRequestBody } from './agent-hook-listener'
+import { readRequestBody } from './agent-hook-listener/request-body'
 
 type FakeIncomingMessage = EventEmitter & {
   headers: IncomingHttpHeaders

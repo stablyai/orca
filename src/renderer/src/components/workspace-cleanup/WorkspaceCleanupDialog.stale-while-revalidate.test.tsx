@@ -7,6 +7,7 @@ import type {
   WorkspaceCleanupScanProgress,
   WorkspaceCleanupScanResult
 } from '../../../../shared/workspace-cleanup'
+import type { WorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import { createTestStore, seedStore } from '../../store/slices/store-test-helpers'
 import { resetWorkspaceCleanupBrowsePersistTimer } from '../../store/slices/workspace-cleanup-browse'
 import { NOW, makeCandidate } from '../../store/slices/workspace-cleanup-slice-test-harness'
@@ -349,6 +350,50 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
   })
 
+  it('reports selections removed by facet filters', async () => {
+    installApi({
+      scannedAt: CACHED_AT,
+      candidates: [
+        makeCandidate({
+          worktreeId: 'repo1::/tmp/alpha',
+          displayName: 'alpha',
+          blockers: ['pinned']
+        }),
+        makeCandidate({ worktreeId: 'repo1::/tmp/beta', displayName: 'beta' })
+      ],
+      errors: []
+    })
+    await renderDialog()
+    await openDialog()
+
+    await act(async () => rowCheckbox('alpha')?.click())
+    const browse = holders.store.getState().workspaceCleanupBrowse as WorkspaceCleanupBrowseState
+    await act(async () => {
+      holders.store.setState({
+        workspaceCleanupBrowse: {
+          ...browse,
+          filters: {
+            ...browse.filters,
+            safety: {
+              ...browse.filters.safety,
+              blockers: ['pinned'],
+              blockerMode: 'none-of'
+            }
+          }
+        }
+      })
+    })
+    await flush()
+
+    expect(holders.infoToasts).toContain(
+      '1 selected workspace is hidden by the current filters and was deselected.'
+    )
+
+    await act(async () => holders.store.setState({ workspaceCleanupBrowse: browse }))
+    await flush()
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('false')
+  })
+
   it('adopts the in-flight scan on reopen instead of starting a duplicate', async () => {
     const rig = installApi(cachedFleet())
     await renderDialog()
@@ -399,7 +444,16 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     })
     await flush()
 
-    // Both rows are default-selected suggestions after the first settle.
+    // Nothing is pre-selected: the dialog no longer acts on its own verdict.
+    expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowCheckbox('beta')?.getAttribute('aria-checked')).toBe('false')
+
+    // The user selects both, which is what must survive the refresh.
+    await act(async () => {
+      rowCheckbox('alpha')?.click()
+      rowCheckbox('beta')?.click()
+    })
+    await flush()
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
     expect(rowCheckbox('beta')?.getAttribute('aria-checked')).toBe('true')
 
@@ -423,5 +477,37 @@ describe('WorkspaceCleanupDialog stale-while-revalidate', () => {
     expect(rowCheckbox('alpha')?.getAttribute('aria-checked')).toBe('true')
     expect(rowNames()).not.toContain('beta')
     expect(holders.infoToasts).toContain('1 selected workspace no longer exists.')
+  })
+
+  it('keeps selected active workspaces outside the select-all scope', async () => {
+    installApi({
+      scannedAt: CACHED_AT,
+      candidates: [
+        makeCandidate({ worktreeId: 'repo1::/tmp/ready', displayName: 'ready' }),
+        makeCandidate({
+          worktreeId: 'repo1::/tmp/active',
+          displayName: 'active',
+          reasons: [],
+          blockers: ['active-workspace']
+        })
+      ],
+      errors: []
+    })
+    await renderDialog()
+    await openDialog()
+
+    await act(async () => rowCheckbox('active')?.click())
+    const selectAll = container?.querySelector<HTMLElement>(
+      '[aria-label="Select 1 safety-checked workspace"]'
+    )
+    expect(selectAll?.getAttribute('aria-checked')).toBe('false')
+
+    await act(async () => selectAll?.click())
+    expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('true')
+    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
+
+    await act(async () => selectAll?.click())
+    expect(rowCheckbox('ready')?.getAttribute('aria-checked')).toBe('false')
+    expect(rowCheckbox('active')?.getAttribute('aria-checked')).toBe('true')
   })
 })

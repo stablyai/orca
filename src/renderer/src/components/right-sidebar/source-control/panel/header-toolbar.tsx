@@ -1,10 +1,7 @@
 import React, { useCallback, useEffect, useRef } from 'react'
 import { GitPullRequestArrow, Loader2, Search, X } from 'lucide-react'
 import type { GitBranchCompareSummary } from '../../../../../../shared/git-diff-compare-types'
-import type {
-  GitBranchLineTotal,
-  GitUpstreamStatus
-} from '../../../../../../shared/git-status-types'
+import type { GitBranchLineTotal } from '../../../../../../shared/git-status-types'
 import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import type { PrimaryAction } from '../../source-control-primary-action'
@@ -40,7 +37,6 @@ type SourceControlHeaderToolbarProps = {
   branchSummary: GitBranchCompareSummary | null
   compareBaseRef: string | null
   headDisplay?: WorktreeGitIdentityDisplay | null
-  upstreamStatus?: GitUpstreamStatus
   manualReviewUrl?: string | null
   branchLineTotal?: GitBranchLineTotal | null
 }
@@ -147,7 +143,6 @@ export function SourceControlHeaderToolbar({
   branchSummary,
   compareBaseRef,
   headDisplay = null,
-  upstreamStatus,
   manualReviewUrl,
   branchLineTotal
 }: SourceControlHeaderToolbarProps): React.JSX.Element {
@@ -294,7 +289,6 @@ export function SourceControlHeaderToolbar({
             summary={branchSummary}
             compareBaseRef={compareBaseRef}
             headDisplay={headDisplay}
-            upstreamStatus={upstreamStatus}
             manualReviewUrl={manualReviewUrl}
             branchLineTotal={branchLineTotal}
             onChangeBaseRef={onChangeBaseRef}

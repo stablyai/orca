@@ -1,7 +1,8 @@
 import type { ProjectHostSetup } from '../../../shared/project-types'
 import { toSshExecutionHostId } from '../../../shared/execution-host'
-import type { StoreOwnedPersistedState } from '../loading-store/store-owned-state'
+import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
+  migrateFolderWorkspaceHostSshTargetId,
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId
 } from '../../ssh/ssh-target-id-migration'
@@ -11,9 +12,14 @@ import {
   migrateRetirementNamespaceHostIdentity,
   sshHostIdentity
 } from '../../worktree-retirement-namespace'
+import {
+  migrateAutomationHostFilterSshTargetId,
+  migrateAutomationsForSshReadoption
+} from '../../automations/automation-ssh-readoption-migration'
+import { automationIdsPinnedToSshTarget } from '../scheduling-automations/automation-owner-projection'
 
 export type SshTargetReassignmentOperations = {
-  state: StoreOwnedPersistedState
+  state: PersistedState
   protectedSecrets: Pick<ProtectedSecretPersistence, 'removeRetainedBlob'>
   syncProjectHostSetupCompatibilityState: () => void
   scheduleSave: () => void
@@ -22,7 +28,7 @@ export type SshTargetReassignmentOperations = {
 /** Retirement namespaces key on the endpoint a target reaches, so a rotation moves them only when
  *  the endpoint itself changed — plus any pre-identity key that embedded the row id. */
 function migrateRetirementNamespaces(
-  state: StoreOwnedPersistedState,
+  state: PersistedState,
   oldTargetId: string,
   newTargetId: string
 ): boolean {
@@ -107,6 +113,27 @@ export function reassignSshTargetId(
   if (migrateRetirementNamespaces(operations.state, oldTargetId, newTargetId)) {
     carrierChanged = true
   }
+  const workspacePinnedAutomationIds = automationIdsPinnedToSshTarget(operations.state, oldTargetId)
+  if (migrateFolderWorkspaceHostSshTargetId(operations.state, oldTargetId, newTargetId)) {
+    carrierChanged = true
+  }
+  if (
+    migrateAutomationsForSshReadoption({
+      automations: operations.state.automations ?? [],
+      automationRuns: operations.state.automationRuns ?? [],
+      oldTargetId,
+      newTargetId,
+      workspacePinnedAutomationIds,
+      newTargetGeneration: (operations.state.sshTargets ?? []).find(
+        (target) => target.id === newTargetId
+      )?.generation
+    })
+  ) {
+    carrierChanged = true
+  }
+  if (migrateAutomationHostFilterSshTargetId(operations.state.ui, oldTargetId, newTargetId)) {
+    carrierChanged = true
+  }
   for (const lease of operations.state.sshRemotePtyLeases ?? []) {
     if (lease.targetId === oldTargetId) {
       lease.targetId = newTargetId
@@ -149,6 +176,11 @@ export function reassignSshTargetId(
     operations.syncProjectHostSetupCompatibilityState()
   }
   if (repoIds.size > 0 || metaChanged || carrierChanged || setupsChanged) {
+    // The rewrites above patch rows in place; the list projection caches on array
+    // identity, so a same-identity array would keep serving pre-readoption owners.
+    operations.state.repos = [...operations.state.repos]
+    operations.state.automations = [...(operations.state.automations ?? [])]
+    operations.state.automationRuns = [...(operations.state.automationRuns ?? [])]
     operations.scheduleSave()
   }
   return [...repoIds]

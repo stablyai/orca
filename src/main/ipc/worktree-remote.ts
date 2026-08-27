@@ -35,6 +35,7 @@ import {
 } from '../git/repo'
 import { resolveLocalGitUsername, getSshGitUsername } from '../git/git-username'
 import { hasCommitObjectViaGitExec } from '../git/commit-object-ref'
+import { probeWorktreeBaseRefPresence } from '../git/worktree-base-ref-probe'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
@@ -181,7 +182,8 @@ type RemoteLocalBaseRefRefreshability =
     }
   | {
       refreshable: false
-      result: LocalBaseRefRefreshResult
+      // undefined = nothing to refresh (no local branch yet), so the caller reports no status at all.
+      result: LocalBaseRefRefreshResult | undefined
     }
 
 function appendWorktreeCreateWarning(current: string | undefined, next: string): string {
@@ -698,8 +700,7 @@ async function hasRemoteWorktreeBaseRef(
   repoPath: string,
   baseRef: string
 ): Promise<boolean> {
-  const refExists = (qualifiedRef: string) =>
-    hasRemoteTrackingRefSsh(provider, repoPath, qualifiedRef)
+  const refExists = (qualifiedRef: string) => hasCommitRefSsh(provider, repoPath, qualifiedRef)
   const resolvedBaseRef = await resolveWorktreeAddBaseRef(baseRef, refExists)
   if (resolvedBaseRef !== baseRef) {
     return true
@@ -710,8 +711,8 @@ async function hasRemoteWorktreeBaseRef(
   return hasRemoteCommitObject(provider, repoPath, baseRef)
 }
 
-// Why: hasRemoteCommitObject resolves only SHAs, not symbolic remote-tracking refs; detect those directly for the fetch-failed local fallback.
-async function hasRemoteTrackingRefSsh(
+// Why: hasRemoteCommitObject resolves only SHAs, not symbolic refs; resolve any qualified ref (remote-tracking or local head) directly.
+async function hasCommitRefSsh(
   provider: SshGitProvider,
   repoPath: string,
   ref: string
@@ -1082,6 +1083,9 @@ async function prepareWorktreePushTargetSsh(
   await provider.exec(['check-ref-format', '--branch', target.branchName], repoPath)
   let remoteName = target.remoteName
   let remoteCreated = false
+  // Why: ownership above is inherited from sibling worktrees, so it can be true
+  // for a remote this call did not create. Only rollback needs that distinction.
+  let remoteAddedHere = false
   if (target.remoteUrl) {
     const existingRemote = await findRemoteForUrl(execGit, repoPath, target.remoteUrl)
     if (existingRemote) {
@@ -1099,16 +1103,37 @@ async function prepareWorktreePushTargetSsh(
         : false
     } else {
       remoteName = await ensureUniqueRemoteName(execGit, repoPath, target.remoteName)
-      await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      try {
+        await provider.exec(['remote', 'add', remoteName, target.remoteUrl], repoPath)
+      } catch (error) {
+        // Why: relays predating fork-remote support reject this exec by policy; name the fix instead of surfacing their rule.
+        if (error instanceof Error && error.message.includes('Destructive git remote operations')) {
+          throw new Error(
+            'This SSH host is running an older Orca relay that cannot add a fork remote for a PR workspace. Reconnect to deploy the latest relay, then try again.'
+          )
+        }
+        throw error
+      }
       remoteCreated = true
+      remoteAddedHere = true
     }
   }
-  await provider.fetchRemoteTrackingRef(
-    repoPath,
-    remoteName,
-    target.branchName,
-    `refs/remotes/${remoteName}/${target.branchName}`
-  )
+  try {
+    await provider.fetchRemoteTrackingRef(
+      repoPath,
+      remoteName,
+      target.branchName,
+      `refs/remotes/${remoteName}/${target.branchName}`
+    )
+  } catch (error) {
+    // Why: mirrors the local path — a fetch failure aborts the create, so the
+    // remote we just added on the host would be orphaned with no owner to clean it.
+    // A reused remote belongs to a live sibling worktree; removing it breaks that one.
+    if (remoteAddedHere) {
+      await provider.exec(['remote', 'remove', remoteName], repoPath).catch(() => {})
+    }
+    throw error
+  }
   return { ...sanitizedTarget, remoteName, ...(remoteCreated ? { remoteCreated: true } : {}) }
 }
 
@@ -1243,7 +1268,7 @@ async function resolveRemoteWorktreeCreateBasePlan(
         baseBranchCandidate
       )
       if (remoteTrackingBase) {
-        if (await hasRemoteTrackingRefSsh(provider, repo.path, remoteTrackingBase.ref)) {
+        if (await hasCommitRefSsh(provider, repo.path, remoteTrackingBase.ref)) {
           return true
         }
         return hasRemoteWorktreeBaseRef(provider, repo.path, baseBranchCandidate)
@@ -1294,7 +1319,7 @@ export async function prefetchRemoteWorktreeCreateBase(
   }
   if (basePlan.remoteTrackingBase) {
     if (
-      (await hasRemoteTrackingRefSsh(provider, repo.path, basePlan.remoteTrackingBase.ref)) ||
+      (await hasCommitRefSsh(provider, repo.path, basePlan.remoteTrackingBase.ref)) ||
       !(await hasRemoteWorktreeBaseRef(provider, repo.path, basePlan.baseBranch))
     ) {
       await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, basePlan.remoteTrackingBase)
@@ -1314,7 +1339,7 @@ async function refreshLocalBaseRefForRemoteWorktreeCreate(
   provider: SshGitProvider,
   repoPath: string,
   remoteTrackingBase: RemoteTrackingBase
-): Promise<LocalBaseRefRefreshResult> {
+): Promise<LocalBaseRefRefreshResult | undefined> {
   const evaluation = await evaluateRemoteLocalBaseRefRefreshability(
     provider,
     repoPath,
@@ -1374,6 +1399,16 @@ async function evaluateRemoteLocalBaseRefRefreshability(
       }
     }
   } catch {
+    // Why (#15331): the probes above also fail when refs/heads/<branch> is simply absent; the relay's
+    // `worktree add -b` is about to create it, so there is nothing stale to warn about. Only a proven
+    // absence suppresses: a dropped relay connection is not evidence the branch is missing.
+    const presence = await probeWorktreeBaseRefPresence(
+      (args) => provider.exec(args, repoPath),
+      fullRef
+    )
+    if (presence === 'absent') {
+      return { refreshable: false, result: undefined }
+    }
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
 
@@ -1531,7 +1566,7 @@ export async function createRemoteWorktree(
   let baseFallback: WorktreeCreateBaseFallback | undefined
 
   if (remoteTrackingBase) {
-    const hasRemoteTrackingBaseRef = await hasRemoteTrackingRefSsh(
+    const hasRemoteTrackingBaseRef = await hasCommitRefSsh(
       provider,
       repo.path,
       remoteTrackingBase.ref
@@ -1681,7 +1716,7 @@ export async function createRemoteWorktree(
       await refreshRemoteTrackingBaseForWorktreeCreate(provider, repo, remoteTrackingBase)
     } catch {
       // Why: a refresh failure shouldn't block create if a usable (stale) local base ref exists; probe after registerRoot and hard-fail only when none does.
-      if (!(await hasRemoteTrackingRefSsh(provider, repo.path, remoteTrackingBase.ref))) {
+      if (!(await hasCommitRefSsh(provider, repo.path, remoteTrackingBase.ref))) {
         throw new Error(
           `Could not refresh base ref "${baseBranch}" from "${remoteTrackingBase.remote}". Check your network and try again.`
         )

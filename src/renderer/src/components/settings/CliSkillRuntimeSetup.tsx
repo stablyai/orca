@@ -164,7 +164,15 @@ function buildPowerShellWslSkillCommand(command: string, runtime: LocalAgentRunt
   // Why: encoding preserves the user's configured login-shell PATH across the Windows argv boundary.
   const encodedScript = encodeWslLoginShellScript(command)
   const visibleCommand = command.replace(/[\r\n]+/g, ' ')
-  const shellScript = `eval "\`printf %s ${encodedScript} | base64 -d\`"`
+  // Why $(...) and not a backtick eval: PowerShell treats ` as its own escape
+  // character, so the old `eval "\`printf ...\`"` had the payload's quotes
+  // interacting with two escaping layers and dash saw `case  in` -- the
+  // `word unexpected (expecting "in")` in #14292. Credit: #14785.
+  //
+  // Why not a plain pipe into sh: that hands the payload the pipe as its stdin,
+  // so a setup command that reads input gets base64 remnants instead. Command
+  // substitution runs in a subshell and leaves the terminal's stdin intact.
+  const shellScript = `sh -c "$(printf %s ${encodedScript} | base64 -d)"`
   // Why --exec: `--` makes wsl.exe expand $name in the argv it forwards to the guest.
   const wslCommand = `wsl.exe${distroArg} --exec sh -c ${quotePowerShellNativeArgument(shellScript)}`
   return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
@@ -179,9 +187,11 @@ function decodeWslSetupTerminalCommand(command: string): string | null {
   }
 
   // Why both separators: commands persisted before the --exec switch must still decode.
-  const encoded = /(?:--|--exec) sh -c 'eval \\"`printf %s ([A-Za-z0-9+/=]+) \| base64 -d`\\"'/.exec(
-    command
-  )?.[1]
+  const encoded =
+    // Both shapes: commands persisted before the pipe switch still decode.
+    /(?:--|--exec) sh -c '(?:eval \\"`|sh -c \\"\$\()?printf %s ([A-Za-z0-9+/=]+) \| base64 -d/.exec(
+      command
+    )?.[1]
   if (!encoded) {
     return null
   }
