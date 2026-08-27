@@ -21,6 +21,7 @@ import { ClientHostedBrowserUnavailableNotice } from './client-hosted-browser-un
 import { useRestoredClientHostedRecoveryWindow } from './restored-client-hosted-recovery-window'
 import BrowserFind from './assemble-chrome/BrowserFind'
 import { BrowserNavigationControlRow } from './assemble-chrome/browser-navigation-control-row'
+import BrowserAddressBar from './assemble-chrome/BrowserAddressBar'
 import { BrowserPageContextMenu } from './assemble-chrome/browser-page-context-menu'
 import { useBrowserPageChromeFocus } from './assemble-chrome/use-browser-page-chrome-focus'
 import { useBrowserAddressBarEditSession } from './assemble-chrome/use-browser-address-bar-edit-session'
@@ -165,7 +166,7 @@ export function ClientHostedBrowserPagePane({
 
   const navigateToUrl = useCallback(
     (value: string) => {
-      const submission = resolveBrowserAddressBarSubmission(value)
+      const submission = resolveBrowserAddressBarSubmission(value, { allowFileUrls: false })
       if (submission.status === 'invalid') {
         onUpdatePageState(browserTab.id, { loadError: submission.loadError })
         return
@@ -367,18 +368,23 @@ export function ClientHostedBrowserPagePane({
             reload: () => reload.runReloadTrigger('button'),
             navigate: navigateToUrl
           }}
-          addressBarValue={addressBarValue}
-          onAddressBarChange={setAddressBarValue}
-          onSubmitAddressBar={() => navigateToUrl(addressBarValue)}
-          addressBarInputRef={addressBarInputRef}
-          addressBarEditSession={addressBarEditSession}
-          reloadLabel={reload.reloadButtonLabel}
-          addressBarLeadingIcon={
-            <RemoteRuntimeEgressIndicator
-              runtimeEnvironmentId={runtimeEnvironmentId}
-              presentation="client-hosted"
+          addressSlot={
+            <BrowserAddressBar
+              value={addressBarValue}
+              onChange={setAddressBarValue}
+              onSubmit={() => navigateToUrl(addressBarValue)}
+              onNavigate={navigateToUrl}
+              inputRef={addressBarInputRef}
+              editSession={addressBarEditSession}
+              leadingIcon={
+                <RemoteRuntimeEgressIndicator
+                  runtimeEnvironmentId={runtimeEnvironmentId}
+                  presentation="client-hosted"
+                />
+              }
             />
           }
+          reloadLabel={reload.reloadButtonLabel}
         />
       </div>
       <div ref={viewportRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">

@@ -2817,16 +2817,16 @@
     },
     {
       "id": "browser-session.remote-html-preview-ownership",
-      "title": "Paired HTML previews keep one host page and one stable client split",
+      "title": "Paired HTML previews render locally as document browser tabs and create no host browser page",
       "maturity": "experimental",
       "protection": "partial",
       "owner": "browser-runtime",
       "layer": "renderer-paired-runtime-reconciliation",
       "surfaces": [
-        "paired remote HTML file preview",
-        "background preview creation and explicit browser activation",
-        "client-only split placement",
-        "capability-unknown and mixed-version preview rejection cleanup",
+        "paired HTML file preview served locally over the orca-preview scheme",
+        "preview split placement that leaves editor focus alone",
+        "grant-scoped document reads, including truncation and out-of-worktree refusal",
+        "capability-unknown and mixed-version browser-creation rejection cleanup",
         "post-create reconciliation failure and compensating rollback",
         "remote browser close convergence"
       ],
@@ -2834,8 +2834,9 @@
       "providers": ["remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["remote-runtime"],
-      "coverageNotes": "A headed macOS desktop host and separate paired client exercise the Explorer eye-button path with a real remote file URL, host browser DOM, renderer split layout, background preview creation, explicit browser activation, browser close, forced capability rejection after caller preflight, a forced post-create reconciliation timeout, and navigation held beyond the client create deadline. The same reconciliation fault oracles pass against a live headless server. Unit contracts cover absent, unknown, and mixed-version capabilities, visible rejection, empty-split cleanup, owning-runtime routing, canonical preallocated page identity, navigation-independent acknowledgement, exact client materialization, confirmed rollback, ambiguous cleanup, and teardown. Linux and Windows live journeys remain gaps.",
+      "coverageNotes": "A macOS desktop host and a separate paired Electron client exercise the Explorer preview action end to end: the document renders inside the client-local orca-preview guest, the client gains exactly one browser workspace and it is the document one, the host's own page registry and tab snapshot gain nothing, the split does not take focus from the source editor, an explicit click activates the preview, and closing it with its X leaves the editor and terminal intact. Both host oracles are read in a run where an ordinary URL browser tab from the same client does arrive in them, because a host that cannot project browser pages at all would otherwise answer the absence question the same way. A second journey quits that client with a document tab open and relaunches it on the same profile, which is the restore the user's original report turned on: the same workspace row comes back blank and named by the document, renders again, and does so over a grant URL that differs from the one that was quit. The same journey pins the guest URL to the orca-preview scheme, so a regression back to file:// or to a host browser page is visible. The rewritten journey caught a live gap the old one could not see: since previews became browser pages they had no chrome to hand focus to their guest, so main refused every reported link click as coming from an unfocused guest and the one route out of a preview was dead. Main's own log answered it — registered true, grant live, focused false — after the embedder reported the anchor really taking six real presses. The pane now hands focus over when it is the reader's surface, and the journey routes. The preview's own components moved out of the editor folder into browser-pane/workspace-doc/ with this change, since a preview is a browser pane and no longer an editor one; their i18n keys keep the historical auto.components.editor.HtmlDocPreview prefix rather than dropping thirty translated strings across four locales for a tidier key path. Seven gate commands named those files by their old paths and were re-issued at the new ones, and the nine dated runs behind them were retired rather than left naming files that are no longer there, on the same principle this gate already applied twice: vitest treats a missing named file as a filter and exits 0, so such a command reports green while silently running only the half that still exists. Each retired record's finding is carried into the replacement run recorded below it, including the red half of the entry/subresource pair, which was re-measured by re-applying its mutant at the new path rather than being dropped. The fence over the page-management channels was decided channel by channel before it was built, and that decision record is: of the 23 channels that can name a page, 6 are allowed for a workspace-document page — the tool channels the reader drives, which reach it through the one authority that reads both halves of the registry — 9 refuse (download accept and cancel, devtools, certificate proceed, client page metadata publish, viewport override, WebAuthn account response, registration probe, registration repair), 3 cannot name a page at all because they take a profile or a worktree instead, and the rest are the registration and activation doors, refused on membership. What shipped is not the per-channel guard that classification implies: eleven call sites read the browsing map directly, so a guard per channel is exactly the caller-flag seam that has to be remembered at every future call site. The registry was split in two instead, which makes the classification structural — a document guest is absent from the browsing map, so every refusing channel refuses by absence rather than by a guard, and a channel added later inherits the refusal without being classified at all. Unit contracts cover grant scoping and path containment, per-owner read routing, refusal of a truncated or over-cap read, the old-server binary degradation, scheme admission on will-attach-webview, the guest navigation policy, the plan layer's local/SSH/paired/out-of-worktree routing, and the distinct sentence the reader sees for each failure reason. The paired browser-creation surfaces this gate still owns — capability rejection cleanup, canonical page identity, reconciliation rollback, close convergence — keep their existing headed and headless journeys. Linux and Windows live journeys remain gaps. A refused subresource is a notice on a rendered document rather than a failure panel, since only the entry document's failure leaves the reader with nothing; the entry document is served as text by every owner and cannot be refused for its format at all. Grants die with the renderer document that minted them, at window creation and on every reload, because the renderer holds the only record of which preview owns which grant. The mint and revoke channels answer only the trusted renderer, and a preview tab is never republished to mobile clients, which have no grant to read it with. External URLs leave the preview only via a trusted user click on an anchor while the preview is focused; script-driven navigation and popups reach nothing. The guest's navigation sinks are deny-only and route no URL at all, and the guest carries a preview-only preload, pinned by will-attach-webview and denied to every other attach path, whose capture-phase click handler reports an anchor's URL to main; main answers only a report from a preview guest with a live bound grant that is the focused contents, and only for http(s). Two earlier reader-facing records from 2026-08-26, which measured a shape where a subresource failure was filtered out and the panel still carried an unsupported-asset sentence, were retired with that shape rather than left contradicting the 10/10 runs of the command they share. Two more were retired on the same principle when the external-link design changed: a record showing that removing a recent-input gate let the unattended document open two browser tabs, and a record showing that dropping the webview's allowpopups attribute left a target=_blank press with nothing to route. Both measured machinery that no longer exists — the input gate could not tell a script's navigation from the click it followed, which is the case now recorded below, and the preload intercepts the press before Chromium considers a popup at all, so allowpopups was removed. WebRTC is fenced by the guest's IP-handling policy alone: this Chromium answers a webrtc content-security-policy directive as unrecognized and gathers candidates anyway, so the directive is deliberately absent from the served policy and a unit assertion keeps it out. A standalone Electron probe on the same version gathered 7 candidates including a STUN reflexive one without the policy and 0 with it. Two command paths this gate used to carry no longer exist, and their structured evidence was retired with them rather than left naming files that are no longer there: vitest treats a missing named file as a filter and exits 0, so such a command reports green while silently running only the half that still exists. The first is src/renderer/src/lib/file-preview-capability-cleanup.test.ts, deleted in STA-5557 when HTML previews stopped creating paired browser tabs: on 2026-08-12 its five-assertion STA-4063 oracle ran red 5/5 on scan e4c278eb52 and on main bc2e30000b, partially green 2/5 on pre-fix PR #14100, and green 5/5 on candidate 14b5877a75; the surviving half of that oracle is web-runtime-browser-capability-cleanup.test.ts, still commanded above. The second is tests/e2e/paired-remote-html-browser-focus.spec.ts, renamed in STA-5557 to paired-remote-html-preview-local-render.spec.ts because the journey no longer proves anything about browser focus: its 2026-08-12 runs established the owning-runtime routing and no-focus-steal behavior of the then-current browser-tab preview (red on main 346e59c879 and a90a18d43d, green on candidates d05217c40d and b7de9c0961, red again with only the side-preview focus or routing seam disabled), and its 2026-08-26 runs are recorded below under the current path. An adversarial pass after the journey landed found four coverage gaps rather than shipping defects, and all four are pinned here. The page url had a third door: the navigation commit wrote whatever url was reported, unfenced, and while nothing reaches it for a document page today it sat one report away from giving a document page a URL that persistence, the publish boundary and the address bar all read. The group projection was the load-bearing half of the mobile publish boundary that no test had: removing it alone left the whole suite green, because no test in it had tab groups, while the phone payload gained a group whose order and active tab named a document tab it was never sent. The focus handoff was covered only in the narrowing direction, so widening it — dropping the page-activity check, or either half of the reader-surface check — survived both suites. And the handoff itself was offered once and never again, so another app taking the front left the preview's one route out shut until the pane remounted, which is a desktop gap rather than a test-only one.",
       "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5557/remote-html-preview-render-workspace-files-locally-over-the-file",
         "https://linear.app/stably/issue/STA-3872/unable-to-open-html-files-in-remote-server",
         "https://linear.app/stably/issue/STA-4025/p1-browser-create-reports-success-when-tab-reconcile-fails-after-pr",
         "https://linear.app/stably/issue/STA-4063/p1-paired-html-preview-rejects-outside-cleanup-after-pr-13909",
@@ -2843,19 +2844,35 @@
         "https://github.com/stablyai/orca/pull/14363",
         "https://github.com/stablyai/orca/pull/13876"
       ],
-      "invariant": "Opening one HTML preview from a paired client succeeds only after exactly one browser page on the worktree-owning runtime materializes as exactly one client browser workspace and unified tab in the requested group. Owner-pinned creation returns the canonical host page identity before navigation readiness; delayed navigation cannot turn a created page into an unidentifiable failure or a duplicate retry. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback. Preview focus and close preserve the source editor and terminal.",
-      "oracle": "Run one unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host. Require the original unsupported error or visible toast, zero RPCs, and no retained new split. Run it on the scan target, latest main, candidate, and candidate with the cleanup boundary disabled. In headed paired Electron, arm capability rejection after the caller preflight, invoke the visible HTML side-preview action, require the failure toast, and compare exact host/client browser, editor, terminal, and group inventories to baseline. Hold a real navigation response beyond the 15-second client deadline after host creation; require the first RPC to return the exact host inventory page ID, one host page, and no retry. Repeat reconciliation faults against headless serve. Retain the separate exact-page reconciliation rollback oracle.",
+      "invariant": "Opening one HTML preview from a paired client renders the workspace document in exactly one client-local browser tab, located by that document and served over the orca-preview scheme. The client gains exactly that one browser workspace and it is the document one — blank where a URL page carries a URL, named by the document, with the chip naming the file — while the host gains no browser page at all, neither in its own page registry nor in the tab snapshot its clients publish into. The preview occupies its own split without taking focus from the source editor; an explicit click activates it, and closing it removes only the preview. Following a document from a file link is the other half of that switch and does move the reader to it, tab group included, whether the preview is new or already open, because opening a file is a request to look at it. A document tab quit with the client comes back as the same row on a grant the relaunched client mints afresh. A preview is named by the browser page it is open in, not by a namespace of its own, and the page registry has two halves: a workspace-document guest is registered in its own map and is absent from the browsing one entirely. That absence is the fence. Page, session and profile management, agent tab enumeration and command targeting, download routing and certificate attribution all read the browsing map directly, in more places than a per-channel guard could be remembered in, so none of them can name a document page and none of them carries a guard. Browser tools the reader drives (element grab, hover describe, selection capture, the annotation viewport bridge) are the one operation that legitimately spans the halves, and they go through the single authority that reads both, keyed by the page and its hosting renderer. The halves are disjoint in both directions: browsing registration refuses a page the document half already holds, and minting a grant refuses a page the browsing half already holds, so one id can never name a surface in both. The headless backend acts on that refusal by destroying the window it had already opened rather than leaving a policy-less page behind an id nothing can drive, keeping nothing under that id for its own shutdown to hand back. Registration refuses on the same terms when the guest it was asked about is already gone. The exit door is guarded in both its halves: a preview withdraws by revoking its grant and never through the unregister channel, so a page the document half holds arriving there is refused before either the registration teardown or the grab-state disposal beside it, which would otherwise drop the intent an in-flight preview grab compares by identity and leave that grab answering ok without ever arming its guest. A bridge request whose guest does not resolve is refused without tearing down the page it named, so a misaddressed request cannot cancel a healthy page's in-flight downloads and grabs. The annotation viewport bridge resolves its guest when its serialized op actually runs rather than when the request arrived, so a cross-process navigation while it waited cannot leave the bridge installed in a retired guest while the reader looks at a new one. State main keys by a preview's page is disposed when that page's grant is revoked, which is the only signal a preview's surface is gone. A tool asking for a page whose guest has not attached yet waits for that registration and arms when it arrives, rather than answering not-ready at the reader; that wait resolves only the request already naming this page, never the worktree-wide or any-tab waits the CLI and agents use to ask for a browser tab to drive. Handing the previewed document to the reader's own machine routes on the owners its grant was minted against — the file's own connection owner and the worktree's own runtime owner, neither read from the tab's stored fields. Only a document proven to live on this machine reaches the client OS; one with a resolved remote owner is downloaded first; and one whose owner cannot be resolved at all, workspace root included, is refused with a message naming that, because the download route would otherwise read the same absolute path on the client and hand back a same-named local file under the remote document's name. A runtime-owned path that falls outside its worktree root is refused by that route itself and surfaces as a failure toast rather than a download. Nothing the document does writes a file to this machine either: the preview partition denies downloads outright instead of routing them through the browser download flow, which has no page to attribute a preview's bytes to and would otherwise reserve a name in this desktop's Downloads folder and write them there unprompted. That refusal is visible to the reader and invisible to the document: the preview's shell carries a fixed sentence saying downloads are off, published at most once per preview per interval so a document asking in a loop cannot fill Orca's chrome, while the page itself gets back exactly what it got before, which is nothing. The sentence names no file, because the document chooses the name it offers; and a refusal never takes the document away the way an entry document's own failure does, whatever it names. A preview is a browser tab, not an editor tab in a preview mode: it is named the way a browser tab is named — by the document it shows when that document declares a title, and by the file it shows when it does not — while the chip goes on naming the file and the host whatever the document calls itself. A title is refused on the same terms the url is: a document that declares none has Chromium report the grant URL as its title, and that title is stored, mirrored onto the tab and written to disk, so anything carrying the scheme falls back to the file instead. It is created by the preview action as a page located by its document, it carries the workspace-relative path copy the editor's path header owned, and closing it revokes the grant that made the document readable while a URL tab closing beside it revokes nothing. Chrome persisted by builds that made previews editor tabs is dropped on restore rather than coming back naming a surface no restore can produce, and the ordinary editor tab for the same document is left alone. A document tab is held back at the mobile publish boundary — no client holds its grant, and the wire has no tab kind for it — while an ordinary browser tab beside it still publishes. It is held back from the group projection that publishes tab order, recency and group activity as well as from the tab list itself, so no published group names a tab the phone is never sent. A browser page can be located by a workspace document instead of a URL, and the document is the whole of its stored identity. The grant and the orca-preview URL that document is served over are minted when the page mounts and replaced by a hard reload, so neither is ever written to the page's url, mirrored onto its tab, persisted or published: such a page's url is the blank URL from creation through restore, including when a session written elsewhere carries a grant URL in, and what the session carries is the worktree and path a restored page mints afresh against today's owners. Every door onto a page's url holds that line — creation, the title update, and the navigation commit alike — so a report about a document page cannot give it a URL it never had, and the title fallback and the loading affordance follow the url each door actually wrote. The mirror carries the document too, so a tab entry cannot go on naming a document its active page has left. Every guest in the app is policy-attached through one door: a workspace document takes a restricted profile there rather than a separate installer beside it, so the attachment bookkeeping that door owns — what registration refuses, and what teardown frees — covers a preview on the same terms as a browsing page, and a preview takes none of the browsing machinery that door installs. That authority answers from the moment the embedder hands the guest over rather than only after a later navigation: the guest binds to the grant it is already showing, so the tools reach the document the reader opened and not just one they navigated to. A read the host reports as truncated or over-cap is refused rather than served partially, and a document outside the paired worktree is refused with a message naming that boundary instead of a bare read failure. The rendered document reaches nothing off-machine on its own: every served response carries a self-only content security policy, the preview session cancels any request that is not in-document, subframes cannot navigate outside the grant, a guest no document has yet bound to a grant may not navigate at all, the guest gathers no ICE candidates, and an SSH path that canonicalizes outside the grant root is refused before it is read. The one route out is a link the reader presses: a trusted click on an anchor, reported by the preview's own preload from a guest that holds focus and is still bound to a live grant, leaves as an Orca browser tab rather than a native window or a dead click. The preview hands its guest that focus itself whenever it is the surface the reader is in — a browsing page gets it from the chrome around it, and a preview has no chrome to get it from — and it does so only then, so a preview mounted behind a terminal or an editor never takes the keyboard from what the reader is actually in. It offers again when the window itself takes focus back and nothing in the embedder has claimed that focus, because another app coming to the front lands focus on the embedder rather than the guest and the route out would otherwise stay shut until something remounted the pane — while the same window focus also arrives when the reader presses a tab, that being the guest's own blur returning, and taking focus back from there would fight the reader for their own click. Nothing else does. A navigation or popup the document starts by itself is swallowed whatever else is happening, including immediately after a genuine press elsewhere in the document, so a page that can read its grant cannot hand it to a browser tab; a middle click opens nothing; and a fragment link is answered inside the document. A preview attach carries the preview preload and no renderer-supplied one, and no other attach path can acquire it. A subresource the workspace will not send degrades the document to a notice naming that file, never to a failure panel over a page that rendered. A grant outlives neither the tab that owns it nor the renderer document that minted it, and only the trusted renderer can mint or revoke one. For the browser creations this gate still owns, owner-pinned creation returns the canonical host page identity before navigation readiness; delayed navigation cannot turn a created page into an unidentifiable failure or a duplicate retry. Capability rejection before host mutation must preserve the original error, issue no RPC, surface a failure toast, and remove only a caller-declared newly-created empty split. Post-create reconciliation failure requires exact rollback; ambiguous rollback rejects without local fallback.",
+      "oracle": "In paired Electron, write an HTML fixture that declares its own title on the host, invoke the Explorer preview action on the client, and require the document text to be readable out of the orca-preview guest before judging any absence. With that presence established, require the client to hold exactly one browser workspace more than its baseline and that workspace to be the document one: page and tab url blank, the document path mirrored onto both, the tab named by the document's title, the chip naming the file, no editor row of the retired preview species anywhere, and the guest URL carrying the orca-preview scheme. Ask the host through its own page registry as well as through the tab snapshot, and in the same run open an ordinary URL browser tab from the same client and require that one to arrive in both — the presence precondition without which “the host gained nothing” is satisfied just as well by an oracle that cannot see browser pages at all. Require the preview to sit in a group other than the source editor's while the active group and tab remain the source editor's. Then click away to the terminal, click the preview tab, require it to reactivate and still render, close it with its own X, and require the document tab to be gone while the host still holds only the URL tab and the source group, source editor and terminal survive. Quit the client with a document tab open and relaunch it on the same profile: require the same workspace row to come back, blank and named by the document, rendering the document again over a grant URL that differs from the one that was quit, with no preview-scheme or document-named page anywhere in what the host holds. Prove the halves are live by flipping one product property at a time and requiring the run to fail: publish document workspaces to the host like ordinary ones, and stop mirroring the document onto the workspace row. Have the fixture document attempt its own egress on every load — an unattended window.open and location.href to an off-machine URL, plus an inline ICE gathering probe — and require the same baseline counts and a candidate count of zero, so the document's own attempts are measured rather than assumed. Then, as a separate phase after the close oracle has already run, bring the client window to the front, press the document's heading with a real mouse event, and require the document to report that the same press drove it to attempt a second window.open and location.href while both browser counts stay at that phase's baseline and nothing routes — the case a recent-input gate cannot distinguish from the press's own effect. Only then press the target=_blank link with a real mouse event and require both a recorded routing call that returned success and a browser count above that baseline, with the preview tab still open. Drive the preload's click policy as a unit oracle over a real document: a dispatched click, a trusted press on an external anchor, an anchor reached through what it wraps, an SVG animated href, a sibling preview link, fragment and percent-encoded fragment targets, a bare hash, and a middle click. Create a browser page located by a workspace document, handing creation a live grant URL, and require its stored url, its mirrored tab url and the written session payload all to be blank with no orca-preview string anywhere in what was written, while an ordinary page created the same way keeps the URL it was given and asks for the address bar the document page never does. Parse the written page and tab through the session schema and require the document to survive both halves. Hydrate them back and require the document page to return blank and still named — including when its page row was salvaged away and only the tab's own copy remains, and when a foreign session carried a grant URL into both rows. Drive the mirror across a page switch out of the document and back, and across a repair in which the document is the only mirrored field that differs. Name a document page from its document and require the tab to take that name, name it with an empty title and require the file, name it with a live grant URL and require the file again with no preview scheme anywhere in the written session, and require an ordinary blank browser tab beside it to still be called New Tab. Dispatch a title update out of a rendered preview's own guest and require it to reach the page state while the identity chip still reads the document's workspace-relative path. Attach a browsing guest and a workspace-document guest through the same method in one run and require the browsing one to take clicked-link routing, popup handling and anti-detection while the document guest takes none of them, stays inside the grant it is showing, denies every window it asks for, and is dropped from the page-keyed document registry by the same teardown that frees its id for a later attach. Register a browsing guest and attach a workspace-document guest in one run against the real manager, require the one door to answer each page with the guest of its own half, and require the document page to be absent from the browsing map and from its enumeration. Drive both browsing registration entry points with a page the document half already holds and require them to register nothing, and drive the mint channel with a page the browsing half already holds and require it to refuse; and drive the offscreen one with a guest that is missing and with one already destroyed, requiring the same refusal. Arm a grab on a live preview target, drive the unregister channel at that same target in the window before the queued operation runs, and require the grab to reach the guest anyway — then drive the same sequence for an ordinary browser page and require its grab state to be disposed after all. Hold one viewport-bridge op open, queue a second behind it, swap the page's guest while that second op waits, and require the injection to land in the guest the page has then. Revoke a grant after a tool has run against its page and require that page's grab state to be cancelled and disposed. Ask a tool for a document page whose guest has not attached, require the request to park in the registration wait, attach the guest, and require the same request to arm on it; require a page nothing ever renders to answer not-ready once that wait elapses. With a document open, ask a tool for a browsing page id and require it to be answered by the browsing half or not at all, with the same channel reaching the document guest under the page it really renders. Drive open-externally for a document whose per-file owner is remote while the workspace-scoped owner is unresolved, for a runtime-owned worktree whose preview tab carries no runtime id of its own, and for a worktree that resolves no runtime owner while the tab still carries one, requiring the download route in each; and for an owner that cannot be resolved at all, and for an unknown workspace root while nothing names another host, requiring a refusal that neither opens nor downloads. Drive the headless backend with a page the document half already holds and require it to reject, destroy the window, and unregister nothing — then shut the backend down and require it still to have unregistered nothing. Navigate a bound preview guest at a second grant through both latch events and require it to stay on the grant it bound to. Mount a preview while a renderer drag is already in flight and require its guest to be click-through at the moment it is appended, not a turn later. Render the editor panel shell in each remaining tab mode and require the path header exactly where the surface does not already name itself. Drive the preview action and require a browser tab located by the document rather than an editor tab, require a second open of the same document to activate the tab it is already in, and require closing that tab to revoke its grant while a URL tab closed beside it revokes none. Hydrate a session carrying preview chrome from a build that made previews editor tabs and require it dropped while the ordinary editor tab for the same document survives. Publish a worktree holding a document tab and a URL tab and require only the URL tab to reach the mobile snapshot. Install the shared partition policies for a preview partition and for an ordinary browsing partition in the same run, fire each one's own will-download listener, and require the preview's to cancel while the browsing one still reaches the download router — then require the preview protocol installer to be what asks for that deny. In the same run, require the cancelled download to raise a reader-facing notice and the routed one to raise none. Drive that notice directly for a guest bound to a live grant, for repeated attempts inside and outside its interval, for two previews at once, and for a contents no preview is bound to; require the guest registry to name the bound grant for a live preview guest and nothing for a contents that is not one, has committed no document, or is gone. Drive the shell with a refusal and require one fixed sentence, still one row after three more refusals, standing beside an asset failure rather than being counted with it, gone behind the failure panel, and ignored when it names another preview's grant. Drive the main-side report gate directly for an unfocused guest, a sender that is no preview guest, a guest with no bound or a revoked grant, and non-web URLs, and drive will-attach-webview in both preload directions. Run the per-owner reader, grant-containment, scheme-admission, guest-policy, and plan-routing contracts as unit oracles, including a host-reported truncation, an over-cap binary, and an out-of-worktree paired path. Drive the reader-facing component with the payloads the reader can actually produce — the entry document fails only as truncated or unreadable, a subresource additionally as a refused format — and require the asset case to leave the guest mounted. Drive the closed-tab cleanup hook, the window installer, and the grant IPC handlers directly, requiring the grant to be released when the preview tab closes, cleared at window creation and on a cross-document main-frame navigation, and refused to any sender that is not the trusted renderer. For the browser creations this gate still owns, run the unchanged contract oracle for direct create and side-preview callers with absent status, unknown capabilities, and a mixed-version host, requiring the original unsupported error or visible toast, zero RPCs, and no retained new split; hold a real navigation response beyond the 15-second client deadline after host creation and require the first RPC to return the exact host inventory page ID, one host page, and no retry; repeat reconciliation faults against headless serve and retain the separate exact-page reconciliation rollback oracle.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/main/runtime/rpc/methods/browser.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/runtime/web-session-browser-placement.test.ts src/renderer/src/runtime/web-runtime-session.test.ts src/renderer/src/runtime/web-session-tabs-sync.test.ts src/renderer/src/runtime/remote-server-parity.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/lib/file-preview-action-visibility.test.tsx src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/hooks/ipc-events/doc-preview-external-link-bridge.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-protocol.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-download-block-notice.test.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/doc-preview-guest-policy.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/lib/file-preview.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
+        // The hardening round: the third url door, the group projection, and both directions of the focus handoff.
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/preload/doc-preview-link-interception.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/window/main-window-webview-security.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/ipc/browser.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/editor/EditorPanelShell.header.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/editor/EditorPanelShell.header.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/renderer/src/components/terminal-pane/TerminalLinkActionPopover.test.tsx src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/store/slices/tabs-hydration.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/ipc/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line --repeat-each=3",
+        // The changed-spec e2e job's own command, which is the only Linux run this gate has.
+        "npx playwright test --config tests/playwright.config.ts --project=electron-headless tests/e2e/paired-remote-html-preview-local-render.spec.ts --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/orca-runtime-browser.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts src/renderer/src/store/slices/browser.test.ts src/renderer/src/runtime/web-runtime-session.test.ts",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-browser-create-navigation-deadline.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1",
-        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
-        "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-        "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headful --workers=1 --reporter=line",
         "SKIP_BUILD=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line"
       ],
@@ -2863,7 +2880,6 @@
         "src/main/runtime/orca-runtime-browser.test.ts",
         "src/main/runtime/rpc/methods/browser.test.ts",
         "src/renderer/src/lib/file-preview.test.ts",
-        "src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
         "src/renderer/src/runtime/web-session-browser-placement.test.ts",
         "src/renderer/src/runtime/web-runtime-browser-materialization.test.ts",
         "src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts",
@@ -2874,7 +2890,38 @@
         "src/renderer/src/hooks/useIpcEvents-close-routing-browser-pages.test.ts",
         "src/renderer/src/hooks/useIpcEvents-close-routing-session-tabs.test.ts",
         "src/renderer/src/store/slices/browser.test.ts",
-        "tests/e2e/paired-remote-html-browser-focus.spec.ts",
+        "src/main/browser/doc-preview-grant-registry.test.ts",
+        "src/main/browser/doc-preview-file-reader.test.ts",
+        "src/main/browser/doc-preview-protocol.test.ts",
+        "src/main/browser/browser-session-partition-policies.test.ts",
+        "src/main/browser/doc-preview-download-block-notice.test.ts",
+        "src/main/browser/browser-manager-guest-policy-profile.test.ts",
+        "src/main/browser/doc-preview-guest-policy.test.ts",
+        "src/main/ipc/browser-tab-registration-wait.test.ts",
+        "src/main/browser/doc-preview-failure-notice.test.ts",
+        "src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
+        "src/preload/doc-preview-link-interception.test.ts",
+        "src/main/window/main-window-webview-security.test.ts",
+        "src/main/ipc/browser-preview-tool-authorization.test.ts",
+        "src/main/browser/browser-manager-annotation-bridge.test.ts",
+        "src/main/browser/browser-manager-guest-lifecycle.test.ts",
+        "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",
+        "src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts",
+        "src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts",
+        "src/renderer/src/components/editor/EditorPanelShell.header.test.tsx",
+        "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+        "src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx",
+        "src/shared/doc-preview-scheme.test.ts",
+        "src/renderer/src/lib/doc-preview-grants.test.ts",
+        "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+        "src/renderer/src/lib/file-preview-action-visibility.test.tsx",
+        "src/renderer/src/hooks/ipc-events/doc-preview-external-link-bridge.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+        "src/main/ipc/doc-preview-grant-ipc.test.ts",
+        "src/renderer/src/store/slices/tabs-hydration.test.ts",
+        "src/renderer/src/components/terminal-pane/TerminalLinkActionPopover.test.tsx",
+        "src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts",
+        "tests/e2e/paired-remote-html-preview-local-render.spec.ts",
         "tests/e2e/paired-browser-create-navigation-deadline.spec.ts",
         "tests/e2e/paired-browser-creation-reconciliation-failure.spec.ts"
       ],
@@ -2887,17 +2934,12 @@
           ]
         },
         {
-          "file": "src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
-          "assertions": [
-            "known unavailability reports visibly without creating a split",
-            "capability loss after caller preflight reports visibly without duplicating transaction cleanup"
-          ]
-        },
-        {
           "file": "src/renderer/src/lib/file-preview.test.ts",
           "assertions": [
-            "a failed side preview reports visibly without caller-owned split cleanup",
-            "overlapping side previews reuse the split without the first failure deleting it"
+            "a paired-runtime HTML preview opens a local doc preview instead of a runtime browser tab",
+            "a local workspace still opens the embedded browser tab at a file URL",
+            "a paired document outside the worktree names that boundary and creates no split",
+            "an SSH document outside the worktree root still previews"
           ]
         },
         {
@@ -2973,11 +3015,152 @@
           ]
         },
         {
-          "file": "tests/e2e/paired-remote-html-browser-focus.spec.ts",
+          "file": "tests/e2e/paired-remote-html-preview-local-render.spec.ts",
           "assertions": [
-            "one HTML open produces one client workspace, one client unified tab, and one host page",
-            "the source editor and remote frame remain visible in separate groups",
-            "preview creation leaves the editor active, an explicit browser click is authoritative, and close preserves the editor and terminal"
+            "the host's HTML document renders inside the client-local orca-preview guest",
+            "neither the client browser-workspace count nor the host browser-tab count moves off baseline",
+            "the preview opens in its own split with mode html-preview and leaves the source editor active",
+            "an explicit click reactivates the preview, and closing it preserves the source editor, its group, and the terminal",
+            "the document reports having attempted both its unattended and its post-press egress, so neither absence assertion can pass on a document that never tried",
+            "a scripted window.open and location.href driven by a real press elsewhere in the document route nothing and move no browser count",
+            "a real target=_blank press in the rendered document routes out as an Orca browser tab while the preview stays open"
+          ]
+        },
+        {
+          "file": "src/main/browser/doc-preview-file-reader.test.ts",
+          "assertions": [
+            "a host-reported truncated read is refused instead of served as partial bytes",
+            "an over-cap binary and an empty binary body are reported as too-large and unsupported rather than a bare read failure",
+            "a document outside the paired worktree is refused without issuing an RPC",
+            "an SSH path that canonicalizes outside the grant root is refused before any read",
+            "a 0-byte file the host still typed is served as 0 bytes rather than reported as a refused format"
+          ]
+        },
+        {
+          "file": "src/main/browser/doc-preview-grant-registry.test.ts",
+          "assertions": [
+            "a path escaping the grant root resolves to nothing, including sibling-prefix roots",
+            "a revoked grant stops resolving"
+          ]
+        },
+        {
+          "file": "src/main/browser/doc-preview-protocol.test.ts",
+          "assertions": [
+            "an unknown or revoked grant is answered exactly like a missing file, with no read attempted",
+            "a failed read pushes its reason for the requested path while a served document pushes nothing",
+            "every served document carries the self-only content security policy",
+            "the preview session cancels any request that is not in-document",
+            "the scheme is handled on the preview session and never on the default one",
+            "the scheme claims exactly its five privileges, so a widened one fails"
+          ]
+        },
+        {
+          "file": "src/main/browser/doc-preview-failure-notice.test.ts",
+          "assertions": ["413 and 415 map to distinct reasons and everything else stays generic"]
+        },
+        {
+          "file": "src/renderer/src/lib/file-preview-action-visibility.test.tsx",
+          "assertions": [
+            "the Explorer row predicate and the preview plan return one answer for the same file"
+          ]
+        },
+        {
+          "file": "src/renderer/src/hooks/ipc-events/doc-preview-external-link-bridge.test.ts",
+          "assertions": [
+            "an external preview link becomes a browser tab, and a tab that is refused or that fails outright surfaces instead of being dropped"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+          "assertions": [
+            "each entry-document failure reason surfaces its own sentence instead of one generic unavailable panel",
+            "a refused subresource names itself in a notice, deduplicated per path, while the document stays rendered",
+            "an entry-document failure replaces the asset notice with the panel",
+            "a failure for another preview's grant leaves the rendered document alone"
+          ]
+        },
+        {
+          "file": "src/main/browser/doc-preview-guest-policy.test.ts",
+          "assertions": [
+            "the guest may only navigate within its own live grant, and not at all until a document has bound it to one",
+            "every navigation and popup sink refuses without routing, whenever genuine input happened",
+            "a subframe cannot navigate outside the grant, and only the main frame binds the guest to one",
+            "a reported click routes exactly once, and only from a focused preview guest with a live bound grant",
+            "a reported click on a non-web URL, or from a destroyed guest, routes nothing",
+            "the guest is denied non-proxied WebRTC UDP when its policy is installed"
+          ]
+        },
+        {
+          "file": "src/preload/doc-preview-link-interception.test.ts",
+          "assertions": [
+            "a click the document dispatched itself is not trusted and routes nothing",
+            "a trusted press on an external anchor reports it once and stops the navigation, including through what the anchor wraps and an SVG animated href",
+            "a fragment link scrolls in the document, raw or percent-encoded, and a bare hash goes to the top",
+            "a sibling preview document is left to the guest's own navigation, and a middle click opens nothing whether or not it is trusted",
+            "an SVG link is resolved against the document, so its relative, rooted and fragment forms behave exactly like the identical HTML anchor",
+            "the preload reports on exactly the channel main listens on"
+          ]
+        },
+        {
+          "file": "src/main/window/main-window-webview-security.test.ts",
+          "assertions": [
+            "an orca-preview src is admitted only on the preview partition with a live grant",
+            "preview guests receive their own policy instead of the browser guest policies",
+            "a preview attach is pinned to the preview preload over any renderer-supplied value, and a browsing attach never receives it",
+            "grants a renderer can no longer release are cleared at window creation and on reload, and survive an in-document navigation"
+          ]
+        },
+        {
+          "file": "src/shared/doc-preview-scheme.test.ts",
+          "assertions": ["preview URLs round-trip per segment and reject a malformed grant id"]
+        },
+        {
+          "file": "src/renderer/src/lib/doc-preview-grants.test.ts",
+          "assertions": [
+            "grants are deduped per preview tab so a StrictMode double-mount cannot revoke the surviving webview",
+            "a mint that rejects after its tab was released and reopened leaves the reopened tab's grant revocable"
+          ]
+        },
+        {
+          "file": "src/main/ipc/doc-preview-grant-ipc.test.ts",
+          "assertions": [
+            "a sender that is not the trusted renderer mints no grant and revokes none",
+            "a reported link click reaches the guest policy with its own sender, and a non-string report reaches nothing"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
+          "assertions": [
+            "closing a document browser tab revokes its grant, and closing a URL tab beside it revokes nothing",
+            "a document page's url is blank in the store, in the written session and after restore",
+            "a navigation committing a url onto a document page leaves the url blank, the document title standing and nothing loading, while an ordinary page beside it takes the url it is given"
+          ]
+        },
+        {
+          "file": "src/renderer/src/store/slices/tabs-hydration.test.ts",
+          "assertions": [
+            "chrome for a preview tab written before previews were browser tabs is dropped, and the ordinary editor tab for the same document is kept"
+          ]
+        },
+        {
+          "file": "src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts",
+          "assertions": [
+            "a browser tab located by a workspace document is not published to mobile clients, while an ordinary browser tab beside it is",
+            "with tab groups in play the document is kept out of the published groups too: no group's order, recency or active tab names a tab the snapshot does not carry, the held-back group leaves the published layout tree with it, and the grouped URL tab beside it still publishes"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx",
+          "assertions": [
+            "the pane offers its guest focus when the reader is in this very preview",
+            "it refuses while the reader is in a terminal in front of it, in a different browser tab, or while its own page is not the active one"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "assertions": [
+            "a preview that is the reader's surface hands its guest focus, and one that is not leaves focus alone",
+            "the window taking focus back re-offers it to the guest, and re-offers nothing for a preview that was refusing"
           ]
         },
         {
@@ -2999,22 +3182,301 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-12",
+          "date": "2026-08-27",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
           "result": "failed",
-          "durationSeconds": 0.72,
-          "summary": "The unchanged STA-4063 oracle failed 5/5 on scan e4c278eb52 and latest main bc2e30000b: direct create never closed the new split, and side-preview rejection produced neither cleanup nor a toast. Pre-fix PR #14100 passed the two caller cases but still failed all three direct transaction cases."
+          "durationSeconds": 7,
+          "summary": "The adversarial pass answered the request for its own group-projection probe after this round landed, and it had measured a third observable this test was missing: the held-back group also has to leave the published layout tree, or the phone renders a split whose second pane can never hold anything. Adopted as a fourth assertion and re-run against the same sole delta, which now fails on the dangling-reference check and, with that check blinded, on the layout alone — group-left and group-right against the group-right the clean tree publishes. The two probes agreed on everything else, including that the tab list is unchanged under this mutant, which is why an assertion reading only the tab list cannot reach the site at all."
         },
         {
-          "date": "2026-08-12",
+          "date": "2026-08-27",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/web-runtime-browser-capability-cleanup.test.ts src/renderer/src/lib/file-preview-capability-cleanup.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "passed",
+          "durationSeconds": 3,
+          "summary": "The adversarial pass's four coverage findings, landed and pinned: 58/58. The third url door now keeps a document page blank and names it by its document, the group projection holds a document back from published groups as well as from the tab list, the pane's focus handoff is pinned in the widening direction as well as the narrowing one, and the handoff is re-offered when the window takes focus back."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "failed",
+          "durationSeconds": 3,
+          "summary": "Three sole-delta mutants on the third url door, each failing only the new store test: committing the reported url onto a document page, dropping the document from the title normalizer there (which renames the tab New Tab, since a blank url is what that fallback reads), and marking a blank document page loading. The ordinary-page half of the same test passes under all three, so the door is pinned as a document-only refusal rather than as a door that writes nothing."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "failed",
+          "durationSeconds": 3,
+          "summary": "Two sole-delta mutants on the mobile publish boundary. Dropping the document from the group projection's browser ids fails only the new grouped test — the tab list stays correct because the per-tab guard still refuses the tab, and what breaks is a published group whose order and active tab name a tab the phone is never sent. This is the survivor the adversarial pass reported: it survives the whole suite without this test, because no other test in it has tab groups. Dropping the per-tab guard instead fails only the ungrouped test, so the two halves of the boundary are pinned separately."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "failed",
+          "durationSeconds": 3,
+          "summary": "Three sole-delta mutants widening the focus handoff, the direction the adversarial pass found uncovered: dropping the page-activity half, dropping the active-tab-type half, and dropping the active-browser-tab half each fail exactly one of the pane's refusals — the inactive page, the terminal in front, and the other browser tab respectively. The presence half of that test passes under all three, so a pane that had stopped offering focus at all would still fail rather than pass the refusals vacuously."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/components/browser-pane/workspace-doc/workspace-doc-page-pane.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "failed",
+          "durationSeconds": 3,
+          "summary": "One sole-delta mutant dropping the window-focus re-offer: the guest is focused once at mount and never again after the window comes back, which is the desktop gap behind it — another app taking the front leaves the preview's only route out shut until the pane remounts. It fails only the new re-offer test, and the refusing-preview case beside it stays green, so the re-offer is pinned as gated rather than unconditional."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 186,
+          "summary": "The rewritten journey passed 2/2. The first test proves the inverted claim: the client gains exactly one browser workspace and it is the document one — page and tab url blank, the document path mirrored onto both, the tab named by the document's own title, the chip still naming the file, no editor row of the retired preview species — while the host's page registry and tab snapshot both stay at their pre-action content. Both host oracles carry a presence precondition in the same run: an ordinary URL browser tab this client opens does arrive in browser.tabList and in session.tabs.list, and leaves both again when it is closed, so the preview's absence is a decision rather than an oracle that cannot see browser pages. The document still reaches nothing on its own (zero ICE candidates, unattended and post-press egress both swallowed), and the one route out still works: a real press on a target=_blank anchor routes exactly one call and opens a tab while the preview stays open. The second test quits the client with a document tab open and relaunches it on the same profile: the same workspace row comes back blank and named by the document, renders again, and does so over a grant URL that differs from the one that was quit."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "failed",
+          "durationSeconds": 108,
+          "summary": "Candidate with the sole delta that the preview action also opens an ordinary browser tab through the runtime — what it did before STA-5557 — failed at the client-workspace count, 2 against the 1 the claim allows. It dies there rather than at the host oracle, so it proves the exactly-one-workspace half; the host half has no single line to mutate, since a document page never calls the runtime at all, and is protected instead by the presence precondition recorded above."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "failed",
+          "durationSeconds": 190,
+          "summary": "Candidate with the sole delta that the workspace row stops mirroring the document its active page shows failed in both tests on workspaceDocFilePath, null against the document path — the tab entry would go on naming nothing while the page it renders is a document. Two earlier mutants survived and are reported as ill-posed rather than as blind spots: flipping the mobile publish filter changes what this desktop publishes to its own phone clients, not what a paired client puts on its host, and flipping the document mirror in the workspace constructor is repaired on the next state write by the active-page mirror, which is the line the mutant above hits."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "failed",
+          "durationSeconds": 195,
+          "summary": "Candidate with the sole delta that the preview pane does not hand focus to its guest — the tree as it stood before this change — failed at the target=_blank press: six real presses reached the anchor, the embedder had the webview as its active element, and main's own log answered each report with registered true, grant live, focused false. This is the gap the rewrite found: since previews became browser pages they had no chrome to pass focus on, so the one route out of a preview was shut."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-grant-registry.test.ts src/main/browser/doc-preview-file-reader.test.ts src/main/browser/doc-preview-protocol.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/browser/doc-preview-failure-notice.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/lib/doc-preview-grants.test.ts src/renderer/src/lib/file-preview.test.ts src/renderer/src/lib/file-preview-action-visibility.test.tsx src/main/window/main-window-webview-security.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx src/renderer/src/hooks/ipc-events/doc-preview-external-link-bridge.test.ts src/renderer/src/components/terminal-pane/terminal-file-link-actions.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.37,
+          "summary": "174/174 over the grant, reader, protocol, guest-policy, scheme-admission, plan-routing, action-visibility, failure-message, external-link and terminal-row contracts, re-issued at the relocated preview paths. This replaces the 2026-08-26 record of the same thirteen files at 152/152, whose command named the pre-relocation paths: it established the stale-mint rejection that must not evict a reopened preview tab, the CSP header and session request filter, the SSH symlink refusal, subframe containment, truncated and over-cap reads, the unservable-asset and empty-file split, the out-of-worktree paired refusal with SSH left unrestricted, reload re-minting a stale grant, and the guest deny-only navigation sinks. The count moved with the cases added since; nothing in those files changed but their directory."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/doc-preview-download-block-notice.test.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.78,
+          "summary": "64/64 on the visible download refusal, re-issued at the relocated path. This replaces the 2026-08-27 record of the same four files at 62/62, whose ten mutants — removing the notice from the deny listener, adding it to the routing listener, dropping the guest-registry lookup that names which preview to tell, dropping the shell branch and the row, letting the row survive the failure panel, removing the per-preview throttle, sharing one throttle across previews, never expiring the window, and publishing for a contents no preview is bound to — all failed as sole deltas. The relocation moved no line of any of them."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx src/shared/doc-preview-scheme.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.05,
+          "summary": "39/39 on the title-parity trio at the relocated path, replacing the 2026-08-27 record of the same three files, which killed five mutants as sole deltas: disabling the document branch restores New Tab for a named document, dropping the grant-URL refusal puts the scheme into the title, the tab mirror and the written session, returning New Tab instead of the file name breaks the fallback, removing the guest listener leaves the document unable to name its tab, and making the scheme test parse rather than prefix-match lets a title that merely looks like a preview URL through."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.54,
+          "summary": "14/14 on the reader-facing failure suite at its relocated path. This and the red run below replace the 2026-08-26 pair recorded against the pre-relocation path (10/10 green, 3/10 red), re-measured today so the entry/subresource split keeps a red half rather than only a green one."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.failure-message.test.tsx",
+          "result": "failed",
+          "durationSeconds": 1.27,
+          "summary": "Candidate with the sole delta that every failure sets the blocking reason, asset or not, failed 4/14 on the asset-notice assertions — the same mutant the retired 2026-08-26 record measured at 3/10, re-run at the relocated path. A refused subresource must name itself over a document that stays mounted; only the entry document may take the page away."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/doc-preview-document-actions.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/editor/EditorPanelShell.header.test.tsx src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.52,
+          "summary": "174/174 at the relocated paths, replacing the 2026-08-27 records of the same command at 162/162 and 158/158. Those established, as sole deltas: removing the unregister-channel refusal goes red because the grab disposal beside it drops the intent an in-flight preview grab compares by identity, while an ordinary browser page driven through the identical sequence still has its grab state disposed; removing registration’s already-gone-guest refusal goes red for both a missing and a destroyed guest; removing the map deletion on the refusal path goes red at shutdown; the bridge’s own unregisterGuest branch, restored, tears down a live page over a misaddressed request; and the download fall-through for an unresolved owner hands back a same-named local file under a remote document’s name."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/ipc/browser-tab-registration-wait.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/main/browser/browser-manager-guest-lifecycle.test.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/browser/browser-manager-annotation-bridge.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/shared/doc-preview-scheme.test.ts src/renderer/src/components/browser-pane/workspace-doc/use-doc-preview-guest-tools.test.ts src/renderer/src/components/browser-pane/workspace-doc/HtmlDocPreview.toolbar.test.tsx",
+          "result": "passed",
+          "durationSeconds": 1.5,
+          "summary": "175/175 at the relocated paths on the unified tool authority, replacing the 2026-08-27 record of the same command at 174/174. That run killed twelve of fourteen mutants as sole deltas — dropping the document branch from the one authority door, removing either browsing-registration refusal or the mint-side refusal that is its converse, deleting the registration notification or widening it to the worktree-wide and any-tab waits, disposing revoked state by grant instead of by page, dropping the hosting-renderer or destroyed-contents check, rebuilding the renderer tool target from the grant, and deleting the teardown identity check under a re-mint — and reported two as ill-posed rather than as kills. The relocation changed no file it names except their directory."
+        },
+{
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts src/renderer/src/lib/file-preview.test.ts",
+          "result": "passed",
+          "durationSeconds": 22.09,
+          "summary": "29/29 on the candidate that makes the preview a browser tab. The preview action now creates a page located by the document; reopening the same document activates the tab it is already in rather than minting a second grant on one file; and closing that tab revokes its grant, which nothing else does now that the editor tab's close hook is gone. Red-green with each mutant as the sole delta: dropping the reuse lookup opens a second tab for a document already on screen, and dropping the release on close leaves the document readable through a grant nothing revokes until the process ends. Both are paired with presence preconditions in the same runs — a second, different document still gets its own tab, and a URL tab closed beside the document tab revokes nothing, so a release fired for every close would fail rather than pass."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/doc-preview-grant-ipc.test.ts src/renderer/src/components/terminal-pane/TerminalLinkActionPopover.test.tsx src/renderer/src/runtime/sync-runtime-graph-editor-diff-tabs.test.ts src/renderer/src/store/slices/tabs-hydration.test.ts",
+          "result": "passed",
+          "durationSeconds": 4.77,
+          "summary": "40/40 on the candidate that removes the editor preview species and moves its two boundary duties onto the browser tab. The publish filter moved with the tab: it used to exclude an editor file by mode, and now excludes a browser workspace by whether it is located by a document — asserted at both the group projection and the tab loop, because a mutant that filters only one of them still publishes. Migration is the other half: sessions written by builds that made previews editor tabs carry chrome whose entity id encodes the document, and whose document was never persisted, so it has always come back naming a surface no restore produces; that chrome is now dropped. Each mutant as the sole delta: filtering neither place publishes the document tab to mobile, filtering only the projection still publishes it, and removing the migration leaves the stale strip entry. Presence preconditions in the same runs: an ordinary browser tab beside the document tab does publish, and the ordinary editor tab for the very same document survives hydration."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/store/slices/browser-workspace-doc-location.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.54,
+          "summary": "10/10 on the candidate that gives a browser page a workspace-document location. The trap this is built around: page.url is read by persistence, the mobile publisher, history and the address bar, so a grant URL parked there would outlive the grant that named it and travel to readers that cannot resolve it. Creation overrides the url rather than trusting its caller, and restore re-asserts the same thing, so a session written by another build cannot carry one in. Red-green with each mutant as the sole delta: dropping the creation override writes the grant URL into the store and into the session payload; dropping the restore override brings a foreign session's grant URL back; leaving docLocation out of either browser schema strips it on load and restores the document as a blank New Tab under a strip entry that still names it (both schemas are plain z.object, and this is the trap that already cost one round on the editor schema); dropping it from the workspace build or the mirror leaves the tab entry naming a document its page has left, which the publish boundary reads; dropping the salvage-path copy loses the document when only the tab row survived; and dropping the address-bar exclusion focuses an address bar the surface does not have. The blank-url assertions are paired with a presence precondition in the same run: an ordinary tab created through the same call keeps its URL and does ask for the address bar."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-manager-guest-policy-profile.test.ts src/main/window/main-window-webview-security.test.ts src/main/browser/doc-preview-guest-policy.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.32,
+          "summary": "55/55 on the candidate that gives every guest one attach door. A preview used to reach its policies through an installer of its own, which meant the manager's attachment bookkeeping — the set registration consults and the cleanup teardown runs — never knew a preview existed. It is now a profile on `attachGuestPolicies`, and the doc policy is what that profile installs. Red-green with each mutant as the sole delta: deleting the profile branch hands a previewed document the browsing machinery (clicked-link routing, frame routing, popup child windows, anti-detection over the debugger) and lets it navigate off-grant; dropping the manager's destroyed wiring leaves the guest answerable through the grant-keyed authority after it dies and its id marked attached forever; and making the window fork ask for the default profile is caught at the fork itself. The absence assertions are paired with a presence precondition in the same run: a browsing guest attached through the same method observably takes every one of those things, so a profile that fenced nothing, or an attach path that had stopped installing anything at all, fails rather than passing empty."
+        },
+        {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/browser/browser-session-partition-policies.test.ts src/main/browser/doc-preview-protocol.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.17,
+          "summary": "22/22 on the candidate that stops a previewed document writing into this desktop's Downloads folder. The hole was read out of the shipping path, not guessed: the preview partition took the shared browser partition policies whole, including will-download, and a preview guest joins no browser-page registry, so handleGuestWillDownload resolved no owner context, routeBrowserClientDownload answered local for a non-client-hosted contents, and the item got a reserved Downloads name with no prompt and no tab to attribute it to. Downloads are now the one policy the preview partition does not inherit. Red-green with each mutant as the sole delta: making the installer ignore the deny option routes the preview partition's download to the router again, and making the preview protocol installer stop asking for the deny leaves the option unset. The absence half is paired with a presence precondition in the same run — an ordinary browsing partition installed beside the preview one in one test still reaches the download router, so a deny that fenced everything, or a download path that had been removed entirely, would fail rather than pass quietly."
+        },
+{
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/ipc/browser.test.ts",
           "result": "passed",
           "durationSeconds": 0.7,
-          "summary": "Rebased candidate 14b5877a75 passed 5/5: absent, unknown, mixed-version, preflight-known, and post-preflight capability failures all reported failure and retained no new empty split."
+          "summary": "99/99 on the candidate that binds a preview guest to its grant when the policy installs, not only on a later navigation. Live on a dev instance against a real SSH workspace, the previous shape refused every tool with not-ready for as long as the reader stayed on the page they opened: the embedder hands the guest over after it has already started loading its src, so the did-start-navigation latch never saw the only navigation most previews make. Following an in-document link bound it and the tools began answering, which is what identified the miss. Two cases pin it: a guest already reporting its URL at install, and one whose first navigation only reaches the commit."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 23.1,
+          "summary": "The journey passed 1/1 on the candidate that requires the guest to be bound to a grant before any navigation is allowed, rather than admitting an unbound one. The document still rendered and the target=_blank press still routed out, which is the half that would break if the renderer-set src reached will-navigate: it does not, because that load is browser-initiated, so the permissive branch it was written for is unreachable."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "ci",
+          "platform": "linux",
+          "command": "npx playwright test --config tests/playwright.config.ts --project=electron-headless tests/e2e/paired-remote-html-preview-local-render.spec.ts --workers=1",
+          "result": "failed",
+          "durationSeconds": 72,
+          "summary": "The journey failed on Ubuntu at the post-press presence precondition, with #post-input-egress still reading 'idle' after 30 seconds. The trace shows the press was dispatched at 769.5,143.9, a point the guest's own hit test had just confirmed was on its heading, and the focus report before it was already isFocused true, so neither focus nor coordinates were the break: the press never entered the guest at all. A standalone Electron 43 probe under Xvfb with this suite's Linux flags reproduced it in roughly two runs in five when pressing immediately after guest attach — the embedder received the pointerdown with the webview element as its target, meaning the browser resolved the press against the embedder because the freshly attached guest had not yet registered its hit-test region. The same probe never dropped a press on macOS, which is why local runs of either project could not see this. The spec now presses until the document answers, mirroring the target=_blank phase."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 72,
+          "summary": "The journey passed 3/3 on the trusted-click candidate, which removed the recent-input gate, made both navigation sinks deny-only, dropped the webview's allowpopups attribute and gave the preview guest its own pinned preload. The fixture now also attempts a window.open and location.href from inside a pointerdown handler, so the egress rides a press the reader really made: it reported 'attempted' every run while both browser counts stayed at that phase's baseline and nothing routed, and the later real press on the target=_blank link still opened exactly one Orca browser tab with the preview still open."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "failed",
+          "durationSeconds": 26.9,
+          "summary": "Candidate with the sole delta that the navigation sinks route again behind a two-second recent-input gate failed on clientBrowserWorkspaceCountAllWorktrees 1 versus baseline 0: the document's location.href, run from inside the handler for the reader's press on the heading, opened a real browser tab. That is the case the earlier design could not distinguish from the press's own effect, and it is why the sinks route nothing at all now. The same run still refused the unattended on-load egress, so this measures the new half specifically."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/browser-preview-tool-authorization.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/ipc/browser.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.97,
+          "summary": "97/97 passed over the preview tool-authorization seam. The channel census asserts the split is total, so a new browser channel cannot be added without classifying it: all six tool channels resolved the preview guest and refused both a renderer that does not host the preview and a grant no preview rendered, while all twenty-three page/session channels never reached the preview authority at all. Five mutations were killed \u2014 dropping the preview branch (12 failures), turning the two authorities into a fallback chain (13), ignoring the hosting renderer id (6), ignoring grant revocation (1), and removing one channel from the census (1)."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/preload/doc-preview-link-interception.test.ts src/main/browser/doc-preview-guest-policy.test.ts src/main/window/main-window-webview-security.test.ts src/main/ipc/doc-preview-grant-ipc.test.ts",
+          "result": "passed",
+          "durationSeconds": 0.36,
+          "summary": "The four surfaces the trusted-click route is built from passed 63/63: the preload's click policy over a real document, including an untrusted dispatched click, an untrusted middle click, an SVG animated href resolved against the document so a relative, rooted or fragment SVG link behaves exactly like the identical HTML anchor, fragment and percent-encoded fragment targets and a trusted middle click; the guest policy's deny-only sinks, its refusal of a navigation that arrives before a document has bound the guest to a grant, and its report gate for an unfocused guest, an unregistered sender, a missing or revoked grant and non-web URLs; will-attach-webview pinning the preview preload in both directions; and the click channel handing main its own sender without a trusted-renderer check."
+        },
+{
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "passed",
+          "durationSeconds": 22.8,
+          "summary": "The journey passed 1/1 with the fixture document now attempting its own egress on every load: an unattended window.open and location.href to an off-machine URL, and an ICE gathering probe. Both browser counts held at baseline and the probe reported candidates=0, while the document still rendered and the later real target=_blank press still routed out as an Orca browser tab."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line",
+          "result": "failed",
+          "durationSeconds": 23.6,
+          "summary": "Candidate with the sole delta that the preview guest no longer receives the disable_non_proxied_udp IP-handling policy failed on candidates=6 versus 0, proving the document can gather ICE — including a STUN reflexive candidate against an off-machine server in the standalone probe — whenever that one main-process call is missing."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 66,
+          "summary": "The journey passed 3/3 again under --repeat-each=3 on the candidate that clears grants on every fresh shell document and gates the mint channel on the trusted renderer, so neither change disturbs a live preview: the document still rendered, both browser counts held at baseline, and the target=_blank press still routed out as an Orca browser tab."
+        },
+{
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-preview-local-render.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --reporter=line --repeat-each=3",
+          "result": "passed",
+          "durationSeconds": 59.7,
+          "summary": "The renamed journey passed 3/3 under --repeat-each=3 on the hardened candidate: the host document rendered in the orca-preview guest, both browser counts held at baseline through the split, focus, reactivation and close phases, and the final phase's real target=_blank press routed out as an Orca browser tab with the routing call recorded as opened while the preview tab stayed open."
         },
         {
           "date": "2026-08-12",
@@ -3071,78 +3533,6 @@
           "summary": "Seven focused host and renderer contract files passed 183/183 tests, covering owning-runtime routing, focused and unfocused creation, placement, reconciliation, failure cleanup, and teardown."
         },
         {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3",
-          "result": "passed",
-          "durationSeconds": 16.1,
-          "summary": "The candidate passed exact host/client cardinality, split stability, rendered DOM, focus authority, close convergence, and surviving editor and terminal."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "SKIP_BUILD=1 ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "failed",
-          "durationSeconds": 11.6,
-          "summary": "Latest-main a90a18d43da333e1cc327779a3f9912a78308848 failed the byte-identical 5806b23f oracle because the HTML preview collapsed into the source editor group instead of retaining its requested split."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 6.5,
-          "summary": "Rebased candidate b7de9c0961a4edf389a29079b2b4d5250184b57e passed the byte-identical 5806b23f oracle: one host page, one client workspace, requested split, rendered DOM, stable focus, and browser-only close."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "failed",
-          "durationSeconds": 10.9,
-          "summary": "Rebased candidate b7de9c0961a4edf389a29079b2b4d5250184b57e with only the side-preview owning-runtime routing seam disabled failed the byte-identical 5806b23f oracle with two client workspaces."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 7.6,
-          "summary": "Final candidate d5767481b982b736e7cc5b4653b2a32a61280638 on merge-base 36d45af062ec4022265aabac8fc6a9d36eecedf1 passed the byte-identical 5806b23f oracle after final review and rebase: one host page, one client workspace, requested split, rendered DOM, stable focus, and browser-only close."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "failed",
-          "durationSeconds": 11.8,
-          "summary": "Latest-main 346e59c879 failed the byte-identical 2ec1dcf1 oracle with two client HTML browser workspaces instead of one."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "passed",
-          "durationSeconds": 8.4,
-          "summary": "Candidate d05217c40d passed the byte-identical 2ec1dcf1 oracle: one host page, one client workspace, stable split, rendered DOM, editor focus after creation, explicit-click browser focus, and browser-only close."
-        },
-        {
-          "date": "2026-08-12",
-          "runner": "local",
-          "platform": "macos",
-          "command": "ORCA_E2E_WEB_CLIENT=1 ORCA_E2E_FORCE_HEADFUL=1 pnpm exec playwright test tests/e2e/paired-remote-html-browser-focus.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
-          "result": "failed",
-          "durationSeconds": 12.3,
-          "summary": "Candidate d05217c40d with only the side-preview focusOnCreate:false call disabled failed the byte-identical 2ec1dcf1 oracle because preview creation activated the browser instead of preserving editor focus."
-        },
-        {
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
@@ -3171,7 +3561,7 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical STA-4231 headed oracle is red on latest-main b19d99bd00: both 15-second creates return runtime_timeout without a page ID while the host retains two distinct pages after retry. The relevant behavior is unchanged through 0a0ae974d4. The candidate is green with one returned canonical ID, one host/client page, and no retry; disabling only the navigation-independent acknowledgement is red with the same two orphaned pages. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing."
+        "evidence": "The unchanged STA-4063 five-assertion oracle is red 5/5 on scan e4c278eb52 and latest main bc2e30000b, partially green 2/5 on pre-fix PR #14100, green 5/5 on candidate 14b5877a75, and red 3/5 when only the new transaction cleanup boundary is disabled on final candidate a9e6fb7716. The earlier STA-4025 transaction oracle remains red on the post-#13909 base and green on this candidate. The byte-identical STA-4231 headed oracle is red on latest-main b19d99bd00: both 15-second creates return runtime_timeout without a page ID while the host retains two distinct pages after retry. The relevant behavior is unchanged through 0a0ae974d4. The candidate is green with one returned canonical ID, one host/client page, and no retry; disabling only the navigation-independent acknowledgement is red with the same two orphaned pages. The byte-identical 2ec1dcf1 Electron oracle remains red on latest main 346e59c879, green on candidate d05217c40d, and red with only side-preview focus disabled; historical 5806b23f evidence separately proves owning-runtime routing. For the STA-5557 preview behavior the rewritten journey is green 1/1 on the candidate and red when the sole delta makes the same preview action also create a browser tab, failing on clientBrowserWorkspaceCount 1 versus baseline 0. That absence assertion is gated on first reading the rendered document out of the guest, so it cannot pass by the preview never happening. Against pre-STA-5557 builds the journey is red by construction rather than by measurement: those builds have no html-preview tab mode, so the run would fail earlier, at materialization, and it has not been executed against an old build. The reader-facing half is red-green at the unit layer. The 6/6 green and 2/6 red pair recorded earlier on 2026-08-26 measured the superseded shape, where a subresource failure was filtered out entirely; the shipping shape is green 10/10 and red 3/10 when the sole delta makes every failure, asset or entry, set the blocking reason. The containment lines the second review found uncovered are red-green too: installing the scheme handler on the default session instead of the preview session, and widening the scheme privileges with allowServiceWorkers and bypassCSP, each fail the protocol suite as the sole delta, and deleting the html-preview case from the closed-tab cleanup fails the hook suite. The external-link phase added on 2026-08-26 is red-green by measurement: green 3/3 on the trusted-click design, in which the guest's own preload reports a trusted press on an anchor and main answers only a focused preview guest holding a live grant. Its earlier shape depended on the webview carrying allowpopups and went red with zero recorded routing calls when only that attribute was dropped; the preload now intercepts the press before Chromium considers a popup, so the attribute is gone and that measurement retired with it. One further run failed in the paired-client harness before reaching any preview step, when the client window never exposed its store within the launch timeout; that is a harness flake, not a preview signal. The two egress fences added on 2026-08-26 are red-green by measurement in the same journey, whose fixture attempts its own escape on every load and again from inside the handler for the reader's press on the heading: with deny-only navigation sinks the document opens no browser tab and the counts hold at baseline, and with the sole delta that those sinks route again behind a two-second recent-input gate the post-press location.href opens a real tab, clientBrowserWorkspaceCountAllWorktrees 1 against a baseline of 0. An earlier measurement of that same gate, taken when it was the shipping design, showed the unattended on-load egress opening two tabs once the gate was removed entirely; it was retired with the gate, because a gate that cannot tell a script's navigation from the click it followed was never the fence the claim needed. With the guest's IP-handling policy the document reports candidates=0, and with the sole delta that the policy call is removed it reports candidates=6. Both mutants were applied to the shipping module, rebuilt, and run against the live paired journey rather than reasoned about."
       },
       "performanceBudget": {
         "required": true,
@@ -3184,9 +3574,14 @@
       "knownGaps": [
         "Live paired-server validation currently covers macOS only.",
         "Multiple simultaneous viewers are not exercised by the Electron journey.",
-        "Direct SSH remote file URLs remain intentionally unsupported and local file previews retain their existing path."
+        "Local workspaces intentionally keep the embedded browser tab at a file URL and are not covered by the preview journey.",
+        "The SSH preview owner has unit coverage only; no live SSH host renders a preview in this gate.",
+        "The preview journey exercises one self-contained document. Relative subresources, reload re-reading the workspace disk, and the truncated and out-of-worktree refusals are covered by unit contracts only.",
+        "Grant revocation on tab close is asserted at the unit layer; the journey observes the tab and open file disappearing, not the main-process registry.",
+        "The external-link route trusts a real press on an anchor in a focused preview guest, so it proves the reader pressed that anchor, not that the anchor's visible text matches its target. The tab it opens is visible, which is the remaining containment.",
+        "WebRTC is fenced by the IP-handling policy rather than by removing the API; the guest can still construct a peer connection, and the journey measures that it gathers nothing."
       ],
-      "demotionRule": "Demote if one paired HTML action can create duplicate client or host browser identities, lose the requested split, steal editor focus before an explicit browser click, lose browser focus after that click, or remove unrelated editor or terminal state on close."
+      "demotionRule": "Demote if a paired HTML preview creates a browser workspace on either side, renders from anything other than the orca-preview scheme, serves a read the host reported as truncated or over-cap, serves a document without the self-only content security policy, lets the preview session carry an off-machine request, reads an SSH path that canonicalizes outside its grant root, steals focus from the source editor when it opens, removes unrelated editor or terminal state on close, hides a document that rendered because one subresource was refused, leaves a grant readable after the tab or renderer that owns it is gone, mints one for a sender that is not the trusted renderer, opens a browser tab for a navigation the document started with no one at the keyboard, or lets the guest gather an ICE candidate; or if a paired browser creation this gate still owns produces duplicate client or host identities or loses its requested split."
     },
     {
       "id": "browser-network-tunnel.bounded-fail-closed-route",

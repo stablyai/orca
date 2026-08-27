@@ -3,6 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { BrowserNavigationControlRow } from '../assemble-chrome/browser-navigation-control-row'
+import BrowserAddressBar from '../assemble-chrome/BrowserAddressBar'
 import type { BrowserAddressBarEditSessionBinding } from '../assemble-chrome/use-browser-address-bar-edit-session'
 import { RemoteRuntimeEgressIndicator } from '../assemble-chrome/browser-egress-indicator'
 import { MarkupDrawButton } from '../annotate/MarkupDrawButton'
@@ -54,15 +55,20 @@ export function RemoteBrowserPageToolbar({
         reload: onReload,
         navigate: onNavigateToUrl
       }}
-      addressBarValue={addressBarValue}
-      onAddressBarChange={onAddressBarChange}
-      onSubmitAddressBar={onSubmitAddressBar}
-      addressBarInputRef={addressBarInputRef}
-      addressBarEditSession={addressBarEditSession}
-      addressBarLeadingIcon={
-        <RemoteRuntimeEgressIndicator
-          runtimeEnvironmentId={runtimeEnvironmentId}
-          presentation="streamed"
+      addressSlot={
+        <BrowserAddressBar
+          value={addressBarValue}
+          onChange={onAddressBarChange}
+          onSubmit={onSubmitAddressBar}
+          onNavigate={onNavigateToUrl}
+          inputRef={addressBarInputRef}
+          editSession={addressBarEditSession}
+          leadingIcon={
+            <RemoteRuntimeEgressIndicator
+              runtimeEnvironmentId={runtimeEnvironmentId}
+              presentation="streamed"
+            />
+          }
         />
       }
       reloadControl={

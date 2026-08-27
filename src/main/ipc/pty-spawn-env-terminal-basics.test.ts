@@ -7,6 +7,7 @@ import { LocalPtyProvider } from '../providers/local-pty-provider'
 import { __resetPersistedWindowsPathCacheForTests } from '../pty/windows-environment-path'
 import { __setWindowsPathRegistryLoaderForTests } from '../pty/windows-path-registry-reader'
 import { hasLiveClaudePtys, markClaudePtySpawned } from '../claude-accounts/live-pty-gate'
+import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
 import { registerPtyHandlers, buildPtyHostEnv, clearProviderPtyState } from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
@@ -57,6 +58,32 @@ describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, spawnAndGetEnv, withBundledCli } = setupPtyIpcSuite()
 
   describe('spawn environment', () => {
+    it('passes the PTY-resolved Codex home to the WSL relay lane', () => {
+      const runtimeHome =
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\.local\\share\\orca\\codex-runtime-home\\home'
+      const ensureForDistro = vi
+        .spyOn(wslHookRelayManager, 'ensureForDistro')
+        .mockImplementation(() => {})
+
+      try {
+        buildPtyHostEnv(
+          'pty-wsl',
+          {},
+          {
+            isPackaged: true,
+            userDataPath: '/tmp/orca-user-data',
+            selectedCodexHomePath: runtimeHome,
+            isWsl: true,
+            wslDistro: 'Ubuntu',
+            agentStatusHooksEnabled: true
+          }
+        )
+        expect(ensureForDistro).toHaveBeenCalledExactlyOnceWith('Ubuntu', runtimeHome)
+      } finally {
+        ensureForDistro.mockRestore()
+      }
+    })
+
     it('refreshes the outer Windows PATH for a WSL spawn without forwarding it', async () => {
       const originalPlatform = process.platform
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })

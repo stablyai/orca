@@ -12,19 +12,23 @@ import {
   type ManagedHookDetectionSettings
 } from './managed-hook-detection-commands'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import { wslCodexRuntimeHomeForGuestHome } from '../pty/codex-home-wsl-env'
 import { WSL_HOOK_FS_METHODS, type WslFsResult } from '../../shared/wsl-hook-relay-contract'
+import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 
 /** Run the shared remote hook installers against a WSL guest over the relay's fs bridge. */
 export async function installWslGuestHooks(options: {
   mux: SshChannelMultiplexer
   guestHome: string
+  codexHomePath: string | null
   distro: string
   installHooks: typeof installRemoteManagedAgentHooks
   settings: ManagedHookDetectionSettings
   warn: (message: string) => void
+  /** Canonical runtime-host installer for redirected Codex homes. */
+  installCodex: (runtimeHomePath: string, distro: string) => Promise<AgentHookInstallStatus | null>
 }): Promise<void> {
-  const { mux, guestHome, distro, installHooks, settings, warn } = options
+  const { mux, guestHome, codexHomePath, distro, installHooks, settings, warn, installCodex } =
+    options
   let agents
   try {
     const detected = (await mux.request('preflight.detectAgents', {
@@ -42,12 +46,25 @@ export async function installWslGuestHooks(options: {
   if (agents.length === 0) {
     return
   }
+  if (agents.includes('codex') && codexHomePath) {
+    try {
+      const status = await installCodex(codexHomePath, distro)
+      if (status?.state === 'error') {
+        warn(
+          `[agent-hooks] WSL Codex hook install for '${distro}' failed: ${status.detail ?? 'unknown error'}`
+        )
+      }
+    } catch (error) {
+      warn(
+        `[agent-hooks] WSL Codex hook install for '${distro}' failed: ${error instanceof Error ? error.message : String(error)}`
+      )
+    }
+  }
+  // Codex is redirected into the runtime home and must use the canonical
+  // runtime-host writer above; the relay adapter owns all other agents.
+  const remoteAgents = agents.filter((agent) => agent !== 'codex')
   const results = await installHooks(createWslHookSftpAdapter(mux), guestHome, {
-    agents,
-    // WSL Codex launches use Orca's managed runtime CODEX_HOME, not ~/.codex.
-    // Keep relay hooks in that active home so status callbacks are received.
-    codexHomeDir: wslCodexRuntimeHomeForGuestHome(guestHome),
-    deferTrustUntilConfigToml: true
+    agents: remoteAgents
   })
   const failed = results.filter((r) => r.state === 'error').length
   if (failed > 0) {

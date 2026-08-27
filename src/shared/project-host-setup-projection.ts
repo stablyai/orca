@@ -1,4 +1,8 @@
 import { getRepoExecutionHostId } from './execution-host'
+import {
+  normalizeProjectHostSetupRow,
+  normalizeProjectRow
+} from './project-catalog-row-normalization'
 import { normalizeGitHubRemoteHost } from './git-remote-host-alias'
 import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-identity-key'
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
@@ -312,7 +316,9 @@ export function projectHostSetupProjectionFromRepos(
     const project = existing
       ? mergeProjectRepo(existing.project, repo)
       : createProjectFromRepo(repo)
-    const setup = createSetupFromRepo(repo, projectId)
+    // Why normalize here: a repo row is untrusted persisted/wire data too, and these
+    // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
+    const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))
     projectById.set(projectId, {
       project
     })
@@ -320,7 +326,7 @@ export function projectHostSetupProjectionFromRepos(
   }
 
   return {
-    projects: [...projectById.values()].map((entry) => entry.project),
+    projects: [...projectById.values()].map((entry) => normalizeProjectRow(entry.project)),
     setups
   }
 }

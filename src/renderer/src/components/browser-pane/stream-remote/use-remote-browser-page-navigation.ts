@@ -222,7 +222,7 @@ export function useRemoteBrowserPageNavigation({
   }, [isActive, keybindings, runRemoteNavigation])
 
   const submitAddressBar = (): void => {
-    const submission = resolveBrowserAddressBarSubmission(addressBarValue)
+    const submission = resolveBrowserAddressBarSubmission(addressBarValue, { allowFileUrls: false })
     if (submission.status === 'invalid') {
       // 'direct': the only response to what the user just typed. With an empty address bar no
       // load-error overlay renders either, so outranking this would make Enter do nothing visible.

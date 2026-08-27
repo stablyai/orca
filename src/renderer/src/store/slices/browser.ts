@@ -8,11 +8,13 @@ import type {
   BrowserHistoryEntry,
   BrowserLoadError,
   BrowserPage,
+  BrowserPageDocLocation,
   BrowserSessionProfile,
   BrowserSessionProfileCreateOptions,
   BrowserViewportPresetId,
   BrowserWorkspace
 } from '../../../../shared/browser-workspace-types'
+import { browserPageDocLocationsEqual } from '../../../../shared/browser-page-doc-location'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import {
@@ -30,6 +32,9 @@ import {
   normalizeBrowserHistoryUrl
 } from '../../../../shared/workspace-session-browser-history'
 import { destroyWorkspaceWebviews } from './browser-webview-cleanup'
+import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
+import { basename } from '@/lib/path'
+import { isDocPreviewUrl } from '../../../../shared/doc-preview-scheme'
 import {
   getRecentlyClosedTabPosition,
   restoreRecentlyClosedTabPosition,
@@ -51,14 +56,13 @@ import type {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { translate } from '@/i18n/i18n'
 import {
-  getExecutionHostLabel,
   getSettingsFocusedExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getHostSettingOverride } from '../../../../shared/host-setting-overrides'
+import { selectExecutionHostDisplayLabel } from '@/lib/execution-host-display-label'
 import type { RuntimeBrowserPlacement } from '../../../../shared/runtime-browser-placement'
 import {
   getExecutionHostIdForWorktree,
@@ -85,6 +89,8 @@ type CreateBrowserTabOptions = {
   // Explicit "New Tab" focuses the address bar even with a real home URL; link-opened tabs leave it unset.
   focusAddressBar?: boolean
   browserRuntimeEnvironmentId?: string | null
+  /** Creates a page that shows a workspace document instead of a URL. */
+  docLocation?: BrowserPageDocLocation
 }
 
 type CreateBrowserPageOptions = {
@@ -236,7 +242,11 @@ export type BrowserSlice = {
     options?: CreateBrowserTabOptions
   ) => BrowserWorkspace
   openNewBrowserTabInActiveWorkspace: (groupId: string) => Promise<void>
-  openBrowserProfileTabInActiveWorkspace: (url: string, profileId: string) => Promise<boolean>
+  /** `profileId: null` uses the workspace default profile. */
+  openBrowserProfileTabInActiveWorkspace: (
+    url: string,
+    profileId: string | null
+  ) => Promise<boolean>
   closeBrowserTab: (tabId: string, options?: { reason?: 'cleanup' }) => void
   shutdownWorktreeBrowsers: (worktreeId: string) => Promise<void>
   reopenClosedBrowserTab: (worktreeId: string) => BrowserWorkspace | null
@@ -338,7 +348,22 @@ function normalizeUrl(url: string): string {
   return redactKagiSessionToken(trimmed)
 }
 
-function normalizeBrowserTitle(title: string | null | undefined, url: string): string {
+function normalizeBrowserTitle(
+  title: string | null | undefined,
+  url: string,
+  docLocation?: BrowserPageDocLocation | null
+): string {
+  if (docLocation) {
+    // Why a document page cannot go through the checks below: its url is the blank URL by design,
+    // which would name every previewed document "New Tab". Its fallback is the file it shows.
+    // Why the grant URL is refused rather than trusted: Chromium reports the URL as the title when
+    // a document declares none, and this title is stored, persisted and mirrored onto the tab —
+    // a grant reaching any of them would outlive the grant and name a document nothing can read.
+    if (!title || isDocPreviewUrl(title)) {
+      return basename(docLocation.filePath) || docLocation.filePath
+    }
+    return title
+  }
   if (
     url === 'about:blank' ||
     url === ORCA_BROWSER_BLANK_URL ||
@@ -356,23 +381,6 @@ function getBrowserSettingsHostId(
   state: Pick<AppState, 'browserSessionHostIdOverride' | 'settings'>
 ): ExecutionHostId {
   return state.browserSessionHostIdOverride ?? getSettingsFocusedExecutionHostId(state.settings)
-}
-
-function getBrowserSettingsHostLabel(state: AppState, hostId: ExecutionHostId): string {
-  const override = getHostSettingOverride(state.settings, hostId, 'displayLabel')
-  if (override) {
-    return override
-  }
-  const parsed = parseExecutionHostId(hostId)
-  if (parsed?.kind === 'runtime') {
-    const name = state.runtimeEnvironments
-      ?.find((environment) => environment.id === parsed.environmentId)
-      ?.name.trim()
-    if (name) {
-      return name
-    }
-  }
-  return getExecutionHostLabel(hostId)
 }
 
 function getBrowserSettingsRuntimeEnvironmentId(
@@ -476,15 +484,19 @@ function buildBrowserPage(
   url: string,
   title?: string,
   browserRuntimeEnvironmentId?: string | null,
-  browserPageId?: string
+  browserPageId?: string,
+  docLocation?: BrowserPageDocLocation
 ): BrowserPage {
-  const normalizedUrl = normalizeUrl(url)
+  // Why the url is overridden rather than trusted: this is the one place a page's url is minted,
+  // and it is read by persistence, the mobile publisher, history and the address bar. A grant URL
+  // reaching any of them would outlive the grant and name a document that machine cannot read.
+  const normalizedUrl = docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(url)
   return {
     id: browserPageId ?? createBrowserUuid(),
     workspaceId,
     worktreeId,
     url: normalizedUrl,
-    title: normalizeBrowserTitle(title, normalizedUrl),
+    title: normalizeBrowserTitle(title, normalizedUrl, docLocation),
     // Why: blank pages mount an inert guest (no real navigation); marking them loading would flash the loading affordance.
     loading: normalizedUrl !== 'about:blank' && normalizedUrl !== ORCA_BROWSER_BLANK_URL,
     faviconUrl: null,
@@ -492,7 +504,8 @@ function buildBrowserPage(
     canGoForward: false,
     loadError: null,
     createdAt: Date.now(),
-    ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {})
+    ...(browserRuntimeEnvironmentId !== undefined ? { browserRuntimeEnvironmentId } : {}),
+    ...(docLocation ? { docLocation } : {})
   }
 }
 
@@ -518,7 +531,8 @@ function buildWorkspaceFromPage(
     canGoBack: page.canGoBack,
     canGoForward: page.canGoForward,
     loadError: page.loadError,
-    createdAt: page.createdAt
+    createdAt: page.createdAt,
+    docLocation: page.docLocation ?? null
   }
 }
 
@@ -538,7 +552,8 @@ function mirrorWorkspaceFromActivePage(
       faviconUrl: null,
       canGoBack: false,
       canGoForward: false,
-      loadError: null
+      loadError: null,
+      docLocation: null
     }
   }
   return {
@@ -551,7 +566,8 @@ function mirrorWorkspaceFromActivePage(
     faviconUrl: activePage.faviconUrl,
     canGoBack: activePage.canGoBack,
     canGoForward: activePage.canGoForward,
-    loadError: activePage.loadError
+    loadError: activePage.loadError,
+    docLocation: activePage.docLocation ?? null
   }
 }
 
@@ -571,7 +587,8 @@ function browserWorkspaceMirrorFieldsEqual(
     workspace.faviconUrl === mirrored.faviconUrl &&
     workspace.canGoBack === mirrored.canGoBack &&
     workspace.canGoForward === mirrored.canGoForward &&
-    workspace.loadError === mirrored.loadError
+    workspace.loadError === mirrored.loadError &&
+    browserPageDocLocationsEqual(workspace.docLocation ?? null, mirrored.docLocation ?? null)
   )
 }
 
@@ -722,7 +739,8 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       url,
       options?.title,
       options?.browserRuntimeEnvironmentId,
-      browserPageId
+      browserPageId,
+      options?.docLocation
     )
     // Why: with no explicit profile, inherit the user's default so a Settings preference applies to new tabs.
     const sessionProfileId =
@@ -767,6 +785,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const shouldFocusFloatingTab = shouldActivate && worktreeId === FLOATING_TERMINAL_WORKTREE_ID
       const shouldFocusAddressBar =
         (shouldUpdateGlobalActiveSurface || shouldFocusFloatingTab) &&
+        // Why the doc check and not just the url: a document page is blank by construction, and
+        // the blank url is exactly what marks a New Tab as wanting the address bar it does not have.
+        !page.docLocation &&
         (options?.focusAddressBar ??
           (page.url === 'about:blank' || page.url === ORCA_BROWSER_BLANK_URL))
 
@@ -918,6 +939,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     // page to close and must not enter the reopen stack as if the user had closed something.
     const isCleanup = options?.reason === 'cleanup'
     let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
+    // Why collected rather than released inside the reducer: revoking is main-process work, and a
+    // grant is the only authority the preview scheme honors — a closed document must stop being
+    // readable, and it must stop being readable even if the reducer bails out below.
+    let docPageIdsToRelease: string[] = []
     let activeBrowserWorktreeIdToNotify: string | null = null
     set((s) => {
       let owningWorktreeId: string | null = null
@@ -949,6 +974,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
         delete nextBrowserAnnotationsByPageId[page.id]
         delete nextBrowserCertificateFailuresByPageId[page.id]
       }
+      docPageIdsToRelease = closedPages.filter((page) => page.docLocation).map((page) => page.id)
       remotePagesToClose = isCleanup
         ? []
         : closedPages.flatMap((page) => {
@@ -1055,6 +1081,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
 
     for (const remotePage of remotePagesToClose) {
       closeRemoteBrowserPageInOwningEnvironment(remotePage.worktreeId, remotePage.handle)
+    }
+
+    for (const docPageId of docPageIdsToRelease) {
+      releaseDocPreviewGrant(docPageId)
     }
 
     for (const tabs of Object.values(get().unifiedTabsByWorktree)) {
@@ -1596,7 +1626,9 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       const nextPage = {
         ...page,
         title:
-          updates.title === undefined ? page.title : normalizeBrowserTitle(updates.title, page.url),
+          updates.title === undefined
+            ? page.title
+            : normalizeBrowserTitle(updates.title, page.url, page.docLocation),
         loading: updates.loading ?? page.loading,
         faviconUrl: updates.faviconUrl === undefined ? page.faviconUrl : updates.faviconUrl,
         canGoBack: updates.canGoBack ?? page.canGoBack,
@@ -1724,15 +1756,21 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
       if (!workspace) {
         return s
       }
+      // Why a document page keeps its blank url here too: this is the third door onto a page's url,
+      // and a document's url is blank by construction. A grant committed here would reach
+      // persistence, the publish boundary and the address bar, exactly as at the other two doors.
+      const nextPageUrl = page.docLocation ? ORCA_BROWSER_BLANK_URL : nextUrl
       // Why: annotations point at DOM coords of the loaded document; a real URL change invalidates those markers.
-      const shouldClearAnnotations = normalizeUrl(page.url) !== nextUrl
+      const shouldClearAnnotations = normalizeUrl(page.url) !== nextPageUrl
       const nextPages = (s.browserPagesByWorkspace[workspace.id] ?? []).map((entry) =>
         entry.id === pageId
           ? {
               ...entry,
-              url: nextUrl,
-              title: normalizeBrowserTitle(entry.title, nextUrl),
-              loading: true,
+              url: nextPageUrl,
+              title: normalizeBrowserTitle(entry.title, nextPageUrl, entry.docLocation),
+              // Why not simply true: a document page's guest is inert, so there is nothing to wait
+              // for and the loading affordance would never clear.
+              loading: !entry.docLocation,
               loadError: options?.preserveLoadError ? entry.loadError : null
             }
           : entry
@@ -1916,7 +1954,11 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
                   canGoBack: tab.canGoBack,
                   canGoForward: tab.canGoForward,
                   loadError: tab.loadError ?? null,
-                  createdAt: tab.createdAt
+                  createdAt: tab.createdAt,
+                  // Why the tab's copy is authority here: this branch runs when the page array was
+                  // salvaged away, and without it a restored document page comes back as a blank
+                  // New Tab under a strip entry still naming the document.
+                  docLocation: tab.docLocation ?? null
                 } satisfies BrowserPage
               ]
           const nextPages = persistedPages.map((page) => {
@@ -1929,7 +1971,10 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
               ...persistedPage,
               workspaceId: tab.id,
               worktreeId,
-              url: normalizeUrl(page.url),
+              // Why re-asserted on restore: the same invariant creation enforces. A session written
+              // by an older or hand-edited build could carry a grant URL here, and it would name a
+              // grant that died with the process that minted it.
+              url: page.docLocation ? ORCA_BROWSER_BLANK_URL : normalizeUrl(page.url),
               loading: false,
               loadError: page.loadError ?? null
             }
@@ -2225,7 +2270,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   importCookiesToProfile: async (profileId) => {
     const initialState = get()
     const hostId = getBrowserSettingsHostId(initialState)
-    const executionHostLabel = getBrowserSettingsHostLabel(initialState, hostId)
+    const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
     if (getBrowserSettingsRuntimeEnvironmentId(initialState)) {
       const reason = translate(
         'auto.store.slices.browser.remoteCookieImportUnavailable',
@@ -2315,7 +2360,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
     const hostId = getBrowserSettingsHostId(get())
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(get())
     if (runtimeEnvironmentId) {
-      const hostLabel = getBrowserSettingsHostLabel(get(), hostId)
+      const hostLabel = selectExecutionHostDisplayLabel(get(), hostId)
       try {
         // Why: the import runs on whichever machine hosts the pages, so the picker must offer that
         // machine's browsers -- client-hosted means this desktop, not the (usually headless) remote.
@@ -2375,7 +2420,7 @@ export const createBrowserSlice: StateCreator<AppState, [], [], BrowserSlice> = 
   importCookiesFromBrowser: async (profileId, browserFamily, browserProfile?) => {
     const initialState = get()
     const hostId = getBrowserSettingsHostId(initialState)
-    const executionHostLabel = getBrowserSettingsHostLabel(initialState, hostId)
+    const executionHostLabel = selectExecutionHostDisplayLabel(initialState, hostId)
     const runtimeEnvironmentId = getBrowserSettingsRuntimeEnvironmentId(initialState)
     if (runtimeEnvironmentId) {
       set((state) =>

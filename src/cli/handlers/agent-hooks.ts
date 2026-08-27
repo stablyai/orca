@@ -28,6 +28,9 @@ type AgentHookCommandResult = {
   statuses: AgentHookInstallStatus[]
 }
 
+// Covers managed-home verification, WSL identity, trust grant, and bounded app-server reap.
+const WSL_CODEX_PREPARE_TIMEOUT_MS = 50_000
+
 function getDataPath(): string {
   const userDataPath = getDefaultUserDataPath()
   const indexPath = join(userDataPath, 'orca-profile-index.json')
@@ -207,6 +210,22 @@ async function setAgentHooksEnabled(
 
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks prepare-codex': async ({ client }) => {
+    if (process.env.WSL_DISTRO_NAME?.trim()) {
+      try {
+        await client.call(
+          'agentHooks.prepareCodexForWslPane',
+          {
+            codexHome: process.env.CODEX_HOME ?? '',
+            orcaCodexHome: process.env.ORCA_CODEX_HOME ?? '',
+            wslDistro: process.env.WSL_DISTRO_NAME
+          },
+          { timeoutMs: WSL_CODEX_PREPARE_TIMEOUT_MS }
+        )
+      } catch {
+        // Best effort: old or unavailable runtimes must not block Codex launch.
+      }
+      return
+    }
     const settings = await readHookSettings(client)
     await prepareManagedCodexHomeBeforeShellLaunch({
       userDataPath: getDefaultUserDataPath(),
