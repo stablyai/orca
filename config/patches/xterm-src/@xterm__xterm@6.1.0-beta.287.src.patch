@@ -1053,3 +1053,18 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..df0761c35907ddc48eb102ba181b0dac
      i = this._search(key);
      if (i === -1) {
        return false;
+diff --git a/src/common/buffer/Marker.ts b/src/common/buffer/Marker.ts
+index c21575919ce495d80c91d5bf12856faf49e10023..31293f4cf88e078231dcdfa711d0a40b28c7cda6 100644
+--- a/src/common/buffer/Marker.ts
++++ b/src/common/buffer/Marker.ts
+@@ -29,9 +29,9 @@ export class Marker implements IMarker {
+       return;
+     }
+     this.isDisposed = true;
+-    this.line = -1;
+     // Emit before super.dispose such that dispose listeners get a chance to react
+     this._onDispose.fire();
++    this.line = -1;
+     dispose(this._disposables);
+     this._disposables.length = 0;
+   }
