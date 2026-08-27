@@ -8,6 +8,7 @@ import type {
 export type ConnectionDiagnosis = {
   likelyCause: string
   nextStep: string
+  reportability: 'none' | 'orca-relay'
 }
 
 export function diagnoseConnection(args: {
@@ -20,7 +21,8 @@ export function diagnoseConnection(args: {
   if (args.state === 'connected') {
     return {
       likelyCause: `Connection is healthy${args.activePath ? ` via ${formatPath(args.activePath)}` : ''}.`,
-      nextStep: 'No action needed.'
+      nextStep: 'No action needed.',
+      reportability: 'none'
     }
   }
   const evidence = args.entries
@@ -30,7 +32,8 @@ export function diagnoseConnection(args: {
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
       likelyCause: 'Relay rejected the saved resume credential.',
-      nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.'
+      nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.',
+      reportability: 'none'
     }
   }
 
@@ -38,29 +41,41 @@ export function diagnoseConnection(args: {
     const retryMs = parseRetryDelayMs(evidence)
     return {
       likelyCause: `Relay service was temporarily unavailable${retryMs == null ? '.' : ` and asked Orca to retry in ${formatDelay(retryMs)}.`}`,
-      nextStep: 'Keep Orca open; recovery should retry automatically.'
+      nextStep: 'Keep Orca open; recovery should retry automatically.',
+      reportability: 'none'
     }
   }
 
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
     const path = args.activePath === 'relay' ? 'Relay' : 'The connected host'
+    const relayLiveness =
+      args.activePath === 'relay' ||
+      args.entries.some(
+        (entry) =>
+          entry.path === 'relay' &&
+          (entry.code === 'liveness-timeout' ||
+            /liveness timeout|health check failed/i.test(entry.message))
+      )
     return {
       likelyCause: `${path} stopped answering authenticated health checks.`,
-      nextStep: 'Orca closed the stale session and started recovery.'
+      nextStep: 'Orca closed the stale session and started recovery.',
+      reportability: relayLiveness ? 'orca-relay' : 'none'
     }
   }
 
   if (/relay-session-failed|active relay session failed/i.test(evidence)) {
     return {
       likelyCause: 'The active Relay session closed unexpectedly.',
-      nextStep: 'Orca started Relay recovery; the event history includes the cell close reason.'
+      nextStep: 'Orca started Relay recovery; the event history includes the cell close reason.',
+      reportability: 'orca-relay'
     }
   }
 
   if (/authentication-rejected|unauthorized|pairing may be revoked/i.test(evidence)) {
     return {
       likelyCause: 'The desktop rejected this device during authentication.',
-      nextStep: 'Confirm the device is still paired; pair it again if the rejection repeats.'
+      nextStep: 'Confirm the device is still paired; pair it again if the rejection repeats.',
+      reportability: 'none'
     }
   }
 
@@ -72,27 +87,31 @@ export function diagnoseConnection(args: {
       nextStep:
         args.pendingPath === 'relay'
           ? 'Relay recovery is in progress; keep Orca open while it retries.'
-          : 'Check the local/VPN network and confirm the desktop is awake.'
+          : 'Check the local/VPN network and confirm the desktop is awake.',
+      reportability: 'none'
     }
   }
 
   if (/handshake-timeout|handshake timeout/i.test(evidence)) {
     return {
       likelyCause: 'The endpoint opened, but the encrypted Orca handshake did not finish.',
-      nextStep: 'Confirm the desktop is running a compatible Orca version and retry.'
+      nextStep: 'Confirm the desktop is running a compatible Orca version and retry.',
+      reportability: 'none'
     }
   }
 
   if (args.pendingPath === 'relay') {
     return {
       likelyCause: 'Relay recovery is selected, but no more specific failure is recorded yet.',
-      nextStep: 'Keep this page open while the next recovery event is recorded.'
+      nextStep: 'Keep this page open while the next recovery event is recorded.',
+      reportability: 'none'
     }
   }
 
   return {
     likelyCause: 'No single failure cause can be determined from the recorded events.',
-    nextStep: 'Run diagnostics and copy the report again after the next connection attempt.'
+    nextStep: 'Run diagnostics and copy the report again after the next connection attempt.',
+    reportability: 'none'
   }
 }
 

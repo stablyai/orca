@@ -118,7 +118,7 @@ export default function ConnectionLogScreen() {
   ])
 
   const sendDiagnostics = useCallback(async () => {
-    if (!selected || submissionState === 'sending') {
+    if (!selected || submissionState === 'sending' || diagnosis?.reportability !== 'orca-relay') {
       return
     }
     setSubmissionState('sending')
@@ -149,7 +149,8 @@ export default function ConnectionLogScreen() {
     entries,
     activePath,
     pendingPath,
-    liveDesktopAppVersion
+    liveDesktopAppVersion,
+    diagnosis
   ])
 
   return (
@@ -201,29 +202,33 @@ export default function ConnectionLogScreen() {
               <Text style={styles.diagnosisHeading}>What this suggests</Text>
               <Text style={styles.diagnosisText}>{diagnosis.likelyCause}</Text>
               <Text style={styles.diagnosisNext}>{diagnosis.nextStep}</Text>
-              <Text style={styles.privacyHint}>
-                Sends redacted connection events only—never terminal contents or credentials.
-              </Text>
-              <Pressable
-                style={styles.sendButton}
-                onPress={() => void sendDiagnostics()}
-                disabled={submissionState === 'sending'}
-              >
-                {submissionState === 'sent' ? (
-                  <Check size={14} color={colors.statusGreen} />
-                ) : (
-                  <Send size={14} color={colors.textPrimary} />
-                )}
-                <Text style={styles.sendButtonText}>
-                  {submissionState === 'sending'
-                    ? 'Sending…'
-                    : submissionState === 'sent'
-                      ? 'Diagnostics sent'
-                      : submissionState === 'failed'
-                        ? 'Retry sending'
-                        : 'Send diagnostics to Orca'}
-                </Text>
-              </Pressable>
+              {diagnosis.reportability === 'orca-relay' && (
+                <>
+                  <Text style={styles.privacyHint}>
+                    Sends redacted connection events only—never terminal contents or credentials.
+                  </Text>
+                  <Pressable
+                    style={styles.sendButton}
+                    onPress={() => void sendDiagnostics()}
+                    disabled={submissionState === 'sending'}
+                  >
+                    {submissionState === 'sent' ? (
+                      <Check size={14} color={colors.statusGreen} />
+                    ) : (
+                      <Send size={14} color={colors.textPrimary} />
+                    )}
+                    <Text style={styles.sendButtonText}>
+                      {submissionState === 'sending'
+                        ? 'Sending…'
+                        : submissionState === 'sent'
+                          ? 'Diagnostics sent'
+                          : submissionState === 'failed'
+                            ? 'Retry sending'
+                            : 'Send diagnostics to Orca'}
+                    </Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           )}
           {entries.length > 0 ? (

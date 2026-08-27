@@ -15,6 +15,11 @@ const entries: ConnectionLogEntry[] = [
   { id: 'event-1', ts: 1, level: 'info', message: 'Opening WebSocket' }
 ]
 
+const duplicateEntries: ConnectionLogEntry[] = [
+  { id: 'relay-1', ts: 1, level: 'info', message: 'Relay recovery started' },
+  { id: 'relay-1', ts: 2, level: 'warn', message: 'Relay retry scheduled' }
+]
+
 describe('ConnectionLog', () => {
   type RenderedNode = { props: { style?: unknown } }
   type Renderer = {
@@ -55,5 +60,22 @@ describe('ConnectionLog', () => {
 
     expect(containerStyles).toContainEqual({ flex: 1 })
     expect(scroll.props.style).toEqual({ flex: 1 })
+  })
+
+  it('does not emit duplicate-key warnings for repeated persisted event IDs', () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    act(() => {
+      renderer = create(
+        createElement(ConnectionLog, { entries: duplicateEntries })
+      ) as unknown as Renderer
+    })
+
+    expect(
+      consoleError.mock.calls.some(([message]) =>
+        String(message).includes('Encountered two children with the same key')
+      )
+    ).toBe(false)
+
+    consoleError.mockRestore()
   })
 })

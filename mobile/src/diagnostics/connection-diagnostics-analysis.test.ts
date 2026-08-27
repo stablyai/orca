@@ -17,7 +17,8 @@ describe('diagnoseConnection', () => {
       })
     ).toEqual({
       likelyCause: 'Connection is healthy via Relay.',
-      nextStep: 'No action needed.'
+      nextStep: 'No action needed.',
+      reportability: 'none'
     })
   })
 
@@ -31,7 +32,8 @@ describe('diagnoseConnection', () => {
       })
     ).toEqual({
       likelyCause: 'Relay rejected the saved resume credential.',
-      nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.'
+      nextStep: 'Try a direct connection; if Relay keeps returning 401, pair this device again.',
+      reportability: 'none'
     })
   })
 
@@ -46,7 +48,8 @@ describe('diagnoseConnection', () => {
       })
     ).toEqual({
       likelyCause: 'The saved Tailscale endpoint did not answer before the connection timeout.',
-      nextStep: 'Relay recovery is in progress; keep Orca open while it retries.'
+      nextStep: 'Relay recovery is in progress; keep Orca open while it retries.',
+      reportability: 'none'
     })
   })
 
@@ -66,7 +69,8 @@ describe('diagnoseConnection', () => {
       })
     ).toEqual({
       likelyCause: 'Relay stopped answering authenticated health checks.',
-      nextStep: 'Orca closed the stale session and started recovery.'
+      nextStep: 'Orca closed the stale session and started recovery.',
+      reportability: 'orca-relay'
     })
   })
 
@@ -86,7 +90,52 @@ describe('diagnoseConnection', () => {
       })
     ).toEqual({
       likelyCause: 'The active Relay session closed unexpectedly.',
-      nextStep: 'Orca started Relay recovery; the event history includes the cell close reason.'
+      nextStep: 'Orca started Relay recovery; the event history includes the cell close reason.',
+      reportability: 'orca-relay'
     })
+  })
+
+  it('marks authenticated Relay liveness failures as safe to send', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://192.168.1.2:6768',
+        state: 'reconnecting',
+        activePath: 'relay',
+        entries: [
+          {
+            ...event('Relay health check failed'),
+            code: 'liveness-timeout',
+            path: 'relay'
+          }
+        ]
+      }).reportability
+    ).toBe('orca-relay')
+  })
+
+  it.each([
+    ['direct timeout', 'connect-timeout', 'tailscale'],
+    ['handshake timeout', 'handshake-timeout', 'relay'],
+    ['invalid credential', 'relay director resolve failed (401)', 'relay'],
+    ['ambiguous recovery', 'retry scheduled', 'relay']
+  ] as const)('does not offer submission for %s', (_name, message, path) => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.88.90.25:6768',
+        state: 'reconnecting',
+        pendingPath: 'relay',
+        entries: [{ ...event(message), path }]
+      }).reportability
+    ).toBe('none')
+  })
+
+  it('does not offer submission for a bounded Relay director outage', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.88.90.25:6768',
+        state: 'reconnecting',
+        pendingPath: 'relay',
+        entries: [event('Relay: relay dial failed', 'relay director resolve failed (503)')]
+      }).reportability
+    ).toBe('none')
   })
 })

@@ -45,6 +45,7 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
     return null
   }
   const baseTs = entries[0]!.ts
+  const keyOccurrences = new Map<string, number>()
 
   return (
     <View
@@ -61,24 +62,29 @@ export function ConnectionLog({ entries, title, fillAvailableHeight = false }: P
         showsVerticalScrollIndicator={false}
         onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
       >
-        {entries.map((entry) => (
-          <View key={entry.id} style={styles.row}>
-            <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs)}</Text>
-            <Text style={[styles.glyph, { color: LEVEL_COLOR[entry.level] }]}>
-              {LEVEL_GLYPH[entry.level]}
-            </Text>
-            <View style={styles.rowText}>
-              <Text style={[styles.message, { color: LEVEL_COLOR[entry.level] }]}>
-                {entry.message}
+        {entries.map((entry) => {
+          const occurrence = keyOccurrences.get(entry.id) ?? 0
+          keyOccurrences.set(entry.id, occurrence + 1)
+          const renderKey = occurrence === 0 ? entry.id : `${entry.id}:${occurrence}`
+          return (
+            <View key={renderKey} style={styles.row}>
+              <Text style={styles.timestamp}>{formatTime(entry.ts, baseTs)}</Text>
+              <Text style={[styles.glyph, { color: LEVEL_COLOR[entry.level] }]}>
+                {LEVEL_GLYPH[entry.level]}
               </Text>
-              {entry.detail && (
-                <Text style={styles.detail} numberOfLines={2}>
-                  {entry.detail}
+              <View style={styles.rowText}>
+                <Text style={[styles.message, { color: LEVEL_COLOR[entry.level] }]}>
+                  {entry.message}
                 </Text>
-              )}
+                {entry.detail && (
+                  <Text style={styles.detail} numberOfLines={2}>
+                    {entry.detail}
+                  </Text>
+                )}
+              </View>
             </View>
-          </View>
-        ))}
+          )
+        })}
       </ScrollView>
     </View>
   )
