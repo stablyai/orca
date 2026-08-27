@@ -4,6 +4,7 @@ import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
 import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { ORCHESTRATION_ASK_MAX_TIMEOUT_MS } from '../../../../shared/orchestration-ask-timeout'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 describe('orchestration RPC methods', () => {
   const h = createOrchestrationRpcHarness()
@@ -59,7 +60,7 @@ describe('orchestration RPC methods', () => {
     it('records one idempotent answer from the current Run consumer', async () => {
       setup()
       const task = db.createTask({ spec: 'question work' })
-      const dispatch = db.createDispatchContext(task.id, 'term_worker')
+      const dispatch = createRootDispatch(db, task.id, 'term_worker')
       const created = db.createQuestion({
         runId: activeRunId!,
         dispatchId: dispatch.id,
@@ -103,7 +104,7 @@ describe('orchestration RPC methods', () => {
   describe('orchestration.ask', () => {
     function createAskingDispatch(handle = 'term_worker') {
       const task = db.createTask({ spec: 'question work' })
-      const dispatch = db.createDispatchContext(task.id, handle)
+      const dispatch = createRootDispatch(db, task.id, handle)
       return { task, dispatch }
     }
 

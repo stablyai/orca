@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  configureHostReadableTranscriptPathSources,
   isGuestAbsoluteLinuxPath,
   needsWslHostTranslation,
   resetHostReadableTranscriptPathCacheForTests,
@@ -215,5 +216,16 @@ describe('wslCodexSessionsDirs', () => {
       `${UBUNTU_HOME}\\.local\\share\\orca\\codex-runtime-home\\home\\sessions`,
       `${UBUNTU_HOME}\\.codex\\sessions`
     ])
+  })
+
+  it('includes WSL managed-account session roots supplied by the runtime', async () => {
+    const accountHome = `${UBUNTU_HOME}\\.local\\share\\orca\\codex-accounts\\account-1\\home`
+    configureHostReadableTranscriptPathSources({
+      getAdditionalCodexHomePaths: () => [accountHome, '/host/account/home']
+    })
+
+    await expect(
+      wslCodexSessionsDirs({ platform: 'win32', listWslHomeDirs: async () => [UBUNTU_HOME] })
+    ).resolves.toContain(`${accountHome}\\sessions`)
   })
 })

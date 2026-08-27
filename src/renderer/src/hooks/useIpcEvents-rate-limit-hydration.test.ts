@@ -148,6 +148,7 @@ describe('useIpcEvents rate-limit hydration', () => {
       clearTimeout: vi.fn(),
       api: {
         repos: makeEvents(),
+        automations: makeEvents(),
         worktrees: makeEvents(),
         keybindings: makeEvents(),
         settings: makeEvents(),

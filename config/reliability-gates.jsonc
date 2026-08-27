@@ -1243,22 +1243,26 @@
       "providers": ["lan", "tailscale", "cloud-relay"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["lan", "tailscale", "cloud-relay"],
-      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, persistent pairing-rejection escalation, direct-winner cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
+      "coverageNotes": "Deterministic TypeScript tests cover shared close-code policy, foreground retry timers, continuous-outage escalation, persistent pairing-rejection escalation, a bounded background Relay grace, direct-winner and background cancellation, credential-gated Relay presentation, and concurrent LAN/Tailscale authentication. Physical iOS/Android radios, GFE, and production relay recovery remain live-test gaps.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca-cloud/pull/96",
         "https://linear.app/stably/issue/STA-4587",
         "https://linear.app/stably/issue/STA-4681"
       ],
-      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. Backgrounding, direct success, or stop must cancel pending work, and losing probes must close without affecting the winner.",
-      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
+      "invariant": "A foregrounded paired phone must recover from relay HOST_OFFLINE without a foreground or network-change signal, while direct recovery must select the first authenticated configured LAN or Tailscale endpoint without serial timeout delays. Relay recovery presentation starts only for a failed active Relay or a dial backed by an eligible credential, remains pending through a genuine failed-dial cooldown, and exposes the supervisor's consecutive failed-dial count so a continuous outage escalates to unreachable. A relay credential the desktop keeps refusing escalates to re-pair once its transient-rejection budget is spent, and only an authenticated session clears that verdict. A healthy Relay survives backgrounding for at most 30 seconds and is reused on a quick foreground without redial; expiry, transport failure, direct success, or stop cancels the grace safely, late confirmation bookkeeping preserves lease rotation for a retained live Relay, and losing probes or replacements close without affecting the winner.",
+      "oracle": "Inject deterministic relay close codes, missing and expired credentials, delayed credential reads, random bytes, fake timers, suspended timers, stale callbacks, and independently controlled direct clients. Require HOST_OFFLINE to replace any faster transport timer with one 5-15 second retry, require no retry before the selected delay, keep Relay presentation absent when no socket can open, clear it across lifecycle races, retain it through real dial cooldowns, retain one healthy Relay through 29,999 milliseconds of background time without a new dial, close it exactly once at 30 seconds or on a later foreground when the timer was suspended, reject a stale expiry after foreground, recover a retained Relay transport failure only after foreground, resume a lease rotation that came due during the grace, arm a lease whose confirmation persistence finishes during the grace, and leave healthy direct sessions unchanged. Establish Relay through the supervisor and require its active close plus 11 failed replacements to publish reconnect attempt 12 and a Relay-unreachable verdict, race all unique non-relay endpoints, select the first authenticated path, close every loser exactly once, and retain no retry after direct connectivity wins. Drive a supervisor-established Relay through four simulated hours of E2EE rejections and require the re-pair verdict, require it to survive a background/foreground cycle, require two rejections followed by acceptance to never latch it, and require a plain transport outage to still read Relay-unreachable.",
       "commands": [
+        "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-background-grace.test.ts mobile/src/transport/mobile-relay-background-lifecycle.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/mobile-relay-close-codes.test.ts --reporter=dot"
       ],
       "testFiles": [
         "mobile/src/transport/mobile-direct-endpoint-probe.test.ts",
+        "mobile/src/transport/mobile-relay-background-grace.test.ts",
+        "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
         "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
         "mobile/src/transport/mobile-endpoint-supervisor.test.ts",
+        "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
         "mobile/src/transport/mobile-relay-outage-escalation.test.ts",
         "mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts",
         "mobile/src/transport/stable-logical-rpc-client.test.ts",
@@ -1275,6 +1279,26 @@
           ]
         },
         {
+          "file": "mobile/src/transport/mobile-relay-background-grace.test.ts",
+          "assertions": [
+            "the grace expires exactly once at 30 seconds",
+            "foreground deadline checks enforce expiry when the OS suspended the timer",
+            "a stale expiry callback cannot close a foreground connection"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-background-lifecycle.test.ts",
+          "assertions": [
+            "a quick background round trip reuses Relay without a new dial",
+            "Relay closes exactly once at grace expiry and recovers only after foreground",
+            "foreground enforces an overdue grace when the OS suspended its timer",
+            "a retained Relay transport failure suspends without a background redial and recovers on foreground",
+            "a healthy direct connection is unchanged by the Relay-only grace",
+            "a lease rotation that becomes due during the grace starts promptly on foreground",
+            "lease rotation remains armed when confirmation persistence finishes during the grace"
+          ]
+        },
+        {
           "file": "mobile/src/transport/mobile-relay-reconnect-controller.test.ts",
           "assertions": [
             "HOST_OFFLINE replaces a pending capacity retry with the bounded host-offline delay",
@@ -1288,6 +1312,12 @@
             "a missing or expired credential never presents a Relay connection that cannot start",
             "backgrounding during credential selection cannot publish a stale Relay recovery path",
             "a genuine failed Relay dial remains pending through its retry cooldown"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts",
+          "assertions": [
+            "a replacement Relay that authenticates after backgrounding withdraws without replacing the retained session"
           ]
         },
         {
@@ -1334,6 +1364,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm --dir mobile exec vitest run --root .. mobile/src/transport/mobile-direct-endpoint-probe.test.ts mobile/src/transport/mobile-relay-background-grace.test.ts mobile/src/transport/mobile-relay-background-lifecycle.test.ts mobile/src/transport/mobile-relay-reconnect-controller.test.ts mobile/src/transport/mobile-endpoint-supervisor.test.ts mobile/src/transport/mobile-endpoint-supervisor-nudge.test.ts mobile/src/transport/mobile-relay-outage-escalation.test.ts mobile/src/transport/mobile-relay-pairing-rejection-escalation.test.ts mobile/src/transport/stable-logical-rpc-client.test.ts mobile/src/transport/mobile-relay-runtime-failover.test.ts mobile/src/transport/connection-health.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.15,
+          "summary": "Eleven focused mobile transport files passed with 135 assertions, including 30-second Relay retention, supervisor-level timer-suspension recovery, mid-grace transport failure, late-persistence lease rotation, manual retry, and direct-path non-regression."
+        },
+        {
           "date": "2026-08-18",
           "runner": "local",
           "platform": "macos",
@@ -1362,11 +1401,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "Banking the pairing rejection after registerFailure's gated early return — the pre-fix placement — leaves the four-hour E2EE oracle on 'Connecting via Relay…' and reds 7 assertions while the 17 others stay green; moving it ahead of the gate turns them green. The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
+        "evidence": "On 2026-08-26, the unchanged immediate-teardown implementation failed the new supervisor oracle at the first 29,999-millisecond assertion because suspendActiveSession had already run once; the candidate retained Relay until the exact deadline and rejected stale or OS-suspended timer paths. The first grace candidate also failed the persistence-straddles-background oracle because only one Relay open occurred after the lease rotation deadline; scheduling from retained Relay liveness restores the required second open. Banking the pairing rejection after registerFailure's gated early return — the pre-fix placement — leaves the four-hour E2EE oracle on 'Connecting via Relay…' and reds 7 assertions while the 17 others stay green; moving it ahead of the gate turns them green. The pre-fix production-lifecycle oracle establishes Relay through the supervisor, then completes one active close plus 11 replacement failures while the public retry count remains 0; the candidate publishes 12 and reaches the existing Relay-unreachable verdict. The prior external-signal HOST_OFFLINE policy and serial direct probe also fail their respective retry and first-authenticated-endpoint timing oracles."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "The production diff only projects existing supervisor state — the failure count and a consecutive-rejection latch — through local setters and subscribers; it adds no call to a Relay dial, timer, socket, probe, or wire API, and the four screens read both recovery inputs from one host subscription instead of two. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
+        "evidence": "The background grace adds at most one one-shot timer and retains at most the already-active Relay splice for 30 seconds; it adds no polling, new dial, probe, listener, or wire API. A quick foreground performs zero Relay opens, while expiry closes once and opens no replacement until foreground. The deterministic outage asserts exactly one successful establishment plus 11 failed replacements at the escalation boundary. All configured direct candidates start in one turn, the first authenticated candidate wins after 100 ms, and every losing client is closed."
       },
       "promotionCriteria": [
         "Collect 100 consecutive CI passes or 14 days of soak history.",
@@ -1376,7 +1415,8 @@
       "knownGaps": [
         "No physical iOS or Android device was exercised.",
         "The deterministic transport seam does not measure production GFE, carrier NAT, DNS, TLS, or Cloud SQL latency.",
-        "Background-to-foreground recovery remains covered by existing supervisor tests but lacks a physical sleep/wake run."
+        "React Native timer suspension means the client enforces an overdue deadline on foreground but cannot guarantee server-side splice release at exactly 30 seconds while JavaScript is frozen.",
+        "Background-to-foreground recovery remains covered by supervisor tests but lacks a physical sleep/wake run."
       ],
       "demotionRule": "Keep experimental or demote if focused tests flake, HOST_OFFLINE can park indefinitely, direct probes serialize configured endpoints, loser cleanup leaks clients, or physical-device radio cost exceeds the measured budget."
     },
@@ -1638,12 +1678,17 @@
       "providers": ["local", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "ssh"],
-      "coverageNotes": "Local deterministic evidence covers git-common classification, desktop watcher debounce counts, non-overlapping poller semantics, macOS native-watch fallback, preload cleanup, Source Control active-visible repo filtering, the direct SSH five-slot fair scheduler, timeout barrier, aggregate privacy schema, coordinator-to-renderer telemetry wiring, host-catalog provenance rejection, and process generation-scope rollover across sibling targets. A macOS Electron client completed a direct SSH disconnect/reconnect against an ephemeral Linux Docker target with exact host/authority hydration and remote proof-file verification. Linux/Windows desktop clients, multi-target live fanout, paired-client, and WSL runs remain gaps.",
-      "motivatingLinks": ["https://github.com/stablyai/orca/pull/7086"],
-      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control; external head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. Direct SSH reconnect discovery must stay host- and authority-qualified, reject contradictory main-catalog provenance without returning rows, admit at most five locally unsettled provider calls, retain a retrying timeout barrier, and emit one identifier-free aggregate product event per target operation. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
-      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. For direct SSH, reject catalog rows whose explicit and legacy host provenance contradict, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, count locally unsettled attempts and round-robin admissions, keep lineage blocked through the first timeout retry, distinguish timeout/rejection/cancel/stale results, and reject telemetry properties carrying target, repo, host, path, label, user, request, lease, terminal, or raw-error data.",
+      "coverageNotes": "Local deterministic evidence covers git-common classification, desktop watcher debounce counts, non-overlapping poller semantics, macOS native-watch fallback, preload cleanup, Source Control active-visible repo filtering, paired-runtime publication to two independent clients with reconnect and stale-cache checks, the direct SSH five-slot fair scheduler, timeout barrier, aggregate privacy schema, coordinator-to-renderer telemetry wiring, host-catalog provenance rejection, and process generation-scope rollover across sibling targets. A headed macOS Electron host and separate paired Electron client both rendered a worktree created through the real Git binary and watcher entry path without reconnect. A macOS Electron client also completed a direct SSH disconnect/reconnect against an ephemeral Linux Docker target with exact host/authority hydration and remote proof-file verification. Linux/Windows desktop clients, multi-target live fanout, and WSL runs remain gaps.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/pull/7086",
+        "https://github.com/stablyai/orca/issues/16477"
+      ],
+      "invariant": "Index-only Git activity below the common Git directory must not emit worktrees:changed, invalidate worktree caches, or trigger fetchWorktrees fanout; structural add/remove/HEAD/gitdir/locked/config.worktree changes must still refresh worktrees and nudge Source Control. When the authoritative paired host accepts an external structural change for a uniquely identified server-local repo, each live client for that host must receive one existing host-scoped worktreesChanged invalidation and converge to the same repo/worktree identity without reconnect; duplicate watcher events must coalesce, stale cached or in-flight catalogs must not survive invalidation, and event-ignoring clients must remain compatible. Nested SSH watchers and colliding local/SSH repo IDs must not publish the host-blind event until existing semantics can carry owner identity. External head moves (commit, amend, reset) must reach background worktree rows through spawn-free metadata reads, never through structural fanout. Direct SSH reconnect discovery must stay host- and authority-qualified, reject contradictory main-catalog provenance without returning rows, admit at most five locally unsettled provider calls, retain a retrying timeout barrier, and emit one identifier-free aggregate product event per target operation. A process generation-scope rollover revokes every direct SSH target and old-scope provider request, not only the target whose counter exhausted.",
+      "oracle": "Classify exact git-common paths as structural, status-only, or ignored; count notifications from debounced watcher events; force the Linux/Windows poll path to emit allowlisted leaf events, detect linked HEAD rewrites independent of entry-directory mtime, and surface in-place index rewrites via the backstop re-stat; diff head identities from metadata-file reads and notify only real head moves; assert Source Control subscribes to both structural and status-only signals with active-repo and visibility filters. Join the real runtime RPC server to two independently authenticated E2EE clients plus an event-ignoring client, advance the host Git inventory, trigger duplicate structural watcher callbacks, and require one host renderer notification plus one runtime event and a refreshed catalog per subscribed client; require the event-ignoring client to refresh safely on explicit read. Hold a scan after it captures old inventory, join it from a second paired client, publish the watcher invalidation, advance Git independently, and require both overlapping RPCs to retry or join one fresh scan before returning. Disconnect one client, advance inventory again, and require reconnect to read current state without stale event replay. Give a watcher a nested SSH connection id or a local repo ID colliding with an SSH owner and require the host renderer refresh while the unqualified runtime event stays absent. Force the real path in isolated Electron apps with git worktree add, a host Git inventory assertion, store-subscription barriers, matching host/client worktree identity, and visible rows in both renderers. For direct SSH, reject catalog rows whose explicit and legacy host provenance contradict, roll one exhausted target into a fresh process generation scope while invalidating sibling target tokens, count locally unsettled attempts and round-robin admissions, keep lineage blocked through the first timeout retry, distinguish timeout/rejection/cancel/stale results, and reject telemetry properties carrying target, repo, host, path, label, user, request, lease, terminal, or raw-error data.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/worktree-base-directory-event-filter.test.ts src/main/ipc/worktree-base-directory-watcher.test.ts src/main/ipc/worktree-base-directory-poller.test.ts src/main/ipc/worktree-head-identity-reader.test.ts src/renderer/src/hooks/worktree-head-identity-apply.test.ts src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
+        "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ssh/ssh-connection-generation.test.ts src/main/ssh/ssh-provider-authority.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/direct-ssh-reconnect-telemetry-schema.test.ts src/renderer/src/lib/direct-ssh-reconnect-product-telemetry.test.ts src/renderer/src/hooks/direct-ssh-worktree-refresh-scheduler.test.ts src/renderer/src/hooks/direct-ssh-reconnect-coordinator.test.ts src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts --reporter=dot",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -1656,6 +1701,10 @@
         "src/renderer/src/hooks/worktree-head-identity-apply.test.ts",
         "src/renderer/src/components/right-sidebar/git-status-push-signal-refresh.test.ts",
         "src/renderer/src/hooks/useIpcEvents-browser-tab-create.test.ts",
+        "src/main/ipc/watched-worktree-catalog-notification.test.ts",
+        "src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts",
+        "src/main/window/attach-main-window-services.test.ts",
+        "tests/e2e/paired-external-worktree-discovery.spec.ts",
         "src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts",
         "src/main/ipc/repos-remote.test.ts",
         "src/main/ssh/ssh-connection-generation.test.ts",
@@ -1727,6 +1776,39 @@
           "file": "src/renderer/src/hooks/useIpcEvents-agent-status-ssh-authority.test.ts",
           "assertions": [
             "direct SSH coordinator telemetry is wired through the fail-soft product adapter"
+          ]
+        },
+        {
+          "file": "src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts",
+          "assertions": [
+            "duplicate host watcher callbacks coalesce to one local notification and one worktreesChanged event for each of two live paired clients",
+            "host inventory and both paired catalogs advance to the same worktree identity after runtime cache invalidation",
+            "an invalidated in-flight host scan and a second client's joined read converge through one fresh retry before either can return stale data",
+            "a disconnected client reconnects to current catalog state without replaying a stale invalidation",
+            "an event-ignoring client remains compatible, and nested SSH or colliding local/SSH owners do not publish an owner-blind event",
+            "the shared runtime publication remains valid without a headed renderer notifier"
+          ]
+        },
+        {
+          "file": "src/main/ipc/watched-worktree-catalog-notification.test.ts",
+          "assertions": [
+            "the watcher authority refreshes the host renderer and paired clients from one boundary",
+            "remote publication failure cannot suppress the host renderer refresh",
+            "nested SSH discoveries remain host-local until the existing event can preserve their owner identity"
+          ]
+        },
+        {
+          "file": "src/main/window/attach-main-window-services.test.ts",
+          "assertions": [
+            "main-window wiring installs the runtime as the watched-worktree remote-client notifier alongside the existing repo notifier"
+          ]
+        },
+        {
+          "file": "tests/e2e/paired-external-worktree-discovery.spec.ts",
+          "assertions": [
+            "a real git worktree add advances the authoritative host inventory",
+            "the headed host and separate paired Electron client render the same new worktree identity",
+            "the paired client's main-process shared-control transport keeps one connection epoch while converging and compares Windows paths case-insensitively"
           ]
         },
         {
@@ -1824,6 +1906,24 @@
           "result": "passed",
           "durationSeconds": 66,
           "summary": "Four Electron Docker SSH tests passed: two typing/performance paths, one concurrent file/Git load path, and exact-authority disconnect/reconnect with a container-visible remote proof file."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/watched-worktree-catalog-notification.test.ts src/main/runtime/external-worktree-paired-client-discovery.integration.test.ts src/main/window/attach-main-window-services.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.19,
+          "summary": "Three watcher/runtime/wiring files passed with 38 tests, including two-client publication, reconnect, stale scan fencing, headless parity, owner-collision suppression, failure isolation, and main-window notifier wiring."
+        },
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_E2E_FORCE_HEADFUL=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-external-worktree-discovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 17.96,
+          "summary": "One forced-visible paired Electron test passed: real Git inventory, matching visible host/client rows, and one unchanged main-process shared-control transport epoch during convergence."
         }
       ],
       "runtimeBudget": {
@@ -1832,7 +1932,7 @@
       },
       "flakeHistory": {
         "status": "unknown",
-        "evidence": "Three deterministic local macOS runs cover the original watcher lane, main catalog/authority lane, and direct SSH scheduler/telemetry lane; CI soak is still unavailable."
+        "evidence": "Four focused deterministic local macOS runs cover the original watcher lane, paired-runtime publication lane, main catalog/authority lane, and direct SSH scheduler/telemetry lane; two live Electron runs cover paired external discovery and Docker SSH, while CI soak is still unavailable."
       },
       "redGreenEvidence": {
         "status": "partial",
@@ -1994,15 +2094,16 @@
       "providers": ["local", "daemon", "ssh"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
+      "coverageNotes": "Deterministic unit coverage exercises activation gating, single-instance ownership, quit policy, local/remote CLI status, headless binding persistence, local daemon identity, SSH identity transfer, the promoted renderer's agent-resume accounting, and the macOS serve update handoff from staged installer through atomic bundle replacement and target-version readiness. Supervisor settlement coverage prevents a late handoff-completion failure from rearming termination after the replacement child exits. A macOS Electron journey covers headless promotion and persistent PTY identity. A disposable locally signed Electron canary exercised real ShipIt and a temporary LaunchAgent with the compiled production supervisor; full packaged Orca and Linux/Windows serve updates remain uncollected.",
       "motivatingLinks": [
         "https://github.com/stablyai/orca/issues/8457",
         "https://github.com/stablyai/orca/issues/9563"
       ],
-      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
-      "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
+      "invariant": "A safely promotable headless serve process is the single app owner. Desktop activation preserves its daemon-backed sessions. On macOS, a CLI-supervised serve update keeps the node-mode parent alive across ShipIt's atomic bundle swap, restarts with the original serve arguments only after the target bundle is present, and clears handoff state only after that target version reports runtime readiness. Once a supervised child exits or fails to start, no late handoff completion may signal it or arm force-kill escalation. Unsupported or failed handoffs leave the current serving owner intact or recover it once without an install retry loop.",
+      "oracle": "Unit tests coalesce early activation, preserve daemon and SSH identity, and reproduce the update race with a staged target, old serving child, persistent CLI parent, atomic .app replacement, and replacement readiness message. They assert the parent does not exit for launchd to respawn the old app, the native updater does not launch an interactive GUI, the replacement version is verified before handoff completion, mismatches become durable failures without retries, and unsupported/preflight-failed installs do not invoke native quit or PTY cleanup. Force handoff completion to fail after the replacement child exits and require zero later child signals and zero escalation timers. A joined lock-owner/activation/hydration contract asserts that a forced relaunch opens exactly one window and that the renderer promoted inside the serve process launches zero agent resumes, creates no replacement tab or startup command, and leaves every surviving session record untouched. The Electron journey independently verifies headless promotion retains owner/runtime/daemon/PTY identity and terminal I/O.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/serve-desktop-activation-wiring.test.ts src/main/startup/single-instance-lock.test.ts src/main/startup/window-all-closed-quit-policy.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
         "pnpm exec electron-vite build --mode e2e",
@@ -2012,6 +2113,7 @@
         "src/main/updater.headless-serve-install.test.ts",
         "src/main/serve-update-handoff.test.ts",
         "src/cli/runtime/launch.test.ts",
+        "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
         "src/main/startup/serve-desktop-activation-wiring.test.ts",
         "src/main/startup/single-instance-lock.test.ts",
@@ -2042,6 +2144,12 @@
             "an atomic app-bundle replacement starts one target-version serve child with the original arguments",
             "handoff completes only after the replacement reports target-version runtime readiness",
             "a replacement version mismatch or readiness timeout is persisted and exits without an in-process retry loop"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
+          "assertions": [
+            "late update handoff failure cannot rearm termination after child exit"
           ]
         },
         {
@@ -10874,7 +10982,7 @@
       "invariant": "Shift+Enter key recognition follows the client OS, while emitted bytes follow the active application and PTY host: active Kitty keyboard protocol authorizes CSI-u on every host; otherwise Windows hosts use Esc+CR except when allowlisted Droid ownership or fresh routing-trusted Droid process evidence authorizes CSI-u, and non-Windows hosts use Esc+CR. The active SSH connection, remote-runtime PTY owner, or live local session outranks later worktree ownership changes, and missing host-platform metadata falls back to the client. Every new command and PTY replacement revokes stale agent routing until current evidence settles; split or reused panes cannot inherit sibling or prior-PTY authority; unrelated keys perform no host, agent, protocol, or ConPTY lookup.",
       "oracle": "Renderer tests assert exact bytes across client/PTY-host combinations, including Kitty keyboard protocol active and inactive on Windows and non-Windows hosts, and prove SSH identity, the environment encoded in an active remote-runtime PTY id, and live local-session identity outrank current worktree ownership, while unavailable platform metadata falls back to the client. A live linux-arm64 SSH PTY independently captured Esc+CR with KKP inactive and CSI-u with KKP active. Fresh Windows process evidence authorizes Droid bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-sampling.test.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-sampling.test.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-pane-handle-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts"
       ],
@@ -10889,7 +10997,9 @@
         "src/main/ipc/pty-runtime-kill-and-exit.test.ts",
         "src/main/providers/agent-foreground-process.test.ts",
         "src/main/providers/local-pty-provider-foreground-process.test.ts",
-        "src/main/providers/windows-conpty-process-membership.test.ts",
+        "src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts",
+        "src/main/providers/windows-console-attached-processes.test.ts",
+        "src/main/providers/windows-pty-job-membership.test.ts",
         "src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts",
         "src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts",
         "src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts",
@@ -10928,11 +11038,28 @@
           ]
         },
         {
-          "file": "src/main/providers/windows-conpty-process-membership.test.ts",
+          "file": "src/main/providers/windows-console-attached-processes.test.ts",
           "assertions": [
             "the fixed node-pty helper returns validated integer console membership containing the PTY root",
             "root-only fallback, malformed/missing-root messages, spawn errors, and a silent helper timeout all fail closed",
             "the bounded timeout kills the child helper exactly once"
+          ]
+        },
+        {
+          "file": "src/main/providers/windows-pty-job-membership.test.ts",
+          "assertions": [
+            "never spawns a child process to answer",
+            "refuses an answer that does not contain the shell",
+            "is asked with the pty handle, because a bare pid cannot find the job"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts",
+          "assertions": [
+            "stops holding a dead agent once the job answer is only a superset",
+            "restores the idle refresh backoff once the dead identity is gone",
+            "never expires an identity while scans stay degraded",
+            "never expires an identity while the job answer is unverifiable"
           ]
         },
         {
@@ -11082,13 +11209,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-07-10",
+          "date": "2026-08-25",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-sampling.test.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-sampling.test.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
           "result": "passed",
-          "durationSeconds": 8.71,
-          "summary": "Twenty-two focused test files passed (1206 tests) on current main, covering fresh-scan ordering/deduplication, exact ConPTY membership and detached-child rejection, stale PTY guards, daemon v21 launch ownership with current-process confirmation, no-OSC command/exit recovery, preserved detach shell classification, unavailable evidence, routing-neutral command generations, exact shortcut bytes, and the composed daemon-plus-tracker contract; the Windows Electron byte test remains platform-gated and is not counted as local macOS evidence."
+          "durationSeconds": 3.88,
+          "summary": "Twenty-six focused test files passed (489 tests) on the PR head, covering fresh-scan ordering/deduplication, exact ConPTY membership and detached-child rejection, stale PTY guards, daemon v21 launch ownership with current-process confirmation, no-OSC command/exit recovery, preserved detach shell classification, unavailable evidence, routing-neutral command generations, exact shortcut bytes, and the composed daemon-plus-tracker contract; the Windows Electron byte test remains platform-gated and is not counted as local macOS evidence."
         }
       ],
       "runtimeBudget": {
@@ -11147,7 +11274,7 @@
       "oracle": "A quarter-circle Claude task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed-Claude launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current Claude activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
         "src/main/runtime/quarter-circle-title-send-authorization.test.ts",
@@ -11156,7 +11283,9 @@
         "src/main/ipc/pty-runtime-kill-and-exit.test.ts",
         "src/main/providers/agent-foreground-process.test.ts",
         "src/main/providers/local-pty-provider-foreground-process.test.ts",
-        "src/main/providers/windows-conpty-process-membership.test.ts",
+        "src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts",
+        "src/main/providers/windows-console-attached-processes.test.ts",
+        "src/main/providers/windows-pty-job-membership.test.ts",
         "src/main/daemon/daemon-foreground-confirmation-protocol.test.ts",
         "src/main/daemon/pty-subprocess.test.ts",
         "src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts",
@@ -11207,7 +11336,7 @@
           "assertions": ["fresh confirmation is discarded when its owning local PTY exits"]
         },
         {
-          "file": "src/main/providers/windows-conpty-process-membership.test.ts",
+          "file": "src/main/providers/windows-console-attached-processes.test.ts",
           "assertions": [
             "exact ConPTY console membership comes from the fixed node-pty helper",
             "malformed, incomplete, timed-out, and spawn-error membership reads fail closed"
@@ -11248,13 +11377,13 @@
           "summary": "The focused file passed 9 tests, including current-incarnation managed-Claude authorization with zero foreground calls and fail-closed bare, unverified, and replacement-incarnation quarter-circle titles."
         },
         {
-          "date": "2026-07-11",
+          "date": "2026-08-25",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/providers/windows-conpty-process-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
           "result": "passed",
-          "durationSeconds": 9.58,
-          "summary": "Ten focused test files passed (1183 tests), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."
+          "durationSeconds": 13.74,
+          "summary": "Twelve focused test files passed (1351 tests, 1 skipped), covering runtime confirmation and PTY revalidation, guarded RPC zero-write behavior, PTY controller routing, local/daemon fresh scans, exact ConPTY membership, and unchanged renderer note routing."
         }
       ],
       "runtimeBudget": {
@@ -12995,7 +13124,7 @@
       "invariant": "The desktop PTY input queue retains at most 64 explicitly sourced pending terminal query replies and 4096 UTF-16 code units. Every retained reply reaches the provider as one atomic write, and the host writes each reply the moment it accepts it, so replies reach the PTY in the order they were produced with no queue that could reorder them. A reply's own echo is contained on the output side by projecting its known echo shapes; the ESC-initial verbatim shape is matched only when complete, never held as a partial, so a query torn at its own ESC is still answered. Overflow removes only the oldest query replies, never ordinary input except the documented modified-F3/CPR byte collision, and drain failures cannot clear a newer queue generation.",
       "oracle": "Synchronously enqueue separate 10,000-entry OSC and DA1 reply floods before the scheduled drain and assert that only the initial immediate reply and newest 64 pending replies are written, each as one provider write, before a trailing keystroke. At the host boundary, defer an OSC reply and assert that separate or legacy-coalesced DA1/CPR replies flush after it in observed query order. At the remote-runtime boundary, preserve separate writes around pending ordinary input, async validation, and viewport-claim buffering. Repeat behind 10,000 ordinary inputs and exercise the text ceiling, real xterm generation, provider-write failure, rejected yield, and clear/reuse generation fencing.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-batching.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-query-reply-immediate.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "pnpm exec playwright test tests/e2e/terminal-osc-color-queries.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "pnpm exec playwright test tests/e2e/terminal-typing-latency.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -13009,6 +13138,7 @@
         "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
         "src/shared/terminal-query-reply.test.ts",
         "src/shared/pty-startup-ingress-live-query-reply.test.ts",
+        "src/shared/pty-startup-reply-echo-shapes.test.ts",
         "tests/e2e/terminal-osc-color-queries.spec.ts",
         "tests/e2e/terminal-typing-latency.spec.ts",
         "tests/e2e/pty-input-write-queue-ssh.spec.ts"
@@ -13087,13 +13217,13 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-08-09",
+          "date": "2026-08-25",
           "runner": "local",
           "platform": "macos",
-          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/pty-input-write-queue.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/shared/terminal-query-reply.test.ts src/shared/pty-startup-ingress-live-query-reply.test.ts src/shared/pty-startup-reply-echo-shapes.test.ts",
           "result": "passed",
-          "durationSeconds": 2.35,
-          "summary": "Four files and 138 tests passed, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
+          "durationSeconds": 1.05,
+          "summary": "Five files and 92 tests passed, including the live-pty echo-shape transcript, including explicit IPC reply-source routing, the 10,000-reply count ceiling, text ceiling, 10,000-entry ordinary backlog preservation, real xterm OSC query flood, single-shot drain-failure recovery, one-reply-per-write echo containment, and clear/reuse generation fencing."
         },
         {
           "date": "2026-08-09",
@@ -16099,6 +16229,130 @@
         "Physical SSH, WSL, Linux, Windows, and host-restart cold-park journeys are not recorded."
       ],
       "demotionRule": "Demote if a live parked PTY loses its exact graph leaf, a retired PTY remains published, multi-pane identity drifts, or the routed client round trip flakes without a diagnosed cause."
+    },
+    {
+      "id": "agent-browser.owner-boundary-cleanup",
+      "title": "Headless browser helpers retire with their owning page and runtime",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "browser-runtime",
+      "layer": "electron-main-headless-browser-lifecycle",
+      "surfaces": [
+        "headless offscreen browser page close",
+        "offscreen renderer destruction",
+        "app quit",
+        "headless serve SIGINT/SIGTERM"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime", "ssh", "wsl"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "The owner-boundary contract injects an isolated BrowserManager, offscreen WebContents, and AgentBrowserBridge. It proves explicit close removes the page from command routing before awaiting exact named-session retirement, runs retirement on unexpected renderer destruction, preserves unrelated pages, joins pending creation/retirement during shutdown, rejects command admission after terminal cleanup begins, retries Electron quit after a vetoed signal, preserves Windows shared-console graceful Ctrl-C, reserves the full renderer-acknowledgement and committed-teardown budgets before supervisor force-kill, bounds process-swap retirement to five seconds, and caps cleanup concurrency at four. A built-CLI macOS headless serve run used an isolated profile, folder workspace, socket directory, and port: exact PPID-1 helper/session identity disappeared within five seconds after page close and after Ctrl-C runtime shutdown, while an unrelated page survived close and reconnect. Linux cgroup and paired/SSH journeys remain gaps.",
+      "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5400",
+        "https://github.com/stablyai/orca/issues/16367"
+      ],
+      "invariant": "For each Orca-owned page identity, after its owner closes or is destroyed and a five-second third-party shutdown grace expires, no live helper session named orca-tab-<pageId> may remain; unrelated live page identities must survive, and runtime quit must join the bounded cleanup attempt. The serve supervisor may force-kill only after the renderer-acknowledgement deadline, committed teardown deadline, and bounded scheduling margin have all elapsed.",
+      "oracle": "Create two isolated offscreen pages and register their WebContents. Close one, block onPageClosed for its stable page ID, and require unregisterGuest to have already removed that page from command routing while the unrelated page remains live. Emit destroyed and require the same exact retirement. Race shutdown with creation, pending retirement, and process-swap destruction; require no replacement session or command after terminal cleanup starts, require shutdown to remain pending until retirement settles, require the swap close command to use the five-second cleanup timeout, and require at most four concurrent close commands. Deliver repeated signals and require every attempt to reach Electron quit; under Windows shared-console semantics require the child to handle Ctrl-C without an immediate child.kill. Advance the supervisor clock through the renderer-acknowledgement and committed teardown deadlines and require no SIGKILL until the bounded scheduling margin elapses. In direct built-CLI serve, inspect exact session/PID/socket identity plus RSS/fd inventory before close and after a five-second grace; reconnect between commands and stop via Ctrl-C. No process-name kill or global sweep is permitted.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/browser"
+      ],
+      "testFiles": [
+        "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",
+        "src/main/browser/agent-browser-bridge-session-lifecycle.test.ts",
+        "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
+        "src/main/startup/serve-signal-handlers.test.ts",
+        "src/main/startup/desktop-startup-ordering.test.ts",
+        "src/cli/runtime/serve-signal-exit-diagnostic.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/browser/offscreen-browser-backend-lifecycle.test.ts",
+          "assertions": [
+            "explicit close unregisters the page before awaiting exact owner cleanup while unrelated and same-ID replacement pages survive",
+            "unexpected offscreen renderer destruction invokes and joins exact helper-owner cleanup",
+            "backend shutdown joins every pending owner cleanup with concurrency capped at four"
+          ]
+        },
+        {
+          "file": "src/main/browser/agent-browser-bridge-session-lifecycle.test.ts",
+          "assertions": [
+            "owner cleanup uses a five-second close-command timeout",
+            "process-swap retirement uses the same five-second cleanup timeout",
+            "runtime shutdown includes sessions whose creation is still pending",
+            "runtime shutdown rejects late command and replacement-session admission",
+            "runtime-wide helper cleanup concurrency is capped at four"
+          ]
+        },
+        {
+          "file": "src/main/browser/agent-browser-bridge-tab-routing.test.ts",
+          "assertions": [
+            "closing a tab retires the exact named agent-browser session"
+          ]
+        },
+        {
+          "file": "src/main/startup/serve-signal-handlers.test.ts",
+          "assertions": [
+            "every repeated serve signal retries Electron quit after a possible renderer veto",
+            "SIGINT and SIGTERM listeners remain installed during quit draining"
+          ]
+        },
+        {
+          "file": "src/main/startup/desktop-startup-ordering.test.ts",
+          "assertions": [
+            "agent-browser cleanup is joined by the committed quit teardown barrier",
+            "repeatable serve signal handling is registered before readiness"
+          ]
+        },
+        {
+          "file": "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
+          "assertions": [
+            "serve supervisor force-kill grace covers renderer acknowledgement, committed teardown, and scheduling margin",
+            "Windows shared-console Ctrl-C is not forwarded as an immediate child termination"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts src/main/browser/offscreen-browser-backend-lifecycle.test.ts src/main/browser/agent-browser-bridge-session-lifecycle.test.ts src/main/browser/agent-browser-bridge-tab-routing.test.ts src/main/startup/serve-signal-handlers.test.ts src/main/startup/desktop-startup-ordering.test.ts",
+          "durationSeconds": 0.44,
+          "summary": "Candidate passed 63 lifecycle, bridge, routing, signal, and quit-order tests plus 1,469 browser tests. The production-reverted control was red; disabling the final swap-timeout/admission controls failed 3 of 15 bridge lifecycle tests; removing the pending-retirement join, page-routing fence, repeat-signal behavior, or Windows shared-console guard failed its exact focused oracle. Setting the supervisor scheduling margin to zero reproduced SIGKILL at the combined 30-second renderer-acknowledgement and teardown boundary. Direct built-CLI serve observed exact PPID-1 helpers at 10-11 MiB RSS and 16-18 fd rows. Closing one page removed only its helper/session within five seconds while the other page survived reconnect. With the signal fix disabled, Ctrl-C left exact helpers alive after the listener exited; the final candidate emptied session inventory and removed app/helper PIDs and port within five seconds."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 2,
+        "scope": "bounded offscreen lifecycle contracts and bridge cleanup ordering"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fresh deterministic coverage has local candidate evidence only."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The pristine current-main control failed explicit close, unexpected destruction, backend shutdown, pending creation, bounded concurrency, joined quit, and repeated-signal assertions; the candidate passed the byte-identical oracle. Disabling only process-swap cleanup timeout and terminal command admission failed 3 of 15 bridge lifecycle tests. Live candidate-with-signal-fix-disabled also retained exact helpers after Ctrl-C, while the final candidate removed them."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Cleanup is event-driven and exact-page scoped: no polling, process-name scan, idle timer, or new wire field. Owner and residual session drains cap close subprocess concurrency at four, sequence headless ownership cleanup before the residual bridge sweep, and reuse the existing bounded app teardown deadline."
+      },
+      "promotionCriteria": [
+        "Run the same oracle on Linux headless serve with bundled agent-browser PID/session and RSS/fd inventory.",
+        "Exercise runtime restart, transport loss, reconnect, concurrent tabs, and paired/SSH host ownership without cross-page cleanup.",
+        "Collect repeated open/close/reconnect evidence showing bounded helper count and no stale PID-1-owned Orca identities."
+      ],
+      "knownGaps": [
+        "No 64 GiB Linux cgroup stress was manufactured; the reported production incident remains un-soaked.",
+        "The real Electron headless serve oracle ran on macOS; physical Linux/SSH/WSL and paired-client journeys remain unvalidated.",
+        "A close-command timeout or error is treated as best-effort and does not escalate to a process kill; helper disappearance on that failure path remains unverifiable without exact PID ownership.",
+        "Four-way close batches remain bounded but can exceed the 20-second app quit barrier above 16 worst-case five-second retirements.",
+        "The patch does not add startup stale-process recovery or an idle timeout; those require an exact persisted ownership ledger and are intentionally out of scope."
+      ],
+      "demotionRule": "Demote if a closed or destroyed page leaves its exact named helper session, if quit can exit before helper retirement settles, if unrelated live pages are retired, or if cleanup regresses to a global process-name kill or timer-only sweep."
     },
     {
       "id": "terminal-session.remote-pane-layout-retry",

@@ -419,7 +419,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     // mount one row per workspace.
     expect(getTabRowIds()).toEqual([])
     expect(getWorktreeRows()).toHaveLength(10)
-    expect(testContainer.textContent).toContain('Type to see all 14 worktrees')
+    expect(testContainer.textContent).toContain('4 more')
   })
 
   it('captures the order when tabs hydrate after the palette is already open', async () => {

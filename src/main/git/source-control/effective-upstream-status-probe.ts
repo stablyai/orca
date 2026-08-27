@@ -6,7 +6,7 @@ import {
 } from '../../../shared/git-effective-upstream'
 import { createGitConfigSnapshotRunner } from '../../../shared/git-config-snapshot-runner'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitStatusReadOptionsForWorktree } from '../git-runtime-options'
+import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import {
   MAX_EFFECTIVE_UPSTREAM_NEGATIVE_CACHE_ENTRIES,
@@ -90,7 +90,7 @@ async function probeOrRevalidateEffectiveUpstreamStatus(
   } else if (cached) {
     try {
       const status = await getGitUpstreamStatusForUpstreamName(
-        (args) => gitExecFileAsync(args, gitStatusReadOptionsForWorktree(worktreePath, options)),
+        (args) => gitExecFileAsync(args, gitReadOptionsForWorktree(worktreePath, options)),
         cached.upstreamName
       )
       return { status, probedSameNameOriginRef: false }
@@ -127,7 +127,7 @@ async function probeEffectiveUpstreamStatus(
 ): Promise<{ status: GitUpstreamStatus; probedSameNameOriginRef: boolean }> {
   let probedSameNameOriginRef = false
   const snapshotRunner = createGitConfigSnapshotRunner((args) =>
-    gitExecFileAsync(args, gitStatusReadOptionsForWorktree(worktreePath, options))
+    gitExecFileAsync(args, gitReadOptionsForWorktree(worktreePath, options))
   )
   const status = await getEffectiveGitUpstreamStatus((args) => {
     if (args[0] === 'rev-parse' && args.includes(`refs/remotes/origin/${branchName}`)) {

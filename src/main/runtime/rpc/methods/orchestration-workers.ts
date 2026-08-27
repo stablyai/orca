@@ -21,14 +21,24 @@ import {
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { resolveOrchestrationWorkerLaunchDefaults } from './orchestration-worker-launch-preferences'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { resolveDispatchCreator } from './orchestration-dispatch-creator'
+import { resolveOrchestrationCaller } from './orchestration-run-scope'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
-    handler: async (input, { runtime, orchestrationMutation }) => {
+    handler: async (
+      input,
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+    ) => {
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = runtime.getTerminalPaneKey(input.from)
+      // Why: worker-start was the only Run-scoped verb that skipped this, so a
+      // declared --from could name someone else's pane and inherit their depth.
+      const coordinatorPane = resolveOrchestrationCaller(runtime, {
+        callerTerminalHandle: input.from,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
       if (!run || (input.run && input.run !== run.id)) {
         throw new OrchestrationError(
@@ -126,6 +136,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           : 'existing_worktree'
       }
       const started = db.createStartingWorkerDispatch({
+        creator: resolveDispatchCreator(runtime, params.from),
+        maxDepth: runtime.getNestedWorkerMaxDepth(),
         taskId: task.id,
         retryOf: params.retryOf,
         startOptions,
@@ -238,6 +250,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
 
         failedStage = 'dispatch_input'
         const preamble = buildDispatchPreamble({
+          canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,
           dispatchId: started.dispatch.id,
           taskSpec: task.spec,

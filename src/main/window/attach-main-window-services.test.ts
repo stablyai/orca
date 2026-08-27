@@ -13,6 +13,7 @@ const {
   systemPreferencesGetMediaAccessStatusMock,
   registerRepoHandlersMock,
   setRepoRemoteClientNotifierMock,
+  setWorktreeCatalogRemoteClientNotifierMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
@@ -35,6 +36,7 @@ const {
   systemPreferencesGetMediaAccessStatusMock: vi.fn(),
   registerRepoHandlersMock: vi.fn(),
   setRepoRemoteClientNotifierMock: vi.fn(),
+  setWorktreeCatalogRemoteClientNotifierMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
@@ -73,6 +75,10 @@ vi.mock('../ipc/repos', () => ({
 
 vi.mock('../ipc/repos/repos-changed-notification', () => ({
   setRepoRemoteClientNotifier: setRepoRemoteClientNotifierMock
+}))
+
+vi.mock('../ipc/watched-worktree-catalog-notification', () => ({
+  setWorktreeCatalogRemoteClientNotifier: setWorktreeCatalogRemoteClientNotifierMock
 }))
 
 vi.mock('../ipc/worktrees', () => ({
@@ -227,6 +233,7 @@ describe('attachMainWindowServices', () => {
     systemPreferencesGetMediaAccessStatusMock.mockReset()
     registerRepoHandlersMock.mockReset()
     setRepoRemoteClientNotifierMock.mockReset()
+    setWorktreeCatalogRemoteClientNotifierMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
     hydrateLocalPtyRegistryAtBootMock.mockReset()
@@ -240,13 +247,13 @@ describe('attachMainWindowServices', () => {
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
   })
 
-  // #11994: without this wiring, host-local repo IPC mutations never reach paired clients.
-  it('gives the repo IPC handlers the runtime so repo changes reach paired clients', () => {
+  it('gives host-local catalog notifiers the runtime', () => {
     const runtime = createRuntime()
 
     attachMainWindowServices(createMainWindow() as never, createStore(), runtime as never)
 
     expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
+    expect(setWorktreeCatalogRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {

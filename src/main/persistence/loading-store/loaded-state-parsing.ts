@@ -27,6 +27,7 @@ import {
   normalizeWorktreeLinkedItemMetadata
 } from '../tracking-repos/worktree-metadata-normalization'
 import { backfillLegacyAutomationContexts } from '../scheduling-automations/automation-context-migration'
+import { migrateAutomationOwners } from '../../automations/automation-owner-migration'
 import {
   ENCRYPTED_SSH_PTY_OWNER_LEASE_MAX_LENGTH,
   normalizeSshPtyConsumerRecovery
@@ -60,6 +61,7 @@ type LoadedStateParsingOperationsRuntime = Pick<
   | 'githubCacheDirty'
   | 'loadNeedsSave'
   | 'protectedSecrets'
+  | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
 >
 
@@ -219,6 +221,25 @@ export class LoadedStateParsingOperations {
       ...result,
       automations: automationContextMigration.state.automations,
       automationRuns: automationContextMigration.state.automationRuns
+    }
+
+    const automationOwnerMigration = migrateAutomationOwners({
+      automations: result.automations,
+      sshTargets: result.sshTargets,
+      repos,
+      folderWorkspaces: result.folderWorkspaces,
+      projectGroups: result.projectGroups,
+      sshTargetGenerationCounter: result.sshTargetGenerationCounter,
+      storageAuthority: this.runtime.storageAuthority
+    })
+    if (automationOwnerMigration.changed) {
+      this.runtime.loadNeedsSave = true
+    }
+    result = {
+      ...result,
+      automations: automationOwnerMigration.automations,
+      sshTargets: automationOwnerMigration.sshTargets,
+      sshTargetGenerationCounter: automationOwnerMigration.sshTargetGenerationCounter
     }
 
     const folderScopeConnectionMigration = backfillFolderScopeConnectionIds({

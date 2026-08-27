@@ -223,8 +223,17 @@ describe('RelaySessionBroker lifecycle ownership', () => {
     )
     expect(fakes.assign).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({ preferredRegion: 'asia-east2', reconnect: true })
+      expect.objectContaining({
+        preferredRegion: 'asia-east2',
+        reconnect: true,
+        // Why: the rate-gate wait relies on this fencing to abort superseded
+        // callers; dropping the wiring must fail here, not only in the field.
+        isCurrent: expect.any(Function)
+      })
     )
+    const wiredIsCurrent = (fakes.assign.mock.calls[0]![0] as { isCurrent: () => boolean })
+      .isCurrent
+    expect(wiredIsCurrent()).toBe(true)
     fakes.controls[0]!.options.onConnectionOpen({
       connId: 'old-basis',
       connTicket: 'T'.repeat(43),

@@ -40,14 +40,21 @@ export async function resolveMergeBase(
   return stdout.trim()
 }
 
-export async function countAheadCommits(
+// Why: `--left-right --count` on the symmetric range answers both directions in one
+// rev-list walk; a rebased branch is usually ahead AND behind its base.
+export async function countCompareDivergence(
   worktreePath: string,
   baseOid: string,
   headOid: string,
   options: GitRuntimeOptions = {}
-): Promise<number> {
-  const { stdout } = await gitExecFileAsync(['rev-list', '--count', `${baseOid}..${headOid}`], {
-    ...gitOptionsForWorktree(worktreePath, options)
-  })
-  return Number.parseInt(stdout.trim(), 10) || 0
+): Promise<{ ahead: number; behind: number }> {
+  const { stdout } = await gitExecFileAsync(
+    ['rev-list', '--left-right', '--count', `${baseOid}...${headOid}`],
+    { ...gitOptionsForWorktree(worktreePath, options) }
+  )
+  const [behind = '', ahead = ''] = stdout.trim().split(/\s+/)
+  return {
+    ahead: Number.parseInt(ahead, 10) || 0,
+    behind: Number.parseInt(behind, 10) || 0
+  }
 }

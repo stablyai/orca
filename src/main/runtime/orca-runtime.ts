@@ -18,6 +18,7 @@ import {
   assertAgentSkillSharingAllowed,
   isAgentSkillSharingEnabled
 } from '../../shared/agent-skill-sharing-gate'
+import { resolveNestedWorkerMaxDepth } from '../../shared/nested-worker-depth'
 import { sortDirEntries } from '../../shared/file-name-sort'
 import { isServerDriveListRequest, listWindowsDrives } from './windows-drive-listing'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
@@ -99,11 +100,13 @@ import {
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_SUBMIT,
-  AGENT_PROMPT_SUBMIT_DELAY_MS,
-  buildAgentPromptPasteBytes
+  buildAgentPromptPasteBytes,
+  getAgentPromptSubmitDelayMs,
+  getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
 import {
   type AgentPromptActivity,
+  resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import {
@@ -264,6 +267,17 @@ import type {
   AutomationUpdateInput,
   AutomationWorkspaceMode
 } from '../../shared/automations-types'
+import {
+  automationChangePublications,
+  type AutomationChangeSelector,
+  type AutomationListParams,
+  type AutomationListResult
+} from '../../shared/automation-list-scope'
+import type {
+  AutomationDestination,
+  AutomationOwnerFenceOperation,
+  AutomationOwnerPrecondition
+} from '../../shared/automation-owner-precondition'
 import type { DirEntry, FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import type { FolderWorkspace, WorkspaceKey } from '../../shared/folder-workspace-types'
 import type {
@@ -386,7 +400,10 @@ import {
   screencastSubscriberDrivesAsMobile,
   type BrowserScreencastSubscriber
 } from './browser-screencast-driver-scope'
-import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
+import type {
+  AutomationsChangedPayload,
+  RuntimeClientEvent
+} from '../../shared/runtime-client-events'
 import { toRuntimeActivateWorktreeEvent } from '../../shared/runtime-client-events'
 import {
   navigationTargetsClients,
@@ -646,6 +663,7 @@ import {
   configureAiVaultSessionSources,
   listAiVaultSessions
 } from '../ai-vault/cached-session-list'
+import { configureHostReadableTranscriptPathSources } from '../native-chat/host-readable-transcript-path'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import type {
@@ -669,6 +687,7 @@ import {
 } from '../ports/workspace-port-ownership'
 import { advertisedUrlWatcher } from '../ports/advertised-url-watcher'
 import type { AutomationService } from '../automations/service'
+import { runAutomationNowFenced } from '../automations/refused-manual-run'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
 import {
   createRuntimeBrowserCommands,
@@ -1352,6 +1371,10 @@ type RuntimeStore = {
   updateUI?: Store['updateUI']
   recordFeatureInteraction?: Store['recordFeatureInteraction']
   listAutomations?: Store['listAutomations']
+  listAutomationsForScope?: Store['listAutomationsForScope']
+  assertAutomationOwnerFence?: Store['assertAutomationOwnerFence']
+  automationOwnerPrecondition?: Store['automationOwnerPrecondition']
+  automationChangeSelector?: Store['automationChangeSelector']
   listAutomationRuns?: Store['listAutomationRuns']
   createAutomation?: Store['createAutomation']
   updateAutomation?: Store['updateAutomation']
@@ -1392,6 +1415,7 @@ type RuntimeStore = {
     prBotAuthorOverrides?: GlobalSettings['prBotAuthorOverrides']
     artifactSharingEnabled?: GlobalSettings['artifactSharingEnabled']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
+    nestedWorkerMaxDepth?: GlobalSettings['nestedWorkerMaxDepth']
     terminalQuickCommands?: GlobalSettings['terminalQuickCommands']
     gitlabProjects?: GlobalSettings['gitlabProjects']
     mobileAutoRestoreFitMs?: number | null
@@ -1422,6 +1446,7 @@ export type RuntimeAutomationCreateInput = Omit<
   workspace?: string
   workspaceMode?: AutomationWorkspaceMode
   timezone?: string
+  destination?: AutomationDestination
 }
 
 export type RuntimeAutomationUpdateInput = Omit<
@@ -1430,6 +1455,18 @@ export type RuntimeAutomationUpdateInput = Omit<
 > & {
   repo?: string
   workspace?: string
+}
+
+function assertAutomationRunContextMatchesRepo(
+  runContext: AutomationCreateInput['runContext'],
+  repo: Repo | null
+): void {
+  if (!runContext || !repo) {
+    return
+  }
+  if (runContext.repoId !== repo.id || runContext.path !== repo.path) {
+    throw new Error('Automation project does not match its run context.')
+  }
 }
 
 function normalizeSparsePresetName(name: string): string {
@@ -2090,6 +2127,10 @@ const FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS = 6_500
 const BRACKETED_PASTE_BEGIN = '\x1b[200~'
 const BRACKETED_PASTE_END = '\x1b[201~'
 const BRACKETED_PASTE_QUIET_MS = 1500
+// Why: both are windows *after* the paste is ingested, so each is added to the
+// payload's ingest bound rather than standing in for it (see getTerminalPasteIngestMs).
+// The quiet window stays at 1500: nothing measured describes an agent's post-paste
+// redraw cadence, and a shorter window submits mid-redraw.
 const AGENT_PROMPT_RENDER_TIMEOUT_MS = 8000
 const AGENT_PROMPT_RENDER_QUIET_MS = 1500
 // Why: Claude and Codex emit show-cursor after accepting bracketed paste.
@@ -2130,6 +2171,19 @@ async function waitForAgentPromptPromise<T>(promise: Promise<T>, signal?: AbortS
       (value) => finish({ value }),
       (error: unknown) => finish({ error })
     )
+  })
+}
+
+// Why not setTimeout(0): it costs a full ~15.19 ms Windows timer tick per chunk (~0.95 s/MB)
+// and never bought backpressure -- 16 KiB per tick paces ~1.07 MB/s, 11x above ConPTY's
+// ~96 KB/s drain, so the in-flight buffer grew regardless. setImmediate keeps the only thing
+// the yield actually did (let abort/permission/data callbacks run between chunks) at ~0.01 ms,
+// and TERMINAL_INPUT_MAX_BYTES still bounds what can be in flight either way.
+// Why the global and not node:timers/promises: only the global is intercepted by fake timers,
+// so a chunked paste stays observable on the test clock.
+function yieldBetweenTerminalInputChunks(): Promise<void> {
+  return new Promise<void>((resolve) => {
+    setImmediate(resolve)
   })
 }
 
@@ -2207,6 +2261,7 @@ type RuntimeNotifier = {
   worktreeBaseStatus?(event: WorktreeBaseStatusEvent): void
   worktreeRemoteBranchConflict?(event: WorktreeRemoteBranchConflictEvent): void
   reposChanged(): void
+  automationsChanged?(payload: AutomationsChangedPayload): void
   activateWorktree(
     repoId: string,
     worktreeId: string,
@@ -3850,6 +3905,9 @@ export class OrcaRuntimeService {
       configureAiVaultSessionSources({
         getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
       })
+      configureHostReadableTranscriptPathSources({
+        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
+      })
     }
     // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
     // attachMainWindowServices, AFTER this service is constructed. Capturing
@@ -4217,18 +4275,67 @@ export class OrcaRuntimeService {
     return this.store.listAutomations()
   }
 
-  listAutomationRuns(automationId?: string): AutomationRun[] {
-    if (!this.store?.listAutomationRuns) {
-      throw new Error('runtime_unavailable')
-    }
-    return this.store.listAutomationRuns(automationId)
+  // Why: Orca's own automation work holds the desktop probe scheduler's
+  // priority lease so queued external probes stay parked behind it; runtime
+  // servers install no lease and run directly.
+  private underExternalProbePriority<T>(run: () => T): T {
+    const wrap = this.automationService?.externalProbePriority
+    return wrap ? wrap(run) : run()
   }
 
-  showAutomation(id: string): Automation {
+  listAutomationsForScope(params: AutomationListParams): AutomationListResult {
+    const store = this.store
+    if (!store?.listAutomationsForScope) {
+      throw new Error('runtime_unavailable')
+    }
+    return this.underExternalProbePriority(() => store.listAutomationsForScope!(params))
+  }
+
+  // Why: a supplied precondition must never degrade to unfenced work, so a store that cannot check it fails the call.
+  private fenceAutomationOwner(
+    id: string,
+    expectedOwner: AutomationOwnerPrecondition | undefined,
+    operation: AutomationOwnerFenceOperation
+  ): void {
+    if (!this.store?.assertAutomationOwnerFence) {
+      if (expectedOwner) {
+        throw new Error('runtime_unavailable')
+      }
+      return
+    }
+    this.store.assertAutomationOwnerFence({ id, expectedOwner, operation })
+  }
+
+  listAutomationRuns(
+    automationId?: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): AutomationRun[] {
+    const store = this.store
+    if (!store?.listAutomationRuns) {
+      throw new Error('runtime_unavailable')
+    }
+    if (expectedOwner && !automationId) {
+      throw new Error('An expected owner requires an automation id.')
+    }
+    return this.underExternalProbePriority(() => {
+      if (automationId) {
+        this.fenceAutomationOwner(automationId, expectedOwner, 'read')
+      }
+      return store.listAutomationRuns!(automationId)
+    })
+  }
+
+  /** Null when the store predates the projection: the caller then sends no precondition. */
+  automationOwnerPrecondition(id: string): AutomationOwnerPrecondition | null {
+    return this.store?.automationOwnerPrecondition?.(id) ?? null
+  }
+
+  showAutomation(id: string, expectedOwner?: AutomationOwnerPrecondition): Automation {
     const automation = this.listAutomations().find((entry) => entry.id === id)
     if (!automation) {
       throw new Error('Automation not found.')
     }
+    this.fenceAutomationOwner(id, expectedOwner, 'read')
     return automation
   }
 
@@ -4237,10 +4344,11 @@ export class OrcaRuntimeService {
       throw new Error('runtime_unavailable')
     }
     const target = await this.resolveAutomationTarget(input)
+    assertAutomationRunContextMatchesRepo(input.runContext, target.repo)
     if (input.reuseSession && target.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.createAutomation({
+    const createInput: AutomationCreateInput = {
       name: input.name,
       prompt: input.prompt,
       precheck: input.precheck,
@@ -4258,10 +4366,37 @@ export class OrcaRuntimeService {
       dtstart: input.dtstart,
       enabled: input.enabled,
       missedRunGraceMinutes: input.missedRunGraceMinutes
+    }
+    return this.underExternalProbePriority(() => {
+      const created = this.store!.createAutomation!(
+        createInput,
+        input.destination ? { destination: input.destination } : undefined
+      )
+      const selector = this.automationChangeSelector(created.id)
+      this.publishAutomationDefinitionChange(selector, selector)
+      return created
     })
   }
 
-  async updateAutomation(id: string, updates: RuntimeAutomationUpdateInput): Promise<Automation> {
+  private automationChangeSelector(id: string): AutomationChangeSelector | null {
+    return this.store?.automationChangeSelector?.(id) ?? null
+  }
+
+  /** A store that cannot name the affected host degrades to one unscoped authority event. */
+  private publishAutomationDefinitionChange(
+    before: AutomationChangeSelector | null,
+    after: AutomationChangeSelector | null
+  ): void {
+    for (const selector of automationChangePublications(before, after)) {
+      this.notifyAutomationsChanged({ reason: 'definition', ...(selector ? { selector } : {}) })
+    }
+  }
+
+  async updateAutomation(
+    id: string,
+    updates: RuntimeAutomationUpdateInput,
+    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+  ): Promise<Automation> {
     if (!this.store?.updateAutomation) {
       throw new Error('runtime_unavailable')
     }
@@ -4315,6 +4450,7 @@ export class OrcaRuntimeService {
       hasRuntimeAutomationUpdateValue(updates, 'workspaceMode')
     if (targetChanged) {
       const target = await this.resolveAutomationTarget(updates, current)
+      assertAutomationRunContextMatchesRepo(updates.runContext, target.repo)
       if (patch.reuseSession === true && target.workspaceMode !== 'existing') {
         throw new Error('Session reuse requires an existing workspace target.')
       }
@@ -4324,27 +4460,56 @@ export class OrcaRuntimeService {
       if (target.workspaceMode !== 'existing') {
         patch.reuseSession = false
       }
+    } else if (hasRuntimeAutomationUpdateValue(updates, 'runContext') && current.projectId) {
+      const currentRepo = await this.showRepo(`id:${current.projectId}`)
+      assertAutomationRunContextMatchesRepo(updates.runContext, currentRepo)
     }
     if (!targetChanged && patch.reuseSession && current.workspaceMode !== 'existing') {
       throw new Error('Session reuse requires an existing workspace target.')
     }
-    return this.store.updateAutomation(id, patch)
+    return this.underExternalProbePriority(() => {
+      // Captured first: an update may move the record to another host.
+      const before = this.automationChangeSelector(id)
+      const updated = this.store!.updateAutomation!(id, patch, options)
+      this.publishAutomationDefinitionChange(before, this.automationChangeSelector(id))
+      return updated
+    })
   }
 
-  deleteAutomation(id: string): { removed: boolean; id: string } {
+  deleteAutomation(
+    id: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): { removed: boolean; id: string } {
     if (!this.store?.deleteAutomation) {
       throw new Error('runtime_unavailable')
     }
-    this.showAutomation(id)
-    this.store.deleteAutomation(id)
-    return { removed: true, id }
+    return this.underExternalProbePriority(() => {
+      this.showAutomation(id)
+      const before = this.automationChangeSelector(id)
+      this.store!.deleteAutomation!(id, expectedOwner ? { expectedOwner } : undefined)
+      this.publishAutomationDefinitionChange(before, before)
+      return { removed: true, id }
+    })
   }
 
-  async runAutomationNow(id: string): Promise<AutomationRun> {
-    if (!this.automationService) {
+  async runAutomationNow(
+    id: string,
+    expectedOwner?: AutomationOwnerPrecondition
+  ): Promise<AutomationRun> {
+    const service = this.automationService
+    if (!service) {
       throw new Error('runtime_unavailable')
     }
-    return await this.automationService.runNow(id)
+    // Why: an orphan or re-registered host must be refused before dispatch, not
+    // after a session starts. The lease spans the whole dispatch promise, so
+    // queued external probes stay parked until the run the user is waiting on settles.
+    return await this.underExternalProbePriority(() =>
+      runAutomationNowFenced({
+        fence: () => this.fenceAutomationOwner(id, expectedOwner, 'execute'),
+        service,
+        automationId: id
+      })
+    )
   }
 
   private async resolveAutomationTarget(
@@ -4359,6 +4524,7 @@ export class OrcaRuntimeService {
     projectId: string
     workspaceMode: AutomationWorkspaceMode
     workspaceId?: string | null
+    repo: Repo | null
   }> {
     const hasRepo = input.repo !== undefined
     const hasWorkspace = input.workspace !== undefined
@@ -4373,7 +4539,14 @@ export class OrcaRuntimeService {
       )
     }
     const workspace = input.workspace ? await this.showManagedWorktree(input.workspace) : null
-    const repo = input.repo ? await this.showRepo(input.repo) : null
+    const repoSelector =
+      input.repo ??
+      (workspace?.repoId
+        ? `id:${workspace.repoId}`
+        : current?.projectId
+          ? `id:${current.projectId}`
+          : null)
+    const repo = repoSelector ? await this.showRepo(repoSelector) : null
     const workspaceMode =
       input.workspaceMode ??
       (workspace
@@ -4390,13 +4563,13 @@ export class OrcaRuntimeService {
       if (!workspaceId || !projectId) {
         throw new Error('Existing-workspace automation requires --workspace.')
       }
-      return { projectId, workspaceMode, workspaceId }
+      return { projectId, workspaceMode, workspaceId, repo }
     }
     const projectId = repo?.id ?? workspace?.repoId ?? current?.projectId
     if (!projectId) {
       throw new Error('Automation requires --repo or --workspace.')
     }
-    return { projectId, workspaceMode: 'new_per_run', workspaceId: null }
+    return { projectId, workspaceMode: 'new_per_run', workspaceId: null, repo }
   }
 
   // Why: lazy initialization — the DB path depends on userData, which on the desktop
@@ -5137,6 +5310,11 @@ export class OrcaRuntimeService {
 
   assertAgentSkillSharingAllowed(): void {
     assertAgentSkillSharingAllowed(() => isAgentSkillSharingEnabled(this.store?.getSettings()))
+  }
+
+  /** Renderer-owned; read here because dispatch enforcement lives in main. */
+  getNestedWorkerMaxDepth(): number {
+    return resolveNestedWorkerMaxDepth(this.store?.getSettings())
   }
 
   async publishDiscoveredSkillsFromAgent(
@@ -6637,6 +6815,14 @@ export class OrcaRuntimeService {
     this.emitClientEvent({ type: 'reposChanged' })
   }
 
+  // Why: automation writes land in the automation service and IPC handlers, so
+  // like SSH state they need a public entry point onto the client-event stream.
+  // Old clients drop the unknown event type; nothing is negotiated for it.
+  notifyAutomationsChanged(payload: AutomationsChangedPayload = {}): void {
+    this.notifier?.automationsChanged?.(payload)
+    this.emitClientEvent({ type: 'automationsChanged', ...payload })
+  }
+
   // Why: SSH state changes originate in main's ssh handlers, not in runtime
   // methods, so they need a public entry point onto the client-event stream.
   notifySshStateChanged(targetId: string, state: SshConnectionState): void {
@@ -6744,6 +6930,16 @@ export class OrcaRuntimeService {
   notifyWorktreesChangedForRemoteClients(repoId: string): void {
     this.invalidateResolvedWorktreeCache()
     this.emitClientEvent({ type: 'worktreesChanged', repoId })
+  }
+
+  // Why: structural catalog changes require a fresh Git scan; renderer metadata edits do not.
+  notifyWorktreeCatalogChangedForRemoteClients(repoId: string): void {
+    this.invalidateWorktreeScanCacheForRepo(repoId)
+    const matchingRepos = this.store?.getRepos().filter((repo) => repo.id === repoId) ?? []
+    if (matchingRepos.length !== 1 || matchingRepos[0]?.connectionId) {
+      return
+    }
+    this.notifyWorktreesChangedForRemoteClients(repoId)
   }
 
   // Why: host-local repo IPC mutations never enter runtime methods, so paired
@@ -15652,16 +15848,7 @@ export class OrcaRuntimeService {
     this.layouts.delete(ptyId)
     this.layoutQueues.delete(ptyId)
     this.freshSubscribeGuard.delete(ptyId)
-    const pendingRestore = this.pendingRestoreTimers.get(ptyId)
-    if (pendingRestore) {
-      clearTimeout(pendingRestore.timer)
-      this.pendingRestoreTimers.delete(ptyId)
-    }
-    const pendingSoft = this.pendingSoftLeavers.get(ptyId)
-    if (pendingSoft) {
-      clearTimeout(pendingSoft.timer)
-      this.pendingSoftLeavers.delete(ptyId)
-    }
+    this.cancelPendingDriverMutations(ptyId)
     // Why: a cold restore can respawn under the same session id within the
     // delayed-Enter window; the armed Enter would inject \r into the
     // replacement and stamp rows it never received.
@@ -16318,6 +16505,7 @@ export class OrcaRuntimeService {
   // frame. Returns `true` whenever there was a lock to reclaim, `false` only
   // when there was nothing to reclaim.
   async reclaimTerminalForDesktop(ptyId: string): Promise<boolean> {
+    this.cancelPendingDriverMutations(ptyId)
     if (this.isMobileSubscriberActive(ptyId)) {
       this.setMobileDisplayMode(ptyId, 'desktop')
       await this.applyMobileDisplayMode(ptyId)
@@ -16337,16 +16525,6 @@ export class OrcaRuntimeService {
     }
     const heldOverride = this.terminalFitOverrides.get(ptyId)
     if (heldOverride && this.hasRemoteDesktopLayoutState(ptyId)) {
-      const pending = this.pendingRestoreTimers.get(ptyId)
-      if (pending) {
-        clearTimeout(pending.timer)
-        this.pendingRestoreTimers.delete(ptyId)
-      }
-      const softLeaver = this.pendingSoftLeavers.get(ptyId)
-      if (softLeaver) {
-        clearTimeout(softLeaver.timer)
-        this.pendingSoftLeavers.delete(ptyId)
-      }
       // Why: applyRemoteDesktopLayout no-ops while the driver still reads mobile.
       this.setDriver(ptyId, { kind: 'idle' })
       // Why: best-effort, like the local held branch below. A host whose resize
@@ -16359,11 +16537,6 @@ export class OrcaRuntimeService {
       return true
     }
     if (heldOverride) {
-      const pending = this.pendingRestoreTimers.get(ptyId)
-      if (pending) {
-        clearTimeout(pending.timer)
-        this.pendingRestoreTimers.delete(ptyId)
-      }
       // Why: with no subscribers, resolveDesktopRestoreTarget can fall through
       // to current PTY size — which is at phone dims (wrong). Prefer a fresh
       // desktop renderer measurement when one exists; otherwise use the
@@ -16386,6 +16559,21 @@ export class OrcaRuntimeService {
       return true
     }
     return false
+  }
+
+  // Why: teardown and desktop reclaim supersede delayed mobile mutations,
+  // revoking soft-leave grace admission for input floors.
+  private cancelPendingDriverMutations(ptyId: string): void {
+    const pendingRestore = this.pendingRestoreTimers.get(ptyId)
+    if (pendingRestore) {
+      clearTimeout(pendingRestore.timer)
+      this.pendingRestoreTimers.delete(ptyId)
+    }
+    const pendingSoft = this.pendingSoftLeavers.get(ptyId)
+    if (pendingSoft) {
+      clearTimeout(pendingSoft.timer)
+      this.pendingSoftLeavers.delete(ptyId)
+    }
   }
 
   // Why: the shared "banner must be gone now" step for an explicit desktop
@@ -18961,6 +19149,9 @@ export class OrcaRuntimeService {
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      // Why: the pre-Enter wait now scales with the payload, so an abandoned request must be
+      // able to stop it instead of writing Enter minutes after the caller gave up.
+      signal?: AbortSignal
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const pty = this.getLivePtyForHandle(handle)
@@ -19607,16 +19798,20 @@ export class OrcaRuntimeService {
   private getFreshExplicitAgentStatusForHandle(handle: string): {
     status: NonNullable<RuntimeTerminalAgentStatus['status']>
     updatedAt: number
+    /** When this state was entered. Pinned across same-state pings, so it identifies the turn. */
+    stateStartedAt: number
   } | null {
     const paneKey = this.getPaneKeyForTerminalHandle(handle)
     const now = Date.now()
     let bestStatus: NonNullable<RuntimeTerminalAgentStatus['status']> | null = null
     let bestUpdatedAt = -1
+    let bestStateStartedAt = -1
 
     const consider = (
       state: AgentStatusEntry['state'] | undefined,
       updatedAt: number | null | undefined,
-      restoredUnconfirmed = false
+      restoredUnconfirmed = false,
+      stateStartedAt?: number | null
     ): void => {
       if (!state || restoredUnconfirmed) {
         return
@@ -19630,22 +19825,25 @@ export class OrcaRuntimeService {
       if (updatedAt > bestUpdatedAt || (updatedAt === bestUpdatedAt && status === 'permission')) {
         bestStatus = status
         bestUpdatedAt = updatedAt
+        bestStateStartedAt = typeof stateStartedAt === 'number' ? stateStartedAt : updatedAt
       }
     }
 
     if (paneKey) {
       const retained = this.latestAgentStatusByPaneKey.get(paneKey)
-      consider(retained?.payload.state, retained?.updatedAt)
+      consider(retained?.payload.state, retained?.updatedAt, false, retained?.stateStartedAt)
     }
 
     for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
       if (entry.terminalHandle !== handle && (!paneKey || entry.paneKey !== paneKey)) {
         continue
       }
-      consider(entry.state, entry.receivedAt, entry.restoredUnconfirmed)
+      consider(entry.state, entry.receivedAt, entry.restoredUnconfirmed, entry.stateStartedAt)
     }
 
-    return bestStatus ? { status: bestStatus, updatedAt: bestUpdatedAt } : null
+    return bestStatus
+      ? { status: bestStatus, updatedAt: bestUpdatedAt, stateStartedAt: bestStateStartedAt }
+      : null
   }
 
   private async writeTerminalAction(
@@ -19657,19 +19855,28 @@ export class OrcaRuntimeService {
       reserveWrite?: (ptyId: string) => void
       afterWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
+      signal?: AbortSignal
     } = {}
   ): Promise<void> {
     // Why: direct terminal.send can carry paste-sized text from RPC/mobile
     // clients; chunk text before PTY/ConPTY while preserving suffix separation.
-    const hasText = typeof action.text === 'string' && action.text.length > 0
+    const text = typeof action.text === 'string' ? action.text : ''
     const hasSuffix = action.enter || action.interrupt
-    if (hasText) {
-      await this.writeTerminalInputChunks(ptyId, action.text!, options)
+    if (text) {
+      await this.writeTerminalInputChunks(ptyId, text, options)
     }
     if (hasSuffix) {
       const suffix = (action.enter ? '\r' : '') + (action.interrupt ? '\x03' : '')
-      if (hasText) {
-        await new Promise((resolve) => setTimeout(resolve, 500))
+      if (text) {
+        // Why: same hazard as the agent-prompt path -- Enter must not overtake text the
+        // execution host is still ingesting, and a flat 500 ms cannot cover 16 MB.
+        await waitForAgentPromptDelay(
+          getAgentPromptSubmitDelayMs(
+            this.getPtyWriteHostPlatform(ptyId),
+            Buffer.byteLength(text, 'utf8')
+          ),
+          options.signal
+        )
       }
       try {
         await options.beforeWrite?.(ptyId)
@@ -19687,7 +19894,7 @@ export class OrcaRuntimeService {
       await options.afterWrite?.(ptyId)
       return
     }
-    if (hasText) {
+    if (text) {
       return
     }
 
@@ -19721,9 +19928,30 @@ export class OrcaRuntimeService {
       await options.afterWrite?.(ptyId)
       chunk = chunks.next()
       if (!chunk.done) {
-        await new Promise((resolve) => setTimeout(resolve, 0))
+        await yieldBetweenTerminalInputChunks()
       }
     }
+  }
+
+  /** Platform of the host whose pty transport ingests our writes -- deliberately NOT the OS
+   *  the command runs under. A WSL pane is spawned as `wsl.exe` through the Windows ConPTY
+   *  (see local-pty-provider), so it pays the ConPTY ingest cost even though its shell is
+   *  Linux; an SSH pane is spawned by node-pty on the remote host, so the client's
+   *  process.platform says nothing about it. */
+  private getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {
+    const pty = this.ptysById.get(ptyId)
+    const connectionId = pty?.connectionId
+    if (!connectionId) {
+      return process.platform
+    }
+    const remotePlatform = getRegisteredSshState(connectionId)?.remotePlatform
+    if (remotePlatform) {
+      return remotePlatform
+    }
+    // Why: remotePlatform only arrives with the relay handshake; until then the worktree path
+    // flavor is the same signal getAgentLaunchPlatformForRepo already trusts for a remote repo.
+    const worktreePath = pty ? splitWorktreeIdForFilesystem(pty.worktreeId)?.worktreePath : null
+    return worktreePath && isWindowsAbsolutePathLike(worktreePath) ? 'win32' : 'linux'
   }
 
   private async writeTerminalAgentPrompt(
@@ -19741,7 +19969,12 @@ export class OrcaRuntimeService {
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
-    const renderGate = this.createAgentPromptRenderGate(ptyId)
+    // Why: the floor for every wait below. Enter must never overtake bytes the execution
+    // host is still feeding the child, and that cost is proportional to the payload.
+    const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
+    const pasteByteLength = Buffer.byteLength(pastePayload, 'utf8')
+    const pasteIngestMs = getTerminalPasteIngestMs(writeHostPlatform, pasteByteLength)
+    const renderGate = this.createAgentPromptRenderGate(ptyId, pasteIngestMs)
     let wrotePasteBytes = false
     let completedPaste = false
     try {
@@ -19768,7 +20001,7 @@ export class OrcaRuntimeService {
         wrotePasteBytes = true
         chunk = nextChunk
         if (!chunk.done) {
-          await new Promise((resolve) => setTimeout(resolve, 0))
+          await yieldBetweenTerminalInputChunks()
         }
       }
       completedPaste = true
@@ -19791,7 +20024,10 @@ export class OrcaRuntimeService {
         renderGate.dispose()
       }
     } else {
-      await waitForAgentPromptDelay(AGENT_PROMPT_SUBMIT_DELAY_MS, options.signal)
+      await waitForAgentPromptDelay(
+        getAgentPromptSubmitDelayMs(writeHostPlatform, pasteByteLength),
+        options.signal
+      )
     }
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
@@ -19814,6 +20050,7 @@ export class OrcaRuntimeService {
     await verifyAgentPromptSubmission({
       baseline,
       readActivity: () => this.getAgentPromptActivity(handle, ptyId),
+      timeoutMs: resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId)),
       signal: options.signal
     })
     return 1
@@ -19870,8 +20107,19 @@ export class OrcaRuntimeService {
       generation: this.getPtyLifecycleGeneration(ptyId),
       permissionSequence: this.agentPromptPermissionSequenceByPtyId.get(ptyId) ?? 0,
       workingSequence: lifecycle?.workingSequence ?? 0,
+      // Why: hook status is the only turn-start signal agents without title coverage have, and it
+      // reaches here without the window-gated synthetic title frame (#16095). Anchored on
+      // stateStartedAt, not updatedAt — same-state tool/prompt pings refresh updatedAt and would
+      // otherwise pass off an in-progress turn as a new one.
+      explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
+      outputSequence: this.getPtyOutputSequence(ptyId),
       status
     }
+  }
+
+  private getPtyAgent(ptyId: string): TuiAgent | null {
+    const pty = this.ptysById.get(ptyId)
+    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
   }
 
   private assertAgentPromptPermissionSafe(
@@ -19892,32 +20140,37 @@ export class OrcaRuntimeService {
     }
   }
 
-  private createAgentPromptRenderGate(ptyId: string): {
+  /** `pasteIngestMs` is the payload's ingest bound on the executing host. Nothing here may
+   *  settle before it elapses: the agent can repaint mid-ingest, so marker-then-quiet alone
+   *  would fire Enter into a paste ConPTY is still feeding. */
+  private createAgentPromptRenderGate(
+    ptyId: string,
+    pasteIngestMs: number
+  ): {
     arm: () => void
     wait: () => Promise<void>
     dispose: () => void
   } | null {
-    const pty = this.ptysById.get(ptyId)
-    const agent = pty?.launchAgent ?? pty?.foregroundAgent
-    if (!isTerminalSendSettlementAgent(agent)) {
+    if (!isTerminalSendSettlementAgent(this.getPtyAgent(ptyId))) {
       return null
     }
     let armed = false
     let canSettle = false
     let settled = false
+    let ingested = pasteIngestMs <= 0
+    // Why absolute: the ingest clock starts once, here, but the cap is armed twice (at arm()
+    // and again on the marker). Re-adding the whole window would charge ingest twice.
+    const ingestDeadlineAt = Date.now() + pasteIngestMs
     let markerCarry = ''
     let quietTimer: NodeJS.Timeout | null = null
     let hardTimer: NodeJS.Timeout | null = null
+    let ingestTimer: NodeJS.Timeout | null = null
     let resolveRender!: () => void
     const rendered = new Promise<void>((resolve) => {
       resolveRender = resolve
     })
 
-    const finish = (): void => {
-      if (settled) {
-        return
-      }
-      settled = true
+    const clearGateTimers = (): void => {
       if (quietTimer) {
         clearTimeout(quietTimer)
         quietTimer = null
@@ -19926,9 +20179,25 @@ export class OrcaRuntimeService {
         clearTimeout(hardTimer)
         hardTimer = null
       }
+      if (ingestTimer) {
+        clearTimeout(ingestTimer)
+        ingestTimer = null
+      }
+    }
+    const finish = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearGateTimers()
       resolveRender()
     }
     const armQuietTimer = (): void => {
+      // Why: the quiet window measures the agent going still after a *complete* paste.
+      // Silence during ingest is not settlement, so it cannot start the clock.
+      if (!ingested) {
+        return
+      }
       if (quietTimer) {
         clearTimeout(quietTimer)
       }
@@ -19938,7 +20207,21 @@ export class OrcaRuntimeService {
       if (hardTimer) {
         clearTimeout(hardTimer)
       }
-      hardTimer = setTimeout(finish, AGENT_PROMPT_RENDER_TIMEOUT_MS)
+      // Why: the cap bounds the wait *after* the bytes land; a flat 8000 ms would expire
+      // mid-paste past ~770 KB on Windows and write Enter into it.
+      hardTimer = setTimeout(
+        finish,
+        AGENT_PROMPT_RENDER_TIMEOUT_MS + Math.max(0, ingestDeadlineAt - Date.now())
+      )
+    }
+    if (!ingested) {
+      ingestTimer = setTimeout(() => {
+        ingestTimer = null
+        ingested = true
+        if (canSettle) {
+          armQuietTimer()
+        }
+      }, pasteIngestMs)
     }
     const unsubscribe = this.subscribeToTerminalData(ptyId, (data) => {
       if (!armed || settled) {
@@ -19970,14 +20253,7 @@ export class OrcaRuntimeService {
       },
       dispose: () => {
         unsubscribe()
-        if (quietTimer) {
-          clearTimeout(quietTimer)
-          quietTimer = null
-        }
-        if (hardTimer) {
-          clearTimeout(hardTimer)
-          hardTimer = null
-        }
+        clearGateTimers()
       }
     }
   }
@@ -24224,7 +24500,20 @@ export class OrcaRuntimeService {
     }
   }
 
-  private markLocalWorkspaceTrustedForAgent(agent: TuiAgent, workspacePath: string): void {
+  private markWorkspaceTrustedForAgent(
+    agent: TuiAgent,
+    connectionId: string | null | undefined,
+    workspacePath: string
+  ): Promise<void> {
+    return connectionId
+      ? this.markRemoteWorkspaceTrustedForAgent(agent, connectionId, workspacePath)
+      : this.markLocalWorkspaceTrustedForAgent(agent, workspacePath)
+  }
+
+  private async markLocalWorkspaceTrustedForAgent(
+    agent: TuiAgent,
+    workspacePath: string
+  ): Promise<void> {
     const preset = TUI_AGENT_CONFIG[agent].preflightTrust
     if (!preset) {
       return
@@ -24235,7 +24524,9 @@ export class OrcaRuntimeService {
       } else if (preset === 'copilot') {
         markCopilotFolderTrusted(workspacePath)
       } else if (preset === 'codex') {
-        markCodexProjectTrusted(workspacePath)
+        // Why: the Codex write queues behind any in-flight hook grant, so the
+        // agent must not launch until it has actually landed.
+        await markCodexProjectTrusted(workspacePath)
       }
     } catch {
       // Best-effort: the user can still accept the agent trust prompt manually.
@@ -24760,7 +25051,7 @@ export class OrcaRuntimeService {
         try {
           const startupTrustAgent = effectiveDraftPaste?.agent ?? effectiveCreatedWithAgent
           if (startupTrustAgent) {
-            this.markLocalWorkspaceTrustedForAgent(startupTrustAgent, worktree.path)
+            await this.markLocalWorkspaceTrustedForAgent(startupTrustAgent, worktree.path)
           }
           const terminal = await this.createTerminal(`id:${worktree.id}`, {
             command: effectiveStartup.command,
@@ -25553,7 +25844,7 @@ export class OrcaRuntimeService {
         // session later, matching `orca terminal create` background semantics.
         const startupTrustAgent = effectiveDraftPaste?.agent ?? effectiveCreatedWithAgent
         if (startupTrustAgent) {
-          this.markLocalWorkspaceTrustedForAgent(startupTrustAgent, worktreePath)
+          await this.markLocalWorkspaceTrustedForAgent(startupTrustAgent, worktreePath)
         }
         const terminal = await this.createTerminal(`id:${worktree.id}`, {
           command: sequencedStartup.command,
@@ -28039,11 +28330,7 @@ export class OrcaRuntimeService {
       return opts
     }
 
-    if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(agent, workspace.path)
-    }
+    await this.markWorkspaceTrustedForAgent(agent, workspace.connectionId, workspace.path)
 
     return {
       ...opts,
@@ -28177,15 +28464,7 @@ export class OrcaRuntimeService {
     if (!startup) {
       throw new Error('agent_session_identity_required')
     }
-    if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(
-        request.agent,
-        workspace.connectionId,
-        workspace.path
-      )
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
-    }
+    await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
     if (_caller.signal?.aborted) {
       throw new Error('client_disconnected')
     }
@@ -28346,15 +28625,7 @@ export class OrcaRuntimeService {
       if (!startup) {
         throw new Error('agent_session_identity_required')
       }
-      if (workspace.connectionId) {
-        await this.markRemoteWorkspaceTrustedForAgent(
-          request.agent,
-          workspace.connectionId,
-          workspace.path
-        )
-      } else {
-        this.markLocalWorkspaceTrustedForAgent(request.agent, workspace.path)
-      }
+      await this.markWorkspaceTrustedForAgent(request.agent, workspace.connectionId, workspace.path)
       if (caller.signal?.aborted) {
         throw new Error('client_disconnected')
       }
@@ -28986,11 +29257,7 @@ export class OrcaRuntimeService {
       throw new Error('Repository for the selected workspace is no longer available.')
     }
     const startup = this.buildStartupForAgent(repo, opts.agent, opts.prompt)
-    if (repo.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(opts.agent, worktree.path)
-    }
+    await this.markWorkspaceTrustedForAgent(opts.agent, repo.connectionId, worktree.path)
     return await this.createTerminal(`id:${worktree.id}`, {
       command: startup.startup.command,
       env: startup.startup.env,
@@ -29379,15 +29646,7 @@ export class OrcaRuntimeService {
     if (opts.agentPrompt && startupPlan.followupPrompt) {
       throw new Error(`Agent ${opts.agent} does not support startup prompt quick commands.`)
     }
-    if (workspace.connectionId) {
-      await this.markRemoteWorkspaceTrustedForAgent(
-        opts.agent,
-        workspace.connectionId,
-        workspace.path
-      )
-    } else {
-      this.markLocalWorkspaceTrustedForAgent(opts.agent, workspace.path)
-    }
+    await this.markWorkspaceTrustedForAgent(opts.agent, workspace.connectionId, workspace.path)
     return {
       command: startupPlan.launchCommand,
       env: startupPlan.env,
@@ -32569,7 +32828,11 @@ export class OrcaRuntimeService {
     }
     const inFlight = this.worktreeScanInFlight.get(scanScopeKey)
     if (inFlight?.generation === generation && inFlight.runtimeKey === runtimeKey) {
-      return (await inFlight.promise).result
+      const refresh = await inFlight.promise
+      if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
+        return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+      }
+      return refresh.result
     }
     const reusableCached =
       cached?.generation === generation && cached.runtimeKey === runtimeKey ? cached : null
@@ -32577,10 +32840,13 @@ export class OrcaRuntimeService {
     this.worktreeScanInFlight.set(scanScopeKey, { generation, runtimeKey, promise })
     try {
       const refresh = await promise
+      // Why: fence the caller as well as cache writeback, or an event refresh can consume a stale scan.
+      if (generation !== (this.worktreeScanGenerations.get(scanScopeKey) ?? 0)) {
+        return this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
+      }
       // Why: back off local spawn failures under resource pressure while disconnected SSH can recover on the next poll.
       if (
         (refresh.result.ok || !repo.connectionId) &&
-        generation === (this.worktreeScanGenerations.get(scanScopeKey) ?? 0) &&
         this.worktreeScanInFlight.get(scanScopeKey)?.promise === promise
       ) {
         const entry: RuntimeWorktreeScanCache = {
@@ -35032,7 +35298,9 @@ export class OrcaRuntimeService {
     return Date.now() - completedAtMs <= AGENT_STATUS_STALE_AFTER_MS ? dispatch : undefined
   }
 
-  private getTerminalHandleForPaneKey(paneKey: string): string | null {
+  // Why: public because automation completion watching runs in main but the
+  // pane→handle mapping is runtime-owned state.
+  getTerminalHandleForPaneKey(paneKey: string): string | null {
     const parsed = parsePaneKey(paneKey)
     const leaf = parsed ? this.leaves.get(this.getLeafKey(parsed.tabId, parsed.leafId)) : undefined
     if (leaf?.ptyId && leaf.connected) {

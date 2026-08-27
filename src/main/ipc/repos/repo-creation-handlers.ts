@@ -6,7 +6,10 @@ import { homedir } from 'node:os'
 import { isAbsolute, join } from 'node:path'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
-import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
+import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../shared/constants'
+import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
+import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
 import { gitExecFileAsync } from '../../git/runner'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
@@ -31,13 +34,37 @@ async function isGitAvailable(): Promise<boolean> {
   }
 }
 
-function getDefaultCreateProjectParent(): string {
-  return join(homedir(), 'orca', 'projects')
+/**
+ * Where the "Create new project" Location field starts. Settings -> Workspace
+ * Directory owns this once the user has actually set it, including a per-host
+ * override for the local host, which is the only scope this handler answers for.
+ *
+ * Why the untouched default does not count: `workspaceDir` is never blank -- new
+ * installs seed it with `~/orca/workspaces`. Treating that seeded value as a choice
+ * would silently relocate every existing user's projects into the worktree root,
+ * where each project would then host its own worktrees inside its working tree.
+ */
+function getDefaultCreateProjectParent(store: Store): string {
+  const home = homedir()
+  const settings = store.getSettings()
+  const configured = getEffectiveHostSetting(
+    settings,
+    LOCAL_EXECUTION_HOST_ID,
+    'defaultWorktreeLocation',
+    settings.workspaceDir ?? ''
+  ).trim()
+  const isUntouchedDefault =
+    normalizeRuntimePathForComparison(configured) ===
+    normalizeRuntimePathForComparison(getDefaultWorkspaceDir(home))
+  if (configured && !isUntouchedDefault) {
+    return configured
+  }
+  return join(home, 'orca', 'projects')
 }
 
 export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle('repos:isGitAvailable', () => isGitAvailable())
-  ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent())
+  ipcMain.handle('repos:getDefaultCreateProjectParent', () => getDefaultCreateProjectParent(store))
 
   ipcMain.handle(
     'repos:add',

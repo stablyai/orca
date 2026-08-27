@@ -239,4 +239,44 @@ describe('mobile endpoint supervisor nudges', () => {
     expect(relaySession.close).toHaveBeenCalled()
     expect(logical.getActivePath()).toBe('lan')
   })
+
+  it('withdraws a relay replacement that authenticates after backgrounding', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const relaySession = new FakeRelaySession('connected')
+    const setActiveSession = vi.fn()
+    let active = true
+    logical.migrateTo.mockImplementation(async (_session, _path, _timeout, shouldAbort) => {
+      active = false
+      if (shouldAbort?.()) {
+        relaySession.close()
+        throw new Error('migration superseded')
+      }
+    })
+    const establisher = new MobileRelaySessionEstablisher({
+      logical,
+      controller: { setActiveSession } as unknown as RelayReconnectController,
+      openRelay: vi.fn(() => relaySession),
+      randomBytes: (length) => new Uint8Array(length),
+      writeBundle: vi.fn(async () => {}),
+      isActive: () => active,
+      isForeground: () => active,
+      relay: () => host.relay,
+      resolveRelay: vi.fn(async ({ relay: endpoint }) => endpoint),
+      persistResolvedRelay: vi.fn(async () => {}),
+      bundle: () => bundle,
+      adoptBundle: vi.fn(),
+      recordMigration: vi.fn(),
+      scheduleLease: vi.fn(),
+      scheduleDirectProbe: vi.fn(),
+      onBookkeepingError: vi.fn(),
+      onDialFailure: vi.fn()
+    })
+
+    const outcome = await establisher.dialEligible([bundle.current])
+
+    expect(outcome).toEqual({ outcome: 'aborted' })
+    expect(setActiveSession).not.toHaveBeenCalled()
+    expect(relaySession.close).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+  })
 })

@@ -103,14 +103,14 @@ export function resolveCodexResumeLaunch(
   })
 }
 
-export function reconcileSharedRuntimeResumeHome(
+export async function reconcileSharedRuntimeResumeHome(
   resumeHome: Extract<CodexSessionResumePreparation, { outcome: 'resume' }>,
-  resolveCurrentHome: () => string | null
-): string {
+  resolveCurrentHome: () => string | null | Promise<string | null>
+): Promise<string> {
   if (!resumeHome.reconcileSharedRuntimeAuth) {
     return resumeHome.codexHomePath
   }
-  const currentHome = resolveCurrentHome()
+  const currentHome = await resolveCurrentHome()
   if (!codexHomePathsEqual(currentHome, resumeHome.codexHomePath)) {
     throw new Error(CODEX_RESUME_AUTH_UNAVAILABLE_MESSAGE)
   }

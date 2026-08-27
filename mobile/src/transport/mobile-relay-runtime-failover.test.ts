@@ -431,7 +431,7 @@ describe('relay runtime recovery without direct connectivity', () => {
     supervisor.stop()
   })
 
-  it('restarts Relay promptly when an active Relay session resumes from background', async () => {
+  it('restarts Relay promptly after the background grace expires', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
@@ -440,6 +440,8 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(deps.openRelay).not.toHaveBeenCalled()
 
     supervisor.setForeground(false)
+    expect(logical.getState()).toBe('connected')
+    await vi.advanceTimersByTimeAsync(30_000)
     expect(logical.getState()).toBe('disconnected')
     expect(logical.getPendingPath()).toBeNull()
 
@@ -452,13 +454,14 @@ describe('relay runtime recovery without direct connectivity', () => {
     supervisor.stop()
   })
 
-  it('recovers a suspended Relay through the app-resume nudge used by manual retry', async () => {
+  it('recovers an expired background Relay through the app-resume manual retry nudge', async () => {
     const logical = new FakeLogicalClient('connected', 'relay')
     const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
     const supervisor = new MobileEndpointSupervisor(logical, host, deps)
 
     await supervisor.start()
     supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(30_000)
     expect(logical.getState()).toBe('disconnected')
 
     supervisor.nudge('app-resume')

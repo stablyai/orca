@@ -18,6 +18,11 @@ export type ParkedTerminalPaneCapture = {
   /** Stable terminal-layout leaf UUID (paneKey attribution). */
   leafId: string
   drivesTabTitle: boolean
+  /** The unmounted pane fresh-spawned this PTY and no terminal input was ever
+   *  sent. Plain-value carry of the session facts behind the sole-newborn
+   *  guard (pty-exit-hibernate), so the parked sidecar preserves a dead
+   *  never-typed shell's tab the same way the session observer did. */
+  untouchedFreshSpawn?: boolean
 }
 
 export type CapturedTabPanes = { worktreeId: string; panes: ParkedTerminalPaneCapture[] }

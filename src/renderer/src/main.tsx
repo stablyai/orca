@@ -8,6 +8,7 @@ import {
   installRendererCrashDiagnostics,
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
+import { installAutomationHostDiagnostic } from './components/automations/automation-host-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
 import { installTypingLatencyDiagnostic } from './lib/typing-latency-diagnostic'
 import { shouldEnableReactGrab } from './lib/react-grab-dev-gate'
@@ -20,6 +21,7 @@ import { installBrowserClientPageRenderer } from './components/browser-pane/brow
 recordRendererCrashBreadcrumb('renderer_bootstrap_started', { dev: import.meta.env.DEV })
 installRendererCrashDiagnostics()
 installTypingLatencyDiagnostic()
+installAutomationHostDiagnostic()
 
 if (
   import.meta.env.DEV &&

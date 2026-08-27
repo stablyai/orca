@@ -14,15 +14,20 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { WorkerStartInput } from './orchestration-worker-start-schema'
 import {
+  federatedUnknownReceipt,
+  isKnownFederatedWorkerStartFailure,
+  type FederatedWorkerStartReceipt
+} from './orchestration-federated-worker-start-receipt'
+import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
   resolveFederatedWorkerLaunchParams,
   resolveFederatedWorkerLaunchReceipt,
-  type OrchestrationWorkerLaunchDefaultsApplied,
-  type OrchestrationWorkerLaunchReceipt
+  type OrchestrationWorkerLaunchDefaultsApplied
 } from './orchestration-worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from './orchestration-worker-start-validation'
+import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -104,6 +109,8 @@ export async function startFederatedWorker(args: {
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const started = db.createStartingWorkerDispatch({
+    creator: resolveDispatchCreator(runtime, params.from),
+    maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: task.id,
     retryOf: params.retryOf,
     startOptions: {
@@ -142,6 +149,9 @@ export async function startFederatedWorker(args: {
         dispatchId: started.dispatch.id,
         taskId: task.id,
         taskSpec: task.spec,
+        // Carry the home dispatch depth across the federation boundary so a
+        // remote worker cannot be mistaken for a root when it dispatches again.
+        depth: started.dispatch.depth,
         protocolVersion: federationProtocolVersion,
         worktree,
         name: params.name,
@@ -164,7 +174,7 @@ export async function startFederatedWorker(args: {
       },
       (params.timeoutMs ?? 60_000) + 15_000,
       { orchestrationRequestId: orchestrationMutation.requestId }
-    )) as RemoteStartReceipt
+    )) as FederatedWorkerStartReceipt
     if (remote.dispatchId !== started.dispatch.id) {
       throw new OrchestrationError(
         'resource_server_mismatch',
@@ -237,7 +247,7 @@ export async function startFederatedWorker(args: {
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
-    if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
+    if (error instanceof OrchestrationError && isKnownFederatedWorkerStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
       return {
         runId,
@@ -255,49 +265,5 @@ export async function startFederatedWorker(args: {
     }
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
     return federatedUnknownReceipt(worker, task.id, server.name, requestedLaunch)
-  }
-}
-
-type RemoteStartReceipt = {
-  dispatchId: string
-  state: string
-  runtimeEpoch: string
-  worktreeId?: string
-  terminalHandle?: string
-  setup?: { state: string }
-  launch?: OrchestrationWorkerLaunchReceipt
-  effects?: unknown[]
-  residualResources?: unknown[]
-  failedStage?: string
-  lastError?: string
-}
-
-function isKnownRemoteStartFailure(code: string): boolean {
-  return /^(?:invalid_argument|agent_unconfigured|worktree_not_found_on_server|terminal_worktree_mismatch|capability_unsupported)$/.test(
-    code
-  )
-}
-
-function federatedUnknownReceipt(
-  worker: { dispatch_id: string; state: string; stage: string; last_error: string | null },
-  taskId: string,
-  serverName: string,
-  launch: OrchestrationWorkerLaunchReceipt
-): unknown {
-  return {
-    taskId,
-    dispatchId: worker.dispatch_id,
-    state: 'outcome_unknown',
-    stage: worker.stage,
-    server: { name: serverName },
-    launch,
-    failedStage: worker.stage,
-    lastError: worker.last_error,
-    effects: [],
-    residualResources: [],
-    nextCommands: [
-      `orca orchestration worker-show --dispatch ${worker.dispatch_id} --json`,
-      `orca orchestration worker-abandon --dispatch ${worker.dispatch_id} --json`
-    ]
   }
 }

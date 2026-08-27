@@ -31,6 +31,14 @@ import { SkillUsageExamplesSection } from './SkillUsageExamplesSection'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
 import { translate } from '@/i18n/i18n'
 import { OrchestrationWorkerModelSetting } from './OrchestrationWorkerModelSetting'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import { resolveNestedWorkerMaxDepth } from '../../../../shared/nested-worker-depth'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { NumberField } from './SettingsFormControls'
+import {
+  getNestedWorkerDepthDescription,
+  getNestedWorkerDepthTitle
+} from './nested-worker-depth-copy'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -44,14 +52,25 @@ function resolveOrchestrationExampleIcon(example: SkillUsageExample): LucideIcon
   return EXAMPLE_ICONS[example.id as keyof typeof EXAMPLE_ICONS] ?? Workflow
 }
 
-export function OrchestrationPane(): React.JSX.Element {
+type OrchestrationPaneProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
+}
+
+export function OrchestrationPane({
+  settings,
+  updateSettings
+}: OrchestrationPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
-  const defaultWorkerAgent = useAppStore((s) => s.settings?.orchestrationDefaultWorkerAgent)
-  const disabledAgents = useAppStore((s) => s.settings?.disabledTuiAgents)
-  const workerModels = useAppStore((s) => s.settings?.orchestrationWorkerModels)
-  const workerEfforts = useAppStore((s) => s.settings?.orchestrationWorkerEfforts)
-  const updateSettings = useAppStore((s) => s.updateSettings)
-  const showOrchestration = matchesSettingsSearch(searchQuery, getOrchestrationPaneSearchEntries())
+  const defaultWorkerAgent = settings.orchestrationDefaultWorkerAgent
+  const disabledAgents = settings.disabledTuiAgents
+  const workerModels = settings.orchestrationWorkerModels
+  const workerEfforts = settings.orchestrationWorkerEfforts
+  const showNestedWorkerDepth = !isPairedWebClientWindow()
+  const searchEntries = getOrchestrationPaneSearchEntries({
+    includeNestedWorkerDepth: showNestedWorkerDepth
+  })
+  const showOrchestration = matchesSettingsSearch(searchQuery, searchEntries)
   const [skillPromptOpen, setSkillPromptOpen] = useState(false)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
   const orchestrationInstallCommand = !activeSkillRuntime.installDisabledReason
@@ -93,7 +112,8 @@ export function OrchestrationPane(): React.JSX.Element {
         'auto.components.settings.OrchestrationPane.2aacdb0517',
         'Coordinate coding agents across handoffs, worktree handovers, and child-agent work.'
       )}
-      keywords={getOrchestrationPaneSearchEntries()[0].keywords}
+      keywords={searchEntries[0].keywords}
+      forceVisible
       className="space-y-5 py-2"
     >
       <OrchestrationWorkerModelSetting
@@ -180,6 +200,19 @@ export function OrchestrationPane(): React.JSX.Element {
           activeSkillRuntime.canUseLocalSkillFreshness ? ORCHESTRATION_SKILL_NAME : undefined
         }
       />
+
+      {showNestedWorkerDepth ? (
+        <NumberField
+          label={getNestedWorkerDepthTitle()}
+          description={getNestedWorkerDepthDescription()}
+          value={resolveNestedWorkerMaxDepth(settings)}
+          min={1}
+          integer
+          onChange={(nestedWorkerMaxDepth) => {
+            void updateSettings({ nestedWorkerMaxDepth })
+          }}
+        />
+      ) : null}
 
       <OrchestrationSkillPromptDialog
         command={orchestrationInstallCommand}

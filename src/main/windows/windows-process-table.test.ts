@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  __setWindowsProcessTableCimScanForTests,
   __setWindowsProcessTreeLoaderForTests,
+  __setWindowsProcessTreeRequireForTests,
   isWindowsProcessTableAvailable,
   readWindowsProcessTable,
   readWindowsProcessTableFresh,
@@ -66,9 +68,13 @@ describe('windows process table', () => {
 
   it('rejects rather than reporting an empty machine when the module is absent', async () => {
     // A caller that reads "no processes" acts on it -- by declaring a tree dead,
-    // or by concluding a shell has no children. Absence must not look like that.
+    // or by concluding a shell has no children. Absence must not look like that,
+    // and neither must a fallback that also fails.
     __setWindowsProcessTreeLoaderForTests(() => null)
-    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unavailable/)
+    __setWindowsProcessTableCimScanForTests(async () => {
+      throw new Error('powershell unavailable')
+    })
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/powershell unavailable/)
     expect(isWindowsProcessTableAvailable()).toBe(false)
   })
 
@@ -104,6 +110,77 @@ describe('windows process table', () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
     __setWindowsProcessTreeLoaderForTests()
     expect(isWindowsProcessTableAvailable()).toBe(false)
+  })
+})
+
+// Why this path exists: relay deployment installs only node-pty and
+// @parcel/watcher, so a Windows SSH host has no native binding and every read
+// used to reject -- which agent recognition reads as "no evidence" forever.
+describe('PowerShell fallback when the native binding is absent', () => {
+  let platform: PropertyDescriptor | undefined
+  const cimScan = vi.fn()
+  const CIM_ROWS = [
+    { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' },
+    { pid: 200, ppid: process.pid, name: 'claude.exe', command: 'claude --resume' }
+  ]
+
+  beforeEach(() => {
+    platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    cimScan.mockReset()
+    cimScan.mockResolvedValue(CIM_ROWS)
+    __setWindowsProcessTableCimScanForTests(cimScan)
+  })
+
+  afterEach(() => {
+    __setWindowsProcessTableCimScanForTests()
+    __setWindowsProcessTreeLoaderForTests()
+    if (platform) {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
+  it('engages when the module cannot be required', async () => {
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    await expect(readWindowsProcessTableFresh()).resolves.toEqual(CIM_ROWS)
+    expect(cimScan).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not engage when the native binding is present', async () => {
+    const getAllProcesses = vi.fn()
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb(NATIVE))
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+    await readWindowsProcessTableFresh()
+    expect(cimScan).not.toHaveBeenCalled()
+  })
+
+  it('does not engage when a present binding fails its read', async () => {
+    // A wedged or blocked reader must not silently start forking a shell at the
+    // caller's poll rate; only absence is unrecoverable.
+    const getAllProcesses = vi.fn()
+    getAllProcesses.mockImplementation((cb: (rows: unknown) => void) => cb([]))
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses
+    }))
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
+    expect(cimScan).not.toHaveBeenCalled()
+  })
+
+  it('rejects a scan missing our own pid instead of reporting an idle machine', async () => {
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    cimScan.mockResolvedValue([{ pid: 200, ppid: 4, name: 'claude.exe', command: 'claude' }])
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unreadable/)
+  })
+
+  it('stays off Windows-only: darwin still reports unavailable', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    __setWindowsProcessTreeLoaderForTests(() => null)
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unavailable/)
+    expect(cimScan).not.toHaveBeenCalled()
   })
 })
 
@@ -196,5 +273,124 @@ describe('wedge cooldown', () => {
       getAllProcesses: (cb: (rows: typeof NATIVE | undefined) => void) => cb(NATIVE)
     }))
     await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(NATIVE.length)
+  })
+})
+
+// Why against the real require and not the loader seam: relay hosts have no
+// node_modules of ours, so which specifier resolves IS the behaviour. #15749
+// passed its suites because every one of them replaced the loader wholesale.
+describe('resolving the native reader', () => {
+  let platform: PropertyDescriptor | undefined
+  const PACKAGE_SPECIFIER = '@vscode/windows-process-tree'
+  const ADDON_SPECIFIER = './windows-process-tree.node'
+
+  beforeEach(() => {
+    platform = Object.getOwnPropertyDescriptor(process, 'platform')
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+  })
+
+  afterEach(() => {
+    __setWindowsProcessTreeRequireForTests()
+    __setWindowsProcessTableCimScanForTests()
+    if (platform) {
+      Object.defineProperty(process, 'platform', platform)
+    }
+  })
+
+  function addonReturning(rows: unknown): { getProcessList: ReturnType<typeof vi.fn> } {
+    return {
+      getProcessList: vi.fn((cb: (r: unknown) => void) => cb(rows))
+    }
+  }
+
+  it('prefers the npm package where the desktop app installs it', async () => {
+    const resolve = vi.fn((specifier: string) => {
+      if (specifier === PACKAGE_SPECIFIER) {
+        return { ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 }, getAllProcesses }
+      }
+      throw new Error('should not reach the addon')
+    })
+    __setWindowsProcessTreeRequireForTests(resolve)
+    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(2)
+    expect(resolve).toHaveBeenCalledWith(PACKAGE_SPECIFIER)
+    expect(resolve).not.toHaveBeenCalledWith(ADDON_SPECIFIER)
+  })
+
+  it('falls through to the addon staged beside the relay bundle', async () => {
+    const addon = addonReturning(NATIVE)
+    __setWindowsProcessTreeRequireForTests((specifier: string) => {
+      if (specifier === ADDON_SPECIFIER) {
+        return addon
+      }
+      throw new Error('MODULE_NOT_FOUND')
+    })
+    const rows = await readWindowsProcessTableFresh()
+    expect(rows).toEqual([
+      { pid: process.pid, ppid: 0, name: 'vitest.exe', command: '', memoryBytes: undefined },
+      {
+        pid: 100,
+        ppid: 4,
+        name: 'orca.exe',
+        command: '"C:/a b/orca.exe" --x',
+        memoryBytes: 4096
+      }
+    ])
+    expect(isWindowsProcessTableAvailable()).toBe(true)
+  })
+
+  it('asks the addon for memory and command line, as the package path does', async () => {
+    const addon = addonReturning(NATIVE)
+    __setWindowsProcessTreeRequireForTests((specifier: string) => {
+      if (specifier === ADDON_SPECIFIER) {
+        return addon
+      }
+      throw new Error('MODULE_NOT_FOUND')
+    })
+    await readWindowsProcessTableFresh()
+    // Memory | CommandLine. A bare snapshot would silently drop the command
+    // line every agent-recognition caller matches on first.
+    expect(addon.getProcessList).toHaveBeenCalledWith(expect.any(Function), 3)
+  })
+
+  it('reaches the CIM scan when neither the package nor the addon is present', async () => {
+    const cimScan = vi
+      .fn()
+      .mockResolvedValue([
+        { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' }
+      ])
+    __setWindowsProcessTableCimScanForTests(cimScan)
+    __setWindowsProcessTreeRequireForTests(() => {
+      throw new Error('MODULE_NOT_FOUND')
+    })
+    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(1)
+    expect(cimScan).toHaveBeenCalledTimes(1)
+    expect(isWindowsProcessTableAvailable()).toBe(false)
+  })
+
+  it('rejects an addon that loads without the call we need', async () => {
+    // An arch mismatch or a truncated upload can still produce a loadable file.
+    // Binding to it would reject every read forever; the scan still works.
+    const cimScan = vi
+      .fn()
+      .mockResolvedValue([
+        { pid: process.pid, ppid: 0, name: 'node.exe', command: 'node relay.js' }
+      ])
+    __setWindowsProcessTableCimScanForTests(cimScan)
+    __setWindowsProcessTreeRequireForTests((specifier: string) => {
+      if (specifier === ADDON_SPECIFIER) {
+        return { notTheApi: true }
+      }
+      throw new Error('MODULE_NOT_FOUND')
+    })
+    await expect(readWindowsProcessTableFresh()).resolves.toHaveLength(1)
+    expect(cimScan).toHaveBeenCalledTimes(1)
+  })
+
+  it('never probes either specifier off Windows', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'darwin' })
+    const resolve = vi.fn()
+    __setWindowsProcessTreeRequireForTests(resolve)
+    await expect(readWindowsProcessTableFresh()).rejects.toThrow(/unavailable/)
+    expect(resolve).not.toHaveBeenCalled()
   })
 })

@@ -97,8 +97,9 @@ import { MAX_QUICK_COMMANDS } from '../../shared/terminal-quick-commands'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
-  AGENT_PROMPT_SUBMIT_DELAY_MS,
-  buildAgentPromptPasteBytes
+  buildAgentPromptPasteBytes,
+  getAgentPromptSubmitDelayMs,
+  getTerminalPasteIngestMs
 } from '../../shared/agent-prompt-injection'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
@@ -144,6 +145,7 @@ import {
 } from './terminal-view-attribute-store'
 import { clearConfiguredWorktreeSharedDirectoriesCacheForTests } from '../git/worktree-shared-directories'
 import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
+import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 
 const ORIGINAL_PLATFORM = process.platform
 const ORIGINAL_PLATFORM_DESCRIPTOR = Object.getOwnPropertyDescriptor(process, 'platform')
@@ -1048,6 +1050,17 @@ const TEST_REPO_ID = 'repo-1'
 const TEST_REPO_PATH = '/tmp/repo'
 const TEST_WORKTREE_PATH = '/tmp/worktree-a'
 const TEST_WORKTREE_ID = `${TEST_REPO_ID}::${TEST_WORKTREE_PATH}`
+/** The render gate's hard cap bounds the wait *after* the paste lands, so it carries the
+ *  payload's ingest bound on top of the flat 8 s settlement budget. */
+function renderGateCapMs(prompt: string): number {
+  return (
+    8_000 +
+    getTerminalPasteIngestMs(
+      process.platform,
+      Buffer.byteLength(buildAgentPromptPasteBytes(prompt), 'utf8')
+    )
+  )
+}
 const TEST_FOLDER_PROJECT_GROUP_ID = 'folder-project-group-1'
 const TEST_FOLDER_WORKSPACE_ID = 'folder-workspace-1'
 const TEST_FOLDER_WORKSPACE_KEY = `folder:${TEST_FOLDER_WORKSPACE_ID}`
@@ -17489,7 +17502,7 @@ describe('OrcaRuntimeService', () => {
     (Object.keys(TUI_AGENT_CONFIG) as TuiAgent[]).filter(
       (agent) => agent !== 'claude' && agent !== 'codex'
     )
-  )('preserves the legacy fixed submit delay for %s', async (agent) => {
+  )('holds Enter for the full open-loop submit delay for %s', async (agent) => {
     vi.useFakeTimers()
     try {
       const writes: string[] = []
@@ -17508,8 +17521,12 @@ describe('OrcaRuntimeService', () => {
         launchAgent: agent
       })
 
+      const submitDelayMs = getAgentPromptSubmitDelayMs(
+        process.platform,
+        Buffer.byteLength(buildAgentPromptPasteBytes('review this change'), 'utf8')
+      )
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
-      await vi.advanceTimersByTimeAsync(AGENT_PROMPT_SUBMIT_DELAY_MS - 1)
+      await vi.advanceTimersByTimeAsync(submitDelayMs - 1)
       expect(writes).not.toContain('\r')
 
       await vi.advanceTimersByTimeAsync(1)
@@ -17580,7 +17597,7 @@ describe('OrcaRuntimeService', () => {
       })
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
-      await vi.advanceTimersByTimeAsync(7_999)
+      await vi.advanceTimersByTimeAsync(renderGateCapMs('review this change') - 1)
       expect(writes).not.toContain('\r')
 
       await vi.advanceTimersByTimeAsync(1)
@@ -17661,7 +17678,9 @@ describe('OrcaRuntimeService', () => {
       })
 
       const sendPromise = runtime.sendTerminalAgentPrompt(handle, 'review this change')
-      await vi.advanceTimersByTimeAsync(8_099)
+      // The marker at 100 ms re-arms the cap, but the ingest term is absolute: a prompt this
+      // small is already ingested by then, so the fallback is one flat render timeout later.
+      await vi.advanceTimersByTimeAsync(100 + 8_000 - 1)
       expect(writes).not.toContain('\r')
 
       await vi.advanceTimersByTimeAsync(1)
@@ -22004,6 +22023,8 @@ describe('OrcaRuntimeService', () => {
     try {
       const task = db.createTask({ spec: 'continue after missing worker recovery' })
       const started = db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: { topology: 'current', agent: 'codex' }
       })
@@ -22109,6 +22130,8 @@ describe('OrcaRuntimeService', () => {
     try {
       const task = db.createTask({ spec: 'retry missing worker recovery' })
       const started = db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: { topology: 'current', agent: 'codex' }
       })
@@ -43844,11 +43867,12 @@ describe('OrcaRuntimeService', () => {
           ['worker-folder', runB.id]
         ].map(([name, runId]) => {
           const task = db.createTask({ spec: name, runId })
-          return [name, db.createDispatchContext(task.id, handles[name], paneKey(name))]
+          return [name, createRootDispatch(db, task.id, handles[name], paneKey(name))]
         })
       )
       const legacyTask = db.createTask({ spec: 'legacy worker' })
-      const legacyDispatch = db.createDispatchContext(
+      const legacyDispatch = createRootDispatch(
+        db,
         legacyTask.id,
         handles['legacy-worker'],
         paneKey('legacy-worker')
@@ -43976,7 +44000,8 @@ describe('OrcaRuntimeService', () => {
       expect(creatorAuthority?.processIncarnation).toBeTruthy()
       expect(coordinatorAuthority?.processIncarnation).toBeTruthy()
       const creatorTask = db.createTask({ spec: 'create nested work', runId: runA.id })
-      db.createDispatchContext(
+      createRootDispatch(
+        db,
         creatorTask.id,
         handles.creator,
         paneKey('creator'),
@@ -43991,7 +44016,8 @@ describe('OrcaRuntimeService', () => {
         createdByProcessIncarnation: creatorAuthority?.processIncarnation ?? undefined,
         createdByRunGeneration: runA.consumer_generation
       })
-      const workerDispatch = db.createDispatchContext(
+      const workerDispatch = createRootDispatch(
+        db,
         workerTask.id,
         handles.worker,
         paneKey('worker')
@@ -44004,7 +44030,8 @@ describe('OrcaRuntimeService', () => {
         createdByProcessIncarnation: coordinatorAuthority?.processIncarnation ?? undefined,
         createdByRunGeneration: runA.consumer_generation
       })
-      const coordinatorCreatedDispatch = db.createDispatchContext(
+      const coordinatorCreatedDispatch = createRootDispatch(
+        db,
         coordinatorCreatedTask.id,
         handles['coordinator-created-worker'],
         paneKey('coordinator-created-worker')
@@ -44092,7 +44119,8 @@ describe('OrcaRuntimeService', () => {
         coordinatorPaneKey: makePaneKey(terminals[99].tabId, terminals[99].leafId)
       })
       const task = db.createTask({ spec: 'one dispatched terminal', runId: run.id })
-      const dispatch = db.createDispatchContext(
+      const dispatch = createRootDispatch(
+        db,
         task.id,
         handles[0],
         makePaneKey(terminals[0].tabId, terminals[0].leafId)

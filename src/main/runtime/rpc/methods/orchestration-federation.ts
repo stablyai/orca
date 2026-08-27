@@ -57,6 +57,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
         homePeerFingerprint: orchestrationMutation.callerFingerprint,
         protocolVersion: params.protocolVersion,
         runtimeEpoch: runtime.getRuntimeId(),
+        depth: params.depth,
         mutationReceipt: orchestrationMutation
       })
       const effects: FederationEffect[] = []
@@ -235,6 +236,9 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
             workerHandle: terminalHandle,
             dispatchCapability: capability,
             devMode: params.devMode,
+            // Why the worker host's own setting: enforcement runs here, with this
+            // host's code, against this host's cap.
+            canDispatchSubWorkers: (params.depth ?? 1) < runtime.getNestedWorkerMaxDepth(),
             cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
           })
         )

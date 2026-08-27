@@ -61,6 +61,11 @@ function resolveCycleContext(): CycleContext | null {
 export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab): void {
   if (next.type === 'terminal') {
     store.setActiveTab(next.id)
+    // Terminal entities can be open in multiple split groups. setActiveTab uses the legacy
+    // entity id and therefore may pick the first copy; the unified id restores the exact target.
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
     store.setActiveTabType('terminal')
   } else if (next.type === 'browser') {
     store.setActiveBrowserTab(next.id)

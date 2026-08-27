@@ -41,7 +41,7 @@ describe('getWindowsManagedLifecycleHook', () => {
 
     expect(hook.args).toBeUndefined()
     expect(hook.command).toMatch(
-      /\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden /
+      /\/powershell\.exe -NoProfile -WindowStyle Hidden -EncodedCommand /
     )
     expect(hook.command).not.toContain(scriptPath)
     // Why: Git Bash/MSYS mangles backslash paths and slash-prefixed switches.
@@ -385,7 +385,7 @@ describe('ClaudeHookService.install', () => {
           const hook = settings.hooks[eventName]?.[0]?.hooks?.[0]
           expect(hook?.args).toBeUndefined()
           expect(hook?.command).toMatch(
-            /\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden /
+            /\/powershell\.exe -NoProfile -WindowStyle Hidden -EncodedCommand /
           )
           expect(hook?.command).not.toContain(scriptPath)
 
