@@ -1,11 +1,14 @@
-import type { ControlPlaneDatabaseHandle } from './control-plane-store'
+import type { OrchestrationDb } from '../db'
+import type { DispatchContextRow } from '../types'
 import { ControlPlaneStore } from './control-plane-store'
+import { advanceAfterValidatedCompletion, type AdvanceOutcome } from './lifecycle-advance'
 import {
   parseCompletionClaim,
   validateCompletionReceipt,
   type CompletionRejection
 } from './completion-receipt'
 import { resolveOutcomeBinding } from './outcome-identity'
+import type { ControlPlaneDatabaseHandle } from './control-plane-store'
 
 /** B6 — where the completion gate actually bites, on the `worker_done` path.
  *
@@ -71,4 +74,59 @@ export function evaluateCompletionGate(args: {
   return validation.ok
     ? { applies: true, ok: true, finalSha: validation.finalSha }
     : { applies: true, ...validation }
+}
+
+/** Runtime hooks the reconcile path threads through so the control plane can
+ *  wake waiters and bind evidence to the current build without importing the
+ *  runtime service. All optional: a plain `reconcileLifecycleMessage(db, msg)`
+ *  from a test or the in-process coordinator behaves exactly as before. */
+export type LifecycleReconciliationHooks = {
+  notify?: (handle: string, messageType: string) => void
+  currentCommitSha?: string
+  currentRuntimeVersion?: string
+  nowMs?: number
+}
+
+function readStringArray(payload: Record<string, unknown>, key: string): string[] {
+  const raw = payload[key]
+  return Array.isArray(raw) && raw.every((item) => typeof item === 'string')
+    ? (raw as string[])
+    : []
+}
+
+/** The single production call site for the post-completion lifecycle. Failures
+ *  are contained: an advance error must never undo an already-settled, already
+ *  gate-proven completion. */
+export function advanceAfterAcceptedCompletion(args: {
+  db: OrchestrationDb
+  dispatch: DispatchContextRow
+  taskId: string
+  payload: Record<string, unknown>
+  finalSha: string
+  outcomeOfReport: 'succeeded' | 'failed'
+  onLog: (message: string) => void
+  hooks?: LifecycleReconciliationHooks
+}): AdvanceOutcome | null {
+  const parsed = parseCompletionClaim(args.payload)
+  if (!parsed.present || !parsed.claim) {
+    return null
+  }
+  try {
+    return advanceAfterValidatedCompletion({
+      db: args.db,
+      dispatch: args.dispatch,
+      taskId: args.taskId,
+      claim: { ...parsed.claim, headSha: args.finalSha },
+      corrections: readStringArray(args.payload, 'corrections'),
+      filesModified: readStringArray(args.payload, 'filesModified'),
+      outcomeOfReport: args.outcomeOfReport,
+      nowMs: args.hooks?.nowMs ?? Date.now(),
+      currentCommitSha: args.hooks?.currentCommitSha,
+      currentRuntimeVersion: args.hooks?.currentRuntimeVersion,
+      notify: args.hooks?.notify
+    })
+  } catch (error) {
+    args.onLog(`Lifecycle advance failed after completion: ${String(error)}`)
+    return null
+  }
 }

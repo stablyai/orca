@@ -113,6 +113,42 @@ CREATE TABLE IF NOT EXISTS control_plane_outcome_relations (
   PRIMARY KEY (left_outcome_id, right_outcome_id, kind)
 );
 
+-- B7 (correction 2): the routing policy for one outcome. Separate from the
+-- outcome row so a database created by an earlier build gains it additively.
+-- Candidate ORDER is supplied by the classifying layer; the control plane never
+-- invents one, which is what keeps model choice out of this code.
+CREATE TABLE IF NOT EXISTS control_plane_outcome_policy (
+  outcome_id          TEXT PRIMARY KEY,
+  task_classification TEXT NOT NULL DEFAULT 'bounded_implementation',
+  builder_candidates  TEXT NOT NULL DEFAULT '[]',
+  reviewer_candidates TEXT NOT NULL DEFAULT '[]',
+  review_capabilities TEXT NOT NULL DEFAULT '[]',
+  allow_unknown_quota INTEGER NOT NULL DEFAULT 0,
+  updated_at          TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+-- B7 (correction 2): every phase the lifecycle created for an outcome, so a
+-- replayed completion is idempotent and recovery can see the exact chain.
+CREATE TABLE IF NOT EXISTS control_plane_outcome_phases (
+  phase_id        TEXT PRIMARY KEY,
+  outcome_id      TEXT NOT NULL,
+  run_id          TEXT NOT NULL,
+  kind            TEXT NOT NULL CHECK(kind IN ('build', 'review', 'fix_first')),
+  task_id         TEXT NOT NULL,
+  source_task_id  TEXT,
+  source_dispatch_id TEXT,
+  bound_sha       TEXT NOT NULL,
+  status          TEXT NOT NULL DEFAULT 'planned'
+    CHECK(status IN ('planned', 'settled')),
+  created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_control_plane_outcome_phases_outcome
+  ON control_plane_outcome_phases(outcome_id, created_at);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_control_plane_outcome_phases_source
+  ON control_plane_outcome_phases(source_dispatch_id, kind)
+  WHERE source_dispatch_id IS NOT NULL;
+
 -- B4: runtime-owned liveness marker. Writer: the runtime liveness sweep.
 -- Consumer: the wake planner and the B10 state query. Never written by a model.
 CREATE TABLE IF NOT EXISTS control_plane_dispatch_liveness (

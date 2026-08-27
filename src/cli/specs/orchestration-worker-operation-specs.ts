@@ -8,7 +8,7 @@ export const ORCHESTRATION_WORKER_OPERATION_SPECS: CommandSpec[] = [
     path: ['orchestration', 'report'],
     summary: 'Report the terminal outcome of this Dispatch',
     usage:
-      'orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome <succeeded|failed> --body <text> [--subject <text>] [--files-modified <csv>] [--report-path <path>] [--run <run_id>] [--outcome-id <id>] [--claimed-sha <sha>] [--receipt-sha <sha>] [--receipt-result <PASS|FAIL>] [--policy-version <id>] [--command-identity <id>] [--no-completion-evidence] [--from <handle>] [--dispatch-capability <cap>] [--retry-request <id>] [--json]',
+      'orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome <succeeded|failed> --body <text> [--subject <text>] [--files-modified <csv>] [--report-path <path>] [--corrections <csv>] [--run <run_id>] [--outcome-id <id>] [--claimed-sha <sha>] [--receipt-sha <sha>] [--receipt-result <PASS|FAIL>] [--policy-version <id>] [--command-identity <id>] [--no-completion-evidence] [--from <handle>] [--dispatch-capability <cap>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
@@ -19,6 +19,7 @@ export const ORCHESTRATION_WORKER_OPERATION_SPECS: CommandSpec[] = [
       'body',
       'files-modified',
       'report-path',
+      'corrections',
       'run',
       'outcome-id',
       'claimed-sha',
@@ -33,7 +34,8 @@ export const ORCHESTRATION_WORKER_OPERATION_SPECS: CommandSpec[] = [
     notes: [
       'The typed replacement for hand-built `send --type worker_done` command lines; the dispatch preamble emits it fully bound.',
       'Orca observes the final Git HEAD and worktree cleanliness itself; --claimed-sha is what you assert you delivered.',
-      'A receipt whose --receipt-sha is not the final HEAD is rejected with the exact stale gate.'
+      'A receipt whose --receipt-sha is not the final HEAD is rejected with the exact stale gate.',
+      'From a reviewer Dispatch, --corrections "<a>,<b>" routes one consolidated FIX_FIRST round back to the same retained builder; omit it to accept the commit.'
     ]
   },
   {

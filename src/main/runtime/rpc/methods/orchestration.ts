@@ -23,6 +23,9 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import { ORCHESTRATION_AWAIT_METHODS } from './orchestration-await'
+import { ORCHESTRATION_GATE_OPS_METHODS } from './orchestration-gate-ops'
+import { ORCHESTRATION_REGISTRY_OPS_METHODS } from './orchestration-registry-ops'
 import { ORCHESTRATION_CONTROL_PLANE_STATE_METHODS } from './orchestration-control-plane-state'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import {
@@ -785,7 +788,12 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
         if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
-          const reconciled = reconcileLifecycleMessage(db, msg)
+          const reconciled = reconcileLifecycleMessage(db, msg, undefined, {
+            // Why the runtime notifier: an accepted completion can publish a
+            // REVIEW_COMPLETE or protected-blocker wake, and a coordinator
+            // sitting in `orchestration.await` must be woken for it.
+            notify: (handle, messageType) => runtime.notifyMessageArrived(handle, messageType)
+          })
           // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
           if (reconciled.action === 'suppressed') {
             return withSendWarnings({ message: msg })
@@ -1916,6 +1924,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
 
   ...ORCHESTRATION_GATE_METHODS,
   ...ORCHESTRATION_CONTROL_PLANE_STATE_METHODS,
+  ...ORCHESTRATION_AWAIT_METHODS,
+  ...ORCHESTRATION_REGISTRY_OPS_METHODS,
+  ...ORCHESTRATION_GATE_OPS_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

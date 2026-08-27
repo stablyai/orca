@@ -1,6 +1,10 @@
 import type { OrchestrationDb } from './db'
 import type { MessageRow, WorkerReportOutcome } from './types'
-import { evaluateCompletionGate } from './control-plane/completion-gate-enforcement'
+import {
+  advanceAfterAcceptedCompletion,
+  evaluateCompletionGate,
+  type LifecycleReconciliationHooks
+} from './control-plane/completion-gate-enforcement'
 import {
   reconcileHeartbeatMessage,
   suppressEarlierHeartbeats
@@ -26,11 +30,12 @@ export type {
 export function reconcileLifecycleMessage(
   db: OrchestrationDb,
   msg: MessageRow,
-  onLog: LogFn = noopLog
+  onLog: LogFn = noopLog,
+  hooks?: LifecycleReconciliationHooks
 ): LifecycleReconciliationResult {
   switch (msg.type) {
     case 'worker_done':
-      return reconcileWorkerDoneMessage(db, msg, onLog)
+      return reconcileWorkerDoneMessage(db, msg, onLog, hooks)
     case 'heartbeat':
       return reconcileHeartbeatMessage(db, msg, onLog)
     case 'status':
@@ -47,7 +52,8 @@ export function reconcileLifecycleMessage(
 function reconcileWorkerDoneMessage(
   db: OrchestrationDb,
   msg: MessageRow,
-  onLog: LogFn
+  onLog: LogFn,
+  hooks?: LifecycleReconciliationHooks
 ): LifecycleReconciliationResult {
   onLog(`Worker done: ${msg.from_handle} — ${msg.subject}`)
 
@@ -187,6 +193,21 @@ function reconcileWorkerDoneMessage(
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)
   }
   suppressEarlierHeartbeats(db, msg, dispatchId)
+  if (gate.applies && gate.ok) {
+    // Why here: the completion is now settled and proven, which is exactly the
+    // point the reviewer phase, gate receipt, lease release and ledger entry
+    // become derivable. Never on a rejected or unproven completion.
+    advanceAfterAcceptedCompletion({
+      db,
+      dispatch,
+      taskId,
+      payload,
+      finalSha: gate.finalSha,
+      outcomeOfReport: outcome as WorkerReportOutcome,
+      onLog,
+      hooks
+    })
+  }
 
   if (outcome === 'failed') {
     onLog(`Task ${taskId} failed by worker report`)

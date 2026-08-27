@@ -162,3 +162,33 @@ function resolveWorkerStartAgent(args: {
     }
   }
 }
+
+/** The persisted launch record for one worker-start. Kept beside the other
+ *  worker-start validation so the method body stays about control flow. */
+export function buildWorkerStartOptions(args: {
+  params: WorkerStartInput
+  createsWorktree: boolean
+  agent: TuiAgent | undefined
+  launchReceipt: WorkerStartLaunch['receipt']
+  resolvedWorktreeId: string | null
+  creationRepoId: string | null
+}): Record<string, unknown> {
+  const { params, createsWorktree } = args
+  return {
+    worktree: params.worktree ?? 'current',
+    resolvedWorktreeId: args.resolvedWorktreeId,
+    name: params.name ?? null,
+    repo: params.repo ?? args.creationRepoId,
+    baseBranch: params.baseBranch ?? null,
+    terminal: params.terminal ?? null,
+    agent: args.agent ?? null,
+    launch: args.launchReceipt,
+    timeoutMs: params.timeoutMs ?? 60_000,
+    setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
+    setupSource: createsWorktree
+      ? params.setup
+        ? 'explicit_request'
+        : 'orchestration_default'
+      : 'existing_worktree'
+  }
+}

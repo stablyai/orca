@@ -98,6 +98,12 @@ export const ORCHESTRATION_WORKER_OPERATION_HANDLERS: Record<string, CommandHand
     if (reportPath) {
       payload.reportPath = reportPath
     }
+    // Why on the report: a reviewer's verdict and its required changes are one
+    // atomic fact, so FIX_FIRST cannot race a separate message.
+    const corrections = splitCsv(getOptionalStringFlag(flags, 'corrections'))
+    if (corrections) {
+      payload.corrections = corrections
+    }
     if (observed) {
       payload.completion = {
         taskId: identity.taskId,

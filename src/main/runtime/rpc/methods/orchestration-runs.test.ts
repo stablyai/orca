@@ -26,8 +26,15 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(39)
+    expect(registry.size).toBe(46)
     expect(registry.has('orchestration.state')).toBe(true)
+    expect(registry.has('orchestration.await')).toBe(true)
+    expect(registry.has('orchestration.outcomeAdmit')).toBe(true)
+    expect(registry.has('orchestration.gatePlan')).toBe(true)
+    expect(registry.has('orchestration.validationLease')).toBe(true)
+    expect(registry.has('orchestration.routeUpsert')).toBe(true)
+    expect(registry.has('orchestration.certify')).toBe(true)
+    expect(registry.has('orchestration.routes')).toBe(true)
     expect(registry.has('orchestration.workerRelease')).toBe(true)
     expect(registry.has('orchestration.workerRetain')).toBe(true)
     expect(registry.has('orchestration.workerList')).toBe(true)

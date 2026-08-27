@@ -134,6 +134,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
+import type { LivenessSignalSource as OrchestrationLivenessSignalSource } from './orchestration/control-plane/liveness-sweep'
 import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope,
@@ -3127,6 +3128,10 @@ type ProviderSnapshotReadOptions = {
   retireOnTimeout?: boolean
   visibleScreenOnly?: boolean
 }
+
+// Why 10 minutes: an approved blocking wait is bounded by its own timeout, so
+// the horizon only has to outlast one sweep interval to read as "in a wait".
+const APPROVED_WAIT_HORIZON_MS = 10 * 60 * 1000
 
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
@@ -35958,6 +35963,30 @@ export class OrcaRuntimeService {
       }
       waiters.add(waiter)
     })
+  }
+
+  /** True while this runtime holds a blocking orchestration waiter on `handle`.
+   *  The waiter registry is the authority for "the worker is inside an
+   *  Orca-approved wait" — no model claim is involved (§B4, correction 2). */
+  hasOrchestrationMessageWaiter(handle: string): boolean {
+    return (this.messageWaitersByHandle.get(handle)?.size ?? 0) > 0
+  }
+
+  /** The authoritative liveness signal source for the orchestration control
+   *  plane. Narrow on purpose: it exposes only what the typed classifier reads,
+   *  and every field is something this runtime observed itself. */
+  getOrchestrationLivenessSignalSource(): OrchestrationLivenessSignalSource {
+    return {
+      agentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      inspectProcessLiveness: (processIncarnation, hostScope) =>
+        this.inspectTerminalProcessIncarnationLiveness(processIncarnation, hostScope),
+      approvedWaitUntil: (dispatchId) =>
+        // Why an open-ended deadline: the waiter exists right now, so the wait
+        // is active; its own timeout ends it and the next sweep sees it gone.
+        this.hasOrchestrationMessageWaiter(`dispatch:${dispatchId}`)
+          ? new Date(Date.now() + APPROVED_WAIT_HORIZON_MS).toISOString()
+          : null
+    }
   }
 
   cancelMessageWaiters(handle: string): void {

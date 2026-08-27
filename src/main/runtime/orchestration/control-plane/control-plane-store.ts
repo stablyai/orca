@@ -212,6 +212,15 @@ export class ControlPlaneStore {
       .get(scopeKey) as ValidationLeaseRow | undefined
   }
 
+  /** Any live lease this Dispatch owns, whatever scope it was taken on. */
+  findValidationLeaseByOwner(owner: string): ValidationLeaseRow | undefined {
+    return this.handle.db
+      .prepare(
+        'SELECT * FROM control_plane_validation_leases WHERE owner = ? AND released_at IS NULL'
+      )
+      .get(owner) as ValidationLeaseRow | undefined
+  }
+
   putValidationLease(row: ValidationLeaseRow): void {
     this.handle.db
       .prepare(
