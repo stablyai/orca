@@ -172,6 +172,8 @@ export function buildWorkerStartOptions(args: {
   launchReceipt: WorkerStartLaunch['receipt']
   resolvedWorktreeId: string | null
   creationRepoId: string | null
+  /** Derived readiness timeout, not the raw param. See upstream #16300. */
+  readinessTimeoutMs: number
 }): Record<string, unknown> {
   const { params, createsWorktree } = args
   return {
@@ -183,7 +185,7 @@ export function buildWorkerStartOptions(args: {
     terminal: params.terminal ?? null,
     agent: args.agent ?? null,
     launch: args.launchReceipt,
-    timeoutMs: params.timeoutMs ?? 60_000,
+    timeoutMs: args.readinessTimeoutMs,
     setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
     setupSource: createsWorktree
       ? params.setup

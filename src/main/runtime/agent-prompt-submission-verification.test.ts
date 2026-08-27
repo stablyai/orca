@@ -4,6 +4,7 @@ import {
   AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS,
   type AgentPromptActivity,
   isAgentPromptStalledError,
+  readAgentPromptWaitText,
   resolveAgentPromptEffectTimeoutMs,
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
@@ -22,6 +23,17 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
 
 describe('agent prompt submission verification', () => {
   afterEach(() => vi.useRealTimers())
+
+  it('reuses wait text while the PTY output sequence is unchanged', () => {
+    const cache: { outputSequence?: number; waitText?: string } = {}
+    const readWaitText = vi.fn(() => 'retained terminal tail')
+
+    expect(readAgentPromptWaitText(cache, 7, readWaitText)).toBe('retained terminal tail')
+    expect(readAgentPromptWaitText(cache, 7, readWaitText)).toBe('retained terminal tail')
+    expect(readAgentPromptWaitText(cache, 8, readWaitText)).toBe('retained terminal tail')
+
+    expect(readWaitText).toHaveBeenCalledTimes(2)
+  })
 
   it('accepts an observed working transition', async () => {
     vi.useFakeTimers()
@@ -78,6 +90,21 @@ describe('agent prompt submission verification', () => {
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 
     await rejected
+  })
+
+  it('accepts a working transition after the former five-second deadline', async () => {
+    vi.useFakeTimers()
+    let current = activity()
+    const verification = verifyAgentPromptSubmission({
+      baseline: current,
+      readActivity: () => current
+    })
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    current = activity({ workingSequence: 5, status: 'working' })
+    await vi.advanceTimersByTimeAsync(50)
+
+    await expect(verification).resolves.toBeUndefined()
   })
 
   it('blocks when permission appears after submit', async () => {
@@ -207,7 +234,7 @@ describe('agent prompt submission verification', () => {
     await rejected
   })
 
-  it('holds the longer hook window open past the default timeout', async () => {
+  it('holds the extended hook window open past the former hook timeout', async () => {
     vi.useFakeTimers()
     let current = activity()
     const verification = verifyAgentPromptSubmission({
@@ -216,7 +243,7 @@ describe('agent prompt submission verification', () => {
       timeoutMs: AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS
     })
 
-    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS + 1_000)
+    await vi.advanceTimersByTimeAsync(15_000 + 1_000)
     current = activity({ explicitWorkingStartedAt: 9_000, status: 'working' })
     await vi.advanceTimersByTimeAsync(50)
 

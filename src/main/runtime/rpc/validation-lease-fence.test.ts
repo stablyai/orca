@@ -164,6 +164,6 @@ describe('the lease fence fails open only when there is nothing to fence', () =>
     }
     const response = await dispatcherWith(() => broken).dispatch(request)
     expect(response.ok).toBe(false)
-    expect(response.error?.message).toContain('db is sick')
+    expect(response.ok === false && response.error.message).toContain('db is sick')
   })
 })

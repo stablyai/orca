@@ -1,17 +1,49 @@
-PACKAGE B — FINAL CLOSURE LIVE RECEIPTS
-captured_at:        2026-08-27T22:32:36Z
-branch:             jb-workflow-control-plane-b
-final_sha:          d7405b348bc300db536a1a6b51cc94cb6da8301f
-pinned_origin_main: 249d93bc5d2fd3b04581aae9916afc84bc787c8b
-pin_is_ancestor:    yes
-worktree_clean:     NO
-native_runtime_untouched: 868298d7-29b6-413d-b374-507abfb6e019
-candidate_runtime:        9a4c6d41-12e6-42c4-9029-9ac7834035d8
-candidate_user_data:      /tmp/orca-pkgb-cert-1787869653
+PACKAGE B — FINAL CLOSURE RECEIPTS
 
--- embedded build provenance in out/main/index.js --
-"{\"schemaVersion\":1,\"sourceSha\":\"d7405b348bc300db536a1a6b51cc94cb6da8301f\",\"dirty\":false,\"appVersion\":\"1.4.178-rc.2\",\"builtAt\":\"2026-08-27T22:27:22.622Z\"}"
+branch                    jb-workflow-control-plane-b
+base at dispatch start    b954873e83
+pinned origin/main        249d93bc5d2fd3b04581aae9916afc84bc787c8b   (ancestor of HEAD: yes)
+final code SHA            935adc80571ff1eee335e01124f28861ad64a54d
+certified artifact SHA    629c9656c83f77a74e5fa5ef718b0d6cc7bfa981   (935adc8057 + docs; no code delta)
+rollback point            4d05afe5b0   (b954873e83 reverts the whole dispatch)
 
--- live certification run on the candidate --
-run: run_f14c2e255999   terminal: term_b864dcbf-99b3-4586-9718-40ac22ca8003
- task task_b8fa5ffdd881 dispatched
+embedded build provenance in the artifact under test:
+  {"schemaVersion":1,"sourceSha":"629c9656c83f77a74e5fa5ef718b0d6cc7bfa981","dirty":false,
+   "appVersion":"1.4.178-rc.2","builtAt":"2026-08-27T22:41:50.199Z"}
+  -> dirty:false, so the artifact names the exact commit it was built from.
+
+candidate runtime         b221f336-f400-47a7-bf34-2df58a464235  (isolated ORCA_DEV_USER_DATA_PATH)
+native runtime            868298d7-29b6-413d-b374-507abfb6e019  (NOT mutated; verified ready after teardown)
+teardown                  candidate killed, port 6769 released, user-data removed
+
+LIVE CHECKS AT THE EXACT FINAL SHA  (all with negative controls)
+
+  B8  opencode route upsert            hookSupported=true    drift=[]                     PASS
+  B8  negative control: aider          hookSupported=false   drift=[launcher_supported_hook_rejected]  PASS
+      certification matrix             ok=true  routes=2  matrix=2  (used to throw)       PASS
+
+  B4  validation lease acquired        ok=true                                            PASS
+  B4  terminal.send under the lease    REFUSED  validation_in_progress                    PASS
+  B4  lease released                   released=true                                      PASS
+  B4  negative control: same send      ok=true  bytesWritten=7                            PASS
+
+  B1  fabricated PASS worker_done      REFUSED  completion_receipt_invalid
+                                       (runtime_observation gate, evidence_unobservable)  PASS
+  B1  side effects of the rejection    tasks=1 [dispatched]   phase launches=0            PASS
+      -> zero reviewer Task, Dispatch or session created
+
+  B7  merge + serialize deadlock       REFUSED  "merged into one outcome, so serializing
+                                       them against each other deadlocks both"            PASS
+  B7  negative control: coherent pair  admitted, both outcomes bound to their own Run     PASS
+
+GATES
+  typecheck (node + cli + web)         clean
+  oxlint, 43 changed files             clean
+  oxlint react-doctor                  clean
+  child-process import ratchet         70 passed
+  control-plane + rpc trees            236 files, 1973 passed, 1 skipped
+  full suite                           see report
+
+NOT DONE (per standing constraints)
+  no push, no PR, no release, no install, no native-app restart, no merge, no deploy
+  no second Run; one worktree, one branch, sole editor

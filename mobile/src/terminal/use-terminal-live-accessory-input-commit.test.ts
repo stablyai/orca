@@ -26,6 +26,7 @@ function createDeferredBoolean(): DeferredBoolean {
 }
 
 type AccessoryInputCommitHarnessOptions = {
+  readonly composing?: boolean
   readonly heldText?: string
   readonly sentText?: string
   readonly pendingHandle?: string | null
@@ -46,6 +47,7 @@ type AccessoryInputCommitHarness = {
 }
 
 function createAccessoryInputCommitHarness({
+  composing,
   heldText = '',
   sentText = '',
   pendingHandle = null,
@@ -55,6 +57,7 @@ function createAccessoryInputCommitHarness({
 }: AccessoryInputCommitHarnessOptions = {}): AccessoryInputCommitHarness {
   const activeHandle = 'terminal-a'
   const heldLiveInputTextRef: RefObject<string> = { current: heldText }
+  const liveInputComposingRef: RefObject<boolean | undefined> = { current: composing }
   const sentLiveInputTextRef: RefObject<string> = { current: sentText }
   const pendingLiveInputHandleRef: RefObject<string | null> = { current: pendingHandle }
   const liveInputRef: RefObject<TextInput | null> = { current: null }
@@ -66,7 +69,9 @@ function createAccessoryInputCommitHarness({
       return sendResult
     }
   }
-  const applyLiveInputMirror = vi.fn((_handle: string, _fieldText: string) => {})
+  const applyLiveInputMirror = vi.fn(
+    (_handle: string, _fieldText: string, _composing?: boolean) => {}
+  )
   const clearPendingLiveInputCommit = vi.fn(() => {})
   const flushPendingLiveInputText = vi.fn(async (_expectedHandle: string | null) => flushResult)
   const waitForPendingLiveInputFlush = vi.fn(async () => waitResult)
@@ -82,6 +87,7 @@ function createAccessoryInputCommitHarness({
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
       heldLiveInputTextRef,
+      liveInputComposingRef,
       liveInputRef,
       liveInputTerminalHandles,
       pendingLiveInputHandleRef,
@@ -178,10 +184,11 @@ describe('terminal live accessory input commit hook', () => {
     expect(harness.sent).toEqual([])
   })
 
-  it('Given accessory backspace with a held syllable When committed Then mirrors the emptied field without terminal bytes', async () => {
+  it('Given accessory backspace with reported composition When committed Then keeps the edited preedit held', async () => {
     // Given
     const harness = createAccessoryInputCommitHarness({
-      heldText: '한',
+      composing: true,
+      heldText: 'ni hao',
       sentText: '',
       pendingHandle: 'terminal-a'
     })
@@ -190,14 +197,31 @@ describe('terminal live accessory input commit hook', () => {
     const result = await harness.commit({ bytes: '\x7f', localEdit: 'backspace' })
 
     // Then
-    expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', '')
+    expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'ni ha', true)
     expect(result).toEqual({ kind: 'handled' })
     expect(harness.sent).toEqual([])
+  })
+
+  it('Given accessory backspace with an unreported hold When committed Then preserves the Android fallback', async () => {
+    // Given
+    const harness = createAccessoryInputCommitHarness({
+      heldText: '한글',
+      sentText: '',
+      pendingHandle: 'terminal-a'
+    })
+
+    // When
+    const result = await harness.commit({ bytes: '\x7f', localEdit: 'backspace' })
+
+    // Then
+    expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', '한', undefined)
+    expect(result).toEqual({ kind: 'handled' })
   })
 
   it('Given accessory backspace with mirrored sent text When committed Then mirrors the shortened field so the diff emits DEL', async () => {
     // Given
     const harness = createAccessoryInputCommitHarness({
+      composing: false,
       heldText: '',
       sentText: 'ab',
       pendingHandle: 'terminal-a'
@@ -207,7 +231,7 @@ describe('terminal live accessory input commit hook', () => {
     const result = await harness.commit({ bytes: '\x7f', localEdit: 'backspace' })
 
     // Then
-    expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'a')
+    expect(harness.applyLiveInputMirror).toHaveBeenCalledWith('terminal-a', 'a', false)
     expect(result).toEqual({ kind: 'handled' })
   })
 })

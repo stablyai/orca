@@ -43,6 +43,7 @@ import {
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS
 } from './orca-runtime'
 import { RESOLVED_WORKTREE_REPO_TIMEOUT_MS } from './repo-worktree-row-resolution'
+import { canonicalWorktreeIdentity } from '../../shared/worktree/identity'
 
 const REPO_ID = 'repo-local'
 const REPO_PATH = '/Users/me/dev/app'
@@ -75,8 +76,15 @@ function makeMeta(overrides: Record<string, unknown> = {}) {
 
 function makeStore(options: { connectionId?: string; repoCount?: number; repoPath?: string } = {}) {
   const metaById: Record<string, ReturnType<typeof makeMeta>> = {
-    [WORKTREE_ID]: makeMeta(),
-    [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main' })
+    [WORKTREE_ID]: makeMeta({
+      hostId: 'local',
+      instanceId: '11111111-1111-4111-8111-111111111111'
+    }),
+    [MAIN_WORKTREE_ID]: makeMeta({
+      displayName: 'main',
+      hostId: 'local',
+      instanceId: '22222222-2222-4222-8222-222222222222'
+    })
   }
   const basePath = options.repoPath ?? REPO_PATH
   const repos = Array.from({ length: options.repoCount ?? 1 }, (_unused, index) => ({
@@ -585,6 +593,22 @@ describe('scoped explicit worktree-id resolution', () => {
 
     expect(resolved.id).toBe(MAIN_WORKTREE_ID)
     expect(scannedRepoPaths()).toEqual([REPO_PATH])
+  })
+  it('resolves an exact canonical identity without relying on the mutable locator', async () => {
+    const runtime = new OrcaRuntimeService(makeStore({ repoCount: 10 }) as never)
+    const resolve = (selector: string): Promise<{ id: string }> =>
+      (
+        runtime as unknown as { resolveWorktreeSelector: (s: string) => Promise<{ id: string }> }
+      ).resolveWorktreeSelector(selector)
+    const identityKey = canonicalWorktreeIdentity({
+      worktreeId: MAIN_WORKTREE_ID,
+      executionHostId: 'local',
+      instanceId: '22222222-2222-4222-8222-222222222222'
+    })
+
+    const resolved = await resolve(`identity:${identityKey}`)
+
+    expect(resolved.id).toBe(MAIN_WORKTREE_ID)
   })
 
   it('still finds worktrees in other repos through the fleet path', async () => {

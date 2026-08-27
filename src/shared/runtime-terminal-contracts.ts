@@ -185,6 +185,8 @@ export type RuntimeTerminalRead = {
   latestCursor?: string
   returnedLineCount?: number
   source?: 'stream' | 'screen' | 'screen-unavailable'
+  /** UI-only composer text, excluded from `tail`. */
+  draft?: string
 }
 
 export type RuntimeTerminalRename = {

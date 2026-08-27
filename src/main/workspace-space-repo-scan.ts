@@ -10,6 +10,8 @@ import type {
 } from '../shared/workspace-space-types'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
 import { getRepoExecutionHostId } from '../shared/execution-host'
+import { readWorktreeMetaForHost } from './persistence/host-qualified-worktree-meta'
+import { getRepoOwnedWorktreeMeta } from './worktree-metadata-ownership'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { createFolderWorktree, listRepoWorktrees } from './repo-worktrees'
@@ -104,7 +106,15 @@ function reportProgress(
 
 function mergeForSpaceScan(repo: Repo, gitWorktree: GitWorktreeInfo, store: Store): Worktree {
   const worktreeId = `${repo.id}::${gitWorktree.path}`
-  return mergeWorktree(repo.id, gitWorktree, store.getWorktreeMeta(worktreeId), repo.displayName)
+  const executionHostId = getRepoExecutionHostId(repo)
+  const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
+  const allMeta = store.getAllWorktreeMeta?.()
+  const legacyMeta = store.getWorktreeMeta?.(worktreeId)
+  const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
+  const meta =
+    readWorktreeMetaForHost(store, worktreeId, executionHostId) ??
+    getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
+  return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
 }
 
 export async function scanWorkspaceSpaceRepo(args: {
