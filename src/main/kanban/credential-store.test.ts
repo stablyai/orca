@@ -78,13 +78,55 @@ describe('Kanban credential store', () => {
     store.saveKanbanCredential(saveInput())
 
     expect(store.hasStoredKanbanCredential()).toBe(true)
-    expect(store.getStoredKanbanMetadata()).toMatchObject({
-      version: 1,
+    expect(store.getStoredKanbanMetadata()).toEqual({
       viewerId: 'user-1',
       viewerName: 'Ada',
-      viewerLevel: 'admin'
+      viewerLevel: 'admin',
+      updatedAt: expect.any(String)
     })
     expect(store.loadStoredKanbanToken({ force: true })).toBe('secret-token')
+  })
+
+  it('writes on-disk metadata with exactly the four viewer keys and no token or ciphertext', async () => {
+    const store = await loadStore()
+    store.saveKanbanCredential(saveInput())
+    const { readFileSync } = await import('node:fs')
+
+    const metadataPath = join(tempHome, '.orca', 'kanban-credential.json')
+    const rawMetadata = readFileSync(metadataPath, 'utf-8')
+    const parsed = JSON.parse(rawMetadata) as Record<string, unknown>
+    expect(Object.keys(parsed).sort()).toEqual([
+      'updatedAt',
+      'viewerId',
+      'viewerLevel',
+      'viewerName'
+    ])
+    expect(rawMetadata).not.toContain('secret-token')
+    expect(rawMetadata).not.toContain('cipher')
+  })
+
+  it('ignores a stale version field in on-disk metadata without crashing', async () => {
+    const store = await loadStore()
+    const { mkdirSync, writeFileSync } = await import('node:fs')
+    mkdirSync(join(tempHome, '.orca'), { recursive: true })
+    writeFileSync(
+      join(tempHome, '.orca', 'kanban-credential.json'),
+      JSON.stringify({
+        version: 1,
+        viewerId: 'user-1',
+        viewerName: 'Ada',
+        viewerLevel: 'admin',
+        updatedAt: '2026-08-27T00:00:00.000Z'
+      })
+    )
+    store._resetKanbanCredentialCache()
+
+    expect(store.getStoredKanbanMetadata()).toEqual({
+      viewerId: 'user-1',
+      viewerName: 'Ada',
+      viewerLevel: 'admin',
+      updatedAt: '2026-08-27T00:00:00.000Z'
+    })
   })
 
   it.skipIf(process.platform === 'win32')('writes both credential files 0600', async () => {

@@ -8,6 +8,15 @@ export type KanbanViewer = {
   level: string
 }
 
+// Why: the plaintext metadata carries only display fields; the secret never
+// lives here. Exactly these four keys are persisted — no version field.
+export type KanbanStoredMetadata = {
+  viewerId: string
+  viewerName: string
+  viewerLevel: string
+  updatedAt: string
+}
+
 export type KanbanPerson = {
   id: string
   name: string

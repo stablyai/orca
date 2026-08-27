@@ -368,6 +368,18 @@ describe('Kanban client', () => {
     expect(sortKanbanTasks(tasks).map((task) => task.id)).toEqual(['K-d', 'K-c', 'K-a', 'K-b'])
   })
 
+  it('breaks ties on urgency and due with the locale-aware title ordering', async () => {
+    const { sortKanbanTasks } = await loadClient()
+    // Supplied in reversed title order so the localeCompare fallback must do
+    // real work: urgent and due are identical, only the title differs.
+    const tasks = [
+      fixtureTask({ id: 'K-z', title: 'Zulu', due: '2026-09-01', urgent: false }),
+      fixtureTask({ id: 'K-a', title: 'Alpha', due: '2026-09-01', urgent: false }),
+      fixtureTask({ id: 'K-m', title: 'Mike', due: '2026-09-01', urgent: false })
+    ]
+    expect(sortKanbanTasks(tasks).map((task) => task.id)).toEqual(['K-a', 'K-m', 'K-z'])
+  })
+
   it('filters by due, urgent and query', async () => {
     const { filterKanbanTasks } = await loadClient()
     const tasks = [

@@ -205,6 +205,88 @@ describe('kanban task mapping', () => {
     )
   })
 
+  it('rejects an attachment whose size is present but not a finite number', () => {
+    expectInvalid(
+      mapKanbanTaskDetails({
+        id: 'K-11',
+        t: 'Bad attachment size',
+        lane: { id: 'L-5', name: 'Backlog' },
+        task_version: 1,
+        attachments: [{ name: 'log.txt', url: 'https://example.com/log.txt', size: 'oops' }]
+      })
+    )
+    expectInvalid(
+      mapKanbanTaskDetails({
+        id: 'K-12',
+        t: 'Non-finite attachment size',
+        lane: { id: 'L-5', name: 'Backlog' },
+        task_version: 1,
+        attachments: [
+          { name: 'log.txt', url: 'https://example.com/log.txt', size: Number.POSITIVE_INFINITY }
+        ]
+      })
+    )
+  })
+
+  it('keeps an absent attachment size acceptable', () => {
+    const result = mapKanbanTaskDetails({
+      id: 'K-13',
+      t: 'Missing attachment size',
+      lane: { id: 'L-5', name: 'Backlog' },
+      task_version: 1,
+      attachments: [{ name: 'log.txt', url: 'https://example.com/log.txt' }]
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.value.attachments).toEqual([
+      { name: 'log.txt', url: 'https://example.com/log.txt', size: null }
+    ])
+  })
+
+  it('rejects a subtask with a non-boolean or missing done', () => {
+    expectInvalid(
+      mapKanbanTaskDetails({
+        id: 'K-14',
+        t: 'Bad subtask done',
+        lane: { id: 'L-5', name: 'Backlog' },
+        task_version: 1,
+        subtasks: [{ id: 's-1', title: 'Update docs', done: 'yes' }]
+      })
+    )
+    expectInvalid(
+      mapKanbanTaskDetails({
+        id: 'K-15',
+        t: 'Missing subtask done',
+        lane: { id: 'L-5', name: 'Backlog' },
+        task_version: 1,
+        subtasks: [{ id: 's-2', title: 'Update docs' }]
+      })
+    )
+  })
+
+  it('keeps a boolean subtask done acceptable', () => {
+    const result = mapKanbanTaskDetails({
+      id: 'K-16',
+      t: 'Boolean subtask done',
+      lane: { id: 'L-5', name: 'Backlog' },
+      task_version: 1,
+      subtasks: [
+        { id: 's-1', title: 'Update docs', done: true },
+        { id: 's-2', title: 'Write tests', done: false }
+      ]
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      return
+    }
+    expect(result.value.subtasks).toEqual([
+      { id: 's-1', title: 'Update docs', done: true },
+      { id: 's-2', title: 'Write tests', done: false }
+    ])
+  })
+
   it('maps a valid viewer and rejects a malformed one', () => {
     expect(mapKanbanViewer({ id: 'user-1', name: 'Ada', level: 'admin' })).toEqual({
       ok: true,

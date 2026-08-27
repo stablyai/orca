@@ -8,18 +8,11 @@ import {
   writeCredentialFileAtomic,
   writeEncryptedCredential
 } from '../integration-credential-file'
-import type { KanbanViewer } from '../../shared/kanban-types'
+import type { KanbanStoredMetadata, KanbanViewer } from '../../shared/kanban-types'
 
 // Why: the token stays encrypted via safeStorage while this metadata stays
 // plaintext, so status reads render the connected viewer without decrypting —
 // otherwise every status poll would trigger an OS keychain prompt.
-export type KanbanStoredMetadata = {
-  version: 1
-  viewerId: string
-  viewerName: string
-  viewerLevel: string
-  updatedAt: string
-}
 
 let cachedMetadata: KanbanStoredMetadata | null = null
 let metadataLoadedFromDisk = false
@@ -58,8 +51,9 @@ function readMetadataFromDisk(): KanbanStoredMetadata | null {
   }
   try {
     const parsed = JSON.parse(readFileSync(path, 'utf-8')) as Partial<KanbanStoredMetadata>
+    // Why: a stale file that still holds a `version` key is tolerated — the
+    // unknown key is ignored, never migrated, and never causes a throw.
     return {
-      version: 1,
       viewerId: asOptionalString(parsed.viewerId),
       viewerName: asOptionalString(parsed.viewerName),
       viewerLevel: asOptionalString(parsed.viewerLevel),
@@ -122,7 +116,6 @@ export function saveKanbanCredential(input: { token: string; viewer: KanbanViewe
   ensureOrcaDir()
   writeEncryptedCredential('Kanban', getSecretPath(), input.token)
   const metadata: KanbanStoredMetadata = {
-    version: 1,
     viewerId: input.viewer.id,
     viewerName: input.viewer.name,
     viewerLevel: input.viewer.level,

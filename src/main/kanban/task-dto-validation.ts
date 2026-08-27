@@ -216,12 +216,16 @@ export function mapAttachment(raw: unknown): KanbanAttachment | null {
   if (!name || !url) {
     return null
   }
-  const size =
-    raw.size === undefined || raw.size === null
-      ? null
-      : typeof raw.size === 'number' && Number.isFinite(raw.size)
-        ? raw.size
-        : null
+  // Why: a present-but-malformed size must not be silently cast to null; only
+  // an absent size (or an explicit null) is acceptable.
+  if (
+    raw.size !== undefined &&
+    raw.size !== null &&
+    (typeof raw.size !== 'number' || !Number.isFinite(raw.size))
+  ) {
+    return null
+  }
+  const size = raw.size === undefined || raw.size === null ? null : raw.size
   return { name, url, size }
 }
 
@@ -234,7 +238,12 @@ export function mapSubtask(raw: unknown): KanbanSubtask | null {
   if (!id || !title) {
     return null
   }
-  return { id, title, done: raw.done === true }
+  // Why: `done` is required; a missing or non-boolean value must not be
+  // silently coerced to false.
+  if (typeof raw.done !== 'boolean') {
+    return null
+  }
+  return { id, title, done: raw.done }
 }
 
 export function mapList<T>(raw: unknown, mapper: (item: unknown) => T | null): T[] | typeof BROKEN {

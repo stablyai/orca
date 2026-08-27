@@ -279,14 +279,17 @@ export function sortKanbanTasks(tasks: readonly KanbanTaskSummary[]): KanbanTask
     }
     const aDue = a.due ? Date.parse(a.due) : null
     const bDue = b.due ? Date.parse(b.due) : null
-    if (aDue !== null && bDue !== null && aDue !== bDue) {
-      return aDue - bDue
-    }
-    if (aDue !== null) {
+    // Why: the has-due vs no-due precedence applies only when exactly one side
+    // carries a due date; when both have equal dues (or neither does), control
+    // must reach the title comparison so ties break on the locale-aware title.
+    if (aDue !== null && bDue === null) {
       return -1
     }
-    if (bDue !== null) {
+    if (aDue === null && bDue !== null) {
       return 1
+    }
+    if (aDue !== null && bDue !== null && aDue !== bDue) {
+      return aDue - bDue
     }
     return a.title.localeCompare(b.title)
   })
