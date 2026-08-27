@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { isEditableKeyboardTarget } from './browser-keyboard'
+import { hasHostTextSelection, isEditableKeyboardTarget } from './browser-keyboard'
 
 // Why: the old fakes passed a single joined selector to `closest`, so any
 // `selector.includes(token)` check matched every token. Use the real DOM instead.
@@ -65,5 +65,40 @@ describe('isEditableKeyboardTarget', () => {
 
   it('returns false for a null target', () => {
     expect(isEditableKeyboardTarget(null)).toBe(false)
+  })
+})
+
+describe('hasHostTextSelection', () => {
+  it('returns true for a non-collapsed selection with text', () => {
+    expect(hasHostTextSelection({ isCollapsed: false, toString: () => 'copied prose' })).toBe(true)
+  })
+
+  it('returns false for a collapsed caret', () => {
+    expect(hasHostTextSelection({ isCollapsed: true, toString: () => '' })).toBe(false)
+  })
+
+  // Why: a range can span layout whitespace between elements without selecting any text the user
+  // would recognize as copied, and suppressing the shortcut for that would look like a dead key.
+  it('returns false for a whitespace-only selection', () => {
+    expect(hasHostTextSelection({ isCollapsed: false, toString: () => '  \n ' })).toBe(false)
+  })
+
+  it('returns false when there is no selection', () => {
+    expect(hasHostTextSelection(null)).toBe(false)
+  })
+
+  it('reads the live document selection by default', () => {
+    const host = document.createElement('p')
+    host.textContent = 'assistant reply'
+    document.body.appendChild(host)
+    const range = document.createRange()
+    range.selectNodeContents(host)
+    window.getSelection()?.removeAllRanges()
+    window.getSelection()?.addRange(range)
+
+    expect(hasHostTextSelection()).toBe(true)
+
+    window.getSelection()?.removeAllRanges()
+    expect(hasHostTextSelection()).toBe(false)
   })
 })
