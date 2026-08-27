@@ -178,6 +178,8 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
     currentRuntimeVersion: request.currentRuntimeVersion,
     corrections,
     retainedBuilder: resolveRetainedBuilder(db, phase),
+    // The completing Dispatch authored the commit, so it cannot review it.
+    excludeRoute: observedRoute,
     reviewerCandidates: policy.reviewerCandidates,
     reviewCapabilities: policy.reviewCapabilities,
     allowUnknownQuota: policy.allowUnknownQuota

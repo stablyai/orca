@@ -1,7 +1,9 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ControlPlaneDatabaseHandle } from '../../orchestration/control-plane/control-plane-store'
+import type { OrchestrationDb } from '../../orchestration/db'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
+import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { admitRoute } from '../../orchestration/control-plane/role-route-registry'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
@@ -114,18 +116,63 @@ export function assertWorktreeMutationAllowed(args: {
   }
 }
 
+/** The role and session mode a Task must be certified for.
+ *
+ *  A Task the lifecycle planned carries its own role: a review phase needs a
+ *  certified REVIEWER on a FRESH session, and a FIX_FIRST phase needs a
+ *  certified BUILDER on a RETAINED session. Anything else is an ordinary fresh
+ *  builder. Reading it from the launch ledger keeps role selection out of the
+ *  launch call site.
+ */
+export function resolveWorkerStartRole(
+  handle: ControlPlaneDatabaseHandle,
+  taskId: string
+): {
+  role: RouteRole
+  sessionMode: SessionMode
+  /** The route the lifecycle already selected for this Task, when it planned one. */
+  plannedAgent?: TuiAgent
+  plannedModel?: string
+  plannedEffort?: string
+} {
+  const launch = new PhaseLaunchStore(handle).getByTask(taskId)
+  if (!launch) {
+    return { role: 'builder', sessionMode: 'fresh' }
+  }
+  // Why the planned route: re-engaging a retained session cannot pass --agent
+  // (worker-start rejects combining it with --terminal), so the certified route
+  // the plan bound is the only truthful identity to admit against.
+  const planned = {
+    ...(launch.agent ? { plannedAgent: launch.agent as TuiAgent } : {}),
+    ...(launch.model ? { plannedModel: launch.model } : {}),
+    ...(launch.reasoning ? { plannedEffort: launch.reasoning } : {})
+  }
+  return launch.kind === 'review'
+    ? { role: 'reviewer', sessionMode: 'fresh', ...planned }
+    : { role: 'builder', sessionMode: 'retained', ...planned }
+}
+
 /** One pre-flight for `orchestration.workerStart`: the route must be certified
- *  for an outcome-admitted Run, and the target worktree must not be under a
- *  live validation lease. Both run before any effect is created. */
+ *  for the Task's own role, and the target worktree must not be under a live
+ *  validation lease. Both run before any effect is created. */
 export function assertWorkerStartAdmitted(args: {
   handle: ControlPlaneDatabaseHandle
   runId: string
+  taskId: string
   agent: TuiAgent | undefined
   model?: string
   effort?: string
   worktreeId?: string
 }): void {
-  assertWorkerStartRouteAdmitted(args)
+  const planned = resolveWorkerStartRole(args.handle, args.taskId)
+  assertWorkerStartRouteAdmitted({
+    ...args,
+    role: planned.role,
+    sessionMode: planned.sessionMode,
+    agent: args.agent ?? planned.plannedAgent,
+    model: args.model ?? planned.plannedModel,
+    effort: args.effort ?? planned.plannedEffort
+  })
   if (args.worktreeId) {
     assertWorktreeMutationAllowed({ handle: args.handle, worktreeId: args.worktreeId })
   }
@@ -153,4 +200,29 @@ export function resolveBoundOutcomeId(
 ): string | undefined {
   const binding = resolveOutcomeBinding(new ControlPlaneStore(handle), runId)
   return binding.kind === 'admitted' ? binding.outcome.outcome_id : undefined
+}
+
+/** B5 (correction 3) — whether this worker-start is re-engaging a session Orca
+ *  already owns in this Run, and which Dispatch it last carried.
+ *
+ *  Only an explicit `--terminal` reuse qualifies, and only when that terminal's
+ *  most recent Dispatch belongs to the same Run and is not the one being
+ *  created now. That is exactly the FIX_FIRST shape: same terminal, same
+ *  session, new Dispatch for the correction Task.
+ */
+export function resolveRetainedReengagement(
+  db: OrchestrationDb,
+  args: { terminal?: string; runId: string; dispatchId: string }
+): { previousTaskId: string; previousDispatchId: string } | null {
+  if (!args.terminal) {
+    return null
+  }
+  const previous = db.db
+    .prepare(
+      `SELECT task_id, id FROM dispatch_contexts
+       WHERE assignee_handle = ? AND run_id = ? AND id <> ?
+       ORDER BY rowid DESC LIMIT 1`
+    )
+    .get(args.terminal, args.runId, args.dispatchId) as { task_id: string; id: string } | undefined
+  return previous ? { previousTaskId: previous.task_id, previousDispatchId: previous.id } : null
 }

@@ -149,6 +149,42 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_control_plane_outcome_phases_source
   ON control_plane_outcome_phases(source_dispatch_id, kind)
   WHERE source_dispatch_id IS NOT NULL;
 
+-- B7 (correction 3): the durable launch record for one planned phase. Separate
+-- table so a database created by correction 2 gains it additively.
+-- One row per phase is the idempotency key: the driver can crash, retry, or run
+-- twice and still reach exactly one Dispatch. dispatch_id is filled from the
+-- worker-start receipt, or recovered from the durable mutation receipt when the
+-- response was lost.
+CREATE TABLE IF NOT EXISTS control_plane_phase_launches (
+  phase_id        TEXT PRIMARY KEY,
+  run_id          TEXT NOT NULL,
+  outcome_id      TEXT NOT NULL,
+  task_id         TEXT NOT NULL,
+  kind            TEXT NOT NULL CHECK(kind IN ('review', 'fix_first')),
+  state           TEXT NOT NULL DEFAULT 'pending'
+    CHECK(state IN ('pending', 'starting', 'started', 'start_unknown', 'blocked', 'failed')),
+  agent           TEXT,
+  model           TEXT,
+  reasoning       TEXT,
+  -- Set only for a retained re-engagement; null means a fresh session.
+  terminal_handle TEXT,
+  -- The worktree the reviewed commit lives in, so a fresh reviewer lands on the
+  -- same tree rather than wherever the coordinator happens to sit.
+  worktree_id     TEXT,
+  bound_sha       TEXT NOT NULL,
+  dispatch_id     TEXT,
+  attempts        INTEGER NOT NULL DEFAULT 0,
+  last_error      TEXT,
+  created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+  updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_control_plane_phase_launches_run
+  ON control_plane_phase_launches(run_id, state);
+-- A Task can back at most one launch, so a replay can never fork a second one.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_control_plane_phase_launches_task
+  ON control_plane_phase_launches(task_id);
+
 -- B4: runtime-owned liveness marker. Writer: the runtime liveness sweep.
 -- Consumer: the wake planner and the B10 state query. Never written by a model.
 CREATE TABLE IF NOT EXISTS control_plane_dispatch_liveness (

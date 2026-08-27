@@ -18,7 +18,9 @@ import {
   assertMutationAllowed,
   releaseValidationLease
 } from '../../orchestration/control-plane/validation-lease'
+import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { resolveValidationScopeKey } from '../../orchestration/control-plane/validation-scope'
+import { driveRunPhaseLaunches } from './orchestration-phase-launch'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean, OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
@@ -88,6 +90,12 @@ const GatePlanParams = z.object({
   riskPolicy: z.enum(['standard', 'high_risk']).optional()
 })
 
+const PhaseLaunchParams = z.object({
+  from: OptionalString,
+  run: OptionalString,
+  drive: OptionalBoolean
+})
+
 const ValidationLeaseParams = z.object({
   from: OptionalString,
   run: OptionalString,
@@ -101,6 +109,21 @@ const ValidationLeaseParams = z.object({
 /** B2/B8/B9 (correction 2) — the typed operations that put outcome policy, gate
  *  receipts and validation leases on real call sites. */
 export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'orchestration.phaseLaunch',
+    params: PhaseLaunchParams,
+    handler: async (params, ctx) => {
+      const { runtime } = ctx
+      const runId = params.run ?? requireRunId(runtime, params.from)
+      // Why an explicit drive flag: reading the launch ledger must stay a safe
+      // recovery query, and forcing a pass must be a deliberate act.
+      if (params.drive !== false) {
+        await driveRunPhaseLaunches({ runtime, ctx, runId })
+      }
+      return { runId, launches: new PhaseLaunchStore(runtime.getOrchestrationDb()).list(runId) }
+    }
+  }),
+
   defineMethod({
     name: 'orchestration.outcomeAdmit',
     params: OutcomeAdmitParams,

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { planNextAfterBuild, type BuilderCompletion, type RetainedBuilder } from './reviewer-advance'
+import {
+  planNextAfterBuild,
+  type BuilderCompletion,
+  type RetainedBuilder
+} from './reviewer-advance'
 import { requiredEvidenceKinds, type RouteEvidence } from './route-certification-evidence'
 import {
   routeKey,
@@ -43,7 +47,11 @@ function row(identity: RouteIdentity, roles: RouteRole[]): RouteRow {
   }
 }
 
-function evidenceFor(identity: RouteIdentity, role: RouteRole, sessionMode: SessionMode): RouteEvidence[] {
+function evidenceFor(
+  identity: RouteIdentity,
+  role: RouteRole,
+  sessionMode: SessionMode
+): RouteEvidence[] {
   return requiredEvidenceKinds(sessionMode).map((kind) => ({
     routeKey: routeKey(identity),
     kind,
@@ -112,14 +120,34 @@ describe('B7 builder to reviewer advance', () => {
     expect(plan.kind === 'review' && routeKey(plan.route.identity)).toBe(routeKey(reviewerIdentity))
   })
 
-  it('never selects the builder route as its own reviewer', () => {
+  it('never selects the route that authored the commit as its own reviewer', () => {
+    const registryWithDualRole = [row(builderIdentity, ['builder', 'reviewer']), registry[1]]
+    const evidenceWithDualRole = [...evidence, ...evidenceFor(builderIdentity, 'reviewer', 'fresh')]
+    // Even when the authoring route IS certified as a reviewer and is offered
+    // first, it must not be chosen to grade its own work.
     const plan = planNextAfterBuild({
       ...base,
+      registry: registryWithDualRole,
+      evidence: evidenceWithDualRole,
       completion: completion(),
       reviewerCandidates: [builderIdentity, reviewerIdentity],
+      excludeRoute: builderIdentity,
       retainedBuilder
     })
     expect(plan.kind === 'review' && routeKey(plan.route.identity)).toBe(routeKey(reviewerIdentity))
+  })
+
+  it('negative control: without the exclusion the authoring route would be picked first', () => {
+    const registryWithDualRole = [row(builderIdentity, ['builder', 'reviewer']), registry[1]]
+    const evidenceWithDualRole = [...evidence, ...evidenceFor(builderIdentity, 'reviewer', 'fresh')]
+    const plan = planNextAfterBuild({
+      ...base,
+      registry: registryWithDualRole,
+      evidence: evidenceWithDualRole,
+      completion: completion(),
+      reviewerCandidates: [builderIdentity, reviewerIdentity]
+    })
+    expect(plan.kind === 'review' && routeKey(plan.route.identity)).toBe(routeKey(builderIdentity))
   })
 
   it('emits the protected blocker when no certified reviewer route exists', () => {
@@ -167,7 +195,9 @@ describe('B7 FIX_FIRST', () => {
       boundSha: FINAL_SHA
     })
     expect(plan.kind === 'fix_first' && plan.corrections).toHaveLength(2)
-    expect(plan.kind === 'fix_first' && routeKey(plan.route.identity)).toBe(routeKey(builderIdentity))
+    expect(plan.kind === 'fix_first' && routeKey(plan.route.identity)).toBe(
+      routeKey(builderIdentity)
+    )
   })
 
   it('blocks FIX_FIRST when the builder session is no longer retained', () => {

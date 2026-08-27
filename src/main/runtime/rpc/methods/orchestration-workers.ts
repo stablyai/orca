@@ -1,5 +1,4 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
@@ -25,9 +24,9 @@ import {
 } from './orchestration-worker-start-validation'
 import {
   assertFederatedWorkerStartAdmitted,
-  assertWorkerStartAdmitted,
-  resolveBoundOutcomeId
+  assertWorkerStartAdmitted
 } from './orchestration-worker-route-admission'
+import { deliverWorkerDispatchPrompt } from './orchestration-worker-dispatch-prompt'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { resolveOrchestrationCaller } from './orchestration-run-scope'
 
@@ -107,6 +106,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       assertWorkerStartAdmitted({
         handle: db,
         runId: run.id,
+        taskId: task.id,
         agent,
         model: params.model,
         effort: params.effort,
@@ -251,22 +251,17 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         })
 
         failedStage = 'dispatch_input'
-        const preamble = buildDispatchPreamble({
-          canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
-          taskId: task.id,
-          dispatchId: started.dispatch.id,
+        await deliverWorkerDispatchPrompt({
+          runtime,
+          db,
           runId: run.id,
-          // Why bound here: the worker's completion receipt must claim the same
-          // outcome the Run was admitted under, and it cannot infer it.
-          outcomeId: resolveBoundOutcomeId(db, run.id),
-          taskSpec: task.spec,
-          coordinatorHandle: params.from,
-          workerHandle: terminalHandle,
-          dispatchCapability: capability,
-          devMode: params.devMode,
-          cliCommand: runtime.getTerminalOrchestrationCliCommand(terminalHandle)
+          task,
+          params,
+          dispatchId: started.dispatch.id,
+          depth: started.dispatch.depth,
+          terminalHandle,
+          capability
         })
-        await runtime.sendTerminalAgentPrompt(terminalHandle, preamble)
         effects.push({
           kind: 'dispatch_input',
           role: 'agent',

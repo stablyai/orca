@@ -88,6 +88,18 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'phase-launch'],
+    summary: 'Show, and by default drive, the automatic reviewer/correction launches',
+    usage:
+      'orca orchestration phase-launch [--inspect] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'inspect', 'run', 'from', 'retry-request'],
+    notes: [
+      'Reviewer and correction phases start automatically on the runtime loop; this is the recovery path when one is stuck.',
+      'Each launch is keyed by its phase, so driving it repeatedly can never create a second Dispatch or a second worker session.',
+      'Use --inspect to read the launch ledger without forcing a pass.'
+    ]
+  },
+  {
     path: ['orchestration', 'route-upsert'],
     summary: 'Register or update one route in the certified role registry',
     usage:

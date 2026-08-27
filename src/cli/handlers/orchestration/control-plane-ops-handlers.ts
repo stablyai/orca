@@ -111,6 +111,37 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     })
   },
 
+  'orchestration phase-launch': async ({ flags, client, cwd, json }) => {
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const result = await callOrchestrationMutation<{
+      runId: string
+      launches: {
+        phase_id: string
+        task_id: string
+        kind: string
+        state: string
+        dispatch_id: string | null
+        attempts: number
+        last_error: string | null
+      }[]
+    }>(client, flags, 'orchestration.phaseLaunch', {
+      from,
+      run: getOptionalStringFlag(flags, 'run'),
+      // --inspect reads the ledger without forcing a launch pass.
+      drive: flags.has('inspect') ? false : undefined
+    })
+    printResult(result, json, (value) =>
+      value.launches.length === 0
+        ? `No planned phases for run ${value.runId}`
+        : value.launches
+            .map(
+              (launch) =>
+                `${launch.kind} task=${launch.task_id} state=${launch.state} dispatch=${launch.dispatch_id ?? '<none>'} attempts=${launch.attempts}${launch.last_error ? ` error=${launch.last_error}` : ''}`
+            )
+            .join('\n')
+    )
+  },
+
   'orchestration route-upsert': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<{
       route: { identity: { agent: string; model: string | null }; identityProof: string }

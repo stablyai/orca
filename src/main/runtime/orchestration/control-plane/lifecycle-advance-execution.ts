@@ -3,6 +3,7 @@ import type { DispatchContextRow } from '../types'
 import type { CompletionClaim } from './completion-receipt'
 import { WAKE_REASON_PAYLOAD_KEY } from './coordinator-wake-events'
 import type { OutcomePhaseRow, OutcomePolicyStore } from './outcome-policy'
+import { PhaseLaunchStore } from './phase-launch-store'
 import type { ReviewerAdvancePlan } from './reviewer-advance'
 
 /** B7 (correction 2) — turning a plan into real Tasks, phases and wakes.
@@ -60,6 +61,20 @@ export function executePlan(args: {
       source_dispatch_id: dispatch.id,
       bound_sha: plan.boundSha
     })
+    // Why here: the route was already selected from the certified registry, so
+    // the launch record binds it durably. The driver starts it; it never picks.
+    new PhaseLaunchStore(db).recordPlanned({
+      phaseId: phase.phase_id,
+      runId,
+      outcomeId: args.outcomeId,
+      taskId: phase.task_id,
+      kind: 'review',
+      route: plan.route.identity,
+      // A reviewer is always an independent FRESH session.
+      terminalHandle: null,
+      worktreeId: db.getWorkerTerminalResourceByOwner(dispatch.id)?.worktree_id ?? null,
+      boundSha: plan.boundSha
+    })
     return { phase, wakeMessageId: announcePhase(db, runId, phase, args.notify) }
   }
 
@@ -78,6 +93,19 @@ export function executePlan(args: {
     source_task_id: args.taskId,
     source_dispatch_id: dispatch.id,
     bound_sha: plan.boundSha
+  })
+  new PhaseLaunchStore(db).recordPlanned({
+    phaseId: phase.phase_id,
+    runId,
+    outcomeId: args.outcomeId,
+    taskId: phase.task_id,
+    kind: 'fix_first',
+    route: plan.route.identity,
+    // Why the terminal: FIX_FIRST re-engages the SAME retained builder session,
+    // so the launch reuses its terminal instead of creating a new one.
+    terminalHandle: plan.terminalHandle,
+    worktreeId: db.getWorkerTerminalResourceByOwner(plan.builderDispatchId)?.worktree_id ?? null,
+    boundSha: plan.boundSha
   })
   return { phase, wakeMessageId: announcePhase(db, runId, phase, args.notify) }
 }

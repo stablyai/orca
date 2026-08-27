@@ -135,6 +135,7 @@ orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome <s
 orca orchestration escalate --task <task_id> --dispatch <dispatch_id> --subject <text> [--body <text>] [--json]
 orca orchestration state (--outcome <id>|--run <run_id>|--task <task_id>|--dispatch <dispatch_id>) [--json]
 orca orchestration await [--ack <delivery_id>] [--timeout-ms <n>] [--json]
+orca orchestration phase-launch [--inspect] [--run <run_id>] [--json]
 ```
 
 Rules:
@@ -170,7 +171,16 @@ orca orchestration outcome-admit --outcome-id <id> --title <text> \
   --reviewer-candidates "codex:gpt-5.6-sol:high,grok:grok-4.6" --json
 ```
 
-Admitting an outcome turns on the fail-closed contract for that Run: worker-start requires a certified route, and `worker_done` requires a completion receipt bound to the exact final HEAD. After a validated build completion Orca automatically plans an independent reviewer phase bound to that SHA; a reviewer that reports `--corrections` routes one consolidated FIX_FIRST round back to the same retained builder, and a clean review emits a `review_complete` wake.
+Admitting an outcome turns on the fail-closed contract for that Run: worker-start requires a certified route, and `worker_done` requires a completion receipt bound to the exact final HEAD.
+
+The lifecycle then runs itself. After a validated build completion Orca creates **and starts** an independent fresh reviewer on the certified reviewer route, bound to that exact SHA. A reviewer that reports `--corrections` gets one consolidated FIX_FIRST round dispatched back to the **same retained builder terminal** — same session, new Dispatch, delta prompt only. When that correction completes, the gates its new commit invalidated rerun, the new HEAD is validated, and the independent reviewer starts again on the corrected SHA. A clean review emits a `review_complete` wake. If the required role has no currently certified route, Orca emits the protected blocker instead of substituting one.
+
+Each launch is keyed by its phase, so a replayed completion, a crashed runtime or a lost worker-start response reconciles the same Task/Dispatch/session and never creates a replacement:
+
+```bash
+orca orchestration phase-launch --json           # drive any stuck phase, then show the ledger
+orca orchestration phase-launch --inspect --json # read the ledger without driving
+```
 
 ```bash
 # Which gates may reuse a receipt, and which must rerun:

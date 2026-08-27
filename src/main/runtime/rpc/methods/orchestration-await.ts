@@ -8,6 +8,7 @@ import {
   resolveAwaitWakeEvents
 } from '../../orchestration/control-plane/coordinator-await-contract'
 import { runLivenessSweep } from '../../orchestration/control-plane/liveness-sweep'
+import { driveRunPhaseLaunches } from './orchestration-phase-launch'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { MessageRow, MessageType } from '../../orchestration/types'
 import { defineMethod, type RpcMethod } from '../core'
@@ -102,6 +103,10 @@ export const ORCHESTRATION_AWAIT_METHODS: RpcMethod[] = [
           publisher: runtime,
           nowMs: Date.now()
         })
+        // Why on the same tick: this is the runtime loop that owns the Run, so a
+        // reviewer or correction phase planned by a completion starts here with
+        // no human step. The driver is idempotent, so re-running is free.
+        await driveRunPhaseLaunches({ runtime, ctx: { runtime, signal }, runId: run.id })
         sweeps += 1
         const delivery = readDelivery()
         if (delivery) {

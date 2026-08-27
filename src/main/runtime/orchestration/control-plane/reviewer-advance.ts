@@ -77,6 +77,9 @@ export type ReviewerAdvanceRequest = {
   retainedBuilder?: RetainedBuilder
   /** Explicit reviewer candidate order from the classifying layer. */
   reviewerCandidates?: readonly RouteIdentity[]
+  /** The route that produced the commit under review. Excluded from reviewer
+   *  selection so a session never grades its own work. */
+  excludeRoute?: RouteIdentity | null
   reviewCapabilities?: readonly TaskCapability[]
   allowUnknownQuota?: boolean
 }
@@ -121,7 +124,11 @@ export function planNextAfterBuild(request: ReviewerAdvanceRequest): ReviewerAdv
       }
     })
     if (!admission.ok) {
-      return { kind: 'blocked', code: 'builder_route_not_certified', reason: admission.error.reason }
+      return {
+        kind: 'blocked',
+        code: 'builder_route_not_certified',
+        reason: admission.error.reason
+      }
     }
     return {
       kind: 'fix_first',
@@ -141,14 +148,16 @@ export function planNextAfterBuild(request: ReviewerAdvanceRequest): ReviewerAdv
       taskCapabilities: request.reviewCapabilities,
       allowUnknownQuota: request.allowUnknownQuota
     },
-    // Why the builder's own route is dropped: the reviewer Task must be
-    // independently configured, not the same session grading itself.
+    // Why only the authoring route is dropped: the reviewer Task must be
+    // independently configured, not the same session grading itself. It is the
+    // route that WROTE the commit, which after a correction round is still the
+    // builder — never whichever Dispatch happened to plan this phase.
     candidates: (request.reviewerCandidates ?? []).filter(
       (candidate) =>
-        !request.retainedBuilder ||
-        candidate.agent !== request.retainedBuilder.identity.agent ||
-        candidate.model !== request.retainedBuilder.identity.model ||
-        candidate.reasoning !== request.retainedBuilder.identity.reasoning
+        !request.excludeRoute ||
+        candidate.agent !== request.excludeRoute.agent ||
+        candidate.model !== request.excludeRoute.model ||
+        candidate.reasoning !== request.excludeRoute.reasoning
     )
   })
   if (!selection.ok) {

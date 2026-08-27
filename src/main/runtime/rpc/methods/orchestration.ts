@@ -24,6 +24,7 @@ import {
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
 import { ORCHESTRATION_AWAIT_METHODS } from './orchestration-await'
+import { driveRunPhaseLaunches } from './orchestration-phase-launch'
 import { ORCHESTRATION_GATE_OPS_METHODS } from './orchestration-gate-ops'
 import { ORCHESTRATION_REGISTRY_OPS_METHODS } from './orchestration-registry-ops'
 import { ORCHESTRATION_CONTROL_PLANE_STATE_METHODS } from './orchestration-control-plane-state'
@@ -804,6 +805,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             return withSendWarnings({ message: rejection, lifecycle: reconciled })
           }
           runtime.notifyMessageArrived(msg.to_handle, msg.type)
+          if (reconciled.action === 'completed' || reconciled.action === 'failed') {
+            // Why not awaited: starting a reviewer waits for agent readiness,
+            // and the reporting worker must not block on it. The launch record
+            // is durable and the `orchestration.await` tick re-arms it, so a
+            // dropped promise costs latency, never the launch.
+            void driveRunPhaseLaunches({ runtime, ctx: { runtime }, runId: msg.run_id }).catch(
+              () => undefined
+            )
+          }
           return withSendWarnings(
             msg.type === 'worker_done' ? { message: msg, lifecycle: reconciled } : { message: msg }
           )
