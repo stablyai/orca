@@ -316,7 +316,17 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalHiddenWorktreeRetentionBudget: true,
     browserGuestWorktreeRetentionBudget: true,
     terminalMainSideEffectAuthority: true,
-    terminalHiddenDeliveryGate: true,
+    // Why default off: dropping renderer-bound bytes leaves the renderer's xterm
+    // a second emulator that has seen a different stream than the model, and a
+    // gap can strand any carried state — a swallowed `ESC[22m` leaves bold on
+    // every later cell, a swallowed `ESC(B` leaves line-drawing on (STA-4042).
+    // Every recovery path then has to reconstruct state it cannot actually know.
+    // Feeding the emulator unconditionally and suspending only the *rendering*
+    // (pane-manager suspendRendering + WebGL retention already do this) removes
+    // the gap class outright rather than repairing it after the fact. The gate
+    // stays available for anyone who needs to trade that correctness for the
+    // hidden-pane IPC/parse saving.
+    terminalHiddenDeliveryGate: false,
     terminalModelQueryAuthority: true,
     defaultTuiAgent: null,
     disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS],

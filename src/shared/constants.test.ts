@@ -181,4 +181,12 @@ describe('MiniMax defaults', () => {
     expect(settings.minimaxGroupId).toBe('')
     expect(settings.minimaxUsageModels).toBe('general')
   })
+
+  it('defaults the hidden-delivery gate off so the renderer emulator sees every byte', () => {
+    // Why pinned: the gate drops renderer-bound bytes, which desynchronizes the
+    // renderer's xterm from the daemon model and strands whatever state the gap
+    // interrupted (STA-4042). The setting has no UI, so this default IS the
+    // shipped behaviour.
+    expect(getDefaultSettings('/Users/alice').terminalHiddenDeliveryGate).toBe(false)
+  })
 })
