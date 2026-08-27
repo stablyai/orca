@@ -25,6 +25,24 @@ describe('planCommitMessageGeneration', () => {
     expect(result.plan.stdinPayload).toBe('Write a commit message')
   })
 
+  it('can leave model selection to the agent for generic text generation', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'pi',
+        model: 'github-copilot/gpt-5.4-mini',
+        useAgentDefaultModel: true
+      },
+      'PROMPT'
+    )
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.plan.args).toContain('--print')
+      expect(result.plan.args).not.toContain('--model')
+      expect(result.plan.args).not.toContain('github-copilot/gpt-5.4-mini')
+    }
+  })
+
   it('plans Claude non-interactive generation with the prompt on stdin only', () => {
     const result = planCommitMessageGeneration(
       {
