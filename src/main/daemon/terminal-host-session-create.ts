@@ -38,45 +38,25 @@ export async function createOrAttachTerminalSession(
     throw new SessionNotFoundError(opts.sessionId)
   }
 
+  // Why no ownership settle here: attach is synchronous by contract. A viewer
+  // connecting inside an in-flight recovery proof (~100ms) gets the pre-reset
+  // snapshot and the injected reset arrives in-order over its stream — a
+  // self-healing first frame. Waiting instead created a race window (cancel,
+  // exit, kill during the await) that produced repeated regressions. Checkpoint
+  // readers that need a settled owner use getSettledSnapshot.
   if (existing && existing.isAlive && !existing.isTerminating) {
-    await existing.settleShellOwnershipConfirmation()
-    const current = deps.sessions.get(opts.sessionId)
-    if (
-      (current !== undefined && current !== existing) ||
-      existing.isTerminating ||
-      deps.sessionTeardown.get(opts.sessionId)
-    ) {
-      throw new SessionNotFoundError(opts.sessionId)
+    const snapshot = existing.getSnapshot()
+    existing.detachAllClients()
+    const token = existing.attachClient(opts.streamClient)
+    return {
+      isNew: false,
+      snapshot,
+      pid: existing.pid,
+      shellState: existing.shellState,
+      incarnationId: existing.incarnationId,
+      ...getDaemonSessionResultMetadata(existing),
+      attachToken: token
     }
-    // Why here: a cancel that landed during the settle await must not detach
-    // the live viewer and hand the session to a stream nobody reads.
-    if (opts.isCanceled?.()) {
-      throw new TerminalAttachCanceledError(opts.sessionId)
-    }
-    if (current === existing && existing.isAlive) {
-      const snapshot = existing.getSnapshot()
-      existing.detachAllClients()
-      const token = existing.attachClient(opts.streamClient)
-      return {
-        isNew: false,
-        snapshot,
-        pid: existing.pid,
-        shellState: existing.shellState,
-        incarnationId: existing.incarnationId,
-        ...getDaemonSessionResultMetadata(existing),
-        attachToken: token
-      }
-    }
-    // A kill that COMPLETED during the settle leaves no isTerminating/teardown
-    // trace (exit clears the flag, the sweep entry deletes itself), so the
-    // tombstone — set at kill, cleared only by the next create — is the one
-    // signal left. Respawning here would resurrect a session the user killed.
-    if (deps.killedTombstones.has(opts.sessionId)) {
-      throw new SessionNotFoundError(opts.sessionId)
-    }
-    // The shell exited (and was possibly reaped) during the settle await: fall
-    // through to the dead-session respawn below — the pre-settle sync path
-    // would have spawned a fresh shell here, never thrown.
   }
 
   if (existing?.isAlive && existing.isTerminating) {
