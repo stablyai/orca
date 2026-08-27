@@ -1,6 +1,8 @@
 import { Fragment, useEffect, useState } from 'react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { translate } from '@/i18n/i18n'
+import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { joinPath } from '@/lib/path'
 import { useAppStore } from '@/store'
 import { useWorktreeById } from '@/store/selectors'
@@ -30,6 +32,10 @@ type ListingState = {
   segmentId: string
   directoryAbsolutePath: string
   directoryRelativePath: string
+  ownerFile: Pick<
+    OpenFile,
+    'worktreeId' | 'runtimeEnvironmentId' | 'externalSshTargetId' | 'operationProvenance'
+  >
 }
 
 export function EditorHeaderPathBreadcrumbs({
@@ -41,7 +47,6 @@ export function EditorHeaderPathBreadcrumbs({
   const openFile = useAppStore((state) => state.openFile)
   const openMarkdownPreview = useAppStore((state) => state.openMarkdownPreview)
   const activeGroupId = useAppStore((state) => state.activeGroupIdByWorktree[activeFile.worktreeId])
-  const { worktreeId, runtimeEnvironmentId, externalSshTargetId, operationProvenance } = activeFile
   const segments = getEditorHeaderPathSegments(activeFile) ?? []
   const previewSuffix = getEditorHeaderPathPreviewSuffix(activeFile)
   const [listing, setListing] = useState<ListingState | null>(null)
@@ -62,7 +67,7 @@ export function EditorHeaderPathBreadcrumbs({
     let cancelled = false
     setLoadState({ status: 'loading' })
     void listEditorHeaderDirectory(
-      { worktreeId, runtimeEnvironmentId, externalSshTargetId, operationProvenance },
+      listing.ownerFile,
       worktreePath,
       listing.directoryAbsolutePath
     ).then((result) => {
@@ -73,20 +78,19 @@ export function EditorHeaderPathBreadcrumbs({
     return () => {
       cancelled = true
     }
-  }, [
-    externalSshTargetId,
-    listing,
-    operationProvenance,
-    runtimeEnvironmentId,
-    worktreeId,
-    worktreePath
-  ])
+  }, [listing, worktreePath])
 
   const openListing = (segment: EditorHeaderPathSegment): void => {
     setLoadState({ status: 'loading' })
     setListing({
       segmentId: segment.id,
       directoryRelativePath: segment.relativeDirectoryPath,
+      ownerFile: {
+        worktreeId: activeFile.worktreeId,
+        runtimeEnvironmentId: activeFile.runtimeEnvironmentId,
+        externalSshTargetId: activeFile.externalSshTargetId,
+        operationProvenance: activeFile.operationProvenance
+      },
       directoryAbsolutePath: resolveEditorHeaderDirectoryAbsolutePath(
         activeFile,
         worktreePath,
@@ -110,8 +114,23 @@ export function EditorHeaderPathBreadcrumbs({
       })
       return
     }
+    try {
+      getEditorFileOperationContext(useAppStore.getState(), listing.ownerFile, worktreePath)
+    } catch (error) {
+      setLoadState({
+        status: 'error',
+        message: extractIpcErrorMessage(
+          error,
+          translate(
+            'auto.components.editor.EditorPanelHeaderPath.7e2c1a9b04',
+            'Could not list this folder.'
+          )
+        )
+      })
+      return
+    }
     openEditorHeaderPathFile({
-      currentFile: activeFile,
+      currentFile: { ...listing.ownerFile, mode: activeFile.mode },
       ...joinEditorHeaderPathEntry(
         listing.directoryAbsolutePath,
         listing.directoryRelativePath,

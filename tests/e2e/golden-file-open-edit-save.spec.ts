@@ -41,11 +41,16 @@ test('@golden opens, edits, saves, and reopens a tracked file', async ({
   await expect(editorHeaderPath).toContainText(README_PATH, {
     timeout: 20_000
   })
+  const editor = orcaPage.locator('.rich-markdown-editor')
+  await expect(editor).toBeVisible({ timeout: 25_000 })
+  await expect(editor).toContainText('Orca E2E Test Repo')
+
   await editorHeaderPath.locator('.editor-header-path-segment-current').click()
   const packageEntry = orcaPage.locator('[data-editor-header-path-entry="package.json"]')
   await expect(packageEntry).toBeVisible()
   await packageEntry.click()
   await expect(orcaPage.locator('.editor-header-path').first()).toContainText('package.json')
+  await expect(orcaPage.locator('.monaco-editor').first()).toBeVisible({ timeout: 25_000 })
 
   await editorHeaderPath.locator('.editor-header-path-segment-current').click()
   const readmeEntry = orcaPage.locator(`[data-editor-header-path-entry="${README_PATH}"]`)
@@ -53,9 +58,6 @@ test('@golden opens, edits, saves, and reopens a tracked file', async ({
   await readmeEntry.click()
   await expect(orcaPage.locator('.editor-header-path').first()).toContainText(README_PATH)
 
-  const editor = orcaPage.locator('.rich-markdown-editor')
-  await expect(editor).toBeVisible({ timeout: 25_000 })
-  await expect(editor).toContainText('Orca E2E Test Repo')
   await editor.click()
   await orcaPage.keyboard.press('ControlOrMeta+End')
   await orcaPage.keyboard.press('Enter')

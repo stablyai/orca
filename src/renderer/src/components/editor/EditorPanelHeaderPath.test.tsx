@@ -319,7 +319,9 @@ describe('EditorPanelHeaderPath', () => {
   })
 
   it('keeps an open listing mounted when unrelated file state changes', async () => {
-    const file = makeOpenFile()
+    const file = makeOpenFile({
+      operationProvenance: { marker: 'same-owner' } as never
+    })
     const { rerender } = render(
       <EditorPanelHeaderPath
         activeFile={file}
@@ -333,7 +335,11 @@ describe('EditorPanelHeaderPath', () => {
 
     rerender(
       <EditorPanelHeaderPath
-        activeFile={{ ...file, isDirty: true }}
+        activeFile={{
+          ...file,
+          isDirty: true,
+          operationProvenance: { ...file.operationProvenance } as never
+        }}
         canShowMarkdownPreview={false}
         onOpenMarkdownPreview={vi.fn()}
         onOpenContainingFolder={vi.fn()}
@@ -342,6 +348,48 @@ describe('EditorPanelHeaderPath', () => {
 
     expect(screen.getByRole('button', { name: 'other.ts' })).toBe(entry)
     expect(readRuntimeDirectory).toHaveBeenCalledOnce()
+  })
+
+  it('refuses to open a stale listing after the file owner changes', async () => {
+    const file = makeOpenFile({
+      externalSshTargetId: 'ssh-1',
+      operationProvenance: { marker: 'ssh-1' } as never
+    })
+    const { rerender } = render(
+      <EditorPanelHeaderPath
+        activeFile={file}
+        canShowMarkdownPreview={false}
+        onOpenMarkdownPreview={vi.fn()}
+        onOpenContainingFolder={vi.fn()}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Browse path.ts' }))
+    const entry = await screen.findByRole('button', { name: 'other.ts' })
+
+    rerender(
+      <EditorPanelHeaderPath
+        activeFile={{
+          ...file,
+          externalSshTargetId: 'ssh-2',
+          operationProvenance: { marker: 'ssh-2' } as never
+        }}
+        canShowMarkdownPreview={false}
+        onOpenMarkdownPreview={vi.fn()}
+        onOpenContainingFolder={vi.fn()}
+      />
+    )
+    getEditorFileOperationContext.mockImplementation(() => {
+      throw new Error('File owner changed')
+    })
+    fireEvent.click(entry)
+
+    expect(openFile).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert').textContent).toContain('File owner changed')
+    expect(getEditorFileOperationContext).toHaveBeenLastCalledWith(
+      expect.anything(),
+      expect.objectContaining({ externalSshTargetId: 'ssh-1' }),
+      '/repo'
+    )
   })
 
   it('keeps path context-menu actions reachable', () => {
