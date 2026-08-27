@@ -4,7 +4,12 @@
 // covers every session, and unlike a transcript subscription it retains none of them.
 
 import { defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
-import { requireStructuredHost as requireHost } from './structured-agent-session-gate'
+import {
+  isWorkItemStartStructuredSession,
+  requireStructuredHost as requireHost,
+  requireWorkItemStartStatusHost
+} from './structured-agent-session-gate'
+import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 
 /** Ties a stream to both ends that can close it — the runtime's subscription registry and the
@@ -46,14 +51,19 @@ export const STRUCTURED_AGENT_SESSION_STATUS_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.subscribeStatus',
     params: null,
     handler: async (_params, ctx, emit) => {
-      const host = requireHost(ctx)
+      const globallyEnabled = supportsStructuredAgentSessions(ctx)
+      const host = globallyEnabled ? requireHost(ctx) : requireWorkItemStartStatusHost(ctx)
       const subscriptionId = structuredAgentSessionStatusSubscriptionId(ctx)
       let dispose = (): void => {}
       const stream = bindStructuredAgentSessionStream(ctx, subscriptionId, () => dispose())
       if (stream.isClosed()) {
         return
       }
-      dispose = host.subscribeStatus({ id: subscriptionId, emit })
+      dispose = globallyEnabled
+        ? host.subscribeStatus({ id: subscriptionId, emit })
+        : host.subscribeStatus({ id: subscriptionId, emit }, (sessionId) =>
+            isWorkItemStartStructuredSession(host, sessionId)
+          )
       if (stream.isClosed()) {
         dispose()
       }

@@ -46,6 +46,49 @@ describe('admission revoked while a session is still open', () => {
     }
   )
 
+  it.each(CLEANUP_METHODS)(
+    'keeps scoped Work Item Start cleanup $method on the authoritative desktop',
+    async ({ method, params, hostCall }) => {
+      hostCalls.getRecord.mockReturnValue({ launchOrigin: 'work-item-start' })
+      const response = await call(
+        method,
+        params,
+        { ...STRUCTURED_CLIENT, clientId: 'desktop-renderer', localDesktopAuthority: true },
+        SETTING_OFF
+      )
+
+      expect(response).toMatchObject({ ok: true })
+      if (hostCall === 'unsubscribe') {
+        expect(response).toMatchObject({ result: { unsubscribed: true } })
+      } else {
+        expect(hostCalls[hostCall]).toHaveBeenCalled()
+      }
+    }
+  )
+
+  it.each(CLEANUP_METHODS)(
+    'refuses scoped Work Item Start cleanup $method from remote and mobile clients',
+    async ({ method, params, hostCall }) => {
+      hostCalls.getRecord.mockReturnValue({ launchOrigin: 'work-item-start' })
+      for (const clientKind of ['runtime', 'mobile'] as const) {
+        const response = await call(
+          method,
+          params,
+          {
+            clientKind,
+            clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+          },
+          SETTING_OFF
+        )
+        expect(response).toMatchObject({
+          ok: false,
+          error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+        })
+      }
+      expect(hostCalls[hostCall]).not.toHaveBeenCalled()
+    }
+  )
+
   it('stops the provider child when closing a chat the setting no longer admits', async () => {
     const response = await call('agentSession.close', { sessionId: SESSION }, STRUCTURED_CLIENT, {
       ...SETTING_OFF

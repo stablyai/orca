@@ -27,13 +27,13 @@ import {
   releaseStructuredLaunchCallerAfterUnknownOutcome,
   settleStructuredLaunchCallersWithFallback,
   settleStructuredLaunchCallersWithoutFallback,
+  structuredAgentLaunchIdentity,
   structuredLaunchCallersHavePendingWork,
   type StructuredAgentLaunchOptions,
   type StructuredLaunchCaller,
   type StructuredLaunchCallerGroup,
   type StructuredRefusalFallback
 } from '@/lib/structured-agent-session-launch-callers'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 
 export type { StructuredAgentLaunchOptions, StructuredAgentLaunchReceipt }
 
@@ -80,14 +80,9 @@ export function getStructuredAgentLaunchStatus(
   worktreeId: string,
   agent: AgentSessionHandleProvider
 ): StructuredAgentLaunchStatus {
-  // Any launch for this pair, not just the blank one: adopting launches carry the conversation in
-  // their identity, and a caller asking "is a chat starting here" means all of them.
-  const states = [
-    pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent)),
-    ...[...pendingStructuredLaunchesByIdentity.entries()]
-      .filter(([identity]) => identity.startsWith(`${agent}:${worktreeId}:resume:`))
-      .map(([, state]) => state)
-  ].filter((state): state is StructuredLaunchState => Boolean(state))
+  const states = [...pendingStructuredLaunchesByIdentity.values()].filter(
+    (state) => state.intent.worktreeId === worktreeId && state.intent.agent === agent
+  )
   if (states.length === 0) {
     return 'idle'
   }
@@ -103,23 +98,6 @@ export function useStructuredAgentLaunchStatus(
     () => getStructuredAgentLaunchStatus(worktreeId, agent),
     () => 'idle'
   )
-}
-
-// Why keyed by agent too: one worktree can hold a Claude and a Codex launch at once, and a shared
-// key would hand the second caller the first agent's intent.
-//
-// Why keyed by the adopted conversation as well: a joining caller is handed the EXISTING intent and
-// contributes only its prompt, so without this a resume that arrives while a blank launch is pending
-// would be silently dropped — the user would get a blank chat, or another row's conversation, with
-// no error. A launch that adopts a conversation is a different launch.
-function launchIdentity(
-  worktreeId: string,
-  agent: AgentSessionHandleProvider,
-  resumeFrom?: StructuredAgentSessionResumeSource
-): string {
-  return resumeFrom
-    ? `${agent}:${worktreeId}:resume:${resumeFrom.providerSessionId}`
-    : `${agent}:${worktreeId}`
 }
 
 function cleanupLaunchState(state: StructuredLaunchState): void {
@@ -226,7 +204,7 @@ function structuredAgentLaunchState(
   agent: AgentSessionHandleProvider,
   options: StructuredAgentLaunchOptions
 ): StructuredLaunchStateResult {
-  const identity = launchIdentity(worktreeId, agent, options.resumeFrom)
+  const identity = structuredAgentLaunchIdentity(worktreeId, agent, options)
   const existing = pendingStructuredLaunchesByIdentity.get(identity)
   if (existing) {
     if (existing.visibilityUnknown) {
@@ -256,8 +234,15 @@ function structuredAgentLaunchState(
   // it has always made, so this change adds no trailing `undefined` for call-site assertions to
   // absorb.
   const intent = options.resumeFrom
-    ? createStructuredAgentSessionLaunchIntent(worktreeId, agent, options.resumeFrom)
-    : createStructuredAgentSessionLaunchIntent(worktreeId, agent)
+    ? createStructuredAgentSessionLaunchIntent(
+        worktreeId,
+        agent,
+        options.resumeFrom,
+        options.launchOrigin
+      )
+    : options.launchOrigin
+      ? createStructuredAgentSessionLaunchIntent(worktreeId, agent, undefined, options.launchOrigin)
+      : createStructuredAgentSessionLaunchIntent(worktreeId, agent)
   const text = options.prompt?.trim() ?? ''
   const stagedPrompt = text
     ? enqueueStructuredAgentSessionLaunchPrompt(intent.sessionId, text)

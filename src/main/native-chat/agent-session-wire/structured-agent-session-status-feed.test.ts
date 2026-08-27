@@ -88,6 +88,17 @@ function feedFor(
 }
 
 describe('StructuredAgentSessionStatusFeed', () => {
+  it('snapshots only sessions still attached to this host', async () => {
+    const journal = await openJournal()
+    const sessions = new Map([[SESSION, { journal }]])
+    const { feed } = feedFor(sessions)
+
+    expect(feed.snapshot()).toEqual([expect.objectContaining({ sessionId: SESSION, status: null })])
+
+    sessions.clear()
+    expect(feed.snapshot()).toEqual([])
+  })
+
   it('opens with every readable session and reports no status before a persisted turn', async () => {
     const journal = await openJournal()
     const { events } = feedFor(new Map([[SESSION, { journal }]]))
@@ -107,6 +118,47 @@ describe('StructuredAgentSessionStatusFeed', () => {
         ]
       }
     ])
+  })
+
+  it('filters both the opening snapshot and later status events', async () => {
+    const includedJournal = await openJournal('included')
+    const excludedJournal = await openJournal('excluded')
+    const sessions = new Map([
+      ['included', { journal: includedJournal }],
+      ['excluded', { journal: excludedJournal }]
+    ])
+    const { feed } = feedFor(sessions)
+    const filtered: AgentSessionStatusEvent[] = []
+    feed.subscribe(
+      { id: 'filtered', emit: (event) => filtered.push(event) },
+      (sessionId) => sessionId === 'included'
+    )
+
+    expect(filtered).toEqual([
+      {
+        type: 'snapshot',
+        sessions: [expect.objectContaining({ sessionId: 'included' })]
+      }
+    ])
+
+    await excludedJournal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'hidden' }] },
+      { fence: 1 }
+    )
+    feed.publish('excluded')
+    expect(filtered).toHaveLength(1)
+
+    await includedJournal.appendItem(
+      USER_IDENTITY,
+      { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'visible' }] },
+      { fence: 1 }
+    )
+    feed.publish('included')
+    expect(filtered.at(-1)).toEqual({
+      type: 'status',
+      session: expect.objectContaining({ sessionId: 'included', latestPrompt: 'visible' })
+    })
   })
 
   it('publishes working, then idle once the running marker is tombstoned, and never a repeat', async () => {

@@ -1,4 +1,5 @@
 import type { AgentStatusState, AgentType, AgentWorkingMode } from './agent-status-types'
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -11,6 +12,10 @@ import type { GitWorktreeInfo, Worktree } from './worktree/types'
 
 export type RuntimeWorktreeAgentRow = {
   paneKey: string
+  /** Present for native structured sessions; absent on terminal-backed agents and older hosts. */
+  sessionId?: string
+  /** Provider-confirmed identity, excluding host-local transcript paths. */
+  providerSession?: Pick<AgentProviderSessionMetadata, 'key' | 'id'>
   parentPaneKey: string | null
   state: AgentStatusState
   workingMode?: AgentWorkingMode

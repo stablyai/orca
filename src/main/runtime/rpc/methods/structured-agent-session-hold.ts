@@ -33,8 +33,8 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.hold',
     params: HoldParams,
     handler: async (params, ctx) => {
-      await ensureStructuredHostInstalled(ctx)
-      const host = requireStructuredHost(ctx)
+      await ensureStructuredHostInstalled(ctx, { sessionId: params.sessionId })
+      const host = requireStructuredHost(ctx, params.sessionId)
       const holderKey = holderKeyFor(ctx, params.holderId)
       ctx.runtime.registerSubscriptionCleanup(
         holdCleanupIdFor(params.sessionId, holderKey),
@@ -54,7 +54,7 @@ export const STRUCTURED_AGENT_SESSION_HOLD_METHODS: RpcAnyMethod[] = [
     name: 'agentSession.release',
     params: HoldParams,
     handler: async (params, ctx) => {
-      const host = requireStructuredCleanupHost(ctx)
+      const host = requireStructuredCleanupHost(ctx, params.sessionId)
       const holderKey = holderKeyFor(ctx, params.holderId)
       host.release(params.sessionId, holderKey)
       // Retires the backstop too; its release is a no-op against a holder already gone.

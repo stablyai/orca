@@ -96,6 +96,7 @@ export class RpcDispatcher {
           requestId: request.id,
           clientId: options?.clientId,
           clientKind: options?.clientKind,
+          localDesktopAuthority: options?.localDesktopAuthority,
           clientCapabilities: options?.clientCapabilities,
           updateClientCapabilities: options?.updateClientCapabilities,
           orchestrationCapability: request.orchestrationCapability,

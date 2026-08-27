@@ -8,9 +8,13 @@ export function deliverDirectWorkItemPrompt(args: {
   effectiveAgent: TuiAgent | null
   draftContent: string
   promptDelivery: 'draft' | 'submit-after-ready'
+  structuredSessionRequired: boolean
   startupPlan: AgentStartupPlan | null
   draftLaunchedNatively: boolean
-}): void {
+}): boolean {
+  if (args.structuredSessionRequired) {
+    return false
+  }
   if (args.promptDelivery === 'draft' && args.primaryTabId && args.effectiveAgent) {
     seedNativeChatLaunchDraftForAgentTab({
       tabId: args.primaryTabId,
@@ -24,13 +28,13 @@ export function deliverDirectWorkItemPrompt(args: {
     args.draftLaunchedNatively ||
     (args.promptDelivery === 'draft' && Boolean(args.startupPlan.draftPrompt))
   ) {
-    return
+    return true
   }
   void pasteDirectWorkItemDraftWhenAgentReady({
     primaryTabId: args.primaryTabId,
     startupPlan: args.startupPlan,
     content: args.draftContent,
-    submit: args.promptDelivery === 'submit-after-ready',
-    forcePaste: args.promptDelivery === 'submit-after-ready'
+    ...(args.promptDelivery === 'submit-after-ready' ? { submit: true, forcePaste: true } : {})
   })
+  return true
 }

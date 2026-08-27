@@ -675,6 +675,8 @@
               "67e103dd60": "Workspace created but could not be activated.",
               "19c7683acf": "Selected agent is not available in the created workspace.",
               "8bc45efdbc": "Failed to resolve PR head.",
+              "structuredPromptDeliveryFailed": "The structured agent session did not accept the work item prompt. Open the chat and send it manually; Orca did not retry.",
+              "structuredUnavailable": "Submit after ready requires a local structured Codex or Claude session without custom launch arguments. The workspace was created, but no agent or prompt was started.",
               "agent": {
                 "ceeeb509b5": "Agent took too long to start. The workspace is ready — paste the {{value0}} when the agent is idle."
               }
@@ -8475,7 +8477,11 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "workItemStartBehavior": "Work item Start behavior",
+          "workItemStartBehaviorDescription": "Choose whether Start leaves the work item prompt editable or submits it after the agent is ready.",
+          "workItemStartDraft": "Draft",
+          "workItemStartSubmit": "Submit after ready"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -10249,7 +10255,16 @@
             "setup": "setup",
             "apiKey": "api key",
             "skill": "skill",
-            "connect": "connect"
+            "connect": "connect",
+            "workItemStartBehavior": "Work item Start behavior",
+            "workItemStartBehaviorDescription": "Choose whether Start leaves the work item prompt editable or submits it after the agent is ready.",
+            "start": "start",
+            "prompt": "prompt",
+            "draft": "draft",
+            "submit": "submit",
+            "ready": "ready",
+            "issue": "issue",
+            "workItem": "work item"
           }
         },
         "terminal": {

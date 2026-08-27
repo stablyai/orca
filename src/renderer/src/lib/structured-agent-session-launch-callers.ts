@@ -1,10 +1,14 @@
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
 import {
   settleStructuredAgentLaunchPrompt,
   type StructuredPromptDeliveryResult
 } from '@/lib/structured-agent-session-launch-prompt'
 import type { StructuredAgentSessionOutboxEntry } from '../../../shared/structured-agent-session-outbox'
-import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
+import type {
+  StructuredAgentSessionLaunchOrigin,
+  StructuredAgentSessionResumeSource
+} from '../../../shared/structured-agent-session-create'
 
 export type StructuredRefusalFallback = () =>
   | void
@@ -18,6 +22,19 @@ export type StructuredAgentLaunchOptions = {
   /** Adopt an existing provider conversation instead of starting a fresh one. Part of the launch's
    *  identity, not a preference — see `launchIdentity`. */
   resumeFrom?: StructuredAgentSessionResumeSource
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
+}
+
+/** Includes every part of a launch that cannot safely share a pending create. */
+export function structuredAgentLaunchIdentity(
+  worktreeId: string,
+  agent: AgentSessionHandleProvider,
+  options: Pick<StructuredAgentLaunchOptions, 'resumeFrom' | 'launchOrigin'> = {}
+): string {
+  const base = options.resumeFrom
+    ? `${agent}:${worktreeId}:resume:${options.resumeFrom.providerSessionId}`
+    : `${agent}:${worktreeId}`
+  return options.launchOrigin ? `${base}:origin:${options.launchOrigin}` : base
 }
 
 export type StructuredLaunchCaller = {

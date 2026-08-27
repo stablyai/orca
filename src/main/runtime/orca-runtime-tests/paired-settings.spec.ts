@@ -28,6 +28,7 @@ describe('OrcaRuntimeService', () => {
         },
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        workItemStartPromptDelivery: 'submit-after-ready',
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         minimaxEndpoint: 'cn',
@@ -39,6 +40,7 @@ describe('OrcaRuntimeService', () => {
       worktreeVisibilityDefaults: { external: 'hide' },
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      workItemStartPromptDelivery: 'submit-after-ready',
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       // Why: without this the paired client silently falls back to 'overseas' and shows the wrong region.
@@ -196,6 +198,7 @@ describe('OrcaRuntimeService', () => {
       ...store.getSettings(),
       experimentalNewWorktreeCardStyle: false,
       compactWorktreeCards: false,
+      workItemStartPromptDelivery: 'draft' as const,
       minimaxGroupId: '',
       minimaxUsageModels: 'general',
       minimaxEndpoint: 'overseas'
@@ -214,6 +217,7 @@ describe('OrcaRuntimeService', () => {
       await runtime.updateClientSettings({
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        workItemStartPromptDelivery: 'submit-after-ready',
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         minimaxEndpoint: 'cn'
@@ -221,6 +225,7 @@ describe('OrcaRuntimeService', () => {
     ).toMatchObject({
       experimentalNewWorktreeCardStyle: true,
       compactWorktreeCards: true,
+      workItemStartPromptDelivery: 'submit-after-ready',
       minimaxGroupId: 'group-42',
       minimaxUsageModels: 'general,abab6.5',
       minimaxEndpoint: 'cn'
@@ -229,6 +234,7 @@ describe('OrcaRuntimeService', () => {
       {
         experimentalNewWorktreeCardStyle: true,
         compactWorktreeCards: true,
+        workItemStartPromptDelivery: 'submit-after-ready',
         minimaxGroupId: 'group-42',
         minimaxUsageModels: 'general,abab6.5',
         minimaxEndpoint: 'cn'

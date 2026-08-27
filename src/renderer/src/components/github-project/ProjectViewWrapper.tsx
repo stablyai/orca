@@ -15,6 +15,7 @@ import {
 } from './ProjectViewStates'
 import { useProjectRowActions } from './useProjectRowActions'
 import { useProjectViewTable } from './useProjectViewTable'
+import { resolveWorkItemStartPromptDelivery } from '../../../../shared/work-item-start-prompt-delivery'
 
 type Props = { selectedRepoIds: ReadonlySet<string> }
 
@@ -110,6 +111,9 @@ function ProjectViewBody({
             repoId: dialogItem.workItem.repoId,
             launchSource: 'task_page',
             telemetrySource: 'sidebar',
+            promptDelivery: resolveWorkItemStartPromptDelivery(
+              useAppStore.getState().settings?.workItemStartPromptDelivery
+            ),
             openModalFallback: () => {
               if (item.url) {
                 void window.api.shell.openUrl(item.url)

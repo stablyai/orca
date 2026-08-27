@@ -1,6 +1,5 @@
 import { useEffect } from 'react'
 import { useAppStore } from '../store'
-import { clearLocalStructuredSessionTabs } from './local-structured-session-tabs-sync/snapshot-apply'
 import { startLocalStructuredSessionTabsSync } from './local-structured-session-tabs-sync/subscription'
 
 export {
@@ -26,13 +25,8 @@ export function useLocalStructuredSessionTabsSync(): void {
   const ready = useAppStore(
     (state) => state.workspaceSessionReady && state.terminalStartupRestorationReady
   )
-  const enabled = useAppStore((state) => state.settings?.experimentalStructuredNativeChat === true)
   useEffect(() => {
     if (!ready) {
-      return
-    }
-    if (!enabled) {
-      clearLocalStructuredSessionTabs()
       return
     }
     let disposed = false
@@ -47,5 +41,5 @@ export function useLocalStructuredSessionTabsSync(): void {
       disposed = true
       unsubscribe()
     }
-  }, [enabled, ready])
+  }, [ready])
 }

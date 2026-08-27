@@ -24,7 +24,10 @@ import {
 } from '../../../native-chat/agent-session-wire/structured-agent-session-attach'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import type { StructuredAgentSessionCaller } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
-import type { StructuredAgentSessionResumeSource } from '../../../../shared/structured-agent-session-create'
+import type {
+  StructuredAgentSessionLaunchOrigin,
+  StructuredAgentSessionResumeSource
+} from '../../../../shared/structured-agent-session-create'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import {
   resolveUncommittedStructuredCreate,
@@ -49,6 +52,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   agent: 'claude' | 'codex'
   caller: StructuredAgentSessionCaller
   resumeFrom?: StructuredAgentSessionResumeSource
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
 }): Promise<PreparedStructuredAgentSessionCreate> {
   // Adoption replay may need the record loaded from disk before source discovery can be skipped.
   let host = args.resumeFrom ? await args.ensureHost() : null
@@ -59,10 +63,14 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     callerKey: args.caller.callerKey,
     ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
   })
+  const resolvedWithOrigin = {
+    ...resolved,
+    ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {})
+  }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
     method: 'agentSession.attach',
     sessionId: args.envelope.sessionId,
-    fields: attachFingerprintFields({ ...resolved, envelope: args.envelope })
+    fields: attachFingerprintFields({ ...resolvedWithOrigin, envelope: args.envelope })
   })
   host ??= await args.ensureHost()
   const { agent: _resolvedAgent, provider: _resolvedProvider, ...resolvedAttach } = resolved
@@ -72,6 +80,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
       ...resolvedAttach,
       provider: resolved.provider as 'claude' | 'codex',
       agent: resolved.agent as 'claude' | 'codex',
+      ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {}),
       envelope: { ...args.envelope, payloadFingerprint: hostFingerprint }
     },
     tab: {

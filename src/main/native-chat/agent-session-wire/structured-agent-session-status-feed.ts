@@ -65,14 +65,30 @@ export class StructuredAgentSessionStatusFeed {
   constructor(private readonly deps: StructuredAgentSessionStatusFeedDeps) {}
 
   /** Opens with every session this host has projected, live ones re-read, then only changes. */
-  subscribe(subscriber: StructuredAgentSessionStatusSubscriber): () => void {
+  subscribe(
+    subscriber: StructuredAgentSessionStatusSubscriber,
+    includeSession: (sessionId: string) => boolean = () => true
+  ): () => void {
     // Re-project before registering: a change found here has to reach the subscribers that
     // already read the old value, and the arriving one carries it in its snapshot instead.
     for (const [sessionId] of this.deps.sessions) {
       this.publish(sessionId, undefined, { replay: true })
     }
-    this.subscribers.set(subscriber.id, subscriber)
-    this.emit(subscriber, { type: 'snapshot', sessions: [...this.published.values()] })
+    const filtered = {
+      ...subscriber,
+      emit: (event: AgentSessionStatusEvent) => {
+        if (event.type === 'snapshot') {
+          subscriber.emit({
+            ...event,
+            sessions: event.sessions.filter((session) => includeSession(session.sessionId))
+          })
+        } else if (event.type !== 'status' || includeSession(event.session.sessionId)) {
+          subscriber.emit(event)
+        }
+      }
+    }
+    this.subscribers.set(subscriber.id, filtered)
+    this.emit(filtered, { type: 'snapshot', sessions: [...this.published.values()] })
     return () => this.unsubscribe(subscriber.id)
   }
 
@@ -87,6 +103,16 @@ export class StructuredAgentSessionStatusFeed {
     } catch {
       // The transport is already gone; teardown must remain idempotent.
     }
+  }
+
+  /** Current attached sessions only; retained projections for evicted sessions stay subscription-only. */
+  snapshot(): AgentSessionStatusSummary[] {
+    for (const [sessionId] of this.deps.sessions) {
+      this.publish(sessionId, undefined, { replay: true })
+    }
+    return [...this.published.values()].filter(
+      (summary) => this.deps.sessions.get(summary.sessionId) !== undefined
+    )
   }
 
   /** Re-projects one session after its journal changed; equal projections are not re-sent. */

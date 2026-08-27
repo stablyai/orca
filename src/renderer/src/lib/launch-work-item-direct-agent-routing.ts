@@ -15,6 +15,8 @@ import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structure
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
+import { toast } from 'sonner'
+import { structuredWorkItemPromptDeliveryFailedMessage } from '@/lib/launch-work-item-direct-messages'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
@@ -118,51 +120,84 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   connectionId: string | null
   draftContent: string
   promptDelivery: PromptDelivery
+  structuredSessionRequired: boolean
   primaryTabId: string | null
   startupPlan: AgentStartupPlan | null
   launchSource: LaunchSource
 }): Promise<{
   completed: boolean
+  succeeded: boolean
   structuredLaunch: boolean
   visibilityUnknown: boolean
   primaryTabId: string | null
 }> {
   let { structuredLaunch, primaryTabId } = args
   if (!structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
-    return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
+    return {
+      completed: false,
+      succeeded: false,
+      structuredLaunch,
+      visibilityUnknown: false,
+      primaryTabId
+    }
   }
 
   const launch = startStructuredAgentLaunch(args.worktreeId, args.agent, {
     prompt: args.draftContent,
-    ...(args.promptDelivery === 'submit-after-ready' ? { promptDelivery: args.promptDelivery } : {})
+    ...(args.promptDelivery === 'submit-after-ready'
+      ? { promptDelivery: args.promptDelivery }
+      : {}),
+    ...(args.structuredSessionRequired ? { launchOrigin: 'work-item-start' as const } : {})
   })
-  const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-    structuredLaunch = false
-    await preflightAgentTrust({
-      agent: args.agent,
-      workspacePath: args.workspacePath,
-      connectionId: args.connectionId
-    })
-    const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
-      sidebarRevealBehavior: 'auto',
-      createNewTerminalForStartup: true,
-      ...buildDirectWorkItemStartupOpts(
-        args.agent,
-        args.startupPlan,
-        args.launchSource,
-        args.promptDelivery === 'draft' ? args.draftContent : undefined
-      )
-    })
-    primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
-  })
+  const refusalFallback = !args.structuredSessionRequired
+    ? launch.claimDefinitiveRefusalFallback(async () => {
+        structuredLaunch = false
+        await preflightAgentTrust({
+          agent: args.agent,
+          workspacePath: args.workspacePath,
+          connectionId: args.connectionId
+        })
+        const fallbackActivation = activateAndRevealWorktree(args.worktreeId, {
+          sidebarRevealBehavior: 'auto',
+          createNewTerminalForStartup: true,
+          ...buildDirectWorkItemStartupOpts(
+            args.agent,
+            args.startupPlan,
+            args.launchSource,
+            args.promptDelivery === 'draft' ? args.draftContent : undefined
+          )
+        })
+        primaryTabId = fallbackActivation === false ? null : fallbackActivation.primaryTabId
+      })
+    : null
   try {
     await launch.launchResult
-    return { completed: true, structuredLaunch, visibilityUnknown: false, primaryTabId }
+    const promptDeliveryResult =
+      args.promptDelivery === 'submit-after-ready' ? await launch.promptDeliveryResult : undefined
+    const succeeded =
+      args.promptDelivery !== 'submit-after-ready' || promptDeliveryResult?.delivered === true
+    if (!succeeded && promptDeliveryResult?.failureNotified !== true) {
+      toast.error(structuredWorkItemPromptDeliveryFailedMessage())
+    }
+    return { completed: true, succeeded, structuredLaunch, visibilityUnknown: false, primaryTabId }
   } catch (error) {
+    if (
+      error instanceof StructuredAgentSessionCreateRefusalError &&
+      args.structuredSessionRequired
+    ) {
+      return {
+        completed: true,
+        succeeded: false,
+        structuredLaunch,
+        visibilityUnknown: false,
+        primaryTabId
+      }
+    }
     if (!(error instanceof StructuredAgentSessionCreateRefusalError)) {
       const visibilityUnknown = launch.isVisibilityUnknown()
       return {
         completed: !visibilityUnknown,
+        succeeded: false,
         structuredLaunch,
         visibilityUnknown,
         primaryTabId
@@ -170,5 +205,11 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
     }
     await refusalFallback
   }
-  return { completed: false, structuredLaunch, visibilityUnknown: false, primaryTabId }
+  return {
+    completed: false,
+    succeeded: false,
+    structuredLaunch,
+    visibilityUnknown: false,
+    primaryTabId
+  }
 }

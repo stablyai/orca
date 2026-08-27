@@ -69,6 +69,7 @@ import {
 import { refreshLocalStructuredSessionTabs } from '@/runtime/local-structured-session-tabs-sync'
 import {
   cancelStructuredAgentLaunch,
+  getStructuredAgentLaunchStatus,
   startStructuredAgentLaunch
 } from './structured-agent-session-launch'
 import { readOutbox } from '@/components/native-chat/structured-agent-session-outbox-storage'
@@ -157,6 +158,64 @@ describe('startStructuredAgentLaunch', () => {
     expect(mocks.launch).toHaveBeenCalledWith(intent)
     expect(toast.message).not.toHaveBeenCalled()
     expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('creates one native Codex session and sends the initial prompt exactly once', async () => {
+    const worktreeId = 'wt-work-item-start'
+    const intent = launchIntent(worktreeId, 'native-codex-session-1')
+    mocks.createIntent.mockReturnValueOnce(intent)
+    mocks.launch.mockResolvedValueOnce({ sessionId: intent.sessionId, fence: 7 })
+    vi.mocked(refreshLocalStructuredSessionTabs).mockResolvedValue([
+      publishedSnapshot(worktreeId, intent.sessionId)
+    ])
+    mocks.callStructuredAgentSession.mockResolvedValueOnce({
+      ok: true,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+
+    const launch = startStructuredAgentLaunch(worktreeId, 'codex', {
+      prompt: 'Implement issue 57',
+      promptDelivery: 'submit-after-ready',
+      launchOrigin: 'work-item-start'
+    })
+    expect(getStructuredAgentLaunchStatus(worktreeId, 'codex')).toBe('pending')
+
+    await expect(launch.launchResult).resolves.toEqual({
+      sessionId: intent.sessionId,
+      fence: 7
+    })
+    await expect(launch.promptDeliveryResult).resolves.toEqual({
+      delivered: true,
+      failureNotified: false
+    })
+    expect(launch.sessionId).toBe(intent.sessionId)
+    expect(mocks.createIntent).toHaveBeenCalledOnce()
+    expect(mocks.createIntent).toHaveBeenCalledWith(
+      worktreeId,
+      'codex',
+      undefined,
+      'work-item-start'
+    )
+    expect(mocks.launch).toHaveBeenCalledOnce()
+    expect(mocks.launch).toHaveBeenCalledWith(intent)
+    expect(mocks.callStructuredAgentSession).toHaveBeenCalledOnce()
+    expect(mocks.callStructuredAgentSession).toHaveBeenCalledWith(
+      { kind: 'local' },
+      'agentSession.send',
+      {
+        envelope: expect.objectContaining({
+          sessionId: intent.sessionId,
+          expectedRuntimeFence: 7
+        }),
+        body: {
+          kind: 'message',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Implement issue 57' }]
+        }
+      }
+    )
+    await flushLaunchSettlement()
+    expect(getStructuredAgentLaunchStatus(worktreeId, 'codex')).toBe('idle')
   })
 
   it('keeps a Claude and a Codex launch in the same worktree apart', async () => {

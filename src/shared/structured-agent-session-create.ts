@@ -18,11 +18,14 @@ export type StructuredAgentSessionResumeSource = {
   providerSessionId: string
 }
 
+export type StructuredAgentSessionLaunchOrigin = 'work-item-start'
+
 export type StructuredAgentSessionCreateParams = {
   envelope: AgentSessionMutationEnvelope
   worktree: string
   agent: AgentSessionHandleProvider
   resumeFrom?: StructuredAgentSessionResumeSource
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
 }
 
 /** Provider-prefixed so a session id names its lane on sight, and underscore-only
@@ -44,13 +47,15 @@ export function structuredAgentSessionCreateParams(args: {
   worktree: string
   agent: AgentSessionHandleProvider
   resumeFrom?: StructuredAgentSessionResumeSource
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
   randomUuid: () => string
   now?: number
 }): StructuredAgentSessionCreateParams {
   const fields = {
     worktree: args.worktree,
     agent: args.agent,
-    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {})
+    ...(args.resumeFrom ? { resumeFrom: args.resumeFrom } : {}),
+    ...(args.launchOrigin ? { launchOrigin: args.launchOrigin } : {})
   }
   return {
     envelope: {

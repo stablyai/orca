@@ -168,6 +168,8 @@ export function hostStub(): StructuredAgentSessionHost {
       }
     })),
     supportsCreate: vi.fn(() => true),
+    getRecord: vi.fn(() => null),
+    listRecords: vi.fn(() => []),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({
       models: [{ id: 'gpt-live', label: 'GPT Live', isDefault: true, efforts: [] }],
@@ -183,7 +185,15 @@ export function hostStub(): StructuredAgentSessionHost {
     unsubscribe: vi.fn(),
     release: vi.fn()
   })
-  return hostCalls as unknown as StructuredAgentSessionHost
+  return {
+    ...hostCalls,
+    deps: {
+      store: {
+        getRecord: hostCalls.getRecord,
+        listRecords: hostCalls.listRecords
+      }
+    }
+  } as unknown as StructuredAgentSessionHost
 }
 
 export function dispatcher(runtimeOverrides: Record<string, unknown> = {}): RpcDispatcher {
@@ -236,6 +246,7 @@ export async function call(
     clientId?: string
     clientKind?: 'mobile' | 'runtime'
     clientCapabilities?: string[]
+    localDesktopAuthority?: true
   },
   runtimeOverrides: Record<string, unknown> = {}
 ): Promise<RpcResponse> {

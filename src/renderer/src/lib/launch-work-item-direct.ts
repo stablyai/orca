@@ -7,6 +7,7 @@ import {
   agentLaunchCommandErrorMessage,
   gitLabIssueNumber,
   resolvePrHeadErrorMessage,
+  structuredWorkItemLaunchUnavailableMessage,
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
@@ -31,6 +32,7 @@ import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-dir
 import { deliverDirectWorkItemPrompt } from '@/lib/launch-work-item-direct-prompt-delivery'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
 import { resolveAgentLaunchRoute, type AgentLaunchRoutingInput } from '@/lib/agent-launch-routing'
+import type { StructuredNativeChatBlocker } from '../../../shared/structured-native-chat-launch-route'
 
 function resolveDirectWorkItemRoute(input: AgentLaunchRoutingInput) {
   return resolveAgentLaunchRoute(input)
@@ -45,8 +47,8 @@ function resolveDirectWorkItemRoute(input: AgentLaunchRoutingInput) {
  *   - the repo can't be resolved from `repoId`
  *   - no compatible agent is detected on PATH
  *
- * Best-effort: after workspace activation, paste failures only toast a notice — the user still
- * has a usable workspace and can paste the work item context themselves.
+ * Draft delivery stays best-effort after activation. Submit-after-ready waits for an authoritative
+ * delivery verdict and reports failure without creating another workspace or writer.
  */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
   const {
@@ -71,6 +73,8 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   // matches the owner-routed createWorktree below, not the focused runtime.
   const repoOwnerSettings = getSettingsForRepoRuntimeOwner(store, repoId)
   const promptDelivery = args.promptDelivery ?? 'draft'
+  const structuredSessionRequired =
+    promptDelivery === 'submit-after-ready' && args.allowLegacyTerminalPromptSubmission !== true
   const repoConnectionId = repo.connectionId?.trim() || null
   const githubIdentity =
     item.number !== null && (item.type === 'issue' || item.type === 'pr')
@@ -160,6 +164,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
   let structuredLaunch = false
+  let structuredLaunchBlocker: StructuredNativeChatBlocker | null = null
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
   try {
@@ -205,6 +210,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       settings,
       draftContent,
       promptDelivery,
+      structuredSessionRequired,
       launchPlatform: args.launchPlatform,
       repoProjectRuntime,
       routeResolver: resolveDirectWorkItemRoute
@@ -222,19 +228,22 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     draftLaunchedNatively = launchPreparation.draftLaunchedNatively
     startupPlanFailed = launchPreparation.startupPlanFailed
     structuredLaunch = launchPreparation.structuredLaunch
+    structuredLaunchBlocker = launchPreparation.structuredLaunchBlocker
 
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
       setup: result.setup,
-      defaultTabs: result.defaultTabs,
+      ...(structuredLaunchBlocker ? {} : { defaultTabs: result.defaultTabs }),
       ...(structuredLaunch
         ? { providesInitialSurface: true }
-        : buildDirectWorkItemStartupOpts(
-            effectiveAgent,
-            startupPlan,
-            launchSource,
-            promptDelivery === 'draft' ? draftContent : undefined
-          ))
+        : structuredLaunchBlocker
+          ? {}
+          : buildDirectWorkItemStartupOpts(
+              effectiveAgent,
+              startupPlan,
+              launchSource,
+              promptDelivery === 'draft' ? draftContent : undefined
+            ))
     })
     if (!activation) {
       // Worktree vanished between create and activate — extremely unlikely but
@@ -243,6 +252,10 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
       return false
     }
     primaryTabId = activation.primaryTabId
+    if (structuredLaunchBlocker) {
+      toast.error(structuredWorkItemLaunchUnavailableMessage())
+      return false
+    }
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Failed to create workspace.'
     toast.error(message)
@@ -259,6 +272,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     connectionId: repoConnectionId,
     draftContent,
     promptDelivery,
+    structuredSessionRequired,
     primaryTabId,
     startupPlan,
     launchSource
@@ -267,7 +281,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
   if (structuredResult.completed) {
-    return true
+    return structuredResult.succeeded
   }
   primaryTabId = structuredResult.primaryTabId
 
@@ -276,13 +290,13 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     return false
   }
 
-  deliverDirectWorkItemPrompt({
+  return deliverDirectWorkItemPrompt({
     primaryTabId,
     effectiveAgent,
     draftContent,
     promptDelivery,
+    structuredSessionRequired,
     startupPlan,
     draftLaunchedNatively
   })
-  return true
 }

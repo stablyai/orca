@@ -4,6 +4,8 @@ import {
 } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
+import type { StructuredAgentSessionLaunchOrigin } from '../../../../shared/structured-agent-session-create'
+import { structuredAgentSessionsEnabled } from '../../../../shared/structured-native-chat-launch-route'
 
 type StructuredPolicyContext = Pick<RpcContext, 'clientCapabilities' | 'clientKind'> & {
   runtime?: Pick<OrcaRuntimeService, 'getClientSettings'>
@@ -14,7 +16,7 @@ export function isStructuredNativeChatEnabled(
   runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
 ): boolean {
   try {
-    return runtime.getClientSettings().experimentalStructuredNativeChat === true
+    return structuredAgentSessionsEnabled(runtime.getClientSettings())
   } catch {
     return false
   }
@@ -30,9 +32,8 @@ export function supportsStructuredAgentSessionCapability(
 }
 
 /**
- * One rule for every caller. The host setting is policy and applies to desktop, mobile and
- * in-process callers alike; the negotiated capability is a wire term, so it is asked of remote
- * clients only — in-process callers are the same build as the host and never negotiate one.
+ * Global structured-chat policy applies to desktop, mobile and in-process callers alike. The
+ * work-item-start route has separate local admission below and never changes this decision.
  */
 export function supportsStructuredAgentSessions(context: StructuredPolicyContext): boolean {
   if (!supportsStructuredAgentSessionCapability(context)) {
@@ -51,4 +52,25 @@ export function structuredNativeChatProjectionEnabled(args: {
   structuredNativeChatEnabled: boolean
 }): boolean {
   return supportsStructuredAgentSessions(args)
+}
+
+export function supportsWorkItemStartStructuredSessionCreate(
+  context: Pick<RpcContext, 'clientCapabilities' | 'clientKind' | 'localDesktopAuthority'> & {
+    runtime: Pick<OrcaRuntimeService, 'getClientSettings'>
+  },
+  launchOrigin: StructuredAgentSessionLaunchOrigin | undefined
+): boolean {
+  if (
+    launchOrigin !== 'work-item-start' ||
+    context.localDesktopAuthority !== true ||
+    context.clientKind !== 'runtime' ||
+    !supportsStructuredAgentSessionCapability(context)
+  ) {
+    return false
+  }
+  try {
+    return context.runtime.getClientSettings().workItemStartPromptDelivery === 'submit-after-ready'
+  } catch {
+    return false
+  }
 }

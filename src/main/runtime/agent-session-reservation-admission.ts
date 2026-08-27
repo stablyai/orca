@@ -28,6 +28,7 @@ import {
   type AgentSessionLaunchEnv,
   type AgentSessionRecord
 } from '../../shared/agent-session-record'
+import type { StructuredAgentSessionLaunchOrigin } from '../../shared/structured-agent-session-create'
 import {
   agentSessionProviderHandleRoot,
   type AgentSessionHandleProvider,
@@ -50,6 +51,7 @@ export type AgentSessionReserveRequest = {
   launchEnv?: AgentSessionLaunchEnv
   /** Initial provider options persisted before the first process is acquired. */
   options?: Readonly<Record<string, string>>
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
   /** Set only when this create adopts an existing provider conversation. Seeds the handle chain so
    *  the adapter resumes; without it a new record has never proved a thread and starts a fresh one. */
   adoptedHandleLink?: AgentSessionProviderHandleLink
@@ -172,7 +174,8 @@ export function applyAgentSessionReservation(
     !agentSessionExecutionLocationsEqual(existing.location, request.location) ||
     existing.provider !== request.provider ||
     existing.accountHome.variable !== request.accountHome.variable ||
-    existing.accountHome.path !== request.accountHome.path
+    existing.accountHome.path !== request.accountHome.path ||
+    existing.launchOrigin !== request.launchOrigin
   ) {
     // Why: location, provider, and account are the session identity; changing one is a fork.
     throw new Error('agent_session_conflict')
@@ -243,6 +246,7 @@ function createAgentSessionRecord(
     accountHome: request.accountHome,
     ...(request.options ? { options: { ...request.options } } : {}),
     ...(request.launchArgs ? { launchArgs: [...request.launchArgs] } : {}),
+    ...(request.launchOrigin ? { launchOrigin: request.launchOrigin } : {}),
     createdAt: request.now,
     updatedAt: request.now,
     lease: {

@@ -31,6 +31,7 @@ export function structuredAgentSessionCreateFingerprint(input: {
   worktree: string
   agent: 'claude' | 'codex'
   resumeFrom?: { providerSessionId: string }
+  launchOrigin?: 'work-item-start'
 }): string {
   return structuredAgentSessionPayloadFingerprint({
     method: 'agentSession.create',
@@ -40,7 +41,8 @@ export function structuredAgentSessionCreateFingerprint(input: {
       agent: input.agent,
       // `canonicalize` drops undefined, so a plain create keeps the digest it has always had.
       // Adopting a conversation is a different intent and must not replay as a blank create.
-      resumeFrom: input.resumeFrom
+      resumeFrom: input.resumeFrom,
+      launchOrigin: input.launchOrigin
     }
   })
 }

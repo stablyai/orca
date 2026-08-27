@@ -9,6 +9,7 @@ import {
   agentTabsDefaultToNativeChat,
   prefersStructuredNativeChatByDefault,
   resolveStructuredNativeChatSupport,
+  structuredAgentSessionsEnabled,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
@@ -48,6 +49,16 @@ describe('the settings default', () => {
   it.each([null, undefined, {}])('reads %s as no preference', (settings) => {
     expect(prefersStructuredNativeChatByDefault(settings)).toBe(false)
     expect(agentTabsDefaultToNativeChat(settings)).toBe(false)
+  })
+
+  it('does not let the work-item preference enable structured sessions globally', () => {
+    const submit = {
+      experimentalStructuredNativeChat: false,
+      workItemStartPromptDelivery: 'submit-after-ready' as const
+    }
+    const draft = { ...submit, workItemStartPromptDelivery: 'draft' as const }
+    expect(structuredAgentSessionsEnabled(submit)).toBe(false)
+    expect(structuredAgentSessionsEnabled(draft)).toBe(false)
   })
 })
 

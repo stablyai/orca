@@ -9,6 +9,7 @@ export type RpcDispatchStreamingOptions = {
   clientId?: string
   pairedDeviceId?: string
   clientKind?: 'mobile' | 'runtime'
+  localDesktopAuthority?: true
   clientCapabilities?: readonly RuntimeCapability[]
   updateClientCapabilities?: (capabilities: readonly RuntimeCapability[]) => void
   pairing?: PairingRpcContext

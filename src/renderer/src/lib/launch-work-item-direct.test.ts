@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   openModalFallback: vi.fn(),
   resolvePrBase: vi.fn(),
   getConnectionId: vi.fn(),
+  startStructuredAgentLaunch: vi.fn(),
+  refreshLocalRuntimeCapabilities: vi.fn(),
+  localRuntimeCapabilities: ['agent-session.structured.v1'] as readonly string[],
   store: {} as Record<string, unknown> & {
     ensureDetectedAgents: ReturnType<typeof vi.fn>
     ensureRemoteDetectedAgents: ReturnType<typeof vi.fn>
@@ -57,6 +60,15 @@ vi.mock('@/lib/ensure-hooks-confirmed', () => ({
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: mocks.getConnectionId
+}))
+
+vi.mock('@/runtime/local-runtime-capabilities', () => ({
+  readLocalRuntimeCapabilitiesOrUnknown: () => mocks.localRuntimeCapabilities,
+  refreshLocalRuntimeCapabilities: mocks.refreshLocalRuntimeCapabilities
+}))
+
+vi.mock('@/lib/structured-agent-session-launch', () => ({
+  startStructuredAgentLaunch: mocks.startStructuredAgentLaunch
 }))
 
 vi.mock('@/runtime/runtime-hooks-client', () => ({
@@ -153,6 +165,15 @@ describe('launchWorkItemDirect', () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['codex'])
     mocks.ensureRemoteDetectedAgents.mockResolvedValue(['codex'])
     mocks.getConnectionId.mockReturnValue(null)
+    mocks.localRuntimeCapabilities = ['agent-session.structured.v1']
+    mocks.refreshLocalRuntimeCapabilities.mockResolvedValue(mocks.localRuntimeCapabilities)
+    mocks.startStructuredAgentLaunch.mockReturnValue({
+      sessionId: 'structured-session-1',
+      launchResult: Promise.resolve({ sessionId: 'structured-session-1', fence: 1 }),
+      promptDeliveryResult: Promise.resolve({ delivered: true, failureNotified: false }),
+      isVisibilityUnknown: () => false,
+      claimDefinitiveRefusalFallback: vi.fn(() => Promise.resolve(false))
+    })
     mocks.createWorktree.mockResolvedValue({
       worktree: { id: 'repo-1::/repo/worktree', path: '/repo/worktree' },
       setup: undefined
@@ -497,7 +518,7 @@ describe('launchWorkItemDirect', () => {
     })
   })
 
-  it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
+  it('delivers explicit Linear content through one structured session', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
 
@@ -524,23 +545,25 @@ describe('launchWorkItemDirect', () => {
       })
     ).resolves.toBe(true)
 
-    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
-    expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledOnce()
+    expect(mocks.startStructuredAgentLaunch).toHaveBeenCalledWith(
+      'repo-1::/repo/worktree',
+      'claude',
+      {
+        launchOrigin: 'work-item-start',
+        prompt: 'Use this explicit user prompt.',
+        promptDelivery: 'submit-after-ready'
+      }
+    )
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(
+      'repo-1::/repo/worktree',
       expect.objectContaining({
-        tabId: 'tab-1',
-        content: 'Use this explicit user prompt.',
-        agent: 'claude',
-        submit: true,
-        forcePaste: true,
-        onTimeout: expect.any(Function)
+        providesInitialSurface: true
       })
     )
-    expect(mocks.seedNativeChatLaunchPrompt).toHaveBeenCalledWith({
-      tabId: 'tab-1',
-      agent: 'claude',
-      text: 'Use this explicit user prompt.',
-      createdAt: expect.any(Number)
-    })
+    expect(buildAgentDraftLaunchPlan).not.toHaveBeenCalled()
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
@@ -736,7 +759,7 @@ describe('launchWorkItemDirect', () => {
     )
   })
 
-  it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {
+  it('plans WSL startup for compatibility but fails closed before launching a writer', async () => {
     mocks.store.repos = [
       {
         id: 'repo-1',
@@ -779,7 +802,7 @@ describe('launchWorkItemDirect', () => {
         agentOverride: 'codex',
         promptDelivery: 'submit-after-ready'
       })
-    ).resolves.toBe(true)
+    ).resolves.toBe(false)
 
     expect(buildAgentStartupPlan).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -787,5 +810,8 @@ describe('launchWorkItemDirect', () => {
         platform: 'linux'
       })
     )
+    expect(mocks.startStructuredAgentLaunch).not.toHaveBeenCalled()
+    expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(mocks.activateAndRevealWorktree.mock.calls[0]?.[1]).not.toHaveProperty('startup')
   })
 })

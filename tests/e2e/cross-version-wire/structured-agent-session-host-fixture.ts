@@ -7,7 +7,7 @@ export function structuredHostStub(
   sessionId: string,
   workspaceId: string
 ): Record<string, ReturnType<typeof vi.fn>> {
-  return {
+  const calls = {
     attach: vi.fn(async () => ({ ok: true, replayed: false, value: { sessionId } })),
     // Attach-shaped entries take a client-supplied location, so the host is asked whether it
     // supports creating there. A real host always answers; leaving it unstubbed made every
@@ -47,4 +47,14 @@ export function structuredHostStub(
     }),
     unsubscribe: vi.fn()
   }
+  Object.defineProperty(calls, 'deps', {
+    value: {
+      store: {
+        getRecord: vi.fn(() => null),
+        listRecords: vi.fn(() => [])
+      }
+    },
+    enumerable: false
+  })
+  return calls
 }

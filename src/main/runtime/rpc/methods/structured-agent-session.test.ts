@@ -226,6 +226,43 @@ describe('capability gating', () => {
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
   })
 
+  it('does not expose an unrelated session when submit-after-ready is selected', async () => {
+    const response = await call('agentSession.send', sendParams(), STRUCTURED_MOBILE_CLIENT, {
+      getClientSettings: () => ({
+        experimentalStructuredNativeChat: false,
+        workItemStartPromptDelivery: 'submit-after-ready'
+      })
+    })
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(hostCalls.send).not.toHaveBeenCalled()
+  })
+
+  it('keeps an admitted Work Item Start session available after switching back to Draft', async () => {
+    hostCalls.getRecord.mockReturnValue({ launchOrigin: 'work-item-start' })
+    const response = await call(
+      'agentSession.send',
+      sendParams(),
+      {
+        ...STRUCTURED_CLIENT,
+        clientId: 'desktop-renderer',
+        localDesktopAuthority: true
+      },
+      {
+        getClientSettings: () => ({
+          experimentalStructuredNativeChat: false,
+          workItemStartPromptDelivery: 'draft'
+        })
+      }
+    )
+
+    expect(response).toMatchObject({ ok: true })
+    expect(hostCalls.send).toHaveBeenCalledOnce()
+  })
+
   it.each(CLEANUP_METHODS)(
     'keeps $method hidden from remote clients without the capability',
     async ({ method, params, hostCall }) => {
@@ -274,6 +311,122 @@ describe('capability gating', () => {
 })
 
 describe('method routing', () => {
+  it('admits only the authoritative local Work Item Start route while the experiment is off', async () => {
+    const fields = {
+      worktree: 'id:workspace-1',
+      agent: 'codex' as const,
+      launchOrigin: 'work-item-start' as const
+    }
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields
+        })
+      }),
+      ...fields
+    }
+    const settings = {
+      getClientSettings: () => ({
+        experimentalStructuredNativeChat: false,
+        workItemStartPromptDelivery: 'submit-after-ready'
+      })
+    }
+    const client = {
+      ...STRUCTURED_CLIENT,
+      clientId: 'desktop-renderer',
+      localDesktopAuthority: true as const
+    }
+
+    expect(await call('agentSession.createSupport', fields, client, settings)).toMatchObject({
+      ok: true,
+      result: { supported: true }
+    })
+    expect(await call('agentSession.create', params, client, settings)).toMatchObject({
+      ok: true,
+      result: { ok: true }
+    })
+    expect(hostCalls.attach).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ launchOrigin: 'work-item-start' })
+    )
+
+    const untrusted = await call('agentSession.create', params, STRUCTURED_CLIENT, settings)
+    expect(untrusted).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(
+      await call('agentSession.createSupport', fields, STRUCTURED_CLIENT, {
+        getClientSettings: () => ({
+          experimentalStructuredNativeChat: true,
+          workItemStartPromptDelivery: 'submit-after-ready'
+        })
+      })
+    ).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+  })
+
+  it('reconciles a durable Work Item Start create after switching back to Draft', async () => {
+    const fields = {
+      worktree: 'id:workspace-1',
+      agent: 'codex' as const,
+      launchOrigin: 'work-item-start' as const
+    }
+    const params = {
+      envelope: envelope({
+        expectedRuntimeFence: null,
+        payloadFingerprint: computeAgentSessionPayloadFingerprint({
+          method: 'agentSession.create',
+          sessionId: SESSION,
+          fields
+        })
+      }),
+      ...fields
+    }
+    const client = {
+      ...STRUCTURED_CLIENT,
+      clientId: 'desktop-renderer',
+      localDesktopAuthority: true as const
+    }
+    const settings = {
+      getClientSettings: () => ({
+        experimentalStructuredNativeChat: false,
+        workItemStartPromptDelivery: 'draft'
+      })
+    }
+    hostCalls.getRecord.mockReturnValue({ launchOrigin: 'work-item-start' })
+
+    expect(
+      await call('agentSession.createSupport', { ...fields, sessionId: SESSION }, client, settings)
+    ).toMatchObject({ ok: true, result: { supported: true } })
+    expect(runtimeCalls.getStructuredAgentSessionCreateSupport).not.toHaveBeenCalled()
+    expect(await call('agentSession.create', params, client, settings)).toMatchObject({
+      ok: true,
+      result: { ok: true }
+    })
+
+    expect(
+      await call(
+        'agentSession.createSupport',
+        { ...fields, sessionId: SESSION },
+        STRUCTURED_CLIENT,
+        settings
+      )
+    ).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+    expect(await call('agentSession.create', params, STRUCTURED_CLIENT, settings)).toMatchObject({
+      ok: false,
+      error: { message: expect.stringContaining('structured_agent_session_unsupported') }
+    })
+  })
+
   it('creates from a client intent while the host resolves paths and provider identity', async () => {
     const worktree = 'id:workspace-1'
     const params = {
@@ -666,6 +819,24 @@ describe('agentSession.subscribeStatus', () => {
       }
     })
     expect(hostCalls.subscribeStatus).toHaveBeenCalledOnce()
+  })
+
+  it('opens only the scoped feed for the authoritative desktop after returning to Draft', async () => {
+    hostCalls.listRecords.mockReturnValue([{ launchOrigin: 'work-item-start' }])
+    const reply = await call(
+      'agentSession.subscribeStatus',
+      null,
+      { ...STRUCTURED_CLIENT, localDesktopAuthority: true },
+      {
+        getClientSettings: () => ({
+          experimentalStructuredNativeChat: false,
+          workItemStartPromptDelivery: 'draft'
+        })
+      }
+    )
+
+    expect(reply).toMatchObject({ ok: true, result: { type: 'snapshot' } })
+    expect(hostCalls.subscribeStatus).toHaveBeenCalledWith(expect.anything(), expect.any(Function))
   })
 })
 

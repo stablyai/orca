@@ -118,6 +118,34 @@ describe('structured agent session launch', () => {
     }
   )
 
+  it('identifies a Work Item Start session in the create-support probe', async () => {
+    vi.mocked(callStructuredAgentSession).mockImplementation(async (_target, method) =>
+      method === 'agentSession.createSupport'
+        ? { supported: true }
+        : { ok: true, replayed: false, value: { sessionId: 'codex_1', fence: 1 } }
+    )
+    const intent = createStructuredAgentSessionLaunchIntent(
+      'workspace-1',
+      'codex',
+      undefined,
+      'work-item-start'
+    )
+
+    await launchStructuredAgentSession(intent)
+
+    expect(callStructuredAgentSession).toHaveBeenNthCalledWith(
+      1,
+      { kind: 'local' },
+      'agentSession.createSupport',
+      {
+        worktree: 'id:workspace-1',
+        agent: 'codex',
+        sessionId: intent.sessionId,
+        launchOrigin: 'work-item-start'
+      }
+    )
+  })
+
   it.each(['claude', 'codex'] as const)(
     'refuses a %s launch the host says it cannot support, without creating',
     async (agent) => {

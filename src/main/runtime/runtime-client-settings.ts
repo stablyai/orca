@@ -15,6 +15,7 @@ import type { NativeChatSessionOptionSettingsMutation } from '../../shared/nativ
 import { getHostDisplayLabelOverrides } from '../../shared/host-setting-overrides'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { TerminalQuickCommand } from '../../shared/terminal-quick-command-types'
+import { resolveWorkItemStartPromptDelivery } from '../../shared/work-item-start-prompt-delivery'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { applyAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-controls'
 import type { RuntimeStore } from './runtime-store-contract'
@@ -29,6 +30,7 @@ export type RuntimeClientSettings = Pick<
   | 'agentStatusHooksEnabled'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
+  | 'workItemStartPromptDelivery'
   | 'visibleTaskProviders'
   | 'defaultRepoSelection'
   | 'defaultLinearTeamSelection'
@@ -63,6 +65,7 @@ export type RuntimeClientSettingsUpdate = Pick<
   | 'agentDefaultEnv'
   | 'defaultTaskSource'
   | 'defaultTaskViewPreset'
+  | 'workItemStartPromptDelivery'
   | 'visibleTaskProviders'
   | 'defaultRepoSelection'
   | 'defaultLinearTeamSelection'
@@ -99,6 +102,9 @@ export class RuntimeClientSettingsController {
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
+      workItemStartPromptDelivery: resolveWorkItemStartPromptDelivery(
+        settings.workItemStartPromptDelivery
+      ),
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,

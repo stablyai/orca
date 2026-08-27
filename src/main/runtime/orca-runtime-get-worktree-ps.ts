@@ -9,6 +9,7 @@ import {
   applyRuntimeWorktreePsTerminalActivity
 } from './runtime-worktree-ps-activity'
 import { attachRuntimeWorktreeAgentRows } from './runtime-worktree-agent-rows'
+import { attachRuntimeWorktreeStructuredAgentRows } from './runtime-worktree-structured-agent-rows'
 import { compareWorktreePs } from './runtime-worktree-status-projection'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { Repo } from '../../shared/repo-types'
@@ -31,6 +32,7 @@ import { hostname } from 'node:os'
 import { claudeStructuredAuthPolicyForSettings } from '../claude-accounts/claude-structured-auth-policy'
 import { probeAgentSessionProcessIdentity } from './agent-session-process-identity-probe'
 import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
+import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 
 export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner {
   async getWorktreePs(
@@ -108,6 +110,14 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       retainedSnapshots: this.agentRows.values(),
       hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? [],
       orchestrationByPaneKey: this.agentOrchestrationProjection.buildByPaneKey(),
+      getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
+        this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
+    })
+    attachRuntimeWorktreeStructuredAgentRows({
+      summaries,
+      pathIndex: runtimeWorktreeSummaryPathIndex,
+      missingWorktreeIds: missingRuntimeWorktreeIds,
+      statuses: getStructuredAgentSessionHost()?.listStatusSummaries?.() ?? [],
       getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
         this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
     })

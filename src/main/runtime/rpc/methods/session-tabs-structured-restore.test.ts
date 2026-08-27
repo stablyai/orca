@@ -20,7 +20,7 @@ function makeRuntime(experimentalStructuredNativeChat: boolean): OrcaRuntimeServ
 }
 
 describe('structured session tab restoration follows one rule for every caller', () => {
-  it('does not restore for the desktop renderer while the host setting is off', async () => {
+  it('restores for the authoritative desktop so scoped tabs survive Draft', async () => {
     const runtime = makeRuntime(false)
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
 
@@ -28,12 +28,13 @@ describe('structured session tab restoration follows one rule for every caller',
       makeRequest('session.tabs.list', { worktree: 'id:wt-1' }),
       {
         clientKind: 'runtime',
-        clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+        clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+        localDesktopAuthority: true
       }
     )
 
     expect(response.ok).toBe(true)
-    expect(runtime.restoreStructuredAgentSessionTabs).not.toHaveBeenCalled()
+    expect(runtime.restoreStructuredAgentSessionTabs).toHaveBeenCalledTimes(1)
   })
 
   it('restores for the desktop renderer once the host setting is on', async () => {

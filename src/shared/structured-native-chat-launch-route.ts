@@ -19,6 +19,11 @@ export type NativeChatDefaultSettings = Pick<
   'experimentalNativeChat' | 'experimentalStructuredNativeChat' | 'openAgentTabsInChatByDefault'
 >
 
+export type StructuredAgentSessionPolicySettings = Pick<
+  GlobalSettings,
+  'experimentalStructuredNativeChat'
+>
+
 /** Why a launch that the user's default asked to be structured cannot be. */
 export type StructuredNativeChatBlocker =
   | 'agent-without-structured-session'
@@ -64,6 +69,12 @@ export function prefersStructuredNativeChatByDefault(
   return (
     agentTabsDefaultToNativeChat(settings) && settings?.experimentalStructuredNativeChat === true
   )
+}
+
+export function structuredAgentSessionsEnabled(
+  settings: Partial<StructuredAgentSessionPolicySettings> | null | undefined
+): boolean {
+  return settings?.experimentalStructuredNativeChat === true
 }
 
 export function resolveStructuredNativeChatSupport(

@@ -77,6 +77,31 @@ const settings = {
 }
 
 describe('buildDirectWorkItemAgentStartupPlan', () => {
+  it('keeps the real Codex command and launch identity for submit-after-ready', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Review issue 42',
+      promptDelivery: 'submit-after-ready',
+      settings: { agentCmdOverrides: {}, agentDefaultArgs: {}, agentDefaultEnv: {} },
+      launchPlatform: 'darwin'
+    })
+
+    expect(result.draftLaunchedNatively).toBe(false)
+    expect(result.startupPlan).toEqual(
+      expect.objectContaining({
+        agent: 'codex',
+        launchCommand: expect.stringMatching(/^codex(?:\s|$)/),
+        expectedProcess: 'codex'
+      })
+    )
+    expect(buildDirectWorkItemStartupOpts('codex', result.startupPlan, 'task_page')).toEqual({
+      startup: expect.objectContaining({
+        command: result.startupPlan?.launchCommand,
+        launchAgent: 'codex'
+      })
+    })
+  })
+
   it('omits native-chat preferences when the new workspace opens in terminal mode', () => {
     const result = buildDirectWorkItemAgentStartupPlan({
       agent: 'codex',

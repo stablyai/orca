@@ -78,6 +78,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         {
           clientId: 'desktop-renderer',
           clientKind: 'runtime',
+          localDesktopAuthority: true,
           connectionId: desktopSenders.connectionIdFor(event.sender),
           clientCapabilities: [
             STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -126,6 +127,7 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
             signal: controller.signal,
             clientId: 'desktop-renderer',
             clientKind: 'runtime',
+            localDesktopAuthority: true,
             connectionId,
             clientCapabilities: [
               STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,

@@ -159,6 +159,7 @@ export function runStructuredConversationCommand(
               agent: record.provider,
               runtimeKind: 'native',
               launchArgs: record.launchArgs,
+              launchOrigin: record.launchOrigin,
               options: effectiveOptions
             }
             attach.envelope.payloadFingerprint = computeAgentSessionPayloadFingerprint({

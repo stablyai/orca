@@ -12,12 +12,15 @@ import {
  *  with structured chat off there is nothing for any mobile client to reach. Restoring spawns no
  *  provider child for a cleanly closed session. */
 export async function restoreStructuredTabsIfSupported(
-  context: Pick<RpcContext, 'runtime' | 'clientKind' | 'clientCapabilities'>
+  context: Pick<
+    RpcContext,
+    'runtime' | 'clientKind' | 'clientCapabilities' | 'localDesktopAuthority'
+  >
 ): Promise<void> {
   const shouldRestore =
     context.clientKind === 'mobile'
       ? isStructuredNativeChatEnabled(context.runtime)
-      : supportsStructuredAgentSessions(context)
+      : context.localDesktopAuthority === true || supportsStructuredAgentSessions(context)
   if (shouldRestore && typeof context.runtime.restoreStructuredAgentSessionTabs === 'function') {
     await context.runtime.restoreStructuredAgentSessionTabs()
   }

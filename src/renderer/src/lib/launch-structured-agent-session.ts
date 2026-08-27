@@ -6,6 +6,7 @@ import type {
 import {
   createStructuredAgentSessionId,
   structuredAgentSessionCreateParams,
+  type StructuredAgentSessionLaunchOrigin,
   type StructuredAgentSessionCreateParams,
   type StructuredAgentSessionResumeSource
 } from '../../../shared/structured-agent-session-create'
@@ -90,7 +91,8 @@ export function isDefinitiveStructuredAgentSessionCreateError(error: unknown): b
 export function createStructuredAgentSessionLaunchIntent(
   worktreeId: string,
   agent: AgentSessionHandleProvider,
-  resumeFrom?: StructuredAgentSessionResumeSource
+  resumeFrom?: StructuredAgentSessionResumeSource,
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
 ): StructuredAgentSessionLaunchIntent {
   const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
   const state = useAppStore.getState()
@@ -110,6 +112,7 @@ export function createStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
+      ...(launchOrigin ? { launchOrigin } : {}),
       randomUuid: () => crypto.randomUUID()
     })
   }
@@ -154,7 +157,13 @@ async function hostSupportsCreate(intent: StructuredAgentSessionLaunchIntent): P
       const support = await callStructuredAgentSession<{ supported: boolean; reason?: string }>(
         { kind: 'local' },
         'agentSession.createSupport',
-        { worktree: intent.params.worktree, agent: intent.agent }
+        {
+          worktree: intent.params.worktree,
+          agent: intent.agent,
+          ...(intent.params.launchOrigin
+            ? { sessionId: intent.sessionId, launchOrigin: intent.params.launchOrigin }
+            : {})
+        }
       )
       return support.supported === true
     } catch (error) {

@@ -1,13 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { supportsStructuredAgentSessions } from './structured-agent-session-policy'
+import {
+  supportsStructuredAgentSessions,
+  supportsWorkItemStartStructuredSessionCreate
+} from './structured-agent-session-policy'
 
 function runtimeWithSetting(
-  experimentalStructuredNativeChat: boolean
+  experimentalStructuredNativeChat: boolean,
+  workItemStartPromptDelivery: 'draft' | 'submit-after-ready' = 'draft'
 ): Pick<OrcaRuntimeService, 'getClientSettings'> {
   return {
-    getClientSettings: () => ({ experimentalStructuredNativeChat })
+    getClientSettings: () => ({ experimentalStructuredNativeChat, workItemStartPromptDelivery })
   } as unknown as Pick<OrcaRuntimeService, 'getClientSettings'>
 }
 
@@ -43,6 +47,55 @@ describe('supportsStructuredAgentSessions', () => {
     ).toBe(true)
   })
 
+  it('does not enable every structured surface from the work item preference', () => {
+    const runtime = runtimeWithSetting(false, 'submit-after-ready')
+    const decisions = CALLERS.map((caller) =>
+      supportsStructuredAgentSessions({
+        clientKind: caller.clientKind,
+        clientCapabilities: caller.clientCapabilities,
+        runtime
+      })
+    )
+
+    expect(decisions).toEqual([false, false, false])
+  })
+
+  it('admits only an authoritative local Work Item Start create', () => {
+    const runtime = runtimeWithSetting(false, 'submit-after-ready')
+    expect(
+      supportsWorkItemStartStructuredSessionCreate(
+        {
+          runtime,
+          clientKind: 'runtime',
+          clientCapabilities: CAPABLE,
+          localDesktopAuthority: true
+        },
+        'work-item-start'
+      )
+    ).toBe(true)
+    expect(
+      supportsWorkItemStartStructuredSessionCreate(
+        {
+          runtime,
+          clientKind: 'runtime',
+          clientCapabilities: CAPABLE
+        },
+        'work-item-start'
+      )
+    ).toBe(false)
+    expect(
+      supportsWorkItemStartStructuredSessionCreate(
+        {
+          runtime,
+          clientKind: 'mobile',
+          clientCapabilities: CAPABLE,
+          localDesktopAuthority: true
+        },
+        'work-item-start'
+      )
+    ).toBe(false)
+  })
+
   it('still refuses a remote client that did not advertise the capability', () => {
     for (const clientKind of ['runtime', 'mobile'] as const) {
       expect(
@@ -55,10 +108,7 @@ describe('supportsStructuredAgentSessions', () => {
     }
   })
 
-  it('leaves desktop launch admission unchanged, because launches require the setting anyway', () => {
-    // `agent-launch-routing.ts` refuses to route a structured launch unless
-    // `experimentalStructuredNativeChat` is on, so the only state a desktop launch can
-    // reach the host in is setting-on — which admits exactly as it did before.
+  it('admits desktop launch when the general structured setting is on', () => {
     expect(
       supportsStructuredAgentSessions({
         clientKind: 'runtime',

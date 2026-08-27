@@ -28,6 +28,7 @@ import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 import { translate } from '@/i18n/i18n'
+import { WorkItemStartBehaviorSetting } from './WorkItemStartBehaviorSetting'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -144,6 +145,11 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
 
   return (
     <div className="space-y-6">
+      <WorkItemStartBehaviorSetting
+        value={settings.workItemStartPromptDelivery}
+        onChange={(workItemStartPromptDelivery) => updateSettings({ workItemStartPromptDelivery })}
+      />
+
       <section className="space-y-3">
         <SettingsSubsectionHeader
           title={translate(

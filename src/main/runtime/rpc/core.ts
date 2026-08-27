@@ -75,6 +75,8 @@ export type RpcContext = {
   pairedDeviceId?: string
   // Why: lets handlers gate mobile payload truncation to phones only; undefined for in-process callers → treat as full-class (no clip).
   clientKind?: 'mobile' | 'runtime'
+  // Set only by Electron IPC; authenticated network clients cannot assert local desktop authority.
+  localDesktopAuthority?: true
   // Why: negotiation is bound to the authenticated socket, never asserted by a destructive request.
   clientCapabilities?: readonly RuntimeCapability[]
   // Why: mobile v2 auth is exact-key validated; capability upgrades must mutate only the authenticated socket after auth.

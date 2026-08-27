@@ -55,7 +55,8 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
   payload: TPayload,
   clientKind: 'mobile' | 'runtime' | undefined,
   clientCapabilities: readonly RuntimeCapability[] | undefined,
-  structuredNativeChatEnabled: boolean
+  structuredNativeChatEnabled: boolean,
+  sessionVisibleWhenDisabled: (sessionId: string) => boolean = () => false
 ): TPayload {
   const structuredVisible = structuredNativeChatProjectionEnabled({
     clientKind,
@@ -72,12 +73,14 @@ export function projectSessionTabAgentStatus<TPayload extends SessionTabsPayload
       structuredNativeChatEnabled
     })
   } else {
-    projected = structuredVisible ? payload : projectAgentSessionTabsOut(payload, () => true)
+    projected = structuredVisible
+      ? payload
+      : projectAgentSessionTabsOut(payload, (tab) => !sessionVisibleWhenDisabled(tab.sessionId))
     // Why: a paired client renders only codex structured tabs unless it says otherwise
     // (mobile's resolveMobileNativeChat returns null for every other agent), so an
     // ungated row would list and select into a pane that shows neither chat nor terminal.
     if (
-      structuredVisible &&
+      (structuredVisible || projected.tabs.some((tab) => tab.type === 'agent-session')) &&
       clientKind !== undefined &&
       !clientCapabilities?.includes(CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     ) {

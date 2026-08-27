@@ -31,5 +31,7 @@ export type LaunchWorkItemDirectArgs = {
   agentOverride?: TuiAgent
   agentArgs?: string | null
   promptDelivery?: 'draft' | 'submit-after-ready'
+  /** Existing fix-check recipes may still target customized or remote terminal agents. */
+  allowLegacyTerminalPromptSubmission?: boolean
   launchPlatform?: NodeJS.Platform
 }

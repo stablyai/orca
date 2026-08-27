@@ -134,6 +134,16 @@ describe('projectSessionTabAgentStatus', () => {
       )
     ).toEqual(oldClient)
     expect(projectSessionTabAgentStatus(snapshot, undefined, undefined, false)).toEqual(oldClient)
+
+    const scoped = projectSessionTabAgentStatus(
+      snapshot,
+      'runtime',
+      [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      false,
+      (sessionId) => sessionId === 'session-a'
+    )
+    expect(scoped.tabs.map((tab) => tab.id)).toEqual(['tab-1::leaf-1', 'agent-session:session-a'])
+    expect(scoped.tabs).not.toContainEqual(expect.objectContaining({ sessionId: 'session-b' }))
   })
 
   const claudeSnapshot = {

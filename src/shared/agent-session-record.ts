@@ -17,6 +17,7 @@ import {
   type AgentSessionHandleProvider,
   type AgentSessionProviderHandleLink
 } from './agent-session-provider-handle'
+import type { StructuredAgentSessionLaunchOrigin } from './structured-agent-session-create'
 
 export const AGENT_SESSION_RECORD_SCHEMA_VERSION = 2 as const
 
@@ -133,6 +134,8 @@ export type AgentSessionRecord = {
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
   launchArgs?: AgentSessionLaunchArgs
+  /** Narrow admission retained for sessions created by an explicit Work Item Start action. */
+  launchOrigin?: StructuredAgentSessionLaunchOrigin
   lease: AgentSessionLease
   createdAt: number
   updatedAt: number
@@ -346,6 +349,7 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     (record.conversationCommand === undefined ||
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
+    (record.launchOrigin === undefined || record.launchOrigin === 'work-item-start') &&
     !Object.hasOwn(record, 'launchEnv') &&
     isAgentSessionLease(record.lease) &&
     record.lease.sessionId === record.sessionId &&

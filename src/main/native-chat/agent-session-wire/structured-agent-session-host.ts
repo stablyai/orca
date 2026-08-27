@@ -343,8 +343,9 @@ export class StructuredAgentSessionHost {
   unsubscribe = (sessionId: string, id: string): void => this.subscribers.close(sessionId, id)
 
   /** Every session's projected status for session lists; unlike `subscribe`, retains nothing. */
-  subscribeStatus: StructuredAgentSessionStatusFeed['subscribe'] = (subscriber) =>
-    this.statusFeed.subscribe(subscriber)
+  subscribeStatus = this.statusFeed.subscribe.bind(this.statusFeed)
+
+  listStatusSummaries = (): SessionWire.AgentSessionStatusSummary[] => this.statusFeed.snapshot()
 
   private requireSession(sessionId: string): StructuredAgentSessionHostSession {
     const session = this.sessions.get(sessionId)
