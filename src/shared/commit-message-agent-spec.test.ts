@@ -70,8 +70,10 @@ describe('COMMIT_MESSAGE_AGENT_SPECS', () => {
   it('uses the provider-qualified Kimi model id accepted by the CLI', () => {
     expect(COMMIT_MESSAGE_AGENT_SPECS.kimi?.models.map((m) => m.id)).toEqual([
       'default',
-      'kimi-code/kimi-for-coding'
+      'kimi-code/kimi-for-coding',
+      'kimi-code/k3'
     ])
+    expect(getCommitMessageModel('kimi', 'kimi-code/k3')?.thinkingLevels).toBeUndefined()
   })
 
   it('maps Kimi thinking off and omission to distinct argv', () => {

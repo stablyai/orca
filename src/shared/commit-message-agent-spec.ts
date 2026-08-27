@@ -604,6 +604,12 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
           { id: 'off', label: 'Off' }
         ],
         defaultThinkingLevel: 'on'
+      },
+      {
+        // Why: K3's managed profile is always-thinking, so exposing Off would
+        // generate a conflicting --no-thinking argument.
+        id: 'kimi-code/k3',
+        label: 'Kimi K3'
       }
     ],
     defaultModelId: 'default'
