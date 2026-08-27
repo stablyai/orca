@@ -1,4 +1,3 @@
-/* eslint-disable max-lines -- Why: these federation RPC tests share one paired-runtime harness so attachment authority and remote resource ownership cannot drift between fixtures. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../../shared/runtime-rpc-envelope'
 import {
@@ -210,32 +209,6 @@ describe('orchestration federation', () => {
       'term_windows_worker',
       expect.stringContaining(`Your task ID is: ${task.id}`)
     )
-  })
-
-  it('refreshes a reused remote pane foreground owner before dispatch input', async () => {
-    vi.spyOn(workerRuntime, 'showManagedTerminalWorkspace').mockResolvedValue({
-      id: 'repo::windows-worktree',
-      repoId: 'repo'
-    } as never)
-    vi.spyOn(workerRuntime, 'isTerminalRunningAgent').mockResolvedValue(false)
-    const settled = vi
-      .spyOn(workerRuntime, 'refreshTerminalPromptAgentOwner')
-      .mockResolvedValue('codex')
-    const task = createHomeTask()
-
-    const started = await homeDispatcher.dispatch(
-      startRequest(task.id, {
-        worktree: 'id:repo::windows-worktree',
-        terminal: 'term_windows_worker',
-        repo: undefined,
-        name: undefined,
-        agent: undefined
-      })
-    )
-
-    expect(started).toMatchObject({ ok: true, result: { state: 'ready' } })
-    expect(settled).toHaveBeenCalledWith('term_windows_worker')
-    expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
   })
 
   it('does not report remotely rejected preferences as effective', async () => {

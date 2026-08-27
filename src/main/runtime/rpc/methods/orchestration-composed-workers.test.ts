@@ -434,6 +434,77 @@ describe('orchestration RPC methods', () => {
       expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     })
 
+    it('waits for a reused pane wrapper to resolve its current foreground owner', async () => {
+      setup()
+      const internals = runtime as unknown as {
+        resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
+      }
+      vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+        id: 'repo::worktree',
+        path: '/repo/worktree',
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      })
+      const getForegroundProcess = vi.fn().mockResolvedValueOnce('node').mockResolvedValue('codex')
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty_worker', incarnationId: 'inc_worker' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+      const terminal = await runtime.createTerminal('id:repo::worktree', {
+        tabId: 'tab_worker',
+        leafId: 'leaf_worker',
+        title: 'worker'
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab_worker',
+            worktreeId: 'repo::worktree',
+            title: 'worker',
+            activeLeafId: 'leaf_worker',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab_worker',
+            worktreeId: 'repo::worktree',
+            leafId: 'leaf_worker',
+            paneRuntimeId: 1,
+            ptyId: 'pty_worker',
+            paneTitle: 'bash'
+          }
+        ]
+      })
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.refreshTerminalPromptAgentOwner).mockRestore()
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_coord'
+          ? coordinatorPaneKey
+          : handle === terminal.handle
+            ? 'tab_worker:leaf_worker'
+            : null
+      )
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+        handle === terminal.handle ? 'runtime_test:pty_worker:1' : null
+      )
+      const task = db.createTask({ spec: 'reuse the delayed wrapper pane' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: terminal.handle
+        })
+      ).resolves.toMatchObject({ state: 'ready' })
+
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+    })
+
     it('returns a failed receipt and preserves a created terminal as residual', async () => {
       setup()
       mockCurrentWorkerStart({ ready: false })

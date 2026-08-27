@@ -24915,6 +24915,20 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(false)
   })
 
+  it('refreshes a generic agent owner after wrapper enrichment', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: vi.fn().mockResolvedValueOnce('node').mockResolvedValue('gemini')
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.refreshTerminalPromptAgentOwner(terminal.handle)).resolves.toBe('gemini')
+    await expect(runtime.isTerminalRunningSettledPromptAgent(terminal.handle)).resolves.toBe(false)
+  })
+
   it('keeps stale Codex launch identity on legacy delivery after the shell returns', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
@@ -25011,6 +25025,40 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('fails owner refresh closed when wrapper enrichment never resolves', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: vi.fn().mockResolvedValue('node')
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    vi.useFakeTimers()
+    try {
+      const result = runtime.refreshTerminalPromptAgentOwner(terminal.handle)
+      await vi.advanceTimersByTimeAsync(7_000)
+
+      await expect(result).resolves.toBeNull()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('fails owner refresh closed when the foreground read is unavailable', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: vi.fn().mockRejectedValue(new Error('foreground unavailable'))
+    })
+    syncSinglePty(runtime, 'pty-1', { paneTitle: 'bash' })
+    const [terminal] = (await runtime.listTerminals()).terminals
+
+    await expect(runtime.refreshTerminalPromptAgentOwner(terminal.handle)).resolves.toBeNull()
   })
 
   it('lets live neutral pane titles retry wrapper foregrounds until recognized', async () => {
