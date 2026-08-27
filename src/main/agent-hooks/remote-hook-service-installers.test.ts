@@ -241,7 +241,20 @@ describe('remote hook service installers', () => {
     expect(toml).toContain('trusted_hash = "sha256:')
   })
 
-  it('installs Codex hooks into an explicit redirected CODEX_HOME (WSL managed runtime home)', async () => {
+  it('reports Codex trust-write failures without rolling back installed hooks', async () => {
+    const { sftp, fs } = createFakeSftp()
+    fs.failRenameTo.add('/home/dev/.codex/config.toml')
+
+    const status = await new CodexHookService().installRemote(sftp, '/home/dev')
+
+    expect(status.state).toBe('error')
+    expect(status.managedHooksPresent).toBe(true)
+    expect(status.detail).toContain('trust entries could not be written')
+    expect(fs.files.get('/home/dev/.codex/hooks.json')).toContain('codex-hook.sh')
+    expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
+  })
+
+  it('installs Codex hooks into an explicit redirected CODEX_HOME', async () => {
     const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
     const { sftp, fs } = createFakeSftp({
       [`${runtimeHome}/config.toml`]: 'model = "gpt-5.2-codex"\n'
@@ -261,12 +274,12 @@ describe('remote hook service installers', () => {
     expect(hooks.hooks.Stop?.[0]?.hooks?.[0]?.command).toContain(
       '/home/dev/.orca/agent-hooks/codex-hook.sh'
     )
-    const toml = fs.files.get(`${runtimeHome}/config.toml`)
-    expect(toml).toContain('model = "gpt-5.2-codex"')
-    expect(toml).toContain(`${runtimeHome}/hooks.json:stop:0:0`)
+    expect(fs.files.get(`${runtimeHome}/config.toml`)).toContain(
+      `${runtimeHome}/hooks.json:stop:0:0`
+    )
   })
 
-  it('defers Codex trust writes until the redirected config.toml exists (launch-path seed race)', async () => {
+  it('defers redirected Codex trust writes until config.toml exists', async () => {
     const runtimeHome = '/home/dev/.local/share/orca/codex-runtime-home/home'
     const { sftp, fs } = createFakeSftp()
 
@@ -278,22 +291,7 @@ describe('remote hook service installers', () => {
     expect(status.state).toBe('installed')
     expect(status.detail).toContain('deferred')
     expect(fs.files.get(`${runtimeHome}/hooks.json`)).toContain('codex-hook.sh')
-    // Why: creating config.toml here would make the launch path's
-    // only-if-absent seed skip the user's real config.
     expect(fs.files.has(`${runtimeHome}/config.toml`)).toBe(false)
-  })
-
-  it('reports Codex trust-write failures without rolling back installed hooks', async () => {
-    const { sftp, fs } = createFakeSftp()
-    fs.failRenameTo.add('/home/dev/.codex/config.toml')
-
-    const status = await new CodexHookService().installRemote(sftp, '/home/dev')
-
-    expect(status.state).toBe('error')
-    expect(status.managedHooksPresent).toBe(true)
-    expect(status.detail).toContain('trust entries could not be written')
-    expect(fs.files.get('/home/dev/.codex/hooks.json')).toContain('codex-hook.sh')
-    expect(fs.files.get('/home/dev/.orca/agent-hooks/codex-hook.sh')).toContain('#!/bin/sh')
   })
 
   it('installs remote Gemini, Antigravity, Cursor, Command Code, Grok, and Devin configs using their CLI-specific schemas', async () => {

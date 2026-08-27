@@ -356,14 +356,14 @@ export class CodexRuntimeHomeService {
     return account
   }
 
-  // Why: session discovery must surface a managed account's own rollouts wherever
-  // they physically live. Every host managed home is a live CODEX_HOME, so scan
-  // them all.
-  private getManagedHostAccountHomesForSessionDiscovery(): string[] {
+  // Why: session discovery must surface every account's own rollouts wherever they live.
+  private getManagedAccountHomesForSessionDiscovery(): string[] {
     const settings = this.store.getSettings()
     const homes: string[] = []
     for (const account of settings.codexManagedAccounts) {
-      if (this.getWslManagedHomePath(account)) {
+      const wslHome = this.getWslManagedHomePath(account)
+      if (wslHome) {
+        homes.push(wslHome)
         continue
       }
       const trustedHome = this.getTrustedSelfContainedManagedHomePath(account)
@@ -372,6 +372,12 @@ export class CodexRuntimeHomeService {
       }
     }
     return homes
+  }
+
+  private getManagedHostAccountHomesForSessionDiscovery(): string[] {
+    return this.getManagedAccountHomesForSessionDiscovery().filter(
+      (home) => parseWslUncPath(home) === null
+    )
   }
 
   private prepareSelfContainedManagedHomeForLaunch(
@@ -583,10 +589,8 @@ export class CodexRuntimeHomeService {
       // mirror, so include the real root for both directly-routed host lanes.
       homes.push(getSystemCodexHomePath())
     }
-    // Why: each managed host account runs in its own self-contained home, so
-    // its rollouts live there rather than in the shared mirror. Scan every such
-    // home so account-scoped sessions still surface in the AI Vault.
-    for (const perAccountHome of this.getManagedHostAccountHomesForSessionDiscovery()) {
+    // Why: account-scoped rollouts live in each account's own home, including WSL.
+    for (const perAccountHome of this.getManagedAccountHomesForSessionDiscovery()) {
       homes.push(perAccountHome)
     }
     return homes.filter((home, index) => homes.indexOf(home) === index)

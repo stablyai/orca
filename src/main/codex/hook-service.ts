@@ -1479,12 +1479,7 @@ export class CodexHookService {
   async installRemote(
     sftp: SFTPWrapper,
     remoteHome: string,
-    options?: {
-      /** Explicit CODEX_HOME dir (flat layout). WSL sessions read Orca's managed runtime home, not ~/.codex, so the default location leaves them hookless. */
-      codexHomeDir?: string
-      /** Skip the trust write when config.toml is absent — the WSL launch path seeds it only-if-absent, so creating it here would cancel that seed. */
-      deferTrustUntilConfigToml?: boolean
-    }
+    options?: { codexHomeDir?: string; deferTrustUntilConfigToml?: boolean }
   ): Promise<AgentHookInstallStatus> {
     const codexHomeBase =
       options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
