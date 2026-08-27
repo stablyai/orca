@@ -17,6 +17,7 @@ const CODEX_SESSIONS_DIR = join(
   'sessions'
 )
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
+const TRAE_SESSIONS_DIR = join(homedir(), '.trae', 'cli', 'sessions')
 const COPILOT_SESSIONS_DIR = join(
   process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
   'session-state'
@@ -94,6 +95,17 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         ...(options.additionalCodexSessionsDirs ?? [])
       ]),
     extensions: ['.jsonl']
+  },
+  trae: {
+    rootDirs: (options, wslHomeDirs) =>
+      sessionRootDirs(options.traeSessionsDir ?? TRAE_SESSIONS_DIR, wslHomeDirs, [
+        '.trae',
+        'cli',
+        'sessions'
+      ]),
+    extensions: ['.jsonl'],
+    filePredicate: (filePath) => basename(filePath).startsWith('rollout-'),
+    directoryPredicate: (name) => !name.endsWith('.artifacts')
   },
   gemini: {
     rootDirs: (options, wslHomeDirs) =>

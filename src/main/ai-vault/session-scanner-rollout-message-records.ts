@@ -3,7 +3,7 @@ import { addPreviewContent } from './session-scanner-accumulator'
 import type { SessionAccumulator } from './session-scanner-types'
 import { asRecord, extractContentText, extractPreviewContentText } from './session-scanner-values'
 
-export function consumeCodexResponseMessage(
+export function consumeRolloutResponseMessage(
   accumulator: SessionAccumulator,
   payload: Record<string, unknown>,
   timestamp: unknown
@@ -19,7 +19,7 @@ export function consumeCodexResponseMessage(
   return setTitle && Boolean(accumulator.title)
 }
 
-export function consumeCodexCompletedMessage(
+export function consumeRolloutCompletedMessage(
   accumulator: SessionAccumulator,
   payload: Record<string, unknown>,
   timestamp: unknown
@@ -48,7 +48,7 @@ export function consumeCodexCompletedMessage(
   return setTitle && Boolean(accumulator.title)
 }
 
-export function consumeCodexLegacyEventMessage(
+export function consumeRolloutLegacyEventMessage(
   accumulator: SessionAccumulator,
   payload: Record<string, unknown>,
   timestamp: unknown

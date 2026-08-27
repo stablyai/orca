@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { AI_VAULT_AGENTS } from '../../shared/ai-vault-types'
 import { scanAiVaultSessions } from './session-scanner'
+import { AI_VAULT_AGENT_SOURCES } from './session-scanner-agent-sources'
 import {
   isolatedScanRoots,
   jsonLines,
@@ -11,6 +12,7 @@ import {
   writeOmpScannerFixture,
   writePrimeAgentScannerFixture
 } from './session-scanner-test-fixtures'
+import { writeTraeScannerFixtures } from './session-scanner-trae-fixtures'
 
 let tempRoots: string[] = []
 
@@ -317,6 +319,17 @@ describe('scanAiVaultSessions', () => {
     )
   })
 
+  it('constructs bounded local and WSL Trae roots', () => {
+    expect(
+      AI_VAULT_AGENT_SOURCES.trae?.rootDirs({ traeSessionsDir: '/Users/ada/.trae/cli/sessions' }, [
+        '/wsl/Ubuntu/home/ada'
+      ])
+    ).toEqual([
+      '/Users/ada/.trae/cli/sessions',
+      join('/wsl/Ubuntu/home/ada', '.trae', 'cli', 'sessions')
+    ])
+  })
+
   it('skips hidden Codex context blocks when choosing session titles', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-codex-hidden-context-'))
     tempRoots.push(root)
@@ -409,6 +422,8 @@ describe('scanAiVaultSessions', () => {
         }
       ])
     )
+
+    await writeTraeScannerFixtures(roots.traeSessionsDir)
 
     await mkdir(roots.geminiSessionsDir, { recursive: true })
     await writeFile(
@@ -712,6 +727,9 @@ describe('scanAiVaultSessions', () => {
     expect(commandByAgent.get('codex')).toBe(
       `cd '/tmp/codex' && CODEX_HOME='${root}' codex resume 'codex-session'`
     )
+    expect(commandByAgent.get('trae')).toBe(
+      "cd '/repo/trae' && traecli resume '019fe968-ff04-7e43-8316-983ae577b782'"
+    )
     expect(commandByAgent.get('gemini')).toBe("gemini --resume 'gemini-session'")
     expect(commandByAgent.get('antigravity')).toBe(`agy --conversation '${antigravitySessionId}'`)
     expect(commandByAgent.get('copilot')).toBe(
@@ -753,6 +771,10 @@ describe('scanAiVaultSessions', () => {
     const primeAgentSession = result.sessions.find((session) => session.agent === 'prime-agent')
     expect(primeAgentSession?.model).toBe('inference/big-model')
     expect(primeAgentSession?.title).toBe('Prime Agent title')
+
+    const traeSessions = result.sessions.filter((session) => session.agent === 'trae')
+    expect(traeSessions).toHaveLength(1)
+    expect(traeSessions[0]?.cwd).toBe('/repo/trae')
   })
 
   it('captures an in-progress OMP model from model_change before any assistant reply', async () => {

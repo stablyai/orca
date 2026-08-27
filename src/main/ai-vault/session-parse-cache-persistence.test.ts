@@ -34,6 +34,7 @@ import {
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
+import { TRAE_FIXTURE_SESSION_ID } from './session-scanner-trae-fixtures'
 
 // Spy-wrap (real implementations still run) so the zero-disk-IO test can
 // assert the uninitialized module never touches the filesystem.
@@ -168,6 +169,61 @@ describe('session parse cache persistence', () => {
     expect(reused).toEqual(first)
   })
 
+  it('round-trips rollout metadata title provenance through a restart', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'vault-state', 'session-parse-cache.json')
+    const traeHome = join(root, '.trae', 'cli')
+    const sessionPath = join(
+      traeHome,
+      'sessions',
+      '2026',
+      '08',
+      '10',
+      `rollout-${TRAE_FIXTURE_SESSION_ID}.jsonl`
+    )
+    await mkdir(join(traeHome, 'sessions', '2026', '08', '10'), { recursive: true })
+    await writeFile(
+      sessionPath,
+      `${JSON.stringify({
+        timestamp: '2026-08-10T10:00:00.000Z',
+        type: 'session_meta',
+        payload: { cwd: '/repo/trae', title: 'Metadata title' }
+      })}\n`
+    )
+    const sessionStat = await stat(sessionPath)
+    const candidate: SessionFileCandidate = {
+      agent: 'trae',
+      file: {
+        path: sessionPath,
+        mtimeMs: sessionStat.mtimeMs,
+        modifiedAt: sessionStat.mtime.toISOString(),
+        sizeBytes: sessionStat.size
+      },
+      codexHome: null
+    }
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    const parsedStats = createSessionParseStats()
+    expect(
+      (await parseAgentSessionFileCached(candidate, process.platform, parsedStats))?.title
+    ).toBe('Metadata title')
+    scheduleSessionParseCachePersist(parsedStats)
+    await flushSessionParseCachePersistForTests()
+    await writeFile(
+      join(traeHome, 'session_index.jsonl'),
+      `${JSON.stringify({
+        id: TRAE_FIXTURE_SESSION_ID,
+        thread_name: 'Conflicting index title'
+      })}\n`
+    )
+
+    simulateRestart(cacheFile)
+    await ensureSessionParseCacheLoaded()
+    const reusedStats = createSessionParseStats()
+    const reused = await parseAgentSessionFileCached(candidate, process.platform, reusedStats)
+    expect(reusedStats.reused).toBe(1)
+    expect(reused?.title).toBe('Metadata title')
+  })
+
   it('ignores a corrupt cache file and scans cold', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
@@ -180,7 +236,7 @@ describe('session parse cache persistence', () => {
     expect(stats.reused).toBe(0)
   })
 
-  it('ignores a cache file with a mismatched schemaVersion', async () => {
+  it('ignores a cache file written with the previous schemaVersion', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
@@ -188,7 +244,7 @@ describe('session parse cache persistence', () => {
     await parseAndPersist(transcript)
 
     const persisted = JSON.parse(await readFile(cacheFile, 'utf-8'))
-    persisted.schemaVersion = 999
+    persisted.schemaVersion = 1
     await writeFile(cacheFile, JSON.stringify(persisted))
 
     simulateRestart(cacheFile)
@@ -225,7 +281,8 @@ describe('session parse cache persistence', () => {
           mtimeMs: candidate.file.mtimeMs,
           sizeBytes: candidate.file.sizeBytes ?? null,
           platform: process.platform,
-          session: null
+          session: null,
+          rolloutTitleSource: null
         }
       ]
     ])
@@ -350,7 +407,13 @@ describe('session parse cache persistence', () => {
       { length: 4100 },
       (_, index): [string, PersistedSessionParseCacheEntry] => [
         `/nonexistent/fake-${index}.jsonl`,
-        { mtimeMs: index, sizeBytes: 1, platform: process.platform, session: null }
+        {
+          mtimeMs: index,
+          sizeBytes: 1,
+          platform: process.platform,
+          session: null,
+          rolloutTitleSource: null
+        }
       ]
     )
     seedSessionParseCache([
@@ -361,7 +424,8 @@ describe('session parse cache persistence', () => {
           mtimeMs: candidate.file.mtimeMs,
           sizeBytes: candidate.file.sizeBytes ?? null,
           platform: process.platform,
-          session: null
+          session: null,
+          rolloutTitleSource: null
         }
       ]
     ])

@@ -10,6 +10,7 @@ import { parseOpenCodeSqliteSessionViaWorker } from './session-scanner-opencode-
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import { parseGeminiSessionFile } from './session-scanner-gemini-parsers'
 import { parseCodexSessionFile } from './session-scanner-codex-parser'
+import { parseTraeSessionFile } from './session-scanner-trae-parser'
 import { parseCopilotSessionFile } from './session-scanner-copilot-parser'
 import { parseCursorSessionFile } from './session-scanner-cursor-parser'
 import { parseHermesSessionFile } from './session-scanner-hermes-parser'
@@ -34,6 +35,8 @@ export async function parseAgentSessionFile(
       return parseClaudeSessionFile(candidate.file, platform)
     case 'codex':
       return parseCodexSessionFile(candidate.file, platform, candidate.codexHome)
+    case 'trae':
+      return parseTraeSessionFile(candidate.file, platform)
     case 'gemini':
       return parseGeminiSessionFile(candidate.file, platform)
     case 'antigravity':

@@ -28,7 +28,8 @@ const ALLOWLIST = new Set([
   'session-scanner-claude-subagents.ts',
   'session-scanner-omp-subagent-listing.ts',
   // Test-only fixture builder.
-  'session-scanner-test-fixtures.ts'
+  'session-scanner-test-fixtures.ts',
+  'session-scanner-trae-fixtures.ts'
 ])
 
 const FS_IMPORT = /import\s+([\s\S]*?)\s+from\s+['"]node:fs(?:\/promises)?['"]/g
