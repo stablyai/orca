@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 import { createCollaborationTopology } from '../../collaboration/collaboration-topology'
 import { registerCollaborationRuntimeTopology } from '../../collaboration/collaboration-runtime-registry'
 import { buildCollaborationTaskMailboxAddress } from '../../collaboration/collaboration-task-mailbox'
@@ -55,7 +56,7 @@ describe('local collaboration RPC integration', () => {
       [d, 'term_d'],
       [e, 'term_e']
     ] as const) {
-      db.createDispatchContext(task.id, handle, paneByHandle.get(handle)!)
+      createRootDispatch(db, task.id, handle, paneByHandle.get(handle)!)
     }
 
     registerCollaborationRuntimeTopology(
@@ -213,8 +214,8 @@ describe('local collaboration RPC integration', () => {
     })
     const producer = db.createTask({ spec: 'produce', runId: run.id })
     const consumer = db.createTask({ spec: 'consume', runId: run.id })
-    db.createDispatchContext(producer.id, 'term_producer', PRODUCER_PANE)
-    db.createDispatchContext(consumer.id, 'term_consumer', CONSUMER_PANE)
+    createRootDispatch(db, producer.id, 'term_producer', PRODUCER_PANE)
+    createRootDispatch(db, consumer.id, 'term_consumer', CONSUMER_PANE)
     registerCollaborationRuntimeTopology(
       runtime,
       run.id,

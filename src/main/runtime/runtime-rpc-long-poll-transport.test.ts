@@ -257,7 +257,7 @@ describe('OrcaRuntimeRpcServer', () => {
         coordinatorPaneKey: 'tab_coord:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
       })
       const task = db.createTask({ spec: 'Checkpoint subscriber', runId: run.id })
-      db.createDispatchContext(task.id, 'term_worker', workerPaneKey)
+      createRootDispatch(db, task.id, 'term_worker', workerPaneKey)
       // Why: admission policy must exist or the handler throws before it can
       // block; no checkpoint is ever published so wait:true times out empty.
       registerCollaborationRuntimeTopology(
