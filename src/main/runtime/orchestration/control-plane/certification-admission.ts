@@ -46,6 +46,9 @@ export type CertificationAdmissionCode =
   | 'invalid_kind'
   | 'invalid_sha'
   | 'evidence_not_observed'
+  | 'commit_unknown'
+  | 'sha_mismatch'
+  | 'runtime_mismatch'
 
 export type CertificationAdmission =
   | { ok: true; evidence: RouteEvidence }
@@ -68,6 +71,10 @@ export type CertificationRequest = {
 export type CertificationStamp = {
   observedAtIso: string
   runtimeVersion: string
+  /** The commit the RUNTIME was built from. The caller's `--sha` is checked
+   *  against this and never substituted for it. Null means the runtime cannot
+   *  establish its own commit, and SHA-bound evidence then fails closed. */
+  commitSha: string | null
 }
 
 /** No runtime facts at all: every PASS request fails closed. */
@@ -100,6 +107,25 @@ export function admitCertificationEvidence(args: {
     }
   }
   if (request.outcome === 'PASS') {
+    // Why at RECORD time: evidence is only ever about the code that was
+    // running. A caller may assert which commit that was, but the runtime is
+    // what knows, so a mismatch is rejected here rather than being written and
+    // discovered later as staleness.
+    if (!args.stamp.commitSha) {
+      return {
+        ok: false,
+        code: 'commit_unknown',
+        reason:
+          'This runtime cannot establish the commit it was built from, so it cannot certify SHA-bound evidence.'
+      }
+    }
+    if (request.commitSha !== args.stamp.commitSha) {
+      return {
+        ok: false,
+        code: 'sha_mismatch',
+        reason: `Evidence claims commit ${request.commitSha}, but this runtime was built from ${args.stamp.commitSha}.`
+      }
+    }
     const guard = requireRealLaunch(args.db, request)
     if (guard) {
       return guard
@@ -136,7 +162,9 @@ export function admitCertificationEvidence(args: {
       outcome: request.outcome,
       observedAt: args.stamp.observedAtIso,
       runtimeVersion: args.stamp.runtimeVersion,
-      commitSha: request.commitSha,
+      // Why the stamp, not the request, for PASS: the runtime owns the commit.
+      // FAIL/UNSUPPORTED keep the caller's value because they only restrict.
+      commitSha: request.outcome === 'PASS' ? (args.stamp.commitSha as string) : request.commitSha,
       detail: request.detail ?? null
     }
   }

@@ -11,7 +11,11 @@ import { UNKNOWN, type RouteIdentity, type RouteRow } from './route-registry-typ
 
 const SHA = 'a1b2c3d4e5f6'
 const IDENTITY: RouteIdentity = { agent: 'claude', model: 'opus-5', reasoning: 'high' }
-const STAMP = { observedAtIso: '2026-08-27T12:00:00.000Z', runtimeVersion: '1.4.188' }
+const STAMP = {
+  observedAtIso: '2026-08-27T12:00:00.000Z',
+  runtimeVersion: '1.4.188',
+  commitSha: SHA
+}
 
 function request(overrides: Partial<CertificationRequest> = {}): CertificationRequest {
   return {

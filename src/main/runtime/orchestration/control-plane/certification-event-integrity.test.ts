@@ -21,7 +21,11 @@ describe('CERTIFICATION_EVENT_INTEGRITY', () => {
 
   const IDENTITY: RouteIdentity = { agent: 'codex', model: 'gpt-5.5', reasoning: 'xhigh' }
   const SHA = 'a1b2c3d4e5f6'
-  const STAMP = { observedAtIso: '2026-08-27T18:00:00Z', runtimeVersion: '1.0+deadbeef' }
+  const STAMP = {
+    observedAtIso: '2026-08-27T18:00:00Z',
+    runtimeVersion: '1.0+deadbeef',
+    commitSha: SHA
+  }
 
   const BLIND: CertificationObservationSource = {
     observedEffectiveIdentity: () => null,

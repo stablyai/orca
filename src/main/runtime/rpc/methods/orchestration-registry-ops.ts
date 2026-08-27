@@ -103,6 +103,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
     params: CertifyParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
+      const build = resolveRuntimeBuildIdentity()
       const admission = admitCertificationEvidence({
         db,
         request: {
@@ -121,7 +122,8 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           observedAtIso: new Date().toISOString(),
           // Why version+buildHash: a version alone repeats across builds, so
           // evidence from another build of the same version would read current.
-          runtimeVersion: resolveRuntimeBuildIdentity().id
+          runtimeVersion: build.id,
+          commitSha: build.commitSha
         },
         // Why the runtime's own signals: the caller names the kind, the runtime
         // decides whether its records actually show that event happening.

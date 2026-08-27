@@ -42,6 +42,18 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'route-truth'],
+    summary: 'Ask native Orca what it can actually launch for one agent/model route',
+    usage:
+      'orca orchestration route-truth --agent <agent> [--model <id>] [--reasoning <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'agent', 'model', 'reasoning'],
+    notes: [
+      "Derived from Orca's own launcher config, hook targets and session-option catalogs - never from a hand-maintained allowlist.",
+      'Verdicts: NATIVE_ROUTE_SUPPORTED, BLOCKED_SAFE_LAUNCH_POLICY_DRIFT, IDENTITY_PROOF_INCOMPLETE, TRULY_UNSUPPORTED.',
+      'Read this instead of keeping your own route table; a policy that disagrees with it is drift, not provider incompatibility.'
+    ]
+  },
+  {
     path: ['orchestration', 'outcome-intake'],
     summary: 'Atomically admit a 2-5 outcome batch supplied by an upstream planner',
     usage:

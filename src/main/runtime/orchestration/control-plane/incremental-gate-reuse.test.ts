@@ -155,4 +155,29 @@ describe('INCREMENTAL_GATE_REUSE', () => {
     })
     expect(missing['file:nope.ts']).toBe('absent')
   })
+
+  it('never reuses a gate whose declared dependency the runtime could not read', () => {
+    const store = world()
+    const at = '2026-08-27T18:00:00Z'
+    const present = gate('gate-x', 'gate-x=x.ts', SHA_A)
+    recordGateReceipt(store, { scopeKey: SCOPE, inputs: present, result: 'PASS', recordedAt: at })
+    expect(planGateSet({ store, scopeKey: SCOPE, gates: [present] }).reuse).toHaveLength(1)
+
+    // The same gate, resolved against a root where its dependency does not
+    // exist. Two "absent" fingerprints compare equal, so without failing closed
+    // this reads as "nothing changed" and reuses a receipt it never proved.
+    const unresolvable = {
+      ...present,
+      inputHashes: fingerprintGateDependencies({
+        spec: parseGateDependencySpec('gate-x=x.ts'),
+        fallbackFiles: [],
+        cwd: join(dir as string, 'nowhere'),
+        policyVersion: 'v1',
+        commandIdentity: 'gate-x'
+      })
+    }
+    const plan = planGateSet({ store, scopeKey: SCOPE, gates: [unresolvable] })
+    expect(plan.reuse).toEqual([])
+    expect(plan.rerun[0].reason).toMatch(/could not read/)
+  })
 })

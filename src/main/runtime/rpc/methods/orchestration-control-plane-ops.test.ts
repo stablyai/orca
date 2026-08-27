@@ -6,6 +6,7 @@ import { assertWorktreeMutationAllowed } from './orchestration-worker-route-admi
 import { acquireValidationLease } from '../../orchestration/control-plane/validation-lease'
 import { validationScopeKeyForWorktree } from '../../orchestration/control-plane/validation-scope'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
+import { resolveRuntimeCommitSha } from '../../orchestration/control-plane/runtime-build-identity'
 
 const harness = createOrchestrationRpcHarness()
 const SHA = 'a1b2c3d4e5f6'
@@ -57,6 +58,11 @@ describe('correction 2: bounded control-plane operations', () => {
 
   it('refuses PASS certification with no real launch and accepts FAIL without one', async () => {
     const state = harness.setup()
+    // Why the runtime's own commit: certification is now bound to the commit
+    // the runtime was BUILT from, and a mismatched SHA is refused before the
+    // launch is even considered. Claiming the real one gets us to the launch
+    // check this test is about.
+    const runtimeSha = resolveRuntimeCommitSha() ?? SHA
     await expect(
       harness.call(
         'orchestration.certify',
@@ -67,11 +73,29 @@ describe('correction 2: bounded control-plane operations', () => {
           sessionMode: 'fresh',
           kind: 'fresh_launch',
           outcome: 'PASS',
-          sha: SHA
+          sha: runtimeSha
         },
         state.ctx
       )
     ).rejects.toMatchObject({ code: 'unknown_dispatch' })
+
+    // And a SHA that is not the one this runtime was built from is refused
+    // outright, whatever the Dispatch looks like.
+    await expect(
+      harness.call(
+        'orchestration.certify',
+        {
+          agent: 'claude',
+          model: 'opus-5',
+          role: 'builder',
+          sessionMode: 'fresh',
+          kind: 'fresh_launch',
+          outcome: 'PASS',
+          sha: 'c'.repeat(40)
+        },
+        state.ctx
+      )
+    ).rejects.toMatchObject({ code: 'sha_mismatch' })
 
     const failed = (await harness.call(
       'orchestration.certify',
@@ -118,8 +142,8 @@ describe('correction 2: bounded control-plane operations', () => {
       {
         from: 'term_coord',
         sha: SHA,
-        gates: 'unit,lint',
-        files: 'src/a.ts',
+        gates: 'unit=package.json,lint=package.json',
+        files: 'package.json',
         policyVersion: 'gates-v1',
         record: 'unit',
         result: 'PASS'
@@ -136,8 +160,8 @@ describe('correction 2: bounded control-plane operations', () => {
       {
         from: 'term_coord',
         sha: 'ffffff1',
-        gates: 'unit',
-        files: 'src/a.ts',
+        gates: 'unit=package.json',
+        files: 'package.json',
         policyVersion: 'gates-v1'
       },
       state.ctx
@@ -150,8 +174,8 @@ describe('correction 2: bounded control-plane operations', () => {
       {
         from: 'term_coord',
         sha: SHA,
-        gates: 'unit',
-        files: 'src/a.ts',
+        gates: 'unit=package.json',
+        files: 'package.json',
         policyVersion: 'gates-v2'
       },
       state.ctx
@@ -164,8 +188,8 @@ describe('correction 2: bounded control-plane operations', () => {
       {
         from: 'term_coord',
         sha: SHA,
-        gates: 'review-exact',
-        files: 'src/a.ts',
+        gates: 'review-exact=package.json',
+        files: 'package.json',
         policyVersion: 'gates-v1',
         record: 'review-exact',
         result: 'PASS'
@@ -178,8 +202,8 @@ describe('correction 2: bounded control-plane operations', () => {
       {
         from: 'term_coord',
         sha: 'ffffff1',
-        gates: 'review-exact',
-        files: 'src/a.ts',
+        gates: 'review-exact=package.json',
+        files: 'package.json',
         policyVersion: 'gates-v1'
       },
       state.ctx

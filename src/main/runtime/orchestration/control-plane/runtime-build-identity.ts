@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
+import { gitExecFileSync } from '../../../git/runner'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { RouteEvidence } from './route-certification-evidence'
 
@@ -22,7 +24,13 @@ const CONTRADICTED = 'contradicted'
 export type RuntimeBuildIdentity = {
   version: string
   buildHash: string
-  /** The value written to and compared against `RouteEvidence.runtimeVersion`. */
+  /** The Git commit this runtime was BUILT FROM, resolved by the runtime itself.
+   *  Null when it cannot be established, which makes PASS evidence fail closed:
+   *  a caller-supplied SHA is an assertion, never the runtime's own identity. */
+  commitSha: string | null
+  /** The value written to and compared against `RouteEvidence.runtimeVersion`.
+   *  Includes the commit, so two builds of one version at different commits are
+   *  different runtimes. */
   id: string
 }
 
@@ -37,6 +45,28 @@ export function computeRuntimeBuildHash(entryPath = process.argv[1]): string {
   }
 }
 
+/** The commit the running code was built from, owned by the runtime.
+ *
+ *  Uses the repository's own sync git runner rather than re-implementing ref
+ *  resolution: worktrees, packed refs and detached HEADs are git's problem, and
+ *  a second parser here is one more thing that can disagree with git. A build
+ *  with no repository above it — a packaged app — yields null, and SHA-bound
+ *  certification then refuses rather than trusting whatever SHA a caller typed.
+ */
+export function resolveRuntimeCommitSha(entryPath = process.argv[1]): string | null {
+  if (!entryPath) {
+    return null
+  }
+  try {
+    const sha = gitExecFileSync(['rev-parse', 'HEAD'], {
+      cwd: dirname(resolve(entryPath))
+    }).trim()
+    return /^[0-9a-f]{40}$/.test(sha) ? sha : null
+  } catch {
+    return null
+  }
+}
+
 export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): RuntimeBuildIdentity {
   // Why tolerate a missing environment: this is read on the admission path, and
   // a host that has not installed an AppEnvironment must still get a usable
@@ -48,7 +78,13 @@ export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): Runtim
     version = 'unknown'
   }
   const buildHash = computeRuntimeBuildHash(entryPath)
-  return { version, buildHash, id: `${version}+${buildHash}` }
+  const commitSha = resolveRuntimeCommitSha(entryPath)
+  return {
+    version,
+    buildHash,
+    commitSha,
+    id: `${version}+${buildHash}+${commitSha ?? 'nocommit'}`
+  }
 }
 
 /** The commit SHA this runtime build is pinned to, read from the build's own

@@ -13,8 +13,8 @@ import { isAbsolute, resolve } from 'node:path'
  *  because a gate whose command or policy changed is a different gate.
  */
 
-const MISSING = 'absent'
-const UNREADABLE = 'unreadable'
+export const MISSING_DEPENDENCY = 'absent'
+export const UNREADABLE_DEPENDENCY = 'unreadable'
 
 export function hashFileBytes(path: string, cwd: string): string {
   const absolute = isAbsolute(path) ? path : resolve(cwd, path)
@@ -23,11 +23,13 @@ export function hashFileBytes(path: string, cwd: string): string {
     // some platforms, and "a directory is a dependency" is a caller mistake we
     // must record distinctly rather than silently fingerprint as empty.
     if (statSync(absolute).isDirectory()) {
-      return UNREADABLE
+      return UNREADABLE_DEPENDENCY
     }
     return createHash('sha256').update(readFileSync(absolute)).digest('hex').slice(0, 32)
   } catch (error) {
-    return (error as NodeJS.ErrnoException).code === 'ENOENT' ? MISSING : UNREADABLE
+    return (error as NodeJS.ErrnoException).code === 'ENOENT'
+      ? MISSING_DEPENDENCY
+      : UNREADABLE_DEPENDENCY
   }
 }
 
@@ -72,4 +74,16 @@ export function fingerprintGateDependencies(args: {
   hashes['config:policyVersion'] = args.policyVersion
   hashes['config:commandIdentity'] = args.commandIdentity
   return hashes
+}
+
+/** A dependency the runtime could not actually read proves nothing about the
+ *  gate. Two unreadable inputs compare EQUAL, so without this an unresolvable
+ *  dependency set silently reads as "nothing changed" and every gate reuses. */
+export function hasUnprovableDependency(hashes: Readonly<Record<string, string>>): string | null {
+  for (const [key, value] of Object.entries(hashes)) {
+    if (value === MISSING_DEPENDENCY || value === UNREADABLE_DEPENDENCY) {
+      return key
+    }
+  }
+  return null
 }

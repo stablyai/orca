@@ -83,6 +83,26 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     )
   },
 
+  'orchestration route-truth': async ({ flags, client, json }) => {
+    const result = await callOrchestrationMutation<{
+      agent: string
+      model: string | null
+      verdict: string
+      reason: string
+      capability: Record<string, unknown>
+    }>(client, flags, 'orchestration.routeTruth', {
+      agent: getRequiredStringFlag(flags, 'agent'),
+      model: getOptionalStringFlag(flags, 'model'),
+      reasoning: getOptionalStringFlag(flags, 'reasoning')
+    })
+    printResult(result, json, (value) =>
+      [
+        `${value.agent}${value.model ? `/${value.model}` : ''} -> ${value.verdict}`,
+        value.reason
+      ].join('\n')
+    )
+  },
+
   'orchestration gates': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const record = getOptionalStringFlag(flags, 'record')

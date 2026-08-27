@@ -1,4 +1,5 @@
 import type { ControlPlaneStore, GateReceiptRow } from './control-plane-store'
+import { hasUnprovableDependency } from './gate-dependency-fingerprint'
 
 /** B8 — a gate receipt binds the deterministic inputs that produced it, so a
  *  later run can reuse it only when it can prove nothing those inputs cover has
@@ -55,6 +56,7 @@ export type GateReuseVerdict =
         | 'command_changed'
         | 'receipt_failed'
         | 'high_risk_policy'
+        | 'dependency_unreadable'
       reason: string
     }
 
@@ -137,6 +139,17 @@ export function canReuseGateReceipt(args: {
       reuse: false,
       code: 'command_changed',
       reason: `Receipt bound command ${receipt.commandIdentity}; current command is ${args.current.commandIdentity}.`
+    }
+  }
+  // Why before the diff: an unreadable dependency compares equal to another
+  // unreadable one, so a gate whose inputs cannot be read would otherwise
+  // reuse a receipt on the strength of two unknowns matching.
+  const unprovable = hasUnprovableDependency(args.current.inputHashes)
+  if (unprovable) {
+    return {
+      reuse: false,
+      code: 'dependency_unreadable',
+      reason: `Gate ${args.current.gateId} declares ${unprovable}, which the runtime could not read, so its receipt cannot be proven current.`
     }
   }
   const changed = changedInputs(receipt.inputHashes, args.current.inputHashes)

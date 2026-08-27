@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { assertWorkerStartRouteAdmitted } from '../../rpc/methods/orchestration-worker-route-admission'
+import { admitCertificationEvidence } from './certification-admission'
+import { resolveRouteCertification } from './route-certification-evidence'
 import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
 import { admitOutcome } from './outcome-identity'
@@ -146,5 +148,114 @@ describe('SHA_RUNTIME_BINDING', () => {
     expect(resolveCandidateCommitSha([...rows, { ...rows[0], commitSha: SHA_B }], BUILD_A)).toBe(
       'contradicted'
     )
+  })
+})
+
+/** The half the live candidate proved was missing: a caller could hand
+ *  `orchestration certify` ANY hexadecimal SHA and the runtime wrote it. Wrong
+ *  evidence must be refused at RECORD time, not discovered later as staleness.
+ */
+describe('SHA_RUNTIME_BINDING at record time', () => {
+  let db: OrchestrationDb | undefined
+  afterEach(() => {
+    db?.close()
+    db = undefined
+  })
+
+  const IDENTITY: RouteIdentity = { agent: 'codex', model: 'gpt-5.5', reasoning: 'xhigh' }
+  const NOW = Date.parse('2026-08-27T18:00:00Z')
+  const RUNTIME_SHA = 'a'.repeat(40)
+  const OTHER_SHA = 'b'.repeat(40)
+  const BUILD_A = `1.0+aaaa+${RUNTIME_SHA}`
+  const BUILD_B = `1.0+bbbb+${OTHER_SHA}`
+
+  function launched() {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: {
+        agent: 'codex',
+        launch: {
+          requested: { agent: 'codex', model: 'gpt-5.5', effort: 'xhigh' },
+          effective: { agent: 'codex', model: 'gpt-5.5', effort: 'xhigh' }
+        }
+      }
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'pane:leaf',
+      processIncarnation: 'pty:term_worker',
+      launchTokenHash: 'hash',
+      worktreeId: 'wt_1',
+      effects: [{ kind: 'terminal', role: 'agent', action: 'created', id: 'term_worker' }],
+      setupState: 'not_applicable',
+      terminalOwnership: 'external'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id, [
+      { kind: 'terminal', role: 'agent', action: 'created', id: 'term_worker' }
+    ])
+    return started.dispatch.id
+  }
+
+  function certify(claimedSha: string, runtimeCommit: string | null, buildId = BUILD_A) {
+    // Why first: the object literal below reads `db` before `launched()` would
+    // have created it.
+    const dispatchId = launched()
+    return admitCertificationEvidence({
+      db: db!,
+      source: { observedEffectiveIdentity: () => null, agentStatusSnapshot: () => [] },
+      stamp: {
+        observedAtIso: '2026-08-27T18:00:00Z',
+        runtimeVersion: buildId,
+        commitSha: runtimeCommit
+      },
+      request: {
+        identity: IDENTITY,
+        role: 'builder',
+        sessionMode: 'fresh',
+        kind: 'fresh_launch',
+        outcome: 'PASS',
+        dispatchId,
+        commitSha: claimedSha
+      }
+    })
+  }
+
+  it('records PASS when the claimed commit is the one the runtime was built from', () => {
+    expect(certify(RUNTIME_SHA, RUNTIME_SHA)).toMatchObject({ ok: true })
+  })
+
+  it('refuses SHA A evidence on a runtime built from SHA B (SHA A -> SHA B)', () => {
+    expect(certify(OTHER_SHA, RUNTIME_SHA)).toMatchObject({ ok: false, code: 'sha_mismatch' })
+  })
+
+  it('stamps the RUNTIME commit, so a caller cannot substitute its own', () => {
+    const admitted = certify(RUNTIME_SHA, RUNTIME_SHA)
+    expect(admitted.ok && admitted.evidence.commitSha).toBe(RUNTIME_SHA)
+  })
+
+  it('refuses SHA-bound evidence when the runtime cannot establish its own commit', () => {
+    expect(certify(RUNTIME_SHA, null)).toMatchObject({ ok: false, code: 'commit_unknown' })
+  })
+
+  it('carries the commit in the build identity, so runtime A and runtime B differ (runtime A -> runtime B)', () => {
+    expect(BUILD_A).not.toBe(BUILD_B)
+    const onA = certify(RUNTIME_SHA, RUNTIME_SHA, BUILD_A)
+    expect(onA.ok && onA.evidence.runtimeVersion).toBe(BUILD_A)
+    // The same evidence read on runtime B is stale: its runtimeVersion differs.
+    expect(
+      resolveRouteCertification(onA.ok ? [onA.evidence] : [], {
+        identity: IDENTITY,
+        role: 'builder',
+        sessionMode: 'fresh',
+        nowMs: NOW,
+        currentCommitSha: RUNTIME_SHA,
+        currentRuntimeVersion: BUILD_B
+      }).state
+    ).not.toBe('PASS')
   })
 })
