@@ -27,6 +27,7 @@ import {
   generateBranchName,
   generateCommitMessage,
   generatePullRequestFields,
+  generateText,
   trimGeneratedCommitMessage as trimCommitMessage
 } from './source-control-text-generation-requests'
 import type {
@@ -35,6 +36,7 @@ import type {
   GenerateBranchNameResult,
   GenerateCommitMessageResult,
   GeneratePullRequestFieldsResult as GenericGeneratePullRequestFieldsResult,
+  GenerateTextResult,
   RemoteCommitMessageExecResult,
   TextGenerationOperation
 } from './source-control-text-generation-types'
@@ -46,6 +48,7 @@ export type {
   DiscoverCommitMessageModelsResult,
   GenerateBranchNameResult,
   GenerateCommitMessageResult,
+  GenerateTextResult,
   RemoteCommitMessageExecResult,
   TextGenerationOperation
 }
@@ -130,6 +133,21 @@ export function cancelGenerateCommitMessageLocal(cwd: string): void {
 
 export function cancelGeneratePullRequestFieldsLocal(cwd: string): void {
   cancelLocalGeneration('pull-request-fields', cwd)
+}
+
+export function generateTextFromPrompt(
+  prompt: string,
+  params: GenerateCommitMessageParams,
+  target: CommitMessageGenerationTarget,
+  operation: TextGenerationOperation = 'mission-plan'
+): Promise<GenerateTextResult> {
+  return generateText({
+    prompt,
+    params,
+    target,
+    operation,
+    spawnAgent: spawnSourceControlAgent
+  })
 }
 
 export function generateCommitMessageFromContext(
