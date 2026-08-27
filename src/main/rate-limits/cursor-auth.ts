@@ -58,6 +58,7 @@ export function getCursorIdeDbPath(
   return join(configHome, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
 }
 
+/** True when `candidate` exists and is executable (on Windows: exists). */
 async function isExecutableCandidate(candidate: string, isWin: boolean): Promise<boolean> {
   try {
     await access(candidate, isWin ? fsConstants.F_OK : fsConstants.X_OK)
@@ -90,6 +91,7 @@ async function resolveExecutableOnPath(
   return null
 }
 
+/** Prefers `cursor-agent`, then bare `agent`, resolved from PATH. */
 async function resolveCursorCliProgram(): Promise<string | null> {
   for (const name of CURSOR_CLI_CANDIDATES) {
     const resolved = await resolveExecutableOnPath(name, process.platform, process.env)
@@ -117,6 +119,7 @@ export function extractIdeAccessToken(row: { value: unknown } | undefined): stri
   }
 }
 
+/** Reads `cursorAuth/accessToken` from Cursor's `state.vscdb`; never throws. */
 function readIdeAccessTokenFromDb(dbPath: string): string | null {
   let db: InstanceType<typeof SyncDatabase> | undefined
   try {
@@ -136,6 +139,7 @@ function readIdeAccessTokenFromDb(dbPath: string): string | null {
   }
 }
 
+/** Production IO wiring for {@link readCursorAuthSession}. */
 function buildDefaultCursorAuthDeps(): CursorAuthDeps {
   return {
     runProcess,
@@ -145,6 +149,7 @@ function buildDefaultCursorAuthDeps(): CursorAuthDeps {
   }
 }
 
+/** Parses `cursor-agent status --format json` stdout for a non-empty access token. */
 function extractCliAccessToken(stdout: string): string | null {
   try {
     const parsed = JSON.parse(stdout) as { auth?: { accessToken?: unknown } }
@@ -195,8 +200,7 @@ export type ReadCursorAuthSessionOptions = {
   signal?: AbortSignal
 }
 
-// Why: Orca never runs `cursor-agent login`; it only reads the session the CLI
-// or Cursor IDE already established.
+/** Reads an existing Cursor CLI/IDE session; never runs login. Honors `signal` for CLI spawn. */
 export async function readCursorAuthSession(
   options: ReadCursorAuthSessionOptions = {}
 ): Promise<CursorAuthReadResult> {

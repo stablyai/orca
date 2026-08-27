@@ -30,7 +30,7 @@ function windowOf(
   return { usedPercent, windowMinutes, resetsAt, resetDescription: null }
 }
 
-// Grok unified-billing accounts surface a monthly window and nothing else.
+/** Grok ProviderRateLimits fixture with only a monthly window. */
 function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
   return {
     provider: 'grok',
@@ -43,7 +43,7 @@ function grokMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLi
   }
 }
 
-// Cursor's monthly plan usage is also a monthly-only window, like Grok.
+/** Cursor ProviderRateLimits fixture with a monthly window. */
 function cursorMonthlyLimits(status: ProviderRateLimits['status']): ProviderRateLimits {
   return {
     provider: 'cursor',

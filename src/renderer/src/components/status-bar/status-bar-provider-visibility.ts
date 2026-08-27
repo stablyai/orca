@@ -33,7 +33,7 @@ type UsageProviderSnapshots = {
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
-
+/** True when a provider snapshot has at least one usable window. */
 function hasUsageData(provider: ProviderRateLimits): boolean {
   return Boolean(
     provider.session ||
@@ -44,16 +44,15 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
   )
 }
 
+/** True while a provider fetch has not yet produced usable data. */
 function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
   return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }
 
-// Why: a provider that returns `unavailable` is explicitly not configured
-// (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
-// fetch object is non-null, so a bare `!== null` check still renders a "--"
-// bar for a provider the user never set up. `error` is kept visible on purpose
-// — that's a *configured* provider failing transiently, and hiding it would
-// make the bar flap on every refresh hiccup.
+/**
+ * True when auth/config indicates the provider can be fetched.
+ * Why: `unavailable` means unset (hide); `error` means configured but failing (keep visible).
+ */
 export function isProviderConfigured(
   provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
@@ -68,6 +67,7 @@ export function isProviderConfigured(
   return true
 }
 
+/** True when any usage-provider settings surface is available. */
 export function hasUsageProviderSettings(
   settings: Partial<UsageProviderSettings> | null | undefined
 ): boolean {
@@ -84,6 +84,7 @@ export function hasUsageProviderSettings(
   )
 }
 
+/** True when settings exist for the given usage provider. */
 export function hasUsageProviderSettingsForProvider(
   providerId: UsageProviderId,
   settings: Partial<UsageProviderSettings> | null | undefined
@@ -121,6 +122,7 @@ export function hasUsageProviderSettingsForProvider(
   return false
 }
 
+/** Placeholder provider snapshot shown during an in-flight fetch. */
 function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRateLimits {
   return {
     provider: providerId,
@@ -134,6 +136,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
   }
 }
 
+/** Provider snapshot to show, or null when the chip should hide. */
 export function getVisibleUsageProvider(
   providerId: UsageProviderId,
   provider: ProviderRateLimits | null | undefined,
@@ -148,6 +151,7 @@ export function getVisibleUsageProvider(
   return provider ?? createPendingProviderSnapshot(providerId)
 }
 
+/** True when the usage roster should show the empty/sign-in state. */
 export function isUsageEmptyState(
   providers: UsageProviderSnapshots,
   settings: Partial<UsageProviderSettings> | null | undefined

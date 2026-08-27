@@ -65,6 +65,7 @@ describe('isProviderConfigured', () => {
   })
 })
 
+/** UsageProviderSettings fixture with optional overrides. */
 function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsageProviderSettings {
   return {
     codexManagedAccounts: [],

@@ -7,6 +7,7 @@ import { getGrokStatusBarToggleSearchEntry } from './appearance-status-bar-grok-
 import { getCursorStatusBarToggleSearchEntry } from './appearance-status-bar-cursor-toggle-search'
 import { getPortsStatusBarToggleSearchEntry } from './appearance-status-bar-ports-toggle-search'
 
+/** Appearance-settings catalog entries for status-bar item toggles. */
 export const getStatusBarToggles = createLocalizedCatalog(
   (): readonly {
     id: StatusBarItem

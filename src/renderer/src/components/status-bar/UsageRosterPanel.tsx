@@ -21,22 +21,21 @@ import type { StatusBarUsageMode } from '../../../../shared/status-bar-usage-mod
 type ProviderId = ProviderRateLimits['provider']
 export type UsageSection = { label: string; window: RateLimitWindow }
 
-// Windows/buckets that actually carry data — absent limits arrive as null, but a
-// partial/rehydrated provider can also carry an undefined window; both must be
-// dropped so downstream consumers never dereference `window.usedPercent`.
+/** Non-null usage windows/buckets safe to render. */
 function usedSections(p: ProviderRateLimits): UsageSection[] {
   return getWindowSections(p).filter(
     (s): s is UsageSection => s.window !== null && s.window !== undefined
   )
 }
 
+/** Max usedPercent across the given sections. */
 function providerMaxUsed(sections: UsageSection[]): number {
   return sections.length > 0
     ? Math.max(...sections.map((s) => clampUsedPercent(s.window.usedPercent)))
     : 0
 }
 
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
+/** Compact chip label for a window or named bucket. */
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
@@ -55,6 +54,7 @@ function shortLabel(
     : formatWindowLabel(section.window.windowMinutes)
 }
 
+/** Filters usage sections down to Cursor plan buckets. */
 function cursorUsageSections(p: ProviderRateLimits, sections: UsageSection[]): UsageSection[] {
   if (p.provider !== 'cursor') {
     return []
@@ -62,6 +62,7 @@ function cursorUsageSections(p: ProviderRateLimits, sections: UsageSection[]): U
   return sections.filter((section) => isCursorUsageBucket(section.label))
 }
 
+/** Highest-consumption window/bucket, labeled for the compact status chip. */
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
   const sections = usedSections(p)
   if (sections.length === 0) {
@@ -75,7 +76,7 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
-// The soonest-resetting window summarizes the agent's next reset in one line.
+/** Countdown to the soonest window reset among sections. */
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
   const resets = sections
     .map((s) => s.window.resetsAt)
@@ -86,6 +87,7 @@ function soonestResetLabel(sections: UsageSection[], now: number): string | null
   return formatResetCountdown(Math.min(...resets) - now)
 }
 
+/** Single usage window/bucket metric row for the roster. */
 function UsageMetric({
   section,
   label,
@@ -116,6 +118,7 @@ function UsageMetric({
   )
 }
 
+/** Provider row in the usage roster dropdown. */
 export function UsageRow({
   p,
   display,

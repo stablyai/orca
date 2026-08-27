@@ -1,7 +1,7 @@
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
-
+/** Settings search entry for the Cursor status-bar usage toggle. */
 export function getCursorStatusBarToggleSearchEntry(): {
   id: StatusBarItem
   title: string

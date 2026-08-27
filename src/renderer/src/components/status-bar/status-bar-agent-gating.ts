@@ -16,7 +16,7 @@ const CLI_GATED_ITEMS: ReadonlySet<StatusBarItem> = new Set([
   'grok',
   'cursor'
 ])
-
+/** Hides CLI-backed status-bar items when their agent is absent from PATH. */
 export function isStatusBarItemAvailable(
   id: StatusBarItem,
   detectedAgentIds: TuiAgent[] | null

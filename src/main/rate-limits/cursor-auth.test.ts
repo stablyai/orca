@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { CursorAuthDeps } from './cursor-auth'
 import { extractIdeAccessToken, getCursorIdeDbPath, readCursorAuthSession } from './cursor-auth'
-
+/** Minimal {@link ProcessResult} fixture for cursor-auth tests. */
 function processResult(
   overrides: Partial<{ code: number | null; stdout: string; stderr: string }> = {}
 ): {
@@ -21,7 +21,7 @@ function processResult(
     ...overrides
   }
 }
-
+/** Test double for {@link CursorAuthDeps}. */
 function makeDeps(overrides: Partial<CursorAuthDeps> = {}): CursorAuthDeps {
   return {
     runProcess: vi.fn().mockResolvedValue(processResult()),

@@ -1,7 +1,7 @@
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
-
+/** Settings search entry for the Ports status-bar toggle. */
 export function getPortsStatusBarToggleSearchEntry(): {
   id: StatusBarItem
   title: string

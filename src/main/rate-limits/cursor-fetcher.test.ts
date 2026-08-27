@@ -8,7 +8,7 @@ vi.mock('electron', () => ({
 }))
 
 import { fetchCursorRateLimits } from './cursor-fetcher'
-
+/** Fetch Response stub returning JSON for cursor-fetcher tests. */
 function jsonResponse(body: unknown, status = 200): Response {
   return {
     ok: status >= 200 && status < 300,

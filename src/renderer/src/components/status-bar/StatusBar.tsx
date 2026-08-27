@@ -1145,6 +1145,7 @@ function ProviderLetterBadge({ p }: { p: ProviderRateLimits }): React.JSX.Elemen
   )
 }
 
+/** Single-letter badge for a usage provider in the status bar. */
 function getProviderLetter(provider: ProviderRateLimits['provider']): string {
   switch (provider) {
     case 'claude':
@@ -1174,7 +1175,7 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
 
 // Why: Gemini exposes extra experimental buckets that made the pre-existing verbose footer noisy.
 const STATUS_BAR_BUCKET_NAMES = new Set(['Flash', 'Pro', '1.5 Pro'])
-
+/** Verbose multi-window/bucket usage readout for a provider chip. */
 function VerboseProviderUsage({
   p,
   display
@@ -1272,6 +1273,7 @@ function VerboseProviderUsage({
   )
 }
 
+/** Status-bar segment showing one provider's usage and switcher. */
 export function ProviderSegment({
   p,
   compact,
@@ -2039,6 +2041,7 @@ function useStatusBarMenuFocusHandoff(): {
   }
 }
 
+/** Main status-bar chrome: usage chips, toggles, and system segments. */
 function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Element | null {
   const floatingTerminalShortcut = useShortcutLabel('floatingTerminal.toggle')
   const rateLimits = useAppStore((s) => s.rateLimits)

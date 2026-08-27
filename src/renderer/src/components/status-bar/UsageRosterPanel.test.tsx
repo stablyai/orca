@@ -39,7 +39,7 @@ const signedOutCodex: ProviderRateLimits = {
   error: 'ChatGPT authentication required to read rate limits',
   status: 'error'
 }
-
+/** Cursor ProviderRateLimits fixture with both plan buckets. */
 function cursorBucketLimits(): ProviderRateLimits {
   return {
     provider: 'cursor',

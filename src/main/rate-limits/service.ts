@@ -114,7 +114,7 @@ type InternalRateLimitState = {
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null
 }
-
+/** Clamps the rate-limit polling interval to a safe positive range. */
 function normalizePollingInterval(ms: number): number {
   if (!Number.isFinite(ms)) {
     return DEFAULT_POLL_MS

@@ -22,6 +22,7 @@ export function createResetCreditLimits(updatedAt = 30): ProviderRateLimits {
   }
 }
 
+/** Builds a RateLimitState fixture with the given Codex snapshot. */
 export function createResetRateLimitState(
   codex: ProviderRateLimits,
   target: RateLimitState['codexTarget'] = { runtime: 'host', wslDistro: null }

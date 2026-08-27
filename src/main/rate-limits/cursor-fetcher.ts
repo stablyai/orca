@@ -30,6 +30,7 @@ type CursorDashboardResponse = {
   plan?: unknown
 }
 
+/** Builds a Cursor {@link ProviderRateLimits} stub with shared defaults. */
 function result(
   status: ProviderRateLimits['status'],
   error: string | null,
@@ -54,6 +55,7 @@ function parseTimestamp(value: unknown): number | null {
   return null
 }
 
+/** Coerces a DashboardService numeric field to a finite number, or null. */
 function toFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return value
@@ -65,10 +67,12 @@ function toFiniteNumber(value: unknown): number | null {
   return null
 }
 
+/** Clamps a usage percent into the inclusive 0–100 range. */
 function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
 }
 
+/** Billing-cycle length in minutes; falls back to a 30-day window. */
 function computeWindowMinutes(startMs: number | null, endMs: number | null): number {
   if (startMs === null || endMs === null) {
     return MONTHLY_WINDOW_MINUTES
@@ -77,8 +81,7 @@ function computeWindowMinutes(startMs: number | null, endMs: number | null): num
   return diffMinutes > 0 ? diffMinutes : MONTHLY_WINDOW_MINUTES
 }
 
-// Why: same style as Grok's parseResetDescription, adapted to accept an
-// already-parsed epoch ms since Cursor's billingCycleEnd may be a numeric string.
+/** Human-readable reset label from a billing-cycle end epoch ms. */
 function parseResetDescription(resetsAtMs: number | null): string | null {
   if (resetsAtMs === null) {
     return null
@@ -93,11 +96,13 @@ function parseResetDescription(resetsAtMs: number | null): string | null {
     : date.toLocaleDateString(undefined, { weekday: 'short', hour: 'numeric', minute: '2-digit' })
 }
 
+/** Optional plan name from DashboardService (`planType` or `plan`). */
 function extractPlanType(data: CursorDashboardResponse): string | undefined {
   const candidate = data.planType ?? data.plan
   return typeof candidate === 'string' && candidate.length > 0 ? candidate : undefined
 }
 
+/** Maps auto/API percent fields into named Cursor usage buckets. */
 function buildBuckets(
   usage: CursorPlanUsage,
   resetsAt: number | null,
@@ -128,18 +133,22 @@ function buildBuckets(
   return buckets.length > 0 ? buckets : undefined
 }
 
-// Why: 'ide' auth comes from the Cursor IDE's own web-authenticated session,
-// while 'cli' comes from `cursor-agent`; UsageRateLimitSource has no 'ide' value.
+/**
+ * Maps CLI/IDE auth provenance onto UsageRateLimitSource.
+ * Why: UsageRateLimitSource has no `ide` value — IDE sessions map to `web`.
+ */
 function toUsageMetadataSource(authSource: 'cli' | 'ide'): 'cli' | 'web' {
   return authSource === 'ide' ? 'web' : 'cli'
 }
 
+/** Standard parse-failure Cursor rate-limit result. */
 function parseFailure(source: 'cli' | 'web'): ProviderRateLimits {
   return result('error', 'Cursor usage response could not be parsed', {
     usageMetadata: { failureKind: 'parse', source }
   })
 }
 
+/** Maps DashboardService JSON into Orca's Cursor {@link ProviderRateLimits}. */
 function mapDashboardResponse(
   data: CursorDashboardResponse,
   source: 'cli' | 'web'
@@ -177,8 +186,7 @@ function mapDashboardResponse(
   }
 }
 
-// Why: Orca never runs `cursor-agent login`; it only reads the token the CLI
-// or Cursor IDE already established (see cursor-auth.ts).
+/** Fetches Cursor monthly plan usage via DashboardService using a local session token. */
 export async function fetchCursorRateLimits(
   options: { signal?: AbortSignal; authReadResult?: CursorAuthReadResult } = {}
 ): Promise<ProviderRateLimits> {

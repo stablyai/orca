@@ -84,6 +84,7 @@ export function unavailableProvider(
 // start, so after 5 fake minutes every healthy provider looks stale and every
 // activation degrades to a full fetch. Backoff tests that reason about the
 // individual retry lane need healthy providers minted fresh at fetch time.
+/** Mocks background provider fetches to return fresh healthy snapshots. */
 export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
   vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))

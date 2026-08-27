@@ -1,6 +1,6 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { translate } from '@/i18n/i18n'
-
+/** Human-readable display name for a rate-limit provider id. */
 export function getProviderDisplayName(provider: ProviderRateLimits['provider']): string {
   if (provider === 'claude') {
     return 'Claude'
@@ -78,6 +78,7 @@ function getDelegatedCliRefreshProvider(
   return p.provider === 'grok' || p.provider === 'kimi' ? p.provider : null
 }
 
+/** Short status label for a provider usage snapshot. */
 export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   const delegatedCliProvider = getDelegatedCliRefreshProvider(p)
   if (delegatedCliProvider === 'grok') {
@@ -129,6 +130,7 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
   return translate('auto.components.status.bar.tooltip.e740f92596', 'Refresh failed')
 }
 
+/** User-facing error copy for a provider usage failure. */
 export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   const fallback = translate(
     'auto.components.status.bar.tooltip.2c35eca8d4',

@@ -39,7 +39,7 @@ describe('getProviderDisplayName', () => {
     expect(getProviderDisplayName('unknown-provider' as never)).toBe('unknown-provider')
   })
 })
-
+/** Minimal Cursor provider fixture for usage-error copy tests. */
 function cursorProvider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimits {
   return {
     provider: 'cursor',

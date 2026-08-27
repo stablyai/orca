@@ -1,5 +1,5 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-
+/** Settings section id to open for a usage provider's accounts. */
 export function getUsageProviderAccountsSectionId(
   provider: ProviderRateLimits['provider']
 ): string | null {
