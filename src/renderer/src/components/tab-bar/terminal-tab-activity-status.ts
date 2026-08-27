@@ -234,8 +234,11 @@ export function terminalTabActivityToAgentDotState(
     case 'interrupted':
     case 'done':
       return status
+    // Why 'unverifiable' lands here: AgentStateDot has no unobserved state, and
+    // inventing one would claim the pane is idle. No badge is the honest mapping.
     case 'active':
     case 'inactive':
+    case 'unverifiable':
       return null
   }
 }

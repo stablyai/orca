@@ -25,6 +25,7 @@ import type { RateLimitSlice } from './slices/rate-limits'
 import type { SshSlice } from './slices/ssh'
 import type { RuntimeEnvironmentSshSlice } from './slices/runtime-environment-ssh'
 import type { AgentStatusSlice } from './slices/agent-status'
+import type { AgentHookInstallStatusSlice } from './slices/agent-hook-install-status'
 import type { PaneForegroundAgentSlice } from './slices/pane-foreground-agent'
 import type { DiffCommentsSlice } from './slices/diffComments'
 import type { DetectedAgentsSlice } from './slices/detected-agents'
@@ -69,6 +70,7 @@ export type AppState = RepoSlice &
   SshSlice &
   RuntimeEnvironmentSshSlice &
   AgentStatusSlice &
+  AgentHookInstallStatusSlice &
   PaneForegroundAgentSlice &
   DiffCommentsSlice &
   DetectedAgentsSlice &

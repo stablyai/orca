@@ -25,6 +25,8 @@ export function createAgentHooksApi(): NonNullable<Partial<PreloadApi>['agentHoo
       detail: 'Agent hook status is only available on the Orca server.'
     } as const)
   return {
+    // Local hook config does not answer for a paired runtime host.
+    installStatuses: () => Promise.resolve([]),
     claudeStatus: () => status('claude'),
     openClaudeStatus: () => status('openclaude'),
     codexStatus: () => status('codex'),

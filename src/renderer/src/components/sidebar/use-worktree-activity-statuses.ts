@@ -9,10 +9,13 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { selectWorktreeHooksUnverifiable } from './worktree-hook-observability'
 
 type WorktreeActivityStatusState = Pick<
   AppState,
   | 'tabsByWorktree'
+  | 'activeRepoId'
+  | 'activeWorktreeId'
   | 'browserTabsByWorktree'
   | 'runtimePaneTitlesByTabId'
   | 'ptyIdsByTabId'
@@ -22,6 +25,13 @@ type WorktreeActivityStatusState = Pick<
   | 'migrationUnsupportedByPtyId'
   | 'retainedAgentsByPaneKey'
   | 'runtimeAgentOrchestrationByPaneKey'
+  | 'agentHookInstallStateByTarget'
+  | 'folderWorkspaces'
+  | 'projectGroups'
+  | 'projects'
+  | 'repos'
+  | 'settings'
+  | 'worktreesByRepo'
 >
 
 export function selectWorktreeActivityStatuses(
@@ -53,7 +63,11 @@ export function selectWorktreeActivityStatuses(
         hasLiveMonitoring,
         hasInterrupted,
         hasLiveDone,
-        hasRetainedDone
+        hasRetainedDone,
+        hooksUnverifiable: selectWorktreeHooksUnverifiable(statusInputs, worktreeId, {
+          hasPermission,
+          hasLiveWorking
+        })
       })
     )
   }

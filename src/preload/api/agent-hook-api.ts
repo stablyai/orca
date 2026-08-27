@@ -36,6 +36,8 @@ export type HooksApi = {
 }
 
 export type AgentHooksApi = {
+  /** Every managed target in one read — the per-agent channels cannot answer a worktree dot. */
+  installStatuses: () => Promise<AgentHookInstallStatus[]>
   claudeStatus: () => Promise<AgentHookInstallStatus>
   openClaudeStatus: () => Promise<AgentHookInstallStatus>
   codexStatus: () => Promise<AgentHookInstallStatus>

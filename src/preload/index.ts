@@ -2265,6 +2265,8 @@ const api = {
     status: (): Promise<CodexConfigSyncStatus> => ipcRenderer.invoke('codexConfigSync:status')
   },
   agentHooks: {
+    installStatuses: (): Promise<AgentHookInstallStatus[]> =>
+      ipcRenderer.invoke('agentHooks:installStatuses'),
     claudeStatus: (): Promise<AgentHookInstallStatus> =>
       ipcRenderer.invoke('agentHooks:claudeStatus'),
     openClaudeStatus: (): Promise<AgentHookInstallStatus> =>

@@ -2,6 +2,7 @@ import React from 'react'
 import { Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
+import { AgentUnverifiableIcon } from '@/components/AgentUnverifiableIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
@@ -61,6 +62,18 @@ const StatusIndicator = React.memo(function StatusIndicator({
         {...rest}
       >
         <span className="block size-1.5 rounded-full bg-red-500" />
+      </span>
+    )
+  }
+
+  if (status === 'unverifiable') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <AgentUnverifiableIcon className="size-3" />
       </span>
     )
   }

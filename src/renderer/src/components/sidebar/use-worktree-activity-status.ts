@@ -9,6 +9,7 @@ import {
   selectRuntimePaneTitlesForWorktree
 } from './worktree-card-status-inputs'
 import { selectWorktreeAgentActivitySummary } from './worktree-agent-activity-summary'
+import { selectWorktreeHooksUnverifiable } from './worktree-hook-observability'
 
 export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
   const tabs = useAppStore((s) => s.tabsByWorktree[worktreeId] ?? EMPTY_TABS)
@@ -29,8 +30,19 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
     hasInterrupted,
     hasLiveDone,
     hasRetainedDone,
-    agentStatusPaneIdsByTabId
-  } = useAppStore(useShallow((s) => selectWorktreeAgentActivitySummary(s, worktreeId)))
+    agentStatusPaneIdsByTabId,
+    hooksUnverifiable
+  } = useAppStore(
+    // Why: one pass — the observability check consumes the same summary, and
+    // selecting it separately would run the summary twice per worktree per render.
+    useShallow((s) => {
+      const summary = selectWorktreeAgentActivitySummary(s, worktreeId)
+      return {
+        ...summary,
+        hooksUnverifiable: selectWorktreeHooksUnverifiable(s, worktreeId, summary)
+      }
+    })
+  )
 
   // Why: compact and detailed cards need the same status-dot semantics:
   // runtime liveness gates title-derived states, then explicit agent rows can
@@ -49,7 +61,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
         hasLiveMonitoring,
         hasInterrupted,
         hasLiveDone,
-        hasRetainedDone
+        hasRetainedDone,
+        hooksUnverifiable
       }),
     [
       tabs,
@@ -63,7 +76,8 @@ export function useWorktreeActivityStatus(worktreeId: string): WorktreeStatus {
       hasLiveMonitoring,
       hasInterrupted,
       hasLiveDone,
-      hasRetainedDone
+      hasRetainedDone,
+      hooksUnverifiable
     ]
   )
 }
