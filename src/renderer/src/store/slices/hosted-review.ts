@@ -10,6 +10,7 @@ import type {
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
+import { withDerivedHostedReviewQueueState } from '../../../../shared/github/pull-request-queue-state'
 import type { Repo } from '../../../../shared/repo-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
@@ -436,7 +437,7 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
             linkedAzureDevOpsPR: options?.linkedAzureDevOpsPR ?? null,
             linkedGiteaPR: options?.linkedGiteaPR ?? null
           }
-          const review =
+          const fetched =
             target.kind === 'environment'
               ? await callRuntimeRpc<HostedReviewInfo | null>(
                   target,
@@ -452,6 +453,9 @@ export const createHostedReviewSlice: StateCreator<AppState, [], [], HostedRevie
                   repoPath,
                   ...args
                 })
+          // Why: hosts publish `open` + `mergeQueueEntry`; derive `queued` as the review
+          // enters renderer state so there is one representation, wire path or local IPC.
+          const review = withDerivedHostedReviewQueueState(fetched)
           if (requestGenerations.get(cacheKey) === generation) {
             set((state) => {
               if (

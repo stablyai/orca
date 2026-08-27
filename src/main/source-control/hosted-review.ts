@@ -1,4 +1,4 @@
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewWireInfo } from '../../shared/hosted-review'
 import { assertRemoteUrlReadable } from '../git/remote-url-probe'
 import { getForgeProviderForRepository, type ForgeProviderId } from './forge-provider'
 import { withHostedReviewBranchCache } from './hosted-review-branch-cache'
@@ -46,7 +46,7 @@ export async function getHostedReviewForBranch(
      */
     active?: boolean
   } & HostedReviewExecutionOptions
-): Promise<HostedReviewInfo | null> {
+): Promise<HostedReviewWireInfo | null> {
   const branchName = input.branch.replace(/^refs\/heads\//, '')
   // Why: detached HEAD cannot use branch lookup, but provider-specific exact
   // ids can still resolve the review without probing an empty branch name.

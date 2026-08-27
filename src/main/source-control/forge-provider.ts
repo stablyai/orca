@@ -1,7 +1,7 @@
 import type {
   CreateHostedReviewInput,
   CreateHostedReviewResult,
-  HostedReviewInfo,
+  HostedReviewWireInfo,
   HostedReviewProvider
 } from '../../shared/hosted-review'
 import {
@@ -67,8 +67,9 @@ export type ForgeProvider = {
   id: ForgeProviderId
   supportsReviewCreation: boolean
   resolveRepository(context: ForgeProviderRepositoryContext): Promise<unknown>
-  getReviewForBranch(input: ForgeReviewForBranchInput): Promise<HostedReviewInfo | null>
-  getReviewByNumber(input: ForgeReviewByNumberInput): Promise<HostedReviewInfo | null>
+  // Why: wire-typed at the interface so a sixth provider cannot sidestep the guard.
+  getReviewForBranch(input: ForgeReviewForBranchInput): Promise<HostedReviewWireInfo | null>
+  getReviewByNumber(input: ForgeReviewByNumberInput): Promise<HostedReviewWireInfo | null>
   createReview?(
     repoPath: string,
     input: CreateHostedReviewInput,
@@ -121,7 +122,7 @@ const gitLabForgeProvider = {
 // mirroring how the PR refresh coordinator keeps cache on upstream-error.
 function unwrapGitHubPRForBranchOutcome(
   outcome: Awaited<ReturnType<typeof getPRForBranchOutcome>>
-): HostedReviewInfo | null {
+): HostedReviewWireInfo | null {
   if (outcome.kind === 'upstream-error') {
     throw new Error(`GitHub PR lookup failed (${outcome.errorType}): ${outcome.message}`)
   }

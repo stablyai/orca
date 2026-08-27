@@ -46,5 +46,7 @@ export function prStateColor(state: PRInfo['state']): string {
       return 'bg-muted text-muted-foreground/70 border-border'
     case 'open':
       return 'bg-emerald-500/15 text-emerald-500 border-emerald-500/20'
+    case 'queued':
+      return 'bg-blue-500/15 text-blue-500 border-blue-500/20'
   }
 }

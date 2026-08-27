@@ -81,6 +81,8 @@ export function getWorkspaceCleanupReviewStateLabel(state: WorkspaceCleanupRevie
   switch (state) {
     case 'open':
       return translate('components.workspace.cleanup.browse.review.open', 'Open')
+    case 'queued':
+      return translate('components.workspace.cleanup.browse.review.queued', 'Queued')
     case 'draft':
       return translate('components.workspace.cleanup.browse.review.draft', 'Draft')
     case 'merged':

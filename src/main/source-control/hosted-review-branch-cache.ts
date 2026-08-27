@@ -1,4 +1,6 @@
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+// Why: this cache only ever holds host-produced reviews, so the wire type is the
+// honest one — and typing it so keeps the publish narrowing intact end to end.
+import type { HostedReviewWireInfo } from '../../shared/hosted-review'
 import {
   __resetHostedReviewActiveClaimsForTests,
   isActiveBranch,
@@ -51,7 +53,7 @@ const FOUND_REVIEW_TTL_MS = 60_000
 const MAX_ENTRIES = MAX_BRANCH_MAP_ENTRIES
 
 type CacheEntry = {
-  review: HostedReviewInfo | null
+  review: HostedReviewWireInfo | null
   fetchedAt: number
   headOid: string | null
   /** When the lookup that produced this answer began, for straggler ordering. */
@@ -62,7 +64,7 @@ type InflightRecord = {
   /** Identity, so a detached lookup can only ever clear its own entry. */
   token: object
   startedAt: number
-  promise: Promise<HostedReviewInfo | null>
+  promise: Promise<HostedReviewWireInfo | null>
   /** Releases the callers and unpins the branch; idempotent. */
   expire: () => void
 }
@@ -264,17 +266,17 @@ function startLookup(
   key: string,
   scope: string,
   headOid: string | null,
-  lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+  lookup: () => Promise<HostedReviewWireInfo | null>
+): Promise<HostedReviewWireInfo | null> {
   const startedAt = Date.now()
   const generation = scopeGeneration(scope)
   const token = {}
   /** The deadline released the callers; the lookup itself runs on, detached. */
   let timedOut = false
   let completed = false
-  let release: (review: HostedReviewInfo | null) => void = () => {}
+  let release: (review: HostedReviewWireInfo | null) => void = () => {}
   let fail: (error: unknown) => void = () => {}
-  const promise = new Promise<HostedReviewInfo | null>((resolve, reject) => {
+  const promise = new Promise<HostedReviewWireInfo | null>((resolve, reject) => {
     release = resolve
     fail = reject
   })
@@ -388,8 +390,8 @@ function startLookup(
 export async function withHostedReviewBranchCache(
   identity: HostedReviewBranchCacheIdentity,
   options: HostedReviewBranchCacheOptions,
-  lookup: () => Promise<HostedReviewInfo | null>
-): Promise<HostedReviewInfo | null> {
+  lookup: () => Promise<HostedReviewWireInfo | null>
+): Promise<HostedReviewWireInfo | null> {
   const key = hostedReviewBranchCacheKey(identity)
   const headOid = options.headOid
   // Why: sweep first, so a lookup whose deadline never fired cannot be joined —

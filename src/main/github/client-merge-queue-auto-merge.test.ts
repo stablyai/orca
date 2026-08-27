@@ -388,8 +388,14 @@ describe('GitHub GraphQL rate-limit guard', () => {
       mergePR('/repo-root', 7, 'squash', undefined, { owner: 'stablyai', repo: 'orca' })
     ).resolves.toMatchObject({ ok: false })
 
+    // Why: the per-PR merge-queue-entry probe is a second GraphQL call on queue
+    // repos, so scope this to the repository merge-metadata query it names.
     expect(
-      ghExecFileAsyncMock.mock.calls.filter((call) => call[0].includes('graphql'))
+      ghExecFileAsyncMock.mock.calls.filter(
+        (call) =>
+          call[0].includes('graphql') &&
+          call[0].some((arg: string) => arg.includes('mergeQueue(branch: $branch)'))
+      )
     ).toHaveLength(1)
     expect(ghExecFileAsyncMock.mock.calls[2]?.[0]).toEqual(
       expect.arrayContaining(['-f', 'owner=stablyai', '-f', 'repo=orca', '-f', 'branch=true'])

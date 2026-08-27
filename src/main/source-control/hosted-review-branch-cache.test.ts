@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { HostedReviewInfo } from '../../shared/hosted-review'
+import type { HostedReviewWireInfo } from '../../shared/hosted-review'
 import {
   __resetHostedReviewBranchCacheForTests,
   invalidateHostedReviewBranchCache,
@@ -20,11 +20,11 @@ const START = 1_000_000
 
 /** A lookup that never settles — the wedged provider this file's deadline exists for. */
 function stuckLookup() {
-  let resolve: (review: HostedReviewInfo | null) => void = () => {}
+  let resolve: (review: HostedReviewWireInfo | null) => void = () => {}
   let reject: (error: unknown) => void = () => {}
   const lookup = vi.fn(
     () =>
-      new Promise<HostedReviewInfo | null>((settle, fail) => {
+      new Promise<HostedReviewWireInfo | null>((settle, fail) => {
         resolve = settle
         reject = fail
       })
@@ -37,7 +37,7 @@ function stuckLookup() {
  * the size cap alone — no deadline, so it is a straggler that never timed out —
  * and leaves a fresh lookup owning the key.
  */
-function evictInflightRecord(evictedLookup: () => Promise<HostedReviewInfo | null>) {
+function evictInflightRecord(evictedLookup: () => Promise<HostedReviewWireInfo | null>) {
   const swallow = (promise: Promise<unknown>): void => {
     void promise.catch(() => {})
   }
@@ -59,7 +59,7 @@ function evictInflightRecord(evictedLookup: () => Promise<HostedReviewInfo | nul
   return { request, resolve: successor.resolve, reject: successor.reject }
 }
 
-const openReview: HostedReviewInfo = {
+const openReview: HostedReviewWireInfo = {
   provider: 'github',
   number: 7,
   title: 'Open PR',
@@ -70,7 +70,7 @@ const openReview: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
-const mergedReview: HostedReviewInfo = { ...openReview, state: 'merged' }
+const mergedReview: HostedReviewWireInfo = { ...openReview, state: 'merged' }
 
 describe('hosted review branch cache (#11532)', () => {
   beforeEach(() => {
@@ -135,10 +135,10 @@ describe('hosted review branch cache (#11532)', () => {
   })
 
   it('collapses concurrent callers onto one lookup', async () => {
-    let resolveLookup: (value: HostedReviewInfo | null) => void = () => {}
+    let resolveLookup: (value: HostedReviewWireInfo | null) => void = () => {}
     const lookup = vi.fn(
       () =>
-        new Promise<HostedReviewInfo | null>((resolve) => {
+        new Promise<HostedReviewWireInfo | null>((resolve) => {
           resolveLookup = resolve
         })
     )
@@ -192,7 +192,7 @@ describe('hosted review branch cache (#11532)', () => {
 
   it('serves the last known review from the failure itself, not only the backoff', async () => {
     const lookup = vi
-      .fn<() => Promise<HostedReviewInfo | null>>()
+      .fn<() => Promise<HostedReviewWireInfo | null>>()
       .mockResolvedValueOnce(openReview)
       .mockRejectedValueOnce(new Error('transient'))
 
@@ -213,7 +213,7 @@ describe('hosted review branch cache (#11532)', () => {
 
   it('resets the escalation once a lookup succeeds', async () => {
     const lookup = vi
-      .fn<() => Promise<HostedReviewInfo | null>>()
+      .fn<() => Promise<HostedReviewWireInfo | null>>()
       .mockRejectedValueOnce(new Error('first'))
       .mockResolvedValueOnce(openReview)
       .mockRejectedValueOnce(new Error('second'))
@@ -243,7 +243,7 @@ describe('hosted review branch cache (#11532)', () => {
 
   it('retires a cached no-review answer when Orca opens a review', async () => {
     const lookup = vi
-      .fn<() => Promise<HostedReviewInfo | null>>()
+      .fn<() => Promise<HostedReviewWireInfo | null>>()
       .mockResolvedValueOnce(null)
       .mockResolvedValueOnce(openReview)
 
@@ -257,12 +257,12 @@ describe('hosted review branch cache (#11532)', () => {
   })
 
   it('discards a lookup that was already in flight when Orca opened a review', async () => {
-    let resolveLookup: (value: HostedReviewInfo | null) => void = () => {}
+    let resolveLookup: (value: HostedReviewWireInfo | null) => void = () => {}
     const lookup = vi
-      .fn<() => Promise<HostedReviewInfo | null>>()
+      .fn<() => Promise<HostedReviewWireInfo | null>>()
       .mockImplementationOnce(
         () =>
-          new Promise<HostedReviewInfo | null>((resolve) => {
+          new Promise<HostedReviewWireInfo | null>((resolve) => {
             resolveLookup = resolve
           })
       )
@@ -282,11 +282,11 @@ describe('hosted review branch cache (#11532)', () => {
   })
 
   it('leaves another repo in-flight lookup cacheable across an invalidation', async () => {
-    let resolveLookup: (value: HostedReviewInfo | null) => void = () => {}
+    let resolveLookup: (value: HostedReviewWireInfo | null) => void = () => {}
     const other = { ...identity, repoPath: '/other' }
-    const lookup = vi.fn<() => Promise<HostedReviewInfo | null>>().mockImplementationOnce(
+    const lookup = vi.fn<() => Promise<HostedReviewWireInfo | null>>().mockImplementationOnce(
       () =>
-        new Promise<HostedReviewInfo | null>((resolve) => {
+        new Promise<HostedReviewWireInfo | null>((resolve) => {
           resolveLookup = resolve
         })
     )

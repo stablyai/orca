@@ -38,6 +38,28 @@ describe('shouldSoftHideTaskPageGitHubWorkItem', () => {
     ).toBe(true)
   })
 
+  it('keeps a queued PR in the is:open list', () => {
+    expect(
+      shouldSoftHideTaskPageGitHubWorkItem({
+        item: { state: 'queued', assignees: [], reviewRequests: [] },
+        query: baseQuery({ state: 'open' }),
+        viewerLogin: 'me',
+        skipMeQualifiers: false
+      })
+    ).toBe(false)
+  })
+
+  it('hides a queued PR from the is:closed list', () => {
+    expect(
+      shouldSoftHideTaskPageGitHubWorkItem({
+        item: { state: 'queued', assignees: [], reviewRequests: [] },
+        query: baseQuery({ state: 'closed' }),
+        viewerLogin: 'me',
+        skipMeQualifiers: false
+      })
+    ).toBe(true)
+  })
+
   it('does not state-soft-hide when state is null', () => {
     expect(
       shouldSoftHideTaskPageGitHubWorkItem({

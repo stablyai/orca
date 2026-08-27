@@ -1,6 +1,6 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
+import { CircleCheck, CircleDot, CircleX, Clock, GitMerge, ListOrdered } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -121,6 +121,20 @@ export function ReviewStateBadge({
         className="border-rose-500/25 bg-rose-500/5 text-rose-600 dark:text-rose-300"
       >
         <CircleX />
+      </MetadataStatusBadge>
+    )
+  }
+
+  if (state === 'queued') {
+    return (
+      <MetadataStatusBadge
+        label={translate(
+          'auto.components.sidebar.WorktreeCardMetadataStatusBadges.66d63eaedd',
+          'State: Queued'
+        )}
+        className="border-blue-500/25 bg-blue-500/5 text-blue-600 dark:text-blue-300"
+      >
+        <ListOrdered />
       </MetadataStatusBadge>
     )
   }

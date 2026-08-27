@@ -166,7 +166,7 @@ export function shouldClearBranchMismatchedLinkedOpenPR(args: {
     linkedPRNumber != null &&
     pr?.number === linkedPRNumber &&
     // Draft reviews are open PRs too; don't let their distinct renderer state leave a stale durable link wedged after a branch switch.
-    (pr.state === 'open' || pr.state === 'draft') &&
+    (pr.state === 'open' || pr.state === 'queued' || pr.state === 'draft') &&
     requestHeadOid !== null &&
     headRefName !== '' &&
     currentBranch !== '' &&

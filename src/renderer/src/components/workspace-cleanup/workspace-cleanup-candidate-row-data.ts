@@ -173,7 +173,11 @@ function hasGitStatusPill(candidate: WorkspaceCleanupCandidate): boolean {
 }
 
 export function getReviewPillTone(reviewInfo: WorkspaceCleanupReviewInfo): StatusPillTone {
-  if (reviewInfo.state === 'open' || reviewInfo.state === 'draft') {
+  if (
+    reviewInfo.state === 'open' ||
+    reviewInfo.state === 'queued' ||
+    reviewInfo.state === 'draft'
+  ) {
     return 'review'
   }
   return 'neutral'

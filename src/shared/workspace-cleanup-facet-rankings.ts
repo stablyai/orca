@@ -50,7 +50,8 @@ const REVIEW_RANK: Record<WorkspaceCleanupReviewState, number> = {
   closed: 1,
   unknown: 2,
   draft: 3,
-  open: 3
+  open: 3,
+  queued: 3
 }
 
 export const WORKSPACE_CLEANUP_BLOCKER_VALUES = Object.keys(

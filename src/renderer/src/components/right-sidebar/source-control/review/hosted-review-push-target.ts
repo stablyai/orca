@@ -1,6 +1,6 @@
 import type { GitUpstreamStatus } from '../../../../../../shared/git-status-types'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
-import type { HostedReviewState } from '../../../../../../shared/hosted-review'
+import type { HostedReviewDisplayState } from '../../../../../../shared/hosted-review'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { getPublishTargetDisplayName } from '../../../../../../shared/git-publish-target-status'
 import { gitRefTargetsBranchName } from '../../../../../../shared/git-remote-branch-name'
@@ -71,7 +71,7 @@ export function hasPositiveHostedReviewNumberLink(args: {
 export function resolveHostedReviewActionUpstreamStatus(args: {
   hasHostedReviewLink: boolean
   hasResolvableHostedReviewPushTargetLink: boolean
-  hostedReviewState?: HostedReviewState | null
+  hostedReviewState?: HostedReviewDisplayState | null
   isHostedReviewStateLoading: boolean
   canUseHostedReviewPushTarget: boolean
   upstreamStatus?: GitUpstreamStatus
@@ -82,6 +82,7 @@ export function resolveHostedReviewActionUpstreamStatus(args: {
     (args.hasResolvableHostedReviewPushTargetLink && !args.hostedReviewState) ||
     args.isHostedReviewStateLoading ||
     args.hostedReviewState === 'open' ||
+    args.hostedReviewState === 'queued' ||
     args.hostedReviewState === 'draft'
   if (
     args.hasHostedReviewLink &&
@@ -96,9 +97,9 @@ export function resolveHostedReviewActionUpstreamStatus(args: {
 }
 
 export function resolveHostedReviewStateForActions(args: {
-  hostedReviewState?: HostedReviewState | null
+  hostedReviewState?: HostedReviewDisplayState | null
   hasResolvableHostedReviewPushTargetLink: boolean
-}): HostedReviewState | null {
+}): HostedReviewDisplayState | null {
   if (args.hostedReviewState) {
     return args.hostedReviewState
   }

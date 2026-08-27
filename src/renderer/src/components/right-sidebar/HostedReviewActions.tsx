@@ -32,10 +32,10 @@ import {
 } from './right-sidebar-primary-action-layout'
 import { translate } from '@/i18n/i18n'
 import {
-  getGitHubPRStackMergeBlocker,
   getGitHubPRStackMergeScope,
   isGitHubPRStackMergeQueueRequired
 } from './github-pr-stack-merge'
+import { composeStackMergePresentation } from './hosted-review-stack-merge-presentation'
 
 export default function HostedReviewActions({
   review,
@@ -91,31 +91,21 @@ export default function HostedReviewActions({
       checksStatus: review.status,
       autoMergeEnabled: review.autoMergeEnabled,
       autoMergeAllowed: review.autoMergeAllowed,
-      mergeQueueRequired: review.mergeQueueRequired
+      mergeQueueRequired: review.mergeQueueRequired,
+      // Why: the review carries the queue entry on hosted-review-only lookups where
+      // `githubPR` is null — without it the queued label loses position/ETA.
+      mergeQueueEntry: review.mergeQueueEntry ?? githubPR?.mergeQueueEntry
     })
-    if (!githubPR?.stack || !stackMergeScope) {
-      return presentation
-    }
-    const stackBlocker = getGitHubPRStackMergeBlocker(stackMergeScope)
-    return {
-      ...presentation,
-      label: stackMergeLabel ?? stackMergeScope.label,
-      tooltip:
-        stackBlocker ??
-        (stackUsesMergeQueue
-          ? translate(
-              'auto.components.right.sidebar.HostedReviewActions.3de88351c5',
-              'GitHub will add this pull request and every pull request below it to the merge queue.'
-            )
-          : translate(
-              'auto.components.right.sidebar.HostedReviewActions.a32fe6dba6',
-              'GitHub will merge this pull request and every pull request below it in the stack.'
-            )),
-      directMergeAvailable:
-        !stackBlocker &&
-        (stackMergeScope.complete || presentation.directMergeAvailable || stackUsesMergeQueue),
-      autoMergeAction: null
-    }
+    // Why: a queued PR is already in the queue, stack or not. The stack override below
+    // forces `directMergeAvailable` on for `stackUsesMergeQueue`, which would re-offer
+    // enqueue — and re-running merge on a queued PR exits 0 without doing anything.
+    return composeStackMergePresentation(presentation, {
+      isQueued: review.state === 'queued',
+      stackMergeScope,
+      hasStack: Boolean(githubPR?.stack),
+      stackMergeLabel,
+      stackUsesMergeQueue
+    })
   }, [githubPR, isGitLab, review, stackMergeLabel, stackMergeScope, stackUsesMergeQueue])
   const mergeMethods = useMemo(
     () => resolveGitHubPRMergeMethods(isGitLab ? null : (githubPR?.mergeMethodSettings ?? null)),
@@ -155,7 +145,7 @@ export default function HostedReviewActions({
     runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
   }, [worktree.hostId, worktree.id])
 
-  if (review.state === 'open') {
+  if (review.state === 'open' || review.state === 'queued') {
     return (
       <div className="space-y-1.5">
         <TooltipProvider delayDuration={300}>

@@ -16,6 +16,15 @@ describe('task-page-github-work-item-status', () => {
     expect(getTaskPageGitHubWorkItemStateLabel({ type: 'pr', state: 'open' })).toBe('Open')
     expect(getTaskPageGitHubWorkItemStateLabel({ type: 'pr', state: 'closed' })).toBe('Closed')
     expect(getTaskPageGitHubWorkItemStateLabel({ type: 'pr', state: 'merged' })).toBe('Merged')
+    expect(getTaskPageGitHubWorkItemStateLabel({ type: 'pr', state: 'queued' })).toBe('Queued')
+  })
+
+  it('gives queued PRs a tone and icon distinct from the other four states', () => {
+    const queuedTone = getTaskPageGitHubWorkItemStateTone({ type: 'pr', state: 'queued' })
+    expect(queuedTone).toContain('blue')
+    expect(queuedTone).not.toContain('emerald')
+    expect(getTaskPageGitHubPRIconTone({ type: 'pr', state: 'queued' })).toContain('blue')
+    expect(isTaskPageGitHubDraftPR({ type: 'pr', state: 'queued' })).toBe(false)
   })
 
   it('maps issue states to labels', () => {

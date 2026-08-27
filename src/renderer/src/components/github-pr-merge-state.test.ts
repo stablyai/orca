@@ -24,6 +24,38 @@ describe('presentGitHubPRMergeState', () => {
     })
   })
 
+  it('reports a queued PR as queued instead of offering to enqueue it again', () => {
+    const presentation = presentGitHubPRMergeState(
+      pr({
+        state: 'queued',
+        mergeQueueRequired: true,
+        mergeQueueEntry: { state: 'QUEUED', position: 3, estimatedTimeToMerge: 600 }
+      })
+    )
+    expect(presentation.label).toContain('Queued')
+    expect(presentation.label).toContain('#3 in line')
+    expect(presentation.label).not.toContain('Merge when ready')
+    expect(presentation.directMergeAvailable).toBe(false)
+    expect(presentation.autoMergeAction).toBeNull()
+  })
+
+  it('phrases the head of the queue as next to merge and degrades without position or ETA', () => {
+    expect(
+      presentGitHubPRMergeState(
+        pr({ state: 'queued', mergeQueueEntry: { state: 'MERGEABLE', position: 1 } })
+      ).label
+    ).toContain('next to merge')
+    const bare = presentGitHubPRMergeState(
+      pr({
+        state: 'queued',
+        mergeQueueEntry: { state: 'QUEUED', position: null, estimatedTimeToMerge: null }
+      })
+    )
+    expect(bare.label).toBe('Queued')
+    expect(bare.label).not.toMatch(/undefined|null|NaN/)
+    expect(presentGitHubPRMergeState(pr({ state: 'queued' })).label).toBe('Queued')
+  })
+
   it('uses the merge-queue label for auto-merge when a queue is required', () => {
     expect(presentGitHubPRMergeState(pr({ mergeQueueRequired: true }))).toMatchObject({
       label: 'Merge when ready',

@@ -1,5 +1,6 @@
 import type {
   CheckStatus,
+  PullRequestMergeQueueEntry,
   GitHubRepositoryIdentity,
   PRConflictSummary,
   PRMergeableState,
@@ -14,7 +15,14 @@ export type HostedReviewProvider =
   | 'gitea'
   | 'unsupported'
 
+// Why: the wire contract. A host may only ever publish one of these four — see
+// `HostedReviewDisplayState` for the client-derived `queued` refinement.
 export type HostedReviewState = 'open' | 'closed' | 'merged' | 'draft'
+
+// Why: mirrors PRState. `queued` never crosses the wire; the client derives it
+// from `mergeQueueEntry` as the value enters renderer state, so every
+// "is this review still live" check must accept it alongside open/draft.
+export type HostedReviewDisplayState = HostedReviewState | 'queued'
 
 // Why: Bitbucket Cloud's API has no draft pull requests, so offering the toggle
 // there would either publish a live PR or fail at submit.
@@ -31,7 +39,7 @@ export type HostedReviewInfo = {
   provider: HostedReviewProvider
   number: number
   title: string
-  state: HostedReviewState
+  state: HostedReviewDisplayState
   url: string
   status: CheckStatus
   updatedAt: string
@@ -40,6 +48,8 @@ export type HostedReviewInfo = {
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null
+  /** Present only while the review is actually sitting in the queue. Wire discriminator for `queued`. */
+  mergeQueueEntry?: PullRequestMergeQueueEntry
   mergeStateStatus?: string | null
   headSha?: string
   /** GitHub repository that owns the PR; absent on older runtimes and other providers. */
@@ -50,6 +60,15 @@ export type HostedReviewInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+}
+
+/**
+ * The publish-side view of `HostedReviewInfo`: identical except that `state` is
+ * narrowed to the wire contract. Host mappers return this so assigning a
+ * possibly-`queued` PR state is a compile error rather than a wire regression.
+ */
+export type HostedReviewWireInfo = Omit<HostedReviewInfo, 'state'> & {
+  state: HostedReviewState
 }
 
 export type HostedReviewForBranchArgs = {

@@ -62,7 +62,7 @@ export function deriveDropdownActionContext(inputs: DropdownActionInputs): Dropd
   // Why: undefined upstreamStatus means loading (transient after a worktree switch), not unpublished — treating it as hasUpstream=false would re-enable Publish Branch and clobber the real upstream.
   const upstreamLoading = upstreamStatus === undefined
   const hasUpstream = upstreamStatus?.hasUpstream ?? false
-  const hasOpenHostedReview = prState === 'open' || prState === 'draft'
+  const hasOpenHostedReview = prState === 'open' || prState === 'queued' || prState === 'draft'
   const canPushUntrackedHostedReview =
     !hasUpstream &&
     hasOpenHostedReview &&

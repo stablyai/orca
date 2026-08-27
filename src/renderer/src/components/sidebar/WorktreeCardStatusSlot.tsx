@@ -9,6 +9,7 @@ import StatusIndicator from './StatusIndicator'
 import { useWorktreeActivityStatus } from './use-worktree-activity-status'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import { getPullRequestMergeQueueLabel } from '@/components/pull-request-merge-queue-presentation'
 
 type WorktreeCardStatusSlotProps = {
   worktreeId: string
@@ -73,6 +74,9 @@ function getReviewStatusTooltip(review: WorktreeCardPrDisplay): string {
   }
   if (review.state === 'draft') {
     return `${label}: Draft`
+  }
+  if (review.state === 'queued') {
+    return `${label}: ${getPullRequestMergeQueueLabel('mergeQueueEntry' in review ? review.mergeQueueEntry : undefined)}`
   }
   if (review.status === 'failure') {
     return `${label} checks: Failed`

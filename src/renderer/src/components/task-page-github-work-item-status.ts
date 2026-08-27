@@ -14,6 +14,9 @@ export function getTaskPageGitHubWorkItemStateLabel(item: GitHubWorkItemStatusIt
     if (item.state === 'closed') {
       return translate('auto.components.TaskPage.d09bf34db7', 'Closed')
     }
+    if (item.state === 'queued') {
+      return translate('auto.components.task.page.github.work.item.status.da175c519c', 'Queued')
+    }
     return translate('auto.components.TaskPage.606a85c774', 'Open')
   }
 
@@ -35,6 +38,10 @@ export function getTaskPageGitHubWorkItemStateTone(item: GitHubWorkItemStatusIte
     }
     if (item.state === 'closed') {
       return 'border-rose-500/30 bg-rose-500/10 text-rose-700 dark:text-rose-200'
+    }
+    // Why: blue is the one unused slot next to open/merged/closed/draft.
+    if (item.state === 'queued') {
+      return 'border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-200'
     }
     return 'border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-200'
   }
@@ -59,6 +66,8 @@ export function getTaskPageGitHubPRIconTone(item: GitHubWorkItemStatusItem): str
       return 'text-muted-foreground'
     case 'open':
       return 'text-emerald-600 dark:text-emerald-400'
+    case 'queued':
+      return 'text-blue-600 dark:text-blue-300'
     case 'merged':
       return 'text-purple-600 dark:text-purple-300'
     case 'closed':

@@ -74,6 +74,8 @@ export type GitHubPRRefreshCandidate = GitHubPRRefreshAlias & {
   cachedChecksStatus?: CheckStatus | null
   cachedMergeable?: PRMergeableState | null
   cachedMergeStateStatus?: string | null
+  /** Why: hosts set this derived flag because `queued` is not part of the published wire state. */
+  cachedMergeQueued?: boolean
   localGitOptions?: { wslDistro?: string }
 }
 

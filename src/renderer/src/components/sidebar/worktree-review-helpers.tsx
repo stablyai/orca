@@ -1,4 +1,4 @@
-import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { GitMerge, GitPullRequestClosed, GitPullRequestDraft, ListOrdered } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -37,6 +37,9 @@ function getStateIcon(
   if (state === 'draft') {
     return GitPullRequestDraft
   }
+  if (state === 'queued') {
+    return ListOrdered
+  }
   return null
 }
 
@@ -46,6 +49,7 @@ function getStateIcon(
 // state glyph to contradict, so it still flags problems — but never claims success,
 // since emerald would assert an open review we have not confirmed.
 function getCheckTone(review: WorktreeCardPrDisplay): string | null {
+  // Why: queued is an open PR, but its own tone carries the queue signal.
   if (review.state && review.state !== 'open') {
     return null
   }
@@ -67,6 +71,9 @@ function getStateTone(state: WorktreeCardPrDisplay['state']): string {
   }
   if (state === 'open') {
     return 'text-emerald-500/80'
+  }
+  if (state === 'queued') {
+    return 'text-blue-500/85'
   }
   if (state === 'closed') {
     return 'text-muted-foreground/60'

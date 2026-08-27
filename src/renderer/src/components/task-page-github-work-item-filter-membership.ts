@@ -32,12 +32,18 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
 
   // State membership
   if (query.state === 'open') {
+    // Why: `queued` is an open PR (GitHub's search `state:open` returns it too).
     if (item.state === 'closed' || item.state === 'merged') {
       return true
     }
   } else if (query.state === 'closed') {
     // Why: closed-only lists treat merged as out-of-membership for soft-hide.
-    if (item.state === 'open' || item.state === 'merged' || item.state === 'draft') {
+    if (
+      item.state === 'open' ||
+      item.state === 'queued' ||
+      item.state === 'merged' ||
+      item.state === 'draft'
+    ) {
       return true
     }
   } else if (query.state === 'merged') {

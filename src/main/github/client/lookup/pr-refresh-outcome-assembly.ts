@@ -52,6 +52,7 @@ export function assemblePRRefreshFoundOutcome(args: {
                 : data.mergeQueueRequired
           }
         : {}),
+      ...(data.mergeQueueEntry ? { mergeQueueEntry: data.mergeQueueEntry } : {}),
       ...(data.mergeMethodSettings !== undefined
         ? { mergeMethodSettings: data.mergeMethodSettings }
         : {}),
