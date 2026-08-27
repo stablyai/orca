@@ -42,6 +42,18 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'outcome-intake'],
+    summary: 'Atomically admit a 2-5 outcome batch supplied by an upstream planner',
+    usage:
+      'orca orchestration outcome-intake --batch-id <id> --manifest <path.json> [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'batch-id', 'manifest', 'from', 'retry-request'],
+    notes: [
+      "The manifest carries the outcomes and the SUPPLIER's own overlap claims; Orca binds identity and decides admission, it never classifies the business issue.",
+      'All-or-nothing: a batch that fails on any outcome admits none of them, so a retry starts clean.',
+      'A detected overlap with no decision is refused, and a decision of reject refuses the whole batch.'
+    ]
+  },
+  {
     path: ['orchestration', 'gates'],
     summary: 'Plan which gates may reuse a receipt and which must rerun',
     usage:

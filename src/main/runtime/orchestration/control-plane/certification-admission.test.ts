@@ -170,10 +170,15 @@ function launchedDispatch(db: OrchestrationDb, identity: RouteIdentity): string 
     processIncarnation: 'pty:real',
     launchTokenHash: 'hash',
     worktreeId: 'wt_1',
-    effects: [],
+    // A real fresh launch records that it CREATED the agent pane; that record
+    // is what the runtime reads back to certify `fresh_launch`.
+    effects: [{ kind: 'terminal', role: 'agent', action: 'created', id: 'term_worker' }],
     setupState: 'not_applicable',
     terminalOwnership: 'created'
   })
+  db.markWorkerDispatchReady(started.dispatch.id, [
+    { kind: 'terminal', role: 'agent', action: 'created', id: 'term_worker' }
+  ])
   return started.dispatch.id
 }
 

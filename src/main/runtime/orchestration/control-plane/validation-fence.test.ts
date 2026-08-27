@@ -126,9 +126,18 @@ describe('B8 correction 2: a FIX_FIRST commit invalidates the previous receipt',
     })
     const receipt = findGateReceipt(store, 'run_1:out_1', 'pnpm test')
     expect(canReuseGateReceipt({ receipt, current: inputs })).toMatchObject({ reuse: true })
-    // The correction round produces a new commit, so the old PASS proves nothing.
+    // The correction round produces a new commit. What that invalidates is the
+    // gate whose DEPENDENCIES moved with it, not every gate in the set: a
+    // content gate whose inputs are byte-identical is still proven.
     expect(
       canReuseGateReceipt({ receipt, current: { ...inputs, finalSha: 'bbbbbbb' } })
+    ).toMatchObject({ reuse: true })
+    // The publication/review gates are the ones that die with the commit.
+    expect(
+      canReuseGateReceipt({
+        receipt,
+        current: { ...inputs, finalSha: 'bbbbbbb', shaBinding: 'exact_head' }
+      })
     ).toMatchObject({ reuse: false, code: 'sha_changed' })
     // A correction that also touched a new file invalidates on inputs too.
     expect(

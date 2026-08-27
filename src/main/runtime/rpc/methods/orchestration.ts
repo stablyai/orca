@@ -26,6 +26,7 @@ import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration
 import { ORCHESTRATION_AWAIT_METHODS } from './orchestration-await'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
 import { ORCHESTRATION_GATE_OPS_METHODS } from './orchestration-gate-ops'
+import { ORCHESTRATION_OUTCOME_INTAKE_METHODS } from './orchestration-outcome-intake'
 import { ORCHESTRATION_REGISTRY_OPS_METHODS } from './orchestration-registry-ops'
 import { ORCHESTRATION_CONTROL_PLANE_STATE_METHODS } from './orchestration-control-plane-state'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
@@ -1937,6 +1938,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   ...ORCHESTRATION_AWAIT_METHODS,
   ...ORCHESTRATION_REGISTRY_OPS_METHODS,
   ...ORCHESTRATION_GATE_OPS_METHODS,
+  ...ORCHESTRATION_OUTCOME_INTAKE_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

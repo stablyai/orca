@@ -33,6 +33,11 @@ export type DispatchLivenessSignals = {
   approvedWaitUntilIso: string | null
   /** Ownership state of the worker terminal resource, when one exists. */
   terminalOwnership: string | null
+  /** Epoch ms of the last output the runtime itself observed on the worker's
+   *  terminal, when the execution host can report one. This is Orca's own PTY
+   *  stream, not anything the model wrote — a worker that keeps producing
+   *  output without emitting a new hook event is working, not stalled. */
+  lastTerminalOutputAtMs: number | null
   /** True once the Dispatch reached a settled lifecycle status. */
   settled: boolean
 }
@@ -50,6 +55,30 @@ const PROCESS_STATE_BY_VERDICT = {
 // pane, so it cannot be evidence of a live worker. `transferred` and `external`
 // still have an owner running the Dispatch.
 const CLOSED_TERMINAL_OWNERSHIP = new Set(['released', 'user_owned'])
+
+/** The newest AUTHORITATIVE activity the runtime observed, across every source
+ *  it owns. Hook events and terminal output are both real activity; taking only
+ *  the hook stamp made a worker that was visibly producing output look stalled
+ *  the moment its agent stopped emitting hook events. */
+function newestActivityIso(
+  signals: DispatchLivenessSignals,
+  dispatch: DispatchContextRow
+): string | null {
+  const candidates: number[] = []
+  if (signals.agentStatus) {
+    candidates.push(signals.agentStatus.receivedAt)
+  }
+  if (signals.lastTerminalOutputAtMs !== null) {
+    candidates.push(signals.lastTerminalOutputAtMs)
+  }
+  if (candidates.length === 0) {
+    // Why exposeUtcTimestamp: dispatch rows keep SQLite's timezone-less UTC
+    // space format, which Date.parse would read as LOCAL time and skew the
+    // stall window by the host's offset.
+    return exposeUtcTimestamp(dispatch.dispatched_at)
+  }
+  return new Date(Math.max(...candidates)).toISOString()
+}
 
 export function toLivenessEvidence(signals: DispatchLivenessSignals): LivenessEvidence {
   const { dispatch } = signals
@@ -72,9 +101,7 @@ export function toLivenessEvidence(signals: DispatchLivenessSignals): LivenessEv
     // Why exposeUtcTimestamp: dispatch rows keep SQLite's timezone-less UTC
     // space format, which Date.parse would read as LOCAL time and skew the
     // stall window by the host's offset.
-    lastActivityAt: signals.agentStatus
-      ? new Date(signals.agentStatus.receivedAt).toISOString()
-      : exposeUtcTimestamp(dispatch.dispatched_at),
+    lastActivityAt: newestActivityIso(signals, dispatch),
     // Why a non-empty toolName: the hook stamps it for the duration of the call,
     // so its presence is the runtime's own proof that work is in flight.
     activeToolCall: Boolean(signals.agentStatus?.toolName),

@@ -199,7 +199,10 @@ function reconcileWorkerDoneMessage(
     // become derivable. Never on a rejected or unproven completion.
     advanceAfterAcceptedCompletion({
       db,
-      dispatch,
+      // Why re-read: `dispatch` was loaded BEFORE settleWorkerReport, so its
+      // status is still the pre-settlement one. The advance decides eligibility
+      // from the accepted completion, and must see the settled row.
+      dispatch: db.getDispatchContextById(dispatchId) ?? dispatch,
       taskId,
       payload,
       finalSha: gate.finalSha,

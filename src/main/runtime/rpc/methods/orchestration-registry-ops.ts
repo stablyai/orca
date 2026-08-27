@@ -8,6 +8,8 @@ import {
   buildRouteRow,
   findRegistryDrift
 } from '../../orchestration/control-plane/route-registry-discovery'
+import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
+import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
 import type { RouteIdentity } from '../../orchestration/control-plane/route-registry-types'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -109,7 +111,16 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           // Why runtime-stamped: an evidence timestamp or version the caller
           // supplied would let a stale or fabricated run look current.
           observedAtIso: new Date().toISOString(),
-          runtimeVersion: getAppEnvironment().getVersion()
+          // Why version+buildHash: a version alone repeats across builds, so
+          // evidence from another build of the same version would read current.
+          runtimeVersion: resolveRuntimeBuildIdentity().id
+        },
+        // Why the runtime's own signals: the caller names the kind, the runtime
+        // decides whether its records actually show that event happening.
+        source: {
+          observedEffectiveIdentity: (dispatchId) => readObservedLaunchIdentity(db, dispatchId),
+          agentStatusSnapshot: () =>
+            runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot()
         }
       })
       if (!admission.ok) {

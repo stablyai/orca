@@ -350,6 +350,9 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     )
     const reviewPhase = new OutcomePolicyStore(db).listPhases('out_1')[0]
     const reviewer = launchWorker(reviewPhase.task_id, REVIEWER, 'term_reviewer')
+    // Production settles the completion before advancing; the advance decides
+    // eligibility from the ACCEPTED completion, so the fixture must settle too.
+    db.db.prepare(`UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?`).run(reviewer.id)
     const advanced = advanceAfterValidatedCompletion({
       db,
       dispatch: db.getDispatchContextById(reviewer.id)!,

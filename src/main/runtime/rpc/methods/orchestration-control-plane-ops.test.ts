@@ -129,6 +129,8 @@ describe('correction 2: bounded control-plane operations', () => {
     expect(first.reuse.map((entry) => entry.gateId)).toEqual(['unit'])
     expect(first.rerun.map((entry) => entry.gateId)).toEqual(['lint'])
 
+    // Moving the commit alone does not invalidate a content gate: it proves
+    // something about its inputs, and those are byte-identical here.
     const moved = (await harness.call(
       'orchestration.gatePlan',
       {
@@ -139,8 +141,50 @@ describe('correction 2: bounded control-plane operations', () => {
         policyVersion: 'gates-v1'
       },
       state.ctx
+    )) as { reuse: { gateId: string }[]; rerun: { gateId: string; reason: string }[] }
+    expect(moved.reuse.map((entry) => entry.gateId)).toEqual(['unit'])
+
+    // Changing a gate CONFIGURATION input is a different gate, so it reruns.
+    const rebadged = (await harness.call(
+      'orchestration.gatePlan',
+      {
+        from: 'term_coord',
+        sha: SHA,
+        gates: 'unit',
+        files: 'src/a.ts',
+        policyVersion: 'gates-v2'
+      },
+      state.ctx
     )) as { rerun: { gateId: string; reason: string }[] }
-    expect(moved.rerun[0].reason).toContain(SHA)
+    expect(rebadged.rerun[0].gateId).toBe('unit')
+
+    // A review gate is bound to its exact head and dies with the commit.
+    const review = (await harness.call(
+      'orchestration.gatePlan',
+      {
+        from: 'term_coord',
+        sha: SHA,
+        gates: 'review-exact',
+        files: 'src/a.ts',
+        policyVersion: 'gates-v1',
+        record: 'review-exact',
+        result: 'PASS'
+      },
+      state.ctx
+    )) as { reuse: { gateId: string }[] }
+    expect(review.reuse.map((entry) => entry.gateId)).toEqual(['review-exact'])
+    const reviewMoved = (await harness.call(
+      'orchestration.gatePlan',
+      {
+        from: 'term_coord',
+        sha: 'ffffff1',
+        gates: 'review-exact',
+        files: 'src/a.ts',
+        policyVersion: 'gates-v1'
+      },
+      state.ctx
+    )) as { rerun: { gateId: string; reason: string }[] }
+    expect(reviewMoved.rerun[0].reason).toContain(SHA)
   })
 
   it('reruns the full gate set for a high-risk outcome even when nothing changed', async () => {
@@ -180,9 +224,34 @@ describe('correction 2: bounded control-plane operations', () => {
       state.ctx
     )) as { guard: { allowed: boolean } }
     expect(blocked.guard.allowed).toBe(false)
+    // Only the Dispatch that HOLDS the lease may release it: the lease id
+    // travels in receipts, so it is not on its own an authority to release.
+    await expect(
+      harness.call(
+        'orchestration.validationLease',
+        { from: 'term_coord', action: 'release', leaseId: acquired.lease.leaseId },
+        state.ctx
+      )
+    ).rejects.toMatchObject({ code: 'invalid_argument' })
+    const impostor = (await harness.call(
+      'orchestration.validationLease',
+      {
+        from: 'term_coord',
+        action: 'release',
+        leaseId: acquired.lease.leaseId,
+        dispatch: 'ctx_impostor'
+      },
+      state.ctx
+    )) as { released: boolean }
+    expect(impostor.released).toBe(false)
     const released = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'release', leaseId: acquired.lease.leaseId },
+      {
+        from: 'term_coord',
+        action: 'release',
+        leaseId: acquired.lease.leaseId,
+        dispatch: 'ctx_1'
+      },
       state.ctx
     )) as { released: boolean }
     expect(released.released).toBe(true)

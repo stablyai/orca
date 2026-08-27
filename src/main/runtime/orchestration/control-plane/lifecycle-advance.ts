@@ -3,12 +3,17 @@ import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import type { DispatchContextRow } from '../types'
 import type { CompletionClaim } from './completion-receipt'
+import { resolveAdvanceEligibility } from './advance-eligibility'
 import { ControlPlaneStore } from './control-plane-store'
 import { readDispatchRouteIdentity } from './dispatch-route-identity'
 import { recordGateReceipt } from './gate-receipt-validity'
 import { ModelPerformanceLedger, type FirstPassResult } from './model-performance-ledger'
 import { resolveOutcomeBinding } from './outcome-identity'
-import { executePlan, publishReviewComplete } from './lifecycle-advance-execution'
+import {
+  executePlan,
+  publishAdvanceBlocked,
+  publishReviewComplete
+} from './lifecycle-advance-execution'
 import { OutcomePolicyStore, type OutcomePhaseRow } from './outcome-policy'
 import { planNextAfterBuild, type ReviewerAdvancePlan } from './reviewer-advance'
 import { RouteRegistryStore } from './route-registry-store'
@@ -39,6 +44,17 @@ export type ReviewCompletePlan = { kind: 'review_complete'; boundSha: string }
 
 export type AdvanceOutcome =
   | { kind: 'not_applicable'; reason: string }
+  /** The completion settled, but it did not earn a next phase. Nothing is
+   *  planned, nothing is launched, and the coordinator is told exactly why. */
+  | {
+      kind: 'not_advanced'
+      code: string
+      reason: string
+      gateReceiptRecorded: boolean
+      leaseReleased: boolean
+      ledgerEntryId: string | null
+      wakeMessageId: string | null
+    }
   | {
       kind: 'advanced'
       plan: ReviewerAdvancePlan | ReviewCompletePlan
@@ -139,6 +155,39 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
     correctionRounds: policyStore.countCorrectionRounds(outcome.outcome_id),
     nowMs
   })
+
+  // Failed work never advances: the next phase is earned by an ACCEPTED
+  // completion that reported success and passed its gate. Everything else
+  // settles here, having released its lease and recorded its ledger entry, and
+  // creates no reviewer Task, Dispatch or session.
+  const eligibility = resolveAdvanceEligibility({
+    dispatch,
+    outcomeOfReport: request.outcomeOfReport,
+    gateResult: claim.receipt?.result ?? null,
+    // Why not for a review: a reviewer reports corrections, not a gate receipt.
+    // Only the completion that produced the commit under gate must carry one.
+    receiptRequired: !isReviewPhase
+  })
+  if (!eligibility.eligible) {
+    const wakeMessageId = publishAdvanceBlocked({
+      db,
+      runId: dispatch.run_id,
+      dispatchId: dispatch.id,
+      taskId,
+      code: eligibility.code,
+      reason: eligibility.reason,
+      notify: request.notify
+    })
+    return {
+      kind: 'not_advanced',
+      code: eligibility.code,
+      reason: eligibility.reason,
+      gateReceiptRecorded,
+      leaseReleased,
+      ledgerEntryId,
+      wakeMessageId
+    }
+  }
 
   // A clean review is the end of the chain: wake the coordinator once with
   // REVIEW_COMPLETE rather than planning another review of the same SHA.

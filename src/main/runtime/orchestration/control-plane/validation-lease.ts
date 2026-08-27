@@ -102,9 +102,14 @@ export function acquireValidationLease(
 
 export function releaseValidationLease(
   store: ControlPlaneStore,
-  args: { scopeKey: string; leaseId: string; nowMs: number }
+  args: { scopeKey: string; leaseId: string; nowMs: number; owner?: string }
 ): { released: boolean } {
   const existing = store.getValidationLease(args.scopeKey)
+  // Why owner as well as lease id: the lease id travels in receipts and logs,
+  // so id alone would let any reader of a receipt release someone else's lease.
+  if (args.owner !== undefined && existing?.owner !== args.owner) {
+    return { released: false }
+  }
   if (!existing || existing.lease_id !== args.leaseId || existing.released_at) {
     // Why not an error: a duplicate release after a crash-recovery retry is the
     // expected shape, and it must stay a no-op.

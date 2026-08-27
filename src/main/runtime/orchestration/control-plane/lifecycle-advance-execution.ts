@@ -193,6 +193,42 @@ export function publishReviewComplete(args: {
   return message.id
 }
 
+/** Tells the coordinator that a settled completion did NOT earn a next phase,
+ *  and why. Deduped on (dispatch, code) the same way a protected blocker is, so
+ *  a replayed completion never wakes a parked coordinator twice. */
+export function publishAdvanceBlocked(args: {
+  db: OrchestrationDb
+  runId: string
+  dispatchId: string
+  taskId: string
+  code: string
+  reason: string
+  notify?: (handle: string, messageType: string) => void
+}): string {
+  const existing = findProtectedBlocker(args.db, args.runId, args.dispatchId, args.code)
+  if (existing) {
+    return existing
+  }
+  const message = args.db.insertMessage({
+    runId: args.runId,
+    from: 'orca:runtime-lifecycle',
+    to: `run:${args.runId}`,
+    subject: `Protected blocker: ${args.code}`,
+    body: args.reason,
+    type: 'escalation',
+    priority: 'urgent',
+    payload: JSON.stringify({
+      [WAKE_REASON_PAYLOAD_KEY]: 'escalation',
+      protectedBlocker: true,
+      code: args.code,
+      dispatchId: args.dispatchId,
+      taskId: args.taskId
+    })
+  })
+  args.notify?.(`run:${args.runId}`, 'escalation')
+  return message.id
+}
+
 /** The id of an already-published protected blocker for this exact Dispatch and
  *  code, or null. Scanning the Run's own escalation history keeps the guard
  *  additive: no new table, and it survives a restart because the mailbox does. */

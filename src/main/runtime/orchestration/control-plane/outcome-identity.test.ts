@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
@@ -193,5 +194,21 @@ describe('B2 historical compatibility', () => {
     expect(db.getTask(task.id)).toEqual(before)
     expect(cp.getOutcomeByRun(task.run_id)).toBeUndefined()
     expect(resolveOutcomeBinding(cp, task.run_id)).toEqual({ kind: 'legacy_unbound' })
+  })
+})
+
+describe('outcome fingerprint domain separation', () => {
+  it('keeps the NUL separator byte-for-byte after the source stopped being binary', () => {
+    // The separator used to be a literal NUL in the source, which made git and
+    // every tool classify this file as binary. It is now an escape, and this
+    // pins that the hashed bytes did not change with it.
+    const expected = createHash('sha256')
+      .update(['a', 'b'].join('\u0000'))
+      .digest('hex')
+      .slice(0, 32)
+    expect(outcomeFingerprint(['a', 'b'])).toBe(expected)
+    // And it still separates domains: 'a\u0000b' must not collide with 'ab'.
+    expect(outcomeFingerprint(['a', 'b'])).not.toBe(outcomeFingerprint(['ab']))
+    expect(outcomeFingerprint(['a', 'b'])).not.toBe(outcomeFingerprint(['a', '', 'b']))
   })
 })

@@ -55,6 +55,9 @@ export type LivenessSignalSource = {
   ): Promise<'live' | 'exited' | 'unverifiable'>
   /** ISO deadline of an Orca-approved blocking wait the runtime owns, if any. */
   approvedWaitUntil(dispatchId: string): string | null
+  /** Epoch ms of the last output the runtime observed on a worker's terminal,
+   *  or null when the execution host cannot report one. */
+  lastTerminalOutputAtMs?(terminalHandle: string | null): number | null
 }
 
 export type WakePublisher = {
@@ -121,6 +124,7 @@ async function collectSignals(
     processLiveness,
     approvedWaitUntilIso: source.approvedWaitUntil(dispatch.id),
     terminalOwnership: resource?.ownership_state ?? null,
+    lastTerminalOutputAtMs: source.lastTerminalOutputAtMs?.(dispatch.assignee_handle) ?? null,
     settled: isDispatchSettled(dispatch)
   }
 }

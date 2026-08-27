@@ -39,3 +39,82 @@ export function readDispatchRouteIdentity(
   const reasoning = typeof effective?.effort === 'string' ? effective.effort : null
   return { agent: agent as TuiAgent, model, reasoning }
 }
+
+/** How the launch receipt's effective identity came to exist.
+ *
+ *  `requested_copy` is the honest name for what `createWorkerLaunchReceipt`
+ *  writes today: it clones the request, so it proves the request was accepted
+ *  and nothing about what the provider is actually running. Only `observed`
+ *  may back effective-identity certification.
+ */
+export type EffectiveIdentityProvenance = 'observed' | 'requested_copy' | 'none'
+
+export type DispatchLaunchReceipt = {
+  requested: RouteIdentity | null
+  effective: RouteIdentity | null
+  effectiveProvenance: EffectiveIdentityProvenance
+}
+
+function toIdentity(value: unknown): RouteIdentity | null {
+  if (!value || typeof value !== 'object') {
+    return null
+  }
+  const record = value as Record<string, unknown>
+  const agent = record.agent
+  if (typeof agent !== 'string' || agent.length === 0) {
+    return null
+  }
+  return {
+    agent: agent as TuiAgent,
+    model: typeof record.model === 'string' ? record.model : null,
+    reasoning: typeof record.effort === 'string' ? record.effort : null
+  }
+}
+
+function sameSelection(left: RouteIdentity | null, right: RouteIdentity | null): boolean {
+  return (
+    left !== null &&
+    right !== null &&
+    left.agent === right.agent &&
+    left.model === right.model &&
+    left.reasoning === right.reasoning
+  )
+}
+
+/** The full launch receipt, with the provenance of its effective identity. */
+export function readDispatchLaunchReceipt(
+  db: OrchestrationDb,
+  dispatchId: string
+): DispatchLaunchReceipt | null {
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (!worker) {
+    return null
+  }
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(worker.start_options)
+  } catch {
+    return null
+  }
+  if (!parsed || typeof parsed !== 'object') {
+    return null
+  }
+  const options = parsed as Record<string, unknown>
+  const launch = options.launch as Record<string, unknown> | undefined
+  const requested = toIdentity(launch?.requested)
+  const effective = toIdentity(launch?.effective)
+  if (!effective) {
+    return { requested, effective: null, effectiveProvenance: 'none' }
+  }
+  // Why the explicit stamp wins: a provider-observed identity is recorded by the
+  // runtime after the session reported itself, and only then is it a receipt.
+  const stamped = (launch?.effectiveProvenance ?? null) as string | null
+  if (stamped === 'observed') {
+    return { requested, effective, effectiveProvenance: 'observed' }
+  }
+  return {
+    requested,
+    effective,
+    effectiveProvenance: sameSelection(requested, effective) ? 'requested_copy' : 'observed'
+  }
+}

@@ -8,6 +8,10 @@ import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { admitRoute } from '../../orchestration/control-plane/role-route-registry'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
+import {
+  resolveCandidateCommitSha,
+  resolveRuntimeBuildIdentity
+} from '../../orchestration/control-plane/runtime-build-identity'
 import type {
   RouteRole,
   SessionMode,
@@ -38,6 +42,8 @@ export function assertWorkerStartRouteAdmitted(args: {
   sessionMode?: SessionMode
   taskCapabilities?: readonly TaskCapability[]
   nowMs?: number
+  /** Injectable only so tests can pin a build; production resolves its own. */
+  runtimeBuildIdentity?: { id: string }
 }): void {
   if (args.agent && isExcludedWorkerAgent(args.agent)) {
     throw new OrchestrationError(
@@ -62,9 +68,11 @@ export function assertWorkerStartRouteAdmitted(args: {
     model: args.model ?? null,
     reasoning: args.effort ?? null
   }
+  const evidence = registryStore.listRouteEvidence()
+  const build = args.runtimeBuildIdentity ?? resolveRuntimeBuildIdentity()
   const admission = admitRoute({
     registry: registryStore.listRoutes(),
-    evidence: registryStore.listRouteEvidence(),
+    evidence,
     requested: identity,
     // Why identical here: worker-start has only the requested identity at this
     // point. The effective identity is proven later by the launch receipt, and
@@ -80,7 +88,12 @@ export function assertWorkerStartRouteAdmitted(args: {
       // the opt-in unusable on the one path an operator actually drives.
       allowUnknownQuota: resolveAllowUnknownQuota(args.handle, binding)
     },
-    nowMs: args.nowMs ?? Date.now()
+    nowMs: args.nowMs ?? Date.now(),
+    // Why both: evidence earned on another commit or another build of this
+    // runtime proves nothing about the code about to run, so it reads STALE
+    // rather than silently admitting a worker on a route nobody re-certified.
+    currentCommitSha: resolveCandidateCommitSha(evidence, build.id) ?? undefined,
+    currentRuntimeVersion: build.id
   })
   if (!admission.ok) {
     throw new OrchestrationError(
@@ -181,6 +194,9 @@ export function assertWorkerStartAdmitted(args: {
   model?: string
   effort?: string
   worktreeId?: string
+  /** Set when the start re-engages an existing worker session instead of
+   *  creating one. Its worktree is fenced the same way a new one is. */
+  terminalHandle?: string
 }): void {
   const planned = resolveWorkerStartRole(args.handle, args.taskId)
   assertWorkerStartRouteAdmitted({
@@ -191,9 +207,34 @@ export function assertWorkerStartAdmitted(args: {
     model: args.model ?? planned.plannedModel,
     effort: args.effort ?? planned.plannedEffort
   })
-  if (args.worktreeId) {
-    assertWorktreeMutationAllowed({ handle: args.handle, worktreeId: args.worktreeId })
+  // Why resolve the retained tree: a re-engagement names a TERMINAL, not a
+  // worktree, so fencing only on an explicit worktree let an already-running
+  // builder be driven back into a tree that is under validation.
+  const worktreeId = args.worktreeId ?? resolveTerminalWorktreeId(args.handle, args.terminalHandle)
+  if (worktreeId) {
+    assertWorktreeMutationAllowed({ handle: args.handle, worktreeId })
   }
+}
+
+/** The worktree an existing worker terminal is bound to, from the runtime's own
+ *  worker record. Null when the terminal is not a known worker session. */
+function resolveTerminalWorktreeId(
+  handle: ControlPlaneDatabaseHandle,
+  terminalHandle: string | undefined
+): string | undefined {
+  if (!terminalHandle) {
+    return undefined
+  }
+  const row = handle.db
+    .prepare(
+      `SELECT w.worktree_id AS worktreeId
+       FROM worker_dispatches w
+       JOIN dispatch_contexts d ON d.id = w.dispatch_id
+       WHERE d.assignee_handle = ? AND w.worktree_id IS NOT NULL
+       ORDER BY w.rowid DESC LIMIT 1`
+    )
+    .get(terminalHandle) as { worktreeId: string } | undefined
+  return row?.worktreeId
 }
 
 /** The federated branch resolves its agent from the raw parameter, because the

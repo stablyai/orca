@@ -1,6 +1,9 @@
-import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
+import {
+  fingerprintGateDependencies,
+  parseGateDependencySpec
+} from '../../orchestration/control-plane/gate-dependency-fingerprint'
 import {
   planGateSet,
   recordGateReceipt,
@@ -45,11 +48,9 @@ function parseIdentityList(raw: string | undefined): RouteIdentity[] {
   })
 }
 
-function hashPaths(paths: readonly string[]): Record<string, string> {
-  return Object.fromEntries(
-    paths.map((path) => [path, createHash('sha256').update(path).digest('hex').slice(0, 16)])
-  )
-}
+/** Gates whose receipt proves something about the commit itself, so it must
+ *  never be reused across a SHA no matter what their inputs look like. */
+const EXACT_HEAD_GATE = /(publish|publication|release|review)/i
 
 function requireRunId(
   runtime: Parameters<RpcMethod['handler']>[1]['runtime'],
@@ -87,7 +88,9 @@ const GatePlanParams = z.object({
   policyVersion: OptionalString,
   record: OptionalString,
   result: z.enum(['PASS', 'FAIL']).optional(),
-  riskPolicy: z.enum(['standard', 'high_risk']).optional()
+  riskPolicy: z.enum(['standard', 'high_risk']).optional(),
+  /** Root that relative dependency paths resolve against; the caller's worktree. */
+  cwd: OptionalString
 })
 
 const PhaseLaunchParams = z.object({
@@ -168,15 +171,29 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
           ? store.getOutcomeByRun(runId)?.outcome_id
           : undefined)
       const scopeKey = `${runId}:${outcomeId ?? 'unbound'}`
-      const inputHashes = hashPaths(splitCsv(params.files))
       const policyVersion = params.policyVersion ?? 'unversioned'
-      const gates: GateInputs[] = splitCsv(params.gates).map((gateId) => ({
-        gateId,
-        finalSha: params.sha,
-        inputHashes,
-        policyVersion,
-        commandIdentity: gateId
-      }))
+      const fallbackFiles = splitCsv(params.files)
+      const cwd = params.cwd ?? process.cwd()
+      const gates: GateInputs[] = splitCsv(params.gates).map((token) => {
+        const spec = parseGateDependencySpec(token)
+        const commandIdentity = spec.gateId
+        return {
+          gateId: spec.gateId,
+          finalSha: params.sha,
+          // Why per gate: one shared input set makes every gate rerun whenever
+          // any file changes, which is the opposite of an incremental gate.
+          inputHashes: fingerprintGateDependencies({
+            spec,
+            fallbackFiles,
+            cwd,
+            policyVersion,
+            commandIdentity
+          }),
+          policyVersion,
+          commandIdentity,
+          shaBinding: EXACT_HEAD_GATE.test(spec.gateId) ? 'exact_head' : 'content'
+        }
+      })
       if (gates.length === 0) {
         throw new OrchestrationError('invalid_argument', '--gates must name at least one gate.')
       }
@@ -228,9 +245,22 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
         if (!params.leaseId) {
           throw new OrchestrationError('invalid_argument', 'release requires --lease-id.')
         }
+        // Why the owner too: the lease id appears in receipts and logs, so id
+        // alone would let anyone who read one release someone else's lease.
+        if (!params.dispatch) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            'release requires --dispatch: only the Dispatch that holds a lease may release it.'
+          )
+        }
         return {
           scopeKey,
-          ...releaseValidationLease(store, { scopeKey, leaseId: params.leaseId, nowMs })
+          ...releaseValidationLease(store, {
+            scopeKey,
+            leaseId: params.leaseId,
+            nowMs,
+            owner: params.dispatch
+          })
         }
       }
       const dispatchId = params.dispatch

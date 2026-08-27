@@ -5,6 +5,8 @@ import { RuntimeClientError } from '../../runtime-client'
 import { callOrchestrationMutation } from './mutation-request'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { readFileSync } from 'node:fs'
+import { isAbsolute, resolve } from 'node:path'
 
 /** Correction 2 — the bounded typed operations that give the control plane real
  *  call sites: outcome admission with its candidate order, gate planning and
@@ -46,6 +48,41 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     )
   },
 
+  'orchestration outcome-intake': async ({ flags, client, cwd, json }) => {
+    const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    const manifestPath = getRequiredStringFlag(flags, 'manifest')
+    // Why a file: a 2-5 outcome batch with rationales does not survive shell
+    // quoting, and the manifest is the artifact the supplier already produced.
+    const manifest = JSON.parse(
+      readFileSync(isAbsolute(manifestPath) ? manifestPath : resolve(cwd, manifestPath), 'utf-8')
+    ) as {
+      outcomes: unknown
+      detected?: unknown
+      relations?: unknown
+    }
+    const result = await callOrchestrationMutation<{
+      batchId: string
+      count: number
+      admitted: { outcomeId: string; runId: string }[]
+      relations: { left: string; right: string; kind: string; decision: string }[]
+    }>(client, flags, 'orchestration.outcomeIntake', {
+      from,
+      batchId: getRequiredStringFlag(flags, 'batch-id'),
+      outcomes: manifest.outcomes,
+      detected: manifest.detected,
+      relations: manifest.relations
+    })
+    printResult(result, json, (value) =>
+      [
+        `batch=${value.batchId} admitted=${value.count}`,
+        ...value.admitted.map((entry) => `  ${entry.outcomeId} -> Run ${entry.runId}`),
+        ...value.relations.map(
+          (entry) => `  ${entry.kind} ${entry.left}/${entry.right}: ${entry.decision}`
+        )
+      ].join('\n')
+    )
+  },
+
   'orchestration gates': async ({ flags, client, cwd, json }) => {
     const from = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     const record = getOptionalStringFlag(flags, 'record')
@@ -65,7 +102,10 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
       policyVersion: getOptionalStringFlag(flags, 'policy-version'),
       record,
       result: rawResult ? requireEnum(rawResult, ['PASS', 'FAIL'] as const, '--result') : undefined,
-      riskPolicy: getOptionalStringFlag(flags, 'risk-policy')
+      riskPolicy: getOptionalStringFlag(flags, 'risk-policy'),
+      // Why send it: dependency paths are relative to the caller's worktree, and
+      // the runtime's own cwd is not that worktree.
+      cwd
     })
     printResult(result, json, (value) =>
       [

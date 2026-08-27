@@ -35985,8 +35985,21 @@ export class OrcaRuntimeService {
         // is active; its own timeout ends it and the next sweep sees it gone.
         this.hasOrchestrationMessageWaiter(`dispatch:${dispatchId}`)
           ? new Date(Date.now() + APPROVED_WAIT_HORIZON_MS).toISOString()
-          : null
+          : null,
+      lastTerminalOutputAtMs: (terminalHandle) => this.getTerminalLastOutputAtMs(terminalHandle)
     }
+  }
+
+  /** Epoch ms of the last output this runtime saw on a terminal's own PTY
+   *  stream, or null when it owns no such record. This is Orca's observation of
+   *  the stream, never anything the model reported about itself. */
+  getTerminalLastOutputAtMs(terminalHandle: string | null): number | null {
+    if (!terminalHandle) {
+      return null
+    }
+    const record = this.handles.get(terminalHandle)
+    const pty = record?.ptyId ? this.ptysById.get(record.ptyId) : null
+    return pty?.lastOutputAt ?? null
   }
 
   cancelMessageWaiters(handle: string): void {

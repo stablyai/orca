@@ -69,6 +69,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
       processLiveness: 'live',
       approvedWaitUntilIso: null,
       terminalOwnership: 'owned',
+      lastTerminalOutputAtMs: null,
       settled: false
     })
     expect(evidence.activeToolCall).toBe(true)
@@ -84,6 +85,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
       processLiveness: 'unverifiable',
       approvedWaitUntilIso: null,
       terminalOwnership: 'owned',
+      lastTerminalOutputAtMs: null,
       settled: false
     })
     expect(evidence.processState).toBe('unknown')
@@ -98,6 +100,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
         processLiveness: 'exited',
         approvedWaitUntilIso: null,
         terminalOwnership: 'owned',
+        lastTerminalOutputAtMs: null,
         settled: false
       }).providerExit
     ).toEqual({ code: null, signal: 'signaled' })
@@ -109,6 +112,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
         processLiveness: 'exited',
         approvedWaitUntilIso: null,
         terminalOwnership: 'owned',
+        lastTerminalOutputAtMs: null,
         settled: false
       }).providerExit
     ).toBeNull()
@@ -123,6 +127,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
           processLiveness: 'live',
           approvedWaitUntilIso: null,
           terminalOwnership: ownership,
+          lastTerminalOutputAtMs: null,
           settled: false
         }).terminalState
       ).toBe('closed')
@@ -138,6 +143,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
       processLiveness: 'live',
       approvedWaitUntilIso: null,
       terminalOwnership: 'owned',
+      lastTerminalOutputAtMs: null,
       settled: false
     })
     expect(evidence.lastActivityAt).toBe('2026-08-27T11:00:00Z')
@@ -163,6 +169,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
       processLiveness: 'live',
       approvedWaitUntilIso: null,
       terminalOwnership: 'owned',
+      lastTerminalOutputAtMs: null,
       settled: false
     })
     expect(withHeartbeat.lastActivityAt).toBeNull()

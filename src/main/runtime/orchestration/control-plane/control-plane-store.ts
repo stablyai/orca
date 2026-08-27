@@ -84,6 +84,12 @@ export class ControlPlaneStore {
     ensureControlPlaneTables(handle)
   }
 
+  /** The underlying database, for callers that must wrap several store writes
+   *  in one transaction (atomic outcome intake). */
+  get db(): ControlPlaneDatabaseHandle['db'] {
+    return this.handle.db
+  }
+
   // --- B2 outcomes --------------------------------------------------------
 
   getOutcomeById(outcomeId: string): OutcomeRow | undefined {

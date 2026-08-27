@@ -22,6 +22,7 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
+import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 
 const HEAD = 'a1b2c3d4e5f6'
 const BUILDER: RouteIdentity = { agent: 'claude', model: 'opus-5', reasoning: 'high' }
@@ -65,7 +66,9 @@ function evidenceFor(
     sessionMode,
     outcome: 'PASS' as const,
     observedAt: new Date().toISOString(),
-    runtimeVersion: '1.4.188',
+    // Why resolved, not literal: worker-start now admits evidence only when it
+    // carries THIS runtime build's identity, so a hand-written version is stale.
+    runtimeVersion: resolveRuntimeBuildIdentity().id,
     commitSha: HEAD,
     detail: null
   }))
@@ -382,20 +385,32 @@ describe('automatic lifecycle autostart', () => {
     const fix = new PhaseLaunchStore(db).list(runId).find((row) => row.kind === 'fix_first')!
     const fixDispatch = db.getDispatchContextById(fix.dispatch_id as string)!
 
-    // The correction lands on a NEW commit, so the receipt recorded against the
-    // pre-correction SHA can no longer be reused.
+    // The correction lands on a NEW commit. A content gate survives that when
+    // nothing it depends on changed, and dies the moment its inputs move — the
+    // SHA alone is not what invalidates it.
     const CORRECTED = 'bbbbbbbbbbbb'
     const beforeCorrection = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
+    const contentGate = {
+      gateId: 'pnpm test',
+      finalSha: CORRECTED,
+      inputHashes: beforeCorrection?.inputHashes ?? {},
+      policyVersion: 'gates-v1',
+      commandIdentity: 'pnpm test'
+    }
+    expect(canReuseGateReceipt({ receipt: beforeCorrection, current: contentGate })).toMatchObject({
+      reuse: true
+    })
     expect(
       canReuseGateReceipt({
         receipt: beforeCorrection,
-        current: {
-          gateId: 'pnpm test',
-          finalSha: CORRECTED,
-          inputHashes: beforeCorrection?.inputHashes ?? {},
-          policyVersion: 'gates-v1',
-          commandIdentity: 'pnpm test'
-        }
+        current: { ...contentGate, inputHashes: { 'file:src/a.ts': 'changed-by-the-correction' } }
+      })
+    ).toMatchObject({ reuse: false, code: 'inputs_changed' })
+    // An exact-head gate still dies with the SHA, whatever its inputs look like.
+    expect(
+      canReuseGateReceipt({
+        receipt: beforeCorrection,
+        current: { ...contentGate, shaBinding: 'exact_head' }
       })
     ).toMatchObject({ reuse: false, code: 'sha_changed' })
 

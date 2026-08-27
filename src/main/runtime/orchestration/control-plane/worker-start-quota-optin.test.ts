@@ -7,6 +7,7 @@ import { OutcomePolicyStore } from './outcome-policy'
 import { RouteRegistryStore } from './route-registry-store'
 import { ROUTE_EVIDENCE_KINDS } from './route-certification-evidence'
 import type { RouteIdentity } from './route-registry-types'
+import { resolveRuntimeBuildIdentity } from './runtime-build-identity'
 
 /** WORKER_START_IGNORES_OUTCOME_QUOTA_OPTIN — observed on candidate runtime
  *  `46755c49-b746-4184-bb1c-97ee670bd4f8`, Run `run_b69cf3f43d45`: the outcome
@@ -28,6 +29,7 @@ describe('WORKER_START_IGNORES_OUTCOME_QUOTA_OPTIN', () => {
   const IDENTITY: RouteIdentity = { agent: 'codex', model: 'gpt-5.5', reasoning: 'xhigh' }
   const SHA = 'abc123'
   const NOW = Date.parse('2026-08-27T17:40:00Z')
+  const BUILD = resolveRuntimeBuildIdentity().id
 
   function world(allowUnknownQuota: boolean) {
     db = new OrchestrationDb(':memory:')
@@ -79,7 +81,8 @@ describe('WORKER_START_IGNORES_OUTCOME_QUOTA_OPTIN', () => {
         sessionMode: 'fresh',
         outcome: 'PASS',
         observedAt: new Date(NOW).toISOString(),
-        runtimeVersion: 'cand',
+        // Why resolved: admission now binds evidence to THIS runtime build.
+        runtimeVersion: BUILD,
         commitSha: SHA,
         detail: null
       })
@@ -97,7 +100,8 @@ describe('WORKER_START_IGNORES_OUTCOME_QUOTA_OPTIN', () => {
       role: 'builder',
       sessionMode: 'fresh',
       taskCapabilities: ['bounded_implementation'],
-      nowMs: NOW
+      nowMs: NOW,
+      runtimeBuildIdentity: { id: BUILD }
     })
   }
 

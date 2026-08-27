@@ -17,13 +17,25 @@ import type { ControlPlaneStore, GateReceiptRow } from './control-plane-store'
 
 export type GateRiskPolicy = 'standard' | 'high_risk'
 
+/** How a gate's receipt relates to the commit it was earned on.
+ *
+ *  `content` gates prove something about their declared inputs, so a receipt
+ *  survives an unrelated commit whose dependency fingerprint is unchanged.
+ *  `exact_head` gates prove something about the commit ITSELF — publication and
+ *  review gates — so their receipt dies with the SHA and is never reused. */
+export type GateShaBinding = 'content' | 'exact_head'
+
 export type GateInputs = {
   gateId: string
   finalSha: string
-  /** Content hashes of every file/input this gate is sensitive to. */
+  /** Content hashes of the actual bytes of every input this gate depends on,
+   *  keyed by dependency. Per gate: a gate is invalidated only by ITS OWN
+   *  dependencies changing. */
   inputHashes: Readonly<Record<string, string>>
   policyVersion: string
   commandIdentity: string
+  /** Defaults to `content`; publication/review gates declare `exact_head`. */
+  shaBinding?: GateShaBinding
 }
 
 export type GateReceipt = GateInputs & {
@@ -49,11 +61,17 @@ export type GateReuseVerdict =
 export function gateReceiptId(inputs: GateInputs): string {
   return [
     inputs.gateId,
-    inputs.finalSha,
+    // Why the SHA only for exact-head gates: including it for a content gate
+    // would mint a new receipt id every commit and defeat reuse entirely.
+    shaBindingOf(inputs) === 'exact_head' ? inputs.finalSha : 'content',
     inputs.policyVersion,
     inputs.commandIdentity,
     stableHashes(inputs.inputHashes)
   ].join('#')
+}
+
+export function shaBindingOf(inputs: GateInputs): GateShaBinding {
+  return inputs.shaBinding ?? 'content'
 }
 
 function stableHashes(hashes: Readonly<Record<string, string>>): string {
@@ -100,11 +118,11 @@ export function canReuseGateReceipt(args: {
       reason: `Gate ${args.current.gateId} last recorded FAIL.`
     }
   }
-  if (receipt.finalSha !== args.current.finalSha) {
+  if (shaBindingOf(args.current) === 'exact_head' && receipt.finalSha !== args.current.finalSha) {
     return {
       reuse: false,
       code: 'sha_changed',
-      reason: `Receipt bound ${receipt.finalSha}; current SHA is ${args.current.finalSha}.`
+      reason: `Gate ${args.current.gateId} is bound to its exact head; receipt bound ${receipt.finalSha}, current SHA is ${args.current.finalSha}.`
     }
   }
   if (receipt.policyVersion !== args.current.policyVersion) {

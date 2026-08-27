@@ -110,7 +110,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         agent,
         model: params.model,
         effort: params.effort,
-        worktreeId: resolvedWorktree?.id
+        worktreeId: resolvedWorktree?.id,
+        terminalHandle: params.terminal
       })
       let explicitTerminal
       if (params.terminal) {

@@ -46,9 +46,25 @@ describe('B8 gate receipts bind deterministic inputs', () => {
     ).toMatchObject({ reuse: true })
   })
 
-  it('invalidates the receipt when the final SHA moves', () => {
+  it('invalidates an exact-head receipt when the final SHA moves, but not a content one', () => {
     const cp = store()
     recordGateReceipt(cp, {
+      scopeKey: 'wt_1',
+      inputs: inputs({ shaBinding: 'exact_head' }),
+      result: 'PASS',
+      recordedAt: RECORDED_AT
+    })
+    expect(
+      canReuseGateReceipt({
+        receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'),
+        current: inputs({ finalSha: 'feedface', shaBinding: 'exact_head' })
+      })
+    ).toMatchObject({ reuse: false, code: 'sha_changed' })
+
+    // A content gate proves something about its INPUTS, so an unrelated commit
+    // that left them byte-identical does not invalidate it.
+    const contentStore = store()
+    recordGateReceipt(contentStore, {
       scopeKey: 'wt_1',
       inputs: inputs(),
       result: 'PASS',
@@ -56,10 +72,10 @@ describe('B8 gate receipts bind deterministic inputs', () => {
     })
     expect(
       canReuseGateReceipt({
-        receipt: findGateReceipt(cp, 'wt_1', 'unit-tests'),
+        receipt: findGateReceipt(contentStore, 'wt_1', 'unit-tests'),
         current: inputs({ finalSha: 'feedface' })
       })
-    ).toMatchObject({ reuse: false, code: 'sha_changed' })
+    ).toMatchObject({ reuse: true })
   })
 
   it('invalidates the receipt when a bound input hash changes, and names the input', () => {

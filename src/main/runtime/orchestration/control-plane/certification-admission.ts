@@ -1,4 +1,8 @@
 import type { OrchestrationDb } from '../db'
+import {
+  observeCertificationEvidence,
+  type CertificationObservationSource
+} from './certification-event-source'
 import { readDispatchRouteIdentity } from './dispatch-route-identity'
 import {
   ROUTE_EVIDENCE_KINDS,
@@ -41,6 +45,7 @@ export type CertificationAdmissionCode =
   | 'identity_mismatch'
   | 'invalid_kind'
   | 'invalid_sha'
+  | 'evidence_not_observed'
 
 export type CertificationAdmission =
   | { ok: true; evidence: RouteEvidence }
@@ -65,10 +70,19 @@ export type CertificationStamp = {
   runtimeVersion: string
 }
 
+/** No runtime facts at all: every PASS request fails closed. */
+const UNOBSERVABLE_SOURCE: CertificationObservationSource = {
+  observedEffectiveIdentity: () => null,
+  agentStatusSnapshot: () => []
+}
+
 export function admitCertificationEvidence(args: {
   db: OrchestrationDb
   request: CertificationRequest
   stamp: CertificationStamp
+  /** Runtime facts the database cannot answer. Omitted only by callers that
+   *  never record PASS; without it a PASS request fails closed. */
+  source?: CertificationObservationSource
 }): CertificationAdmission {
   const { request } = args
   if (!(ROUTE_EVIDENCE_KINDS as readonly string[]).includes(request.kind)) {
@@ -89,6 +103,27 @@ export function admitCertificationEvidence(args: {
     const guard = requireRealLaunch(args.db, request)
     if (guard) {
       return guard
+    }
+    // Why a second gate: a real launch proves the ROUTE ran, never that THIS
+    // evidence kind happened. The caller requests the kind; the runtime decides
+    // whether its own records show the event, and fails closed when they do not.
+    const observation = observeCertificationEvidence({
+      db: args.db,
+      source: args.source ?? UNOBSERVABLE_SOURCE,
+      request: {
+        identity: request.identity,
+        role: request.role,
+        sessionMode: request.sessionMode,
+        kind: request.kind as RouteEvidenceKind,
+        dispatchId: request.dispatchId as string
+      }
+    })
+    if (!observation.observed) {
+      return {
+        ok: false,
+        code: 'evidence_not_observed',
+        reason: `${observation.code}: ${observation.reason}`
+      }
     }
   }
   return {

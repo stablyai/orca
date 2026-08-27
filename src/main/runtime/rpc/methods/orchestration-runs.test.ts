@@ -26,10 +26,11 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(47)
+    expect(registry.size).toBe(48)
     expect(registry.has('orchestration.state')).toBe(true)
     expect(registry.has('orchestration.await')).toBe(true)
     expect(registry.has('orchestration.outcomeAdmit')).toBe(true)
+    expect(registry.has('orchestration.outcomeIntake')).toBe(true)
     expect(registry.has('orchestration.gatePlan')).toBe(true)
     expect(registry.has('orchestration.validationLease')).toBe(true)
     expect(registry.has('orchestration.phaseLaunch')).toBe(true)
