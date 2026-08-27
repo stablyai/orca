@@ -167,12 +167,18 @@ describe('authoritative session tab inventory publication', () => {
     await expect(allHosts).resolves.toEqual({ snapshots: [], authoritative: true })
   })
 
-  it('serves an unlabeled scan when the PTY census is unavailable', async () => {
+  it('retries once and serves an unlabeled scan when the PTY census is unavailable', async () => {
     const runtime = new OrcaRuntimeService()
+    const collect = vi.spyOn(
+      runtime as unknown as { collectAllMobileSessionTabs: () => Promise<unknown> },
+      'collectAllMobileSessionTabs'
+    )
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
     await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({ snapshots: [] })
+    // Why: the retry gives daemon-backed tabs a post-race restore chance.
+    expect(collect).toHaveBeenCalledTimes(2)
   })
 
   it('serves an unlabeled scan when an execution host is omitted from the census', async () => {

@@ -7295,7 +7295,7 @@ export class OrcaRuntimeService {
       primedPublicationEpoch !== null &&
       this.getAuthoritativeSessionTabsInventoryEpoch() === primedPublicationEpoch
     ) {
-      return this.settleSessionTabsInventory(primed)
+      return await this.settleSessionTabsInventory(primed, clientNavigationId, signal)
     }
     while (true) {
       const publicationEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
@@ -7306,20 +7306,31 @@ export class OrcaRuntimeService {
       const inventory = await this.collectAllMobileSessionTabs(clientNavigationId)
       this.assertSessionTabsInventoryRequestActive(signal)
       if (this.getAuthoritativeSessionTabsInventoryEpoch() === publicationEpoch) {
-        return this.settleSessionTabsInventory(inventory)
+        return await this.settleSessionTabsInventory(inventory, clientNavigationId, signal)
       }
     }
   }
 
   // Why: a failed census only invalidates the emptiness verdict, never the
-  // list — serve the scan already collected, unlabeled, instead of rescanning.
-  private settleSessionTabsInventory(inventory: {
-    snapshots: RuntimeMobileSessionTabsResult[]
-    ptyInventory: PtyControllerInventory | null
-  }): { snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: true } {
-    return this.isCompleteSessionTabsPtyCensus(inventory.ptyInventory)
-      ? { snapshots: inventory.snapshots, authoritative: true }
-      : { snapshots: inventory.snapshots }
+  // list. An incomplete census usually means a concurrent scan invalidated
+  // this one mid-relaunch and daemon-backed tabs could not be restored yet, so
+  // retry the collection once; a still-incomplete retry serves its snapshots
+  // unlabeled rather than erroring the request.
+  private async settleSessionTabsInventory(
+    inventory: {
+      snapshots: RuntimeMobileSessionTabsResult[]
+      ptyInventory: PtyControllerInventory | null
+    },
+    clientNavigationId?: string,
+    signal?: AbortSignal
+  ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: true }> {
+    if (this.isCompleteSessionTabsPtyCensus(inventory.ptyInventory)) {
+      return { snapshots: inventory.snapshots, authoritative: true }
+    }
+    const retried = await this.collectAllMobileSessionTabs(clientNavigationId)
+    this.assertSessionTabsInventoryRequestActive(signal)
+    // Why: the retry ran outside the epoch fence, so it never claims authority.
+    return { snapshots: retried.snapshots }
   }
 
   supportsAuthoritativeSessionTabsInventory(): boolean {
