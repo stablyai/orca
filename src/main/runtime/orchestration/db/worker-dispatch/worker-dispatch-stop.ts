@@ -93,20 +93,33 @@ export function settleWorkerStop(this: OrchestrationDb, dispatchId: string): Wor
   try {
     const worker = this.getWorkerDispatch(dispatchId)
     const dispatch = this.getDispatchContextById(dispatchId)
-    if (!worker || !dispatch || worker.state !== 'stopping') {
+    if (!worker || !dispatch) {
+      throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
+    }
+    if (
+      worker.state === 'stopped' &&
+      dispatch.status !== 'pending' &&
+      dispatch.status !== 'dispatched'
+    ) {
+      this.db.exec('COMMIT')
+      return worker
+    }
+    if (!['stopping', 'stop_unknown'].includes(worker.state)) {
       throw new OrchestrationError('dispatch_inactive', `Dispatch ${dispatchId} is not stopping.`)
     }
     this.db
       .prepare(
         `UPDATE worker_dispatches
-         SET state = 'stopped', stage = 'process_stopped', updated_at = datetime('now')
-         WHERE dispatch_id = ? AND state = 'stopping'`
+         SET state = 'stopped', stage = 'process_stopped', last_error = NULL,
+             updated_at = datetime('now')
+         WHERE dispatch_id = ? AND state IN ('stopping', 'stop_unknown')`
       )
       .run(dispatchId)
     this.db
       .prepare(
         `UPDATE dispatch_contexts
-         SET status = 'failed', completed_at = datetime('now'), last_failure = 'stopped'
+         SET status = 'failed', completed_at = datetime('now'), last_failure = 'stopped',
+             termination_reason = COALESCE(termination_reason, 'operator_close')
          WHERE id = ? AND status IN ('pending', 'dispatched')`
       )
       .run(dispatchId)

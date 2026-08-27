@@ -21,8 +21,6 @@ export type AgentPromptActivity = Readonly<{
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
-  /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
-  outputSequence: number
   status: 'working' | 'permission' | 'idle' | null
 }>
 
@@ -83,8 +81,7 @@ function agentPromptEffectObserved(
 ): boolean {
   return (
     current.workingSequence > baseline.workingSequence ||
-    observedHookWorkingAfterBaseline(baseline, current) ||
-    observedDeliveryEvidence(baseline, current)
+    observedHookWorkingAfterBaseline(baseline, current)
   )
 }
 
@@ -99,16 +96,6 @@ function observedHookWorkingAfterBaseline(
     current.explicitWorkingStartedAt !== null &&
     current.explicitWorkingStartedAt > (baseline.explicitWorkingStartedAt ?? 0)
   )
-}
-
-// Why: a `→working` edge is unreachable for an agent that is already working, so the honest proof
-// that the prompt landed is the pane emitting bytes after Enter. An idle agent still owes a real
-// turn start, which keeps a swallowed Enter detectable.
-function observedDeliveryEvidence(
-  baseline: AgentPromptActivity,
-  current: AgentPromptActivity
-): boolean {
-  return baseline.status === 'working' && current.outputSequence > baseline.outputSequence
 }
 
 function assertSamePromptGeneration(

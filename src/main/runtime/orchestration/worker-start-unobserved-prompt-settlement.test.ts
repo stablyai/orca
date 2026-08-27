@@ -33,6 +33,39 @@ function verify(dispatchId: string, capability: string): { valid: boolean; reaso
 describe('worker start settled by an unobserved prompt', () => {
   afterEach(() => db?.close())
 
+  it('lets a late report settle an ambiguous post-submit worker-start', () => {
+    db = new OrchestrationDb(':memory:')
+    const { taskId, dispatchId, capability } = startWorker('run after an unobserved Enter')
+
+    db.markWorkerStartUnknown(dispatchId, 'dispatch_input', 'agent_prompt_stalled', {
+      retainCapability: true
+    })
+
+    expect(db.getDispatchContextById(dispatchId)).toMatchObject({
+      status: 'pending',
+      capability_revoked_at: null
+    })
+    expect(db.getTask(taskId)?.status).toBe('blocked')
+    expect(verify(dispatchId, capability)).toEqual({ valid: true })
+    expect(
+      db.settleWorkerReport({
+        taskId,
+        dispatchId,
+        outcome: 'succeeded',
+        result: 'late first-hand completion'
+      })
+    ).toEqual({ action: 'settled', outcome: 'succeeded', duplicate: false })
+    expect(db.getTask(taskId)).toMatchObject({
+      status: 'completed',
+      result: 'late first-hand completion'
+    })
+    expect(db.getDispatchContextById(dispatchId)?.status).toBe('completed')
+    expect(db.getWorkerDispatch(dispatchId)).toMatchObject({
+      state: 'succeeded',
+      stage: 'settled'
+    })
+  })
+
   it('keeps the capability and lets the worker report correct the record', () => {
     db = new OrchestrationDb(':memory:')
     const { taskId, dispatchId, capability } = startWorker('run to completion')

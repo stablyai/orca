@@ -14,7 +14,6 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
     permissionSequence: 2,
     workingSequence: 4,
     explicitWorkingStartedAt: null,
-    outputSequence: 7,
     status: 'idle',
     ...overrides
   }
@@ -172,24 +171,25 @@ describe('agent prompt submission verification', () => {
     })
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
-    current = activity({ explicitWorkingStartedAt: 2_000, outputSequence: 40 })
+    current = activity({ explicitWorkingStartedAt: 2_000 })
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 
     await rejected
   })
 
-  it('accepts pane output after Enter when the agent was already working', async () => {
+  it('does not accept unrelated current-turn output after Enter was swallowed', async () => {
     vi.useFakeTimers()
     let current = activity({ status: 'working' })
     const verification = verifyAgentPromptSubmission({
       baseline: current,
       readActivity: () => current
     })
+    const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
-    current = activity({ status: 'working', outputSequence: 8 })
-    await vi.advanceTimersByTimeAsync(50)
+    current = activity({ status: 'working' })
+    await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 
-    await expect(verification).resolves.toBeUndefined()
+    await rejected
   })
 
   it('does not accept pane output when the agent was idle at submit', async () => {
@@ -201,7 +201,7 @@ describe('agent prompt submission verification', () => {
     })
     const rejected = expect(verification).rejects.toThrow('agent_prompt_stalled')
 
-    current = activity({ outputSequence: 9 })
+    current = activity({ status: 'idle' })
     await vi.advanceTimersByTimeAsync(AGENT_PROMPT_EFFECT_TIMEOUT_MS)
 
     await rejected

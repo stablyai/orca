@@ -94,7 +94,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             `Terminal ${params.terminal} does not belong to worktree ${resolvedWorktree?.id}.`
           )
         }
-        if (!(await runtime.isTerminalRunningAgent(params.terminal))) {
+        if (!(await runtime.refreshTerminalPromptAgentOwner(params.terminal))) {
           throw new OrchestrationError(
             'agent_unconfigured',
             `Terminal ${params.terminal} is not running a recognized agent.`

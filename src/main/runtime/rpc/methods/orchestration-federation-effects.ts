@@ -1,3 +1,5 @@
+import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
+
 export type FederationEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
   action?: string
@@ -12,6 +14,11 @@ export type FederationEffect = {
   hookFound?: boolean
   startupPolicy?: string
   terminalId?: string
+}
+
+export function isFederationPromptStalled(error: unknown, stage: string | undefined): boolean {
+  const promptError = typeof error === 'string' ? new Error(error) : error
+  return stage === 'dispatch_input' && isAgentPromptStalledError(promptError)
 }
 
 export function appendFederationTerminalEffects(
@@ -69,6 +76,9 @@ export function isFederationEffectUnknown(error: unknown, stage: string): boolea
       ? (error as { code: string }).code
       : ''
   if (code === 'operation_unknown') {
+    return true
+  }
+  if (isFederationPromptStalled(error, stage)) {
     return true
   }
   if (!['worktree_create', 'terminal_create', 'dispatch_input'].includes(stage)) {

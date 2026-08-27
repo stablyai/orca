@@ -17,9 +17,14 @@ export function failWorkerStartWithReceipt(args: {
   launch: OrchestrationWorkerLaunchReceipt
 }): unknown {
   const reason = args.error instanceof Error ? args.error.message : String(args.error)
+  // Enter is written before verification, so an unobserved turn is ambiguous and must keep the
+  // pane fenced until its worker reports or the coordinator explicitly stops/abandons it.
+  const unobservedPrompt = isAgentPromptStalledError(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
-    ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
+    ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason, {
+        retainCapability: unobservedPrompt
+      })
     : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason, {
         // Why (#16095): the preamble is written before submission is verified, so a stalled
         // verdict never means the worker lacks its task — keep the authority its report needs.

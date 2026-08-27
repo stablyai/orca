@@ -420,9 +420,9 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  // Why (#16095): a still-working agent can never produce a `→working` edge, so the old predicate
-  // was unsatisfiable for every follow-up prompt; pane output after Enter is the evidence left.
-  it('accepts pane output after Enter while the agent is already working', async () => {
+  // Output from the current turn is not causally tied to Enter; without a new-turn edge the
+  // submission remains ambiguous and must stay fenced for first-hand worker settlement.
+  it('does not accept unrelated pane output after Enter while the agent is already working', async () => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000)
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
@@ -435,6 +435,60 @@ describe('agent prompt submission runtime', () => {
       '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
       Date.now()
     )
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('does not accept an unchanged repaint while the agent is already working', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const repaint = '\x1b[2J\x1b[Hworking on the current turn'
+    const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
+      if (data === '\r') {
+        runtime.onPtyData('pty-prompt', repaint, Date.now())
+      }
+    })
+    await runtime.acceptPtyDataBounded('pty-prompt', repaint, Date.now()).completion
+    runtime.onPtyData(
+      'pty-prompt',
+      '\x1b]9999;{"state":"working","agentType":"aider"}\x07',
+      Date.now()
+    )
+
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const rejected = expect(submission).rejects.toThrow('agent_prompt_stalled')
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(writes.filter((data) => data === '\r')).toHaveLength(1)
+  })
+
+  it('uses the current foreground owner when a reused pane has stale launch metadata', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+      (runtime, data) => {
+        if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+          runtime.onPtyData('pty-prompt', '\x1b[?25hcomposer ready', Date.now())
+        } else if (data === '\r') {
+          setTimeout(() => {
+            runtime.onPtyData(
+              'pty-prompt',
+              '\x1b]9999;{"state":"working","agentType":"codex"}\x07',
+              Date.now()
+            )
+          }, 6_000)
+        }
+      },
+      'claude',
+      async () => 'codex'
+    )
+    await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
 
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     await vi.runAllTimersAsync()

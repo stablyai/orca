@@ -88,7 +88,8 @@ export function markWorkerStartUnknown(
   this: OrchestrationDb,
   dispatchId: string,
   stage: string,
-  reason: string
+  reason: string,
+  options: { retainCapability?: boolean } = {}
 ): WorkerDispatchRow {
   this.db.exec('BEGIN IMMEDIATE')
   try {
@@ -107,10 +108,11 @@ export function markWorkerStartUnknown(
     this.db
       .prepare(
         `UPDATE dispatch_contexts
-         SET capability_revoked_at = COALESCE(capability_revoked_at, datetime('now'))
+         SET capability_revoked_at = CASE WHEN ? = 1 THEN capability_revoked_at
+           ELSE COALESCE(capability_revoked_at, datetime('now')) END
          WHERE id = ?`
       )
-      .run(dispatchId)
+      .run(options.retainCapability ? 1 : 0, dispatchId)
     this.db.prepare("UPDATE tasks SET status = 'blocked' WHERE id = ?").run(dispatch.task_id)
     this.closeQuestionsForDispatch(dispatchId)
     this.db.exec('COMMIT')

@@ -24,6 +24,12 @@ export function prepareRemoteAttachmentAuthority(
       `Remote Dispatch ${params.dispatchId} is not starting.`
     )
   }
+  const occupied = this.findActiveRemoteAttachmentForPane(params.paneKey)
+  if (occupied && occupied.dispatch_id !== params.dispatchId) {
+    throw new Error(
+      `Terminal ${params.terminalHandle} already has an active remote dispatch (${occupied.dispatch_id} for task ${occupied.task_id})`
+    )
+  }
   const capability = `dcap_${randomBytes(32).toString('base64url')}`
   const result = this.db
     .prepare(
@@ -96,11 +102,12 @@ export function failRemoteAttachment(
   const result = this.db
     .prepare(
       `UPDATE remote_dispatch_attachments
-       SET state = ?, stage = ?, last_error = ?, capability_hash = NULL,
+       SET state = ?, stage = ?, last_error = ?,
+           capability_hash = CASE WHEN ? = 1 THEN capability_hash ELSE NULL END,
            updated_at = datetime('now')
        WHERE dispatch_id = ? AND state = 'starting'`
     )
-    .run(state, stage, reason, dispatchId)
+    .run(state, stage, reason, unknown ? 1 : 0, dispatchId)
   if (result.changes !== 1) {
     throw new OrchestrationError(
       'dispatch_inactive',

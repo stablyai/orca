@@ -43,7 +43,10 @@ describe('orchestration worker recovery', () => {
     } as never)
   })
 
-  afterEach(() => db.close())
+  afterEach(() => {
+    vi.useRealTimers()
+    db.close()
+  })
 
   async function call(name: string, params: Record<string, unknown>) {
     const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
@@ -114,6 +117,53 @@ describe('orchestration worker recovery', () => {
     })
     expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
     expect(db.getTask(task.id)?.status).toBe('blocked')
+  })
+
+  it('settles a stop_unknown after operator-close proof arrives more than a second later', async () => {
+    vi.useFakeTimers()
+    const { task, dispatch } = createWorker()
+    vi.mocked(runtime.closeTerminal).mockImplementationOnce(async () => {
+      setTimeout(() => {
+        ;(
+          runtime as unknown as {
+            failActiveDispatchOnExit: (
+              handle: string,
+              paneKey: string,
+              exitCode: number,
+              cause: { kind: 'operator_close' }
+            ) => void
+          }
+        ).failActiveDispatchOnExit(
+          'term_worker',
+          'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
+          0,
+          { kind: 'operator_close' }
+        )
+      }, 1_100)
+      return { handle: 'term_worker', tabId: 'tab-worker', ptyKilled: false } as never
+    })
+
+    await expect(
+      call('orchestration.workerStop', { dispatch: dispatch.id })
+    ).resolves.toMatchObject({ state: 'stop_unknown', processAction: 'closed_agent_terminal' })
+    expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stop_unknown')
+
+    await vi.advanceTimersByTimeAsync(1_099)
+    expect(db.getWorkerDispatch(dispatch.id)?.state).toBe('stop_unknown')
+    await vi.advanceTimersByTimeAsync(1)
+
+    expect(db.getWorkerDispatch(dispatch.id)).toMatchObject({
+      state: 'stopped',
+      stage: 'process_stopped',
+      last_error: null
+    })
+    expect(db.getTask(task.id)?.status).toBe('blocked')
+    expect(db.getDispatchContextById(dispatch.id)).toMatchObject({
+      status: 'failed',
+      failure_count: 0,
+      last_failure: 'stopped',
+      termination_reason: 'operator_close'
+    })
   })
 
   it('keeps an in-flight stop fenced during runtime-epoch reconciliation', async () => {

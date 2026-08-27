@@ -59,6 +59,7 @@ describe('orchestration RPC methods', () => {
         handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
       )
       vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+      vi.spyOn(runtime, 'refreshTerminalPromptAgentOwner').mockResolvedValue('codex')
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_worker',
         accepted: true,
@@ -410,6 +411,100 @@ describe('orchestration RPC methods', () => {
       expect(createWorktree).not.toHaveBeenCalled()
     })
 
+    it('refreshes the current foreground owner before dispatching a reused pane', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      // The generic liveness check can trust stale launch metadata. The settled preflight reads
+      // the live foreground owner used by prompt verification and its provider timeout.
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(false)
+      const settled = vi
+        .spyOn(runtime, 'refreshTerminalPromptAgentOwner')
+        .mockResolvedValue('codex')
+      const task = db.createTask({ spec: 'reuse the pane under its current agent owner' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker'
+        })
+      ).resolves.toMatchObject({ state: 'ready' })
+
+      expect(settled).toHaveBeenCalledWith('term_worker')
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+    })
+
+    it('waits for a reused pane wrapper to resolve its current foreground owner', async () => {
+      setup()
+      const internals = runtime as unknown as {
+        resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
+      }
+      vi.spyOn(internals, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+        id: 'repo::worktree',
+        path: '/repo/worktree',
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      })
+      const getForegroundProcess = vi.fn().mockResolvedValueOnce('node').mockResolvedValue('codex')
+      runtime.setPtyController({
+        spawn: vi.fn().mockResolvedValue({ id: 'pty_worker', incarnationId: 'inc_worker' }),
+        write: () => true,
+        kill: () => true,
+        getForegroundProcess
+      })
+      const terminal = await runtime.createTerminal('id:repo::worktree', {
+        tabId: 'tab_worker',
+        leafId: 'leaf_worker',
+        title: 'worker'
+      })
+      runtime.attachWindow(1)
+      runtime.syncWindowGraph(1, {
+        tabs: [
+          {
+            tabId: 'tab_worker',
+            worktreeId: 'repo::worktree',
+            title: 'worker',
+            activeLeafId: 'leaf_worker',
+            layout: null
+          }
+        ],
+        leaves: [
+          {
+            tabId: 'tab_worker',
+            worktreeId: 'repo::worktree',
+            leafId: 'leaf_worker',
+            paneRuntimeId: 1,
+            ptyId: 'pty_worker',
+            paneTitle: 'bash'
+          }
+        ]
+      })
+      mockCurrentWorkerStart()
+      vi.mocked(runtime.refreshTerminalPromptAgentOwner).mockRestore()
+      vi.mocked(runtime.getTerminalPaneKey).mockImplementation((handle) =>
+        handle === 'term_coord'
+          ? coordinatorPaneKey
+          : handle === terminal.handle
+            ? 'tab_worker:leaf_worker'
+            : null
+      )
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
+        handle === terminal.handle ? 'runtime_test:pty_worker:1' : null
+      )
+      const task = db.createTask({ spec: 'reuse the delayed wrapper pane' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: terminal.handle
+        })
+      ).resolves.toMatchObject({ state: 'ready' })
+
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
+    })
+
     it('returns a failed receipt and preserves a created terminal as residual', async () => {
       setup()
       mockCurrentWorkerStart({ ready: false })
@@ -469,6 +564,46 @@ describe('orchestration RPC methods', () => {
       expect(result.residualResources).toEqual(
         expect.arrayContaining([expect.objectContaining({ kind: 'terminal', id: 'term_worker' })])
       )
+    })
+
+    it('keeps a post-submit stalled worker fenced from an overlapping worker-start', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+        new Error('agent_prompt_stalled')
+      )
+      const firstTask = db.createTask({ spec: 'possibly already running' })
+
+      const first = (await call('orchestration.workerStart', {
+        task: firstTask.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string; state: string; failedStage: string }
+
+      expect(first).toMatchObject({
+        state: 'outcome_unknown',
+        failedStage: 'dispatch_input'
+      })
+      expect(db.getTask(firstTask.id)?.status).toBe('blocked')
+      expect(db.getDispatchContextById(first.dispatchId)).toMatchObject({
+        status: 'pending',
+        capability_revoked_at: null
+      })
+      expect(db.getWorkerDispatch(first.dispatchId)?.state).toBe('start_unknown')
+
+      const overlapTask = db.createTask({ spec: 'must not share the same pane' })
+      const overlap = (await call('orchestration.workerStart', {
+        task: overlapTask.id,
+        from: 'term_coord',
+        terminal: 'term_worker'
+      })) as { state: string; lastError: string }
+
+      expect(overlap).toMatchObject({
+        state: 'failed',
+        lastError: expect.stringContaining('already has an active dispatch')
+      })
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledTimes(1)
     })
 
     it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(

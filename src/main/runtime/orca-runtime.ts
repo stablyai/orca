@@ -582,7 +582,8 @@ import { repoIsRemote } from '../../shared/agent-launch-remote'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
-  recognizeAgentProcess
+  recognizeAgentProcess,
+  type RecognizedAgentProcess
 } from '../../shared/agent-process-recognition'
 import {
   haveSameDisabledTuiAgents,
@@ -17776,6 +17777,16 @@ export class OrcaRuntimeService {
       return
     }
 
+    const worker = isDeliberateTerminalExit(cause)
+      ? this._orchestrationDb.getWorkerDispatch(dispatch.id)
+      : undefined
+    if (worker && ['stopping', 'stop_unknown'].includes(worker.state)) {
+      // The close event is the durable proof a prior worker-stop receipt lacked; it may arrive
+      // after that RPC returned, so settle both in-flight and already-unknown local stops.
+      this._orchestrationDb.settleWorkerStop(dispatch.id)
+      return
+    }
+
     const errorContext = describeTerminalExitCause(cause)
     const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
       workerProcessExited: true,
@@ -20309,14 +20320,15 @@ export class OrcaRuntimeService {
       // stateStartedAt, not updatedAt — same-state tool/prompt pings refresh updatedAt and would
       // otherwise pass off an in-progress turn as a new one.
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
-      outputSequence: this.getPtyOutputSequence(ptyId),
       status
     }
   }
 
   private getPtyAgent(ptyId: string): TuiAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    // A reused pane can outlive its original launcher; a positively refreshed foreground owner is
+    // current execution evidence and therefore outranks stale launch metadata.
+    return pty?.foregroundAgent ?? pty?.launchAgent ?? null
   }
 
   private assertAgentPromptPermissionSafe(
@@ -35687,28 +35699,35 @@ export class OrcaRuntimeService {
     }
   }
 
-  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+  async refreshTerminalPromptAgentOwner(handle: string): Promise<TuiAgent | null> {
     try {
       const livePty = this.getLivePtyForHandle(handle)
       const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
       const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
       const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
       if (!ptyId || !trackedPty || !this.ptyController) {
-        return false
+        return null
       }
-      const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
-      const recognizedAgent = recognized?.agent
-      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
-        return false
+      const foregroundProcess = await this.ptyController.getForegroundProcess(ptyId)
+      if (!foregroundProcess) {
+        return null
+      }
+      const recognized = await this.recognizeForegroundAgentProcess(ptyId, foregroundProcess)
+      if (!recognized) {
+        return null
       }
       if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
-        return false
+        return null
       }
-      trackedPty.foregroundAgent = recognizedAgent
-      return true
+      trackedPty.foregroundAgent = recognized.agent
+      return recognized.agent
     } catch {
-      return false
+      return null
     }
+  }
+
+  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+    return isTerminalSendSettlementAgent(await this.refreshTerminalPromptAgentOwner(handle))
   }
 
   private async isPtyRunningAgent(
@@ -35783,19 +35802,30 @@ export class OrcaRuntimeService {
     foregroundProcess: string,
     options: { suppressClaude?: boolean; retryWrappers?: boolean } = {}
   ): Promise<boolean> {
+    return (await this.recognizeForegroundAgentProcess(ptyId, foregroundProcess, options)) !== null
+  }
+
+  private async recognizeForegroundAgentProcess(
+    ptyId: string,
+    foregroundProcess: string,
+    options: { suppressClaude?: boolean; retryWrappers?: boolean } = {}
+  ): Promise<RecognizedAgentProcess | null> {
     const initialRecognition = recognizeAgentProcess(foregroundProcess)
     if (initialRecognition !== null) {
-      return !(
+      if (
         options.suppressClaude === true &&
         isExpectedAgentProcess(initialRecognition.processName, 'claude')
-      )
+      ) {
+        return null
+      }
+      return initialRecognition
     }
     if (
       options.retryWrappers === false ||
       !this.isAgentWrapperForegroundProcess(foregroundProcess) ||
       !this.ptyController
     ) {
-      return false
+      return null
     }
     const startedAt = Date.now()
     while (Date.now() - startedAt < FOREGROUND_AGENT_WRAPPER_RETRY_TIMEOUT_MS) {
@@ -35805,16 +35835,19 @@ export class OrcaRuntimeService {
       const refreshedProcess = await this.ptyController.getForegroundProcess(ptyId)
       const refreshedRecognition = recognizeAgentProcess(refreshedProcess)
       if (refreshedRecognition !== null) {
-        return !(
+        if (
           options.suppressClaude === true &&
           isExpectedAgentProcess(refreshedRecognition.processName, 'claude')
-        )
+        ) {
+          return null
+        }
+        return refreshedRecognition
       }
       if (!refreshedProcess || !this.isAgentWrapperForegroundProcess(refreshedProcess)) {
-        return false
+        return null
       }
     }
-    return false
+    return null
   }
 
   private isAgentWrapperForegroundProcess(processName: string): boolean {

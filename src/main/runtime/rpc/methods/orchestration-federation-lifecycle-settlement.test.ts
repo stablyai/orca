@@ -56,7 +56,7 @@ describe('orchestration federation lifecycle settlement', () => {
           failNextAckBeforeDelivery = false
           throw new Error('connection lost before acknowledgment')
         }
-        return (await workerDispatcher.dispatch({
+        const response = (await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
@@ -65,6 +65,7 @@ describe('orchestration federation lifecycle settlement', () => {
           orchestrationRequestId: envelope?.orchestrationRequestId,
           orchestrationCapability: envelope?.orchestrationCapability
         })) as RuntimeRpcResponse<unknown>
+        return response
       }
     }
     homeRuntime = new OrcaRuntimeService(null, undefined, {
