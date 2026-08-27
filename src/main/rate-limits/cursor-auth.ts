@@ -36,7 +36,8 @@ const CLI_SPAWN_ERROR_MESSAGE = 'Unable to run the Cursor CLI'
 /** Cursor (VSCode-based) stores its global storage db at the same relative path as VSCode. */
 export function getCursorIdeDbPath(
   platform: NodeJS.Platform = process.platform,
-  home: string = homedir()
+  home: string = homedir(),
+  env: NodeJS.ProcessEnv = process.env
 ): string {
   if (platform === 'darwin') {
     return join(
@@ -50,10 +51,11 @@ export function getCursorIdeDbPath(
     )
   }
   if (platform === 'win32') {
-    const appData = process.env.APPDATA ?? join(home, 'AppData', 'Roaming')
+    const appData = env.APPDATA ?? join(home, 'AppData', 'Roaming')
     return join(appData, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
   }
-  return join(home, '.config', 'Cursor', 'User', 'globalStorage', 'state.vscdb')
+  const configHome = env.XDG_CONFIG_HOME ?? join(home, '.config')
+  return join(configHome, 'Cursor', 'User', 'globalStorage', 'state.vscdb')
 }
 
 async function isExecutableCandidate(candidate: string, isWin: boolean): Promise<boolean> {

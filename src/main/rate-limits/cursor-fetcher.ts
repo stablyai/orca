@@ -5,6 +5,7 @@ import type {
   RateLimitWindow
 } from '../../shared/rate-limit-types'
 import { readCursorAuthSession, type CursorAuthReadResult } from './cursor-auth'
+import { parseClaudeUsageResetTimestamp } from './claude-usage-window'
 
 // Why: this is the same Connect RPC endpoint Cursor's own dashboard/status bar reads.
 const DASHBOARD_URL = 'https://api2.cursor.sh/aiserver.v1.DashboardService/GetCurrentPeriodUsage'
@@ -41,21 +42,12 @@ function result(
   }
 }
 
-/** Accepts an ISO date string, an epoch-ms number, or an epoch-ms numeric string. */
+/** Accepts an ISO date string, epoch seconds, or epoch milliseconds. */
 function parseTimestamp(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    return value
+  if (typeof value === 'number' || typeof value === 'string') {
+    return parseClaudeUsageResetTimestamp(value)
   }
-  if (typeof value !== 'string' || value.trim().length === 0) {
-    return null
-  }
-  const trimmed = value.trim()
-  if (/^-?\d+$/.test(trimmed)) {
-    const asEpochMs = Number(trimmed)
-    return Number.isFinite(asEpochMs) ? asEpochMs : null
-  }
-  const parsed = Date.parse(trimmed)
-  return Number.isFinite(parsed) ? parsed : null
+  return null
 }
 
 function toFiniteNumber(value: unknown): number | null {

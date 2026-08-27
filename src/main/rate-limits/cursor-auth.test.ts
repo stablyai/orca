@@ -1,6 +1,7 @@
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { CursorAuthDeps } from './cursor-auth'
-import { extractIdeAccessToken, readCursorAuthSession } from './cursor-auth'
+import { extractIdeAccessToken, getCursorIdeDbPath, readCursorAuthSession } from './cursor-auth'
 
 function processResult(
   overrides: Partial<{ code: number | null; stdout: string; stderr: string }> = {}
@@ -156,6 +157,39 @@ describe('readCursorAuthSession', () => {
     await readCursorAuthSession(deps)
 
     expect(readIdeAccessToken).not.toHaveBeenCalled()
+  })
+})
+
+describe('getCursorIdeDbPath', () => {
+  const home = '/home/testuser'
+  const suffixParts = ['Cursor', 'User', 'globalStorage', 'state.vscdb'] as const
+
+  it('returns the macOS Application Support path on darwin', () => {
+    expect(getCursorIdeDbPath('darwin', home)).toBe(
+      join(home, 'Library', 'Application Support', ...suffixParts)
+    )
+  })
+
+  it('returns the Windows AppData path on win32', () => {
+    expect(
+      getCursorIdeDbPath('win32', home, { APPDATA: 'C:\\Users\\test\\AppData\\Roaming' })
+    ).toBe(join('C:\\Users\\test\\AppData\\Roaming', ...suffixParts))
+  })
+
+  it('falls back to ~/AppData/Roaming on win32 when APPDATA is unset', () => {
+    expect(getCursorIdeDbPath('win32', home, {})).toBe(
+      join(home, 'AppData', 'Roaming', ...suffixParts)
+    )
+  })
+
+  it('returns ~/.config/Cursor/... on Linux by default', () => {
+    expect(getCursorIdeDbPath('linux', home, {})).toBe(join(home, '.config', ...suffixParts))
+  })
+
+  it('honors XDG_CONFIG_HOME on Linux', () => {
+    expect(getCursorIdeDbPath('linux', home, { XDG_CONFIG_HOME: '/custom/config' })).toBe(
+      join('/custom/config', ...suffixParts)
+    )
   })
 })
 

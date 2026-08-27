@@ -101,6 +101,35 @@ describe('fetchCursorRateLimits', () => {
     expect(result.usageMetadata?.source).toBe('cli')
   })
 
+  it('treats 10-digit billingCycleEnd as unix seconds', async () => {
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        planUsage: { totalPercentUsed: 6.1 },
+        billingCycleEnd: '1771077734'
+      })
+    )
+
+    const result = await fetchCursorRateLimits({ authReadResult: OK_AUTH })
+
+    expect(result.status).toBe('ok')
+    expect(result.monthly?.resetsAt).toBe(1_771_077_734_000)
+  })
+
+  it('parses ISO billingCycleEnd strings', async () => {
+    const end = Date.parse('2026-08-01T00:00:00Z')
+    netFetchMock.mockResolvedValueOnce(
+      jsonResponse({
+        planUsage: { totalPercentUsed: 6.1 },
+        billingCycleEnd: '2026-08-01T00:00:00Z'
+      })
+    )
+
+    const result = await fetchCursorRateLimits({ authReadResult: OK_AUTH })
+
+    expect(result.status).toBe('ok')
+    expect(result.monthly?.resetsAt).toBe(end)
+  })
+
   it('computes windowMinutes from billingCycleStart/End when both parse', async () => {
     const start = Date.parse('2026-07-01T00:00:00Z')
     const end = Date.parse('2026-08-01T00:00:00Z')
