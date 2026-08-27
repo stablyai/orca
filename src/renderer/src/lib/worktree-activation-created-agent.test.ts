@@ -10,6 +10,9 @@ import {
   seedAlreadyActiveWorktree,
   seedEmptyActivatableWorktree
 } from '@/lib/worktree-activation-created-agent-test-state'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const initialAppStoreState = useAppStore.getState()
 

@@ -4,6 +4,9 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import { parseWorkspaceSession } from '../../../shared/workspace-session-schema'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

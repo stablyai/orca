@@ -3,6 +3,9 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { makeCreatedAgentWorktree as makeWorktree } from '@/lib/worktree-activation-created-agent-test-state'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const initialAppStoreState = useAppStore.getState()
 

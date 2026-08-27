@@ -3,6 +3,9 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const initialAppStoreState = useAppStore.getState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'

@@ -4,6 +4,9 @@ import { useAppStore, type AppState } from '@/store'
 import { activateAndRevealWorktree } from './worktree-activation'
 import { makeCreatedAgentWorktree } from '@/lib/worktree-activation-created-agent-test-state'
 import { makePaneKey } from '../../../shared/stable-pane-id'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 // Red repro for the aug20 "windows 2" incident (restart-reattach/resume-relaunch):
 // a runtime-owned (paired remote) worktree's web-mirror tab holds a sleeping

@@ -74,6 +74,9 @@ import {
 } from './web-session-tabs-sync'
 import { hasHostSessionMirrorHydrated } from './host-session-mirror-hydration'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
+import { pinResumeRecordClock } from '@/lib/resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 /**
  * Parked waiters drain synchronously, so a settle placed before its frame's

@@ -5,6 +5,9 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const initialAppStoreState = useAppStore.getState()
 const PI_TRANSCRIPT_PATH = join(tmpdir(), 'pi-session-1.jsonl')

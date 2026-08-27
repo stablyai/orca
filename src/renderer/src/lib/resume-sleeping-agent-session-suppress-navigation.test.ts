@@ -3,6 +3,9 @@ import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-r
 import { useAppStore } from '@/store'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
 import { getProviderSessionClaimKey } from './sleeping-agent-pane-ownership'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const initialAppStoreState = useAppStore.getState()
 

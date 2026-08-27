@@ -132,15 +132,36 @@ function activeOrQueuedResumeClaimsProviderSession(
   return false
 }
 
+/**
+ * Absolute age after which an unfinished resume record stops being a resume candidate.
+ *
+ * Why this exists on top of the staleness check below: that check compares two timestamps
+ * captured together, so it measures how long the agent had been silent *at capture time* and
+ * never how long the record has since been sitting there. A live capture writes `capturedAt`
+ * from the same value as `updatedAt`, which makes the difference ~0 no matter how old the
+ * record gets. Without an absolute bound, any agent that ends without a confirmable exit
+ * transition — SIGKILL, force quit, host reboot, a status hook that never fires — leaves a
+ * record that stays a valid resume candidate forever.
+ *
+ * Why a week: the surrounding intent is deliberately permissive about resuming interrupted
+ * turns, and the cost of expiring too early is small — the transcript survives and the session
+ * can still be resumed by hand — while the cost of never expiring is an unattended relaunch.
+ */
+export const RESUME_RECORD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
   if (!record.origin && record.state === 'done') {
     return true
   }
-  return (
-    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
-  )
+  if (record.state === 'done') {
+    return false
+  }
+  if (record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
+    return true
+  }
+  return Date.now() - record.capturedAt > RESUME_RECORD_MAX_AGE_MS
 }
 
 function parkWorktreeResumeSweepUntilHostMirrorHydrates(
