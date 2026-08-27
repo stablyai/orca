@@ -5,8 +5,8 @@
 | Branch | `jb-workflow-control-plane-b` (one worktree, one branch, sole editor) |
 | Base at dispatch start | `b954873e83` |
 | Pinned `origin/main` | `249d93bc5d2fd3b04581aae9916afc84bc787c8b` — **ancestor of HEAD: yes** |
-| Final SHA | `d7405b348bc300db536a1a6b51cc94cb6da8301f` |
-| Commits added | `4d05afe5b0`, `5579d4378b`, `d7405b348b` |
+| Final code SHA | `935adc80571ff1eee335e01124f28861ad64a54d` — the certified artifact is built from exactly this commit |
+| Commits added | `4d05afe5b0`, `5579d4378b`, `d7405b348b`, `935adc8057`, plus one docs-only commit carrying this report and the receipts |
 | Rollback point | `4d05afe5b0` (first of the three; `b954873e83` reverts the whole dispatch) |
 | Candidate runtime | `9a4c6d41-12e6-42c4-9029-9ac7834035d8`, isolated `ORCA_DEV_USER_DATA_PATH`, torn down |
 | Native runtime | `868298d7-29b6-413d-b374-507abfb6e019` — not mutated, verified healthy after teardown |
