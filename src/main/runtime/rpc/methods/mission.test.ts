@@ -86,7 +86,8 @@ describe('mission.plan', () => {
         model: 'github-copilot/gpt-5.4-mini'
       }),
       { kind: 'local', cwd: homedir() },
-      'mission-plan'
+      'mission-plan',
+      { useAgentDefaultModel: true }
     )
   })
 

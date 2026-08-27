@@ -79,10 +79,15 @@ export async function generateText(input: {
   params: GenerateParams
   target: CommitMessageGenerationTarget
   operation: TextGenerationOperation
+  useAgentDefaultModel?: boolean
   spawnAgent: SpawnSourceControlAgent
 }): Promise<GenerateTextResult> {
   const planned = planCommitMessageGeneration(
-    { ...input.params, backslash: commandBackslashMode(input.target) },
+    {
+      ...input.params,
+      backslash: commandBackslashMode(input.target),
+      useAgentDefaultModel: input.useAgentDefaultModel
+    },
     input.prompt
   )
   if (!planned.ok) {
