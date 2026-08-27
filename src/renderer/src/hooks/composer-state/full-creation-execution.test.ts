@@ -175,4 +175,43 @@ describe('useFullCreationExecution kanban sync', () => {
     expect(syncMock).not.toHaveBeenCalled()
     expect(onCreated).not.toHaveBeenCalled()
   })
+
+  it('leaves generic non-Kanban creation unaffected', async () => {
+    syncMock.mockReset()
+    const onCreated = vi.fn()
+    const githubItem = {
+      type: 'issue',
+      provider: 'github',
+      number: 42,
+      title: 'Fix login',
+      url: 'https://github.com/acme/widgets/issues/42'
+    } as const
+    const state = makeState({
+      createWorktree: vi.fn().mockResolvedValue({
+        worktree: { id: 'wt-9', branch: 'feature-x' },
+        setup: undefined,
+        defaultTabs: undefined,
+        startupTerminal: { spawned: false }
+      }),
+      onCreated,
+      prepareFullSubmit: vi.fn().mockResolvedValue({
+        ...makeKanbanPrepared(),
+        submitLinkedWorkItem: githubItem
+      })
+    })
+    const hook = renderHook(() => useFullCreationExecution(state))
+
+    let creation!: Promise<void>
+    act(() => {
+      creation = hook.result.current.executeFullCreation({ kind: 'none' }, 'repo-1')
+    })
+    await act(async () => creation)
+
+    expect(syncMock).toHaveBeenCalledWith({
+      linkedWorkItem: expect.objectContaining({ provider: 'github' }),
+      projectName: 'Widgets fix',
+      branch: 'feature-x'
+    })
+    expect(onCreated).toHaveBeenCalled()
+  })
 })

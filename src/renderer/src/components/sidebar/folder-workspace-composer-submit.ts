@@ -59,7 +59,9 @@ type SubmitFolderWorkspaceCreateParams = {
   launchSource?: LaunchSource
   runtimeEnvironmentId?: string | null
   createFolderWorkspace: (input: FolderWorkspaceCreateInput) => Promise<FolderWorkspace | null>
-  onOpenChange: (open: boolean) => void
+  /** Why: invoked on create completion with the actual computed workspace name
+   *  (blank/auto-managed names included) as the second argument. */
+  onOpenChange: (open: boolean, workspaceName?: string) => void
 }
 
 export function getFolderWorkspaceAgentLaunchPlatform(
@@ -292,7 +294,6 @@ export async function submitFolderWorkspaceCreate({
           }
         }
       : undefined
-  onOpenChange(false)
   try {
     const activation = activateAndRevealFolderWorkspace(workspace.id, {
       ...(startup ? { startup } : {}),
@@ -329,5 +330,8 @@ export async function submitFolderWorkspaceCreate({
     // open if the follow-up reveal/startup path hits a transient issue.
     console.error('Failed to activate folder workspace after create:', error)
   }
+  // Why: run after activation with the actual computed name, so the caller can
+  // synchronize the card before its onOpenChange cleanup (draft clear, onCreated).
+  onOpenChange(false, workspaceName)
   return true
 }

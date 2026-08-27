@@ -32,6 +32,14 @@ const kanbanLinkedItem = {
   kanbanIdentifier: 'K-1'
 } as const
 
+const githubLinkedItem = {
+  provider: 'github',
+  type: 'issue',
+  number: 42,
+  title: 'Fix login',
+  url: 'https://github.com/acme/widgets/issues/42'
+} as const
+
 function makeState(
   overrides: Partial<FolderSubmitOrchestrationInput>
 ): FolderSubmitOrchestrationInput {
@@ -72,10 +80,19 @@ beforeEach(() => {
 })
 
 describe('useFolderSubmitOrchestration kanban sync', () => {
-  it('syncs the Kanban card after a successful folder workspace creation with branch null', async () => {
-    mocks.submitFolderWorkspaceCreate.mockResolvedValue(true)
-    const onCreated = vi.fn()
-    const state = makeState({ onCreated })
+  it('syncs the Kanban card in onOpenChange after activation with the computed name before cleanup', async () => {
+    const order: string[] = []
+    mocks.syncKanbanTaskAfterWorkspaceStart.mockImplementation(() => {
+      order.push('sync')
+    })
+    mocks.submitFolderWorkspaceCreate.mockImplementation(async (args: unknown) => {
+      const submitArgs = args as { onOpenChange?: (open: boolean, workspaceName?: string) => void }
+      order.push('activate')
+      submitArgs.onOpenChange?.(false, '4123 Fix checkout retry')
+      return true
+    })
+    const onCreated = vi.fn(() => order.push('onCreated'))
+    const state = makeState({ name: '', onCreated })
     const hook = renderHook(() => useFolderSubmitOrchestration(state))
 
     let submission!: Promise<void>
@@ -86,9 +103,11 @@ describe('useFolderSubmitOrchestration kanban sync', () => {
 
     expect(mocks.syncKanbanTaskAfterWorkspaceStart).toHaveBeenCalledWith({
       linkedWorkItem: expect.objectContaining({ provider: 'kanban', kanbanIdentifier: 'K-1' }),
-      projectName: 'Folder name',
+      projectName: '4123 Fix checkout retry',
       branch: null
     })
+    expect(order.indexOf('sync')).toBeGreaterThan(order.indexOf('activate'))
+    expect(order.indexOf('sync')).toBeLessThan(order.indexOf('onCreated'))
   })
 
   it('does not sync the Kanban card when folder workspace creation fails', async () => {
@@ -103,5 +122,26 @@ describe('useFolderSubmitOrchestration kanban sync', () => {
     await act(async () => submission)
 
     expect(mocks.syncKanbanTaskAfterWorkspaceStart).not.toHaveBeenCalled()
+  })
+})
+
+describe('useFolderSubmitOrchestration generic paths', () => {
+  it('leaves generic non-Kanban folder creation unaffected', async () => {
+    mocks.submitFolderWorkspaceCreate.mockImplementation(async (args: unknown) => {
+      const submitArgs = args as { onOpenChange?: (open: boolean, workspaceName?: string) => void }
+      submitArgs.onOpenChange?.(false)
+      return true
+    })
+    const onCreated = vi.fn()
+    const state = makeState({ linkedWorkItem: githubLinkedItem, onCreated })
+    const hook = renderHook(() => useFolderSubmitOrchestration(state))
+
+    let submission!: Promise<void>
+    act(() => {
+      submission = hook.result.current.submitFolderTarget(null)
+    })
+    await act(async () => submission)
+
+    expect(onCreated).toHaveBeenCalled()
   })
 })

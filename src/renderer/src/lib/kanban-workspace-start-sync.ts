@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 
+import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { KanbanMarkStartedResult } from '../../../shared/kanban-types'
 
@@ -38,7 +39,9 @@ export function showKanbanCardUpdateToast(args: {
   branch: string | null
   result: Extract<KanbanMarkStartedResult, { ok: false }>
 }): void {
-  const retry: 'all' | 'comment-only' = args.result.moved ? 'comment-only' : 'all'
+  // Why: the main process already decided the exact retry mode; a failed
+  // comment-only retry must stay comment-only instead of restarting from `all`.
+  const retry = args.result.retry
   toast.error(
     translate(
       'auto.components.kanban.sync.failed',
@@ -71,6 +74,10 @@ export async function retryKanbanCardUpdate(
     const result = await window.api.kanban.markStarted({ taskId, projectName, branch, retry })
     if (!result.ok) {
       showKanbanCardUpdateToast({ taskId, projectName, branch, result })
+    } else {
+      // Why: the card moved/updated — refresh the Kanban task list via the
+      // store-backed nonce the Task Page list fetch already watches.
+      useAppStore.getState().requestKanbanTaskRefresh()
     }
   } catch {
     showKanbanCardUpdateToast({

@@ -8,17 +8,24 @@ import {
 
 const mocks = vi.hoisted(() => ({
   markStarted: vi.fn(),
-  toastError: vi.fn()
+  toastError: vi.fn(),
+  requestRefresh: vi.fn()
 }))
 
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError } }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
+vi.mock('@/store', () => ({
+  useAppStore: {
+    getState: () => ({ requestKanbanTaskRefresh: mocks.requestRefresh })
+  }
+}))
 
 const okResult: KanbanMarkStartedResult = { ok: true, moved: true, commented: true }
 
 beforeEach(() => {
   mocks.markStarted.mockReset().mockResolvedValue(okResult)
   mocks.toastError.mockReset()
+  mocks.requestRefresh.mockReset()
   globalThis.window = {
     api: {
       kanban: {
@@ -128,6 +135,74 @@ describe('syncKanbanTaskAfterWorkspaceStart', () => {
       })
     ).resolves.toBeUndefined()
     expect(mocks.toastError).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a failed comment-only retry as comment-only across repeated network failures', async () => {
+    mocks.markStarted.mockResolvedValueOnce({
+      ok: false,
+      moved: true,
+      commented: false,
+      retry: 'comment-only',
+      code: 'server',
+      message: 'Comment failed'
+    })
+    await syncKanbanTaskAfterWorkspaceStart({
+      linkedWorkItem: { provider: 'kanban', kanbanIdentifier: 'K-1' },
+      projectName: 'Widgets',
+      branch: 'feature-x'
+    })
+    const [, firstOptions] = mocks.toastError.mock.calls[0]
+    mocks.markStarted.mockResolvedValueOnce({
+      ok: false,
+      moved: false,
+      commented: false,
+      retry: 'comment-only',
+      code: 'network',
+      message: 'Kanban is unreachable. Check your connection.'
+    })
+    firstOptions.action.onClick()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.markStarted).toHaveBeenLastCalledWith({
+      taskId: 'K-1',
+      projectName: 'Widgets',
+      branch: 'feature-x',
+      retry: 'comment-only'
+    })
+    const [, secondOptions] = mocks.toastError.mock.calls[1]
+    secondOptions.action.onClick()
+    expect(mocks.markStarted).toHaveBeenLastCalledWith({
+      taskId: 'K-1',
+      projectName: 'Widgets',
+      branch: 'feature-x',
+      retry: 'comment-only'
+    })
+  })
+
+  it('requests a Kanban list refresh only after markStarted succeeds', async () => {
+    await syncKanbanTaskAfterWorkspaceStart({
+      linkedWorkItem: { provider: 'kanban', kanbanIdentifier: 'K-1' },
+      projectName: 'Widgets',
+      branch: 'feature-x'
+    })
+    expect(mocks.requestRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('does not request a Kanban list refresh when markStarted fails', async () => {
+    mocks.markStarted.mockResolvedValue({
+      ok: false,
+      moved: true,
+      commented: false,
+      retry: 'comment-only',
+      code: 'server',
+      message: 'Comment failed'
+    })
+    await syncKanbanTaskAfterWorkspaceStart({
+      linkedWorkItem: { provider: 'kanban', kanbanIdentifier: 'K-1' },
+      projectName: 'Widgets',
+      branch: 'feature-x'
+    })
+    expect(mocks.requestRefresh).not.toHaveBeenCalled()
   })
 })
 

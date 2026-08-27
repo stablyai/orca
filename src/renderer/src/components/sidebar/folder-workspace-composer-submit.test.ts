@@ -114,7 +114,7 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: null,
       linkedTask: null
     })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.any(String))
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
       runtimeEnvironmentId: null
     })
@@ -657,7 +657,7 @@ describe('submitFolderWorkspaceCreate', () => {
       connectionId: 'ssh-1',
       linkedTask: null
     })
-    expect(onOpenChange).toHaveBeenCalledWith(false)
+    expect(onOpenChange).toHaveBeenCalledWith(false, expect.any(String))
     expect(mocks.activateAndRevealFolderWorkspace).toHaveBeenCalledWith('folder-workspace-1', {
       runtimeEnvironmentId: null
     })

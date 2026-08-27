@@ -42,7 +42,6 @@ import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { runBackgroundWorktreeCreation } from '@/lib/worktree-creation-flow'
 import { translate } from '@/i18n/i18n'
 import { resolveQuickCreateLinkedWorkItemPrompt } from '@/lib/linked-work-item-context'
-import { syncKanbanTaskAfterWorkspaceStart } from '@/lib/kanban-workspace-start-sync'
 import { buildQuickComposerStartup } from './quick-startup-plan'
 import { buildQuickCreationRequest } from './quick-creation-request'
 import type { PendingSmartGitHubSubmitResolution } from './source-selection-decisions'
@@ -242,15 +241,6 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       }
 
       runBackgroundWorktreeCreation(request)
-
-      // Why: background creation owns the workspace lifecycle; once the request
-      // is handed off, sync the Kanban card before the composer cleanup runs.
-      // The helper never throws, so a board failure cannot fail creation.
-      void syncKanbanTaskAfterWorkspaceStart({
-        linkedWorkItem: submitLinkedWorkItem,
-        projectName: createDisplayName ?? workspaceName,
-        branch: effectiveBranchNameOverride ?? workspaceName
-      })
 
       if (createMultiple) {
         resetForNextCreate()

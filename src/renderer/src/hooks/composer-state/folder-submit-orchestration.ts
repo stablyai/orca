@@ -151,8 +151,21 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
             createFolderWorkspace(input, {
               runtimeEnvironmentId: folderTargetRuntimeEnvironmentId
             }),
-          onOpenChange: (open) => {
+          onOpenChange: (open, workspaceName) => {
             if (!open) {
+              // Why: after the folder is created, persisted and activated (the
+              // submit calls this with the actual computed workspace name,
+              // blank/auto-managed included), sync the Kanban card before the
+              // generic cleanup. A folder has no git branch, so the comment says
+              // "ветка без Git". The helper never throws, so a board failure
+              // cannot fail creation.
+              if (workspaceName) {
+                void syncKanbanTaskAfterWorkspaceStart({
+                  linkedWorkItem: submitLinkedWorkItem,
+                  projectName: workspaceName,
+                  branch: null
+                })
+              }
               if (persistDraft) {
                 clearNewWorkspaceDraft()
               }
@@ -170,15 +183,6 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
               'auto.hooks.useComposerState.folderWorkspaceCreateFailedMessage',
               'The folder workspace could not be created. Check the error details above, then try again.'
             )
-          })
-        } else {
-          // Why: after a successful folder create, sync the Kanban card. A folder
-          // workspace has no git branch, so the comment says "ветка без Git".
-          // The helper never throws, so a board failure cannot fail creation.
-          void syncKanbanTaskAfterWorkspaceStart({
-            linkedWorkItem: submitLinkedWorkItem,
-            projectName: smartGitHubMetadata?.workspaceName ?? name,
-            branch: null
           })
         }
       } catch (error) {

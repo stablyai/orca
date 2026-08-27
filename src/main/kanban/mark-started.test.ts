@@ -201,8 +201,7 @@ describe('markKanbanTaskStarted', () => {
     expect(moveCalls).toHaveLength(1)
   })
 
-  it('skips the move on a comment-only retry', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse(LIST))
+  it('skips the move on a comment-only retry and does not GET the task list', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     const { markKanbanTaskStarted, deps } = await loadMarkStarted()
 
@@ -212,8 +211,9 @@ describe('markKanbanTaskStarted', () => {
     )
 
     expect(result).toEqual({ ok: true, moved: false, commented: true })
-    const moveCalls = fetchMock.mock.calls.filter((call) => String(call[0]).endsWith('/move'))
-    expect(moveCalls).toHaveLength(0)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const [commentCall] = [callArgs(0)]
+    expect(String(commentCall[0])).toBe('https://kanban.fpimi.ru/api/tasks/K-1/comments')
   })
 
   it('sanitizes workspace data so it cannot inject extra comment lines', async () => {
@@ -283,5 +283,32 @@ describe('markKanbanTaskStarted', () => {
     if (!result.ok) {
       expect(result.code).toBe('server')
     }
+  })
+
+  it('invalidates the shared auth state on 401 so getStatus reports disconnected', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'nope' }, 401))
+    const { markKanbanTaskStarted, deps } = await loadMarkStarted()
+    const { createKanbanClient } = await import('./client')
+    const client = createKanbanClient({
+      fetch: (input: RequestInfo | URL, init?: RequestInit) => fetchMock(input, init),
+      now: () => Date.parse('2026-08-27T10:00:00Z'),
+      timeoutMs: 5000
+    })
+
+    expect(client.getStatus()).toEqual({
+      connected: true,
+      viewer: { id: 'user-1', name: 'Ada', level: 'admin' }
+    })
+
+    const result = await markKanbanTaskStarted(
+      { taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x' },
+      deps
+    )
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.code).toBe('unauthorized')
+    }
+    expect(client.getStatus()).toEqual({ connected: false, reason: 'invalid' })
   })
 })

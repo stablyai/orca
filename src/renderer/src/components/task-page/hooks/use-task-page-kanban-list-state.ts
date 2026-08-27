@@ -1,4 +1,5 @@
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react'
+import { useAppStore } from '@/store'
 import type {
   KanbanConnectionStatus,
   KanbanTaskDetails,
@@ -28,7 +29,12 @@ export function useTaskPageKanbanListState() {
   const [kanbanResult, setKanbanResult] = useState<KanbanTaskListResult | null>(null)
   const [kanbanLoading, setKanbanLoading] = useState(false)
   const [kanbanLoadError, setKanbanLoadError] = useState<KanbanListLoadError | null>(null)
-  const [kanbanRefreshNonce, setKanbanRefreshNonce] = useState(0)
+  // Why: the nonce lives in the store so the sync helper can bump it from a
+  // non-React context after a successful card update.
+  const kanbanRefreshNonce = useAppStore((s) => s.kanbanRefreshNonce)
+  const setKanbanRefreshNonce: Dispatch<SetStateAction<number>> = useCallback(() => {
+    useAppStore.getState().requestKanbanTaskRefresh()
+  }, [])
   const [kanbanSelectedTaskId, setKanbanSelectedTaskId] = useState<string | null>(null)
   const [kanbanDetail, setKanbanDetail] = useState<KanbanTaskDetails | null>(null)
   const [kanbanDetailLoading, setKanbanDetailLoading] = useState(false)

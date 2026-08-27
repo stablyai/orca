@@ -3,7 +3,11 @@ import { tmpdir } from 'node:os'
 import type * as Os from 'node:os'
 import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KanbanConnectResult, KanbanTaskDetails } from '../../shared/kanban-types'
+import type {
+  KanbanConnectResult,
+  KanbanMarkStartedResult,
+  KanbanTaskDetails
+} from '../../shared/kanban-types'
 import type * as KanbanClientModule from '../kanban/client'
 
 const {
@@ -13,7 +17,8 @@ const {
   disconnectMock,
   getStatusMock,
   listTasksMock,
-  getTaskMock
+  getTaskMock,
+  markStartedMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
   createClientMock: vi.fn(),
@@ -21,7 +26,8 @@ const {
   disconnectMock: vi.fn(),
   getStatusMock: vi.fn(),
   listTasksMock: vi.fn(),
-  getTaskMock: vi.fn()
+  getTaskMock: vi.fn(),
+  markStartedMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -36,6 +42,10 @@ vi.mock('../kanban/client', async (importOriginal) => {
   const actual = await importOriginal<typeof KanbanClientModule>()
   return { ...actual, createKanbanClient: createClientMock }
 })
+
+vi.mock('../kanban/mark-started', () => ({
+  markKanbanTaskStarted: markStartedMock
+}))
 
 import { registerKanbanHandlers } from './kanban'
 
@@ -59,6 +69,7 @@ describe('registerKanbanHandlers', () => {
     getStatusMock.mockReset()
     listTasksMock.mockReset()
     getTaskMock.mockReset()
+    markStartedMock.mockReset()
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
     }
@@ -332,5 +343,77 @@ describe('registerKanbanHandlers', () => {
     } finally {
       rmSync(tempHome, { recursive: true, force: true })
     }
+  })
+})
+
+describe('registerKanbanHandlers markStarted', () => {
+  const handlers: HandlerMap = {}
+
+  beforeEach(() => {
+    handleMock.mockReset()
+    markStartedMock.mockReset()
+    for (const key of Object.keys(handlers)) {
+      delete handlers[key]
+    }
+    handleMock.mockImplementation((channel, handler) => {
+      handlers[channel] = handler
+    })
+    markStartedMock.mockResolvedValue({ ok: true, moved: true, commented: true })
+  })
+
+  it('registers and invokes the kanban:markStarted channel', async () => {
+    registerKanbanHandlers()
+    expect(handleMock).toHaveBeenCalledWith('kanban:markStarted', expect.any(Function))
+
+    const result = await handlers['kanban:markStarted'](null, {
+      taskId: ' K-1 ',
+      projectName: ' Widgets ',
+      branch: 'feature-x'
+    })
+
+    expect(markStartedMock).toHaveBeenCalledWith(
+      { taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x' },
+      { fetch: expect.any(Function) }
+    )
+    expect(result).toEqual({ ok: true, moved: true, commented: true })
+  })
+
+  it('forwards a comment-only retry marker', async () => {
+    registerKanbanHandlers()
+
+    await handlers['kanban:markStarted'](null, {
+      taskId: 'K-1',
+      projectName: 'Widgets',
+      branch: null,
+      retry: 'comment-only'
+    })
+
+    expect(markStartedMock).toHaveBeenCalledWith(
+      { taskId: 'K-1', projectName: 'Widgets', branch: null, retry: 'comment-only' },
+      { fetch: expect.any(Function) }
+    )
+  })
+
+  it.each([
+    ['empty taskId', { taskId: '   ', projectName: 'Widgets', branch: 'feature-x' }],
+    ['oversized taskId', { taskId: 'x'.repeat(600), projectName: 'Widgets', branch: 'feature-x' }],
+    ['non-string taskId', { taskId: 42, projectName: 'Widgets', branch: 'feature-x' }],
+    ['empty projectName', { taskId: 'K-1', projectName: '   ', branch: 'feature-x' }],
+    ['oversized projectName', { taskId: 'K-1', projectName: 'x'.repeat(400), branch: 'feature-x' }],
+    ['non-string projectName', { taskId: 'K-1', projectName: 42, branch: 'feature-x' }],
+    ['non-string branch', { taskId: 'K-1', projectName: 'Widgets', branch: 42 }],
+    ['oversized branch', { taskId: 'K-1', projectName: 'Widgets', branch: 'x'.repeat(400) }],
+    ['invalid retry', { taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x', retry: 'nonsense' }]
+  ])('rejects %s without touching the operation', async (_label, args) => {
+    registerKanbanHandlers()
+
+    const result = (await handlers['kanban:markStarted'](null, args)) as KanbanMarkStartedResult
+
+    expect(result.ok).toBe(false)
+    if (!result.ok) {
+      expect(result.moved).toBe(false)
+      expect(result.commented).toBe(false)
+    }
+    expect(markStartedMock).not.toHaveBeenCalled()
   })
 })

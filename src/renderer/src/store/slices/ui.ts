@@ -827,6 +827,10 @@ export type UISlice = {
   modalData: Record<string, unknown>
   openModal: (modal: UISlice['activeModal'], data?: Record<string, unknown>) => void
   closeModal: () => void
+  /** Why: cross-cutting bump for the Kanban task list; the sync helper calls it
+   *  after a successful card update so the Task Page re-fetches the board. */
+  kanbanRefreshNonce: number
+  requestKanbanTaskRefresh: () => void
   featureTipsSeenIds: FeatureTipId[]
   markFeatureTipsSeen: (ids: FeatureTipId[]) => void
   featureInteractions: FeatureInteractionState
@@ -1646,6 +1650,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     const evicted = get().modalData
     set({ activeModal: 'none', modalData: {} })
     settleEvictedModalData(evicted)
+  },
+  kanbanRefreshNonce: 0,
+  requestKanbanTaskRefresh: () => {
+    set((state) => ({ kanbanRefreshNonce: state.kanbanRefreshNonce + 1 }))
   },
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>

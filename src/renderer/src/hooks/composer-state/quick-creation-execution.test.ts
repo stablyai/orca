@@ -103,7 +103,7 @@ beforeEach(() => {
 })
 
 describe('useQuickCreationExecution kanban sync', () => {
-  it('syncs the Kanban card after background creation is kicked off', async () => {
+  it('does not sync the Kanban card from the quick hook - the background creation tail owns it', async () => {
     const onCreated = vi.fn()
     const state = makeState({ onCreated })
     const hook = renderHook(() => useQuickCreationExecution(state))
@@ -122,11 +122,7 @@ describe('useQuickCreationExecution kanban sync', () => {
     await act(async () => execution)
 
     expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledTimes(1)
-    expect(mocks.syncKanbanTaskAfterWorkspaceStart).toHaveBeenCalledWith({
-      linkedWorkItem: expect.objectContaining({ provider: 'kanban', kanbanIdentifier: 'K-1' }),
-      projectName: 'Widgets fix',
-      branch: 'workspace'
-    })
+    expect(mocks.syncKanbanTaskAfterWorkspaceStart).not.toHaveBeenCalled()
     expect(onCreated).toHaveBeenCalled()
   })
 
@@ -151,5 +147,42 @@ describe('useQuickCreationExecution kanban sync', () => {
 
     expect(mocks.runBackgroundWorktreeCreation).not.toHaveBeenCalled()
     expect(mocks.syncKanbanTaskAfterWorkspaceStart).not.toHaveBeenCalled()
+  })
+})
+
+describe('useQuickCreationExecution generic paths', () => {
+  it('leaves generic non-Kanban creation unaffected', async () => {
+    const onCreated = vi.fn()
+    const githubItem = {
+      type: 'issue',
+      provider: 'github',
+      number: 42,
+      title: 'Fix login',
+      url: 'https://github.com/acme/widgets/issues/42'
+    } as const
+    const state = makeState({
+      prepareQuickSubmit: vi.fn().mockResolvedValue({
+        ...makeKanbanPrepared(),
+        submitLinkedWorkItem: githubItem
+      }),
+      onCreated
+    })
+    const hook = renderHook(() => useQuickCreationExecution(state))
+
+    let execution!: Promise<void>
+    act(() => {
+      execution = hook.result.current.executeQuickCreation(
+        { kind: 'none' },
+        null,
+        'workspace',
+        null,
+        'repo-1',
+        { id: 'repo-1' } as never
+      )
+    })
+    await act(async () => execution)
+
+    expect(mocks.runBackgroundWorktreeCreation).toHaveBeenCalledTimes(1)
+    expect(onCreated).toHaveBeenCalled()
   })
 })

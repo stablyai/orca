@@ -5,6 +5,7 @@ import {
   type KanbanRequestErrorCode
 } from '../../shared/kanban-types'
 import { KanbanRequestError } from './client'
+import { invalidateKanbanAuth } from './kanban-auth-invalidation'
 import { loadStoredKanbanToken } from './credential-store'
 import { mapKanbanTaskList } from './task-mapping'
 
@@ -94,9 +95,11 @@ async function requestJson(
     throw new KanbanRequestError('network')
   }
   if (response.status === 401) {
+    invalidateKanbanAuth()
     throw new KanbanRequestError('unauthorized')
   }
   if (response.status === 403) {
+    invalidateKanbanAuth()
     throw new KanbanRequestError('forbidden')
   }
   if (response.status === 409) {
@@ -214,6 +217,23 @@ export async function markKanbanTaskStarted(
     return toFailure(new KanbanRequestError('unauthorized'), false, false, retry)
   }
 
+  // Why: a comment-only retry already moved the card — only the comment is
+  // retried, with no task-list GET and no move.
+  if (retry === 'comment-only') {
+    try {
+      await postComment({
+        taskId: args.taskId,
+        text: buildKanbanStartedComment(args.projectName, args.branch),
+        token,
+        timeoutMs,
+        fetchFn: deps.fetch
+      })
+      return { ok: true, moved: false, commented: true }
+    } catch (error) {
+      return toFailure(error, false, false, 'comment-only')
+    }
+  }
+
   const read = await readTaskAndLane({
     taskId: args.taskId,
     token,
@@ -225,7 +245,7 @@ export async function markKanbanTaskStarted(
   }
 
   let moved = false
-  if (retry === 'all' && read.currentLaneId !== read.targetLaneId) {
+  if (read.currentLaneId !== read.targetLaneId) {
     try {
       await moveOnce({
         taskId: read.taskId,

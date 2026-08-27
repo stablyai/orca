@@ -10,6 +10,11 @@ import {
 } from '../../shared/kanban-types'
 import { mapKanbanTaskDetails, mapKanbanTaskList, mapKanbanViewer } from './task-mapping'
 import {
+  isKanbanAuthInvalidated,
+  invalidateKanbanAuth,
+  resetKanbanAuthInvalidation
+} from './kanban-auth-invalidation'
+import {
   clearStoredKanbanCredential,
   getStoredKanbanCredentialError,
   getStoredKanbanMetadata,
@@ -56,8 +61,6 @@ export type KanbanClientOptions = {
   timeoutMs?: number
 }
 
-let authInvalidated = false
-
 export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
   const now = options.now ?? Date.now
   const timeoutMs = options.timeoutMs ?? 10_000
@@ -86,11 +89,11 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
       throw new KanbanRequestError('network')
     }
     if (response.status === 401) {
-      authInvalidated = true
+      invalidateKanbanAuth()
       throw new KanbanRequestError('unauthorized')
     }
     if (response.status === 403) {
-      authInvalidated = true
+      invalidateKanbanAuth()
       throw new KanbanRequestError('forbidden')
     }
     if (response.status === 409) {
@@ -129,7 +132,7 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
         return { ok: false, code: 'invalid_response', error: ERROR_MESSAGES.invalid_response }
       }
       saveKanbanCredential({ token: trimmed, viewer: mapped.value })
-      authInvalidated = false
+      resetKanbanAuthInvalidation()
       return { ok: true, viewer: mapped.value }
     } catch (error) {
       if (error instanceof KanbanRequestError) {
@@ -140,12 +143,12 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
   }
 
   function disconnect(): void {
-    authInvalidated = false
+    resetKanbanAuthInvalidation()
     clearStoredKanbanCredential()
   }
 
   function getStatus(): KanbanConnectionStatus {
-    if (authInvalidated) {
+    if (isKanbanAuthInvalidated()) {
       return { connected: false, reason: 'invalid' }
     }
     const metadata = getStoredKanbanMetadata()

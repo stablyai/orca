@@ -4,6 +4,7 @@ import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
+import { syncKanbanTaskAfterWorkspaceStart } from '@/lib/kanban-workspace-start-sync'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   attachEphemeralVmRuntimeToWorkspace,
@@ -258,6 +259,14 @@ async function executeWorktreeCreation(
   if (shouldActivateOnCompletion && !preparedRequest.suppressTerminalFocusOnCompletion) {
     queueWorkspaceActivationTerminalFocus(worktree.id, activation)
   }
+
+  // Why: after the workspace is created, persisted and activated, sync the
+  // Kanban card (move + comment) with the actual created name and branch. The
+  // helper never throws and no-ops for non-Kanban items, so a board failure
+  // cannot fail or roll back creation.
+  void syncKanbanTaskAfterWorkspaceStart({
+    linkedWorkItem: preparedRequest.linkedWorkItem, projectName: worktree.displayName, branch: worktree.branch
+  })
 
   // Why: awaiting the note IPC before the swap would add a visible round-trip to
   // the panel→terminal transition; it's cosmetic, so it runs last.
