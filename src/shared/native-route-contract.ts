@@ -31,6 +31,18 @@ export type NativeRouteVerdict =
   /** Native Orca genuinely has no route: no catalog, or no way to apply a model. */
   | 'TRULY_UNSUPPORTED'
 
+/** How native Orca can actually put this agent on screen.
+ *
+ *  Why two: modelling only the structured path made agents that Orca launches
+ *  perfectly well through a custom terminal read as "no native route". Both are
+ *  native launches; they differ in whether Orca composes the command line from
+ *  its catalog or the caller supplies it and Orca supervises the result. */
+export type NativeLaunchStrategy =
+  /** `worker-start --model/--effort`: Orca composes the launch from its catalog. */
+  | 'worker_start_preferences'
+  /** A custom terminal command Orca then supervises and hooks. */
+  | 'custom_terminal_attach'
+
 export type NativeRouteCapability = {
   agent: TuiAgent
   /** Orca has a launch configuration for this agent at all. */
@@ -53,6 +65,11 @@ export type NativeRouteCapability = {
   discoversExactModels: boolean
   /** Opaque ids may launch with these options rather than being rejected. */
   acceptsUnknownModelIds: boolean
+  /** Every way native Orca can launch this agent today. */
+  launchStrategies: readonly NativeLaunchStrategy[]
+  /** True when ANY strategy can launch it. A verdict short of
+   *  NATIVE_ROUTE_SUPPORTED never means Orca cannot launch the agent. */
+  nativeLaunchPossible: boolean
 }
 
 /** Why these live here too: a consumer asking "may this route launch?" needs the
@@ -100,7 +117,8 @@ export function resolveNativeRouteCapability(
       optedIntoWorkerLaunch: false,
       effortChoices: [],
       discoversExactModels: false,
-      acceptsUnknownModelIds: false
+      acceptsUnknownModelIds: false,
+      ...launchStrategiesFor(agent, false)
     }
   }
   return {
@@ -112,8 +130,27 @@ export function resolveNativeRouteCapability(
     optedIntoWorkerLaunch: catalog.supportsWorkerLaunchPreferences === true,
     effortChoices: effortChoicesFor(catalog, model),
     discoversExactModels: Boolean(catalog.listModels),
-    acceptsUnknownModelIds: (catalog.unknownModelOptions ?? []).length > 0
+    acceptsUnknownModelIds: (catalog.unknownModelOptions ?? []).length > 0,
+    ...launchStrategiesFor(agent, catalog.supportsWorkerLaunchPreferences === true)
   }
+}
+
+/** Orca can supervise a custom terminal for any agent it has a launch config
+ *  for, so that strategy is available whenever the launcher is. The structured
+ *  strategy additionally needs the unattended-launch opt-in. */
+function launchStrategiesFor(
+  agent: TuiAgent,
+  optedIntoWorkerLaunch: boolean
+): { launchStrategies: readonly NativeLaunchStrategy[]; nativeLaunchPossible: boolean } {
+  const facts = orchestrationFacts(agent)
+  if (!facts.launcherSupported || facts.excludedFromWorkerRouting) {
+    return { launchStrategies: [], nativeLaunchPossible: false }
+  }
+  const strategies: NativeLaunchStrategy[] = ['custom_terminal_attach']
+  if (optedIntoWorkerLaunch) {
+    strategies.unshift('worker_start_preferences')
+  }
+  return { launchStrategies: strategies, nativeLaunchPossible: true }
 }
 
 export type NativeRouteClassification = {
@@ -153,14 +190,14 @@ export function classifyNativeRoute(args: {
     return {
       verdict: 'IDENTITY_PROOF_INCOMPLETE',
       capability,
-      reason: `Native Orca launches ${args.agent} but has no session-option catalog for it, so a model cannot be pinned or verified through Orca's own contract.`
+      reason: `Native Orca launches ${args.agent} through a supervised custom terminal, but has no session-option catalog for it, so Orca cannot compose or verify the model itself.`
     }
   }
   if (!capability.optedIntoWorkerLaunch) {
     return {
       verdict: 'BLOCKED_SAFE_LAUNCH_POLICY_DRIFT',
       capability,
-      reason: `${args.agent} can pin a model at launch (${capability.models.join(', ')}), but is not opted into unattended worker launch. This is Orca launch policy, not a provider limit.`
+      reason: `${args.agent} can pin a model at launch (${capability.models.join(', ')}) and Orca CAN launch it through a supervised custom terminal; it is only the structured worker-start path that is not opted in. Orca launch policy, not a provider limit.`
     }
   }
   if (args.reasoning && !capability.effortChoices.includes(args.reasoning)) {

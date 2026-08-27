@@ -4,6 +4,7 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
 import { assertOutcomeSerializationAllowed } from '../../orchestration/control-plane/outcome-serialization'
+import { classifyNativeRoute } from '../../../../shared/native-route-contract'
 import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -48,6 +49,25 @@ export function assertWorkerStartRouteAdmitted(args: {
       'route_excluded',
       `Agent ${args.agent} is excluded from Orca worker routing.`
     )
+  }
+  // Why the shared contract: admission previously re-derived what a route can
+  // do from the registry alone. Reading the ONE derived contract here is what
+  // makes it the single route contract rather than another opinion.
+  if (args.agent) {
+    const native = classifyNativeRoute({
+      agent: args.agent,
+      model: args.model ?? null,
+      reasoning: args.effort ?? null
+    })
+    if (native.verdict === 'TRULY_UNSUPPORTED') {
+      throw new OrchestrationError('route_unsupported', `${native.verdict}: ${native.reason}`, {
+        verdict: native.verdict,
+        agent: args.agent,
+        model: args.model ?? null,
+        launchStrategies: native.capability.launchStrategies,
+        nativeLaunchPossible: native.capability.nativeLaunchPossible
+      })
+    }
   }
   const store = new ControlPlaneStore(args.handle)
   const binding = resolveOutcomeBinding(store, args.runId)

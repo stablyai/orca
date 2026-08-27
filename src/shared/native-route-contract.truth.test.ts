@@ -100,4 +100,26 @@ describe('ORCA_NATIVE_ROUTE_TRUTH', () => {
     expect(resolveNativeRouteCapability('gemini').models).not.toContain('gemini-3.7-flash')
     expect(resolveNativeRouteCapability('gemini').models).toContain('gemini-3-flash-preview')
   })
+
+  it('reports BOTH native launch strategies, so a policy verdict never reads as "cannot launch"', () => {
+    // Structured worker-start preferences AND a supervised custom terminal are
+    // both native launches. Modelling only the first made agents Orca launches
+    // perfectly well look unsupported.
+    const codex = resolveNativeRouteCapability('codex', 'gpt-5.6-sol')
+    expect(codex.launchStrategies).toEqual(['worker_start_preferences', 'custom_terminal_attach'])
+
+    for (const agent of ['gemini', 'grok', 'opencode'] as const) {
+      const capability = resolveNativeRouteCapability(agent)
+      // Not opted into the structured path...
+      expect(capability.launchStrategies, agent).toEqual(['custom_terminal_attach'])
+      // ...but Orca can still launch and supervise it natively.
+      expect(capability.nativeLaunchPossible, agent).toBe(true)
+    }
+
+    // Only a genuine absence of any launcher, or an explicit policy exclusion,
+    // means Orca cannot launch at all.
+    const excluded = resolveNativeRouteCapability('qwen-code')
+    expect(excluded.launchStrategies).toEqual([])
+    expect(excluded.nativeLaunchPossible).toBe(false)
+  })
 })
