@@ -1,3 +1,5 @@
+import type { CustomProviderUsageResult } from './custom-provider-types'
+
 export type RateLimitWindow = {
   /** Percentage of the window consumed (0–100). */
   usedPercent: number
@@ -124,6 +126,10 @@ export type RateLimitState = {
   antigravity: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
+  /** User-defined custom provider usage, keyed by CustomProviderAccount.id. A separate,
+   *  arbitrary-length structure — not folded into the fixed `provider` union above, since that
+   *  union is exhaustively switched on throughout the status bar/settings code. */
+  customProviderUsage: Record<string, CustomProviderUsageResult>
   /**
    * True when a MiniMax session cookie is persisted on disk. The cookie lives
    * outside GlobalSettings, so this flag is the durable signal that the

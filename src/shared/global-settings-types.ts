@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
+import type { CustomProviderAccount } from './custom-provider-types'
 import type { GitHubProjectSettings } from './github/project-types'
 import type { VoiceSettings } from './speech-types'
 import type { GitLabProjectSettings } from './gitlab-types'
@@ -357,6 +358,9 @@ export type GlobalSettings = {
   minimaxGroupId: string
   /** Comma-separated MiniMax model names to show in the status bar usage window. */
   minimaxUsageModels: string
+  /** User-defined AI provider accounts polled for a generic usage %. Auth tokens live in the
+   *  keychain-backed custom-provider-token-store, not here. */
+  customProviderAccounts: CustomProviderAccount[]
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */

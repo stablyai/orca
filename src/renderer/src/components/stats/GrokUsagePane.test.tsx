@@ -37,6 +37,7 @@ const mockStoreState = {
       error: null,
       status: 'ok'
     },
+    customProviderUsage: {},
     minimaxCookieConfigured: false,
     grokAuthConfigured: true,
     claudeTarget: { runtime: 'host', wslDistro: null },

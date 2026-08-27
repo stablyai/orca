@@ -63,6 +63,7 @@ import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from 
 import { AgentIcon } from '@/lib/agent-catalog'
 import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
+import { getCustomProviderIconOption } from '../settings/custom-provider-icon-options'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import {
@@ -2106,7 +2107,22 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     return null
   }
 
-  const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
+  const {
+    claude,
+    codex,
+    gemini,
+    opencodeGo,
+    kimi,
+    antigravity,
+    minimax,
+    grok,
+    customProviderUsage
+  } = rateLimits
+  // Why: an arbitrary-length, user-defined list rendered alongside the fixed
+  // providers above but kept out of their closed-union-typed roster/segment
+  // components (ProviderSegment/UsageRosterPanel) — see custom-provider-types.ts.
+  const enabledCustomProviders = (settings?.customProviderAccounts ?? []).filter((a) => a.enabled)
+  const hasCustomProviders = enabledCustomProviders.length > 0
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
   // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
@@ -2171,13 +2187,15 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     showKimi ||
     showAntigravity ||
     showMiniMax ||
-    showGrok
+    showGrok ||
+    hasCustomProviders
   const anyVisible = hasVisibleUsageMeters || showResourceUsage
   // Why: include Settings so durable managed accounts count — a configured user isn't shown the empty state while snapshots hydrate.
-  const isEmptyUsageState = isUsageEmptyState(
-    { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
-    usageSettings
-  )
+  const isEmptyUsageState =
+    isUsageEmptyState(
+      { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok },
+      usageSettings
+    ) && !hasCustomProviders
   // Why: one-time nudge — once dismissed, stays hidden even if providers reconnect later.
   const showEmptyUsageCta = isEmptyUsageState && !usageEmptyStateDismissed
   const anyFetching =
@@ -2188,7 +2206,8 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
     kimi?.status === 'fetching' ||
     antigravity?.status === 'fetching' ||
     minimax?.status === 'fetching' ||
-    grok?.status === 'fetching'
+    grok?.status === 'fetching' ||
+    enabledCustomProviders.some((a) => customProviderUsage[a.id]?.status === 'fetching')
 
   const compact = containerWidth < 900
   const iconOnly = containerWidth < 500
@@ -2291,6 +2310,25 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                       />
                     )
                   )}
+                  {enabledCustomProviders.map((account) => {
+                    const usage = customProviderUsage[account.id]
+                    const { Icon } = getCustomProviderIconOption(account.icon)
+                    const percent =
+                      usage?.usedPercent != null ? `${Math.round(usage.usedPercent)}%` : '--'
+                    return (
+                      <span
+                        key={account.id}
+                        title={account.displayName}
+                        className={`inline-flex items-center gap-1 text-xs ${
+                          usage && usage.status !== 'ok' ? 'text-red-400' : ''
+                        }`}
+                      >
+                        <Icon className="size-3" />
+                        {!iconOnly ? <span className="truncate">{account.displayName}</span> : null}
+                        <span>{percent}</span>
+                      </span>
+                    )
+                  })}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent
@@ -2358,6 +2396,30 @@ function StatusBarInner({ floatingTerminalOpen }: StatusBarProps): React.JSX.Ele
                     )
                   }}
                 />
+                {enabledCustomProviders.length > 0 ? (
+                  <div className="border-t border-border/60 p-1">
+                    {enabledCustomProviders.map((account) => {
+                      const usage = customProviderUsage[account.id]
+                      const { Icon } = getCustomProviderIconOption(account.icon)
+                      return (
+                        <button
+                          key={account.id}
+                          type="button"
+                          onClick={handleManageAccounts}
+                          className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-accent/50"
+                        >
+                          <Icon className="size-3.5 shrink-0 text-muted-foreground" />
+                          <span className="min-w-0 flex-1 truncate">{account.displayName}</span>
+                          <span className={usage && usage.status !== 'ok' ? 'text-red-400' : ''}>
+                            {usage?.usedPercent != null
+                              ? `${Math.round(usage.usedPercent)}%`
+                              : '--'}
+                          </span>
+                        </button>
+                      )
+                    })}
+                  </div>
+                ) : null}
               </DropdownMenuContent>
             </DropdownMenu>
           </UsagePercentageDisplayChangeNotice>

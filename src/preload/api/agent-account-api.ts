@@ -4,6 +4,10 @@ import type {
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
+import type {
+  CustomProviderAccount,
+  CustomProviderUsageResult
+} from '../../shared/custom-provider-types'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -66,4 +70,11 @@ export type MinimaxCredentialsApi = {
 
 export type CodexConfigSyncApi = {
   status: () => Promise<CodexConfigSyncStatus>
+}
+
+export type CustomProviderAccountsApi = {
+  getTokenStatus: (accountId: string) => Promise<{ configured: boolean }>
+  saveToken: (accountId: string, token: string) => Promise<{ configured: boolean }>
+  clearToken: (accountId: string) => Promise<{ configured: boolean }>
+  testDraft: (account: CustomProviderAccount, token: string) => Promise<CustomProviderUsageResult>
 }

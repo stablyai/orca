@@ -113,6 +113,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     opencodeWorkspaceId: '',
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
+    customProviderAccounts: [],
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,

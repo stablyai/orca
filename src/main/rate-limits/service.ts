@@ -27,6 +27,12 @@ import { fetchGrokRateLimits } from './grok-fetcher'
 import { readGrokAuthSession } from './grok-auth'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
+import { fetchCustomProviderUsage } from './custom-provider-fetcher'
+import { resolveCustomProviderToken } from '../custom-providers/custom-provider-token-store'
+import type {
+  CustomProviderAccount,
+  CustomProviderUsageResult
+} from '../../shared/custom-provider-types'
 import { fetchOpenCodeGoRateLimits } from './opencode-go-usage-fetcher'
 import {
   normalizeCodexAccountSelectionTarget,
@@ -249,6 +255,15 @@ export class RateLimitService {
   private lastInactiveCodexFetchAt = 0
   private inactiveCodexAccountsGeneration = 0
   private stateListeners = new Set<(state: RateLimitState) => void>()
+  // Why: an arbitrary-length, user-defined list — kept parallel to the fixed
+  // InternalRateLimitState fields above rather than folded into them, since
+  // those are exhaustively switched on throughout the status bar/settings code.
+  private customProviderConfigResolver: (() => CustomProviderAccount[]) | null = null
+  private customProviderTokenResolver: ((accountId: string) => string | null) | null = null
+  private customProviderUsage: Record<string, CustomProviderUsageResult> = {}
+  // Why: guards against a slower, superseded fetch cycle clobbering a fresher one — same
+  // pattern as claudeFetchGeneration/codexFetchGeneration/minimaxFetchGeneration below.
+  private customProviderFetchGeneration = 0
 
   constructor() {}
 
@@ -301,6 +316,75 @@ export class RateLimitService {
 
   setClaudeFetchTarget(target?: ClaudeAccountSelectionTarget): void {
     this.claudeFetchTarget = normalizeClaudeAccountSelectionTarget(target)
+  }
+
+  setCustomProviderConfigResolver(resolver: () => CustomProviderAccount[]): void {
+    this.customProviderConfigResolver = resolver
+  }
+
+  setCustomProviderTokenResolver(resolver: (accountId: string) => string | null): void {
+    this.customProviderTokenResolver = resolver
+  }
+
+  // Why: fire-and-forget from fetchAll() rather than joining its Promise.allSettled batch —
+  // an arbitrary-length list shouldn't gate on or be gated by the fixed providers' generation
+  // counters/config-change diffing, which are sized for a known, bounded set.
+  private async fetchCustomProviders(): Promise<void> {
+    const generation = ++this.customProviderFetchGeneration
+    const enabled = (this.customProviderConfigResolver?.() ?? []).filter(
+      (account) => account.enabled
+    )
+    const results = await Promise.all(
+      enabled.map(async (account) => {
+        try {
+          const keychainToken = this.customProviderTokenResolver?.(account.id) ?? null
+          const token = resolveCustomProviderToken(account, keychainToken)
+          return await fetchCustomProviderUsage(account, token)
+        } catch (error) {
+          return {
+            accountId: account.id,
+            usedPercent: null,
+            resetsAt: null,
+            updatedAt: Date.now(),
+            error: error instanceof Error ? error.message : 'Custom provider usage request failed',
+            status: 'error' as const,
+            failureKind: 'unknown' as const
+          }
+        }
+      })
+    )
+    // Why: a slower, superseded cycle must never apply over a fresher one that
+    // already started (mirrors claudeFetchGeneration/codexFetchGeneration below).
+    if (generation !== this.customProviderFetchGeneration) {
+      return
+    }
+    // Why: re-read the config fresh rather than trust the `enabled` snapshot
+    // captured before the fetch — an account deleted/disabled/renamed mid-fetch
+    // must be pruned here, not revived with this cycle's now-stale result.
+    const currentIds = new Set(
+      (this.customProviderConfigResolver?.() ?? [])
+        .filter((account) => account.enabled)
+        .map((account) => account.id)
+    )
+    const next: Record<string, CustomProviderUsageResult> = {}
+    for (const id of currentIds) {
+      const fresh = results.find((r) => r.accountId === id)
+      const previous = this.customProviderUsage[id]
+      // Why: preserve the last successful percent on a fetch error (a stale/error
+      // indicator) rather than snapping the status-bar row to a misleading 0%.
+      // A non-'error' non-'ok' status (e.g. 'unavailable' right after the user
+      // clears their token) is an intentional state change, not a transient
+      // failure, and must be reflected immediately rather than papered over.
+      const merged =
+        fresh && fresh.status === 'error' && previous?.usedPercent != null
+          ? { ...fresh, usedPercent: previous.usedPercent }
+          : (fresh ?? previous)
+      if (merged) {
+        next[id] = merged
+      }
+    }
+    this.customProviderUsage = next
+    this.pushToRenderer()
   }
 
   setOpenCodeGoConfigResolver(resolver: () => OpenCodeGoRateLimitConfig): void {
@@ -398,20 +482,37 @@ export class RateLimitService {
       inactiveCodexAccounts: this.buildInactiveArray(
         this.inactiveCodexCache,
         this.inactiveCodexFetching
-      )
+      ),
+      customProviderUsage: this.customProviderUsage
     }
   }
 
-  async refresh(): Promise<RateLimitState> {
+  async refresh(options?: { skipCustomProviders?: boolean }): Promise<RateLimitState> {
     // Why: this user-directed refresh must bypass the poll throttle, else the click can no-op after wake/focus and feel broken.
-    await this.fetchAll({ force: true })
+    // Why: skipCustomProviders lets a paired/remote/mobile-triggered refresh
+    // reach the fixed providers without also being the proximate cause of the
+    // host resolving a tokenEnvVar secret and hitting a user-configured
+    // endpoint — see RemoteAccountsRateLimitState. Otherwise, also await the
+    // custom-provider cycle explicitly (fetchAll's internal call is
+    // fire-and-forget) so the returned state reflects it, not just the fixed
+    // providers — a plain await fetchAll() alone would race this call. Both
+    // branches pass skipCustomProviders: true to fetchAll itself so it never
+    // starts its own fire-and-forget cycle on top of the one already awaited
+    // here (or intentionally skipped above), which would otherwise double-fire
+    // an authenticated request per enabled custom provider on every refresh.
+    await (options?.skipCustomProviders
+      ? this.fetchAll({ force: true, skipCustomProviders: true })
+      : Promise.all([
+          this.fetchAll({ force: true, skipCustomProviders: true }),
+          this.fetchCustomProviders()
+        ]))
     return this.getState()
   }
 
-  async refreshIfStale(): Promise<RateLimitState> {
+  async refreshIfStale(options?: { skipCustomProviders?: boolean }): Promise<RateLimitState> {
     // Why: reconnecting mobile subscribers need fresh backgrounded-desktop data, but replaying a subscription must not queue another forced fetch.
     const plan = this.getActiveWindowRefreshPlan(Date.now())
-    await this.runActiveWindowRefreshPlan(plan)
+    await this.runActiveWindowRefreshPlan(plan, options)
     return this.getState()
   }
 
@@ -918,7 +1019,10 @@ export class RateLimitService {
     return { kind: 'providers', providers: retryableFailures }
   }
 
-  private async runActiveWindowRefreshPlan(plan: ActiveWindowRefreshPlan): Promise<void> {
+  private async runActiveWindowRefreshPlan(
+    plan: ActiveWindowRefreshPlan,
+    options?: { skipCustomProviders?: boolean }
+  ): Promise<void> {
     if (plan.kind === 'none') {
       return
     }
@@ -933,7 +1037,7 @@ export class RateLimitService {
           }
         }
       }
-      await this.fetchAll()
+      await this.fetchAll({ skipCustomProviders: options?.skipCustomProviders })
       return
     }
 
@@ -951,7 +1055,7 @@ export class RateLimitService {
       INDIVIDUALLY_REFRESHABLE_PROVIDERS.has(provider)
     )
     if (!canRefreshIndividually) {
-      await this.fetchAll()
+      await this.fetchAll({ skipCustomProviders: options?.skipCustomProviders })
       return
     }
 
@@ -975,7 +1079,19 @@ export class RateLimitService {
     await this.runActiveWindowRefreshPlan(plan)
   }
 
-  private async fetchAll(options?: { force?: boolean }): Promise<void> {
+  private async fetchAll(options?: {
+    force?: boolean
+    skipCustomProviders?: boolean
+  }): Promise<void> {
+    // Why: decoupled from the fixed-provider reentrancy/queueing below (own
+    // generation guard handles overlap) but still triggered by the same
+    // coordinator on every poll tick / forced refresh, per review (#codex).
+    // skipCustomProviders lets a paired/remote/mobile-triggered refresh reach
+    // the fixed providers without also causing the host to resolve a
+    // tokenEnvVar secret and hit a user-configured endpoint on its behalf.
+    if (!options?.skipCustomProviders) {
+      void this.fetchCustomProviders()
+    }
     if (this.isFetching) {
       if (options?.force) {
         this.fullFetchQueued = true

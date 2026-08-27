@@ -198,6 +198,10 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitState
 } from '../shared/rate-limit-types'
+import type {
+  CustomProviderAccount,
+  CustomProviderUsageResult
+} from '../shared/custom-provider-types'
 import type { WorkspaceSpaceScanProgress } from '../shared/workspace-space-types'
 import type { WorkspaceCleanupScanProgress } from '../shared/workspace-cleanup'
 import type { WorkspacePortAdvertisedUrlChangedEvent } from '../shared/workspace-ports'
@@ -4757,6 +4761,20 @@ const api = {
       ipcRenderer.invoke('minimaxCredentials:saveCookie', cookie),
     clearCookie: (): Promise<{ configured: boolean }> =>
       ipcRenderer.invoke('minimaxCredentials:clearCookie')
+  },
+
+  customProviderAccounts: {
+    getTokenStatus: (accountId: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('customProviderAccounts:getTokenStatus', accountId),
+    saveToken: (accountId: string, token: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('customProviderAccounts:saveToken', { accountId, token }),
+    clearToken: (accountId: string): Promise<{ configured: boolean }> =>
+      ipcRenderer.invoke('customProviderAccounts:clearToken', accountId),
+    testDraft: (
+      account: CustomProviderAccount,
+      token: string
+    ): Promise<CustomProviderUsageResult> =>
+      ipcRenderer.invoke('customProviderAccounts:testDraft', { account, token })
   },
 
   grokAccounts: {

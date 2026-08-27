@@ -66,6 +66,7 @@ const WorkspaceStatusDefinition = z.object({
   color: z.string().optional(),
   icon: z.string().optional()
 })
+
 const FeatureInteractionRecord = z
   .object({
     firstInteractedAt: z.number().finite().nonnegative(),
