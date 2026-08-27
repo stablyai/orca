@@ -73,6 +73,8 @@ export function resolveNativeChatLeafRoute(args: {
   chatLeafStillMounted: boolean
   activeLeafIsEligible: boolean
   chatLeafHasConfirmedAgentExit?: boolean
+  /** Suppress exitChat when a recent Chat UI send may race a false title exit. */
+  suppressExitChat?: boolean
 }): NativeChatLeafRoute {
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
@@ -81,6 +83,16 @@ export function resolveNativeChatLeafRoute(args: {
     // Why: agent/title evidence can disappear while local, SSH, or runtime
     // transports reconnect. A mounted owning pane is not a terminal lifecycle
     // event, so keep its chat surface until the pane itself is removed.
+    return { chatLeafId: args.chatLeafId, exitChat: false }
+  }
+  // Why: run before eligible-sibling retarget so a false exit during the send
+  // grace window cannot steal Chat onto a sibling pane (#10098 / CodeRabbit).
+  if (
+    args.suppressExitChat &&
+    args.chatLeafId &&
+    args.chatLeafStillMounted &&
+    args.chatLeafHasConfirmedAgentExit
+  ) {
     return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   // Manager hydration can briefly have no active pane; preserve the requested

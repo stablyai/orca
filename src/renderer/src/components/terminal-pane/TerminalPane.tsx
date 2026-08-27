@@ -69,6 +69,12 @@ import {
   clearPaneTitleOverlayRects
 } from './pane-title-overlay-rects'
 import NativeChatView from '../native-chat/NativeChatView'
+import { shouldSuppressNativeChatExitForPane } from '../native-chat/native-chat-pending'
+import {
+  getNativeChatExitSuppressRemainingMs,
+  NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+} from '../native-chat/native-chat-exit-suppress'
+import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import { TerminalAgentSessionForkDialog } from './TerminalAgentSessionForkDialog'
 import { AgentSessionContinuationDialog } from '@/components/agent-session-continuation/AgentSessionContinuationDialog'
@@ -630,12 +636,18 @@ function TerminalPane(
       resolveTitleAgentForLeaf
     ]
   )
+  const pendingConfirmedExitTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const applyNativeChatLeafRoute = useCallback(
     (route: NativeChatLeafRoute): void => {
       if (route.chatLeafId !== chatLeafId) {
         setChatLeafId(route.chatLeafId)
       }
       if (route.exitChat && unifiedTabId) {
+        // Why: exit routes null the leaf — record the pre-route owner for triage (#10098).
+        recordRendererCrashBreadcrumb('native_chat_exit_to_terminal', {
+          reason: 'leaf_route',
+          chatLeafId
+        })
         // Why: event/effect replay must not flip terminal mode back to chat.
         setTabViewMode(unifiedTabId, 'terminal')
       }
@@ -649,6 +661,27 @@ function TerminalPane(
       }
       const panes = managerRef.current?.getPanes() ?? []
       const activeLeafId = managerRef.current?.getActivePane()?.leafId ?? null
+      const paneKey = makePaneKey(tabId, leafId)
+      const suppressExitChat = shouldSuppressNativeChatExitForPane(paneKey)
+      if (suppressExitChat) {
+        recordRendererCrashBreadcrumb('native_chat_agent_exit_suppressed', {
+          reason: 'recent_chat_send',
+          paneKey
+        })
+        // Why: re-evaluate after grace so a genuine exit is not stuck forever.
+        if (pendingConfirmedExitTimerRef.current) {
+          clearTimeout(pendingConfirmedExitTimerRef.current)
+        }
+        // Why: pending sends have no fixed end — fall back to the full grace.
+        const remainingMs = Math.max(
+          1,
+          getNativeChatExitSuppressRemainingMs(paneKey) || NATIVE_CHAT_EXIT_SUPPRESS_AFTER_SEND_MS
+        )
+        pendingConfirmedExitTimerRef.current = setTimeout(() => {
+          pendingConfirmedExitTimerRef.current = null
+          onAgentExitedRef.current(leafId)
+        }, remainingMs)
+      }
       applyNativeChatLeafRoute(
         resolveNativeChatLeafRoute({
           isChatViewMode,
@@ -656,16 +689,25 @@ function TerminalPane(
           activeLeafId,
           chatLeafStillMounted: panes.some((pane) => pane.leafId === chatLeafId),
           activeLeafIsEligible: isChatEligibleForLeaf(activeLeafId),
-          chatLeafHasConfirmedAgentExit: true
+          chatLeafHasConfirmedAgentExit: true,
+          suppressExitChat
         })
       )
     },
-    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode]
+    [applyNativeChatLeafRoute, chatLeafId, isChatEligibleForLeaf, isChatViewMode, tabId]
   )
   useEffect(() => {
     // Why: transport callbacks must observe only committed chat ownership; render work can be replayed/discarded under concurrent React.
     onAgentExitedRef.current = handleConfirmedAgentExit
   }, [handleConfirmedAgentExit])
+  useEffect(() => {
+    return () => {
+      if (pendingConfirmedExitTimerRef.current) {
+        clearTimeout(pendingConfirmedExitTimerRef.current)
+        pendingConfirmedExitTimerRef.current = null
+      }
+    }
+  }, [])
   const canToggleChatForLeaf = useCallback(
     (leafId: string | null): boolean => {
       // Scope the "always allow toggling back" rule to the leaf showing chat; must not make an unsupported sibling look eligible.
