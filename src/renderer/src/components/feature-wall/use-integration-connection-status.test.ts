@@ -463,4 +463,15 @@ describe('deriveIntegrationFlowState', () => {
       complete: false
     })
   })
+
+  it('accepts Kanban as a dedicated tracker in the task summary', () => {
+    expect(
+      deriveIntegrationFlowState({
+        reviewConnected: true,
+        trackerProviderName: 'Kanban',
+        codeHostTaskProviderName: null,
+        trackerChecking: false
+      })
+    ).toMatchObject({ task: 'done', complete: true, taskResolved: true })
+  })
 })

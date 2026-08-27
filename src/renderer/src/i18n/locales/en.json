@@ -2186,7 +2186,8 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "kanbanSourceLabel": "Kanban"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8281,7 +8282,9 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "kanbanLabel": "Kanban",
+          "kanbanDescription": "Connect the Kanban server and show it in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
@@ -9483,7 +9486,11 @@
             "7166b9090c": "GitHub authentication via the gh CLI.",
             "f16e41cc72": "GitHub Integration",
             "760e2446e0": "Bitbucket Cloud authentication with a saved API token or environment variables.",
-            "af5ae87847": "access token"
+            "af5ae87847": "access token",
+            "kanbanTitle": "Kanban Integration",
+            "kanbanDescription": "Connect a personal Kanban token to browse and start tasks.",
+            "kanbanKeyword": "kanban",
+            "personalToken": "personal token"
           }
         },
         "jira": {
@@ -11449,6 +11456,24 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "kanban": {
+          "integration": {
+            "card": {
+              "connectedDescription": "Browse and start work from your tasks on {{value0}}.",
+              "notConnectedDescription": "Connect a personal token to browse tasks from {{value0}}.",
+              "checkingDescription": "Checking Kanban access before showing setup actions.",
+              "statusConnected": "Connected",
+              "statusNotConnected": "Not connected",
+              "updateToken": "Update token",
+              "connect": "Connect Kanban",
+              "disconnectLabel": "Disconnect Kanban",
+              "disconnect": "Disconnect",
+              "tokenNote": "One personal token is stored by the active runtime for {{value0}}.",
+              "credentialCopy": "Add a personal token from your Kanban profile. The token is never shown in Orca.",
+              "recheck": "Re-check"
+            }
+          }
         }
       },
       "right": {
@@ -16272,6 +16297,81 @@
         "remoteLabel": "Browsers on {{value0}}",
         "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
         "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
+      },
+      "kanban": {
+        "connect": {
+          "dialog": {
+            "title": "Connect Kanban",
+            "description": "Use your personal Kanban token to browse and start work from your tasks.",
+            "server": "Server",
+            "token": "Personal token",
+            "tokenPlaceholder": "Kanban personal token",
+            "storage": "Your token is stored locally and encrypted when local runtime storage supports it.",
+            "cancel": "Cancel",
+            "verifying": "Verifying:",
+            "connect": "Connect"
+          },
+          "title": "Connect your Kanban",
+          "description": "Browse and start work from your Kanban tasks on https://kanban.fpimi.ru.",
+          "action": "Connect Kanban",
+          "hide": "Hide Kanban"
+        },
+        "filter": {
+          "executor": "Executor",
+          "observer": "Observer",
+          "creator": "Creator",
+          "dueAny": "Any due",
+          "dueOverdue": "Overdue",
+          "dueToday": "Today",
+          "dueWeek": "7 days",
+          "dueNone": "No due",
+          "refresh": "Refresh Kanban tasks",
+          "allLanes": "All lanes",
+          "urgent": "Urgent",
+          "includeDone": "Include Done",
+          "search": "Search tasks",
+          "clearSearch": "Clear search"
+        },
+        "workspaceOpenFailed": "Couldn't open the existing workspace for this Kanban task.",
+        "error": {
+          "auth": "Kanban authentication failed. Reconnect your token to continue.",
+          "retry": "Retry",
+          "reconnect": "Reconnect"
+        },
+        "detail": {
+          "result": "Result",
+          "description": "Description",
+          "roles": "Roles",
+          "executors": "Executors",
+          "observers": "Observers",
+          "createdBy": "Created by",
+          "comments": "Comments",
+          "dependencies": "Dependencies",
+          "repositories": "Repositories",
+          "attachments": "Attachments",
+          "openBrowser": "Open Kanban task {{value0}} in browser",
+          "openBrowserLabel": "Open in browser",
+          "notFound": "Kanban task not found.",
+          "backToList": "Back to list",
+          "error": "Couldn't load this Kanban task.",
+          "close": "Close task detail",
+          "attachmentSize": "({{value0}} B)"
+        },
+        "list": {
+          "empty": "No Kanban tasks found",
+          "emptyHint": "Try a different filter or search.",
+          "name": "Kanban tasks",
+          "rowLabel": "Kanban task {{value0}}",
+          "urgent": "Urgent",
+          "start": "Start workspace from Kanban task {{value0}}",
+          "startTooltip": "Start",
+          "openBrowser": "Open Kanban task {{value0}} in browser"
+        },
+        "sync": {
+          "networkError": "Kanban is unreachable. Check your connection.",
+          "failed": "Не удалось обновить карточку Kanban.",
+          "retry": "Повторить обновление карточки"
+        }
       }
     },
     "i18n": {

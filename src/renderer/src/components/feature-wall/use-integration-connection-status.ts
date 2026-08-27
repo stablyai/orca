@@ -28,7 +28,7 @@ export function deriveIntegrationStepStates(input: {
 
 export function deriveIntegrationFlowState(input: {
   reviewConnected: boolean
-  trackerProviderName: 'Linear' | 'Jira' | null
+  trackerProviderName: 'Linear' | 'Jira' | 'Kanban' | null
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
   trackerChecking: boolean
 }): {
@@ -100,14 +100,14 @@ export type IntegrationConnectionStatus = {
   // GitHub/GitLab issues can double as tasks; token/env review providers do not.
   codeHostTaskProviderName: 'GitHub' | 'GitLab' | null
   // True once any task source is usable: a code host (its issues double as a
-  // task source) or a dedicated tracker (Linear/Jira).
+  // task source) or a dedicated tracker (Linear/Jira/Kanban).
   trackerConnected: boolean
   // Display name of the connected tracker, or null. Code hosts are surfaced
-  // via reviewProviderName, so this only names Linear/Jira.
-  trackerProviderName: 'Linear' | 'Jira' | null
+  // via reviewProviderName, so this only names dedicated trackers.
+  trackerProviderName: 'Linear' | 'Jira' | 'Kanban' | null
   // Every connected task source, trackers first, for "Linear and GitHub
   // connected for tasks" summaries that don't under-report what's usable.
-  taskSourceNames: ('Linear' | 'Jira' | 'GitHub' | 'GitLab')[]
+  taskSourceNames: ('Linear' | 'Jira' | 'Kanban' | 'GitHub' | 'GitLab')[]
   // True while the code-host check is unresolved, stale, loading, or errored.
   reviewChecking: boolean
   // True while either dedicated tracker check is unresolved or stale.

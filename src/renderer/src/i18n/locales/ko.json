@@ -1592,6 +1592,7 @@
         "73dfd4eb8d": "다시 묻지 않기"
       },
       "TaskPage": {
+        "kanbanSourceLabel": "Kanban",
         "513cddfa7a": "확인 중…",
         "ff69a30681": "취소",
         "2abe22ef76": "귀하의 토큰은 OS 키체인을 통해 암호화되어 로컬에 저장됩니다.",
@@ -5225,7 +5226,100 @@
           }
         }
       },
+      "kanban": {
+        "connect": {
+          "dialog": {
+            "title": "Kanban 연결",
+            "description": "개인 Kanban 토큰으로 작업을 탐색하고 작업을 시작하세요.",
+            "server": "서버",
+            "token": "개인 토큰",
+            "tokenPlaceholder": "Kanban 개인 토큰",
+            "storage": "토큰은 로컬에 저장되며, 로컬 런타임 저장소가 지원하면 암호화됩니다.",
+            "cancel": "취소",
+            "verifying": "확인 중:",
+            "connect": "연결"
+          },
+          "title": "Kanban을 연결하세요",
+          "description": "https://kanban.fpimi.ru의 Kanban 작업을 탐색하고 작업을 시작하세요.",
+          "action": "Kanban 연결",
+          "hide": "Kanban 숨기기"
+        },
+        "filter": {
+          "executor": "실행자",
+          "observer": "관찰자",
+          "creator": "작성자",
+          "dueAny": "모든 기한",
+          "dueOverdue": "기한 초과",
+          "dueToday": "오늘",
+          "dueWeek": "7일",
+          "dueNone": "기한 없음",
+          "refresh": "Kanban 작업 새로 고침",
+          "allLanes": "모든 레인",
+          "urgent": "긴급",
+          "includeDone": "완료 포함",
+          "search": "작업 검색",
+          "clearSearch": "검색 지우기"
+        },
+        "workspaceOpenFailed": "이 Kanban 작업의 기존 워크스페이스를 열 수 없습니다.",
+        "error": {
+          "auth": "Kanban 인증에 실패했습니다. 계속하려면 토큰을 다시 연결하세요.",
+          "retry": "다시 시도",
+          "reconnect": "다시 연결"
+        },
+        "detail": {
+          "result": "결과",
+          "description": "설명",
+          "roles": "역할",
+          "executors": "실행자",
+          "observers": "관찰자",
+          "createdBy": "작성자",
+          "comments": "댓글",
+          "dependencies": "종속성",
+          "repositories": "저장소",
+          "attachments": "첨부 파일",
+          "attachmentSize": "({{value0}} 바이트)",
+          "close": "작업 상세 닫기",
+          "openBrowser": "브라우저에서 Kanban 작업 {{value0}} 열기",
+          "openBrowserLabel": "브라우저에서 열기",
+          "notFound": "Kanban 작업을 찾을 수 없습니다.",
+          "backToList": "목록으로 돌아가기",
+          "error": "이 Kanban 작업을 불러올 수 없습니다."
+        },
+        "list": {
+          "empty": "Kanban 작업이 없습니다",
+          "emptyHint": "다른 필터나 검색을 시도하세요.",
+          "name": "Kanban 작업",
+          "rowLabel": "Kanban 작업 {{value0}}",
+          "urgent": "긴급",
+          "start": "Kanban 작업 {{value0}}에서 워크스페이스 시작",
+          "startTooltip": "시작",
+          "openBrowser": "브라우저에서 Kanban 작업 {{value0}} 열기"
+        },
+        "sync": {
+          "networkError": "Kanban에 연결할 수 없습니다. 연결을 확인하세요.",
+          "failed": "Не удалось обновить карточку Kanban.",
+          "retry": "Повторить обновление карточки"
+        }
+      },
       "settings": {
+        "kanban": {
+          "integration": {
+            "card": {
+              "connectedDescription": "{{value0}}의 작업을 탐색하고 작업을 시작합니다.",
+              "notConnectedDescription": "개인 토큰을 연결해 {{value0}}의 작업을 탐색합니다.",
+              "checkingDescription": "설정 작업을 표시하기 전에 Kanban 접근을 확인하고 있습니다.",
+              "statusConnected": "연결됨",
+              "statusNotConnected": "연결되지 않음",
+              "updateToken": "토큰 업데이트",
+              "connect": "Kanban 연결",
+              "disconnectLabel": "Kanban 연결 해제",
+              "disconnect": "연결 해제",
+              "tokenNote": "활성 런타임은 {{value0}}용 개인 토큰 하나를 저장합니다.",
+              "credentialCopy": "Kanban 프로필에서 개인 토큰을 추가하세요. 토큰은 Orca에 표시되지 않습니다.",
+              "recheck": "다시 확인"
+            }
+          }
+        },
         "AccountsPane": {
           "c2d2751587": "계정 삭제",
           "dbb9626ed1": "취소",
@@ -7221,7 +7315,9 @@
           "integrationsHint": "모든 제공업체의 자격 증명은 다음에서도 관리할 수 있습니다:",
           "integrationsLink": "연동",
           "skillHint": ". Linear를 연결한 후 사용 예시는 설정 → Linear에서 확인할 수 있습니다.",
-          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다."
+          "incompleteBannerBodyWithLinear": "사용하지 않는 제공업체를 숨기거나 카드를 펼쳐 단계를 완료하세요. Linear에는 API 액세스, 에이전트 스킬, 작업에 표시가 필요합니다.",
+          "kanbanLabel": "Kanban",
+          "kanbanDescription": "Kanban 서버에 연결하고 작업에 표시합니다."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "창 구분선의 두께입니다.",
@@ -8409,7 +8505,11 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "gh CLI를 통한 GitHub 인증.",
-            "f16e41cc72": "GitHub 연동"
+            "f16e41cc72": "GitHub 연동",
+            "kanbanTitle": "Kanban 통합",
+            "kanbanDescription": "개인 Kanban 토큰을 연결해 작업을 탐색하고 시작합니다.",
+            "kanbanKeyword": "kanban",
+            "personalToken": "개인 토큰"
           }
         },
         "jira": {
@@ -14575,23 +14675,6 @@
     "workspace": {
       "cleanup": {
         "browse": {
-          "selectionWithheldOne": "선택한 워크스페이스 1개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
-          "selectionWithheld": "선택한 워크스페이스 {{value0}}개가 현재 필터에 의해 숨겨져 선택이 해제되었습니다.",
-          "selectAllCountOne": "안전 검사를 통과한 워크스페이스 1개 선택",
-          "selectAllCount": "안전 검사를 통과한 워크스페이스 {{value0}}개 모두 선택"
-        },
-        "scan": {
-          "readyOne": "워크스페이스 1개를 찾았습니다.",
-          "readyMany": "워크스페이스 {{value0}}개를 찾았습니다."
-        },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "알파 정리 검토"
-        },
-        "presentation": {
-          "gitlabMergeRequestNumber": "MR #{{value0}}",
-          "githubPullRequestNumber": "PR #{{value0}}"
-        },
-        "browse": {
           "gitStatusCheckFailed": "Git 상태 확인 실패",
           "gitStatusUnverified": "Git 상태를 확인할 수 없음",
           "deleteAnyway": "그래도 삭제",
@@ -14643,6 +14726,17 @@
               "retainedAgents": "완료된 에이전트"
             }
           }
+        },
+        "scan": {
+          "readyOne": "워크스페이스 1개를 찾았습니다.",
+          "readyMany": "워크스페이스 {{value0}}개를 찾았습니다."
+        },
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "알파 정리 검토"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     },

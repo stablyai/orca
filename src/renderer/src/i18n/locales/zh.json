@@ -1590,6 +1590,7 @@
         "73dfd4eb8d": "不再询问"
       },
       "TaskPage": {
+        "kanbanSourceLabel": "Kanban",
         "513cddfa7a": "正在验证...",
         "ff69a30681": "取消",
         "2abe22ef76": "您的token通过操作系统钥匙串加密并存储在本地。",
@@ -5270,7 +5271,100 @@
           }
         }
       },
+      "kanban": {
+        "connect": {
+          "dialog": {
+            "title": "连接 Kanban",
+            "description": "使用个人 Kanban 令牌浏览任务并开始工作。",
+            "server": "服务器",
+            "token": "个人令牌",
+            "tokenPlaceholder": "Kanban 个人令牌",
+            "storage": "令牌保存在本地，并在本地运行时存储支持时加密。",
+            "cancel": "取消",
+            "verifying": "正在验证：",
+            "connect": "连接"
+          },
+          "title": "连接您的 Kanban",
+          "description": "浏览 https://kanban.fpimi.ru 上的 Kanban 任务并开始工作。",
+          "action": "连接 Kanban",
+          "hide": "隐藏 Kanban"
+        },
+        "filter": {
+          "executor": "执行人",
+          "observer": "观察者",
+          "creator": "创建者",
+          "dueAny": "任意截止日期",
+          "dueOverdue": "已逾期",
+          "dueToday": "今天",
+          "dueWeek": "7 天",
+          "dueNone": "无截止日期",
+          "refresh": "刷新 Kanban 任务",
+          "allLanes": "所有泳道",
+          "urgent": "紧急",
+          "includeDone": "包含已完成",
+          "search": "搜索任务",
+          "clearSearch": "清除搜索"
+        },
+        "workspaceOpenFailed": "无法打开此 Kanban 任务的现有工作区。",
+        "error": {
+          "auth": "Kanban 身份验证失败。请重新连接令牌以继续。",
+          "retry": "重试",
+          "reconnect": "重新连接"
+        },
+        "detail": {
+          "result": "结果",
+          "description": "描述",
+          "roles": "角色",
+          "executors": "执行人",
+          "observers": "观察者",
+          "createdBy": "创建者",
+          "comments": "评论",
+          "dependencies": "依赖项",
+          "repositories": "仓库",
+          "attachments": "附件",
+          "attachmentSize": "({{value0}} 字节)",
+          "close": "关闭任务详情",
+          "openBrowser": "在浏览器中打开 Kanban 任务 {{value0}}",
+          "openBrowserLabel": "在浏览器中打开",
+          "notFound": "未找到 Kanban 任务。",
+          "backToList": "返回列表",
+          "error": "无法加载此 Kanban 任务。"
+        },
+        "list": {
+          "empty": "未找到 Kanban 任务",
+          "emptyHint": "请尝试其他筛选条件或搜索。",
+          "name": "Kanban 任务",
+          "rowLabel": "Kanban 任务 {{value0}}",
+          "urgent": "紧急",
+          "start": "从 Kanban 任务 {{value0}} 启动工作区",
+          "startTooltip": "开始",
+          "openBrowser": "在浏览器中打开 Kanban 任务 {{value0}}"
+        },
+        "sync": {
+          "networkError": "无法访问 Kanban。请检查网络连接。",
+          "failed": "Не удалось обновить карточку Kanban.",
+          "retry": "Повторить обновление карточки"
+        }
+      },
       "settings": {
+        "kanban": {
+          "integration": {
+            "card": {
+              "connectedDescription": "浏览 {{value0}} 上的任务并开始工作。",
+              "notConnectedDescription": "连接个人令牌以浏览 {{value0}} 的任务。",
+              "checkingDescription": "在显示设置操作前正在检查 Kanban 访问权限。",
+              "statusConnected": "已连接",
+              "statusNotConnected": "未连接",
+              "updateToken": "更新令牌",
+              "connect": "连接 Kanban",
+              "disconnectLabel": "断开 Kanban",
+              "disconnect": "断开连接",
+              "tokenNote": "活动运行时为 {{value0}} 保存一个个人令牌。",
+              "credentialCopy": "从您的 Kanban 个人资料添加个人令牌。令牌不会在 Orca 中显示。",
+              "recheck": "重新检查"
+            }
+          }
+        },
         "AccountsPane": {
           "c2d2751587": "删除账户",
           "dbb9626ed1": "取消",
@@ -7266,7 +7360,9 @@
           "integrationsHint": "所有提供商的凭据也可在此管理：",
           "integrationsLink": "集成",
           "skillHint": "。连接 Linear 后，可在设置 → Linear 中查看使用示例。",
-          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。"
+          "incompleteBannerBodyWithLinear": "隐藏不使用的提供商，或展开卡片并完成其中的步骤。Linear 需要 API 访问权限、智能体技能以及在任务中显示。",
+          "kanbanLabel": "Kanban",
+          "kanbanDescription": "连接 Kanban 服务器并在任务中显示。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "窗格分隔线的厚度。",
@@ -8454,7 +8550,11 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "通过 gh CLI 进行 GitHub 身份验证。",
-            "f16e41cc72": "GitHub 集成"
+            "f16e41cc72": "GitHub 集成",
+            "kanbanTitle": "Kanban 集成",
+            "kanbanDescription": "连接个人 Kanban 令牌以浏览并开始任务。",
+            "kanbanKeyword": "kanban",
+            "personalToken": "个人令牌"
           }
         },
         "jira": {
@@ -14601,23 +14701,6 @@
     "workspace": {
       "cleanup": {
         "browse": {
-          "selectionWithheldOne": "当前筛选条件隐藏了 1 个已选工作区，已取消选择。",
-          "selectionWithheld": "当前筛选条件隐藏了 {{value0}} 个已选工作区，已取消选择。",
-          "selectAllCountOne": "选择 1 个通过安全检查的工作区",
-          "selectAllCount": "选择全部 {{value0}} 个通过安全检查的工作区"
-        },
-        "scan": {
-          "readyOne": "找到 1 个工作区。",
-          "readyMany": "找到 {{value0}} 个工作区。"
-        },
-        "presentationFixtures": {
-          "reviewAlphaCleanup": "评审 Alpha 清理"
-        },
-        "presentation": {
-          "gitlabMergeRequestNumber": "MR #{{value0}}",
-          "githubPullRequestNumber": "PR #{{value0}}"
-        },
-        "browse": {
           "gitStatusCheckFailed": "Git 状态检查失败",
           "gitStatusUnverified": "无法验证 Git 状态",
           "deleteAnyway": "仍然删除",
@@ -14669,6 +14752,17 @@
               "retainedAgents": "已完成的代理"
             }
           }
+        },
+        "scan": {
+          "readyOne": "找到 1 个工作区。",
+          "readyMany": "找到 {{value0}} 个工作区。"
+        },
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "评审 Alpha 清理"
+        },
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
         }
       }
     },

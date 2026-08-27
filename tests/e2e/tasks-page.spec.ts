@@ -22,7 +22,8 @@ const TASK_SOURCE_BY_LABEL: Record<string, string> = {
   GitHub: 'github',
   GitLab: 'gitlab',
   Linear: 'linear',
-  Jira: 'jira'
+  Jira: 'jira',
+  Kanban: 'kanban'
 }
 
 async function openTasksPage(page: Parameters<typeof getStoreState>[0]): Promise<void> {
@@ -258,6 +259,24 @@ test.describe('Tasks page', () => {
       await expect(orcaPage.getByRole('button', { name: 'Projects', exact: true })).toBeVisible()
       await expect(orcaPage.getByPlaceholder(/Search GitHub (issues|PRs)/i)).toBeVisible()
     }
+  })
+
+  test('opens disconnected Kanban setup without exposing a token', async ({ orcaPage }) => {
+    await openTasksPage(orcaPage)
+
+    const sourceButton = orcaPage.getByRole('button', { name: 'Kanban', exact: true })
+    await expect(sourceButton).toBeVisible()
+    await sourceButton.focus()
+    await expect(sourceButton).toBeFocused()
+    await sourceButton.press('Enter')
+
+    await expect(orcaPage.getByText('Connect your Kanban', { exact: true })).toBeVisible()
+    await orcaPage.getByRole('button', { name: 'Connect Kanban', exact: true }).click()
+
+    const tokenInput = orcaPage.getByLabel('Personal token', { exact: true })
+    await expect(orcaPage.getByText('https://kanban.fpimi.ru', { exact: true })).toBeVisible()
+    await expect(tokenInput).toHaveAttribute('type', 'password')
+    await expect(tokenInput).toHaveValue('')
   })
 
   test('closing the tasks page returns to the previous view', async ({ orcaPage }) => {

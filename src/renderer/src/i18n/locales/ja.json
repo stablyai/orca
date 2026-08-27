@@ -1587,6 +1587,7 @@
         "73dfd4eb8d": "今後表示しない"
       },
       "TaskPage": {
+        "kanbanSourceLabel": "Kanban",
         "513cddfa7a": "確認中…",
         "ff69a30681": "キャンセル",
         "2abe22ef76": "トークンは OS キーチェーンを介して暗号化され、ローカルに保存されます。",
@@ -5220,7 +5221,100 @@
           }
         }
       },
+      "kanban": {
+        "connect": {
+          "dialog": {
+            "title": "Kanban に接続",
+            "description": "個人用 Kanban トークンを使ってタスクを閲覧し、作業を開始します。",
+            "server": "サーバー",
+            "token": "個人用トークン",
+            "tokenPlaceholder": "Kanban の個人用トークン",
+            "storage": "トークンはローカルに保存され、ローカルランタイムのストレージが対応している場合は暗号化されます。",
+            "cancel": "キャンセル",
+            "verifying": "確認中:",
+            "connect": "接続"
+          },
+          "title": "Kanban を接続しましょう",
+          "description": "https://kanban.fpimi.ru の Kanban タスクを閲覧し、作業を開始します。",
+          "action": "Kanban に接続",
+          "hide": "Kanban を非表示"
+        },
+        "filter": {
+          "executor": "担当者",
+          "observer": "オブザーバー",
+          "creator": "作成者",
+          "dueAny": "期限すべて",
+          "dueOverdue": "期限切れ",
+          "dueToday": "今日",
+          "dueWeek": "7 日間",
+          "dueNone": "期限なし",
+          "refresh": "Kanban のタスクを更新",
+          "allLanes": "すべてのレーン",
+          "urgent": "緊急",
+          "includeDone": "完了を含める",
+          "search": "タスクを検索",
+          "clearSearch": "検索をクリア"
+        },
+        "workspaceOpenFailed": "この Kanban タスクの既存ワークスペースを開けませんでした。",
+        "error": {
+          "auth": "Kanban の認証に失敗しました。続行するにはトークンを再接続してください。",
+          "retry": "再試行",
+          "reconnect": "再接続"
+        },
+        "detail": {
+          "result": "結果",
+          "description": "説明",
+          "roles": "ロール",
+          "executors": "担当者",
+          "observers": "オブザーバー",
+          "createdBy": "作成者",
+          "comments": "コメント",
+          "dependencies": "依存関係",
+          "repositories": "リポジトリ",
+          "attachments": "添付ファイル",
+          "attachmentSize": "({{value0}} バイト)",
+          "close": "タスクの詳細を閉じる",
+          "openBrowser": "Kanban タスク {{value0}} をブラウザーで開く",
+          "openBrowserLabel": "ブラウザーで開く",
+          "notFound": "Kanban タスクが見つかりません。",
+          "backToList": "一覧に戻る",
+          "error": "この Kanban タスクを読み込めませんでした。"
+        },
+        "list": {
+          "empty": "Kanban タスクが見つかりません",
+          "emptyHint": "別のフィルターまたは検索を試してください。",
+          "name": "Kanban タスク",
+          "rowLabel": "Kanban タスク {{value0}}",
+          "urgent": "緊急",
+          "start": "Kanban タスク {{value0}} からワークスペースを開始",
+          "startTooltip": "開始",
+          "openBrowser": "Kanban タスク {{value0}} をブラウザーで開く"
+        },
+        "sync": {
+          "networkError": "Kanban に接続できません。接続を確認してください。",
+          "failed": "Не удалось обновить карточку Kanban.",
+          "retry": "Повторить обновление карточки"
+        }
+      },
       "settings": {
+        "kanban": {
+          "integration": {
+            "card": {
+              "connectedDescription": "{{value0}} のタスクを閲覧し、作業を開始します。",
+              "notConnectedDescription": "個人用トークンを接続して {{value0}} のタスクを閲覧します。",
+              "checkingDescription": "セットアップ操作を表示する前に Kanban へのアクセスを確認しています。",
+              "statusConnected": "接続済み",
+              "statusNotConnected": "未接続",
+              "updateToken": "トークンを更新",
+              "connect": "Kanban に接続",
+              "disconnectLabel": "Kanban を切断",
+              "disconnect": "切断",
+              "tokenNote": "アクティブなランタイムは {{value0}} 用の個人用トークンを 1 つ保存します。",
+              "credentialCopy": "Kanban のプロフィールから個人用トークンを追加します。トークンは Orca に表示されません。",
+              "recheck": "再確認"
+            }
+          }
+        },
         "AccountsPane": {
           "c2d2751587": "アカウントの削除",
           "dbb9626ed1": "キャンセル",
@@ -7253,7 +7347,9 @@
           "integrationsHint": "すべてのプロバイダーの認証情報は次の場所でも管理できます：",
           "integrationsLink": "連携",
           "skillHint": "。Linear の接続後、使用例は設定 → Linear で確認できます。",
-          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。"
+          "incompleteBannerBodyWithLinear": "使用しないプロバイダーを非表示にするか、カードを展開して手順を完了してください。Linear では API アクセス、Agent スキル、タスクへの表示が必要です。",
+          "kanbanLabel": "Kanban",
+          "kanbanDescription": "Kanban サーバーに接続し、タスクに表示します。"
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "ペイン分割線の太さ。",
@@ -8441,7 +8537,11 @@
             "41ccade05c": "gh",
             "b79c21bd42": "GitHub",
             "7166b9090c": "gh CLI を介した GitHub 認証。",
-            "f16e41cc72": "GitHub 連携"
+            "f16e41cc72": "GitHub 連携",
+            "kanbanTitle": "Kanban 連携",
+            "kanbanDescription": "個人用 Kanban トークンを接続して、タスクを閲覧・開始します。",
+            "kanbanKeyword": "kanban",
+            "personalToken": "個人用トークン"
           }
         },
         "jira": {

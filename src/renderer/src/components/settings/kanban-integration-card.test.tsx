@@ -4,6 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { KanbanIntegrationCard } from './kanban-integration-card'
+import { KANBAN_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 
 const kanbanApi = vi.hoisted(() => ({
   status: vi.fn(),
@@ -64,8 +65,17 @@ describe('KanbanIntegrationCard', () => {
   it('renders the provider name and the fixed server copy', async () => {
     const host = renderCard()
     await flushEffects()
+    expect(host.querySelector('[data-settings-section="integrations-kanban"]')).not.toBeNull()
     expect(host.textContent).toContain('Kanban')
     expect(host.textContent).toContain('https://kanban.fpimi.ru')
+  })
+
+  it('anchors the card to the Kanban settings section id', async () => {
+    const host = renderCard()
+    await flushEffects()
+    expect(
+      host.querySelector(`[data-settings-section="${KANBAN_INTEGRATION_SECTION_ID}"]`)
+    ).not.toBeNull()
   })
 
   it('shows the connected viewer and a disconnect action', async () => {

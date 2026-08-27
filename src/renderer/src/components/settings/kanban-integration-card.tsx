@@ -8,6 +8,7 @@ import { KANBAN_SERVER_URL } from '../../../../shared/kanban-types'
 import type { KanbanConnectionStatus } from '../../../../shared/kanban-types'
 import { translate } from '@/i18n/i18n'
 import { IntegrationCardDetails, IntegrationCardShell } from './integration-card-shell'
+import { KANBAN_INTEGRATION_SECTION_ID } from './task-provider-integration-section-ids'
 
 export function KanbanIntegrationCard(): React.JSX.Element {
   const [status, setStatus] = useState<KanbanConnectionStatus>({
@@ -51,6 +52,7 @@ export function KanbanIntegrationCard(): React.JSX.Element {
 
   return (
     <IntegrationCardShell
+      settingsSectionId={KANBAN_INTEGRATION_SECTION_ID}
       icon={<SquareKanban className="size-5" />}
       name="Kanban"
       description={

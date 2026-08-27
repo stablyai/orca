@@ -31,7 +31,12 @@ export function KanbanTaskDetail({ task, onClose }: KanbanTaskDetailProps): Reac
           <p className="truncate text-sm font-medium text-foreground">{task.title}</p>
           <p className="font-mono text-[11px] text-muted-foreground">{task.id}</p>
         </div>
-        <Button variant="ghost" size="icon-sm" onClick={onClose} aria-label="Close task detail">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClose}
+          aria-label={translate('auto.components.kanban.detail.close', 'Close task detail')}
+        >
           <X className="size-4" />
         </Button>
       </div>
@@ -137,7 +142,9 @@ export function KanbanTaskDetail({ task, onClose }: KanbanTaskDetailProps): Reac
                 {task.attachments.map((attachment) => (
                   <p key={attachment.url} className="truncate text-xs text-foreground">
                     {attachment.name}
-                    {attachment.size !== null ? ` (${attachment.size} B)` : ''}
+                    {attachment.size !== null
+                      ? ` ${translate('auto.components.kanban.detail.attachmentSize', '({{value0}} B)', { value0: attachment.size })}`
+                      : ''}
                   </p>
                 ))}
               </dd>

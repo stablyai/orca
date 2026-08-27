@@ -1587,6 +1587,7 @@
         "73dfd4eb8d": "No volver a preguntar"
       },
       "TaskPage": {
+        "kanbanSourceLabel": "Kanban",
         "513cddfa7a": "Verificando…",
         "ff69a30681": "Cancelar",
         "2abe22ef76": "Tu token se cifra con el llavero del sistema operativo y se almacena localmente.",
@@ -5220,7 +5221,100 @@
           }
         }
       },
+      "kanban": {
+        "connect": {
+          "dialog": {
+            "title": "Conectar Kanban",
+            "description": "Usa tu token personal de Kanban para explorar e iniciar trabajo desde tus tareas.",
+            "server": "Servidor",
+            "token": "Token personal",
+            "tokenPlaceholder": "Token personal de Kanban",
+            "storage": "Tu token se guarda localmente y se cifra cuando el almacenamiento del runtime local lo permite.",
+            "cancel": "Cancelar",
+            "verifying": "Verificando:",
+            "connect": "Conectar"
+          },
+          "title": "Conecta tu Kanban",
+          "description": "Explora e inicia trabajo desde tus tareas de Kanban en https://kanban.fpimi.ru.",
+          "action": "Conectar Kanban",
+          "hide": "Ocultar Kanban"
+        },
+        "filter": {
+          "executor": "Ejecutor",
+          "observer": "Observador",
+          "creator": "Creador",
+          "dueAny": "Cualquier vencimiento",
+          "dueOverdue": "Vencidas",
+          "dueToday": "Hoy",
+          "dueWeek": "7 días",
+          "dueNone": "Sin vencimiento",
+          "refresh": "Actualizar tareas de Kanban",
+          "allLanes": "Todas las columnas",
+          "urgent": "Urgente",
+          "includeDone": "Incluir Hechas",
+          "search": "Buscar tareas",
+          "clearSearch": "Borrar búsqueda"
+        },
+        "workspaceOpenFailed": "No se pudo abrir el espacio de trabajo existente para esta tarea de Kanban.",
+        "error": {
+          "auth": "La autenticación de Kanban falló. Vuelve a conectar tu token para continuar.",
+          "retry": "Reintentar",
+          "reconnect": "Reconectar"
+        },
+        "detail": {
+          "result": "Resultado",
+          "description": "Descripción",
+          "roles": "Funciones",
+          "executors": "Ejecutores",
+          "observers": "Observadores",
+          "createdBy": "Creado por",
+          "comments": "Comentarios",
+          "dependencies": "Dependencias",
+          "repositories": "Repositorios",
+          "attachments": "Adjuntos",
+          "attachmentSize": "({{value0}} bytes)",
+          "close": "Cerrar detalles de la tarea",
+          "openBrowser": "Abrir la tarea de Kanban {{value0}} en el navegador",
+          "openBrowserLabel": "Abrir en el navegador",
+          "notFound": "Tarea de Kanban no encontrada.",
+          "backToList": "Volver a la lista",
+          "error": "No se pudo cargar esta tarea de Kanban."
+        },
+        "list": {
+          "empty": "No se encontraron tareas de Kanban",
+          "emptyHint": "Prueba con otro filtro o búsqueda.",
+          "name": "Tareas de Kanban",
+          "rowLabel": "Tarea de Kanban {{value0}}",
+          "urgent": "Urgente",
+          "start": "Iniciar espacio de trabajo desde la tarea de Kanban {{value0}}",
+          "startTooltip": "Iniciar",
+          "openBrowser": "Abrir la tarea de Kanban {{value0}} en el navegador"
+        },
+        "sync": {
+          "networkError": "Kanban no está accesible. Comprueba tu conexión.",
+          "failed": "Не удалось обновить карточку Kanban.",
+          "retry": "Повторить обновление карточки"
+        }
+      },
       "settings": {
+        "kanban": {
+          "integration": {
+            "card": {
+              "connectedDescription": "Explora e inicia trabajo desde tus tareas en {{value0}}.",
+              "notConnectedDescription": "Conecta un token personal para explorar tareas de {{value0}}.",
+              "checkingDescription": "Comprobando el acceso a Kanban antes de mostrar las acciones de configuración.",
+              "statusConnected": "Conectado",
+              "statusNotConnected": "No conectado",
+              "updateToken": "Actualizar token",
+              "connect": "Conectar Kanban",
+              "disconnectLabel": "Desconectar Kanban",
+              "disconnect": "Desconectar",
+              "tokenNote": "El runtime activo almacena un token personal para {{value0}}.",
+              "credentialCopy": "Añade un token personal desde tu perfil de Kanban. El token nunca se muestra en Orca.",
+              "recheck": "Volver a comprobar"
+            }
+          }
+        },
         "keep": {
           "local": {
             "main": {
@@ -7231,7 +7325,9 @@
           "integrationsHint": "Las credenciales de todos los proveedores también están en",
           "integrationsLink": "Integraciones",
           "skillHint": ". Después de conectar Linear, los ejemplos de uso están en Ajustes → Linear.",
-          "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas."
+          "incompleteBannerBodyWithLinear": "Oculta los proveedores que no uses o expande una tarjeta y completa sus pasos. Para Linear: acceso a la API, la habilidad del agente y Mostrar en Tareas.",
+          "kanbanLabel": "Kanban",
+          "kanbanDescription": "Conecta el servidor de Kanban y muéstralo en Tareas."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Grosor de la línea divisoria del panel.",
@@ -8419,7 +8515,11 @@
             "41ccade05c": "gh",
             "b79c21bd42": "github",
             "7166b9090c": "Autenticación de GitHub a través de la CLI de gh.",
-            "f16e41cc72": "Integración de GitHub"
+            "f16e41cc72": "Integración de GitHub",
+            "kanbanTitle": "Integración de Kanban",
+            "kanbanDescription": "Conecta un token personal de Kanban para explorar e iniciar tareas.",
+            "kanbanKeyword": "kanban",
+            "personalToken": "token personal"
           }
         },
         "jira": {
