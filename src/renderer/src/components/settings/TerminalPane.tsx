@@ -94,7 +94,11 @@ export function TerminalPane({
       />
     ) : null,
     matchesSettingsSearch(searchQuery, getManageSessionsSearchEntries()) ? (
-      <ManageSessionsSection key="manage-sessions" />
+      <ManageSessionsSection
+        key="manage-sessions"
+        settings={settings}
+        updateSettings={updateSettings}
+      />
     ) : null,
     matchesSettingsSearch(searchQuery, getTerminalAdvancedSearchEntries()) ||
     (showWindowsPowerShellImplementation &&

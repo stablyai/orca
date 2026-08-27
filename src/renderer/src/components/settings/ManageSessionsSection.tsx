@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import type { PtyManagementSession } from '../../../../preload/api-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { SearchableSetting } from './SearchableSetting'
+import { SettingsSwitchRow } from './SettingsFormControls'
 import { getManageSessionsSearchEntries } from './terminal-search'
 import { useAppStore } from '../../store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -18,7 +20,15 @@ import { translate } from '@/i18n/i18n'
 
 type ConfirmKind = 'killOne'
 
-export function ManageSessionsSection(): React.JSX.Element {
+type ManageSessionsSectionProps = {
+  settings: GlobalSettings
+  updateSettings: (updates: Partial<GlobalSettings>) => void
+}
+
+export function ManageSessionsSection({
+  settings,
+  updateSettings
+}: ManageSessionsSectionProps): React.JSX.Element {
   const [sessions, setSessions] = useState<PtyManagementSession[]>([])
   const [isRefreshing, setIsRefreshing] = useState(true)
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false)
@@ -231,6 +241,23 @@ export function ManageSessionsSection(): React.JSX.Element {
           onRestartDaemon={() => daemonActions.setPending('restart')}
           onNavigate={handleNavigate}
           onRequestKill={setPendingKillSession}
+        />
+      </SearchableSetting>
+
+      <SearchableSetting
+        title={getManageSessionsSearchEntries()[1].title}
+        description={getManageSessionsSearchEntries()[1].description}
+        keywords={getManageSessionsSearchEntries()[1].keywords}
+      >
+        <SettingsSwitchRow
+          label={getManageSessionsSearchEntries()[1].title}
+          description={getManageSessionsSearchEntries()[1].description}
+          checked={settings.terminateSessionsOnQuit === true}
+          onChange={() =>
+            updateSettings({
+              terminateSessionsOnQuit: !(settings.terminateSessionsOnQuit === true)
+            })
+          }
         />
       </SearchableSetting>
 

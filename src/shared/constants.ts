@@ -327,6 +327,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     claudeAgentTeamsDefaultDisabledMigrated: true,
     skipDeleteWorktreeConfirm: false,
     skipCloseTerminalWithRunningProcessConfirm: false,
+    terminateSessionsOnQuit: false,
     skipDeleteAutomationConfirm: false,
     skipDeleteArtifactConfirm: false,
     skipCodexRateLimitResetConfirm: false,

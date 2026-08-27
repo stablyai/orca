@@ -28,6 +28,36 @@ export const getManageSessionsSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.terminal.search.88561b3499', 'frozen'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.d4daf4f612', 'unfreeze')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.terminateOnQuitTitle',
+      'Terminate sessions when quitting Orca'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.terminateOnQuitDescription',
+      'Kill every terminal and agent session on quit instead of keeping them running in the background for reattach.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.terminateKeyword',
+        'terminate'
+      ),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.quitKeyword', 'quit'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.exitKeyword', 'exit'),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.backgroundKeyword',
+        'background'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.persistKeyword',
+        'persist'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.terminal.search.restoreKeyword',
+        'restore'
+      )
+    ]
   }
 ])
 
