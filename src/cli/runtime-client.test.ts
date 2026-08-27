@@ -441,7 +441,10 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect((failure as RuntimeClientError).message).toBe(
       'The Orca runtime closed the connection before responding. Restart Orca and try again.'
     )
-    expect((failure as RuntimeClientError).data).toBeUndefined()
+    expect((failure as RuntimeClientError).data).toEqual({
+      requestPhase: 'awaiting_response',
+      method: 'orchestration.workerShow'
+    })
     expect(request).toMatchObject({ method: 'orchestration.workerShow' })
     expect(request).not.toHaveProperty('orchestrationRequestId')
   })

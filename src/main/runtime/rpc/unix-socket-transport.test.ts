@@ -74,4 +74,47 @@ describe('UnixSocketTransport', () => {
     vi.advanceTimersByTime(500)
     expect(socket.writes).toHaveLength(1)
   })
+
+  it('returns one terminal frame when bounded keepalive expires', () => {
+    const transport = new UnixSocketTransport({
+      endpoint: '/tmp/orca-runtime-rpc-test.sock',
+      kind: 'unix',
+      keepaliveIntervalMs: 10
+    })
+    const socket = new FakeSocket()
+    let reply: ((response: string) => void) | undefined
+
+    transport.onMessage((_msg, respond, context) => {
+      reply = respond
+      context?.startKeepalive({
+        maxDurationMs: 25,
+        timeoutResponse: JSON.stringify({
+          id: 'slow-rm',
+          ok: false,
+          error: {
+            code: 'runtime_timeout',
+            data: { requestPhase: 'awaiting_response', method: 'worktree.rm' }
+          }
+        })
+      })
+    })
+    ;(transport as unknown as UnixSocketTransportInternals).handleConnection(
+      socket as unknown as Socket
+    )
+    socket.emit('data', '{"id":"slow-rm","method":"worktree.rm"}\n')
+
+    vi.advanceTimersByTime(25)
+    reply?.('{"id":"slow-rm","ok":true}')
+
+    const terminalWrites = socket.writes.filter((write) => !write.includes('_keepalive'))
+    expect(terminalWrites).toHaveLength(1)
+    expect(JSON.parse(terminalWrites[0]!.trim())).toMatchObject({
+      id: 'slow-rm',
+      ok: false,
+      error: {
+        code: 'runtime_timeout',
+        data: { requestPhase: 'awaiting_response', method: 'worktree.rm' }
+      }
+    })
+  })
 })

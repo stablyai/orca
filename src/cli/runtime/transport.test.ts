@@ -134,7 +134,8 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     await expect(sendRequest(metadata, 'status.get', undefined, 60000)).rejects.toMatchObject({
       code: 'runtime_unavailable',
       message:
-        'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+        'The Orca runtime closed the connection before responding. Restart Orca and try again.',
+      data: { requestPhase: 'awaiting_response', method: 'status.get' }
     })
     expect(Date.now() - start).toBeLessThan(5000)
   })

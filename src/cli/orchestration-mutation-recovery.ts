@@ -1,4 +1,5 @@
 import { RuntimeClientError } from './runtime-client'
+import { stripMutationResponseLossRetryAdvice } from './mutation-response-loss-message'
 
 export function orchestrationMutationRecoveryError(error: unknown): unknown {
   if (!(error instanceof RuntimeClientError) || !isUnknownMutationOutcomeCode(error.code)) {
@@ -10,7 +11,10 @@ export function orchestrationMutationRecoveryError(error: unknown): unknown {
     return error
   }
   const message = [
-    stripUnsafeRetryAdvice(error.message, requestId),
+    stripMutationResponseLossRetryAdvice(error.message).replace(
+      ` Orchestration mutation request ID: ${requestId}.`,
+      ''
+    ),
     'The orchestration mutation may already have taken effect; do not assume it failed.',
     `Re-issue the same command with --retry-request ${requestId} to recover idempotently. Do not retry this mutation without --retry-request.`,
     typeof data?.failedStage === 'string' ? `Failed stage: ${data.failedStage}.` : undefined,
@@ -34,11 +38,4 @@ function objectRecord(value: unknown): Record<string, unknown> | undefined {
   return value !== null && typeof value === 'object'
     ? (value as Record<string, unknown>)
     : undefined
-}
-
-function stripUnsafeRetryAdvice(message: string, requestId: string): string {
-  return message
-    .replace(' Restart Orca and try again.', '')
-    .replace(' Retry the command.', '')
-    .replace(` Orchestration mutation request ID: ${requestId}.`, '')
 }

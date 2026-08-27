@@ -33,7 +33,12 @@ export async function sendRequest<TResult>(
     const socket = createConnection(transport.endpoint)
     let buffer = ''
     let settled = false
+    let requestSent = false
     const requestId = randomUUID()
+    const requestData = (): { requestPhase: 'not_sent' | 'awaiting_response'; method: string } => ({
+      requestPhase: requestSent ? 'awaiting_response' : 'not_sent',
+      method
+    })
 
     const timeout = setTimeout(() => {
       if (settled) {
@@ -44,7 +49,8 @@ export async function sendRequest<TResult>(
       reject(
         new RuntimeClientError(
           'runtime_timeout',
-          'Timed out waiting for the Orca runtime to respond.'
+          'Timed out waiting for the Orca runtime to respond.',
+          requestData()
         )
       )
     }, timeoutMs)
@@ -71,7 +77,8 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
+          'Could not connect to the running Orca app. Restart Orca and try again.',
+          requestData()
         )
       })
     })
@@ -84,7 +91,8 @@ export async function sendRequest<TResult>(
         ok: false,
         error: new RuntimeClientError(
           'runtime_unavailable',
-          'The Orca runtime closed the connection before responding. Restart Orca and try again.'
+          'The Orca runtime closed the connection before responding. Restart Orca and try again.',
+          requestData()
         )
       })
     })
@@ -112,7 +120,8 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'invalid_runtime_response',
-              'The Orca runtime returned an invalid response frame.'
+              'The Orca runtime returned an invalid response frame.',
+              requestData()
             )
           })
           return
@@ -139,7 +148,8 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'invalid_runtime_response',
-              'The Orca runtime returned an invalid response frame.'
+              'The Orca runtime returned an invalid response frame.',
+              requestData()
             )
           })
           return
@@ -160,7 +170,8 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'invalid_runtime_response',
-              'The Orca runtime returned a mismatched response id.'
+              'The Orca runtime returned a mismatched response id.',
+              requestData()
             )
           })
           return
@@ -170,7 +181,8 @@ export async function sendRequest<TResult>(
             ok: false,
             error: new RuntimeClientError(
               'runtime_unavailable',
-              'The Orca runtime changed while the request was in flight. Retry the command.'
+              'The Orca runtime changed while the request was in flight. Retry the command.',
+              requestData()
             )
           })
           return
@@ -180,6 +192,7 @@ export async function sendRequest<TResult>(
       }
     })
     socket.on('connect', () => {
+      requestSent = true
       socket.write(
         `${JSON.stringify({
           id: requestId,

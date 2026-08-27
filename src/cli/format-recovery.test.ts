@@ -70,4 +70,21 @@ describe('CLI error recovery', () => {
     expect(output).toContain('--retry-request mutation_1')
     expect(output).not.toContain('orca open')
   })
+
+  it('prefers worktree response-loss recovery over runtime startup advice', () => {
+    const error = new RuntimeClientError(
+      'runtime_unavailable',
+      'The workspace removal may still complete.',
+      {
+        requestPhase: 'awaiting_response',
+        method: 'worktree.rm',
+        nextSteps: ['Run: orca worktree list --json and verify state.']
+      }
+    )
+
+    const output = formatCliError(error)
+
+    expect(output).toContain('worktree list --json')
+    expect(output).not.toContain('orca open')
+  })
 })

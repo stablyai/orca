@@ -33,6 +33,7 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
+import { addWorktreeRemoveResponseRecovery } from './worktree-remove-response-recovery'
 
 type HookWarningResult = {
   warning?: string
@@ -292,14 +293,18 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
-    const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
-      worktree,
-      hostId,
-      force: flags.get('force') === true,
-      // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
-      allowUnverifiedPtyStop: flags.get('force') === true,
-      runHooks: flags.get('run-hooks') === true
-    })
+    const result = await client
+      .call<RuntimeWorktreeRemoveResult>('worktree.rm', {
+        worktree,
+        hostId,
+        force: flags.get('force') === true,
+        // Why (#11960): --force is explicit here, so it may also waive PTY-stop proof.
+        allowUnverifiedPtyStop: flags.get('force') === true,
+        runHooks: flags.get('run-hooks') === true
+      })
+      .catch((error: unknown) => {
+        throw addWorktreeRemoveResponseRecovery(error)
+      })
     printHookWarning(result.result, json)
     printPreservedBranchWarning(result.result, json)
     printResult(result, json, (value) => `removed: ${value.removed}`)
