@@ -30,6 +30,39 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
   }
+  if (transcriptAgent === 'antigravity') {
+    return decodeAntigravityTurnLifecycle
+  }
+  return null
+}
+
+export function decodeAntigravityTurnLifecycle(
+  line: string,
+  fallbackId: string
+): NativeChatTurnLifecycle | null {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return null
+  }
+  const timestamp = lifecycleTimestamp(record.created_at ?? record.timestamp)
+  const stepIndex =
+    typeof record.step_index === 'number'
+      ? String(record.step_index)
+      : extractString(record.step_index) ?? extractString(record.id)
+  const turnId = stepIndex ?? fallbackId
+
+  if (record.status === 'ERROR' || record.status === 'INTERRUPTED') {
+    return { state: 'interrupted', turnId, timestamp }
+  }
+  if (
+    (record.source === 'USER_EXPLICIT' || record.source === 'USER') &&
+    (record.type === 'USER_INPUT' || record.type === 'REQUEST')
+  ) {
+    return { state: 'working', turnId, timestamp }
+  }
+  if (record.source === 'MODEL' && record.type === 'PLANNER_RESPONSE') {
+    return { state: 'completed', turnId, timestamp }
+  }
   return null
 }
 

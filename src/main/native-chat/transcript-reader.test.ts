@@ -258,6 +258,51 @@ describe('readNativeChatTranscript (codex)', () => {
     const reasoning = result.messages.find((m) => m.role === 'reasoning')
     expect(reasoning?.blocks[0]).toEqual({ type: 'text', text: 'I will run it' })
   })
+
+  it('decodes Antigravity transcripts into user, assistant, and tool turns', async () => {
+    const filePath = await writeFixture('orca-native-chat-antigravity-', [
+      {
+        source: 'USER_EXPLICIT',
+        type: 'USER_INPUT',
+        content: '<USER_REQUEST>Render mermaid graph</USER_REQUEST>',
+        created_at: '2026-08-21T03:00:00.000Z',
+        step_index: 1
+      },
+      {
+        source: 'MODEL',
+        type: 'PLANNER_RESPONSE',
+        thinking: 'Generating flowchart',
+        content: '```mermaid\ngraph TD\nA-->B\n```',
+        tool_calls: [{ name: 'run_command', arguments: { CommandLine: 'npm test' } }],
+        created_at: '2026-08-21T03:00:01.000Z',
+        step_index: 2
+      },
+      {
+        source: 'SYSTEM',
+        type: 'TOOL_RESULT',
+        status: 'DONE',
+        content: 'Tests passed',
+        created_at: '2026-08-21T03:00:02.000Z',
+        step_index: 3
+      }
+    ])
+
+    const result = await readNativeChatTranscript('antigravity', 'ag-sess', { filePath })
+    if (!('messages' in result)) {
+      throw new Error(`expected messages, got error`)
+    }
+
+    expect(result.messages.map((m) => m.role)).toEqual(['user', 'assistant', 'tool'])
+    expect(result.messages[0].blocks[0]).toEqual({ type: 'text', text: 'Render mermaid graph' })
+    expect(result.messages[1].blocks[0]).toEqual({ type: 'text', text: '> *Thinking:*\nGenerating flowchart' })
+    expect(result.messages[1].blocks[1]).toEqual({ type: 'text', text: '```mermaid\ngraph TD\nA-->B\n```' })
+    expect(result.messages[1].blocks[2]).toEqual({
+      type: 'tool-call',
+      name: 'run_command',
+      input: { CommandLine: 'npm test' }
+    })
+    expect(result.messages[2].blocks[0]).toEqual({ type: 'tool-result', output: 'Tests passed' })
+  })
 })
 
 describe('readNativeChatTranscript (errors)', () => {
