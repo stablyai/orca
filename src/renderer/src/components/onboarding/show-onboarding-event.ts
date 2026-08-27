@@ -1,4 +1,4 @@
-import type { OnboardingState } from '../../../../shared/types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 const ONBOARDING_REOPENED_EVENT = 'orca:onboarding-reopened'
 

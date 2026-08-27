@@ -10,7 +10,10 @@ import {
   type MutableRefObject
 } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
@@ -55,6 +58,7 @@ import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
+import { ShareSkillsSettingsPane } from './ShareSkillsSettingsPane'
 import { AutomationsSettingsPane } from './AutomationsSettingsPane'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
@@ -306,7 +310,6 @@ function Settings(): React.JSX.Element {
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
   const settingsProjectSetupSelection = useAppStore((s) => s.settingsProjectSetupSelection)
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
-  const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
@@ -1202,12 +1205,10 @@ function Settings(): React.JSX.Element {
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
-        searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
         // Why: deep-links open panes/modals that own focus; plain entry lands in search.
         searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
-        onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
       />
 
@@ -1296,7 +1297,9 @@ function Settings(): React.JSX.Element {
                   )}
                   searchEntries={getSectionSearchEntries('orchestration')}
                 >
-                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                  {isSectionMounted('orchestration') ? (
+                    <OrchestrationPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 {linearConnected ? (
@@ -1389,6 +1392,7 @@ function Settings(): React.JSX.Element {
                     <GeneralPane
                       settings={settings}
                       updateSettings={updateSettings}
+                      updateSettingsOrThrow={updateSettingsOrThrow}
                       fontSuggestions={terminalFontSuggestions}
                       onRequestFontSuggestions={requestFontSuggestions}
                       wslSupportedPlatform={localWslSupportedPlatform}
@@ -1457,6 +1461,19 @@ function Settings(): React.JSX.Element {
                 </SettingsSection>
 
                 <SettingsSection
+                  id="share-skills"
+                  title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.shareSkills.description',
+                    'Share your skills with an unlisted link. Anyone who has it can install them.'
+                  )}
+                  searchEntries={getSectionSearchEntries('share-skills')}
+                >
+                  {isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
                   title={translate(
                     'auto.components.settings.Settings.70100f94c7',
@@ -1464,7 +1481,7 @@ function Settings(): React.JSX.Element {
                   )}
                   description={translate(
                     'auto.components.settings.Settings.cfa34f4465',
-                    'Branch naming, base refs, attribution, and Git AI Author.'
+                    'Branch naming, base refs, and Git AI Author.'
                   )}
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}

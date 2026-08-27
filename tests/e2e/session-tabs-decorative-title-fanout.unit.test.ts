@@ -429,7 +429,8 @@ describe('real PTY decorative session-tabs fanout', () => {
       agent: 'pi' as const,
       firstTitle: '⠋ π - project',
       heartbeatTitles: ['⠋ π - project', '⠙ π - project'],
-      expectedTitle: '⠋ Pi'
+      // Why: the π brand swaps for the owner label in place; session text survives.
+      expectedTitle: '⠋ Pi - project'
     },
     {
       agent: 'grok-build' as const,
@@ -486,11 +487,11 @@ describe('real PTY decorative session-tabs fanout', () => {
 
     expect(publications).toHaveLength(2)
     expect(
-      publications.every((snapshot) => {
+      publications.map((snapshot) => {
         const terminal = snapshot.tabs[0]
-        return terminal?.type === 'terminal' && terminal.title === testCase.expectedTitle
+        return terminal?.type === 'terminal' ? terminal.title : null
       })
-    ).toBe(true)
+    ).toEqual([testCase.expectedTitle, testCase.expectedTitle])
     const finalTerminal = publications.at(-1)?.tabs[0]
     const finalAgentStatus =
       finalTerminal?.type === 'terminal' ? finalTerminal.agentStatus : undefined

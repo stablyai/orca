@@ -4,30 +4,19 @@ import {
   type FeatureInteractionId
 } from '../../../../shared/feature-interactions'
 import { isFeatureTipId } from '../../../../shared/feature-tips'
-import {
-  normalizeTuiAgentArgsRecord,
-  normalizeTuiAgentEnvRecord
-} from '../../../../shared/tui-agent-launch-defaults'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
-import { isTaskProvider } from '../../../../shared/task-providers'
 import { isReleaseChannel, type ReleaseChannel } from '../../../../shared/release-channel'
-import { normalizeDisabledTuiAgents } from '../../../../shared/tui-agent-selection'
-import { normalizePRBotAuthorOverrides } from '../../../../shared/pr-bot-author-overrides'
 import {
   normalizeWorktreeCardProperties,
   WORKTREE_CARD_PROPERTIES
-} from '../../../../shared/worktree-card-properties'
+} from '../../../../shared/worktree/card-properties'
 import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
-import type { TaskProvider } from '../../../../shared/types'
 import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fields'
 import { TaskResumeState } from './task-resume-state-schema'
+import { WorkspaceCleanup } from './workspace-cleanup-ui-schema'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance'
 
 const NullableString = z.string().nullable()
 const StringArray = z.array(z.string())
-const TaskProviderParam = z.custom<TaskProvider>(isTaskProvider, {
-  message: 'Unknown task provider'
-})
 const FeatureTipIds = z.array(z.custom(isFeatureTipId, { message: 'Unknown feature tip id' }))
 const UnknownRecord = z.record(z.string(), z.unknown())
 const UnknownRecordArray = z.array(UnknownRecord)
@@ -77,19 +66,6 @@ const WorkspaceStatusDefinition = z.object({
   color: z.string().optional(),
   icon: z.string().optional()
 })
-const WorkspaceCleanupDismissal = z
-  .object({
-    worktreeId: z.string(),
-    dismissedAt: z.number().finite(),
-    fingerprint: z.string(),
-    classifierVersion: z.number().finite()
-  })
-  .strict()
-const WorkspaceCleanup = z
-  .object({
-    dismissals: z.record(z.string(), WorkspaceCleanupDismissal)
-  })
-  .strict()
 const FeatureInteractionRecord = z
   .object({
     firstInteractedAt: z.number().finite().nonnegative(),
@@ -112,71 +88,6 @@ const FeatureInteractions = z
 export const FeatureInteractionIdParam = z.custom<FeatureInteractionId>(isFeatureInteractionId, {
   message: 'Unknown feature interaction id'
 })
-export const PRBotAuthorOverrideUpdate = z
-  .object({ author: z.string(), isBot: z.boolean() })
-  .strict()
-const GitHubProjectRef = z
-  .object({
-    owner: z.string(),
-    ownerType: z.enum(['organization', 'user']),
-    number: z.number().int(),
-    host: z.string().optional()
-  })
-  .strict()
-const GitHubProjectSettings = z
-  .object({
-    pinned: z.array(GitHubProjectRef),
-    recent: z.array(
-      GitHubProjectRef.extend({
-        lastOpenedAt: z.string()
-      }).strict()
-    ),
-    lastViewByProject: z.record(z.string(), z.object({ viewId: z.string() }).strict()),
-    activeProject: GitHubProjectRef.nullable()
-  })
-  .strict()
-
-export const SettingsUpdate = z
-  .object({
-    defaultTuiAgent: z
-      .unknown()
-      .transform((value) =>
-        value === null || value === 'blank' || isTuiAgent(value) ? value : undefined
-      )
-      .optional(),
-    disabledTuiAgents: z
-      .unknown()
-      .transform((value) => normalizeDisabledTuiAgents(value))
-      .optional(),
-    agentDefaultArgs: z
-      .unknown()
-      .transform((value) => normalizeTuiAgentArgsRecord(value))
-      .optional(),
-    agentDefaultEnv: z
-      .unknown()
-      .transform((value) => normalizeTuiAgentEnvRecord(value))
-      .optional(),
-    defaultTaskSource: TaskProviderParam.optional(),
-    visibleTaskProviders: z.array(TaskProviderParam).optional(),
-    defaultTaskViewPreset: z
-      .enum(['issues', 'my-issues', 'prs', 'my-prs', 'review', 'all'])
-      .optional(),
-    experimentalNewWorktreeCardStyle: z.boolean().optional(),
-    agentStatusHooksEnabled: z.boolean().optional(),
-    defaultRepoSelection: z.array(z.string()).nullable().optional(),
-    defaultLinearTeamSelection: z.array(z.string()).nullable().optional(),
-    compactWorktreeCards: z.boolean().optional(),
-    minimaxGroupId: z.string().optional(),
-    minimaxUsageModels: z.string().optional(),
-    githubProjects: GitHubProjectSettings.optional(),
-    prBotAuthorOverrides: z
-      .unknown()
-      .transform((value) => normalizePRBotAuthorOverrides(value))
-      .optional()
-  })
-  .strict()
-  .default({})
-
 const TopLevelViewSchema = z.enum([
   'terminal',
   'settings',
@@ -212,6 +123,12 @@ const UiUpdateFields = z
     workspaceHostScope: z.string().optional(),
     visibleWorkspaceHostIds: z.array(z.string()).nullable().optional(),
     workspaceHostOrder: z.array(z.string()).optional(),
+    automationHostFilter: z
+      .union([
+        z.object({ kind: z.literal('all') }).strict(),
+        z.object({ kind: z.literal('host'), hostKey: z.string().min(1) }).strict()
+      ])
+      .optional(),
     manualRepoOrder: z
       .array(z.object({ hostId: z.string(), repoId: z.string() }).strict())
       .optional(),

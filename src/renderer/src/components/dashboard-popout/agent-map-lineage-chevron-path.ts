@@ -17,7 +17,7 @@ type LineageSegment = {
 const CHEVRON_SPACING = 8
 const CHEVRON_DEPTH = 3.5
 const CHEVRON_HALF_WIDTH = 2.25
-const MAX_CHEVRONS_PER_PATH = 32
+const MAX_CHEVRONS_PER_PATH = 256
 
 function svgNumber(value: number): number {
   return Math.round(value * 1_000) / 1_000
@@ -46,11 +46,14 @@ export function agentMapLineageChevronPath(points: AgentMapLineagePoint[]): stri
     MAX_CHEVRONS_PER_PATH,
     Math.max(1, Math.floor(totalLength / CHEVRON_SPACING))
   )
+  // Fixed pitch, centered run: spacing must read identically on a short link and a long
+  // one. Dividing the length by the count instead stretched the gaps as nodes moved apart.
+  const firstDistance = (totalLength - (chevronCount - 1) * CHEVRON_SPACING) / 2
   const commands: string[] = []
   let segmentIndex = 0
   let segmentStartDistance = 0
   for (let index = 0; index < chevronCount; index += 1) {
-    const distance = (totalLength * (index + 1)) / (chevronCount + 1)
+    const distance = firstDistance + index * CHEVRON_SPACING
     while (
       segmentIndex < segments.length - 1 &&
       distance > segmentStartDistance + segments[segmentIndex].length
@@ -73,7 +76,7 @@ export function agentMapLineageChevronPath(points: AgentMapLineagePoint[]): stri
   return commands.join(' ')
 }
 
-export function agentMapDirectLineageChevronPath(
+function buildDirectLineageChevronPath(
   parent: AgentMapLineageNode,
   child: AgentMapLineageNode
 ): string {
@@ -89,4 +92,34 @@ export function agentMapDirectLineageChevronPath(
     { x: parent.x + unitX * parent.radius, y: parent.y + unitY * parent.radius },
     { x: child.x - unitX * child.radius, y: child.y - unitY * child.radius }
   ])
+}
+
+// Keyed on world coordinates, which a zoom gesture never changes — so the scene's
+// per-frame rerender reuses every path instead of rebuilding kilobytes of `d` at
+// 60fps. Only enter/exit motion, which really does move nodes, misses. LRU-bounded
+// because a removed agent's key is never revisited.
+const MAX_CACHED_LINEAGE_PATHS = 512
+const lineagePathCache = new Map<string, string>()
+
+export function agentMapDirectLineageChevronPath(
+  parent: AgentMapLineageNode,
+  child: AgentMapLineageNode
+): string {
+  const key = `${parent.x},${parent.y},${parent.radius},${child.x},${child.y},${child.radius}`
+  const cached = lineagePathCache.get(key)
+  if (cached !== undefined) {
+    lineagePathCache.delete(key)
+    lineagePathCache.set(key, cached)
+    return cached
+  }
+  const path = buildDirectLineageChevronPath(parent, child)
+  lineagePathCache.set(key, path)
+  while (lineagePathCache.size > MAX_CACHED_LINEAGE_PATHS) {
+    const oldest = lineagePathCache.keys().next().value
+    if (oldest === undefined) {
+      break
+    }
+    lineagePathCache.delete(oldest)
+  }
+  return path
 }

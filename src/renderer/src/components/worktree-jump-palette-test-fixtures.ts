@@ -1,4 +1,7 @@
-import type { Repo, Tab, TabGroup, TerminalTab, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import type { AppState } from '@/store/types'
@@ -90,7 +93,8 @@ export const LEAF_ID = '11111111-2222-4333-8444-555555555555'
 export function makeAgentEntry(
   tabId: string,
   state: AgentStatusState,
-  stateStartedAt: number
+  stateStartedAt: number,
+  overrides: Partial<AgentStatusEntry> = {}
 ): AgentStatusEntry {
   return {
     state,
@@ -98,7 +102,8 @@ export function makeAgentEntry(
     updatedAt: stateStartedAt,
     stateStartedAt,
     paneKey: makePaneKey(tabId, LEAF_ID),
-    stateHistory: []
+    stateHistory: [],
+    ...overrides
   }
 }
 
@@ -130,6 +135,36 @@ export function makeRecentTabState(overrides: Partial<AppState> = {}): Partial<A
       'wt-beta': 'group-wt-beta'
     },
     ...overrides
+  }
+}
+
+/** Two host-qualified worktrees intentionally publish the same unified tab id. */
+export function makeDuplicateRecentTabState(): Partial<AppState> {
+  const alpha = makeWorktree('wt-alpha', 'Alpha workspace', { hostId: 'ssh:alpha' })
+  const beta = makeWorktree('wt-beta', 'Beta workspace', { hostId: 'ssh:beta' })
+  return {
+    worktreesByRepo: { 'repo-1': [alpha, beta] },
+    showSleepingWorkspaces: true,
+    ptyIdsByTabId: {
+      'term-alpha': ['pty-term-alpha'],
+      'term-beta': ['pty-term-beta']
+    },
+    tabsByWorktree: {
+      'wt-alpha': [makeTerminalTab('term-alpha', 'wt-alpha', 'Alpha duplicate')],
+      'wt-beta': [makeTerminalTab('term-beta', 'wt-beta', 'Beta duplicate')]
+    },
+    unifiedTabsByWorktree: {
+      'wt-alpha': [makeUnifiedTab('tab-duplicate', 'wt-alpha', 'term-alpha', 'Alpha duplicate')],
+      'wt-beta': [makeUnifiedTab('tab-duplicate', 'wt-beta', 'term-beta', 'Beta duplicate')]
+    },
+    groupsByWorktree: {
+      'wt-alpha': [makeGroup('wt-alpha', ['tab-duplicate'])],
+      'wt-beta': [makeGroup('wt-beta', ['tab-duplicate'])]
+    },
+    activeGroupIdByWorktree: {
+      'wt-alpha': 'group-wt-alpha',
+      'wt-beta': 'group-wt-beta'
+    }
   }
 }
 

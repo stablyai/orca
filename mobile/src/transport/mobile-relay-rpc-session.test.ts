@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
@@ -103,6 +103,7 @@ describe('mobile relay RPC session', () => {
     fakes.linkOptions = null
     fakes.sendText.mockReturnValue(true)
   })
+  afterEach(() => vi.useRealTimers())
 
   it('requires exact resume observations and confirms by request ID before becoming connected', async () => {
     const { session, confirmationRequest } = await authenticateSession()

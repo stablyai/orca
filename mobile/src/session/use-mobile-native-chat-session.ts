@@ -12,16 +12,25 @@ import {
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
 
-export type MobileNativeChatStatus = 'idle' | 'loading' | 'waiting-session' | 'ready' | 'error'
+export type MobileNativeChatStatus =
+  | 'idle'
+  | 'loading'
+  | 'waiting-session'
+  /** The host answered, but the session has no transcript file yet — render the
+   *  empty chat instead of a spinner while the read stays open. */
+  | 'awaiting-transcript'
+  | 'ready'
+  | 'error'
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
   /** True while `messages` cannot be trusted as this session's real history:
-   *  the read is in flight, OR the subscription effect has not yet caught up to
-   *  a just-changed agent/session, so `messages`/`status` still describe the
-   *  previous tab. Consumers that decide something from an empty transcript
-   *  (the launch-draft seed) must wait for this to clear. */
+   *  the read is in flight, the transcript has not been written yet, OR the
+   *  subscription effect has not yet caught up to a just-changed agent/session,
+   *  so `messages`/`status` still describe the previous tab. Consumers that
+   *  decide something from an empty transcript (the launch-draft seed) must
+   *  wait for this to clear. */
   transcriptLoading: boolean
   error?: string
   /** True when an older page may exist (the last read filled the window). */
@@ -145,6 +154,7 @@ export function useMobileNativeChatSession(args: {
         sessionId,
         limit: limitRef.current,
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
+        capabilities: { transcriptPending: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -166,7 +176,9 @@ export function useMobileNativeChatSession(args: {
           setError(applied.error)
           return
         }
-        if (frame.type === 'snapshot') {
+        if (frame.type === 'snapshot' && !applied.pending) {
+          // A pending window has no transcript behind it, so the snapshot that
+          // follows is still this subscription's base, not a reconnect replay.
           snapshotSeenRef.current = true
         }
         if (applied.windowReplaced || frame.type === 'snapshot') {
@@ -198,7 +210,7 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
           beforeOffsetRef.current = null
         }
-        setRead({ client, identity, status: 'ready' })
+        setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
       }
     )
 
@@ -286,7 +298,7 @@ export function useMobileNativeChatSession(args: {
     // clears the previous tab's list is passive, so `messages` lags a commit.
     messages: visibleMessages,
     status,
-    transcriptLoading: status === 'loading',
+    transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,
     hasMore,
     loadingEarlier,

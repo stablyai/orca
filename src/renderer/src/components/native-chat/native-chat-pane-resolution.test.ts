@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { resolveNativeChatSession } from './native-chat-pane-resolution'
 
 function entry(

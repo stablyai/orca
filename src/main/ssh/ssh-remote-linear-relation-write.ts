@@ -1,4 +1,4 @@
-import type { LinearIssueRelationship } from '../../shared/linear-agent-access'
+import type { LinearIssueRelationship } from '../../shared/linear/agent-access'
 import type { RpcResponse } from '../runtime/rpc/core'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import {

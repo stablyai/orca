@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { normalizeTerminalLayoutSnapshot } from './terminal-layout-leaf-ids'
 import { normalizeTerminalLayoutPtyOwnership } from './terminal-layout-pty-ownership'
 

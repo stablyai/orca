@@ -13,7 +13,7 @@ import {
   recordLiveEntriesFullRebuild
 } from './worktree-agent-live-index-patch'
 import { selectWorktreeAgentOrchestration } from './worktree-agent-orchestration-index'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 const EMPTY_LIVE_ENTRIES: AgentStatusEntry[] = []
 const EMPTY_MIGRATION_UNSUPPORTED_ENTRIES: MigrationUnsupportedPtyEntry[] = []

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { AiVaultSessionTitlesResult } from '../../../shared/ai-vault-session-title'
 import { resolveTerminalTabTitle } from '../../../shared/tab-title-resolution'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import {
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest

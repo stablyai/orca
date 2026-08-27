@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentBrowserBridge } from '../browser/agent-browser-bridge'
 import { REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES } from '../../shared/remote-runtime-memory-limits'
 import type { RuntimeBrowserCommandHost } from './orca-runtime-browser'
+import { RuntimeBrowserPageRegistry } from './runtime-browser-page-registry'
 
 const {
   ipcMainOnMock,
@@ -57,7 +58,7 @@ vi.mock('../browser/browser-screencast-stream', () => ({
   startBrowserScreencast: startBrowserScreencastMock
 }))
 
-vi.mock('../ipc/browser', () => ({
+vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForTabRegistration: waitForTabRegistrationMock,
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
 }))
@@ -77,25 +78,28 @@ function deferred<T>() {
 }
 
 function createHost(overrides: Partial<RuntimeBrowserCommandHost> = {}): RuntimeBrowserCommandHost {
-  const bridge =
-    overrides.getAgentBrowserBridge?.() ??
-    ({
-      getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
-      getActivePageId: vi.fn(() => 'page-1'),
-      tabList: vi.fn(() => ({
-        tabs: [
-          {
-            browserPageId: 'page-1',
-            index: 0,
-            url: 'about:blank',
-            title: 'Browser',
-            active: true
-          }
-        ]
-      }))
-    } as unknown as AgentBrowserBridge)
+  const runtimeBrowserPages = new RuntimeBrowserPageRegistry()
+  const bridge = overrides.getAgentBrowserBridge
+    ? overrides.getAgentBrowserBridge()
+    : ({
+        getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
+        getActivePageId: vi.fn(() => 'page-1'),
+        tabList: vi.fn(() => ({
+          tabs: [
+            {
+              browserPageId: 'page-1',
+              index: 0,
+              url: 'about:blank',
+              title: 'Browser',
+              active: true
+            }
+          ]
+        }))
+      } as unknown as AgentBrowserBridge)
   return {
     resolveWorktreeSelector: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    resolveBrowserWorkspace: async (selector) => ({ id: selector.replace(/^id:/, '') }),
+    getRuntimeBrowserPageRegistry: () => runtimeBrowserPages,
     getAuthoritativeWindow: vi.fn(),
     getAvailableAuthoritativeWindow: vi.fn(() => null),
     getOffscreenBrowserBackend: vi.fn(() => null),
@@ -329,6 +333,56 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
   })
 
+  it('returns the renderer page identity before navigation settles', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const navigation = deferred<{ title: string; url: string }>()
+    const webContents = { send: vi.fn() }
+    webContents.send = vi.fn((_channel: string, data: { requestId: string }) => {
+      const handler = ipcMainOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'browser:tabCreateReply'
+      )?.[1] as
+        | ((event: unknown, reply: { requestId: string; browserPageId?: string }) => void)
+        | undefined
+      handler?.({ sender: webContents } as never, {
+        requestId: data.requestId,
+        browserPageId: 'page-slow-navigation'
+      })
+    })
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-slow-navigation', 101]])),
+      goto: vi.fn(() => navigation.promise),
+      setActiveTab: vi.fn()
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => ({}) as never),
+        getAuthoritativeWindow: vi.fn(() => ({ webContents }) as never)
+      })
+    )
+
+    let created: { browserPageId: string } | null = null
+    const creation = commands
+      .browserTabCreate({
+        worktree: 'id:wt-1',
+        url: 'https://example.com/slow',
+        waitForRegistration: true
+      })
+      .then((result) => {
+        created = result
+        return result
+      })
+    await vi.waitFor(() => expect(bridge.goto).toHaveBeenCalledOnce())
+    await new Promise<void>((resolve) => setImmediate(resolve))
+
+    try {
+      expect(created).toEqual({ browserPageId: 'page-slow-navigation' })
+    } finally {
+      navigation.resolve({ title: 'Slow page', url: 'https://example.com/slow' })
+      await creation
+    }
+  })
+
   it('rejects unknown explicit profile ids before requesting a renderer tab', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const send = vi.fn()
@@ -509,7 +563,7 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     expect(result.browserPageId).toBe('page-target')
   })
 
-  it('wakes the requested page before closing a page-scoped tab', async () => {
+  it('closes the requested renderer page without waiting for guest registration', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => true })
     const send = vi.fn((channel: string, data: { requestId?: string }) => {
@@ -537,11 +591,8 @@ describe('RuntimeBrowserCommands browser screencast', () => {
       commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-target' })
     ).resolves.toEqual({ closed: true })
 
-    expect(send).toHaveBeenCalledWith('browser:activateView', {
-      worktreeId: 'wt-1',
-      browserPageId: 'page-target'
-    })
-    expect(waitForTabRegistrationMock).toHaveBeenCalledWith('page-target')
+    expect(send).not.toHaveBeenCalledWith('browser:activateView', expect.anything())
+    expect(waitForTabRegistrationMock).not.toHaveBeenCalled()
     expect(waitForWorktreeTabRegistrationMock).not.toHaveBeenCalled()
     expect(send).toHaveBeenCalledWith(
       'browser:requestTabClose',
@@ -549,36 +600,89 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     )
   })
 
-  it('lets a new same-page stream take over an active stale stream', async () => {
+  it('lets the renderer close an acknowledged page whose guest never registered', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    const send = vi.fn((channel: string, data: { requestId?: string }) => {
+      if (channel !== 'browser:requestTabClose') {
+        return
+      }
+      const handler = ipcMainOnMock.mock.calls.find(
+        ([eventName]) => eventName === 'browser:tabCloseReply'
+      )?.[1] as ((event: unknown, reply: { requestId: string }) => void) | undefined
+      handler?.({} as never, { requestId: data.requestId ?? '' })
+    })
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map()),
+      getActivePageId: vi.fn(() => null),
+      getActiveWebContentsId: vi.fn(() => null)
+    } as unknown as AgentBrowserBridge
+    const authoritativeWindow = { webContents: { send } } as never
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => authoritativeWindow),
+        getAuthoritativeWindow: vi.fn(() => authoritativeWindow)
+      })
+    )
+
+    await expect(
+      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-canonical' })
+    ).resolves.toEqual({ closed: true })
+
+    expect(waitForTabRegistrationMock).not.toHaveBeenCalled()
+    expect(send).toHaveBeenCalledWith(
+      'browser:requestTabClose',
+      expect.objectContaining({ tabId: 'page-canonical', worktreeId: 'wt-1' })
+    )
+  })
+
+  it('fans one page screencast out to multiple subscribers', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
-    const firstDone = deferred<void>()
-    const secondDone = deferred<void>()
-    const firstStop = vi.fn(() => firstDone.resolve())
-    const secondStop = vi.fn(() => secondDone.resolve())
-    startBrowserScreencastMock
-      .mockResolvedValueOnce({ stop: firstStop, done: firstDone.promise })
-      .mockResolvedValueOnce({ stop: secondStop, done: secondDone.promise })
+    const done = deferred<void>()
+    const stop = vi.fn(() => done.resolve())
+    const updateViewport = vi.fn(async () => {})
+    startBrowserScreencastMock.mockResolvedValue({ stop, done: done.promise, updateViewport })
 
     const commands = new RuntimeBrowserCommands(createHost())
+    const firstSend = vi.fn(() => false)
+    const secondSend = vi.fn(() => true)
     const first = await commands.browserScreencast(
-      { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
-      { sendBinary: vi.fn() }
+      {
+        worktree: 'id:wt-1',
+        page: 'page-1',
+        format: 'jpeg',
+        viewportWidth: 1200,
+        viewportHeight: 800
+      },
+      { sendBinary: firstSend }
+    )
+    const second = await commands.browserScreencast(
+      {
+        worktree: 'id:wt-1',
+        page: 'page-1',
+        format: 'jpeg',
+        viewportWidth: 800,
+        viewportHeight: 600
+      },
+      { sendBinary: secondSend }
     )
 
-    const secondPromise = commands.browserScreencast(
-      { worktree: 'id:wt-1', page: 'page-1', format: 'jpeg' },
-      { sendBinary: vi.fn() }
-    )
-
-    await vi.waitFor(() => expect(firstStop).toHaveBeenCalledTimes(1))
-    const second = await secondPromise
-
-    expect(startBrowserScreencastMock).toHaveBeenCalledTimes(2)
+    expect(startBrowserScreencastMock).toHaveBeenCalledOnce()
     expect(first.subscriptionId).not.toBe(second.subscriptionId)
+    const frame = new Uint8Array([1, 2, 3])
+    expect(startBrowserScreencastMock.mock.calls[0][1].onFrame(frame)).toBe(true)
+    expect(firstSend).toHaveBeenCalledWith(frame)
+    expect(secondSend).toHaveBeenCalledWith(frame)
+    expect(updateViewport).toHaveBeenLastCalledWith(
+      expect.objectContaining({ viewportWidth: 800, viewportHeight: 600 })
+    )
     second.session.stop()
     await second.session.done
-    expect(secondStop).toHaveBeenCalledTimes(1)
+    expect(stop).not.toHaveBeenCalled()
+    first.session.stop()
+    await first.session.done
+    expect(stop).toHaveBeenCalledOnce()
   }, 10_000)
 
   it('admits screencast frames through the paired-runtime size guard', async () => {
@@ -587,7 +691,8 @@ describe('RuntimeBrowserCommands browser screencast', () => {
     const done = deferred<void>()
     startBrowserScreencastMock.mockResolvedValue({
       stop: vi.fn(() => done.resolve()),
-      done: done.promise
+      done: done.promise,
+      updateViewport: vi.fn(async () => {})
     })
     const sendBinary = vi.fn(() => true)
 
@@ -648,6 +753,34 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
     expect(setActiveTab).toHaveBeenCalledWith(202, 'wt-1')
   })
 
+  it('publishes a headless session snapshot after explicit navigation', async () => {
+    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
+    const notifyHeadlessBrowserSessionTabsChanged = vi.fn()
+    const bridge = {
+      getRegisteredTabs: vi.fn(() => new Map([['page-offscreen', 202]])),
+      getActivePageId: vi.fn(() => 'page-offscreen'),
+      goto: vi.fn(async () => ({ title: 'Loaded', url: 'https://example.com/loaded' }))
+    } as unknown as AgentBrowserBridge
+    const commands = new RuntimeBrowserCommands(
+      createHost({
+        getAgentBrowserBridge: () => bridge,
+        getAvailableAuthoritativeWindow: vi.fn(() => null),
+        notifyHeadlessBrowserSessionTabsChanged
+      })
+    )
+
+    await expect(
+      commands.browserGoto({
+        worktree: 'id:wt-1',
+        page: 'page-offscreen',
+        url: 'https://example.com/loaded'
+      })
+    ).resolves.toEqual({ title: 'Loaded', url: 'https://example.com/loaded' })
+
+    expect(notifyHeadlessBrowserSessionTabsChanged).toHaveBeenCalledWith('wt-1')
+  })
+
   it('rejects tab creation when neither a renderer nor an offscreen backend is available', async () => {
     const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
     const commands = new RuntimeBrowserCommands(
@@ -660,100 +793,5 @@ describe('RuntimeBrowserCommands headless offscreen routing', () => {
     await expect(commands.browserTabCreate({ url: 'about:blank' })).rejects.toThrow(
       /does not support browser panes/
     )
-  })
-
-  it('closes a headless tab via the offscreen backend without a renderer round-trip', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
-    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-offscreen', 202]])),
-      getActivePageId: vi.fn(() => 'page-offscreen'),
-      getActiveWebContentsId: vi.fn(() => 202)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab }))
-      })
-    )
-
-    await expect(
-      commands.browserTabClose({ worktree: 'id:wt-1', page: 'page-offscreen' })
-    ).resolves.toEqual({ closed: true })
-
-    expect(closeTab).toHaveBeenCalledWith('page-offscreen')
-    // The renderer close IPC must not be used in headless mode.
-    expect(ipcMainOnMock).not.toHaveBeenCalledWith('browser:tabCloseReply', expect.anything())
-  })
-
-  it('closes the active headless tab on an implicit close', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
-    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => false })
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-active', 303]])),
-      getActivePageId: vi.fn(() => 'page-active'),
-      getActiveWebContentsId: vi.fn(() => 303)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab }))
-      })
-    )
-
-    // No --page / --index: resolves the active page rather than no-op succeeding.
-    await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({
-      closed: true
-    })
-    expect(closeTab).toHaveBeenCalledWith('page-active')
-  })
-
-  it('reports not-closed (no false success) when no headless tab can be resolved', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
-    const closeTab = vi.fn(async () => {})
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map()),
-      getActivePageId: vi.fn(() => null),
-      getActiveWebContentsId: vi.fn(() => null)
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAvailableAuthoritativeWindow: vi.fn(() => null),
-        getOffscreenBrowserBackend: vi.fn(() => ({ createTab: vi.fn(), closeTab }))
-      })
-    )
-
-    await expect(commands.browserTabClose({ worktree: 'id:wt-1' })).resolves.toEqual({
-      closed: false
-    })
-    expect(closeTab).not.toHaveBeenCalled()
-  })
-
-  it('forwards an unresolved worktree to the bridge unchanged for keyboard inserttext', async () => {
-    const { RuntimeBrowserCommands } = await import('./orca-runtime-browser')
-    // Why: when no --worktree is passed (or cwd is outside a managed worktree),
-    // worktreeId arrives undefined. The bridge — not the runtime — owns the
-    // cross-worktree guard, so verify the undefined scope is threaded through
-    // intact rather than silently widened here.
-    const keyboardInsertText = vi.fn().mockResolvedValue({ inserted: true })
-    const bridge = {
-      getRegisteredTabs: vi.fn(() => new Map([['page-1', 100]])),
-      keyboardInsertText
-    } as unknown as AgentBrowserBridge
-    const commands = new RuntimeBrowserCommands(
-      createHost({
-        getAgentBrowserBridge: () => bridge,
-        getAuthoritativeWindow: vi.fn(() => ({ webContents: { send: vi.fn() } }) as never)
-      })
-    )
-
-    await commands.browserKeyboardInsertText({ text: 'hello' })
-
-    expect(keyboardInsertText).toHaveBeenCalledWith('hello', undefined, undefined)
   })
 })

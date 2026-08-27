@@ -47,7 +47,7 @@ vi.mock('../source-control/hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock
 }))
 
-vi.mock('./filesystem-auth', () => ({
+vi.mock('./registered-worktree-roots-cache', () => ({
   resolveRegisteredWorktreePath: resolveRegisteredWorktreePathMock
 }))
 

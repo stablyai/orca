@@ -1,7 +1,7 @@
 import type {
   LinearMcpIssueListRequest,
   LinearMcpIssueListResult
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import { getClients, getStatus, type LinearClientForWorkspace } from './client'
 import { withLinearRead } from './issue-context-client'
 import { linearError } from './issue-context-errors'
@@ -12,9 +12,16 @@ import {
 } from './issue-context-fanout'
 import { ISSUE_FIELDS, mapIssue, type RawIssue } from './issue-context-raw'
 import { resolveWorkspaceSelector } from './issue-context-workspaces'
+import { encodeIssueListCursor, resolveIssueListCursor } from './mcp-issue-list-cursor'
+import { buildIssueFilter } from './mcp-issue-list-filter'
 
-const LIST_ISSUES_DEFAULT_LIMIT = 50
-const LIST_ISSUES_MAX_LIMIT = 250
+// Why: `--limit` is opt-in, so the default read walks every page instead of quietly cutting
+// the answer off. Linear caps `first` at 250. The budget and page ceiling are backstops, not
+// caps: the CLI abandons an RPC at 60s, so a walk that would outlive it has to stop early and
+// say `truncated` with a continuation cursor rather than fail the whole command.
+const LIST_ISSUES_PAGE_SIZE = 250
+const LIST_ISSUES_MAX_PAGES = 200
+const LIST_ISSUES_READ_BUDGET_MS = 20_000
 
 type RawListIssuesResponse = {
   issues?: {
@@ -28,6 +35,9 @@ type WorkspaceIssuePage = {
   hasMore: boolean
   nextCursor?: string
 }
+
+// limit null means unbounded; the deadline still applies.
+type IssueListReadBudget = { limit: number | null; deadline: number }
 
 const LIST_ISSUES_QUERY = `
   query OrcaLinearListIssues(
@@ -53,15 +63,10 @@ const LIST_ISSUES_QUERY = `
 export async function listMcpIssues(
   request: LinearMcpIssueListRequest
 ): Promise<LinearMcpIssueListResult> {
-  if (request.cursor && (!request.workspaceId || request.workspaceId === 'all')) {
-    throw linearError(
-      'linear_invalid_workspace',
-      'Cursor pagination requires a concrete Linear workspace.'
-    )
-  }
-  const limit = clampLimit(request.limit)
+  const pagination = resolveIssueListCursor(request)
+  const limit = resolveLimit(request.limit)
   const orderBy = request.orderBy ?? 'updatedAt'
-  const { entries, failures: entryFailures } = getIssueListEntries(request.workspaceId)
+  const { entries, failures: entryFailures } = getIssueListEntries(pagination.workspaceId)
   if (entries.length === 0) {
     if (entryFailures[0]) {
       throw entryFailures[0].error
@@ -70,10 +75,17 @@ export async function listMcpIssues(
       nextSteps: ['Connect Linear from Orca settings, then retry the issue list.']
     })
   }
+  const pagedRequest = {
+    ...request,
+    cursor: pagination.linearCursor,
+    workspaceId: pagination.workspaceId
+  }
+  // One deadline for the whole call, so fanning out over many workspaces cannot multiply it.
+  const deadline = Date.now() + LIST_ISSUES_READ_BUDGET_MS
   const { pages, failures } = await readIssueListWorkspaces(
     entries,
-    request,
-    limit,
+    pagedRequest,
+    { limit, deadline },
     orderBy,
     entryFailures
   )
@@ -81,21 +93,23 @@ export async function listMcpIssues(
   let hasMore = pages.some((page) => page.hasMore)
 
   issues.sort((left, right) => compareIssues(left, right, orderBy))
-  if (issues.length > limit) {
+  if (limit !== null && issues.length > limit) {
     hasMore = true
     issues.length = limit
   }
+  const workspaceId = pagination.workspaceId === 'all' ? 'all' : entries[0].workspace.id
   return {
     issues,
+    truncated: hasMore,
     meta: {
       limit,
       returned: issues.length,
       hasMore,
-      ...(hasMore && request.workspaceId !== 'all' && pages.length === 1 && pages[0].nextCursor
-        ? { nextCursor: pages[0].nextCursor }
+      ...(hasMore && workspaceId !== 'all' && pages.length === 1 && pages[0].nextCursor
+        ? { nextCursor: encodeIssueListCursor(workspaceId, pages[0].nextCursor) }
         : {}),
       orderBy,
-      workspaceId: request.workspaceId === 'all' ? 'all' : entries[0].workspace.id,
+      workspaceId,
       partial: failures.length > 0,
       workspaceErrors: failures.map(({ workspace, code, message }) => ({
         workspace,
@@ -122,19 +136,19 @@ function getIssueListEntries(workspaceId?: (string & {}) | 'all'): {
 async function readIssueListWorkspaces(
   entries: LinearClientForWorkspace[],
   request: LinearMcpIssueListRequest,
-  limit: number,
+  budget: IssueListReadBudget,
   orderBy: 'createdAt' | 'updatedAt',
   initialFailures: WorkspaceReadFailure[]
 ): Promise<{ pages: WorkspaceIssuePage[]; failures: WorkspaceReadFailure[] }> {
   if (request.workspaceId !== 'all') {
     return {
-      pages: [await readIssueListWorkspace(entries[0], request, limit, orderBy)],
+      pages: [await readIssueListWorkspace(entries[0], request, budget, orderBy)],
       failures: []
     }
   }
 
   const settled = await Promise.allSettled(
-    entries.map((entry) => readIssueListWorkspace(entry, request, limit, orderBy))
+    entries.map((entry) => readIssueListWorkspace(entry, request, budget, orderBy))
   )
   const pages: WorkspaceIssuePage[] = []
   const failures = [...initialFailures]
@@ -155,136 +169,58 @@ async function readIssueListWorkspaces(
 async function readIssueListWorkspace(
   entry: LinearClientForWorkspace,
   request: LinearMcpIssueListRequest,
-  limit: number,
+  { limit, deadline }: IssueListReadBudget,
   orderBy: 'createdAt' | 'updatedAt'
 ): Promise<WorkspaceIssuePage> {
-  return await withLinearRead(entry, async () => {
-    const raw = await entry.client.client.rawRequest<
-      RawListIssuesResponse,
-      Record<string, unknown>
-    >(LIST_ISSUES_QUERY, {
-      first: limit,
-      after: request.cursor,
-      filter: buildIssueFilter(request),
-      orderBy,
-      includeArchived: request.includeArchived ?? false
+  const filter = buildIssueFilter(request)
+  const issues: WorkspaceIssuePage['issues'] = []
+  let after = request.cursor
+  let hasMore = false
+  let nextCursor: string | undefined
+  for (let page = 0; page < LIST_ISSUES_MAX_PAGES; page += 1) {
+    const first =
+      limit === null
+        ? LIST_ISSUES_PAGE_SIZE
+        : Math.min(limit - issues.length, LIST_ISSUES_PAGE_SIZE)
+    // Each page takes its own concurrency slot so a long walk cannot starve other reads.
+    const connection = await withLinearRead(entry, async () => {
+      const raw = await entry.client.client.rawRequest<
+        RawListIssuesResponse,
+        Record<string, unknown>
+      >(LIST_ISSUES_QUERY, {
+        first,
+        after,
+        filter,
+        orderBy,
+        includeArchived: request.includeArchived ?? false
+      })
+      return raw.data?.issues
     })
-    const connection = raw.data?.issues
-    return {
-      issues: (connection?.nodes ?? []).map((issue) => ({
+    for (const issue of connection?.nodes ?? []) {
+      issues.push({
         ...mapIssue(issue),
         workspace: { id: entry.workspace.id, name: entry.workspace.organizationName }
-      })),
-      hasMore: connection?.pageInfo?.hasNextPage === true,
-      nextCursor: connection?.pageInfo?.endCursor ?? undefined
+      })
     }
-  })
+    hasMore = connection?.pageInfo?.hasNextPage === true
+    nextCursor = connection?.pageInfo?.endCursor ?? undefined
+    if (!hasMore || !nextCursor) {
+      break
+    }
+    if (limit !== null && issues.length >= limit) {
+      break
+    }
+    if (Date.now() >= deadline) {
+      break
+    }
+    after = nextCursor
+  }
+  return { issues, hasMore, nextCursor }
 }
 
-function buildIssueFilter(request: LinearMcpIssueListRequest): Record<string, unknown> {
-  const filter: Record<string, unknown> = {}
-  if (request.team) {
-    filter.team = namedFilter(request.team, true)
-  }
-  if (request.cycle) {
-    filter.cycle = nullableNamedFilter(request.cycle)
-  }
-  if (request.label) {
-    filter.labels = { some: namedFilter(request.label) }
-  }
-  if (request.query) {
-    filter.searchableContent = { contains: request.query }
-  }
-  if (request.state) {
-    filter.state = workflowStateFilter(request.state)
-  }
-  if (request.project) {
-    filter.project = nullableProjectFilter(request.project)
-  }
-  if (request.release) {
-    filter.releases = { some: namedFilter(request.release, false, true) }
-  }
-  if (request.assignee) {
-    filter.assignee = nullableUserFilter(request.assignee)
-  }
-  if (request.delegate) {
-    filter.delegate = nullableUserFilter(request.delegate)
-  }
-  if (request.parentId) {
-    filter.parent = nullableIdFilter(request.parentId)
-  }
-  if (request.priority !== undefined) {
-    filter.priority = { eq: request.priority }
-  }
-  if (request.createdAt) {
-    filter.createdAt = { gte: request.createdAt }
-  }
-  if (request.updatedAt) {
-    filter.updatedAt = { gte: request.updatedAt }
-  }
-  return filter
-}
-
-function namedFilter(value: string, includeKey = false, includeVersion = false): object {
-  return {
-    or: [
-      ...(isLinearId(value) ? [{ id: { eq: value } }] : []),
-      { name: { eqIgnoreCase: value } },
-      ...(includeKey ? [{ key: { eqIgnoreCase: value } }] : []),
-      ...(includeVersion ? [{ version: { eqIgnoreCase: value } }] : [])
-    ]
-  }
-}
-
-function nullableNamedFilter(value: string): object {
-  return value === 'null' ? { null: true } : namedFilter(value)
-}
-
-function workflowStateFilter(value: string): object {
-  const filter = namedFilter(value) as { or: object[] }
-  filter.or.push({ type: { eqIgnoreCase: value } })
-  return filter
-}
-
-function nullableProjectFilter(value: string): object {
-  if (value === 'null') {
-    return { null: true }
-  }
-  const filter = namedFilter(value) as { or: object[] }
-  filter.or.push({ slugId: { eqIgnoreCase: value } })
-  return filter
-}
-
-function nullableIdFilter(value: string): object {
-  return value === 'null' ? { null: true } : { id: { eq: value } }
-}
-
-function nullableUserFilter(value: string): object {
-  if (value === 'null') {
-    return { null: true }
-  }
-  if (value.toLocaleLowerCase() === 'me') {
-    return { isMe: { eq: true } }
-  }
-  return {
-    or: [
-      ...(isLinearId(value) ? [{ id: { eq: value } }] : []),
-      { displayName: { eqIgnoreCase: value } },
-      { name: { eqIgnoreCase: value } },
-      { email: { eqIgnoreCase: value } }
-    ]
-  }
-}
-
-function isLinearId(value: string): boolean {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-}
-
-function clampLimit(limit: number | undefined): number {
-  return Math.min(
-    Math.max(1, Math.floor(limit ?? LIST_ISSUES_DEFAULT_LIMIT)),
-    LIST_ISSUES_MAX_LIMIT
-  )
+// null means unbounded: read until Linear stops handing out pages.
+function resolveLimit(limit: number | undefined): number | null {
+  return limit === undefined ? null : Math.max(1, Math.floor(limit))
 }
 
 function compareIssues(

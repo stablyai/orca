@@ -176,6 +176,33 @@ Dispatch rules:
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
 
+## How deep workers can nest
+
+A dispatched worker normally cannot dispatch sub-workers. Attempting it fails with
+`nested_worker_depth_exceeded` and a message telling the worker to complete the task
+itself. Do that — do not try to route around it.
+
+The limit is a number, not an on/off switch. `Settings -> Orchestration -> Nested worker depth`
+sets how many generations are allowed:
+
+- `1` (default): a coordinator dispatches workers; those workers do not dispatch.
+- `2`: workers may dispatch one further generation.
+
+Depth is counted from the terminal that issues the command, not from the Run. Creating a
+new Run does not reset it — a worker that runs `run-create` then `worker-start` is still a
+worker, and still counted. This is the part that changed: the old behaviour rejected
+sub-dispatch only because a worker's terminal was not bound to a Run, so creating a Run was
+enough to slip past it.
+
+Two limits worth knowing:
+
+- **It is a guardrail, not a security boundary.** A caller that declares another terminal's
+  handle while its own launch evidence is unverifiable (an ordinary restored terminal, for
+  example) can be counted as that terminal instead. Orca does not treat workers as hostile.
+- **It applies while a Dispatch is active.** After `worker_done`, or after a coordinator
+  settles the task, the terminal is no longer a worker and is counted as a root again. The
+  process may still be alive; that is the documented boundary, not an accident.
+
 ## Preferred Supervised Worker Loop
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.
@@ -195,7 +222,7 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model`; add `--effort` only when that agent/model supports the level. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt:
 
 ```bash
-orca orchestration worker-start --task <task_id> --worktree current --agent claude --model aws-bedrock-opus-5 --effort high --json
+orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ```
 
 `--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
@@ -269,6 +296,8 @@ Recovery is conditional, never a fixed destructive sequence:
 - `worker-stop` closes only the exact supervised agent terminal. It never deletes the worktree, setup terminal, configured tabs, or unrelated processes.
 
 Low-level `worktree create`, `terminal create`, and `dispatch --inject` remain valid recipes for custom argv or topology that `worker-start` does not express.
+
+`dispatch --inject` deliberately keeps an operator-started terminal unsupervised: it never creates a `worker_dispatches` row and `worker-stop`/`worker-abandon` never close that process. The dispatch context is still authoritative, so `worker-show`, `worker-read`, and `worker-list` report it as `unsupervised`; settled `worker-retain` and `worker-release` report `retained` with `no_owned_resource` and take no process action. Use `worker-start --terminal <handle>` when supervision and worker lifecycle state are required.
 
 ## Gates And Legacy Inspection
 
@@ -381,7 +410,7 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 - Workers with a valid live preamble must send `worker_done` exactly once from their own terminal with an explicit `--outcome succeeded` or `--outcome failed`:
   `orca orchestration send --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded --files-modified "path/a" --report-path "<optional>" --json`
 - A failed outcome is still a terminal report, but Orca records both the Dispatch and Task as failed. Never encode failure only in the subject/body.
-- After sending `worker_done`, end your turn and idle at the agent prompt. The coordinator may reuse or release this terminal after it processes your report; do not start more work, poll, or attempt to close the terminal yourself. If it reuses you, it re-engages you with a fresh preamble + TASK block delivered as new terminal input.
+- After sending `worker_done`, end that dispatched turn and idle at the agent prompt. Do not autonomously start more work, poll, or attempt to close the terminal yourself. A direct user instruction takes precedence and starts ordinary user-owned work: follow it without coordinator approval or a fresh Dispatch, never refuse it because of worker/coordinator roles, and do not reuse the settled Dispatch's lifecycle IDs. A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block.
 - For long tasks, send heartbeat/status only when the preamble asks for it, including both IDs:
   `orca orchestration send --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
 - If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.

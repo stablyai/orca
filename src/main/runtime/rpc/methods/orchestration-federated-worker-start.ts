@@ -21,6 +21,7 @@ import {
   type OrchestrationWorkerLaunchReceipt
 } from './orchestration-worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from './orchestration-worker-start-validation'
+import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -97,6 +98,8 @@ export async function startFederatedWorker(args: {
 
   const setupDecision = createsWorktree ? (params.setup ?? 'run') : 'not_applicable'
   const started = db.createStartingWorkerDispatch({
+    creator: resolveDispatchCreator(runtime, params.from),
+    maxDepth: runtime.getNestedWorkerMaxDepth(),
     taskId: task.id,
     retryOf: params.retryOf,
     startOptions: {
@@ -135,6 +138,9 @@ export async function startFederatedWorker(args: {
         dispatchId: started.dispatch.id,
         taskId: task.id,
         taskSpec: task.spec,
+        // Carry the home dispatch depth across the federation boundary so a
+        // remote worker cannot be mistaken for a root when it dispatches again.
+        depth: started.dispatch.depth,
         protocolVersion: federationProtocolVersion,
         worktree,
         name: params.name,

@@ -2,12 +2,13 @@ import { BrowserWindow, ipcMain } from 'electron'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   RuntimeBrowserDriverState,
+  RuntimeRendererSyncWindowGraph,
   RuntimeStatus,
   RuntimeSyncWindowGraphResult,
-  RuntimeSyncWindowGraph,
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
 import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import { TERMINAL_FIT_RESTORE_DEADLINE_MS } from '../../shared/terminal-fit-restore-deadline'
 import { RpcDispatcher } from '../runtime/rpc/dispatcher'
 
@@ -28,10 +29,18 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
 
   ipcMain.handle(
     'runtime:syncWindowGraph',
-    (event, graph: RuntimeSyncWindowGraph): RuntimeSyncWindowGraphResult => {
+    (event, graph: RuntimeRendererSyncWindowGraph): RuntimeSyncWindowGraphResult => {
       const window = BrowserWindow.fromWebContents(event.sender)
       if (!window) {
         throw new Error('Runtime graph sync must originate from a BrowserWindow')
+      }
+      if (event.senderFrame !== event.sender.mainFrame) {
+        // Why: a disposed main frame can leave an invoke queued after its
+        // replacement starts. It must not settle the replacement generation.
+        throw new Error('Runtime graph sync must originate from the current main frame')
+      }
+      if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
+        throw new Error('Runtime graph sync requires a renderer generation')
       }
       return runtime.syncWindowGraph(window.id, graph)
     }
@@ -92,6 +101,17 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
         driver
       }))
     }
+  )
+
+  ipcMain.removeHandler('runtime:getBrowserRemoteViewerPages')
+  ipcMain.handle('runtime:getBrowserRemoteViewerPages', (): string[] =>
+    runtime.getBrowserRemoteViewerPages()
+  )
+
+  // Why: the renderer holds these rows in memory only, so a reload has nothing to restore from.
+  ipcMain.removeHandler('runtime:getClientHostedBrowserRows')
+  ipcMain.handle('runtime:getClientHostedBrowserRows', (): ClientHostedBrowserRowsEvent[] =>
+    runtime.listClientHostedBrowserRows()
   )
 
   // Why: the desktop "Restore" button sets the display mode to 'desktop' and

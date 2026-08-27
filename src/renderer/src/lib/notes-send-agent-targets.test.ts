@@ -4,7 +4,7 @@ import {
   type AgentStatusEntry,
   type AgentStatusState
 } from '../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   deriveNotesSendAgentTargets,

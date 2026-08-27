@@ -4,7 +4,7 @@ import * as Clipboard from 'expo-clipboard'
 import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../theme/mobile-theme'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import type { TerminalQuickCommand } from '../../../src/shared/types'
+import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-command-types'
 import {
   getQuickCommandDisplayPreview,
   getTerminalQuickCommandBody,

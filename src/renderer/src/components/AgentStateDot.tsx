@@ -1,6 +1,7 @@
 import React from 'react'
-import { CircleCheck, MessageCircleQuestion } from 'lucide-react'
+import { CircleCheck, Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 
 // Why: shared state-indicator primitive so the dashboard and the sidebar's
@@ -16,6 +17,7 @@ import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 
 export type AgentDotState =
   | 'working'
+  | 'monitoring'
   | 'blocked'
   | 'waiting'
   | 'interrupted'
@@ -27,8 +29,8 @@ export type AgentDotState =
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
-  // vocabulary, while rendering it with the same amber attention color as the
-  // worktree-level permission dot.
+  // vocabulary, while rendering it with the same question glyph and
+  // --agent-question color as the worktree-level permission indicator.
   | 'permission'
 
 /** Return the accessible label shared by every visual agent-state marker. */
@@ -36,6 +38,8 @@ export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
       return 'Working'
+    case 'monitoring':
+      return 'Monitoring background tasks'
     case 'blocked':
       return 'Blocked'
     case 'waiting':
@@ -80,6 +84,17 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     )
   }
 
+  if (state === 'monitoring') {
+    return (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <Radio className={cn('text-yellow-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  }
+
   if (state === 'done') {
     // Why: the dashboard lists many agents, so a check glyph scans well for
     // agent-reported completion and keeps 'done' visually distinct from
@@ -101,7 +116,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
       >
-        <MessageCircleQuestion className={cn('text-amber-500', icon)} aria-hidden="true" />
+        <AgentQuestionIcon className={icon} />
       </span>
     )
   }

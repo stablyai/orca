@@ -7,6 +7,13 @@ import {
   launchPairedElectronClient,
   type PairedElectronClient
 } from './helpers/paired-electron-client'
+import {
+  armPairedHtmlPreviewCreationObservation,
+  armPairedHtmlPreviewInventoryRpcFailure,
+  readPairedHtmlPreviewInventory,
+  type PairedHtmlPreviewInventory,
+  waitForPairedHtmlPreviewCreationSettlement
+} from './helpers/paired-html-preview-inventory'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 
 const FIXTURE_NAME = 'paired-html-focus.html'
@@ -77,28 +84,26 @@ test('keeps remote HTML preview placement and focuses it only after a click', as
       throw new Error('paired client editor had no source identity before side preview')
     }
     const sourceGroupId = sourceEditor.groupId
-    const browserBaseline = await page.evaluate(
-      async ({ environmentId, worktreeId }) => {
-        const state = window.__store?.getState()
-        const response = await window.api.runtimeEnvironments.call({
-          selector: environmentId,
-          method: 'session.tabs.list',
-          params: { worktree: `id:${worktreeId}` },
-          timeoutMs: 15_000
-        })
-        return {
-          clientUnified: (state?.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-            (tab) => tab.contentType === 'browser'
-          ).length,
-          clientWorkspaces: (state?.browserTabsByWorktree[worktreeId] ?? []).length,
-          host: response.ok
-            ? response.result.tabs.filter((tab) => tab.type === 'browser').length
-            : -1
-        }
-      },
-      { environmentId: client.environmentId, worktreeId }
-    )
+    let browserBaseline: PairedHtmlPreviewInventory | null = null
+    await expect
+      .poll(
+        async () => {
+          browserBaseline = await readPairedHtmlPreviewInventory(page, {
+            environmentId: client!.environmentId,
+            fixtureName: FIXTURE_NAME,
+            worktreeId
+          })
+          return browserBaseline
+        },
+        { timeout: 30_000, message: 'host browser baseline was never successfully observed' }
+      )
+      .toMatchObject({ hostResponseError: null, hostResponseOk: true })
+    if (!browserBaseline?.hostResponseOk) {
+      throw new Error(`host browser baseline failed: ${browserBaseline.hostResponseError}`)
+    }
+    await armPairedHtmlPreviewCreationObservation(page)
     await openPreviewToSide.click()
+    await waitForPairedHtmlPreviewCreationSettlement(page)
 
     await expect
       .poll(
@@ -145,48 +150,59 @@ test('keeps remote HTML preview placement and focuses it only after a click', as
         handleEnvironmentId: client.environmentId,
         hostHasHtml: true
       })
-    const htmlTabInventory = await page.evaluate(
-      async ({ environmentId, fixtureName, worktreeId }) => {
-        const state = window.__store?.getState()
-        const response = await window.api.runtimeEnvironments.call({
-          selector: environmentId,
-          method: 'session.tabs.list',
-          params: { worktree: `id:${worktreeId}` },
-          timeoutMs: 15_000
-        })
-        const clientWorkspaceIds = (state?.browserTabsByWorktree[worktreeId] ?? [])
-          .filter((tab) => tab.url.endsWith(`/${fixtureName}`))
-          .map((tab) => tab.id)
-        return {
-          clientWorkspaceIds,
-          clientUnifiedTabs: (state?.unifiedTabsByWorktree[worktreeId] ?? [])
-            .filter(
-              (tab) => tab.contentType === 'browser' && clientWorkspaceIds.includes(tab.entityId)
-            )
-            .map((tab) => ({ groupId: tab.groupId, id: tab.id })),
-          hostTabIds: response.ok
-            ? response.result.tabs
-                .filter((tab) => tab.type === 'browser' && tab.url.endsWith(`/${fixtureName}`))
-                .map((tab) => tab.id)
-            : [],
-          hostTabGroups: response.ok ? (response.result.tabGroups ?? []) : [],
-          totalClientUnified: (state?.unifiedTabsByWorktree[worktreeId] ?? []).filter(
-            (tab) => tab.contentType === 'browser'
-          ).length,
-          totalClientWorkspaces: (state?.browserTabsByWorktree[worktreeId] ?? []).length,
-          totalHost: response.ok
-            ? response.result.tabs.filter((tab) => tab.type === 'browser').length
-            : -1
-        }
-      },
-      { environmentId: client.environmentId, fixtureName: FIXTURE_NAME, worktreeId }
-    )
+    let htmlTabInventory: PairedHtmlPreviewInventory | null = null
+    let injectedInventoryErrorObserved = false
+    let inventoryFailureArmed = false
+    let previousSuccessfulInventory: string | null = null
+    let stableSuccessfulSnapshots = 0
+    await expect
+      .poll(
+        async () => {
+          htmlTabInventory = await readPairedHtmlPreviewInventory(page, {
+            environmentId: client!.environmentId,
+            fixtureName: FIXTURE_NAME,
+            worktreeId
+          })
+          if (!htmlTabInventory.hostResponseOk) {
+            injectedInventoryErrorObserved ||=
+              htmlTabInventory.hostResponseError?.includes('e2e_forced_inventory_rpc_failure') ===
+              true
+            previousSuccessfulInventory = null
+            stableSuccessfulSnapshots = 0
+          } else {
+            if (!inventoryFailureArmed) {
+              await armPairedHtmlPreviewInventoryRpcFailure(page)
+              inventoryFailureArmed = true
+            }
+            const fingerprint = JSON.stringify([
+              htmlTabInventory.hostPageIds,
+              htmlTabInventory.hostTabIds,
+              htmlTabInventory.totalHost
+            ])
+            stableSuccessfulSnapshots =
+              fingerprint === previousSuccessfulInventory ? stableSuccessfulSnapshots + 1 : 1
+            previousSuccessfulInventory = fingerprint
+          }
+          return { ...htmlTabInventory, stableSuccessfulSnapshots }
+        },
+        { timeout: 60_000, message: 'host HTML inventory did not settle successfully' }
+      )
+      .toMatchObject({
+        hostResponseError: null,
+        hostResponseOk: true,
+        stableSuccessfulSnapshots: 2
+      })
+    expect(injectedInventoryErrorObserved).toBe(true)
+    if (!htmlTabInventory) {
+      throw new Error('host HTML inventory disappeared after successful settlement')
+    }
     expect(htmlTabInventory.clientWorkspaceIds).toHaveLength(1)
     expect(htmlTabInventory.clientUnifiedTabs).toHaveLength(1)
     expect(htmlTabInventory.hostTabIds).toHaveLength(1)
-    expect(htmlTabInventory.totalClientUnified).toBe(browserBaseline.clientUnified + 1)
-    expect(htmlTabInventory.totalClientWorkspaces).toBe(browserBaseline.clientWorkspaces + 1)
-    expect(htmlTabInventory.totalHost).toBe(browserBaseline.host + 1)
+    expect(htmlTabInventory.clientRemotePageIds).toEqual(htmlTabInventory.hostPageIds)
+    expect(htmlTabInventory.totalClientUnified).toBe(browserBaseline.totalClientUnified + 1)
+    expect(htmlTabInventory.totalClientWorkspaces).toBe(browserBaseline.totalClientWorkspaces + 1)
+    expect(htmlTabInventory.totalHost).toBe(browserBaseline.totalHost + 1)
     expect(htmlTabInventory.clientUnifiedTabs[0]?.groupId).not.toBe(sourceGroupId)
     expect(
       htmlTabInventory.hostTabGroups.some(
@@ -279,24 +295,7 @@ test('keeps remote HTML preview placement and focuses it only after a click', as
         { timeout: 30_000, message: 'host never accepted terminal activation' }
       )
       .toBe(true)
-    const hostBrowserTab = await page.evaluate(
-      async ({ environmentId, fixtureName, worktreeId }) => {
-        const response = await window.api.runtimeEnvironments.call({
-          selector: environmentId,
-          method: 'session.tabs.list',
-          params: { worktree: `id:${worktreeId}` },
-          timeoutMs: 15_000
-        })
-        const tab = response.ok
-          ? response.result.tabs.find(
-              (candidate) =>
-                candidate.type === 'browser' && candidate.url.endsWith(`/${fixtureName}`)
-            )
-          : null
-        return tab?.type === 'browser' ? { browserPageId: tab.browserPageId, id: tab.id } : null
-      },
-      { environmentId: client.environmentId, fixtureName: FIXTURE_NAME, worktreeId }
-    )
+    const hostBrowserTab = htmlTabInventory.hostTabs[0]
     if (!hostBrowserTab?.browserPageId) {
       throw new Error('host HTML browser tab disappeared before activation')
     }

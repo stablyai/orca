@@ -6,7 +6,7 @@ import type {
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import type { SshTarget } from '../../shared/ssh-types'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 const {
   getActiveMultiplexerMock,
@@ -36,9 +36,9 @@ vi.mock('./remote-workspace-events', () => ({
 
 import {
   _resetRemoteWorkspaceCachesForTests,
-  registerRemoteWorkspaceHandlers,
-  remoteWorkspaceSessionMatchesSnapshot
+  registerRemoteWorkspaceHandlers
 } from './remote-workspace'
+import { remoteWorkspaceSessionMatchesSnapshot } from './remote-workspace-snapshot-normalization'
 
 function snapshot(session: RemoteWorkspaceSession, revision = 7): RemoteWorkspaceSnapshot {
   return {

@@ -1,14 +1,23 @@
 import { getDefaultWorkspaceSession } from './constants'
 import type { RemoteWorkspaceSession, RemoteWorkspaceTerminalTab } from './remote-workspace-types'
-import type { TerminalTab, WorkspaceSessionState } from './types'
-import { splitWorktreeId } from './worktree-id'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
+import { splitWorktreeId } from './worktree/id'
+import type { ExecutionHostId } from './execution-host'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeIdFromHostIdentity,
+  isWorktreeHostIdentity
+} from './worktree/host-qualified-identity'
 
 type ExportOptions = {
-  isTargetWorktree: (worktreeId: string) => boolean
+  isTargetWorktree: (worktreeId: string, executionHostId?: ExecutionHostId) => boolean
 }
 
 type ImportOptions = {
   resolveWorktreeId: (worktreePath: string) => string | null
+  /** Host owning the projected snapshot; absent preserves the legacy bare key. */
+  executionHostId?: ExecutionHostId
 }
 
 function worktreePathFromId(worktreeId: string): string | null {
@@ -69,13 +78,23 @@ export function exportRemoteWorkspaceSession(
   }
 
   const lastVisitedAtByWorktreePath: Record<string, number> = {}
-  for (const [worktreeId, timestamp] of Object.entries(session.lastVisitedAtByWorktreeId ?? {})) {
-    if (!options.isTargetWorktree(worktreeId)) {
+  for (const [visitKey, timestamp] of Object.entries(session.lastVisitedAtByWorktreeId ?? {})) {
+    const worktreeId = isWorktreeHostIdentity(visitKey)
+      ? getWorktreeIdFromHostIdentity(visitKey)
+      : visitKey
+    const executionHostId = isWorktreeHostIdentity(visitKey)
+      ? (visitKey.slice(0, visitKey.indexOf('|')) as ExecutionHostId)
+      : undefined
+    if (!options.isTargetWorktree(worktreeId, executionHostId)) {
       continue
     }
     const worktreePath = worktreePathFromId(worktreeId)
     if (worktreePath) {
-      lastVisitedAtByWorktreePath[worktreePath] = timestamp
+      // Why max: a bare legacy key and its host-qualified twin collapse onto one path.
+      lastVisitedAtByWorktreePath[worktreePath] = Math.max(
+        lastVisitedAtByWorktreePath[worktreePath] ?? 0,
+        timestamp
+      )
     }
   }
 
@@ -100,7 +119,7 @@ export function exportRemoteWorkspaceSession(
       )
     ),
     activeWorktreePathsOnShutdown: session.activeWorktreeIdsOnShutdown
-      ?.filter(options.isTargetWorktree)
+      ?.filter((worktreeId) => options.isTargetWorktree(worktreeId))
       .map(worktreePathFromId)
       .filter((path): path is string => Boolean(path)),
     activeTabIdByWorktreePath,
@@ -165,7 +184,10 @@ export function importRemoteWorkspaceSession(
   )) {
     const worktreeId = resolvePath(worktreePath)
     if (worktreeId) {
-      lastVisitedAtByWorktreeId[worktreeId] = timestamp
+      const key = options.executionHostId
+        ? composeWorktreeHostIdentity(options.executionHostId, worktreeId)
+        : worktreeId
+      lastVisitedAtByWorktreeId[key] = timestamp
     }
   }
 

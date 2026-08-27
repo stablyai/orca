@@ -1,6 +1,7 @@
 import React from 'react'
-import { MessageCircleQuestion } from 'lucide-react'
+import { Radio } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 import { getWorktreeStatusLabel, type WorktreeStatus } from '@/lib/worktree-status'
 
@@ -40,6 +41,30 @@ const StatusIndicator = React.memo(function StatusIndicator({
     )
   }
 
+  if (status === 'monitoring') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <Radio className="size-3 text-yellow-500" aria-hidden="true" />
+      </span>
+    )
+  }
+
+  if (status === 'interrupted') {
+    return (
+      <span
+        className={cn('inline-flex h-3 w-3 shrink-0 items-center justify-center', className)}
+        title={resolvedTitle}
+        {...rest}
+      >
+        <span className="block size-1.5 rounded-full bg-red-500" />
+      </span>
+    )
+  }
+
   if (status === 'permission') {
     return (
       <span
@@ -47,7 +72,7 @@ const StatusIndicator = React.memo(function StatusIndicator({
         title={resolvedTitle}
         {...rest}
       >
-        <MessageCircleQuestion className="size-3 text-amber-500" aria-hidden="true" />
+        <AgentQuestionIcon className="size-3" />
       </span>
     )
   }

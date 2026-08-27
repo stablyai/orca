@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { resolveWorktreeOperationRouteResult } from './worktree-operation-route'
 
 const WORKTREE_ID = 'repo-1::/srv/worktree'

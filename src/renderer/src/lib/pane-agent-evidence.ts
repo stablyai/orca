@@ -1,7 +1,7 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import { detectAgentStatusFromTitle, getAgentLabel } from '../../../shared/agent-detection'
 import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry,
@@ -115,8 +115,3 @@ export function resolvePaneAgentActivity(
     livePtyRequired: false
   }
 }
-
-// Deliberately absent: a resolvePaneAgentOwner precedence resolver. The only
-// Phase 2 identity consumer (native-chat toggle) reads hook identity without a
-// freshness gate, so a gated owner resolver would change its behavior; the
-// owner resolver lands with its first real consumer in a later slice.

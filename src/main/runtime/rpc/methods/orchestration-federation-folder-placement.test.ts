@@ -30,7 +30,7 @@ describe('orchestration federated folder placement', () => {
           dispatchId: 'ctx_folder',
           taskId: 'task_folder',
           taskSpec: 'work in folder',
-          protocolVersion: 1,
+          protocolVersion: 3,
           worktree: 'new-top-level',
           repo: 'folder-repo',
           name: 'folder-worker',

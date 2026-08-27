@@ -1,6 +1,6 @@
 import { useRef, useState } from 'react'
 import { RotateCw } from 'lucide-react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'

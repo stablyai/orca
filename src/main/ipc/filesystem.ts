@@ -9,25 +9,24 @@ import { awaitWindowsHostGitEnvironmentReady, gitExecFileAsync, wslAwareSpawn } 
 import { parseWslPath, toWindowsWslPath } from '../wsl'
 import { tryDeleteWslUncPath } from '../wsl-unc-delete'
 import type { Store } from '../persistence'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
+import type { DirEntry, MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type {
-  DirEntry,
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GlobalSettings,
   GitStagingArea,
-  GitPushTarget,
-  GitUpstreamStatus,
   GitStatusResult,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult,
-  Repo,
-  TuiAgent
-} from '../../shared/types'
+  GitUpstreamStatus
+} from '../../shared/git-status-types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
+import type { Repo } from '../../shared/repo-types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type { SshMutationExpectation } from '../../shared/ssh-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
@@ -91,13 +90,9 @@ import type { ResolvedSourceControlAiGenerationParams } from '../../shared/sourc
 import { withLinkedIssueDraftContext } from '../../shared/source-control-ai-action-variables'
 import { validateGitPushTarget } from '../git/push-target-validation'
 import { getRemoteCommitUrl, getRemoteFileUrl } from '../git/repo'
-import {
-  resolveAuthorizedPath,
-  resolveRegisteredWorktreePath,
-  validateGitRelativeFilePath,
-  isENOENT,
-  authorizeExternalPath
-} from './filesystem-auth'
+import { resolveAuthorizedPath, authorizeExternalPath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
+import { validateGitRelativeFilePath, isENOENT } from './filesystem-path-containment'
 import { listQuickOpenFiles } from './filesystem-list-files'
 import { registerFilesystemMutationHandlers } from './filesystem-mutations'
 import { searchWithGitGrep } from './filesystem-search-git'
@@ -135,7 +130,7 @@ import {
 import { listRepoWorktrees } from '../repo-worktrees'
 import { recordCrashBreadcrumb } from '../crash-reporting/crash-breadcrumb-store'
 import { buildReadDirErrorBreadcrumb, type ReadDirThrowSite } from './readdir-error-diagnostics'
-import { splitWorktreeId } from '../../shared/worktree-id'
+import { splitWorktreeId } from '../../shared/worktree/id'
 import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { registerLocalLogTailHandlers } from './local-log-tail'
@@ -144,6 +139,7 @@ import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { registerFilesystemDownloadFolderHandlers } from './filesystem-download-folder'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { createSenderScopedRequestCancellations } from './sender-scoped-request-cancellation'
+import { QuickOpenPathRanker } from '../../shared/quick-open-path-search'
 import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
@@ -153,6 +149,8 @@ import {
 const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
 const BINARY_PROBE_BYTES = 8192
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
+// 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
+const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 // Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
 const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
 const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
@@ -1120,6 +1118,8 @@ export function registerFilesystemHandlers(
         connectionId?: string
         excludePaths?: string[]
         requestToken?: string
+        maxResults?: number
+        searchQuery?: string
       }
     ): Promise<string[]> => {
       const controller = listFilesCancellations.begin(event, args.requestToken)
@@ -1131,8 +1131,29 @@ export function registerFilesystemHandlers(
             return []
           }
           // Why: forward excludePaths or nested linked worktrees get double-scanned over SSH, causing timeout-induced partial results.
+          if (
+            args.searchQuery !== undefined &&
+            provider.supportsQuickOpenSearch &&
+            !(await provider.supportsQuickOpenSearch({ signal: controller?.signal }))
+          ) {
+            const legacyFiles = await provider.listFiles(args.rootPath, {
+              excludePaths: args.excludePaths,
+              maxResults: QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT,
+              signal: controller?.signal
+            })
+            const ranker = new QuickOpenPathRanker(
+              args.searchQuery,
+              args.maxResults ?? QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT
+            )
+            for (const file of legacyFiles) {
+              ranker.consider(file)
+            }
+            return ranker.result().paths
+          }
           return await provider.listFiles(args.rootPath, {
             excludePaths: args.excludePaths,
+            ...(args.maxResults === undefined ? {} : { maxResults: args.maxResults }),
+            ...(args.searchQuery === undefined ? {} : { searchQuery: args.searchQuery }),
             signal: controller?.signal
           })
         }

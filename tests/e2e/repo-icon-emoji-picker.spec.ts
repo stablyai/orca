@@ -7,7 +7,7 @@
 import type { Page, TestInfo } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import { getStoreState, waitForSessionReady } from './helpers/store'
-import type { Repo } from '../../src/shared/types'
+import type { Repo } from '../../src/shared/repo-types'
 
 /** Opens the repo settings panel and pins the UI language to English. */
 async function openRepoSettings(page: Page, repoId: string): Promise<void> {

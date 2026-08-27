@@ -60,6 +60,8 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-agent-question: var(--agent-question);
+  --color-agent-question-text: var(--agent-question-text);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -101,6 +103,9 @@
   --color-status-success: var(--status-success);
   --color-status-success-background: var(--status-success-background);
   --color-status-success-border: var(--status-success-border);
+  --color-workspace-status-done: var(--workspace-status-done);
+  --color-workspace-status-review: var(--workspace-status-review);
+  --color-workspace-status-progress: var(--workspace-status-progress);
   --color-tab-group-split-divider: var(--tab-group-split-divider);
   --color-tab-group-split-divider-strong: var(--tab-group-split-divider-strong);
   --color-git-graph-ref: var(--git-graph-ref);
@@ -112,6 +117,7 @@
   --color-git-graph-lane-4: var(--git-graph-lane-4);
   --color-git-graph-lane-5: var(--git-graph-lane-5);
   --color-annotation-highlight: var(--annotation-highlight);
+  --shadow-floating: 0 10px 24px rgb(0 0 0 / 0.18);
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -169,9 +175,20 @@
   --ring: #a1a1a1;
   --terminal-pane-locate: var(--color-blue-600);
   --ai-action-accent: var(--color-violet-500);
+  /* "An agent is asking you something" — one hue for every surface that shows
+     it (sidebar, tabs, dashboard, agent map). Orange, not amber: on the map it
+     has to stay separable from working-yellow at a glance. */
+  --agent-question: var(--color-orange-600);
+  /* Legible weight for text/glyphs on a tinted --agent-question surface. */
+  --agent-question-text: var(--color-orange-700);
   --status-success: #15803d;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  /* Workspace PR-state tones: same hue in both themes so a status keeps its
+     identity when the theme flips. */
+  --workspace-status-done: #c7a594;
+  --workspace-status-review: #16a34a;
+  --workspace-status-progress: #d4a300;
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -272,9 +289,14 @@
   --ring: #737373;
   --terminal-pane-locate: var(--color-blue-400);
   --ai-action-accent: var(--color-violet-400);
+  --agent-question: var(--color-orange-500);
+  --agent-question-text: var(--color-orange-300);
   --status-success: #86efac;
   --status-success-background: color-mix(in srgb, var(--status-success) 10%, transparent);
   --status-success-border: color-mix(in srgb, var(--status-success) 25%, transparent);
+  --workspace-status-done: #c7a594;
+  --workspace-status-review: #16a34a;
+  --workspace-status-progress: #d4a300;
   --chart-1: var(--color-blue-300);
   --chart-2: var(--color-blue-500);
   --chart-3: var(--color-blue-600);
@@ -374,7 +396,7 @@
   flex-wrap: wrap;
   gap: 10px;
   padding: 14px 16px;
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 [data-sonner-toaster] [data-sonner-toast][data-styled='true'] [data-icon] {
@@ -1301,7 +1323,7 @@ html.native-shell .app-layout {
   background: var(--popover);
   color: var(--popover-foreground);
   /* STYLEGUIDE: floating elevation for popovers that escape the editor surface. */
-  box-shadow: 0 10px 24px rgb(0 0 0 / 0.18);
+  box-shadow: var(--shadow-floating);
 }
 
 /* Why: caret points down at the usage meters this notice explains. */
@@ -1702,6 +1724,13 @@ html.native-shell .app-layout {
 
 .collapsible-height-content[data-state='closed'] {
   animation: collapsible-up 180ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .collapsible-height-content[data-state='open'],
+  .collapsible-height-content[data-state='closed'] {
+    animation: none;
+  }
 }
 
 @keyframes collapsible-down {

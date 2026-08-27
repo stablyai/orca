@@ -7,12 +7,18 @@ const getClients = vi.fn()
 const clearToken = vi.fn()
 const isAuthError = vi.fn()
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
-  getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: (...args: unknown[]) => isAuthError(...args),
+  release: vi.fn()
+}))
+
+vi.mock('./linear-token-store', () => ({
   clearToken: (...args: unknown[]) => clearToken(...args)
+}))
+
+vi.mock('./client', () => ({
+  getClients: (...args: unknown[]) => getClients(...args),
+  isAuthError: (...args: unknown[]) => isAuthError(...args)
 }))
 
 function makeEntry(options?: {

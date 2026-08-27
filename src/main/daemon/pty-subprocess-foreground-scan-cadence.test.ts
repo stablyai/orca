@@ -119,17 +119,20 @@ describe('daemon pty foreground scan cadence', () => {
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
-  function spawnShellSubprocess(shellProcessName: string, targetPlatform: 'win32' | 'darwin') {
+  async function spawnShellSubprocess(
+    shellProcessName: string,
+    targetPlatform: 'win32' | 'darwin'
+  ) {
     Object.defineProperty(process, 'platform', { configurable: true, value: targetPlatform })
     const proc = mockPtyProcess(shellProcessName)
     spawnMock.mockReturnValue(proc)
-    const handle = createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
     return { proc, handle }
   }
 
   it('bounds scans for an idle Windows shell polled every 2s to the 15s retry tier', async () => {
     resolveAgentForegroundProcessMock.mockResolvedValue('powershell.exe')
-    const { handle } = spawnShellSubprocess('powershell.exe', 'win32')
+    const { handle } = await spawnShellSubprocess('powershell.exe', 'win32')
 
     for (let atMs = 0; atMs <= 60_000; atMs += 2_000) {
       expect(await readForegroundAt(handle, atMs)).toBe('powershell.exe')
@@ -142,7 +145,7 @@ describe('daemon pty foreground scan cadence', () => {
 
   it('re-arms the fast retry when PTY output appears on an idle Windows shell', async () => {
     resolveAgentForegroundProcessMock.mockResolvedValueOnce('powershell.exe')
-    const { proc, handle } = spawnShellSubprocess('powershell.exe', 'win32')
+    const { proc, handle } = await spawnShellSubprocess('powershell.exe', 'win32')
 
     await readForegroundAt(handle, 0)
     await readForegroundAt(handle, 2_000)
@@ -164,7 +167,7 @@ describe('daemon pty foreground scan cadence', () => {
 
   it('keeps the fast identity refresh for a Windows session with a cached agent', async () => {
     resolveAgentForegroundProcessMock.mockResolvedValue('codex')
-    const { handle } = spawnShellSubprocess('powershell.exe', 'win32')
+    const { handle } = await spawnShellSubprocess('powershell.exe', 'win32')
 
     await readForegroundAt(handle, 0)
     expect(await readForegroundAt(handle, 1_000)).toBe('codex')
@@ -178,7 +181,7 @@ describe('daemon pty foreground scan cadence', () => {
 
   it('keeps the 5s retry for an idle POSIX shell with no output', async () => {
     resolveAgentForegroundProcessMock.mockResolvedValue('zsh')
-    const { handle } = spawnShellSubprocess('zsh', 'darwin')
+    const { handle } = await spawnShellSubprocess('zsh', 'darwin')
 
     for (let atMs = 0; atMs <= 30_000; atMs += 2_000) {
       expect(await readForegroundAt(handle, atMs)).toBe('zsh')
@@ -192,7 +195,7 @@ describe('daemon pty foreground scan cadence', () => {
     'keeps wrapped pi reads on the cached omp owner between bounded %s scans',
     async (targetPlatform) => {
       resolveAgentForegroundProcessMock.mockResolvedValue('omp')
-      const { handle } = spawnShellSubprocess('pi', targetPlatform)
+      const { handle } = await spawnShellSubprocess('pi', targetPlatform)
 
       const reads: (string | null)[] = []
       for (let atMs = 0; atMs <= 3_000; atMs += 250) {
@@ -216,7 +219,7 @@ describe('daemon pty foreground scan cadence', () => {
   it.each(['darwin', 'win32'] as const)(
     'keeps authoritative %s omp reads on the zero-scan path',
     async (targetPlatform) => {
-      const { handle } = spawnShellSubprocess('omp', targetPlatform)
+      const { handle } = await spawnShellSubprocess('omp', targetPlatform)
 
       for (let atMs = 0; atMs <= 3_000; atMs += 250) {
         expect(await readForegroundAt(handle, atMs)).toBe('omp')
@@ -231,7 +234,7 @@ describe('daemon pty foreground scan cadence', () => {
       resolveAgentForegroundProcessMock
         .mockResolvedValueOnce('omp')
         .mockResolvedValue({ available: false, processName: 'pi' })
-      const { handle } = spawnShellSubprocess('pi', targetPlatform)
+      const { handle } = await spawnShellSubprocess('pi', targetPlatform)
 
       expect(await readForegroundAt(handle, 0)).toBe('pi')
       expect(await readForegroundAt(handle, 1_000)).toBe('omp')

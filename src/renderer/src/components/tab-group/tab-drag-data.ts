@@ -1,4 +1,5 @@
-import type { TabGroup, TuiAgent } from '../../../../shared/types'
+import type { TabGroup } from '../../../../shared/tab-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 
 export type TabDropZone = 'center' | TabSplitDirection

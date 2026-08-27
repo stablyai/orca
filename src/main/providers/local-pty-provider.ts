@@ -1,7 +1,10 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
 import { basename, delimiter, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { resolveWindowsShellLaunchArgs } from './windows-shell-args'
+import {
+  ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
+  resolveWindowsShellLaunchArgs
+} from './windows-shell-args'
 import {
   resolveEffectiveWindowsPowerShell,
   shouldProbeWindowsPowerShellAvailability,
@@ -12,13 +15,17 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
-  updateHistFileForFallback,
-  logHistoryInjection
+  injectWslFishHistoryEnv,
+  updateHistoryEnvForFallback,
+  logHistoryInjection,
+  type HistoryInjectionResult
 } from '../terminal-history'
+import { dropInheritedOrcaFishHistory } from '../fish-history-session'
+import { dropInheritedOrcaHistFile } from '../worktree-history-file-path'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   ensureNodePtySpawnHelperExecutable,
@@ -26,19 +33,18 @@ import {
   spawnShellWithFallback
 } from './local-pty-utils'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
+import { getShellLaunchConfig } from './local-pty-shell-ready'
+import { selectShellStartupFeatures } from '../shell-startup-features'
 import {
-  getAttributionShellLaunchConfig,
-  getShellReadyLaunchConfig,
-  createShellReadyScanState,
-  drainShellReadyHeldBytes,
-  scanForShellReady,
   writeStartupCommandWhenShellReady,
   STARTUP_COMMAND_READY_MAX_WAIT_MS
-} from './local-pty-shell-ready'
-import type { ShellReadySignal } from './local-pty-shell-ready'
+} from './local-pty-shell-ready-startup-command'
+import type { ShellReadySignal } from './local-pty-shell-ready-startup-command'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
+import { stripLegacyTerminalShimEnv } from '../pty/legacy-terminal-shim-dir'
+import { dropIncoherentCondaActivationEnv } from '../pty/conda-activation-env'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { resolvePathEnvKey } from '../pty/windows-environment-path'
 import { isHostCodexHomeForWsl, isWslCodexHomeForHost } from '../pty/codex-home-wsl-env'
@@ -53,13 +59,21 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
+import {
+  confirmShellForegroundProcess,
+  resolveAgentForegroundProcessWithAvailability
+} from './agent-foreground-process'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
-import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
+import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
+import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
+import { terminatePtyJob } from '../windows/windows-pty-job'
+import {
+  canRevalidateCachedAgentWithoutScan,
+  judgeCachedAgentJobEvidence
+} from './windows-cached-agent-revalidation'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
 import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
@@ -67,18 +81,24 @@ import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
-import { extractOnlyCookedEchoSafeQueryReplies } from '../../shared/terminal-query-reply'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
 import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
 import { readPtsName } from '../pty/node-pty-pts-name'
+import { readPtySlavePath } from '../../shared/pty-slave-line-discipline-echo'
 import {
-  createPtySlaveEchoProbe,
-  readPtySlavePath
-} from '../../shared/pty-slave-line-discipline-echo'
+  createShellStartupOutputScanState,
+  drainShellStartupOutputScanState,
+  scanShellStartupOutput
+} from '../shell-startup-output-scanner'
+import {
+  createShellPromptReadinessProbe,
+  type ShellPromptReadinessProbe
+} from '../shell-prompt-readiness-probe'
 import {
   expandWindowsEnvironmentVariables,
   expandWindowsPathEnvironmentVariables
 } from '../../shared/windows-environment-expansion'
+import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -107,7 +127,12 @@ const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
-const ptyLastRecognizedForeground = new Map<string, string>()
+// `pid` anchors the identity to the row that proved it (null when ambiguous);
+// `at` is the last confirmation, so unanchored job evidence -- only a superset -- cannot hold it forever.
+const ptyLastRecognizedForeground = new Map<
+  string,
+  { name: string; pid: number | null; at: number }
+>()
 const ptyTerminalHandle = new Map<string, string>()
 const ptyWorktreeId = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
@@ -119,6 +144,9 @@ const ptyExitDisposables = new Map<string, { dispose: () => void }>()
 const ptyCleanupCallbacks = new Map<string, () => void>()
 const ptyTerminationMode = new Map<string, 'graceful' | 'force'>()
 const ptyPhysicalExits = new Map<string, PhysicalExitTracker>()
+// Why: a wrapper spawn (macOS TCC login) reports its own status, never the
+// shell's, so its exit numbers must not be read as the agent's (STA-4536).
+const ptyReportsChildExitStatus = new Map<string, boolean>()
 const ptyForceKillTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
 export const LOCAL_PTY_PHYSICAL_EXIT_TIMEOUT_MS = 8_000
@@ -135,7 +163,12 @@ type DataCallback = (payload: {
   transformed?: boolean
   seq?: number
 }) => void
-type ExitCallback = (payload: { id: string; code: number; incarnationId?: string }) => void
+type ExitCallback = (payload: {
+  id: string
+  code: number
+  incarnationId?: string
+  cause?: TerminalExitCause
+}) => void
 
 const dataListeners = new Set<DataCallback>()
 const exitListeners = new Set<ExitCallback>()
@@ -265,6 +298,7 @@ function clearPtyState(id: string): void {
   ptyWslDistroById.delete(id)
   ptyLoadGeneration.delete(id)
   ptyTerminationMode.delete(id)
+  ptyReportsChildExitStatus.delete(id)
   ptyPhysicalExits.delete(id)
 }
 
@@ -342,17 +376,19 @@ function allocatePtyId(sessionId: string | undefined): string {
   return id
 }
 
-async function prepareLocalPtySpawn(id: string): Promise<void> {
+/** Awaits pre-launch work that shutdown must be able to cancel: no node-pty
+ *  process exists yet, so cancellation can only be observed after the await. */
+async function awaitCancelableLocalPtySpawn<T>(id: string, operation: T | Promise<T>): Promise<T> {
   const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
   try {
-    // Why: shutdown must be able to cancel a stable session id during the async macOS capability probe, before node-pty exists.
-    await prepareMacosTccLoginShell()
+    const result = await operation
     if (pendingSpawn.canceled) {
       throw new Error(`PTY spawn canceled: ${id}`)
     }
+    return result
   } finally {
     pending.delete(pendingSpawn)
     if (pending.size === 0) {
@@ -503,7 +539,10 @@ export type LocalPtyProviderOptions = {
       isWsl?: boolean
       wslDistro?: string | null
     }
-  ) => Record<string, string>
+    // Why (#16441): Codex launch prep grants hook trust through a codex
+    // app-server session. `spawn` already awaits, so returning a promise keeps
+    // the Electron main thread responsive instead of blocking on spawnSync.
+  ) => Record<string, string> | Promise<Record<string, string>>
   /** Whether worktree-scoped shell history is enabled; when true (or absent) with a worktreeId, HISTFILE is scoped per-worktree. */
   isHistoryEnabled?: () => boolean
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
@@ -511,7 +550,7 @@ export type LocalPtyProviderOptions = {
   getWindowsPowerShellImplementation?: () => 'auto' | 'powershell.exe' | 'pwsh.exe' | undefined
   pwshAvailable?: () => boolean | Promise<boolean>
   onSpawned?: (id: string, incarnationId: string) => void
-  onExit?: (id: string, code: number, incarnationId: string) => void
+  onExit?: (id: string, code: number, incarnationId: string, cause?: TerminalExitCause) => void
   onData?: (
     id: string,
     data: string,
@@ -584,10 +623,13 @@ export class LocalPtyProvider implements IPtyProvider {
     let validationCwd: string
     let startupCommandDeliveredInShellArgs = false
     let windowsFallbackAttempts: ReturnType<typeof buildWindowsPowerShellSpawnAttempts> = []
-    let shellReadyLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
+    let shellReadyLaunch: ReturnType<typeof getShellLaunchConfig> | null = null
     let getFallbackShellReadyConfig:
-      | ((shell: string) => ReturnType<typeof getShellReadyLaunchConfig>)
+      | ((shell: string) => ReturnType<typeof getShellLaunchConfig>)
       | undefined
+    // Why hoisted: a fallback shell must drop the primary's launch env, and
+    // re-deriving the key names would re-run wrapper generation.
+    let primaryLaunchEnvKeys: string[] = []
     if (wslInfo) {
       shellPath = 'wsl.exe'
       const resolved = resolveWindowsShellLaunchArgs(shellPath, cwd, defaultCwd)
@@ -709,16 +751,21 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
     const launchWslDistro = isWslShell ? (launchWslContext?.distro ?? null) : null
+    // Why (#16441): building the env now awaits Codex hook installs and trust
+    // grants, so shutdown must be able to cancel this session id here too.
     const finalEnv = this.opts.buildSpawnEnv
-      ? this.opts.buildSpawnEnv(id, spawnEnv, {
-          command: args.command,
-          launchAgent: args.launchAgent,
-          codexHomePathOverride: args.codexHomePathOverride,
-          cwd,
-          shellPath,
-          isWsl: isWslShell,
-          wslDistro: launchWslDistro
-        })
+      ? await awaitCancelableLocalPtySpawn(
+          id,
+          this.opts.buildSpawnEnv(id, spawnEnv, {
+            command: args.command,
+            launchAgent: args.launchAgent,
+            codexHomePathOverride: args.codexHomePathOverride,
+            cwd,
+            shellPath,
+            isWsl: isWslShell,
+            wslDistro: launchWslDistro
+          })
+        )
       : spawnEnv
     // Why: app-level env hooks can re-add scrubbed vars; delete last so shims like Claude Agent Teams keep their PATH.
     for (const key of args.envToDelete ?? []) {
@@ -770,6 +817,30 @@ export class LocalPtyProvider implements IPtyProvider {
         delete finalEnv.CODEX_HOME
         delete finalEnv.ORCA_CODEX_HOME
       }
+
+      const shellBasename = pathWin32.basename(shellPath).toLowerCase()
+      const codexLaunchPreflightCommand = finalEnv.ORCA_CODEX_LAUNCH_PREFLIGHT
+      if (
+        codexLaunchPreflightCommand &&
+        (shellBasename === 'cmd.exe' || isWindowsGitBashShellPath(shellPath))
+      ) {
+        if (shellBasename === 'cmd.exe') {
+          // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
+          finalEnv[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
+        }
+        const resolved = resolveWindowsShellLaunchArgs(
+          shellPath,
+          cwd,
+          defaultCwd,
+          launchWslContext,
+          args.command,
+          codexLaunchPreflightCommand
+        )
+        shellArgs = resolved.shellArgs
+        effectiveCwd = resolved.effectiveCwd
+        validationCwd = resolved.validationCwd
+        startupCommandDeliveredInShellArgs = resolved.startupCommandDeliveredInShellArgs === true
+      }
     }
     seedPowerlevel10kWizardEnv(finalEnv, { envToDelete: args.envToDelete })
     if (
@@ -779,51 +850,16 @@ export class LocalPtyProvider implements IPtyProvider {
     ) {
       addWslEnvKeys(finalEnv, [POWERLEVEL10K_WIZARD_DISABLE_ENV])
     }
-    if (!wslInfo && process.platform !== 'win32') {
-      // Why: OpenCode/Codex PATH restoration and OMP's status wrapper need shell-ready code after user startup files run.
-      const needsNoMarkerWrapper =
-        finalEnv.ORCA_ATTRIBUTION_SHIM_DIR ||
-        finalEnv.ORCA_OPENCODE_CONFIG_DIR ||
-        finalEnv.ORCA_MIMOCODE_HOME ||
-        finalEnv.ORCA_OMP_STATUS_EXTENSION ||
-        finalEnv.ORCA_CODEX_HOME ||
-        finalEnv.ORCA_AGENT_TEAMS_SHIM_DIR
-      const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
-      let shellLaunch: ReturnType<typeof getShellReadyLaunchConfig> | null = null
-      if (args.command && isCodexStartupCommand) {
-        const shouldWaitForShellReady = shouldUseShellReadyStartupDelivery({
-          command: args.command,
-          startupCommandDelivery: args.startupCommandDelivery
-        })
-        // Why: payload-bearing Codex startup can be lost to rc-file noise; plain Codex stays markerless for startup speed.
-        getFallbackShellReadyConfig = (shell) =>
-          shouldWaitForShellReady
-            ? getShellReadyLaunchConfig(shell)
-            : getAttributionShellLaunchConfig(shell)
-        shellLaunch = shouldWaitForShellReady
-          ? getShellReadyLaunchConfig(shellPath)
-          : getAttributionShellLaunchConfig(shellPath)
-      } else if (args.command) {
-        getFallbackShellReadyConfig = (shell) => getShellReadyLaunchConfig(shell)
-        shellLaunch = getShellReadyLaunchConfig(shellPath)
-      } else if (needsNoMarkerWrapper) {
-        getFallbackShellReadyConfig = (shell) => getAttributionShellLaunchConfig(shell)
-        shellLaunch = getAttributionShellLaunchConfig(shellPath)
-      } else {
-        getFallbackShellReadyConfig = undefined
-      }
-      if (shellLaunch) {
-        Object.assign(finalEnv, shellLaunch.env)
-        shellArgs = shellLaunch.args ?? shellArgs
-        shellReadyLaunch = args.command ? shellLaunch : null
-      }
-    }
     const requestedEnv = args.env
     expandWindowsPathEnvironmentVariables(finalEnv)
     promoteAgentTeamsShimPath(
       finalEnv,
       requestedEnv ? requestedEnv[resolvePathEnvKey(requestedEnv, process.platform)] : undefined
     )
+    // Why: raw requested PATH promotion runs after the host-env scrub.
+    stripLegacyTerminalShimEnv(finalEnv, process.platform)
+    // Why after every deletion pass: an envToDelete of CONDA_PREFIX must not leave the sentinel behind.
+    dropIncoherentCondaActivationEnv(finalEnv, process.platform)
 
     // Why: worktree-scoped HISTFILE — without it worktrees share one global history (terminal-history-scope-design §7–§10).
     const worktreeId = args.worktreeId
@@ -838,10 +874,61 @@ export class LocalPtyProvider implements IPtyProvider {
       historyResult = injectHistoryEnv(finalEnv, worktreeId, effectiveShellPath, cwd, {
         wslDistro: launchWslDistro
       })
+      if (isWslTerminal && launchWslDistro) {
+        injectWslFishHistoryEnv(finalEnv, worktreeId, launchWslDistro)
+        addWslEnvKeys(finalEnv, ['HISTFILE', 'fish_history'])
+      }
       logHistoryInjection(worktreeId, historyResult)
+    } else {
+      // Why: injectHistoryEnv is what normally clears it, so when history is off
+      // an inherited ORCA_HISTFILE would still reach the wrapper. Credit: #11146.
+      delete finalEnv.ORCA_HISTFILE
+      // Same for an exported `fish_history` from the fish pane that launched this
+      // Orca: history off means fish's own default, not another worktree's file.
+      dropInheritedOrcaFishHistory(finalEnv)
+      // And for an exported HISTFILE: history off means the shell's own default,
+      // not the history file of the worktree this Orca was launched from.
+      dropInheritedOrcaHistFile(finalEnv)
     }
 
-    await prepareLocalPtySpawn(id)
+    if (!wslInfo && process.platform !== 'win32') {
+      // Why after history injection: the wrapper is what repairs a worktree
+      // HISTFILE that the system zshrc clobbers, so the decision to wrap has to
+      // see whether this spawn actually injected one.
+      const isCodexStartupCommand = startupAgentRecognition?.agent === 'codex'
+      // Why: payload-bearing Codex startup can be lost to rc-file noise; plain Codex stays markerless for startup speed.
+      const waitsForShellReady =
+        Boolean(args.command) &&
+        (!isCodexStartupCommand ||
+          shouldUseShellReadyStartupDelivery({
+            command: args.command as string,
+            startupCommandDelivery: args.startupCommandDelivery
+          }))
+      // Why delete: ORCA_SHELL_FEATURES is Orca-owned, and only the launch
+      // config below may name features for this shell.
+      delete finalEnv.ORCA_SHELL_FEATURES
+      getFallbackShellReadyConfig = (shell) =>
+        getShellLaunchConfig(
+          shell,
+          selectShellStartupFeatures({
+            shellPath: shell,
+            env: finalEnv,
+            hasStartupCommand: Boolean(args.command),
+            waitsForShellReady,
+            // Why identical: the identity marker exists so the readiness
+            // handshake can bind output to the right shell PID.
+            emitsStartupIdentity: waitsForShellReady
+          })
+        )
+      const shellLaunch = getFallbackShellReadyConfig(shellPath)
+      Object.assign(finalEnv, shellLaunch.env)
+      shellArgs = shellLaunch.args ?? shellArgs
+      shellReadyLaunch = args.command ? shellLaunch : null
+      primaryLaunchEnvKeys = Object.keys(shellLaunch.env)
+    }
+
+    // Why: the async macOS capability probe runs before node-pty exists.
+    await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell())
     if (args.signal?.aborted) {
       throw new Error('client_disconnected')
     }
@@ -860,9 +947,11 @@ export class LocalPtyProvider implements IPtyProvider {
       termName: finalEnv.TERM,
       ptySpawn: pty.spawn,
       getShellReadyConfig: getFallbackShellReadyConfig,
+      launchEnvKeys: primaryLaunchEnvKeys,
       // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).
-      onBeforeFallbackSpawn: historyResult?.histFile
-        ? (env, fallbackShell) => updateHistFileForFallback(env, fallbackShell)
+      onBeforeFallbackSpawn: historyResult?.historyDir
+        ? (env, fallbackShell) =>
+            updateHistoryEnvForFallback(env, fallbackShell, historyResult as HistoryInjectionResult)
         : undefined,
       windowsFallbackAttempts
     })
@@ -889,6 +978,7 @@ export class LocalPtyProvider implements IPtyProvider {
         ? null
         : undefined
     createPtyPhysicalExit(id)
+    ptyReportsChildExitStatus.set(id, spawnResult.reportsChildExitStatus !== false)
     ptyProcesses.set(id, proc)
     ptyInitialCwd.set(id, cwd)
     if (spawnedWslDistro !== undefined) {
@@ -934,7 +1024,6 @@ export class LocalPtyProvider implements IPtyProvider {
         )
       }
     }
-    const startupEchoProbe = createPtySlaveEchoProbe(readPtySlavePath(proc))
     const startupIngress = new PtyStartupIngress({
       ...(args.startupIngress ? { intent: args.startupIngress } : {}),
       ownerBackend: resolvePtyOwnerBackend({
@@ -943,16 +1032,17 @@ export class LocalPtyProvider implements IPtyProvider {
         wslDistro: spawnedWslDistro
       }),
       write: (data) => proc.write(data),
-      onEmission: emitIngressData,
-      ...(startupEchoProbe ? { echoProbe: startupEchoProbe } : {})
+      onEmission: emitIngressData
     })
     startupIngressByPty.set(id, startupIngress)
 
     // Shell-ready startup command support
     let resolveShellReady: ((signal: ShellReadySignal) => void) | null = null
     let shellReadyTimeout: ReturnType<typeof setTimeout> | null = null
-    const shellReadyScanState = shellReadyLaunch?.supportsReadyMarker
-      ? createShellReadyScanState()
+    let shellStartupPid: number | null = null
+    let shellPromptReadinessProbe: ShellPromptReadinessProbe | null = null
+    let shellStartupOutputScanState = shellReadyLaunch?.supportsReadyMarker
+      ? createShellStartupOutputScanState()
       : null
     const shellReadyPromise = args.command
       ? new Promise<ShellReadySignal>((resolve) => {
@@ -967,19 +1057,38 @@ export class LocalPtyProvider implements IPtyProvider {
         clearTimeout(shellReadyTimeout)
         shellReadyTimeout = null
       }
+      shellPromptReadinessProbe?.dispose()
+      shellPromptReadinessProbe = null
       const resolve = resolveShellReady
       resolveShellReady = null
       resolve(signal)
     }
     const releaseHeldShellReadyBytes = (): void => {
-      if (!shellReadyScanState) {
+      if (!shellStartupOutputScanState) {
         return
       }
-      const heldBytes = drainShellReadyHeldBytes(shellReadyScanState)
+      const heldBytes = drainShellStartupOutputScanState(shellStartupOutputScanState)
+      shellStartupOutputScanState = null
       if (heldBytes.length === 0) {
         return
       }
       startupIngress.accept(heldBytes)
+    }
+    if (shellStartupOutputScanState) {
+      shellPromptReadinessProbe = createShellPromptReadinessProbe({
+        slavePath: readPtySlavePath(proc),
+        shellPath,
+        shellCwd: effectiveCwd,
+        shellPathEnv: finalEnv.PATH,
+        getShellPid: () => shellStartupPid,
+        onPromptReady: () => {
+          console.warn(
+            `[pty] ${id}: shell-ready wrapper was replaced before its marker; releasing at the identified shell prompt. OSC 133 integration may be unavailable.`
+          )
+          releaseHeldShellReadyBytes()
+          finishShellReady({ postMarkerBytesObserved: true })
+        }
+      })
     }
     if (args.command) {
       if (shellReadyLaunch?.supportsReadyMarker) {
@@ -1002,26 +1111,42 @@ export class LocalPtyProvider implements IPtyProvider {
         startupCommandCleanup?.()
         startupCommandCleanup = null
         resolveShellReady = null
+        shellPromptReadinessProbe?.dispose()
+        shellPromptReadinessProbe = null
       })
     }
 
     const disposables: { dispose: () => void }[] = []
     const onDataDisposable = proc.onData((rawData) => {
       let data = rawData
-      if (shellReadyScanState && resolveShellReady) {
-        const scanned = scanForShellReady(shellReadyScanState, rawData)
+      if (shellStartupOutputScanState && resolveShellReady) {
+        const scanned = scanShellStartupOutput(shellStartupOutputScanState, data)
         data = scanned.output
-        if (scanned.matched) {
+        if (scanned.shellPid) {
+          shellStartupPid = scanned.shellPid
+        }
+        if (scanned.ready) {
           finishShellReady({ postMarkerBytesObserved: scanned.postMarkerBytesObserved })
         }
       }
       startupIngress.accept(data)
+      if (resolveShellReady && data.length > 0) {
+        shellPromptReadinessProbe?.notifyOutput(data)
+      }
     })
     if (onDataDisposable) {
       disposables.push(onDataDisposable)
     }
 
-    const onExitDisposable = proc.onExit(({ exitCode }) => {
+    const onExitDisposable = proc.onExit(({ exitCode, signal }) => {
+      // Why: node-pty reports a signalled death as {exitCode: 0, signal: N}; the
+      // cause is built here, where the signal and the spawn's trustworthiness
+      // are both still in hand.
+      const cause = resolveProcessExitCause({
+        exitCode,
+        signal,
+        hostReportsChildExitStatus: ptyReportsChildExitStatus.get(id)
+      })
       const wasTerminationRequested = ptyTerminationMode.has(id)
       ptyPhysicalExits.get(id)?.markExited()
       // Why: neutralize proc.kill before destroy — node-pty SIGHUPs on socket 'close', which can race here and signal a reaped/recycled pid.
@@ -1033,14 +1158,17 @@ export class LocalPtyProvider implements IPtyProvider {
         shellReadyTimeout = null
       }
       startupCommandCleanup?.()
+      shellPromptReadinessProbe?.dispose()
+      shellPromptReadinessProbe = null
       clearPtyState(id)
       startupIngress.drainAndClose()
       startupIngressByPty.delete(id)
       // Why: release the master ptmx fd on natural exit, else a clean exit leaks the fd until GC. See docs/fix-pty-fd-leak.md.
       destroyPtyProcess(proc, { alreadyKilled: wasTerminationRequested })
-      this.opts.onExit?.(id, exitCode, incarnationId)
+      ptyReportsChildExitStatus.delete(id)
+      this.opts.onExit?.(id, exitCode, incarnationId, cause)
       for (const cb of exitListeners) {
-        cb({ id, code: exitCode, incarnationId })
+        cb({ id, code: exitCode, incarnationId, cause })
       }
     })
     if (onExitDisposable) {
@@ -1084,15 +1212,18 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
-  write(id: string, data: string): void {
-    // Cooked PTYs echo private DSR/OSC replies; CPR/DA remain immediate (#13137, #7329).
-    if (extractOnlyCookedEchoSafeQueryReplies(data)) {
-      const ingress = startupIngressByPty.get(id)
-      if (ingress?.answerLiveQueryReply(data)) {
-        return
-      }
+  write(id: string, data: string): boolean {
+    // Cooked PTYs echo private DSR/OSC replies; CPR/DA stay immediate unless one of
+    // those is still held, which they must not overtake (#13137, #7329, #15559).
+    if (startupIngressByPty.get(id)?.answerLiveQueryReply(data)) {
+      return true
     }
-    ptyProcesses.get(id)?.write(data)
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
+    proc.write(data)
+    return true
   }
   resize(id: string, cols: number, rows: number): void {
     ptyProcesses.get(id)?.resize(cols, rows)
@@ -1179,7 +1310,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // identity probe returns `own` so agent/MCP orphans cannot hold the worktree cwd
       // (#10004). `unknown`/`foreign`/`absent` skip taskkill and rely on root close alone.
       await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc)
       })
     } else if (process.platform === 'win32' && operation.immediate) {
       // Why: a plain shell's ConPTY teardown doesn't reap orphaned children (useConptyDll
@@ -1187,7 +1319,8 @@ export class LocalPtyProvider implements IPtyProvider {
       // holds the worktree cwd. Tree kill runs only when the OS identity probe returns `own`;
       // otherwise root close alone, and detached children may block physical stop (#10004).
       await killWithDescendantSweep(proc.pid, signalRoot, {
-        ownsRoot: () => ptyProcesses.get(id) === proc
+        ownsRoot: () => ptyProcesses.get(id) === proc,
+        terminateOwnedTree: () => terminatePtyJob(proc)
       })
     } else {
       signalRoot()
@@ -1296,24 +1429,48 @@ export class LocalPtyProvider implements IPtyProvider {
       proc.process || null,
       ptyShellName.get(id)
     )
-    const cachedAgent = ptyLastRecognizedForeground.get(id) ?? null
-    let consoleMembershipUnavailable = false
-    // Why: console membership preserves a live cached agent without the whole-table scan (incomplete under Windows load).
+    const cachedEntry = ptyLastRecognizedForeground.get(id)
+    const cachedAgent = cachedEntry?.name ?? null
+    let paneMembershipUnavailable = false
+    let cachedAgentAliveInJob = false
+    // Why: job membership preserves a live cached agent without the whole-table
+    // scan (incomplete under Windows load). Job, not console: this asks "is
+    // anything besides the shell alive?", which needs no console attachment and
+    // so needs no forked helper (#10857).
     if (
       process.platform === 'win32' &&
-      canConfirmAgentFromConsolePresence(cachedAgent, fallbackProcess)
+      canRevalidateCachedAgentWithoutScan(cachedAgent, fallbackProcess)
     ) {
       try {
-        const consoleProcessIds = await readWindowsConptyProcessIds(proc.pid)
+        const paneProcessIds = readWindowsPtyJobProcessIds(proc)
         if (ptyProcesses.get(id) !== proc) {
           return null
         }
-        if (consoleProcessIds !== null && consoleProcessIds.size > 1 && cachedAgent !== null) {
+        const verdict = judgeCachedAgentJobEvidence({
+          jobProcessIds: paneProcessIds,
+          jobSupported: isWindowsPtyJobReadable(),
+          shellPid: proc.pid,
+          anchorProcessId: cachedEntry?.pid ?? null,
+          identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)
+        })
+        if (verdict === 'confirmed' || verdict === 'unproven') {
           return cachedAgent
         }
-        consoleMembershipUnavailable = consoleProcessIds === null
+        if (verdict === 'exited') {
+          // The shell stands alone in a complete, inescapable job list: no
+          // successor is possible, so the identity retires before the scan.
+          ptyLastRecognizedForeground.delete(id)
+        } else if (verdict === 'anchor-exited' && cachedEntry) {
+          // The recognized process died but another member remains -- a
+          // leftover, or a restarted successor. Keep the name as unanchored,
+          // age-bounded evidence and let this cycle's scan decide: deleting
+          // here made a degraded scan read a mid-restart agent as an exit.
+          ptyLastRecognizedForeground.set(id, { ...cachedEntry, pid: null })
+        }
+        cachedAgentAliveInJob = verdict === 'recheck'
+        paneMembershipUnavailable = verdict === 'unavailable'
       } catch {
-        consoleMembershipUnavailable = true
+        paneMembershipUnavailable = true
       }
     }
     try {
@@ -1321,7 +1478,10 @@ export class LocalPtyProvider implements IPtyProvider {
         proc.pid,
         fallbackProcess,
         {
-          contextPaths: ptyAgentForegroundContextPaths.get(id)
+          contextPaths: ptyAgentForegroundContextPaths.get(id),
+          ...(cachedEntry?.pid != null
+            ? { anchorProcessId: cachedEntry.pid, anchorProcessName: cachedEntry.name }
+            : {})
         }
       )
       // Why: the scan can outlive PTY teardown/id reuse; stale results must not resurrect cache for a foreign id.
@@ -1329,20 +1489,40 @@ export class LocalPtyProvider implements IPtyProvider {
         return null
       }
       // Why: a degraded scan reporting shell-as-foreground fires a false "agent done"; keep last recognized agent instead.
-      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id) ?? null
+      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id)?.name ?? null
       const resolvedAgent = resolution.processName
         ? recognizeAgentProcessFromCommandLine(resolution.processName)
         : null
-      // Why: incomplete snapshot + unavailable console probe isn't exit proof; only shell-only membership may clear the cache.
-      const stable = resolveStableForegroundProcess(
-        consoleMembershipUnavailable && resolvedAgent === null
+      // A recycled anchor pid keeps job membership truthful but the identity
+      // dead; the scan proving the pid now runs a non-agent settles it.
+      const anchorContradicted = resolution.anchorPidForeign === true
+      // Why: incomplete snapshot + unavailable job read isn't exit proof; and an
+      // anchor pid still alive in the job outranks a snapshot that lost its row.
+      const stableResolution =
+        (paneMembershipUnavailable || cachedAgentAliveInJob) &&
+        !anchorContradicted &&
+        resolvedAgent === null
           ? { ...resolution, available: false }
-          : resolution,
-        lastRecognizedAgent
-      )
-      if (stable.lastRecognizedAgent) {
-        ptyLastRecognizedForeground.set(id, stable.lastRecognizedAgent)
-      } else {
+          : resolution
+      const stable = resolveStableForegroundProcess(stableResolution, lastRecognizedAgent)
+      if (stable.lastRecognizedAgent && stableResolution.available) {
+        // Only a positive recognition restarts the age bound.
+        ptyLastRecognizedForeground.set(id, {
+          name: stable.lastRecognizedAgent,
+          pid:
+            stable.lastRecognizedAgent === resolution.processName
+              ? (resolution.processId ?? null)
+              : null,
+          at: Date.now()
+        })
+      } else if (stable.lastRecognizedAgent && cachedAgentAliveInJob && !anchorContradicted) {
+        // The anchor pid in the job is proof of life; restamp so the
+        // short-circuit resumes instead of scanning on every call.
+        const entry = ptyLastRecognizedForeground.get(id)
+        if (entry) {
+          ptyLastRecognizedForeground.set(id, { ...entry, at: Date.now() })
+        }
+      } else if (!stable.lastRecognizedAgent) {
         ptyLastRecognizedForeground.delete(id)
       }
       return stable.processName
@@ -1351,7 +1531,7 @@ export class LocalPtyProvider implements IPtyProvider {
         return null
       }
       // Why: an inspection error is a degraded read; fall back to last recognized agent (null reads as an exit).
-      return ptyLastRecognizedForeground.get(id) ?? null
+      return ptyLastRecognizedForeground.get(id)?.name ?? null
     }
   }
 
@@ -1370,7 +1550,8 @@ export class LocalPtyProvider implements IPtyProvider {
           ...(process.platform === 'win32'
             ? {
                 forceProcessScan: true,
-                readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+                readWindowsConsoleAttachedProcessIds: () =>
+                  readWindowsConsoleAttachedProcessIds(proc.pid)
               }
             : {})
         }
@@ -1383,6 +1564,21 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       return null
     }
+  }
+
+  async confirmShellForeground(id: string): Promise<boolean> {
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
+    const confirmed = await confirmShellForegroundProcess(
+      proc.pid,
+      ptyShellName.get(id),
+      process.platform === 'win32'
+        ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(proc) }
+        : {}
+    )
+    return ptyProcesses.get(id) === proc && confirmed
   }
 
   async serialize(_ids: string[]): Promise<string> {

@@ -36,12 +36,14 @@ type MobilePageContentProps = {
   setIosChannel: (channel: IosChannel) => void
   loadNetworkInterfaces: () => void
   networkInterfaces: MobileNetworkInterface[]
+  openAndroidInstallGuide: () => void
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
   connectionMode: MobilePairingConnectionMode
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
+  pairQrSize: number | null
   pairingUrl: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
@@ -82,12 +84,14 @@ export function MobilePageContent({
   setIosChannel,
   loadNetworkInterfaces,
   networkInterfaces,
+  openAndroidInstallGuide,
   openInstallUrl,
   pairAnotherDevice,
   pairLoading,
   connectionMode,
   handleConnectionModeChange,
   pairQrDataUrl,
+  pairQrSize,
   pairingUrl,
   pairingQrError,
   relayMintFailure,
@@ -133,9 +137,11 @@ export function MobilePageContent({
               installCopy={getInstallCopy(platform, iosChannel)}
               iosChannel={iosChannel}
               onIosChannelChange={setIosChannel}
+              onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
+              pairQrSize={pairQrSize}
               pairingUrl={pairingUrl}
               pairingQrError={pairingQrError}
               relayMintFailure={relayMintFailure}

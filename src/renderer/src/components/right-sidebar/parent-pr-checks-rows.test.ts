@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail, PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import {
@@ -7,7 +10,7 @@ import {
   getGitHubRepoCacheKey,
   getLegacyGitHubPRCacheKey
 } from '@/store/slices/github-cache-key'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   buildParentPrChecksProjection,
   getParentPrChecksRefreshIdentity,

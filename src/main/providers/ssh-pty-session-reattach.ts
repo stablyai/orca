@@ -196,6 +196,11 @@ export async function reattachSshPtySession(args: {
         cols: args.options.cols,
         rows: args.options.rows,
         suppressReplayNotification: true,
+        // A reattach always paints into a NEW terminal: a reconnect bumps tab.generation, which is
+        // the pane's React key, so TerminalPane remounts and the old xterm is disposed with its
+        // buffer. Without this the relay sees a delivery still open under our unchanged client id,
+        // answers "you already have this", and the pane stays blank until new output arrives.
+        requireReplay: true,
         ...(expectedPaneKey ? { expectedPaneKey } : {}),
         ...(expectedTabId ? { expectedTabId } : {})
       },
@@ -253,5 +258,41 @@ export async function reattachSshPtySessionWithExitFence(
     throw error
   } finally {
     args.exitRaceTracker.finish(operation)
+  }
+}
+
+/**
+ * The full reattach path a spawn takes when it carries a sessionId: fence the
+ * exit race, reject a session the relay can no longer restore, and commit or
+ * roll back the source-activation lease.
+ *
+ * Lives here rather than in SshPtyProvider.spawn so the lease's commit and
+ * rollback stay in one place — a caller that only wrapped the fence could
+ * return without committing and silently leak the activation.
+ */
+export async function reattachSshPtySessionForSpawn(
+  args: Parameters<typeof reattachSshPtySessionWithExitFence>[0] & {
+    acceptLivePty: (relayPtyId: string) => void
+  }
+): Promise<PtySpawnResult> {
+  let result: SshPtyReattachResult | undefined
+  try {
+    result = await reattachSshPtySessionWithExitFence(args)
+    if (result.sourceRecovery?.status === 'restoreRequired') {
+      throw new Error(
+        `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, result.id)}`
+      )
+    }
+    args.acceptLivePty(result.id)
+    result.sourceActivationLease?.commit()
+    const {
+      sourceActivationLease: _lease,
+      sourceRecovery: _sourceRecovery,
+      ...spawnResult
+    } = result
+    return spawnResult
+  } catch (error) {
+    result?.sourceActivationLease?.rollback()
+    throw error
   }
 }

@@ -245,7 +245,7 @@ function AgentTargetMenuItem({
   onSend: (target: NotesSendAgentTarget) => void
 }): React.JSX.Element {
   const tabTitle = target.tabTitle.trim()
-  const state = asDotState(agent?.state ?? 'idle')
+  const state = asDotState(agent?.state ?? 'idle', agent?.entry.workingMode)
   const timeAgo = agent ? formatAgentRelativeTime(agent, now) : null
   const secondaryParts = [
     agentStateLabel(state),
@@ -302,9 +302,13 @@ function orderSendTargetsByWorktreeAgentRows(
   return ordered
 }
 
-function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
+function asDotState(
+  state: AgentStatusState | 'idle',
+  workingMode?: DashboardAgentRowData['entry']['workingMode']
+): AgentDotState {
   switch (state) {
     case 'working':
+      return workingMode === 'monitoring' ? 'monitoring' : 'working'
     case 'blocked':
     case 'waiting':
     case 'done':

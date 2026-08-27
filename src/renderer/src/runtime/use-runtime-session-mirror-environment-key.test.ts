@@ -4,7 +4,8 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { ProjectGroup, Repo } from '../../../shared/types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
 import type * as RuntimeSessionMirrorTargetsModule from '@/lib/runtime-session-mirror-targets'
 import { makeWorktree } from '@/store/slices/store-test-helpers'
 
@@ -17,6 +18,7 @@ vi.mock('@/lib/runtime-session-mirror-targets', async (importOriginal) => {
 })
 
 import { useAppStore } from '@/store'
+import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { AppState } from '@/store/types'
 import {
   selectRuntimeSessionMirrorTargetInputs,
@@ -71,7 +73,7 @@ function seedMirrorState(): void {
       runtimeEnvironments: [
         { id: 'env-a', createdAt: 100, pairingRevision: 101 },
         { id: 'env-b', createdAt: 200, pairingRevision: 201 }
-      ] as AppState['runtimeEnvironments'],
+      ] as PublicKnownRuntimeEnvironment[],
       runtimeStatusByEnvironmentId: new Map([
         [
           'env-a',
@@ -260,7 +262,7 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
       useAppStore.setState({
         runtimeEnvironments: [
           { id: 'env-a', createdAt: 100, pairingRevision: 102 }
-        ] as AppState['runtimeEnvironments']
+        ] as PublicKnownRuntimeEnvironment[]
       })
     })
     expect(hook.result.current).toBe('env-a\u0001runtime-a\u00012\u0001102')

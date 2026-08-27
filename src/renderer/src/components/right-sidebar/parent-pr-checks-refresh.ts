@@ -1,9 +1,7 @@
-import type {
-  GitHubRepositoryIdentity,
-  PRCheckDetail,
-  Repo,
-  Worktree
-} from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'

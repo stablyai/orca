@@ -22,6 +22,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
 
 const gitStatus = vi.fn()
 const gitCancelStatus = vi.fn()
@@ -616,7 +617,7 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.rebaseFromBase',
       params: { worktree: 'id:wt-1', baseRef: 'origin/main' },
-      timeoutMs: 30_000
+      timeoutMs: REBASE_FROM_BASE_RPC_TIMEOUT_MS
     })
   })
 
@@ -641,8 +642,7 @@ describe('runtime git client', () => {
       settings: {
         activeRuntimeEnvironmentId: 'env-1',
         commitMessageAi,
-        agentCmdOverrides,
-        enableGitHubAttribution: true
+        agentCmdOverrides
       },
       worktreeId: 'wt-1',
       worktreePath: '/repo'
@@ -655,7 +655,6 @@ describe('runtime git client', () => {
         worktree: 'id:wt-1',
         commitMessageAi,
         agentCmdOverrides,
-        enableGitHubAttribution: true,
         commitMessageDiscoveryHostKey: 'runtime:env-1'
       },
       timeoutMs: 75_000

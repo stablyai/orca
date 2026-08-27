@@ -36,11 +36,9 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
-import {
-  findLinearIssueWorkspaceAttachment,
-  getLinearIssueWorkspaceAttachmentLabel
-} from '@/lib/linear-issue-workspace-attachment'
+import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
@@ -57,7 +55,7 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { LinearPriorityIcon } from '@/components/linear-priority-icon'
-import type { LinearIssue, LinearComment } from '../../../shared/types'
+import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import {
   linearAddIssueComment,
@@ -1384,7 +1382,7 @@ export default function LinearItemDrawer({
     [attachmentWorkspaces, displayed]
   )
   const attachedWorkspaceLabel = attachedWorkspace
-    ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+    ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
 
   const handleOpenOrUseIssue = useCallback((): void => {

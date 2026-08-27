@@ -1,5 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
+import type { GitHubRepositoryIdentity } from '../shared/github/pull-request-types'
+import type { RepoKind } from '../shared/repo-types'
 import {
   faviconUrlFromWebsite,
   githubAvatarIcon,
@@ -102,16 +103,20 @@ export async function detectRepoIcon({
 }): Promise<RepoIcon | undefined> {
   try {
     const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-    const fileIcon = await detectRepoFileIcon(repoPath, fsProvider)
-    if (fileIcon) {
-      return fileIcon
-    }
+    // Why: a remote repoPath with no provider must not be probed on the client
+    // filesystem — a same-named local path answers for the wrong repository.
+    if (fsProvider || !connectionId) {
+      const fileIcon = await detectRepoFileIcon(repoPath, { connectionId, fsProvider })
+      if (fileIcon) {
+        return fileIcon
+      }
 
-    const homepageIcon = fsProvider
-      ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
-      : await detectLocalPackageHomepageIcon(repoPath)
-    if (homepageIcon) {
-      return homepageIcon
+      const homepageIcon = fsProvider
+        ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
+        : await detectLocalPackageHomepageIcon(repoPath)
+      if (homepageIcon) {
+        return homepageIcon
+      }
     }
 
     if (kind === 'git') {

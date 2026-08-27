@@ -1,5 +1,6 @@
 import { useAppStore } from '@/store'
-import { getAllWorktreesFromState, getWorktreeMapFromState } from '@/store/selectors'
+import { getAllWorktreesFromState, getWorktreeOnHostFromState } from '@/store/selectors'
+import { toWorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
   showNoDeletableWorkspacesToast,
@@ -9,6 +10,7 @@ import { getWorkspaceDeleteLineage } from './workspace-delete-lineage'
 import { resolveSshWorkspaceForget } from './ssh-workspace-forget-resolution'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
   resolveWorktreeBatchDeleteTargets,
   toWorktreeDeleteIdentities,
@@ -31,7 +33,11 @@ export { runWorktreeDeletesInParallel, runWorktreeDeleteWithToast }
  */
 export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOptions = {}): void {
   const state = useAppStore.getState()
-  const target = getWorktreeMapFromState(state).get(worktreeId) ?? null
+  // Why (STA-4343): the id-keyed map keeps one row per `repoId::path`, so a caller
+  // acting on a specific sidebar row has to name that row's host — otherwise
+  // deleting the SSH row destroys the local checkout at the same path. A caller
+  // that names no host keeps the old first-wins behaviour.
+  const target = getWorktreeOnHostFromState(state, worktreeId, options.expectedHostId) ?? null
   const instanceChanged =
     Object.hasOwn(options, 'expectedInstanceId') &&
     target?.instanceId !== options.expectedInstanceId
@@ -44,15 +50,24 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
     return
   }
   if (target.isMainWorktree) {
-    const repo = state.repos.find((entry) => entry.id === target.repoId)
+    const repo = findRepoForHost(state.repos, target.repoId, {
+      hostId: target.hostId,
+      settings: state.settings
+    })
+    const hostId = repo ? getRepoExecutionHostId(repo) : target.hostId
     // Why: git refuses to delete the primary checkout; users can still remove the owning project from Orca (disk contents kept).
     state.openModal('confirm-remove-folder', {
       repoId: target.repoId,
-      displayName: repo?.displayName ?? target.displayName
+      displayName: repo?.displayName ?? target.displayName,
+      ...(hostId ? { hostId } : {})
     })
     return
   }
-  state.clearWorktreeDeleteState(worktreeId)
+  if (target.hostId) {
+    state.clearWorktreeDeleteState(worktreeId, target.hostId)
+  } else {
+    state.clearWorktreeDeleteState(worktreeId)
+  }
 
   // Why: a disconnected SSH host has no provider, so worktrees:remove throws; route to reconnect-and-delete or local-only forget.
   // Skip on paired web/mobile clients: SSH state is desktop-only, so empty sshTargetLabels misclassifies SSH repos as ghosts; their worktree.rm RPC still handles the delete.
@@ -87,7 +102,7 @@ export function runWorktreeDelete(worktreeId: string, options: WorktreeDeleteOpt
   const hasLineageChildren = deleteLineage.descendants.length > 0
   const skipConfirm = state.settings?.skipDeleteWorktreeConfirm ?? false
   if (skipConfirm && !hasLineageChildren) {
-    void runWorktreeDeleteWithToast(worktreeId, target.displayName)
+    void runWorktreeDeleteWithToast(toWorktreeRemovalTarget(target), target.displayName)
     return
   }
   state.openModal('delete-worktree', {
@@ -107,9 +122,8 @@ export function runWorktreeBatchDelete(
   options: WorktreeBatchDeleteOptions = {}
 ): boolean {
   const state = useAppStore.getState()
-  const targets = resolveWorktreeBatchDeleteTargets(
-    requestedWorktrees,
-    getWorktreeMapFromState(state)
+  const targets = resolveWorktreeBatchDeleteTargets(requestedWorktrees, (worktreeId, hostId) =>
+    getWorktreeOnHostFromState(state, worktreeId, hostId)
   )
   if (!targets) {
     showWorkspaceListChangedToast()
@@ -122,7 +136,11 @@ export function runWorktreeBatchDelete(
   }
 
   for (const target of targets) {
-    state.clearWorktreeDeleteState(target.id)
+    if (target.hostId) {
+      state.clearWorktreeDeleteState(target.id, target.hostId)
+    } else {
+      state.clearWorktreeDeleteState(target.id)
+    }
   }
 
   // Why: bulk cleanup can destroy many directories at once, so batch/Space deletes keep an explicit confirmation step.
@@ -142,10 +160,10 @@ export function runWorktreeBatchDelete(
     (state.settings?.skipDeleteWorktreeConfirm ?? false)
   if (skipConfirm) {
     void runWorktreeDeletesInParallel(targets, {
-      onForceDeleted: (deletedId) => options.onDeleted?.([deletedId])
-    }).then((deletedIds) => {
-      if (deletedIds.length > 0) {
-        options.onDeleted?.(deletedIds)
+      onForceDeleted: (deletedTarget) => options.onDeleted?.([deletedTarget])
+    }).then((deletedTargets) => {
+      if (deletedTargets.length > 0) {
+        options.onDeleted?.(deletedTargets)
       }
     })
     return true
@@ -165,7 +183,8 @@ export function runWorktreeBatchDelete(
       ...(options.forceConfirm || singleTargetHasLineageChildren
         ? { allowSkipConfirm: false }
         : {}),
-      ...(options.onDeleted ? { onDeleted: options.onDeleted } : {})
+      ...(options.onDeleted ? { onDeleted: options.onDeleted } : {}),
+      ...(options.forceOnConfirm === false ? { forceOnConfirm: false } : {})
     })
     return true
   }
@@ -174,7 +193,8 @@ export function runWorktreeBatchDelete(
     worktreeIds: targets.map((target) => target.id),
     worktreeDeleteIdentities: toWorktreeDeleteIdentities(targets),
     allowSkipConfirm: false,
-    ...(options.onDeleted ? { onDeleted: options.onDeleted } : {})
+    ...(options.onDeleted ? { onDeleted: options.onDeleted } : {}),
+    ...(options.forceOnConfirm === false ? { forceOnConfirm: false } : {})
   })
   return true
 }

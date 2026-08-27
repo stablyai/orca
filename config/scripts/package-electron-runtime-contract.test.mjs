@@ -3,6 +3,7 @@ import { createRequire } from 'node:module'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
+import { relayArtifactFilenames } from '../../src/shared/relay-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const require = createRequire(import.meta.url)
@@ -41,12 +42,12 @@ describe('Electron runtime package contract', () => {
     // Why: pnpm installs optional target architectures on every host; the root
     // Windows-only rebuild owns this addon so macOS/Linux never run node-gyp for it.
     expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('windows-native-registry')
-    expect(rebuildScript).toContain(
-      "rebuildPlatform === 'win32' ? ['windows-native-registry'] : []"
-    )
-    expect(ensureScript).toContain(
-      "process.platform === 'win32' ? ['windows-native-registry'] : []"
-    )
+    // Why assert the guard and the member separately: the list now carries more
+    // than one addon, so pinning the whole literal only tested its formatting.
+    expect(rebuildScript).toContain("rebuildPlatform === 'win32'")
+    expect(rebuildScript).toContain("'windows-native-registry'")
+    expect(ensureScript).toContain("process.platform === 'win32'")
+    expect(ensureScript).toContain("'windows-native-registry'")
     const packageTargets = {
       win32: createPackagedRuntimeNodeModuleResources('win32'),
       darwin: createPackagedRuntimeNodeModuleResources('darwin'),
@@ -67,6 +68,47 @@ describe('Electron runtime package contract', () => {
     }
   })
 
+  it('keeps the native Windows process-table addon optional and platform-gated', () => {
+    const rebuildScript = readFileSync(
+      join(projectDir, 'config/scripts/rebuild-native-deps.mjs'),
+      'utf8'
+    )
+    const ensureScript = readFileSync(
+      join(projectDir, 'config/scripts/ensure-native-runtime.mjs'),
+      'utf8'
+    )
+    expect(packageJson.optionalDependencies['@vscode/windows-process-tree']).toBe('0.8.0')
+    // Why: same rule as the registry addon -- pnpm installs optional deps on
+    // every host, so macOS/Linux must never run node-gyp for a Windows addon.
+    expect(packageJson.pnpm.onlyBuiltDependencies).not.toContain('@vscode/windows-process-tree')
+    expect(rebuildScript).toContain("'@vscode/windows-process-tree'")
+    expect(ensureScript).toContain("'@vscode/windows-process-tree'")
+    // Why pin the patch: the upstream binding.gyp requires Spectre-mitigated
+    // libraries our build agents do not carry, and the enumeration stops after
+    // 1024 processes -- on a busy host that silently hides the very descendants
+    // teardown is looking for.
+    expect(packageJson.pnpm.patchedDependencies['@vscode/windows-process-tree@0.8.0']).toBe(
+      'config/patches/@vscode__windows-process-tree@0.8.0.patch'
+    )
+    const packageTargets = {
+      win32: createPackagedRuntimeNodeModuleResources('win32'),
+      darwin: createPackagedRuntimeNodeModuleResources('darwin'),
+      linux: createPackagedRuntimeNodeModuleResources('linux')
+    }
+    expect(packageTargets.win32).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
+      ])
+    )
+    for (const platform of ['darwin', 'linux']) {
+      expect(packageTargets[platform]).not.toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ to: join('node_modules', '@vscode', 'windows-process-tree') })
+        ])
+      )
+    }
+  })
+
   it('guards package scripts that launch Electron tooling', () => {
     const scripts = packageJson.scripts
     const guardedScripts = [
@@ -80,6 +122,7 @@ describe('Electron runtime package contract', () => {
       'build:linux',
       'test:e2e',
       'test:e2e:terminal-rendering-golden',
+      'test:e2e:posix-profile-index-golden',
       'test:e2e:terminal-rendering-release-evidence',
       'test:e2e:headful'
     ]
@@ -89,17 +132,21 @@ describe('Electron runtime package contract', () => {
     }
   })
 
-  it('keeps Windows and Linux package builds off the macOS native helper build', () => {
+  it('keeps Windows and Linux package builds off macOS native helper builds', () => {
     const scripts = packageJson.scripts
 
     expect(scripts['build:desktop']).not.toContain('build:computer-macos')
+    expect(scripts['build:desktop']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:win']).toContain('pnpm run build:desktop')
     expect(scripts['build:win']).not.toContain('pnpm run build ')
     expect(scripts['build:win']).not.toContain('build:computer-macos')
+    expect(scripts['build:win']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:linux']).toContain('pnpm run build:desktop')
     expect(scripts['build:linux']).not.toContain('pnpm run build ')
     expect(scripts['build:linux']).not.toContain('build:computer-macos')
+    expect(scripts['build:linux']).not.toContain('build:keyboard-layout-macos')
     expect(scripts['build:mac']).toContain('pnpm run build:computer-macos')
+    expect(scripts['build:mac']).toContain('pnpm run build:keyboard-layout-macos')
     expect(scripts['build:release']).toContain('pnpm run build:native')
     expect(scripts['build:release']).not.toContain('build:computer-macos')
   })
@@ -196,14 +243,15 @@ describe('Electron runtime package contract', () => {
 
     expect(relayBuild).toContain("'parcel-watcher-process-entry.ts'")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-watcher.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-watcher.js'))")
     expect(relayBuild).toContain("outfile: join(outDir, 'relay-ai-vault-service.js')")
-    expect(relayBuild).toContain("readFileSync(join(outDir, 'relay-ai-vault-service.js'))")
     expect(builderConfig).toContain("from: 'out/relay'")
-    expect(remoteCommands).toContain("joinRemotePath(host, remoteRelayDir, 'relay-watcher.js')")
-    expect(remoteCommands).toContain(
-      "joinRemotePath(host, remoteRelayDir, 'relay-ai-vault-service.js')"
-    )
+
+    // Hashing and remote install probing are manifest-driven, so the contract
+    // is that both companions are declared once and that both sites read it.
+    expect(relayArtifactFilenames(true)).toContain('relay-watcher.js')
+    expect(relayArtifactFilenames(true)).toContain('relay-ai-vault-service.js')
+    expect(relayBuild).toContain('relayArtifactFilenames(')
+    expect(remoteCommands).toContain('relayArtifactFilenames(')
 
     const assertRelayGate = (steps, publishStepName) => {
       const names = steps.map((step) => step.name)
@@ -492,7 +540,7 @@ describe('Electron runtime package contract', () => {
     expect(uploadStep.with.path).toBe('${{ env.ORCA_E2E_TERMINAL_PERF_REPORT_PATH }}')
   })
 
-  it('keeps terminal rendering regressions in the manual golden E2E workflow', () => {
+  it('keeps platform golden regressions in the manual and release workflows', () => {
     const packageScripts = packageJson.scripts
     const goldenWorkflow = parse(
       readFileSync(join(projectDir, '.github/workflows/golden-e2e-experiment.yml'), 'utf8')
@@ -506,17 +554,19 @@ describe('Electron runtime package contract', () => {
       ['mac', 'macOS'],
       ['windows', 'Windows']
     ])
-    const goldenPlatforms = goldenWorkflow.jobs['golden-e2e'].strategy.matrix.include
-      .map(({ platform }) => platform)
-      .sort()
-    const goldenRunSteps = goldenPlatforms.map((platform) => {
-      const label = goldenPlatformLabels.get(platform)
+    const goldenMatrix = goldenWorkflow.jobs['golden-e2e'].strategy.matrix.include
+    const goldenPlatforms = goldenMatrix.map(({ platform }) => platform).sort()
+    const goldenRunSteps = new Map(
+      goldenPlatforms.map((platform) => {
+        const label = goldenPlatformLabels.get(platform)
 
-      expect(label, platform).toBeDefined()
+        expect(label, platform).toBeDefined()
 
-      return steps.find((step) => step.name === `Run golden E2E tests on ${label}`)
-    })
+        return [platform, steps.find((step) => step.name === `Run golden E2E tests on ${label}`)]
+      })
+    )
     const releaseGoldenJob = releaseWorkflow.jobs['terminal-rendering-golden']
+    const releaseGoldenMatrix = releaseGoldenJob.strategy.matrix.include
     const releaseEvidenceJob = releaseWorkflow.jobs['terminal-rendering-release-evidence']
     const releaseBuildNeeds = releaseWorkflow.jobs.build.needs
     const publishReleaseNeeds = releaseWorkflow.jobs['publish-release'].needs
@@ -535,15 +585,49 @@ describe('Electron runtime package contract', () => {
     expect(packageScripts['test:e2e:terminal-rendering-golden']).not.toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
+    expect(packageScripts['test:e2e:windows-fresh-startup-golden']).toContain(
+      'golden-windows-fresh-startup.spec.ts'
+    )
+    expect(packageScripts['test:e2e:windows-fresh-startup-golden']).toContain(
+      '@windows-fresh-startup-golden'
+    )
+    expect(packageScripts['test:e2e:posix-profile-index-golden']).toContain(
+      'golden-posix-profile-index-fsync.spec.ts'
+    )
+    expect(packageScripts['test:e2e:posix-profile-index-golden']).toContain(
+      'golden-posix-fresh-startup.spec.ts'
+    )
+    expect(packageScripts['test:e2e:posix-profile-index-golden']).toContain(
+      '@posix-profile-index-golden'
+    )
     expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
       'terminal-opencode-emoji-table-rendering.spec.ts'
     )
     expect(packageScripts['test:e2e:terminal-rendering-release-evidence']).toContain(
       'terminal-long-table-scroll-restore.spec.ts'
     )
-    for (const runStep of goldenRunSteps) {
-      expect(runStep?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
-    }
+    expect(goldenMatrix).toEqual([
+      { os: 'ubuntu-latest', platform: 'linux' },
+      { os: 'macos-15', platform: 'mac' },
+      { os: 'windows-2022', platform: 'windows' }
+    ])
+    expect(goldenRunSteps.get('linux')?.run).toContain(
+      'pnpm run test:e2e:terminal-rendering-golden'
+    )
+    expect(goldenRunSteps.get('linux')?.run).toContain(
+      'pnpm run --if-present test:e2e:posix-profile-index-golden'
+    )
+    expect(goldenRunSteps.get('mac')?.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    expect(goldenRunSteps.get('mac')?.run).toContain(
+      'pnpm run --if-present test:e2e:posix-profile-index-golden'
+    )
+    expect(goldenRunSteps.get('windows')).toMatchObject({
+      if: "runner.os == 'Windows'",
+      shell: 'pwsh'
+    })
+    expect(goldenRunSteps.get('windows').run).toContain(
+      'pnpm run --if-present test:e2e:windows-fresh-startup-golden'
+    )
     expect(goldenWorkflow.on.pull_request).toBeUndefined()
     expect(goldenWorkflow.on.workflow_dispatch).toBeDefined()
     expect(releaseBuildNeeds).not.toContain('terminal-rendering-golden')
@@ -552,11 +636,30 @@ describe('Electron runtime package contract', () => {
     expect(publishReleaseNeeds).toContain('build')
     expect(publishReleaseNeeds).not.toContain('terminal-rendering-release-evidence')
     expect(releaseGoldenJob['continue-on-error']).toBeUndefined()
-    expect(releaseGoldenJob.strategy.matrix.include.map(({ platform }) => platform).sort()).toEqual(
-      goldenPlatforms
+    expect(releaseGoldenMatrix).toEqual(goldenMatrix)
+    const releaseLinuxRunStep = releaseGoldenJob.steps.find(
+      (step) => step.name === 'Run terminal rendering golden on Linux'
     )
-    expect(releaseGoldenJob.steps.map((step) => step.run ?? '')).toContain(
-      'xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:terminal-rendering-golden'
+    expect(releaseLinuxRunStep.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    expect(releaseLinuxRunStep.run).toContain(
+      'pnpm run --if-present test:e2e:posix-profile-index-golden'
+    )
+    const releaseMacRunStep = releaseGoldenJob.steps.find(
+      (step) => step.name === 'Run terminal rendering golden on macOS'
+    )
+    expect(releaseMacRunStep.run).toContain('pnpm run test:e2e:terminal-rendering-golden')
+    expect(releaseMacRunStep.run).toContain(
+      'pnpm run --if-present test:e2e:posix-profile-index-golden'
+    )
+    const releaseWindowsRunStep = releaseGoldenJob.steps.find(
+      (step) => step.name === 'Run fresh-startup golden on Windows'
+    )
+    expect(releaseWindowsRunStep).toMatchObject({
+      if: "runner.os == 'Windows'",
+      shell: 'pwsh'
+    })
+    expect(releaseWindowsRunStep.run).toContain(
+      'pnpm run --if-present test:e2e:windows-fresh-startup-golden'
     )
     expect(releaseEvidenceJob['continue-on-error']).toBe(true)
     expect(

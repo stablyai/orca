@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { FolderWorkspace } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
 import { folderWorkspaceToWorktree } from './folder-workspace-worktree'
 
 function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWorkspace {

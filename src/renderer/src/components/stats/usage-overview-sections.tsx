@@ -1,13 +1,12 @@
 import { AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import {
-  formatUsageCost,
-  formatUsageTokens,
-  type UsageOverviewDailyPoint,
-  type UsageOverviewModel,
-  type UsageProviderOverview
-} from './usage-overview-model'
+import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import type {
+  UsageOverviewDailyPoint,
+  UsageOverviewModel,
+  UsageProviderOverview
+} from './usage-overview-types'
 import { translate } from '@/i18n/i18n'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {

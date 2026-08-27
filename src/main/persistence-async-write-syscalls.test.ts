@@ -13,6 +13,7 @@ import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { SshRemotePtyLeaseState } from '../shared/ssh-types'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 const testState = { dir: '' }
 
@@ -177,6 +178,9 @@ async function createStore(dir: string): Promise<TestStore> {
   testState.dir = dir
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
+  // Why here: userData resolves through AppEnvironment, and this must point at this
+  // file's temp dir rather than the global fake's shared one, after resetModules.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return new Store() as unknown as TestStore
 }

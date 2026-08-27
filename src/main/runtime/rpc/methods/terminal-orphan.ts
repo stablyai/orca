@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import type { TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import { defineMethod, type RpcAnyMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'

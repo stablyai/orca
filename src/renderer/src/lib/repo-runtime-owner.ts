@@ -3,7 +3,8 @@ import {
   getSettingsFocusedExecutionHostId,
   parseExecutionHostId
 } from '../../../shared/execution-host'
-import type { GlobalSettings, Repo } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Repo } from '../../../shared/repo-types'
 
 export type RepoRuntimeOwnerState = {
   repos?: readonly Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>[]
