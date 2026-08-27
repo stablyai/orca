@@ -5,8 +5,10 @@ import { defineMethod, type RpcMethod } from '../core'
 import { requiredString } from '../schemas'
 import {
   archiveSummary,
+  exposeWorkerTerminalResource
+} from './orchestration-worker-release-receipt'
+import {
   completeWorkerTerminalRelease,
-  exposeWorkerTerminalResource,
   type WorkerReleaseReceipt
 } from './orchestration-worker-release-completion'
 

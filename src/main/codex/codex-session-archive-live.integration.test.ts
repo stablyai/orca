@@ -3,6 +3,10 @@ import { tmpdir } from 'node:os'
 import { basename, dirname, join, relative } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runCodexAppServerSession } from './codex-app-server-session'
+import {
+  applyCodexWorkerThreadName,
+  archiveCodexWorkerThread
+} from './codex-worker-thread-lifecycle'
 import type { CodexSessionBackfillPaths } from './codex-session-backfill-types'
 import type { CodexSessionIndexHealPaths } from './codex-session-index-heal-state'
 
@@ -31,7 +35,12 @@ describe.skipIf(!runLiveTest)('live Codex archive reconciliation', () => {
       const id = readThreadId(result)
       await request('turn/start', {
         threadId: id,
-        input: [{ type: 'text', text: 'Reply OK to this isolated archive lifecycle canary.' }]
+        input: [
+          {
+            type: 'text',
+            text: 'You are working inside Orca, a multi-agent IDE. You are a dispatched worker.\n\nIsolated archive lifecycle canary.'
+          }
+        ]
       })
       return id
     })
@@ -44,9 +53,25 @@ describe.skipIf(!runLiveTest)('live Codex archive reconciliation', () => {
     linkSync(activePath, managedPath)
 
     await withCodex(systemHome, async (request) => {
-      await request('thread/read', { threadId })
+      const beforeName = (await request('thread/read', { threadId })) as {
+        thread?: { name?: string | null; preview?: string }
+      }
+      expect(beforeName.thread?.name).toBeNull()
+      expect(beforeName.thread?.preview).toContain(
+        'You are working inside Orca, a multi-agent IDE. You are a dispatched worker.'
+      )
       expect(await taskListContains(request, threadId, false)).toBe(true)
-      await request('thread/archive', { threadId })
+      expect(
+        await applyCodexWorkerThreadName({
+          threadId,
+          desiredName: 'Isolated Orca archive canary',
+          request
+        })
+      ).toEqual({ state: 'named' })
+      expect(JSON.stringify(await request('thread/read', { threadId }))).toContain(
+        'Isolated Orca archive canary'
+      )
+      expect(await archiveCodexWorkerThread({ threadId, request })).toEqual({ state: 'archived' })
     })
 
     expect(existsSync(activePath)).toBe(false)

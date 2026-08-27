@@ -6,6 +6,7 @@ import { ORCHESTRATION_METHODS } from './orchestration'
 import type { RpcContext } from '../core'
 import { OrchestrationDb } from '../../orchestration/db'
 import { OrcaRuntimeService } from '../../orca-runtime'
+import { bindCodexThreadDuringRelease } from './orchestration-worker-codex-test-helpers'
 
 function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
   let resolve!: (value: T) => void
@@ -96,6 +97,10 @@ describe('orchestration worker release', () => {
       closed: true
     } as never)
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
+    vi.spyOn(runtime, 'reconcileCodexWorkerThreadLifecycle').mockImplementation(
+      bindCodexThreadDuringRelease(db)
+    )
+    vi.spyOn(runtime, 'archiveReleasedCodexWorkerThread').mockResolvedValue(undefined)
     activeRunId = db.createRun({
       objective: 'Release test Run',
       coordinatorHandle: 'term_coord',

@@ -46154,6 +46154,78 @@ describe('OrcaRuntimeService', () => {
     })
   }
 
+  it('blocks worktree teardown until an exact Codex worker thread is known', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const resource = {
+      id: 'wtr-worker-pending',
+      owner_dispatch_id: 'ctx-worker-pending',
+      worktree_id: TEST_WORKTREE_ID,
+      terminal_handle: 'term-worker-pending',
+      ownership_state: 'owned',
+      release_state: 'not_requested',
+      codex_thread_id: null,
+      codex_archive_state: 'not_requested'
+    }
+    const db = {
+      listOwnedWorkerTerminalResourcesForWorktree: vi.fn(() => [resource]),
+      getWorkerTerminalResource: vi.fn(() => resource),
+      getWorkerDispatch: vi.fn(() => ({ start_options: JSON.stringify({ agent: 'codex' }) }))
+    }
+    runtime.setOrchestrationDb(db as never)
+    vi.spyOn(runtime, 'reconcileCodexWorkerThreadLifecycle').mockResolvedValue(undefined)
+
+    await expect(runtime.removeManagedWorktree(TEST_WORKTREE_ID)).rejects.toThrow(
+      'exact Codex thread identity'
+    )
+    expect(removeWorktree).not.toHaveBeenCalled()
+  })
+
+  it('archives exact disposable Codex workers after a proven worktree teardown', async () => {
+    const runtime = createWorktreeRemovalRuntime()
+    const resource = {
+      id: 'wtr-worker',
+      owner_dispatch_id: 'ctx-worker',
+      worktree_id: TEST_WORKTREE_ID,
+      terminal_handle: 'term-worker',
+      ownership_state: 'owned',
+      release_state: 'not_requested',
+      codex_thread_id: 'thread-worker',
+      codex_archive_state: 'not_requested'
+    }
+    const db = {
+      listOwnedWorkerTerminalResourcesForWorktree: vi.fn(() => [resource]),
+      reconcileMissingWorkerTerminal: vi.fn(),
+      finalizeOwnedWorkerTerminalResourcesForRemovedWorktree: vi.fn(() => [
+        {
+          ...resource,
+          ownership_state: 'released',
+          release_state: 'released',
+          codex_archive_state: 'requested'
+        }
+      ])
+    }
+    runtime.setOrchestrationDb(db as never)
+    const reconcile = vi
+      .spyOn(runtime, 'reconcileCodexWorkerThreadLifecycle')
+      .mockResolvedValue(undefined)
+    const archive = vi
+      .spyOn(runtime, 'archiveReleasedCodexWorkerThread')
+      .mockResolvedValue(undefined)
+    vi.mocked(removeWorktree).mockResolvedValue({})
+
+    await runtime.removeManagedWorktree(TEST_WORKTREE_ID)
+
+    expect(reconcile).toHaveBeenCalledWith('ctx-worker')
+    expect(db.reconcileMissingWorkerTerminal).toHaveBeenCalledWith(
+      'ctx-worker',
+      'The disposable worker terminal was removed with its worktree.'
+    )
+    expect(db.finalizeOwnedWorkerTerminalResourcesForRemovedWorktree).toHaveBeenCalledWith(
+      TEST_WORKTREE_ID
+    )
+    expect(archive).toHaveBeenCalledWith('ctx-worker', 'wtr-worker')
+  })
+
   it('skips archive hooks for CLI worktree removal by default', async () => {
     const runtime = createWorktreeRemovalRuntime()
     vi.mocked(getEffectiveHooks).mockReturnValue({

@@ -15,7 +15,7 @@ import {
 import { readArchivedWorkerOutput } from './orchestration-worker-archive-read'
 import { readLegacyFederatedTerminal } from './orchestration-worker-legacy-federated-read'
 import { readExactWorkerOutput } from './orchestration-worker-output'
-import { exposeWorkerTerminalResource } from './orchestration-worker-release-completion'
+import { exposeWorkerTerminalResource } from './orchestration-worker-release-receipt'
 
 const WorkerDispatchParams = z.object({ dispatch: requiredString('Missing --dispatch') })
 const WorkerReadParams = WorkerDispatchParams.extend({

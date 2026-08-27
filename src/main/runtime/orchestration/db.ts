@@ -294,8 +294,8 @@ type RunListCursor = {
   id: string
 }
 
-// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity.
-const SCHEMA_VERSION = 26
+// Schema versions: v2 'heartbeat'+last_heartbeat_at, v3 delivered_at, v4 task-creator terminal, v5 task_title/display_name, v6 pane identity, v7 lightweight Runs, v8 crash-safe Run deliveries, v9 durable question threads, v10 Dispatch capabilities, v11 durable mutation receipts, v12 composed worker state, v18 post-v6 version-skew repair, v19 adopted legacy Runs and compatibility receipts, v20 legacy question backfill, v21 legacy scheduler-loss provenance, v22 dispatch assignee lookup, v23 worker terminal resource ownership, v24 creator-incarnation authority, v25 active Dispatch handle lookup, v26 indexed mutation receipt capacity, v27 exact Codex worker-thread lifecycle.
+const SCHEMA_VERSION = 27
 
 function hardenOrchestrationDatabaseFiles(dbPath: (string & {}) | ':memory:'): void {
   if (dbPath === ':memory:' || process.platform === 'win32') {
@@ -444,6 +444,13 @@ export class OrchestrationDb {
         release_error            TEXT,
         archive_source           TEXT,
         archive_status           TEXT,
+        codex_thread_id           TEXT,
+        codex_auto_name           TEXT,
+        codex_name_state          TEXT
+          CHECK(codex_name_state IS NULL OR codex_name_state IN ('pending', 'applied', 'user_named')),
+        codex_archive_state       TEXT
+          CHECK(codex_archive_state IS NULL OR codex_archive_state IN ('not_requested', 'requested', 'archived')),
+        codex_lifecycle_error     TEXT,
         created_at               TEXT NOT NULL DEFAULT (datetime('now')),
         updated_at               TEXT NOT NULL DEFAULT (datetime('now'))
       );
@@ -998,6 +1005,19 @@ export class OrchestrationDb {
       }
       if (current < 26) {
         migrateMutationReceiptCapacity(this.db)
+      }
+      if (current < 27) {
+        for (const [column, definition] of [
+          ['codex_thread_id', 'TEXT'],
+          ['codex_auto_name', 'TEXT'],
+          ['codex_name_state', 'TEXT'],
+          ['codex_archive_state', 'TEXT'],
+          ['codex_lifecycle_error', 'TEXT']
+        ] as const) {
+          if (!this.hasColumn('worker_terminal_resources', column)) {
+            this.db.exec(`ALTER TABLE worker_terminal_resources ADD COLUMN ${column} ${definition}`)
+          }
+        }
       }
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_dispatch_assignee_pane_leaf
@@ -5753,6 +5773,177 @@ export class OrchestrationDb {
       .get(dispatchId) as WorkerTerminalResourceRow | undefined
   }
 
+  recordWorkerCodexThreadIdentity(params: {
+    dispatchId: string
+    resourceId: string
+    threadId: string
+    autoName: string
+  }): WorkerTerminalResourceRow {
+    const resource = this.getWorkerTerminalResource(params.resourceId)
+    if (
+      !resource ||
+      resource.owner_dispatch_id !== params.dispatchId ||
+      resource.ownership_state !== 'owned'
+    ) {
+      throw new Error(
+        'Codex thread identity requires the exact owned disposable terminal resource.'
+      )
+    }
+    if (resource.codex_thread_id && resource.codex_thread_id !== params.threadId) {
+      throw new Error(
+        `Worker terminal resource ${params.resourceId} is already bound to a different Codex thread.`
+      )
+    }
+    if (!resource.codex_thread_id) {
+      this.db
+        .prepare(
+          `UPDATE worker_terminal_resources
+              SET codex_thread_id = ?, codex_auto_name = ?, codex_name_state = 'pending',
+                  codex_archive_state = 'not_requested', codex_lifecycle_error = NULL,
+                  updated_at = datetime('now')
+            WHERE id = ? AND owner_dispatch_id = ? AND ownership_state = 'owned'
+              AND codex_thread_id IS NULL`
+        )
+        .run(params.threadId, params.autoName, params.resourceId, params.dispatchId)
+    }
+    return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
+  }
+
+  markWorkerCodexThreadNameOutcome(
+    resourceId: string,
+    outcome: 'applied' | 'user_named'
+  ): WorkerTerminalResourceRow {
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+            SET codex_name_state = ?, codex_lifecycle_error = NULL, updated_at = datetime('now')
+          WHERE id = ? AND codex_thread_id IS NOT NULL
+            AND codex_name_state IN ('pending', ?)`
+      )
+      .run(outcome, resourceId, outcome)
+    return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
+  }
+
+  recordWorkerCodexThreadLifecycleError(resourceId: string, error: string): void {
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+            SET codex_lifecycle_error = ?, updated_at = datetime('now')
+          WHERE id = ? AND codex_thread_id IS NOT NULL`
+      )
+      .run(error, resourceId)
+  }
+
+  requestWorkerCodexThreadArchive(
+    dispatchId: string,
+    resourceId: string
+  ): WorkerTerminalResourceRow {
+    const resource = this.getWorkerTerminalResource(resourceId)
+    if (
+      !resource ||
+      resource.owner_dispatch_id !== dispatchId ||
+      resource.ownership_state !== 'released' ||
+      resource.release_state !== 'released' ||
+      !resource.codex_thread_id
+    ) {
+      throw new Error(
+        'Codex archive requires the exact finally released disposable worker resource.'
+      )
+    }
+    if (resource.codex_archive_state !== 'archived') {
+      this.db
+        .prepare(
+          `UPDATE worker_terminal_resources
+              SET codex_archive_state = 'requested', codex_lifecycle_error = NULL,
+                  updated_at = datetime('now')
+            WHERE id = ? AND owner_dispatch_id = ? AND ownership_state = 'released'
+              AND release_state = 'released' AND codex_thread_id IS NOT NULL
+              AND codex_archive_state <> 'archived'`
+        )
+        .run(resourceId, dispatchId)
+    }
+    return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
+  }
+
+  markWorkerCodexThreadArchived(resourceId: string): WorkerTerminalResourceRow {
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+            SET codex_archive_state = 'archived', codex_lifecycle_error = NULL,
+                updated_at = datetime('now')
+          WHERE id = ? AND codex_archive_state IN ('requested', 'archived')`
+      )
+      .run(resourceId)
+    return this.getWorkerTerminalResource(resourceId) as WorkerTerminalResourceRow
+  }
+
+  listOwnedWorkerTerminalResourcesForWorktree(worktreeId: string): WorkerTerminalResourceRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM worker_terminal_resources
+          WHERE worktree_id = ? AND ownership_state = 'owned'
+            AND release_state IN ('not_requested', 'requested', 'releasing', 'unknown')
+          ORDER BY created_at ASC, id ASC`
+      )
+      .all(worktreeId) as WorkerTerminalResourceRow[]
+  }
+
+  finalizeOwnedWorkerTerminalResourcesForRemovedWorktree(
+    worktreeId: string
+  ): WorkerTerminalResourceRow[] {
+    const resources = this.listOwnedWorkerTerminalResourcesForWorktree(worktreeId)
+    if (resources.length === 0) {
+      return []
+    }
+    this.db.exec('BEGIN IMMEDIATE')
+    try {
+      const update = this.db.prepare(
+        `UPDATE worker_terminal_resources
+            SET ownership_state = 'released', release_state = 'released',
+                release_completed_at = datetime('now'), release_error = NULL,
+                codex_archive_state = CASE
+                  WHEN codex_thread_id IS NOT NULL AND codex_archive_state <> 'archived'
+                    THEN 'requested'
+                  ELSE codex_archive_state
+                END,
+                updated_at = datetime('now')
+          WHERE id = ? AND worktree_id = ? AND ownership_state = 'owned'
+            AND release_state IN ('not_requested', 'requested', 'releasing', 'unknown')`
+      )
+      for (const resource of resources) {
+        update.run(resource.id, worktreeId)
+      }
+      this.db.exec('COMMIT')
+      return resources
+        .map((resource) => this.getWorkerTerminalResource(resource.id))
+        .filter((resource): resource is WorkerTerminalResourceRow => Boolean(resource))
+    } catch (error) {
+      this.db.exec('ROLLBACK')
+      throw error
+    }
+  }
+
+  listWorkerTerminalResourcesAwaitingProviderSession(): WorkerTerminalResourceRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM worker_terminal_resources
+          WHERE ownership_state = 'owned' AND codex_thread_id IS NULL
+          ORDER BY created_at ASC, id ASC`
+      )
+      .all() as WorkerTerminalResourceRow[]
+  }
+
+  listWorkerCodexThreadLifecycleBacklog(): WorkerTerminalResourceRow[] {
+    return this.db
+      .prepare(
+        `SELECT * FROM worker_terminal_resources
+          WHERE codex_thread_id IS NOT NULL
+            AND (codex_name_state = 'pending' OR codex_archive_state = 'requested')
+          ORDER BY updated_at ASC, id ASC`
+      )
+      .all() as WorkerTerminalResourceRow[]
+  }
+
   getWorkerTerminalResourceFormerlyOwnedBy(
     dispatchId: string
   ): WorkerTerminalResourceRow | undefined {
@@ -6100,6 +6291,11 @@ export class OrchestrationDb {
         `UPDATE worker_terminal_resources
          SET release_state = 'released', ownership_state = 'released',
              release_completed_at = datetime('now'), release_error = NULL,
+             codex_archive_state = CASE
+               WHEN codex_thread_id IS NOT NULL AND codex_archive_state <> 'archived'
+                 THEN 'requested'
+               ELSE codex_archive_state
+             END,
              updated_at = datetime('now')
          WHERE id = ? AND release_state IN ('requested', 'releasing', 'unknown')`
       )

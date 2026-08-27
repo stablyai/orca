@@ -239,6 +239,14 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           state: 'accepted'
         })
         const worker = db.markWorkerDispatchReady(started.dispatch.id, effects)
+        if (!params.terminal) {
+          void runtime.reconcileCodexWorkerThreadLifecycle(started.dispatch.id).catch((error) => {
+            console.warn('[orchestration] Codex worker thread naming deferred', {
+              dispatchId: started.dispatch.id,
+              error: error instanceof Error ? error.message : String(error)
+            })
+          })
+        }
         monitorWorkerSetup({
           runtime,
           db,
