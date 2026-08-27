@@ -1214,8 +1214,18 @@ html.native-shell .app-layout {
 /* Why: the brighter border carries the selected state; a translucent wash keeps
    card text legible instead of lifting the surface toward the foreground color. */
 [data-worktree-card-surface][data-worktree-card-active='primary'] {
-  border-color: color-mix(in srgb, var(--worktree-sidebar-border) 40%, transparent);
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 8%, transparent);
+  /* Why: optional contrast steps raise the wash via --worktree-card-active-*-mix;
+     defaults keep the current quiet worktree-sidebar treatment. */
+  border-color: color-mix(
+    in srgb,
+    var(--worktree-sidebar-border) var(--worktree-card-active-border-mix, 40%),
+    transparent
+  );
+  background: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) var(--worktree-card-active-bg-mix, 8%),
+    transparent
+  );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 4%, transparent);
 }
 
@@ -1225,7 +1235,11 @@ html.native-shell .app-layout {
     var(--worktree-sidebar-foreground) 18%,
     var(--worktree-sidebar-border)
   );
-  background: color-mix(in srgb, var(--worktree-sidebar-foreground) 10%, transparent);
+  background: color-mix(
+    in srgb,
+    var(--worktree-sidebar-foreground) var(--worktree-card-active-dark-bg-mix, 10%),
+    transparent
+  );
   box-shadow: 0 1px 2px color-mix(in srgb, var(--worktree-sidebar-foreground) 3%, transparent);
 }
 

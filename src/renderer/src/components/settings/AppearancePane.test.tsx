@@ -350,6 +350,25 @@ describe('AppearancePane', () => {
     })
   })
 
+  it('updates active workspace contrast from sidebar appearance settings', async () => {
+    mocks.state.settingsSearchQuery = 'active workspace contrast'
+    const updateSettings = vi.fn()
+    const settings = getDefaultSettings('/tmp')
+
+    const container = await renderAppearancePane(settings, updateSettings)
+    const highButton = Array.from(
+      container.querySelectorAll<HTMLButtonElement>('button[role="radio"]')
+    ).find((button) => button.textContent === 'High')
+
+    expect(highButton).toBeDefined()
+
+    await act(async () => {
+      highButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ activeWorkspaceContrast: 3 })
+  })
+
   it('restores the Automations sidebar button from the sidebar settings switch', async () => {
     const updateSettings = vi.fn()
     const settings = {

@@ -30,6 +30,22 @@ export const getLeftSidebarAppearanceEntry = createLocalizedCatalog(
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.leftSidebarAppearance.tint',
         'tint'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.contrast',
+        'contrast'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.activeWorkspace',
+        'active workspace'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.selectedWorkspace',
+        'selected workspace'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.appearance.search.leftSidebarAppearance.activeWorkspaceContrast',
+        'active workspace contrast'
       )
     ]
   })

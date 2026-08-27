@@ -23,6 +23,7 @@ import { DEFAULT_DISABLED_TUI_AGENTS } from './tui-agent-selection'
 import { DEFAULT_TUI_AGENT_ARGS, DEFAULT_TUI_AGENT_ENV } from './tui-agent-launch-defaults'
 import { UI_LANGUAGE_SYSTEM } from './ui-language'
 import {
+  DEFAULT_ACTIVE_WORKSPACE_CONTRAST,
   DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
   DEFAULT_LEFT_SIDEBAR_TINT_OPACITY
 } from './left-sidebar-appearance'
@@ -186,6 +187,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,
     leftSidebarTintOpacity: DEFAULT_LEFT_SIDEBAR_TINT_OPACITY,
+    activeWorkspaceContrast: DEFAULT_ACTIVE_WORKSPACE_CONTRAST,
     uiLanguage: UI_LANGUAGE_SYSTEM,
     appIcon: DEFAULT_APP_ICON_ID,
     appFontFamily: DEFAULT_APP_FONT_FAMILY,

@@ -1,6 +1,8 @@
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { HEX_COLOR_RE } from '../../../shared/color-validation'
 import {
+  DEFAULT_ACTIVE_WORKSPACE_CONTRAST,
+  normalizeActiveWorkspaceContrast,
   normalizeLeftSidebarTintColor,
   normalizeLeftSidebarTintOpacity
 } from '../../../shared/left-sidebar-appearance'
@@ -11,6 +13,7 @@ type LeftSidebarAppearanceSettings = Pick<
   | 'leftSidebarAppearanceMode'
   | 'leftSidebarTintColor'
   | 'leftSidebarTintOpacity'
+  | 'activeWorkspaceContrast'
   | 'theme'
   | 'terminalThemeDark'
   | 'terminalDividerColorDark'
@@ -113,6 +116,29 @@ function resolveTintedSurfaceVariables(
   return buildSurfaceVariables({ background, foreground: 'var(--foreground)' })
 }
 
+function resolveActiveWorkspaceContrastVariables(
+  value: number | undefined
+): LeftSidebarStyleVariables | undefined {
+  const contrast = normalizeActiveWorkspaceContrast(value)
+  if (contrast === DEFAULT_ACTIVE_WORKSPACE_CONTRAST) {
+    return undefined
+  }
+  // Why: the optional steps must be visibly distinct in light/tinted themes,
+  // while the default CSS fallback preserves the original subtle treatment.
+  if (contrast === 2) {
+    return {
+      '--worktree-card-active-bg-mix': '18%',
+      '--worktree-card-active-dark-bg-mix': '15%',
+      '--worktree-card-active-border-mix': '60%'
+    }
+  }
+  return {
+    '--worktree-card-active-bg-mix': '26%',
+    '--worktree-card-active-dark-bg-mix': '19%',
+    '--worktree-card-active-border-mix': '78%'
+  }
+}
+
 export function resolveLeftSidebarStyleVariables(
   settings: LeftSidebarAppearanceSettings | null | undefined,
   systemPrefersDark: boolean
@@ -120,12 +146,21 @@ export function resolveLeftSidebarStyleVariables(
   if (!settings) {
     return undefined
   }
+  const activeWorkspaceContrastVariables = resolveActiveWorkspaceContrastVariables(
+    settings.activeWorkspaceContrast
+  )
   switch (settings.leftSidebarAppearanceMode) {
     case 'default':
-      return undefined
+      return activeWorkspaceContrastVariables
     case 'match-terminal':
-      return resolveTerminalSurfaceVariables(settings, systemPrefersDark)
+      return {
+        ...resolveTerminalSurfaceVariables(settings, systemPrefersDark),
+        ...activeWorkspaceContrastVariables
+      }
     case 'tinted':
-      return resolveTintedSurfaceVariables(settings)
+      return {
+        ...resolveTintedSurfaceVariables(settings),
+        ...activeWorkspaceContrastVariables
+      }
   }
 }

@@ -78,6 +78,8 @@ export type GlobalSettings = {
   leftSidebarAppearanceMode: LeftSidebarAppearanceMode
   leftSidebarTintColor?: string
   leftSidebarTintOpacity?: number
+  /** Strength of the persistent active workspace highlight in the left sidebar. */
+  activeWorkspaceContrast?: number
   uiLanguage: UiLanguage
   appIcon: AppIconId
   appFontFamily: string
