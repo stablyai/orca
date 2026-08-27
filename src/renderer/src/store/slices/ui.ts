@@ -1367,7 +1367,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       preferredVisibleTaskProviders,
       {
         gitlabInstalled: state.preflightStatus?.glab?.installed === true,
-        linearConnected: state.linearStatus?.connected === true
+        linearConnected: state.linearStatus?.connected === true,
+        // Why: forced call-site update — the Task Page keeps the Kanban tab
+        // available so a saved/default Kanban source stays reachable.
+        kanbanConnected: true
       },
       state.settings?.defaultTaskSource
     )

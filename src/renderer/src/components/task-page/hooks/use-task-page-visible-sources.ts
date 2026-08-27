@@ -51,7 +51,11 @@ export function useTaskPageVisibleSources({
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          // Why: Kanban is offered beside GitHub and Jira and can be connected
+          // from the Tasks surface itself; the list (not the tab) is gated on
+          // the real connection state in the Kanban host.
+          kanbanConnected: true
         },
         defaultTaskSource
       ),

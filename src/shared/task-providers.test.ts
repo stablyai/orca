@@ -26,16 +26,10 @@ describe('task providers', () => {
     ])
   })
 
-  it('accepts Kanban as a valid provider without leaking it into available sources yet', () => {
+  it('accepts Kanban as a valid provider', () => {
     expect(isTaskProvider('kanban')).toBe(true)
     expect(isTaskProvider('bitbucket')).toBe(false)
     expect(normalizeVisibleTaskProviders(['kanban'])).toEqual(['kanban'])
-    expect(
-      filterAvailableTaskProviders(['github', 'kanban'], {
-        gitlabInstalled: false,
-        linearConnected: false
-      })
-    ).toEqual(['github'])
     expect(
       normalizeTaskProviderSettings({
         visibleTaskProviders: ['kanban'],
@@ -45,6 +39,72 @@ describe('task providers', () => {
       defaultTaskSource: 'kanban',
       visibleTaskProviders: ['kanban']
     })
+  })
+
+  it('makes Kanban available exactly when the connection flag says so', () => {
+    expect(
+      filterAvailableTaskProviders(['github', 'kanban'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        kanbanConnected: true
+      })
+    ).toEqual(['github', 'kanban'])
+    expect(
+      filterAvailableTaskProviders(['github', 'kanban'], {
+        gitlabInstalled: false,
+        linearConnected: false,
+        kanbanConnected: false
+      })
+    ).toEqual(['github'])
+  })
+
+  it('restores a Kanban saved default only when connected', () => {
+    expect(
+      restoreAvailableDefaultTaskProvider(
+        ['kanban'],
+        {
+          gitlabInstalled: false,
+          linearConnected: false,
+          kanbanConnected: true
+        },
+        'kanban'
+      )
+    ).toEqual(['kanban'])
+    expect(
+      restoreAvailableDefaultTaskProvider(
+        ['kanban'],
+        {
+          gitlabInstalled: false,
+          linearConnected: false,
+          kanbanConnected: false
+        },
+        'kanban'
+      )
+    ).toEqual(['github'])
+  })
+
+  it('keeps every other provider availability unchanged by the Kanban flag', () => {
+    const withKanbanTrue = {
+      gitlabInstalled: false,
+      linearConnected: false,
+      kanbanConnected: true
+    }
+    const withKanbanFalse = {
+      gitlabInstalled: false,
+      linearConnected: false,
+      kanbanConnected: false
+    }
+    for (const availability of [withKanbanTrue, withKanbanFalse]) {
+      expect(filterAvailableTaskProviders(['gitlab'], availability)).toEqual(['github'])
+      expect(filterAvailableTaskProviders(['linear'], availability)).toEqual(['github'])
+      expect(filterAvailableTaskProviders(['github', 'jira'], availability)).toEqual([
+        'github',
+        'jira'
+      ])
+      expect(filterAvailableTaskProviders(['github', 'gitlab', 'linear'], availability)).toEqual([
+        'github'
+      ])
+    }
   })
 
   it('restores a valid saved default when provider settings drifted', () => {
@@ -79,7 +139,8 @@ describe('task providers', () => {
     expect(
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
         gitlabInstalled: false,
-        linearConnected: true
+        linearConnected: true,
+        kanbanConnected: false
       })
     ).toEqual(['github', 'linear'])
   })
@@ -90,7 +151,8 @@ describe('task providers', () => {
         ['linear'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          kanbanConnected: false
         },
         'github'
       )
@@ -103,7 +165,8 @@ describe('task providers', () => {
         ['linear'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          kanbanConnected: false
         },
         'linear'
       )
@@ -116,7 +179,8 @@ describe('task providers', () => {
         ['linear'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          kanbanConnected: false
         },
         'gitlab'
       )
@@ -129,7 +193,8 @@ describe('task providers', () => {
         ['gitlab'],
         {
           gitlabInstalled: false,
-          linearConnected: true
+          linearConnected: true,
+          kanbanConnected: false
         },
         'bitbucket'
       )
@@ -140,7 +205,8 @@ describe('task providers', () => {
     expect(
       filterAvailableTaskProviders(['gitlab', 'linear'], {
         gitlabInstalled: false,
-        linearConnected: false
+        linearConnected: false,
+        kanbanConnected: false
       })
     ).toEqual(['github'])
   })

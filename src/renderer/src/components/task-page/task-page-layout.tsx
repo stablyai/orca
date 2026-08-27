@@ -23,6 +23,10 @@ import {
   type TaskPageJiraFiltersProps
 } from '@/components/task-page/chrome/task-page-jira-filters'
 import {
+  TaskPageKanbanFilters,
+  type TaskPageKanbanFiltersProps
+} from '@/components/task-page/chrome/task-page-kanban-filters'
+import {
   TaskPageGitlabFilters,
   type TaskPageGitlabFiltersProps
 } from '@/components/task-page/chrome/task-page-gitlab-filters'
@@ -43,6 +47,10 @@ import {
   JiraIssueListHost,
   type JiraIssueListHostProps
 } from '@/components/task-page/jira/jira-issue-list-host'
+import {
+  KanbanTaskListHost,
+  type KanbanTaskListHostProps
+} from '@/components/task-page/kanban/kanban-task-list-host'
 import {
   NewGithubIssueDialog,
   type NewGithubIssueDialogProps
@@ -93,6 +101,9 @@ export function TaskPageLayout({
   gitlabList,
   jiraList,
   linearViews,
+  kanbanConnected,
+  kanbanFilters,
+  kanbanList,
   newGithubIssue,
   newLinearProject,
   newLinearIssue,
@@ -120,6 +131,9 @@ export function TaskPageLayout({
   gitlabList: GitlabWorkItemListProps
   jiraList: JiraIssueListHostProps
   linearViews: LinearViewsHostProps
+  kanbanConnected: boolean
+  kanbanFilters: TaskPageKanbanFiltersProps
+  kanbanList: KanbanTaskListHostProps
   newGithubIssue: NewGithubIssueDialogProps
   newLinearProject: NewLinearProjectDialogProps
   newLinearIssue: NewLinearIssueDialogProps
@@ -144,6 +158,8 @@ export function TaskPageLayout({
                   <TaskPageLinearFilters {...linearFilters} />
                 ) : taskSource === 'jira' && jiraConnected ? (
                   <TaskPageJiraFilters {...jiraFilters} />
+                ) : taskSource === 'kanban' && kanbanConnected ? (
+                  <TaskPageKanbanFilters {...kanbanFilters} />
                 ) : taskSource === 'gitlab' ? (
                   <TaskPageGitlabFilters {...gitlabFilters} />
                 ) : null}
@@ -168,6 +184,8 @@ export function TaskPageLayout({
             <GitlabWorkItemList {...gitlabList} />
           ) : taskSource === 'jira' ? (
             <JiraIssueListHost {...jiraList} />
+          ) : taskSource === 'kanban' ? (
+            <KanbanTaskListHost {...kanbanList} />
           ) : taskSource === 'linear' ? (
             <LinearViewsHost {...linearViews} />
           ) : null}

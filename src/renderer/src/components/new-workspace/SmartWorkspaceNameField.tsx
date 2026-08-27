@@ -442,7 +442,9 @@ export default function SmartWorkspaceNameField({
     () =>
       filterAvailableTaskProviders(['github', 'gitlab', 'linear'], {
         gitlabInstalled: gitlabSourceAvailable,
-        linearConnected: linearStatus.connected === true
+        linearConnected: linearStatus.connected === true,
+        // Why: forced call-site update — Kanban has no smart-workspace name mode.
+        kanbanConnected: false
       }),
     [gitlabSourceAvailable, linearStatus.connected]
   )

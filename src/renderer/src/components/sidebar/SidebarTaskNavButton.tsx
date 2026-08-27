@@ -101,7 +101,10 @@ export function SidebarTaskNavButton(): React.JSX.Element | null {
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearStatus.connected === true
+          linearConnected: linearStatus.connected === true,
+          // Why: forced call-site update — keep the Kanban source surface
+          // offered beside Jira for sidebar default-source resolution.
+          kanbanConnected: true
         },
         defaultTaskSource
       ),

@@ -61,6 +61,7 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  kanbanConnected: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -111,11 +112,11 @@ function isTaskProviderAvailable(
   if (provider === 'jira') {
     return true
   }
-  // Why: the Kanban credential flow lands in a later task; until then the
-  // provider stays out of the available source list so a half-built source
-  // never surfaces or captures the default source selection.
+  // Why: Kanban is offered beside GitHub and Jira and can be connected from
+  // the Tasks surface; the connection flag gates the list, not the tab, so a
+  // disconnected Kanban still renders its connect empty-state.
   if (provider === 'kanban') {
-    return false
+    return availability.kanbanConnected === true
   }
   return availability.linearConnected
 }

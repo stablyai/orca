@@ -4,12 +4,27 @@ import { i18n } from '@/i18n/i18n'
 import {
   getGitHubModeButtons,
   getGitHubTaskKindPresets,
-  getLinearPriorityLabel
+  getLinearPriorityLabel,
+  getSourceOptions
 } from './task-page-localized-options'
 
 describe('task-page-localized-options', () => {
   beforeEach(async () => {
     await i18n.changeLanguage('en')
+  })
+
+  it('lists Kanban exactly once in the source options without changing the other providers', () => {
+    const options = getSourceOptions()
+    const kanbanEntries = options.filter((source) => source.id === 'kanban')
+    expect(kanbanEntries).toHaveLength(1)
+    expect(kanbanEntries[0].label).toBe('Kanban')
+    expect(options.map((source) => source.id)).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'kanban'
+    ])
   })
 
   it('refreshes GitHub task labels when the UI language changes', async () => {

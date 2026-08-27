@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { TaskProvider } from '../../../../shared/task-providers'
+import type { KanbanConnectionStatus } from '../../../../shared/kanban-types'
 import {
   GLOBAL_AGENT_SKILL_SOURCE_KINDS,
   useInstalledAgentSkillNames
@@ -32,6 +33,31 @@ export function useTaskSourceProviderReadiness(
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const [kanbanStatus, setKanbanStatus] = useState<KanbanConnectionStatus>({
+    connected: false,
+    reason: 'missing'
+  })
+  const [kanbanStatusChecked, setKanbanStatusChecked] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void window.api.kanban
+      .status()
+      .then((next) => {
+        if (!cancelled) {
+          setKanbanStatus(next)
+          setKanbanStatusChecked(true)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setKanbanStatusChecked(true)
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [providerRuntimeContextKey])
 
   const {
     installed: linearSkillInstalled,
@@ -91,11 +117,8 @@ export function useTaskSourceProviderReadiness(
         visible: visible.has('jira')
       },
       kanban: {
-        // Why: the Kanban credential flow lands in a later task; report it as
-        // unavailable and hidden so settings never surface a half-built source.
-        connected: false,
-        checking: false,
-        unavailable: true,
+        connected: kanbanStatusChecked && kanbanStatus.connected === true,
+        checking: !kanbanStatusChecked,
         visible: visible.has('kanban')
       }
     }
@@ -104,6 +127,8 @@ export function useTaskSourceProviderReadiness(
     gitlabConnected,
     jiraChecking,
     jiraConnected,
+    kanbanStatus,
+    kanbanStatusChecked,
     linearChecking,
     linearConnected,
     linearSkillInstalled,

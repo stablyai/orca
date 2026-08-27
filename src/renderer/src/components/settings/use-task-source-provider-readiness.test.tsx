@@ -9,6 +9,7 @@ import { useTaskSourceProviderReadiness } from './use-task-source-provider-readi
 
 const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
+  kanbanStatus: vi.fn(),
   skill: {
     installed: false,
     loading: false,
@@ -70,6 +71,12 @@ async function renderProbe(
 }
 
 beforeEach(() => {
+  mocks.kanbanStatus.mockReset().mockResolvedValue({ connected: false, reason: 'missing' })
+  globalThis.window.api = {
+    kanban: {
+      status: mocks.kanbanStatus
+    }
+  } as never
   mocks.state = {
     settings: {},
     preflightStatus: {
@@ -160,6 +167,26 @@ describe('useTaskSourceProviderReadiness', () => {
     expect(latest?.linear.visible).toBe(true)
     expect(latest?.gitlab.visible).toBe(false)
     expect(latest?.jira.visible).toBe(false)
+  })
+
+  it('reports Kanban connected once the status check lands', async () => {
+    mocks.kanbanStatus.mockResolvedValue({
+      connected: true,
+      viewer: { id: 'u1', name: 'User One', level: 'admin' }
+    })
+    await renderProbe()
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+
+    expect(latest?.kanban).toMatchObject({ connected: true, checking: false })
+  })
+
+  it('reports Kanban as disconnected while the check is pending and after a missing status', async () => {
+    await renderProbe()
+
+    expect(latest?.kanban).toMatchObject({ connected: false })
   })
 
   it('recomputes visibility when the provider list changes', async () => {

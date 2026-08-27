@@ -36,6 +36,7 @@ import { saveLinearIssueView } from './linear-issue-view-storage'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { KanbanTaskSummary } from '../../../shared/kanban-types'
 
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
@@ -77,11 +78,13 @@ import type { TaskPageGithubModeBarProps } from '@/components/task-page/chrome/t
 import type { TaskPageGithubItemFiltersProps } from '@/components/task-page/chrome/task-page-github-item-filters'
 import type { TaskPageLinearFiltersProps } from '@/components/task-page/chrome/task-page-linear-filters'
 import type { TaskPageJiraFiltersProps } from '@/components/task-page/chrome/task-page-jira-filters'
+import type { TaskPageKanbanFiltersProps } from '@/components/task-page/chrome/task-page-kanban-filters'
 import type { TaskPageGitlabFiltersProps } from '@/components/task-page/chrome/task-page-gitlab-filters'
 import type { GithubDetailHostProps } from '@/components/task-page/github/github-detail-host'
 import type { GithubWorkItemTableProps } from '@/components/task-page/github/github-work-item-table'
 import type { GitlabWorkItemListProps } from '@/components/task-page/gitlab/gitlab-work-item-list'
 import type { JiraIssueListHostProps } from '@/components/task-page/jira/jira-issue-list-host'
+import type { KanbanTaskListHostProps } from '@/components/task-page/kanban/kanban-task-list-host'
 import type { NewGithubIssueDialogProps } from '@/components/task-page/dialogs/new-github-issue-dialog'
 import type { NewLinearProjectDialogProps } from '@/components/task-page/dialogs/new-linear-project-dialog'
 import type { NewLinearIssueDialogProps } from '@/components/task-page/dialogs/new-linear-issue-dialog'
@@ -101,6 +104,8 @@ import { useTaskPageGitLabListState } from '@/components/task-page/hooks/use-tas
 import { useTaskPageGitHubListState } from '@/components/task-page/hooks/use-task-page-github-list-state'
 import { useTaskPageLinearListState } from '@/components/task-page/hooks/use-task-page-linear-list-state'
 import { useTaskPageJiraListState } from '@/components/task-page/hooks/use-task-page-jira-list-state'
+import { useTaskPageKanbanListState } from '@/components/task-page/hooks/use-task-page-kanban-list-state'
+import { useTaskPageKanbanFetch } from '@/components/task-page/hooks/use-task-page-kanban-fetch'
 import { useTaskPageGitLabFetch } from '@/components/task-page/hooks/use-task-page-gitlab-fetch'
 import { useTaskPageGitHubNewIssueState } from '@/components/task-page/hooks/use-task-page-github-new-issue-state'
 import { useTaskPageSessionResume } from '@/components/task-page/hooks/use-task-page-session-resume'
@@ -1011,6 +1016,46 @@ export default function TaskPage(): React.JSX.Element {
     settings
   })
 
+  const {
+    kanbanStatus,
+    setKanbanStatus,
+    kanbanFilter,
+    setKanbanFilter,
+    kanbanResult,
+    setKanbanResult,
+    kanbanLoading,
+    setKanbanLoading,
+    setKanbanLoadError,
+    kanbanRefreshNonce,
+    setKanbanRefreshNonce,
+    kanbanSelectedTaskId,
+    setKanbanSelectedTaskId,
+    setKanbanDetail,
+    setKanbanDetailLoading,
+    setKanbanDetailError,
+    kanbanConnectOpen,
+    setKanbanConnectOpen,
+    displayedKanbanTasks,
+    kanbanListLoadState,
+    kanbanDetailState
+  } = useTaskPageKanbanListState()
+
+  const { refreshKanban } = useTaskPageKanbanFetch({
+    taskSource,
+    kanbanStatus,
+    setKanbanStatus,
+    kanbanFilter,
+    kanbanRefreshNonce,
+    setKanbanRefreshNonce,
+    setKanbanResult,
+    setKanbanLoading,
+    setKanbanLoadError,
+    kanbanSelectedTaskId,
+    setKanbanDetail,
+    setKanbanDetailLoading,
+    setKanbanDetailError
+  })
+
   useTaskPageSessionResume({
     persistedUIReady,
     settings,
@@ -1316,6 +1361,7 @@ export default function TaskPage(): React.JSX.Element {
       !newLinearIssueOpen &&
       !linearConnectOpen &&
       !jiraConnectOpen &&
+      !kanbanConnectOpen &&
       activeModal === 'none',
     'tasks_open'
   )
@@ -2704,6 +2750,13 @@ export default function TaskPage(): React.JSX.Element {
     jiraProjectsLoading,
     jiraLoading
   }
+  const kanbanFilters: TaskPageKanbanFiltersProps = {
+    kanbanFilter,
+    setKanbanFilter,
+    lanes: kanbanResult?.lanes ?? [],
+    kanbanLoading,
+    refreshKanban
+  }
   const gitlabFilters: TaskPageGitlabFiltersProps = {
     gitlabView,
     setGitlabView,
@@ -2804,6 +2857,18 @@ export default function TaskPage(): React.JSX.Element {
     displayedJiraStatusOrder,
     closeTaskDetailPage,
     jiraDetailSourceContext
+  }
+  const kanbanList: KanbanTaskListHostProps = {
+    listLoadState: kanbanListLoadState,
+    detailState: kanbanDetailState,
+    displayedKanbanTasks,
+    onOpenDetail: (task: KanbanTaskSummary) => setKanbanSelectedTaskId(task.id),
+    onStartWorkspace: (task: KanbanTaskSummary) => setKanbanSelectedTaskId(task.id),
+    onRetry: refreshKanban,
+    onReconnect: () => setKanbanConnectOpen(true),
+    onCloseDetail: () => setKanbanSelectedTaskId(null),
+    onConnect: () => setKanbanConnectOpen(true),
+    onHideSource: hideTaskSource
   }
   const linearViews: LinearViewsHostProps = {
     selectedLinearIssue,
@@ -3057,7 +3122,10 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearWorkspace,
     handleLinearAccessConnected,
     jiraConnectOpen,
-    setJiraConnectOpen
+    setJiraConnectOpen,
+    kanbanConnectOpen,
+    setKanbanConnectOpen,
+    handleKanbanAccessConnected: refreshKanban
   }
 
   return (
@@ -3083,6 +3151,9 @@ export default function TaskPage(): React.JSX.Element {
       gitlabList={gitlabList}
       jiraList={jiraList}
       linearViews={linearViews}
+      kanbanConnected={kanbanStatus.connected === true}
+      kanbanFilters={kanbanFilters}
+      kanbanList={kanbanList}
       newGithubIssue={newGithubIssue}
       newLinearProject={newLinearProject}
       newLinearIssue={newLinearIssue}
