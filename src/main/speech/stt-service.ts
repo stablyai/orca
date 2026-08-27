@@ -1,13 +1,12 @@
 /* eslint-disable max-lines -- Why: speech worker ownership, warm reuse, and
-timeout teardown must stay co-located so dictation lifecycle state cannot drift. */
+timeout teardown stay co-located so dictation lifecycle state cannot drift. */
 import { Worker } from 'node:worker_threads'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
 import { getCatalogModel } from './model-catalog'
 import type { ModelManager } from './model-manager'
 import { OpenAiTranscriptionSession } from './openai-transcription-client'
 import { readOpenAiSpeechApiKey } from './openai-api-key-store'
+import { getSherpaModulePath, getSttWorkerPath } from './stt-worker-paths'
+import { waitForSttWorkerStop, type SttWorkerStopOutcome } from './stt-worker-stop'
 
 export const START_DICTATION_TIMEOUT_MS = 60_000
 const STOP_DICTATION_TIMEOUT_MS = 60_000
@@ -27,8 +26,6 @@ type StopInFlight = {
   owner: string
   promise: Promise<void>
 }
-
-type StopOutcome = 'stopped' | 'error' | 'exit' | 'timeout'
 
 export class SttService {
   private worker: Worker | null = null
@@ -164,8 +161,8 @@ export class SttService {
       throw new Error(`Model not ready: ${modelState.status}`)
     }
 
-    const workerPath = this.getWorkerPath()
-    const sherpaModulePath = this.getSherpaModulePath()
+    const workerPath = getSttWorkerPath()
+    const sherpaModulePath = getSherpaModulePath()
 
     this.worker = new Worker(workerPath, {
       workerData: { sherpaModulePath }
@@ -384,81 +381,37 @@ export class SttService {
   }
 
   private createStopPromise(worker: Worker, capturedSink: SttEventSink | null): Promise<void> {
-    return new Promise<void>((resolve) => {
-      let settled = false
-      let receivedStopped = false
-      let timeout: ReturnType<typeof setTimeout> | null = null
-
-      const cleanup = (): void => {
-        if (timeout) {
-          clearTimeout(timeout)
-          timeout = null
-        }
-        worker.off('message', onStopped)
-        worker.off('error', onError)
-        worker.off('exit', onExit)
-      }
-
-      const finish = (outcome: StopOutcome): void => {
-        if (settled) {
-          return
-        }
-        settled = true
-        cleanup()
-        if (outcome === 'stopped') {
-          if (this.worker === worker) {
-            this.activeOwner = null
-            this.eventSink = null
-            this.scheduleIdleTeardown()
-          }
-          resolve()
-          return
-        }
-
-        if (!receivedStopped) {
-          capturedSink?.({ type: 'stopped' })
-        }
-        // Why: a worker that cannot finish dictation is no longer reusable; drop
-        // its lifecycle listeners so a stale worker can't retain this service.
-        this.cleanupActiveWorkerLifecycleListeners()
-        worker.removeAllListeners()
-        if (outcome !== 'exit') {
-          void worker.terminate().catch(() => undefined)
-        }
-        if (this.worker === worker) {
-          this.worker = null
-          this.activeModelId = null
-          this.activeHotwordsFilePath = undefined
-          this.activeOwner = null
-          this.eventSink = null
-        }
-        resolve()
-      }
-
-      const onStopped = (msg: { type: string; text?: string; error?: string }) => {
-        if (msg.type === 'stopped') {
-          receivedStopped = true
-          finish('stopped')
-        }
-      }
-
-      const onError = (): void => {
-        finish('error')
-      }
-
-      const onExit = (): void => {
-        finish('exit')
-      }
-
-      timeout = setTimeout(() => {
-        finish('timeout')
-      }, STOP_DICTATION_TIMEOUT_MS)
-      timeout.unref?.()
-
-      worker.on('message', onStopped)
-      worker.on('error', onError)
-      worker.on('exit', onExit)
+    return waitForSttWorkerStop({
+      worker,
+      capturedSink,
+      timeoutMs: STOP_DICTATION_TIMEOUT_MS,
+      finish: (outcome) => this.finishWorkerStop(worker, outcome)
     })
+  }
+
+  private finishWorkerStop(worker: Worker, outcome: SttWorkerStopOutcome): void {
+    if (outcome === 'stopped') {
+      if (this.worker === worker) {
+        this.activeOwner = null
+        this.eventSink = null
+        this.scheduleIdleTeardown()
+      }
+      return
+    }
+    // Why: a worker that cannot finish dictation is no longer reusable; drop
+    // its lifecycle listeners so a stale worker can't retain this service.
+    this.cleanupActiveWorkerLifecycleListeners()
+    worker.removeAllListeners()
+    if (outcome !== 'exit') {
+      void worker.terminate().catch(() => undefined)
+    }
+    if (this.worker === worker) {
+      this.worker = null
+      this.activeModelId = null
+      this.activeHotwordsFilePath = undefined
+      this.activeOwner = null
+      this.eventSink = null
+    }
   }
 
   isActive(): boolean {
@@ -479,13 +432,6 @@ export class SttService {
         throw new Error('voice_model_in_use')
       }
     }
-  }
-
-  private getWorkerPath(): string {
-    if (getAppEnvironment().isPackaged()) {
-      return join(process.resourcesPath, 'app.asar', 'out', 'main', 'stt-worker.js')
-    }
-    return join(__dirname, 'stt-worker.js')
   }
 
   private clearIdleTeardownTimer(): void {
@@ -551,28 +497,5 @@ export class SttService {
     const cleanup = this.cleanupWorkerLifecycleListeners
     this.cleanupWorkerLifecycleListeners = null
     cleanup?.()
-  }
-
-  private getSherpaModulePath(): string {
-    // Why: the main sherpa-onnx npm package uses WASM, which cannot access
-    // the host filesystem to load model files. The platform-specific native
-    // addon (e.g. sherpa-onnx-darwin-arm64) has direct filesystem access
-    // and better performance. We resolve its absolute path here because
-    // the worker runs from out/main/ where bare require() can't find it.
-    const nativePkg =
-      process.platform === 'win32' && process.arch === 'x64'
-        ? 'sherpa-onnx-win-x64'
-        : `sherpa-onnx-${process.platform}-${process.arch}`
-
-    if (getAppEnvironment().isPackaged()) {
-      const resourcesNodeModule = join(process.resourcesPath, 'node_modules', nativePkg)
-      if (existsSync(resourcesNodeModule)) {
-        return resourcesNodeModule
-      }
-      return join(process.resourcesPath, 'app.asar.unpacked', 'node_modules', nativePkg)
-    }
-
-    const resolved = require.resolve(nativePkg)
-    return join(resolved, '..')
   }
 }
