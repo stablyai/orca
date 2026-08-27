@@ -471,6 +471,46 @@ describe('orchestration RPC methods', () => {
       )
     })
 
+    it('keeps a post-submit stalled worker fenced from an overlapping worker-start', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
+      vi.mocked(runtime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+        new Error('agent_prompt_stalled')
+      )
+      const firstTask = db.createTask({ spec: 'possibly already running' })
+
+      const first = (await call('orchestration.workerStart', {
+        task: firstTask.id,
+        from: 'term_coord',
+        agent: 'codex'
+      })) as { dispatchId: string; state: string; failedStage: string }
+
+      expect(first).toMatchObject({
+        state: 'outcome_unknown',
+        failedStage: 'dispatch_input'
+      })
+      expect(db.getTask(firstTask.id)?.status).toBe('blocked')
+      expect(db.getDispatchContextById(first.dispatchId)).toMatchObject({
+        status: 'pending',
+        capability_revoked_at: null
+      })
+      expect(db.getWorkerDispatch(first.dispatchId)?.state).toBe('start_unknown')
+
+      const overlapTask = db.createTask({ spec: 'must not share the same pane' })
+      const overlap = (await call('orchestration.workerStart', {
+        task: overlapTask.id,
+        from: 'term_coord',
+        terminal: 'term_worker'
+      })) as { state: string; lastError: string }
+
+      expect(overlap).toMatchObject({
+        state: 'failed',
+        lastError: expect.stringContaining('already has an active dispatch')
+      })
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledTimes(1)
+    })
+
     it.each(['codex-update-prompt', 'codex-trust-workspace'] as const)(
       'returns a truthful readiness failure for %s',
       async (blockedReason) => {

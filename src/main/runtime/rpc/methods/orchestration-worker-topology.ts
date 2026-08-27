@@ -2,6 +2,7 @@ import type { AgentLaunchPreferences } from '../../../../shared/agent-session-ho
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
+import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
 
 export type WorkerEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
@@ -272,6 +273,9 @@ export function isUnknownWorkerStartOutcome(error: unknown, stage: string): bool
       ? (error as { code: string }).code
       : ''
   if (code === 'operation_unknown') {
+    return true
+  }
+  if (stage === 'dispatch_input' && isAgentPromptStalledError(error)) {
     return true
   }
   if (stage !== 'worktree_create') {

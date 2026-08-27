@@ -15,6 +15,8 @@ function activity(overrides: Partial<AgentPromptActivity> = {}): AgentPromptActi
     workingSequence: 4,
     explicitWorkingStartedAt: null,
     outputSequence: 7,
+    visibleOutputFingerprint: 'screen-a',
+    outputUpdatedAt: 0,
     status: 'idle',
     ...overrides
   }
@@ -186,7 +188,11 @@ describe('agent prompt submission verification', () => {
       readActivity: () => current
     })
 
-    current = activity({ status: 'working', outputSequence: 8 })
+    current = activity({
+      status: 'working',
+      outputSequence: 8,
+      visibleOutputFingerprint: 'screen-b'
+    })
     await vi.advanceTimersByTimeAsync(50)
 
     await expect(verification).resolves.toBeUndefined()

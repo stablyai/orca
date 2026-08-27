@@ -8,6 +8,7 @@ export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 5_000
 // (30s, src/relay/dispatcher.ts), the budget a paired client's submission runs under.
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = 15_000
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
+const AGENT_PROMPT_OUTPUT_SETTLE_MS = 50
 
 const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
 
@@ -23,6 +24,9 @@ export type AgentPromptActivity = Readonly<{
   explicitWorkingStartedAt: number | null
   /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
   outputSequence: number
+  /** The generic terminal model's visible text, so repainting the same frame is not a receipt. */
+  visibleOutputFingerprint: string
+  outputUpdatedAt: number | null
   status: 'working' | 'permission' | 'idle' | null
 }>
 
@@ -108,7 +112,13 @@ function observedDeliveryEvidence(
   baseline: AgentPromptActivity,
   current: AgentPromptActivity
 ): boolean {
-  return baseline.status === 'working' && current.outputSequence > baseline.outputSequence
+  return (
+    baseline.status === 'working' &&
+    current.outputSequence > baseline.outputSequence &&
+    current.visibleOutputFingerprint !== baseline.visibleOutputFingerprint &&
+    current.outputUpdatedAt !== null &&
+    Date.now() - current.outputUpdatedAt >= AGENT_PROMPT_OUTPUT_SETTLE_MS
+  )
 }
 
 function assertSamePromptGeneration(

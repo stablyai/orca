@@ -21,12 +21,10 @@ describe('worker start outcome classification', () => {
     expect(isUnknownWorkerStartOutcome(new Error('worktree exists'), 'worktree_create')).toBe(false)
   })
 
-  // Why: a stalled prompt still reports a definite failure to the caller — the correction path is
-  // the worker's own report, which keeps its capability and can re-settle the dispatch (see
-  // worker-start-unobserved-prompt-settlement.test.ts), not an outcome_unknown receipt.
-  it('does not class a stalled dispatch prompt as unknown', () => {
+  // Enter was already written, so a missing turn-start observation cannot prove failure.
+  it('classes a stalled dispatch prompt as unknown', () => {
     expect(isUnknownWorkerStartOutcome(new Error('agent_prompt_stalled'), 'dispatch_input')).toBe(
-      false
+      true
     )
   })
 })

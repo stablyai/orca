@@ -55,6 +55,7 @@ export function settleWorkerReportInTransaction(
 
   const expectedDispatchStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
   const expectedTaskStatus = params.outcome === 'succeeded' ? 'completed' : 'failed'
+  const reportingWorker = this.getWorkerDispatch(params.dispatchId)
   // Why (#16095): worker-start records a stalled prompt as failed, but the preamble was written
   // before verification ran — the worker may have been executing it the whole time. Its own report
   // is first-hand evidence and must be able to correct that record instead of being thrown away.
@@ -64,6 +65,13 @@ export function settleWorkerReportInTransaction(
     dispatch.status === 'failed' &&
     dispatch.last_failure === AGENT_PROMPT_STALLED_ERROR &&
     task.status === 'failed'
+  const ambiguousPostSubmit =
+    dispatch.status === 'pending' &&
+    task.status === 'blocked' &&
+    reportingWorker?.state === 'start_unknown' &&
+    reportingWorker.stage === 'dispatch_input' &&
+    reportingWorker.last_error === AGENT_PROMPT_STALLED_ERROR &&
+    dispatch.capability_revoked_at === null
   if (
     !settledByUnobservedPrompt &&
     dispatch.status === expectedDispatchStatus &&
@@ -71,10 +79,12 @@ export function settleWorkerReportInTransaction(
   ) {
     return { action: 'settled', outcome: params.outcome, duplicate: true }
   }
-  const previous = settledByUnobservedPrompt
-    ? { status: 'failed', workerState: 'failed' }
-    : { status: 'dispatched', workerState: 'ready' }
-  if (dispatch.status !== previous.status || task.status !== previous.status) {
+  const previous = ambiguousPostSubmit
+    ? { dispatchStatus: 'pending', taskStatus: 'blocked', workerState: 'start_unknown' }
+    : settledByUnobservedPrompt
+      ? { dispatchStatus: 'failed', taskStatus: 'failed', workerState: 'failed' }
+      : { dispatchStatus: 'dispatched', taskStatus: 'dispatched', workerState: 'ready' }
+  if (dispatch.status !== previous.dispatchStatus || task.status !== previous.taskStatus) {
     return {
       action: 'rejected',
       code: 'inactive_dispatch',
@@ -99,7 +109,6 @@ export function settleWorkerReportInTransaction(
       reason: `Task ${params.taskId} still has active supervised Dispatch ${conflictingWorker.id}; stop or settle it before completing ${params.dispatchId}.`
     }
   }
-  const reportingWorker = this.getWorkerDispatch(params.dispatchId)
   const latest = getActiveDispatchForTask(this, params.taskId)
   if (!reportingWorker && latest?.id !== params.dispatchId) {
     return {
@@ -129,7 +138,7 @@ export function settleWorkerReportInTransaction(
       expectedDispatchStatus,
       params.result,
       params.dispatchId,
-      previous.status
+      previous.dispatchStatus
     )
   const taskUpdate = this.db
     .prepare(
@@ -137,7 +146,7 @@ export function settleWorkerReportInTransaction(
        SET status = ?, result = ?, completed_at = datetime('now')
        WHERE id = ? AND status = ?`
     )
-    .run(expectedTaskStatus, params.result, params.taskId, previous.status)
+    .run(expectedTaskStatus, params.result, params.taskId, previous.taskStatus)
   if (dispatchUpdate.changes !== 1 || taskUpdate.changes !== 1) {
     this.db.exec('ROLLBACK TO settle_worker_report')
     this.db.exec('RELEASE settle_worker_report')

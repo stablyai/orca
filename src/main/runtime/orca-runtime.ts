@@ -17566,6 +17566,16 @@ export class OrcaRuntimeService {
       return
     }
 
+    const worker = isDeliberateTerminalExit(cause)
+      ? this._orchestrationDb.getWorkerDispatch(dispatch.id)
+      : undefined
+    if (worker && ['stopping', 'stop_unknown'].includes(worker.state)) {
+      // The close event is the durable proof a prior worker-stop receipt lacked; it may arrive
+      // after that RPC returned, so settle both in-flight and already-unknown local stops.
+      this._orchestrationDb.settleWorkerStop(dispatch.id)
+      return
+    }
+
     const errorContext = describeTerminalExitCause(cause)
     const settled = this._orchestrationDb.failDispatch(dispatch.id, errorContext, {
       workerProcessExited: true,
@@ -20100,13 +20110,18 @@ export class OrcaRuntimeService {
       // otherwise pass off an in-progress turn as a new one.
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
       outputSequence: this.getPtyOutputSequence(ptyId),
+      visibleOutputFingerprint:
+        this.headlessTerminals.get(ptyId)?.emulator.getVisibleLines().join('\n') ?? '',
+      outputUpdatedAt: this.ptysById.get(ptyId)?.lastOutputAt ?? null,
       status
     }
   }
 
   private getPtyAgent(ptyId: string): TuiAgent | null {
     const pty = this.ptysById.get(ptyId)
-    return pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    // A reused pane can outlive its original launcher; a positively refreshed foreground owner is
+    // current execution evidence and therefore outranks stale launch metadata.
+    return pty?.foregroundAgent ?? pty?.launchAgent ?? null
   }
 
   private assertAgentPromptPermissionSafe(
