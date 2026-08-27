@@ -3,6 +3,7 @@ import { contextBridge, ipcRenderer, webFrame, webUtils } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import { preloadE2EConfig } from './e2e-config'
 import { glApi } from './gitlab'
+import { createKanbanApi } from './api/kanban-api'
 import type {
   SkillDeletePlan,
   SkillDeleteRequest,
@@ -2073,6 +2074,8 @@ const api = {
       siteId?: string
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
+
+  kanban: createKanbanApi(ipcRenderer) satisfies PreloadApi['kanban'],
 
   starNag: {
     onShow: (
