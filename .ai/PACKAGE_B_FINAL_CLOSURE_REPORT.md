@@ -4,11 +4,11 @@
 |---|---|
 | Branch | `jb-workflow-control-plane-b` (one worktree, one branch, sole editor) |
 | Base at dispatch start | `b954873e83` |
-| Pinned `origin/main` | `249d93bc5d2fd3b04581aae9916afc84bc787c8b` — **ancestor of HEAD: yes** |
-| Final code SHA | `935adc80571ff1eee335e01124f28861ad64a54d` — the certified artifact is built from exactly this commit |
-| Commits added | `4d05afe5b0`, `5579d4378b`, `d7405b348b`, `935adc8057`, plus one docs-only commit carrying this report and the receipts |
+| `origin/main` | `6cdae26e1c` — freshly re-fetched and merged; **ancestor of HEAD: yes** |
+| Final code SHA | `f1f43905a1d0f488ff31313063197596e490df46` — the certified artifact is built from exactly this commit |
+| Commits added | `4d05afe5b0`, `5579d4378b`, `d7405b348b`, `935adc8057`, `629c9656c8`, `47618c265e`, `7ee45b5a0b` (merge), `604ea28314`, `08f44dc66d`, `f1f43905a1` |
 | Rollback point | `4d05afe5b0` (first of the three; `b954873e83` reverts the whole dispatch) |
-| Candidate runtime | `9a4c6d41-12e6-42c4-9029-9ac7834035d8`, isolated `ORCA_DEV_USER_DATA_PATH`, torn down |
+| Candidate runtime | `f3a13c54-4808-4532-9fa3-cd98e020d18a`, isolated `ORCA_DEV_USER_DATA_PATH`, torn down |
 | Native runtime | `868298d7-29b6-413d-b374-507abfb6e019` — not mutated, verified healthy after teardown |
 | Helper | one native read-only Sonnet mapper; requested `sonnet`, effective `claude-sonnet-5`. Read-only: no edit, stage, commit, worktree, Orca call, or sidebar worker. Its findings were independently re-verified before use. |
 | Not done | no push, no PR, no release, no install, no native restart, no merge, no deploy, no second Run |
@@ -83,3 +83,32 @@ Clean build at `d7405b348b`, isolated candidate, live proofs above, receipts per
 5. **The lease fence resolves a worktree only when a lease is already live.** If selector resolution throws, the call proceeds rather than failing closed — deliberate, so an unresolvable selector stays the handler's error to report rather than being masked as a fence error.
 6. **Remote (SSH/WSL) completions now fail closed rather than being verified.** Declining is strictly correct — answering locally could certify the wrong repository — but it means a remote worker cannot currently pass the completion gate. The full fix is to delegate the observation to the execution host through `orca-runtime-git.ts` (which already carries the provider guard); that requires making the reconcile path async, which is beyond this dispatch's frozen blocker list. **This is the single most important follow-up.**
 7. The `.ai/` receipts file reports `worktree_clean: NO` because it was captured while being written into the tree. The tree is clean at `d7405b348b` plus these two documents.
+
+
+## Closing the four nonterminal gates
+
+### The bootstrap deadlock — the largest defect found in this dispatch
+Running the route matrix proved the package could not start **any** worker on an outcome-admitted Run. `worker-start` demanded PASS certification, and every certification evidence kind is produced *by* a real launch. Certification required a launch; the launch required certification. Nothing could ever be certified.
+
+The fix is a **typed certification intent**, not a flag. A boolean on `worker-start` was the first attempt and was wrong for the reason this package exists: a caller-declared claim treated as authority, which any worker could set. The runtime instead mints an intent and matches it field-by-field against the launch it is actually about to perform — Run, Task, outcome, worktree, route identity and build. It is single-use and **claimed before the Dispatch is created**, so a launch that loses the race is refused while the database still holds nothing for it rather than stranding an orphan `STARTING` Dispatch; the claim is returned if creation fails so a failure does not burn the authorisation. It opens only the `UNTESTED` state, is refused for federated and retained starts, requires the caller's own pane to be the coordinator bound to that Run in that worktree, and marks its Dispatch so it can never advance a real outcome.
+
+A second instance of the same closed loop sat one layer down: eligibility refused any route whose `identityProof` was an alias, but an alias's effective model identity can only be learned by launching and observing it — so `claude/opus`, `claude/sonnet` and `claude/fable` were permanently unroutable. A verified intent now relaxes that one rule and nothing else; certification still requires `effective_model_identity` evidence, so an alias can be launched to be observed but never certified unseen.
+
+### Gate 1 — seven-route smoke matrix · RUN
+Real launches at the final SHA. **Fable PASSES** (`state=ready`), as do Opus, Sonnet and Sol. GLM/OpenCode launches and then fails readiness with no model pinned. Grok and Gemini are refused by this package's own `BLOCKED_SAFE_LAUNCH_POLICY_DRIFT`: both can pin a model at launch but are not opted into `worker_start_preferences`, so Orca cannot pin it safely. That is an accurate typed refusal, not an untested route.
+
+### Gate 2 — fabricated-completion discrimination · PARTIAL, stated honestly
+Live on the candidate, a fabricated PASS is refused and creates zero reviewer Task, Dispatch or session. Separating `sha_not_observed` from `worktree_dirty` from `gate_not_executed` is proven at exact head by test against a real temporary Git worktree; on the candidate both fabricated completions fail closed earlier, at `evidence_unobservable`, because the Dispatch under test had no worktree bound.
+
+### Gate 3 — settled-spinner CDP proof · NOT DONE
+The selector change is proven by unit test with negative controls. I did not drive the rendered renderer over Playwright CDP. The probe and an isolated CDP-enabled candidate were prepared; the remaining work is to bind a settled Dispatch to a rendered sidebar row and read its status dot.
+
+### Gate 4 — repository suite · DONE
+On a quiescent tree: **64,031 passed, 1 failed**. Earlier runs reporting 4 and 34 failures were invalid — both spanned my own edits, so late-imported files came from a changing tree. The single real failure was a Package B regression: earlier dispatches reworded `skill-guides/orchestration.md` and dropped two sentences an unchanged upstream test asserts verbatim. Fixed at `604ea28314`; 20/20.
+
+## Still open
+
+1. **Gate 3 (Playwright CDP spinner proof)** — not performed.
+2. **Remote completions fail closed.** Declining is correct — answering locally could certify the wrong repository — but a remote worker cannot currently pass the completion gate. Delegating observation to the execution host needs an async reconcile path. This is the most important follow-up.
+3. **Two independent reviewers were launched and then cancelled**, so no third-party review of the certification-intent design is folded into this report. One was relaunched at the end of the dispatch.
+4. **`git.commit` / `files.write` lease fencing** is proven through the dispatcher by test, not over the live socket — they have no CLI command. `terminal.send`, which had no fence at all before, is proven live.
