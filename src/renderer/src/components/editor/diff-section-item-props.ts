@@ -2,6 +2,7 @@ import type { Dispatch, MutableRefObject, ReactNode, SetStateAction } from 'reac
 import type { editor as monacoEditor } from 'monaco-editor'
 import type { DecoratedDiffComment } from '../diff-comments/decorated-diff-comment'
 import type { DiffSection } from './diff-section-types'
+import type { EditorColorThemeValue } from '@/lib/editor-theme'
 
 export type DiffSectionItemProps = {
   section: DiffSection
@@ -13,6 +14,7 @@ export type DiffSectionItemProps = {
     terminalFontSize?: number
     terminalFontFamily?: string
     diffWordWrap?: boolean
+    editorColorTheme?: EditorColorThemeValue
   } | null
   sectionHeight: number | undefined
   worktreeId?: string

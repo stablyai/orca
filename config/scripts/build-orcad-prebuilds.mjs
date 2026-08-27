@@ -132,12 +132,16 @@ function compileNodePty(dir) {
     return built
   }
   console.log('[orcad-prebuilds] compiling node-pty from patched source ...')
-  const result = spawnSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['node-gyp', 'rebuild'], {
-    cwd: dir,
-    stdio: 'inherit',
-    env: process.env,
-    windowsHide: true
-  })
+  const result = spawnSync(
+    process.platform === 'win32' ? 'npx.cmd' : 'npx',
+    ['node-gyp', 'rebuild'],
+    {
+      cwd: dir,
+      stdio: 'inherit',
+      env: process.env,
+      windowsHide: true
+    }
+  )
   if (result.status !== 0) {
     throw new Error(`[orcad-prebuilds] node-gyp rebuild failed (status ${result.status})`)
   }

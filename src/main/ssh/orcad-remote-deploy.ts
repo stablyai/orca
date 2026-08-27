@@ -32,10 +32,7 @@ import {
   type OrcadActivationRecord,
   type OrcadStateSnapshot
 } from './orcad-activation-record'
-import {
-  orcadActivationPath,
-  readOrcadActivationRecord
-} from './orcad-activation-record-store'
+import { orcadActivationPath, readOrcadActivationRecord } from './orcad-activation-record-store'
 import { evaluateOrcadActivation, type OrcadActivationVerdict } from './orcad-activation-gate'
 import { planOrcadUpdate, type OrcadTerminalCensus } from './orcad-update-plan'
 import {
@@ -111,9 +108,11 @@ async function installOrcadBundle(
   fullVersion: string,
   remoteDir: string
 ): Promise<void> {
-  if (await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
-    signal: options.signal
-  })) {
+  if (
+    await isRemoteInstallComplete(options.conn, ORCAD_INSTALL_MODEL, remoteDir, options.host, {
+      signal: options.signal
+    })
+  ) {
     return
   }
   await acquireInstallLock(options.conn, remoteDir, options.host, { signal: options.signal })
@@ -151,7 +150,12 @@ async function captureSnapshot(
   takenAt: Date
 ): Promise<OrcadStateSnapshot | null> {
   const dirName = orcadSnapshotDirName(fullVersion, takenAt.getTime())
-  const snapshotDir = joinRemotePath(options.host, baseDir(options), ORCAD_STATE_SNAPSHOT_DIR, dirName)
+  const snapshotDir = joinRemotePath(
+    options.host,
+    baseDir(options),
+    ORCAD_STATE_SNAPSHOT_DIR,
+    dirName
+  )
   const capture = parseOrcadSnapshotCapture(
     await exec(
       options,
@@ -287,9 +291,12 @@ export async function deployOrcad(options: OrcadDeployOptions): Promise<OrcadDep
       record.active
     )
     const stopped = parseOrcadStopOutcome(
-      await exec(options, stopOrcadCommand(options.host, outgoingDir, {
-        waitSeconds: STOP_WAIT_SECONDS
-      }))
+      await exec(
+        options,
+        stopOrcadCommand(options.host, outgoingDir, {
+          waitSeconds: STOP_WAIT_SECONDS
+        })
+      )
     )
     if (!orcadStopFreedTheHost(stopped)) {
       return {
