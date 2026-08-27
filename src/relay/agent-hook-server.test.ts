@@ -56,7 +56,7 @@ describe('RelayAgentHookServer', () => {
           'X-Orca-Agent-Hook-Token': token,
           'X-Orca-Agent-Hook-Meta-Encoding': 'base64',
           'X-Orca-Agent-Hook-Meta': Buffer.from(
-            [PANE_KEY, 'tab-1', '', 'wt-1', 'remote', '1'].join('\0')
+            [PANE_KEY, 'tab-1', '', 'wt-1', 'remote', '1'].join('\x1f')
           ).toString('base64')
         },
         body: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hi' })

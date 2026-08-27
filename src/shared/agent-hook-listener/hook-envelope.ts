@@ -55,7 +55,8 @@ function readPackedHookMetadata(
   if (decoded === undefined) {
     return null
   }
-  const fields = decoded.split('\0')
+  // POSIX command substitution strips NUL bytes, so use the shell-safe unit separator.
+  const fields = decoded.split('\x1f')
   if (fields.length !== 6 || !fields[0]) {
     return null
   }

@@ -56,7 +56,7 @@ describe('AgentHookServer listener replay', () => {
           'X-Orca-Agent-Hook-Token': env.ORCA_AGENT_HOOK_TOKEN,
           'X-Orca-Agent-Hook-Meta-Encoding': 'base64',
           'X-Orca-Agent-Hook-Meta': Buffer.from(
-            [PANE, 'tab-1', '', 'wt-1', 'production', ''].join('\0')
+            [PANE, 'tab-1', '', 'wt-1', 'production', ''].join('\x1f')
           ).toString('base64')
         },
         body: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'raw JSON' })

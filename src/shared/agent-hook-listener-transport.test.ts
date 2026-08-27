@@ -43,7 +43,7 @@ function expectRequestParserListenersReleased(req: FakeIncomingMessage): void {
 describe('shared agent-hook-listener', () => {
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
   const b64 = (value: string): string => Buffer.from(value, 'utf8').toString('base64')
-  const packedMetadata = (...values: string[]): string => b64(values.join('\0'))
+  const packedMetadata = (...values: string[]): string => b64(values.join('\x1f'))
 
   afterEach(() => {
     clearGrokSessionPathLookupCacheForTests()
