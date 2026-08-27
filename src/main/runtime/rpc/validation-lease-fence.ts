@@ -1,4 +1,7 @@
-import { ControlPlaneStore } from '../orchestration/control-plane/control-plane-store'
+import {
+  ControlPlaneStore,
+  type ControlPlaneDatabaseHandle
+} from '../orchestration/control-plane/control-plane-store'
 import { assertMutationAllowed } from '../orchestration/control-plane/validation-lease'
 import { validationScopeKeyForWorktree } from '../orchestration/control-plane/validation-scope'
 import type { OrcaRuntimeService } from '../orca-runtime'
@@ -96,20 +99,24 @@ export async function assertNotFencedByValidationLease(
   if (!LEASE_FENCED_METHODS.has(method) || !params || typeof params !== 'object') {
     return
   }
-  // Why resolve the selector only after a lease is known to exist: resolution
-  // costs a runtime lookup on every mutating call, and no lease is the norm.
-  // A runtime with no orchestration database has no leases and no fence.
-  let store: ControlPlaneStore
+  // A runtime with no orchestration database holds no leases, so there is
+  // nothing to fence. This is the only fail-open: everything past it either
+  // proves the tree is unleased or refuses.
+  let db: ControlPlaneDatabaseHandle | null
   try {
-    const db = runtime.getOrchestrationDb()
-    if (!db) {
-      return
-    }
-    store = new ControlPlaneStore(db)
-    if (!store.hasAnyActiveValidationLease(new Date(nowMs ?? Date.now()).toISOString())) {
-      return
-    }
+    db = runtime.getOrchestrationDb()
   } catch {
+    return
+  }
+  if (!db) {
+    return
+  }
+  // Why not inside the try above: a store or probe failure means we cannot tell
+  // whether a lease is held, and "could not check" must never read as "clear".
+  const store = new ControlPlaneStore(db)
+  // Why probe before resolving the selector: resolution costs a runtime lookup
+  // on every mutating call, and no lease at all is the overwhelmingly common case.
+  if (!store.hasAnyActiveValidationLease(new Date(nowMs ?? Date.now()).toISOString())) {
     return
   }
   const worktreeId = await targetWorktreeId(runtime, params as FenceableParams)

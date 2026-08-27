@@ -112,3 +112,58 @@ describe('MUTATION_UNDER_A_RUNNING_GATE', () => {
     expect(reads.filter((method) => LEASE_FENCED_METHODS.has(method))).toEqual([])
   })
 })
+
+/** "COULD NOT CHECK" MUST NEVER READ AS "CLEAR" — the fence originally wrapped
+ *  the whole lookup in one catch, so any database error silently disabled it
+ *  and every mutation sailed through. Only "this runtime has no orchestration
+ *  database at all" is a legitimate reason to skip the check. */
+describe('the lease fence fails open only when there is nothing to fence', () => {
+  const request = {
+    id: 'r',
+    authToken: 't',
+    method: 'git.commit',
+    params: { worktree: 'id:wt-1', message: 'probe' }
+  }
+
+  function dispatcherWith(getOrchestrationDb: () => unknown) {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      getOrchestrationDb,
+      showManagedTerminalWorkspace: async (s: string) => ({ id: s.slice(3) }),
+      commitRuntimeGit: async () => ({ ok: true })
+    } as unknown as OrcaRuntimeService
+    return new RpcDispatcher({ runtime, methods: [...GIT_METHODS] })
+  }
+
+  // These assert only that the FENCE did not fire; the mock runtime is too thin
+  // for the handler itself to succeed, and that is not what is under test.
+  const fenced = (response: { ok: boolean; error?: { code?: string } }) =>
+    response.ok === false && response.error?.code === 'validation_in_progress'
+
+  it('skips the fence when the runtime has no orchestration database', async () => {
+    expect(fenced(await dispatcherWith(() => null).dispatch(request))).toBe(false)
+  })
+
+  it('skips the fence when asking for the database throws', async () => {
+    const dispatcher = dispatcherWith(() => {
+      throw new Error('orchestration disabled')
+    })
+    expect(fenced(await dispatcher.dispatch(request))).toBe(false)
+  })
+
+  it('does NOT wave the mutation through when the lease probe itself fails', async () => {
+    // A database that exists but cannot answer proves nothing about leases, so
+    // "could not check" must not read as "clear".
+    const broken = {
+      db: {
+        exec: () => undefined,
+        prepare: () => {
+          throw new Error('db is sick')
+        }
+      }
+    }
+    const response = await dispatcherWith(() => broken).dispatch(request)
+    expect(response.ok).toBe(false)
+    expect(response.error?.message).toContain('db is sick')
+  })
+})
