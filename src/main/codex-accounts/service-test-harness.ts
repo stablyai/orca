@@ -135,6 +135,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
+    glmCodingPlanUsage: null,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
     confirmClosePinnedTab: true,
