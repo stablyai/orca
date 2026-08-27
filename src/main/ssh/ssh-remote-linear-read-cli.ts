@@ -3,7 +3,7 @@ import {
   clampLinearIssueDepth,
   clampLinearSearchLimit,
   type LinearIssueInclude
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
 import type { RpcDispatcher } from '../runtime/rpc/dispatcher'
 import type { RpcResponse } from '../runtime/rpc/core'
 import { RemoteCliArgumentError, type ParsedRemoteCli } from './ssh-remote-cli-argument-error'

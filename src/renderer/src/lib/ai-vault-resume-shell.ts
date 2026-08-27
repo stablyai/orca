@@ -4,11 +4,9 @@ import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { resolveLocalWindowsTerminalShellOverrideForTab } from '../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../shared/windows-terminal-shell'
 import {
-  resolveLoginShellStartupDialect,
   resolveStartupShell,
   type AgentStartupShell
 } from '../../../shared/tui-agent-startup-shell'
-import { getClientLoginShell } from '@/lib/client-login-shell'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { parseWslUncPath } from '../../../shared/wsl-paths'
 
@@ -28,19 +26,12 @@ export function resolveAiVaultResumeStartupShell(args: {
   worktreeId?: string | null
   platform: NodeJS.Platform
   isLocalSession: boolean
-  /**
-   * True only when this machine's own login shell parses the command. A local
-   * session is NOT enough: a locally scanned session carries no executionHostId
-   * yet can target an SSH/runtime/WSL worktree, whose shell is unrelated.
-   */
-  parsedByClientLoginShell?: boolean
 }): AgentStartupShell {
-  // Why: fish rejects `unset`, so the client's login shell decides the dialect —
-  // but only when it is the shell that reads the line; otherwise it stays sh.
+  // Why no login-shell probe: everything this command is built from — quoting
+  // and env clearing — is emitted in a form that is correct in sh and fish
+  // alike, so the Unix branch never has to know which one reads the line.
   if (args.platform !== 'win32') {
-    return args.parsedByClientLoginShell
-      ? resolveLoginShellStartupDialect(getClientLoginShell())
-      : 'posix'
+    return 'posix'
   }
   const projectRuntime = args.isLocalSession
     ? getLocalProjectExecutionRuntimeContext(args.state, args.worktreeId, CLIENT_PLATFORM)

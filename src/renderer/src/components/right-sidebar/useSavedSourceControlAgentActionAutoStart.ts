@@ -3,7 +3,9 @@ import type {
   SourceControlActionRecipe,
   SourceControlLaunchActionId
 } from '../../../../shared/source-control-ai-actions'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isSourceControlAgentDetectedAndEnabled } from './source-control-agent-action-dialog-support'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 

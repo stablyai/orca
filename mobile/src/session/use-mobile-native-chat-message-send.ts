@@ -17,7 +17,10 @@ import {
 } from './mobile-native-chat-terminal-write-lock'
 import type { MobileNativeChatSendOrigin } from './use-mobile-native-chat-drafts'
 import type { MobileNativeChatLaunchDraftSeed } from './use-mobile-native-chat-launch-draft-seed'
-import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import {
+  AGENT_TUI_CLEAR_INPUT_LINE,
+  buildAgentTuiClearInputForText
+} from '../../../src/shared/agent-tui-input-clear'
 
 export type MobileNativeChatMessageSend = {
   /** Composer send that syncs the draft (clear on send, restore on rejection). */
@@ -85,12 +88,17 @@ export function useMobileNativeChatMessageSend(args: {
 
   const sendMessage = useCallback(
     async (
-      text: string,
+      draftText: string,
       images: string[] | undefined,
       syncComposer: boolean,
       recordControlSend: boolean,
       sharedDeadline?: number
     ): Promise<MobileNativeChatSendOutcome> => {
+      // The host writes trailing whitespace verbatim onto the agent's input line,
+      // where it can glue the next rapid send onto this one (#14262). Only the
+      // bytes that go out are trimmed: `draftText` is what the user typed, and a
+      // rejected send has to put back exactly that (#14819).
+      const text = draftText.trimEnd()
       const handle = handleRef.current
       const origin = captureSendOrigin(text)
       const agent = agentRef.current
@@ -124,25 +132,24 @@ export function useMobileNativeChatMessageSend(args: {
       // round trip is visible, and a lost ack must not strand the sent prompt
       // in the box. Only a definite rejection puts the text back.
       if (syncComposer) {
-        clearDraftForSend(origin, text)
+        clearDraftForSend(origin, draftText)
       }
-      // Why: a parked launch draft is routinely multi-line, and one Ctrl+U clears
-      // only one logical line. Size the clear to the text Orca injected, with
-      // slack — the user can also have typed into the TUI line directly, so that
-      // line count is a lower bound. Mobile cannot read the agent's screen, so
-      // there is no empty-line observable to confirm against here; the upper
-      // bound plus the host's write acceptance is what makes it safe.
-      //
-      // The burst goes out as its OWN write: bundled into the body write it
-      // arrived as literal Ctrl+U text and the draft concatenated (see
-      // clearMobileNativeChatInput). A rejected clear aborts the send rather
-      // than pasting on top of an uncleared line.
       const seededLaunchDraft = readSeededLaunchDraftSeed()
-      if (seededLaunchDraft && !images?.length) {
+      const classification = classifyMobileNativeChatSend(agent, text)
+      const typesCodexCommand =
+        agent === 'codex' &&
+        classification !== 'chat' &&
+        isSlashCommandDraft(text) &&
+        !images?.length
+      // Keep terminal controls in their own write. When bundled with the body,
+      // a pasted burst can become literal prompt text instead of editing input.
+      if (!images?.length && (seededLaunchDraft || !typesCodexCommand)) {
         const cleared = await clearMobileNativeChatInput({
           client,
           terminal: handle,
-          clearInput: buildAgentTuiClearInputForText(seededLaunchDraft.text),
+          clearInput: seededLaunchDraft
+            ? buildAgentTuiClearInputForText(seededLaunchDraft.text)
+            : AGENT_TUI_CLEAR_INPUT_LINE,
           deadline,
           ...(deviceTokenRef.current
             ? { mobileClient: { id: deviceTokenRef.current, type: 'mobile' } }
@@ -150,13 +157,12 @@ export function useMobileNativeChatMessageSend(args: {
         })
         if (!cleared) {
           if (syncComposer) {
-            restoreRejectedDraft(origin, text)
+            restoreRejectedDraft(origin, draftText)
           }
           onSendError('Message not sent')
           return 'rejected'
         }
       }
-      const classification = classifyMobileNativeChatSend(agent, text)
       const mobileClient = deviceTokenRef.current
         ? { id: deviceTokenRef.current, type: 'mobile' as const }
         : undefined
@@ -164,30 +170,23 @@ export function useMobileNativeChatMessageSend(args: {
         syncComposer && typeof seededLaunchDraft?.createdAt === 'number'
           ? { text: seededLaunchDraft.text, createdAt: seededLaunchDraft.createdAt }
           : undefined
-      const outcome =
-        agent === 'codex' &&
-        classification !== 'chat' &&
-        isSlashCommandDraft(text) &&
-        !images?.length
-          ? await typeMobileNativeChatCommandWithOutcome({
-              client,
-              terminal: handle,
-              command: text,
-              ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
-              ...(mobileClient ? { mobileClient } : {}),
-              deadline
-            })
-          : await sendMobileNativeChatMessageWithOutcome({
-              client,
-              terminal: handle,
-              text,
-              // Why: an image send already cleared before its paste; a second
-              // clear here would wipe the image before submission.
-              clearInputFirst: !images?.length && !seededLaunchDraft,
-              ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
-              deadline,
-              ...(mobileClient ? { mobileClient } : {})
-            })
+      const outcome = typesCodexCommand
+        ? await typeMobileNativeChatCommandWithOutcome({
+            client,
+            terminal: handle,
+            command: text,
+            ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
+            ...(mobileClient ? { mobileClient } : {}),
+            deadline
+          })
+        : await sendMobileNativeChatMessageWithOutcome({
+            client,
+            terminal: handle,
+            text,
+            ...(resolvedLaunchDraft ? { resolvedLaunchDraft } : {}),
+            deadline,
+            ...(mobileClient ? { mobileClient } : {})
+          })
       // Why (desktop parity): a slash/skill send dispatches into the agent's own
       // TUI, not the conversation — the transcript never echoes it as a user
       // turn, so an optimistic bubble would never reconcile and the
@@ -204,7 +203,7 @@ export function useMobileNativeChatMessageSend(args: {
       }
       if (outcome === 'rejected') {
         if (syncComposer) {
-          restoreRejectedDraft(origin, text)
+          restoreRejectedDraft(origin, draftText)
         }
         onSendError('Message not sent')
         return 'rejected'

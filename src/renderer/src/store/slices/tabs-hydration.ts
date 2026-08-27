@@ -1,14 +1,11 @@
-import type {
-  Tab,
-  TabGroup,
-  TabGroupLayoutNode,
-  WorkspaceSessionState
-} from '../../../../shared/types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { adoptGrouplessTabs, layoutSpanningGroups } from './tab-group-reference-repair'
 import {
   dedupeTabOrder,
+  dedupeTabsById,
   getPersistedEditFileIdsByWorktree,
   isTransientEditorContentType,
   sanitizeRecentTabIds,
@@ -22,16 +19,31 @@ type HydratedTabState = {
   layoutByWorktree: Record<string, TabGroupLayoutNode>
 }
 
+/** Drops leaves whose group is gone, and repeat leaves for a group already
+ *  placed earlier in the tree — one column per group is the render invariant,
+ *  and a repeated leaf paints the same tab strip in every one of its columns. */
 export function pruneTabGroupLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
 ): TabGroupLayoutNode | null {
+  return pruneLayoutNodeForGroups(root, validGroupIds, new Set())
+}
+
+function pruneLayoutNodeForGroups(
+  root: TabGroupLayoutNode,
+  validGroupIds: Set<string>,
+  placedGroupIds: Set<string>
+): TabGroupLayoutNode | null {
   if (root.type === 'leaf') {
-    return validGroupIds.has(root.groupId) ? root : null
+    if (!validGroupIds.has(root.groupId) || placedGroupIds.has(root.groupId)) {
+      return null
+    }
+    placedGroupIds.add(root.groupId)
+    return root
   }
 
-  const first = pruneTabGroupLayoutForGroups(root.first, validGroupIds)
-  const second = pruneTabGroupLayoutForGroups(root.second, validGroupIds)
+  const first = pruneLayoutNodeForGroups(root.first, validGroupIds, placedGroupIds)
+  const second = pruneLayoutNodeForGroups(root.second, validGroupIds, placedGroupIds)
 
   if (first === null) {
     return second
@@ -79,7 +91,7 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.aiVaultTitle)
         .map((tab) => [tab.id, tab.aiVaultTitle!])
     )
-    tabsByWorktree[worktreeId] = [...tabs]
+    const hydratedTabs = [...tabs]
       .map((tab) => ({
         ...tab,
         entityId: tab.entityId ?? tab.id
@@ -115,6 +127,8 @@ function hydrateUnifiedFormat(
         return persistedEditFileIds.has(tab.entityId)
       })
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
+    // Why after the sort: the surviving record is the one the strip renders first.
+    tabsByWorktree[worktreeId] = dedupeTabsById(hydratedTabs)
   }
 
   for (const [worktreeId, groups] of Object.entries(session.tabGroups!)) {

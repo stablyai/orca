@@ -11,7 +11,10 @@ import { RelayDispatcher } from '../../relay/dispatcher'
 import { registerWslHookFsHandlers } from '../../relay/wsl-hook-fs-bridge'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { createWslHookSftpAdapter } from './wsl-hook-fs-adapter'
-import { installRemoteManagedAgentHooks } from './remote-managed-hook-installers'
+import {
+  installRemoteManagedAgentHooks,
+  REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+} from './remote-managed-hook-installers'
 import { WslHookRelayManager } from './wsl-hook-relay-manager'
 import { FAILURE_COOLDOWN_BASE_MS, type WslHookRelayManagerDeps } from './wsl-hook-relay-deps'
 import {
@@ -122,7 +125,9 @@ describe.skipIf(process.platform === 'win32')(
 
     it('runs the unchanged remote managed hook installers against a WSL guest home', async () => {
       const adapter = createWslHookSftpAdapter(harness.mux)
-      const results = await installRemoteManagedAgentHooks(adapter, home)
+      const results = await installRemoteManagedAgentHooks(adapter, home, {
+        agents: REMOTE_MANAGED_HOOK_INSTALLER_AGENTS
+      })
 
       expect(results.length).toBeGreaterThan(0)
       expect(results.every((r) => r.state !== 'error')).toBe(true)
@@ -239,10 +244,10 @@ describe('WslHookRelayManager', () => {
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
-    // Codex is the one agent whose home Orca redirects for WSL sessions.
     expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
+      agents: ['codex'],
       codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`,
-      agents: ['codex']
+      deferTrustUntilConfigToml: true
     })
 
     expect(manager.getGuestEndpointFilePath('Ubuntu')).toBe(

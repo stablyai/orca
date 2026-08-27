@@ -16,6 +16,8 @@ import { resolveWindowsShellLaunchTarget } from './windows-shell-launch'
 export function renderTabBarStaticCreateMenu({
   terminalOnly,
   mobileEmulatorEnabled,
+  managedBrowserCreationEnabled,
+  mobileEmulatorCreationEnabled,
   workspaceHasSimulatorTab,
   showMobileEmulatorIntroCallout,
   props,
@@ -32,6 +34,8 @@ export function renderTabBarStaticCreateMenu({
   props: TabBarProps
   terminalOnly: boolean
   mobileEmulatorEnabled: boolean
+  managedBrowserCreationEnabled: boolean
+  mobileEmulatorCreationEnabled: boolean
   workspaceHasSimulatorTab: boolean
   showMobileEmulatorIntroCallout: boolean
   windowsShellEntries: WindowsShellMenuEntry[] | undefined
@@ -97,18 +101,19 @@ export function renderTabBarStaticCreateMenu({
         <DropdownMenuShortcut>{newTerminalShortcut}</DropdownMenuShortcut>
       </DropdownMenuItem>
     )
-  const newBrowserMenuItem = !terminalOnly ? (
-    <DropdownMenuItem
-      onSelect={onNewBrowserTab}
-      className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
-    >
-      <Globe className="size-4 text-muted-foreground" />
-      {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
-      <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
-    </DropdownMenuItem>
-  ) : null
+  const newBrowserMenuItem =
+    !terminalOnly && managedBrowserCreationEnabled ? (
+      <DropdownMenuItem
+        onSelect={onNewBrowserTab}
+        className="gap-2 rounded-[7px] px-2 py-1.5 text-[12px] leading-5 font-medium"
+      >
+        <Globe className="size-4 text-muted-foreground" />
+        {translate('auto.components.tab.bar.TabBar.4833fb2cbe', 'New Browser Tab')}
+        <DropdownMenuShortcut>{newBrowserShortcut}</DropdownMenuShortcut>
+      </DropdownMenuItem>
+    ) : null
   const newSimulatorMenuItem =
-    !terminalOnly && mobileEmulatorEnabled && onNewSimulatorTab ? (
+    !terminalOnly && mobileEmulatorEnabled && mobileEmulatorCreationEnabled && onNewSimulatorTab ? (
       workspaceHasSimulatorTab ? (
         <Tooltip>
           <TooltipTrigger asChild>
@@ -168,6 +173,7 @@ export function renderTabBarStaticCreateMenu({
     !terminalOnly &&
     isMacOs &&
     mobileEmulatorEnabled &&
+    mobileEmulatorCreationEnabled &&
     onNewSimulatorTab ? (
       <MobileEmulatorTabIntroCallout />
     ) : null

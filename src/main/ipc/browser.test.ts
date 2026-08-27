@@ -68,13 +68,12 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
+import { registerBrowserHandlers, setAgentBrowserBridgeRef } from './browser'
 import {
-  registerBrowserHandlers,
-  setAgentBrowserBridgeRef,
   waitForAnyTabRegistration,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
-} from './browser'
+} from './browser-tab-registration-wait'
 
 describe('registerBrowserHandlers', () => {
   beforeEach(() => {

@@ -1,8 +1,8 @@
+import type { EagerPtyHandle } from '@/components/terminal-pane/pty-dispatcher'
 import {
-  registerEagerPtyBuffer,
-  type EagerPtyHandle
-} from '@/components/terminal-pane/pty-dispatcher'
-import { BACKGROUND_PTY_SPAWN_SIZE } from '@/lib/background-pty-spawn-size'
+  BACKGROUND_PTY_SPAWN_SIZE,
+  registerBackgroundEagerPtyBuffer
+} from '@/lib/background-pty-spawn-size'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
@@ -15,12 +15,12 @@ import {
   buildSetupRunnerCommand,
   getSetupRunnerCommandPlatformForPath
 } from '../../../shared/setup-runner-command'
+import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type {
-  TerminalLayoutSnapshot,
-  Worktree,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
-} from '../../../shared/types'
+} from '../../../shared/worktree/launch-types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 type BackgroundPane = {
   leafId: string
@@ -116,14 +116,10 @@ function persistExitedPaneOutput(tabId: string, leafId: string, output: string):
 
 function registerBackgroundPaneBuffer(tabId: string, leafId: string, ptyId: string): void {
   let eagerBuffer: EagerPtyHandle | null = null
-  eagerBuffer = registerEagerPtyBuffer(
-    ptyId,
-    (exitPtyId) => {
-      persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
-      useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
-    },
-    { captureDims: BACKGROUND_PTY_SPAWN_SIZE }
-  )
+  eagerBuffer = registerBackgroundEagerPtyBuffer(ptyId, (exitPtyId) => {
+    persistExitedPaneOutput(tabId, leafId, eagerBuffer?.flush() ?? '')
+    useAppStore.getState().clearTabPtyId(tabId, exitPtyId)
+  })
 }
 
 function buildSetupCommand(setup: WorktreeSetupLaunch): string {

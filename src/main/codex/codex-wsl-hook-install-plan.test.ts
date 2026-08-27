@@ -52,7 +52,7 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(args).toEqual([
       '-d',
       'Ubuntu',
-      '--',
+      '--exec',
       'sh',
       '-c',
       `if [ ! -d "$1" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$1"`,
@@ -91,7 +91,7 @@ describe('canonicalizeWslLinuxPath', () => {
     expect(args).toEqual([
       '-d',
       'Ubuntu',
-      '--',
+      '--exec',
       'sh',
       '-c',
       `resolved=$(wslpath -a -u "$1") || exit; if [ ! -d "$resolved" ]; then printf '%s\\n' '__ORCA_WSL_PATH_MISSING__'; exit 0; fi; readlink -f -- "$resolved"`,

@@ -7,7 +7,7 @@ import {
   getSourceControlFileFilterState,
   isSourceControlFileFilterQueryTooLarge,
   type SourceControlPathEntry
-} from './source-control-file-filter'
+} from './source-control/listing/file-filter'
 
 describe('source-control-file-filter', () => {
   it('naturally orders committed branch rows without mutating store input', () => {

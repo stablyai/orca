@@ -34,6 +34,7 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'inherit',
+      nameWasGenerated: false,
       supportsIdempotentCutoverRetry: true
     })
 
@@ -56,6 +57,25 @@ describe('createBlankWorkspace', () => {
     expect('comment' in params).toBe(false)
   })
 
+  it('marks the name as generated only when the user typed nothing', async () => {
+    // Why: the host retires generated names permanently; a name the user chose must stay reusable.
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-3' } }), calls)
+
+    await createBlankWorkspace({
+      client,
+      repoId: 'repo-1',
+      baseName: 'octopus',
+      createdWithAgentId: undefined,
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: true,
+      supportsIdempotentCutoverRetry: true
+    })
+
+    expect(calls[0]?.params).toMatchObject({ nameWasGenerated: true })
+  })
+
   it('sends startupAgent (not a pre-built command) so the host resolves launch args', async () => {
     // Why: regression — the modal used to send a bare startupCommand ('claude')
     // that skipped the host's default `--dangerously-skip-permissions`.
@@ -69,6 +89,7 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: 'claude',
       comment: 'spike',
       setupDecision: 'run',
+      nameWasGenerated: false,
       supportsIdempotentCutoverRetry: true
     })
 
@@ -100,6 +121,7 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'inherit',
+      nameWasGenerated: false,
       supportsIdempotentCutoverRetry: true
     })
 
@@ -125,6 +147,7 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'inherit',
+      nameWasGenerated: false,
       supportsIdempotentCutoverRetry: true
     })
 
@@ -143,6 +166,7 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'skip',
+      nameWasGenerated: false,
       supportsIdempotentCutoverRetry: true
     })
 

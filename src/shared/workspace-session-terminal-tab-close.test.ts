@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from './constants'
-import type { Tab, TerminalTab, WorkspaceSessionState } from './types'
+import type { Tab } from './tab-types'
+import type { TerminalTab } from './terminal-tab-types'
+import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { closeTerminalTabInWorkspaceSession } from './workspace-session-terminal-tab-close'
 
 const WORKTREE_ID = 'worktree-1'

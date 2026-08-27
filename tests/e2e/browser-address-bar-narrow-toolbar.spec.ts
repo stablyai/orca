@@ -17,7 +17,7 @@ import {
   waitForActiveWorktree,
   waitForSessionReady
 } from './helpers/store'
-import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/browser-address-bar-expansion'
+import { BROWSER_ADDRESS_BAR_MIN_INLINE_WIDTH } from '../../src/renderer/src/components/browser-pane/assemble-chrome/browser-address-bar-expansion'
 
 // Why: the toolbar must land in a band — squeezed enough that the inline field
 // collapses, roomy enough that the overlay itself has somewhere to go. Target

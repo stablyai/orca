@@ -1,4 +1,4 @@
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import { mayDestroyWithoutOwnerEvidence } from '../../../../shared/pty-listed-session'
 import type { DaemonSession } from './resource-usage-merge-types'
 

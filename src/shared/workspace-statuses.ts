@@ -1,4 +1,4 @@
-import type { Worktree, WorkspaceStatus, WorkspaceStatusDefinition } from './types'
+import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from './worktree/types'
 import { DEFAULT_STATUS_VISUALS, DEFAULT_WORKSPACE_STATUSES } from './workspace-status-defaults'
 import {
   isKnownBadPRReorderedDefaultStatusPayload,

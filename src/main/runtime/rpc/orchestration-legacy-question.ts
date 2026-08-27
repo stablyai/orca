@@ -28,7 +28,7 @@ export async function handleLegacyAsk(args: {
     if (!params.to) {
       throw new OrchestrationError('invalid_argument', 'Legacy ask requires --to.')
     }
-    if (!db.isLegacyCoordinatorHandle(dispatch.run_id, params.to)) {
+    if (!db.isLegacyCoordinatorDeliveryTarget(dispatch.run_id, params.to)) {
       throw new OrchestrationError(
         'request_mismatch',
         `Terminal ${params.to} is not a retained coordinator for this legacy Dispatch.`

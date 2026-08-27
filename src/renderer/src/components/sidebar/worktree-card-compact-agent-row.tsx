@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
 import CacheTimer, { usePromptCacheCountdownForPane } from './CacheTimer'
@@ -36,19 +37,17 @@ function getCompactAgentPrimary(
   return prompt || agentStateLabel(getAgentDotState(agent))
 }
 
-function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
+export function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
   if (agent.entry.interrupted === true) {
     return 'Interrupted by user'
   }
-  if (agent.state === 'working') {
-    const toolName = agent.entry.toolName?.trim() ?? ''
-    const toolInput = agent.entry.toolInput?.trim() ?? ''
-    if (toolName && toolInput) {
-      return `${toolName}: ${toolInput}`
-    }
-    if (toolName) {
-      return toolName
-    }
+  // Why: the lead turn is over in monitoring, so its last tool line is stale; name the state instead.
+  if (agent.state === 'working' && agent.entry.workingMode === 'monitoring') {
+    return agentStateLabel('monitoring')
+  }
+  const toolPreview = formatAgentToolPreview(agent.entry, agent.state)
+  if (toolPreview) {
+    return toolPreview
   }
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim()
   if (lastAssistantMessage) {
@@ -124,6 +123,11 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const primary = getCompactAgentPrimary(agent, conversationName)
   const isLineageChild = agent.lineage?.depth === 1
   const secondary = getCompactAgentSecondary(agent)
+  // Why: sidebar truncation must preserve the passive-vs-active distinction.
+  const leadingText = dotState === 'monitoring' ? secondary : primary
+  const trailingText =
+    dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
+  const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
@@ -206,12 +210,12 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
         {/* Why: the selected-row fill is strong enough to wash out the dimmed
             prompt/secondary text, so lift both toward full foreground when focused. */}
         <span className={isFocusedPane ? 'text-foreground' : 'text-muted-foreground/90'}>
-          {primary}
+          {leadingText}
         </span>
-        {secondary && (
+        {trailingText && (
           <span className={isFocusedPane ? 'text-foreground/70' : 'text-muted-foreground/65'}>
             {' '}
-            - {secondary}
+            - {trailingText}
           </span>
         )}
       </span>
@@ -274,7 +278,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
-      title={sendTargetDisabledReason ?? `${primary}${secondary ? ` - ${secondary}` : ''}`}
+      title={sendTargetDisabledReason ?? rowTitle}
     >
       {rowBody}
     </div>

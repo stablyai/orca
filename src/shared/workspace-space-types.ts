@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from './execution-host'
+
 export type WorkspaceSpaceScanStatus =
   | 'ok'
   | 'missing'
@@ -17,6 +19,7 @@ export type WorkspaceSpaceItem = {
 export type WorkspaceSpaceWorktree = {
   worktreeId: string
   repoId: string
+  executionHostId?: ExecutionHostId
   repoDisplayName: string
   repoPath: string
   displayName: string
@@ -40,6 +43,7 @@ export type WorkspaceSpaceWorktree = {
 
 export type WorkspaceSpaceRepoSummary = {
   repoId: string
+  executionHostId?: ExecutionHostId
   displayName: string
   path: string
   isRemote: boolean
@@ -66,6 +70,11 @@ export type WorkspaceSpaceAnalyzeResult =
   | { ok: true; analysis: WorkspaceSpaceAnalysis }
   | { ok: false; cancelled: true }
 
+export type WorkspaceSpaceWorktreeMeasurement = Pick<
+  WorkspaceSpaceWorktree,
+  'worktreeId' | 'executionHostId' | 'status' | 'sizeBytes'
+>
+
 export type WorkspaceSpaceDirectoryScanResult = {
   sizeBytes: number
   skippedEntryCount: number
@@ -85,4 +94,6 @@ export type WorkspaceSpaceScanProgress = {
   scannedWorktreeCount: number
   currentRepoDisplayName: string | null
   currentWorktreeDisplayName: string | null
+  /** Append-only batch; absent for older senders and progress-only updates. */
+  completedMeasurements?: WorkspaceSpaceWorktreeMeasurement[]
 }

@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { isTuiAgentEnabled } from './tui-agent-selection'
 import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import {
@@ -44,6 +44,10 @@ export type CommitMessageAgentSpec = {
   /** Where the prompt is delivered. Large diffs go via stdin to avoid argv limits. */
   promptDelivery: 'argv' | 'stdin'
   buildArgs: (params: { prompt: string; model: string; thinkingLevel?: string }) => string[]
+  /** Alias groups the CLI accepts at most once. Recipe CLI arguments repeating one
+   *  replace the generated flag instead of being appended: yargs-based CLIs collapse
+   *  a repeated flag into an array and crash. Defaults to the model flag alone. */
+  singletonOptions?: readonly (readonly string[])[]
   /** Whether the model list is static or discovered from the agent CLI. */
   modelSource: 'static' | 'dynamic'
   /** Command used by the main process to discover models when modelSource is dynamic. */
@@ -392,6 +396,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       model,
       ...(thinkingLevel ? ['-c', `model_reasoning_effort=${thinkingLevel}`] : [])
     ],
+    // `-c` is intentionally absent: Codex accepts repeated overrides.
+    singletonOptions: [['--model', '-m']],
     modelSource: 'dynamic',
     modelDiscovery: {
       binary: 'codex',
@@ -461,6 +467,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       'default',
       ...(thinkingLevel ? ['--variant', thinkingLevel] : [])
     ],
+    singletonOptions: [['--model', '-m'], ['--agent'], ['--format'], ['--variant']],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'opencode', args: ['models'], parse: parseLineModels },
     models: [
@@ -524,6 +531,8 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
       model,
       ...(thinkingLevel ? ['--effort', thinkingLevel] : [])
     ],
+    // Amp selects the model with `--mode`, not `--model`.
+    singletonOptions: [['--mode']],
     modelSource: 'static',
     models: [
       { id: 'smart', label: 'Smart' },

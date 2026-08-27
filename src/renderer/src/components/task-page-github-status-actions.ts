@@ -1,8 +1,8 @@
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type {
   GitHubIssueCloseReason,
-  GitHubIssueUpdate,
-  GitHubWorkItem
-} from '../../../shared/types'
+  GitHubIssueUpdate
+} from '../../../shared/issue-mutation-types'
 
 export type TaskPageGitHubCloseAction =
   | { stateReason: Exclude<GitHubIssueCloseReason, 'duplicate'> }

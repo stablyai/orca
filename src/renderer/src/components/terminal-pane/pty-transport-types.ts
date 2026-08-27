@@ -11,7 +11,7 @@ import type { StartupCommandDelivery } from '../../../../shared/codex-startup-de
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
@@ -44,6 +44,7 @@ export type PtyBufferSnapshot = {
   /** Effective kitty flags the owner of this image proved at `seq`. Absent
    *  means unknown; never rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
+  terminalOwner?: 'shell'
 }
 
 /** Metadata for one authoritative replay payload. */
@@ -56,6 +57,8 @@ export type PtyReplayDataMeta = {
   /** The boundary `kittyKeyboardFlags` describes, recorded as the renderer's
    *  ordered high-water so a quiet pane can still publish a coherent snapshot. */
   snapshotSeq?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
 }
 
 export type LocalPtySessionMetadata = {
@@ -86,6 +89,7 @@ export type PtyConnectResult = {
    *  domain `snapshotSeq` main reconciled for the same attach boundary. Absent
    *  means unknown, never a proven inactive protocol. */
   snapshotKittyKeyboardFlags?: number
+  snapshotTerminalOwner?: 'shell'
   snapshotSeq?: number
   isAlternateScreen?: boolean
   sessionExpired?: boolean
@@ -104,6 +108,9 @@ type PtyCallbacks = {
   /** Called before an adopted PTY can publish buffered/live bytes. */
   onReattachDetermined?: () => void
   onConnect?: () => void
+  /** A stream re-established after loss carries only new bytes, so the pane must
+   *  re-pull the host's retained buffer or an idle/exited pane paints nothing. */
+  onStreamRecovered?: () => void
   onDisconnect?: () => void
   onData?: (data: string, meta?: PtyDataMeta) => void
   onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
@@ -141,6 +148,7 @@ export type PtyTransport = {
      *  Ignored by remote-runtime transports (not gate-markable). */
     initiallyHidden?: boolean
     command?: string
+    commandDelivery?: 'renderer' | 'provider'
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
@@ -150,6 +158,8 @@ export type PtyTransport = {
     startupCommandDelivery?: StartupCommandDelivery
     /** Reject a stale restored identity before this transport can publish global PTY handlers. */
     admitPtyId?: (ptyId: string) => boolean
+    /** Reject a stale pane after any pre-spawn test gate but before creating a PTY. */
+    shouldContinue?: () => boolean
     callbacks: PtyCallbacks
   }) => void | Promise<void | string | PtyConnectResult>
   attach: (options: {
@@ -221,6 +231,7 @@ export type IpcPtyTransportOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   agentPrompt?: string
@@ -240,7 +251,7 @@ export type IpcPtyTransportOptions = {
   projectRuntime?: ProjectExecutionRuntimeResolution
   terminalColorQueryReplies?: TerminalOscColorQueryReplyColors
   telemetry?: EventProps<'agent_started'>
-  onPtyExit?: (ptyId: string) => void
+  onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
   onPtySpawn?: (ptyId: string) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */

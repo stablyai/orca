@@ -1,5 +1,5 @@
 import { expect, it, vi } from 'vitest'
-import type { Project, ProjectHostSetup } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import { createTestStore } from './store-test-helpers'
 import {
   installReposRuntimeRoutingHarness,

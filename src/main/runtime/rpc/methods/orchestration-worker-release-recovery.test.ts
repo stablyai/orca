@@ -48,7 +48,7 @@ describe('orchestration worker release recovery', () => {
     vi.spyOn(runtime, 'showTerminal').mockImplementation(
       async (handle) => ({ handle, worktreeId: 'repo::worktree', status: 'running' }) as never
     )
-    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
+    vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: 'repo::worktree'
     } as never)
     vi.spyOn(runtime, 'createTerminal').mockResolvedValue({
@@ -80,8 +80,9 @@ describe('orchestration worker release recovery', () => {
     })
     vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
       handle: 'term_worker',
-      closed: true
-    } as never)
+      tabId: 'tab-worker',
+      ptyKilled: true
+    })
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     activeRunId = db.createRun({
       objective: 'Release recovery test Run',
@@ -160,6 +161,36 @@ describe('orchestration worker release recovery', () => {
     const result = await reconcileRequestedWorkerTerminalReleases(runtime)
     expect(result).toMatchObject({ attempted: 1, pending: 1, unknown: 0 })
     expect(db.getWorkerTerminalResourceByOwner(dispatchId)?.release_state).toBe('releasing')
+  })
+
+  it('preserves archived output when an unconfirmed release retry cannot find the terminal', async () => {
+    setup()
+    const { dispatchId } = await startSettledWorker()
+    vi.mocked(runtime.closeTerminal).mockResolvedValueOnce({
+      handle: 'term_worker',
+      tabId: 'tab-worker',
+      ptyKilled: false,
+      ptyStopVerdict: 'unverifiable',
+      ptyStopReason: 'its SSH provider is no longer registered'
+    })
+
+    await expect(
+      call('orchestration.workerRelease', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'release_unknown' })
+    expect(db.getWorkerTerminalArchive(dispatchId)).toBeDefined()
+
+    vi.mocked(runtime.showTerminal).mockRejectedValue(new Error('terminal_handle_stale'))
+    await expect(
+      call('orchestration.workerRelease', { dispatch: dispatchId })
+    ).resolves.toMatchObject({ state: 'release_unknown' })
+    const read = (await call('orchestration.workerRead', { dispatch: dispatchId })) as {
+      archived?: boolean
+      terminal: { tail: string[] }
+    }
+    expect(read).toMatchObject({
+      archived: true,
+      terminal: { tail: ['worker output line 1', 'worker output line 2'] }
+    })
   })
 
   it('never touches resources without requested releases', async () => {

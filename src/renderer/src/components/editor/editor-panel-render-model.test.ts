@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
-import type { GitStatusEntry } from '../../../../shared/types'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import type { FileContent } from './editor-panel-content-types'
 import { getEditorPanelRenderModel } from './editor-panel-render-model'
 
@@ -42,7 +42,8 @@ function renderModel(args: {
     gitStatusEntries: args.gitStatusByWorktree?.[activeFile.worktreeId],
     gitBranchEntries: undefined,
     markdownViewMode: args.markdownViewMode ?? {},
-    isChangesMode: args.isChangesMode ?? false
+    isChangesMode: args.isChangesMode ?? false,
+    canOpenWorkspaceFileBrowser: true
   })
 }
 
@@ -64,6 +65,22 @@ describe('getEditorPanelRenderModel HTML preview affordance', () => {
     expect(renderModel({ activeFile: htmlFile(), fileContents: {} }).canOpenPreviewToSide).toBe(
       true
     )
+  })
+
+  it('disables preview when the workspace browser provider is unavailable', () => {
+    const activeFile = htmlFile()
+    const model = getEditorPanelRenderModel({
+      activeFile,
+      fileContents: {},
+      editorDrafts: {},
+      gitStatusEntries: undefined,
+      gitBranchEntries: undefined,
+      markdownViewMode: {},
+      isChangesMode: false,
+      canOpenWorkspaceFileBrowser: false
+    })
+
+    expect(model.canOpenPreviewToSide).toBe(false)
   })
 
   it('enables preview for single HTML diffs whose file exists on disk', () => {

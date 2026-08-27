@@ -3,18 +3,16 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  FolderWorkspace,
-  PRCheckDetail,
-  Repo,
-  Worktree,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 
 type MockStoreState = {
   activeWorktreeId: string | null
@@ -72,7 +70,7 @@ vi.mock('@/components/ui/button', () => ({
   )
 }))
 
-vi.mock('./checks-panel-content', () => ({
+vi.mock('./checks-panel/check-presentation', () => ({
   CHECK_COLOR: {
     success: 'success',
     failure: 'failure',
@@ -86,7 +84,10 @@ vi.mock('./checks-panel-content', () => ({
     neutral: (props: { className?: string }) => <span data-icon="neutral" {...props} />
   },
   PullRequestIcon: (props: { className?: string }) => <span data-icon="review" {...props} />,
-  prStateColor: () => 'state-color',
+  prStateColor: () => 'state-color'
+}))
+
+vi.mock('./checks-panel/checks-list', () => ({
   ChecksList: ({ checks, checksLoading }: { checks: PRCheckDetail[]; checksLoading: boolean }) => (
     <div data-testid="checks-list">
       {checksLoading ? 'Loading checks' : null}

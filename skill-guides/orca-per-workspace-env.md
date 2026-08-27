@@ -40,6 +40,11 @@ in the env and emits a `pairingCode`; §7c/§7f) vs **SSH** (`create` runs no se
 `connection.type:"ssh"` block Orca dials into; §7g/§7h). Settle this first — it changes the `create`
 output shape and half the templates.
 
+Keep Orca's checkout behavior unchanged by default: omit `checkoutMode`, emit schema version 1, and
+let Orca create a linked worktree. Only use `checkoutMode: provisioned-root` when the user explicitly
+wants one ephemeral machine to clone the finished workspace itself. This niche mode currently requires
+direct SSH, an ordinary non-bare/non-sparse primary checkout at `projectRoot`, and schema version 2.
+
 **Quick-start (happy path):** interview the user (connection mode Orca-server vs SSH, provider, agent CLI,
 git auth — §1.2) + read the provider's CLI docs → scaffold `scripts/orca-vm/` from §7 → run the
 base-snapshot script, then the auth script (you invoke these by hand; not via `orca.yaml`) → wire
@@ -60,6 +65,8 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
    - **Connection mode:** how Orca attaches to the environment — an **Orca server** (the VM runs
      `orca serve` and Orca pairs over its pairing URL; worked example §7f) or **SSH** (Orca connects to
      the host over SSH; §7g). This decides the recipe's connection shape, so settle it first.
+   - **Checkout ownership:** do not ask by default. Only when the user requires the environment to
+     create the exact final checkout, confirm `provisioned-root` and direct SSH; otherwise omit it.
    - **Provider:** Vercel Sandbox, Fly, Modal, an existing SSH host, … For non-obvious providers, also
      ask scope/project/region and plan limits (§2). Then **read that provider's CLI/SDK docs** (or
      `<cli> --help`) before scaffolding — you need its exact create/exec/snapshot/remove verbs.
@@ -266,7 +273,7 @@ set -euo pipefail
 set -euo pipefail
 # read authenticated snapshotId/scope/project/port/repo*/project_root (env→state→fallback)
 # fail clearly if snapshotId is missing (point back to Phases 2–3)
-# name = orca-${ORCA_VM_RECIPE_ID}-${ORCA_VM_INSTANCE_ID} (sanitized, length-capped)
+# name = orca-${ORCA_RECIPE_ID}-${ORCA_VM_INSTANCE_ID} (sanitized, length-capped)
 # 1. boot sandbox from snapshotId with a published port; capture the public URL → pairing address
 #    (an externally reachable wss:// URL); trap: remove sandbox on error
 # 2. remote exec: ensure repo at desired commit; rebuild only if commit changed (cache marker)
@@ -369,7 +376,12 @@ set -euo pipefail
 vercel_args=(); [ -n "$scope" ] && vercel_args+=(--scope "$scope"); [ -n "$project" ] && vercel_args+=(--project "$project")
 [ -n "$snapshot_id" ] || { echo "snapshotId missing — run Phases 2–3 first" >&2; exit 1; }
 gh_token="${GH_TOKEN:-${GITHUB_TOKEN:-$(command -v gh >/dev/null 2>&1 && gh auth token 2>/dev/null || true)}}"
-name="orca-${ORCA_VM_RECIPE_ID:-vercel-sandbox}-${ORCA_VM_INSTANCE_ID:-$(date +%s)}"  # sanitize+cap to 63 chars
+recipe_id="${ORCA_RECIPE_ID:-vercel-sandbox}"
+recipe_id="${recipe_id//./-}"  # Vercel names forbid dots.
+instance_id="${ORCA_VM_INSTANCE_ID:-$(date +%s)}"
+max_recipe_id_length=$((128 - ${#instance_id} - 6))  # Preserve the unique instance suffix.
+[ "$max_recipe_id_length" -gt 0 ] || { echo "ORCA_VM_INSTANCE_ID is too long for a Vercel sandbox name" >&2; exit 1; }
+name="orca-${recipe_id:0:max_recipe_id_length}-${instance_id}"
 
 # Arm cleanup BEFORE create so a failing create can't leak a half-built paid sandbox.
 cleanup_on_error() { [ "$?" -ne 0 ] && vercel sandbox remove "$name" "${vercel_args[@]}" >/dev/null 2>&1 || true; }
@@ -456,6 +468,35 @@ SSH mode is **fundamentally different from §7c/§7f**, not a relabeling of them
 ```
 
 `label`, `host`, `port`, `username` are required; the rest are optional — omit any you don't need.
+
+For an explicitly requested one-VM-per-workspace checkout, the create script must read
+`ORCA_RECIPE_RESULT_SCHEMA_VERSION`, `ORCA_REPO_URL`, `ORCA_REPO_REF`, `ORCA_REPO_REF_HEAD`, and
+`ORCA_REPO_BRANCH`. Use `ORCA_REPO_REF` to fetch the selected source, but create
+`ORCA_REPO_BRANCH` at the exact `ORCA_REPO_REF_HEAD` commit; resolving the symbolic ref again can race
+with an upstream update. `ORCA_REPO_URL` and `ORCA_REPO_REF` are a matched fetch pair, including when
+the desktop source uses multiple remotes. Return that primary checkout at `projectRoot` and emit the
+same SSH result with:
+
+```bash
+[ -n "${ORCA_REPO_REF_HEAD:-}" ] || { echo "missing pinned source commit" >&2; exit 1; }
+git fetch origin "$ORCA_REPO_REF"
+git cat-file -e "${ORCA_REPO_REF_HEAD}^{commit}"
+git checkout -B "$ORCA_REPO_BRANCH" "$ORCA_REPO_REF_HEAD"
+```
+
+```json
+{
+  "schemaVersion": 2,
+  "checkoutMode": "provisioned-root",
+  "connection": {
+    "type": "ssh",
+    "projectRoot": "/abs/repo",
+    "target": { "label": "my-box", "host": "192.0.2.10", "port": 22, "username": "ubuntu" }
+  }
+}
+```
+
+Fail if the requested schema is not `2`; do not silently fall back to the ordinary recipe shape.
 
 **Networking → which `target` fields to set** (how *your desktop* reaches the box — there is no
 `orca serve` URL in SSH mode):
@@ -612,6 +653,12 @@ and `userData` are optional.
 
 **SSH mode** — do **not** run `orca serve`; print the `connection.type:"ssh"` block instead (full shape +
 worked script in §7g). `pairingCode` is **not** used in SSH mode.
+
+**Optional provisioned root** — only for direct SSH and only when explicitly requested. Add
+`checkoutMode: provisioned-root` to the recipe, require `ORCA_RECIPE_RESULT_SCHEMA_VERSION=2`, create
+the requested `ORCA_REPO_BRANCH` at the pinned `ORCA_REPO_REF_HEAD` commit (use `ORCA_REPO_REF` only
+to fetch that commit) at the returned `projectRoot`, and emit schema version 2 with
+`checkoutMode: "provisioned-root"`. All recipes without this field retain the schema-v1 behavior above.
 
 Lifecycle hooks (all run locally):
 

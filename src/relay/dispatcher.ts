@@ -31,6 +31,10 @@ import {
   type LegacyPublicationLease
 } from './legacy-relay-publication-ledger'
 import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
+import {
+  SKILL_INSTALL_RPC_ERROR_CODE,
+  SkillInstallFailureSchema
+} from '../shared/skill-install-failure'
 
 export type {
   RelayClientSinkOptions,
@@ -208,7 +212,14 @@ export class RelayDispatcher {
     this.requestHandlers.set(method, handler)
   }
 
+  // Why it throws: this is a single slot, so a second registration silently shadows the
+  // first and which one survives depends only on construction order. `pty.ackData` shipped
+  // that way — a no-op handler was saved from disabling credit acks purely by the adapter
+  // being constructed second (STA-4571). Fail loudly instead of encoding that ordering.
   onNotification(method: string, handler: NotificationHandler): void {
+    if (this.notificationHandlers.has(method)) {
+      throw new Error(`Notification handler for ${method} is already registered`)
+    }
     this.notificationHandlers.set(method, handler)
   }
 
@@ -1038,13 +1049,25 @@ export class RelayDispatcher {
         return
       }
       const message = err instanceof Error ? err.message : String(err)
-      const code = (err as { code?: number }).code ?? -32000
-      const accepted = this.sendResponse(client, req.id, undefined, { code, message }, (result) => {
-        settleResponse({
-          ok: false,
-          error: result.ok ? new Error(message) : result.error
-        })
-      })
+      const errorCode = (err as { code?: unknown }).code
+      const code = typeof errorCode === 'number' ? errorCode : -32000
+      const skillFailure =
+        errorCode === SKILL_INSTALL_RPC_ERROR_CODE
+          ? SkillInstallFailureSchema.safeParse((err as { data?: unknown }).data)
+          : null
+      const data = skillFailure?.success === true ? skillFailure.data : undefined
+      const accepted = this.sendResponse(
+        client,
+        req.id,
+        undefined,
+        { code, message, ...(data === undefined ? {} : { data }) },
+        (result) => {
+          settleResponse({
+            ok: false,
+            error: result.ok ? new Error(message) : result.error
+          })
+        }
+      )
       if (!accepted) {
         settleResponse({ ok: false, error: new Error('Relay error response was not admitted') })
       }

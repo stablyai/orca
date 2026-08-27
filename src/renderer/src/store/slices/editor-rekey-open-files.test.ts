@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
 import type { OpenFilePathRekey } from './editor'
-import type { Tab, TabGroup } from '../../../../shared/types'
+import type { Tab, TabGroup } from '../../../../shared/tab-types'
 
 // Stage-1 foundation: rekeyOpenFilesForPathChange atomically retargets an open
 // edit session across an Orca-owned move (no close/reopen), preserving all
@@ -267,6 +267,40 @@ describe('rekeyOpenFilesForPathChange', () => {
     })
 
     expect(useAppStore.getState().openFiles[0]!.mirroredFromRuntimeSession).toBeUndefined()
+  })
+
+  it('leaves a reveal keyed by another worktree file id untouched when only the path matches', () => {
+    seedEditTab()
+    // A same-path tab in a second worktree: the reveal belongs to it, not to the rekeyed tab.
+    useAppStore.getState().openFile(
+      {
+        filePath: '/repo/a.md',
+        relativePath: 'a.md',
+        worktreeId: 'wt-2',
+        runtimeEnvironmentId: null,
+        language: 'markdown',
+        mode: 'edit'
+      },
+      { suppressActiveRuntimeFallback: true }
+    )
+    const rekeyedId = useAppStore.getState().openFiles[0]!.id
+    const otherWorktreeId = useAppStore.getState().openFiles[1]!.id
+    expect(otherWorktreeId).not.toBe(rekeyedId)
+    useAppStore.setState({
+      pendingEditorReveal: { fileId: otherWorktreeId, filePath: '/repo/a.md', line: 40 }
+    } as never)
+
+    const result = useAppStore.getState().rekeyOpenFilesForPathChange({
+      rekeys: [rekeyFor(rekeyedId, '/repo/sub/a.md', 'sub/a.md')]
+    })
+
+    expect(result).toEqual({ ok: true })
+    expect(
+      useAppStore.getState().openFiles.find((file) => file.id === '/repo/sub/a.md')
+    ).toMatchObject({ filePath: '/repo/sub/a.md' })
+    const reveal = useAppStore.getState().pendingEditorReveal!
+    expect(reveal.fileId).toBe(otherWorktreeId)
+    expect(reveal.filePath).toBe('/repo/a.md')
   })
 
   it('migrates a pending editor reveal to the new path', () => {

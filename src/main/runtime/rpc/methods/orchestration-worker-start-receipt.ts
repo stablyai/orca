@@ -1,4 +1,5 @@
 import type { OrchestrationDb } from '../../orchestration/db'
+import { isAgentPromptStalledError } from '../../agent-prompt-submission-verification'
 import {
   isUnknownWorkerStartOutcome,
   type WorkerSetupReceipt
@@ -19,7 +20,11 @@ export function failWorkerStartWithReceipt(args: {
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
-    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason)
+    : args.db.failWorkerStart(args.dispatchId, args.failedStage, reason, {
+        // Why (#16095): the preamble is written before submission is verified, so a stalled
+        // verdict never means the worker lacks its task — keep the authority its report needs.
+        retainCapability: isAgentPromptStalledError(args.error)
+      })
   return {
     runId: args.runId,
     taskId: args.taskId,

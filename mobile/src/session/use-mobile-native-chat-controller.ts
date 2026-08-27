@@ -111,14 +111,18 @@ export function useMobileNativeChatController(args: {
     // a null is indistinguishable from a host retraction, and peeking at the
     // terminal view would permanently decline the prefill.
     chatActive: showNativeChat,
-    transcriptLoading: nativeChatSession.transcriptLoading
+    transcriptLoading: nativeChatSession.transcriptLoading,
+    transcriptSettled: nativeChatSession.status === 'ready'
   })
 
-  const nativeChatStatus = activeChatResolution ? activeSessionTab?.agentStatus : null
-  const nativeChatAgentWorking = nativeChatStatus?.state === 'working'
+  const activeTabStatus = activeSessionTab?.agentStatus
+  const activeTabAgentWorking =
+    activeTabStatus?.state === 'working' && activeTabStatus.workingMode !== 'monitoring'
+  const nativeChatStatus = activeChatResolution ? activeTabStatus : null
+  const nativeChatAgentWorking = activeChatResolution != null && activeTabAgentWorking
   // Deliberately not gated on the chat view being visible: the streaming gate
   // has to tell "hidden mid-turn" from "the turn ended".
-  const nativeChatStreamLive = activeSessionTab?.agentStatus?.state === 'working'
+  const nativeChatStreamLive = activeTabAgentWorking
   // Throttle the streaming bubble: OpenCode emits a status frame per streamed
   // part, and each one re-renders and re-parses the whole accumulated markdown.
   const nativeChatStreamingText = useThrottledLatestValue(

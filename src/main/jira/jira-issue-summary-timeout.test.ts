@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraClientForSite } from './client'
+import type { JiraClientForSite } from './authenticated-request'
 import { getJiraSummaryLookupErrorCode } from '../../shared/jira-summary-lookup'
 
 const { acquireMock, getClientsMock, jiraRequestMock, releaseMock } = vi.hoisted(() => ({
@@ -9,16 +9,22 @@ const { acquireMock, getClientsMock, jiraRequestMock, releaseMock } = vi.hoisted
   releaseMock: vi.fn()
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./request-queue', () => ({
   acquire: (...args: unknown[]) => acquireMock(...args),
-  release: (...args: unknown[]) => releaseMock(...args),
+  release: (...args: unknown[]) => releaseMock(...args)
+}))
+
+vi.mock('./authenticated-request', () => ({
   apiBasePath: () => '/rest/api/3',
-  clearToken: vi.fn(),
-  getClients: (...args: unknown[]) => getClientsMock(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
   jiraRequestBinary: vi.fn(),
   JiraApiError: class JiraApiError extends Error {}
+}))
+
+vi.mock('./client', () => ({
+  clearToken: vi.fn(),
+  getClients: (...args: unknown[]) => getClientsMock(...args),
+  isAuthError: vi.fn().mockReturnValue(false)
 }))
 
 function makeEntry(): JiraClientForSite {

@@ -4,6 +4,17 @@ export type FederatedLifecycleSettlement =
   | { action: 'completed' | 'failed'; authority: 'run_home' }
   | { action: 'rejected'; code: string; reason: string; authority: 'run_home' }
 
+export function areFederatedLifecycleSettlementsEqual(
+  left: FederatedLifecycleSettlement,
+  right: FederatedLifecycleSettlement
+): boolean {
+  return (
+    left.action === right.action &&
+    (left.action !== 'rejected' ||
+      (right.action === 'rejected' && left.code === right.code && left.reason === right.reason))
+  )
+}
+
 type Waiter = (settlement: FederatedLifecycleSettlement) => void
 
 const waitersByRuntime = new WeakMap<OrcaRuntimeService, Map<string, Set<Waiter>>>()

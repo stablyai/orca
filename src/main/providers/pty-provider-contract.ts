@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
@@ -10,6 +10,8 @@ import type {
   AgentSessionSurfaceBinding
 } from '../../shared/agent-session-host-authority'
 import type { PtyProcessInfo } from './pty-process-info'
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type {
   PtyBackgroundStreamEvent,
@@ -36,6 +38,8 @@ export type PtyProviderBufferSnapshot = {
    *  boundary. Absent means the source could not prove them; readers must not
    *  rewrite that silence into a known `0`. */
   kittyKeyboardFlags?: number
+  /** Ordered ownership evidence proven at this snapshot's `seq`. */
+  terminalOwner?: TerminalOwner
 }
 
 export type PtySpawnOptions = {
@@ -70,6 +74,8 @@ export type PtySpawnOptions = {
    *  Existing-session attach paths must stay false so recovery checks do not
    *  replace the daemon out from under a still-live PTY. */
   isNewSession?: boolean
+  /** Host setting forwarded additively to the process owner; old owners ignore it. */
+  historyIsolationEnabled?: boolean
   /** Attach the named session atomically or fail without creating a process. */
   attachOnly?: boolean
   /** Exact persisted owner expected by an attach-only routing decision. */
@@ -109,11 +115,18 @@ export type { PtyProcessInfo, PtySpawnResult }
 type PtyProbeOptions = { signal?: AbortSignal }
 
 export type IPtyProvider = {
+  requestHostRpc?: (
+    method: string,
+    params: unknown,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ) => Promise<unknown>
   /** Fresh local spawns currently route to an in-process, non-persistent fallback. */
   readonly routesFreshSpawnsToLocalProvider?: true
   /** Re-probes a degraded durable host before main commits to fallback spawn semantics. */
   recoverFreshSpawnRouting?: () => Promise<boolean>
   spawn(opts: PtySpawnOptions): Promise<PtySpawnResult>
+  /** Process-owner cleanup for history stored outside the workspace tree. */
+  deleteWorktreeHistory?: (worktreeId: string) => Promise<void>
   /** Whether this spawn target can append the Git guard after its final env merge. */
   supportsGitCredentialGuardHost?: (sessionId?: string) => boolean
   /** Explicit false selects pre-claim legacy spawn for a preserved old daemon. */
@@ -126,7 +139,8 @@ export type IPtyProvider = {
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): void
+  write(id: string, data: string): boolean | void
+  writeWithSettlement?: (id: string, data: string) => Promise<boolean>
   resize(id: string, cols: number, rows: number): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a
@@ -198,6 +212,8 @@ export type IPtyProvider = {
   getForegroundProcess(id: string): Promise<string | null>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
+  /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */
+  confirmShellForeground?: (id: string) => Promise<boolean>
   serialize(ids: string[]): Promise<string>
   revive(state: string): Promise<void>
   // Why: deadlineMs bounds the underlying RPC exactly like shutdown's deadlineMs.
@@ -207,6 +223,12 @@ export type IPtyProvider = {
   onData(callback: (payload: PtyDataEvent) => void): () => void
   onReplay(callback: (payload: { id: string; data: string }) => void): () => void
   onExit(
-    callback: (payload: { id: string; code: number; incarnationId?: PtyIncarnationId }) => void
+    callback: (payload: {
+      id: string
+      code: number
+      incarnationId?: PtyIncarnationId
+      /** Absent when the provider predates exit causes; readers must not infer one from `code`. */
+      cause?: TerminalExitCause
+    }) => void
   ): () => void
 }

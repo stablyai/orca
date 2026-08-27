@@ -1,4 +1,4 @@
-import type { DiffComment } from '../../../shared/types'
+import type { DiffComment } from '../../../shared/diff-comment-types'
 
 export type MarkdownCommentBlock = {
   key: string

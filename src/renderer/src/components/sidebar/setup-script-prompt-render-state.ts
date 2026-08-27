@@ -1,4 +1,6 @@
-import type { GlobalSettings, Repo, Worktree } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { SetupScriptPromptInspection } from '@/lib/setup-script-prompt'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'

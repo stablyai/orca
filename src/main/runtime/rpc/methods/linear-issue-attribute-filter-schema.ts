@@ -4,7 +4,7 @@ import {
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_PRIORITIES,
   LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
-} from '../../../../shared/linear-issue-attribute-filter'
+} from '../../../../shared/linear/issue-attribute-filter'
 
 // Why: keep ListIssues param validation co-located with shared limits without
 // pushing linear.ts past the max-lines ratchet.

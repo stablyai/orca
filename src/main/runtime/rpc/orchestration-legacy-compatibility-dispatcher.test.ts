@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type Database from '../../sqlite/sync-database'
+import { applyEscalationToDispatch } from '../orchestration/coordinator-escalation-triage'
 import {
   cleanupLegacyCompatibilityDispatcherHarnesses,
   COORDINATOR_HANDLE,
@@ -14,6 +15,7 @@ import {
   WORKER_HANDLE,
   WORKER_PANE
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
@@ -51,7 +53,10 @@ describe('legacy compatibility through RpcDispatcher', () => {
         harness.dispatcher,
         request(
           'orchestration.send',
-          escalationParams(harness),
+          {
+            ...escalationParams(harness),
+            payload: JSON.stringify({ taskId: harness.taskId })
+          },
           evidence('worker', valid),
           `${transport}-${valid}`
         ),
@@ -75,6 +80,15 @@ describe('legacy compatibility through RpcDispatcher', () => {
           legacyCompatibility: { replayed: false }
         }
       })
+      const message = (response as { result: { message: { id: string; payload: string } } }).result
+        .message
+      expect(JSON.parse(message.payload)).toMatchObject({
+        taskId: harness.taskId,
+        dispatchId: harness.dispatchId
+      })
+      applyEscalationToDispatch(harness.db, harness.db.getMessageById(message.id)!, () => {})
+      expect(harness.db.getTask(harness.taskId)?.status).toBe('ready')
+      expect(harness.db.getDispatchContextById(harness.dispatchId)?.status).toBe('failed')
       expect(counts(harness.db)).toEqual({
         ...before,
         messages: before.messages + 1,
@@ -178,7 +192,8 @@ describe('legacy compatibility through RpcDispatcher', () => {
       processIncarnation: 'process-1'
     })
     harness.db.updateTaskStatus(harness.taskId, 'ready')
-    const currentDispatch = harness.db.createDispatchContext(
+    const currentDispatch = createRootDispatch(
+      harness.db,
       harness.taskId,
       'term_current_worker',
       'tab_current_worker:77777777-7777-4777-8777-777777777777',
@@ -382,7 +397,8 @@ describe('legacy compatibility through RpcDispatcher', () => {
       coordinatorPaneKey: 'tab_current_coord:55555555-5555-4555-8555-555555555555'
     })
     const task = harness.db.createTask({ spec: 'current assignment', runId: run.id })
-    const dispatch = harness.db.createDispatchContext(
+    const dispatch = createRootDispatch(
+      harness.db,
       task.id,
       'term_current_worker',
       'tab_current_worker:66666666-6666-4666-8666-666666666666',

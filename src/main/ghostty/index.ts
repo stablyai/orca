@@ -1,6 +1,6 @@
 import { readFile, stat } from 'node:fs/promises'
 import { platform } from 'node:os'
-import type { GlobalSettings, GhosttyImportPreview } from '../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
 import type { Store } from '../persistence'
 import { findGhosttyConfigPaths } from './discovery'
 import { parseGhosttyConfig } from './parser'

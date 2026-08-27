@@ -88,8 +88,16 @@ export class RelayAuthCoordinator {
     this.options.onStatus('offline')
   }
 
+  // Raw ownership handle for identity matching (revoke routing); control work uses getLiveBroker.
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
+  }
+
+  // Why: ownership stays valid across a control death, so control work must
+  // apply the same liveness gate reconcile does; unprovable liveness stays usable.
+  getLiveBroker(): CoordinatedRelayBroker | null {
+    const broker = this.getActiveBroker()
+    return broker && (broker.isLive?.() ?? true) ? broker : null
   }
 
   // Why: some broker deaths end with no retry timer — an auth refresh that
@@ -108,16 +116,16 @@ export class RelayAuthCoordinator {
     this.beginReconcile(false)
   }
 
-  async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
+  async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
-      const broker = this.getActiveBroker()
+      const broker = this.getLiveBroker()
       if (broker) {
         return broker
       }
       const pending = this.latestReconcile
       await pending
       if (pending === this.latestReconcile) {
-        return this.getActiveBroker()
+        return this.getLiveBroker()
       }
     }
     return null

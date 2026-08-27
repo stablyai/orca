@@ -57,18 +57,30 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
 }
 
 export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
-  const leftWslPath = parseWslUncPath(left)
-  const rightWslPath = parseWslUncPath(right)
-  if (!leftWslPath && !rightWslPath) {
-    return false
+  const leftIdentity = getLocalWindowsWslPathIdentity(left)
+  const rightIdentity = getLocalWindowsWslPathIdentity(right)
+  return (
+    (leftIdentity.isWslUnc || rightIdentity.isWslUnc) &&
+    leftIdentity.aliasComparisonPath === rightIdentity.aliasComparisonPath
+  )
+}
+
+export type LocalWindowsWslPathIdentity = {
+  normalizedPath: string
+  aliasComparisonPath: string
+  isWslUnc: boolean
+}
+
+export function getLocalWindowsWslPathIdentity(value: string): LocalWindowsWslPathIdentity {
+  const wslPath = parseWslUncPath(value)
+  const normalizedPath = normalizeRuntimePathForComparison(value)
+  return {
+    normalizedPath,
+    aliasComparisonPath: wslPath
+      ? normalizeRuntimePathForComparison(toWindowsWslPath(wslPath.linuxPath, wslPath.distro))
+      : normalizedPath,
+    isWslUnc: wslPath !== null
   }
-  const normalize = (value: string): string => {
-    const wslPath = parseWslUncPath(value)
-    return normalizeRuntimePathForComparison(
-      wslPath ? toWindowsWslPath(wslPath.linuxPath, wslPath.distro) : value
-    )
-  }
-  return normalize(left) === normalize(right)
 }
 
 export function isRuntimePathAbsolute(

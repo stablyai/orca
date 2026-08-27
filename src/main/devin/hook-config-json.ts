@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs'
-import { parse as parseJsonc, type ParseError } from 'jsonc-parser'
+import { applyEdits, modify, parse as parseJsonc, type ParseError } from 'jsonc-parser'
 import { isPlainObject, type HooksConfig } from '../agent-hooks/installer-utils'
 
 /** Devin documents config.json as JSONC; stock JSON.parse rejects comments. */
@@ -14,6 +14,60 @@ export function readDevinHooksConfig(configPath: string): HooksConfig | null {
   } catch {
     return null
   }
+}
+
+/** Original file text alongside its parsed form, so a write can edit the text in place. */
+export function readDevinHooksSource(
+  configPath: string
+): { text: string | null; config: HooksConfig } | null {
+  if (!existsSync(configPath)) {
+    return { text: null, config: {} }
+  }
+
+  let text: string
+  try {
+    text = readFileSync(configPath, 'utf-8')
+  } catch {
+    return null
+  }
+  const config = parseDevinHooksConfigText(text, 'Devin config.json')
+  return config === null ? null : { text, config }
+}
+
+/**
+ * Serialize by editing the original JSONC text one hook event at a time, so the user's
+ * comments, key order, and formatting survive. A parse -> JSON.stringify round trip would
+ * silently drop all of them.
+ */
+export function serializeDevinHooksConfig(
+  originalText: string | null,
+  nextConfig: HooksConfig
+): string {
+  if (originalText === null) {
+    return `${JSON.stringify(nextConfig, null, 2)}\n`
+  }
+
+  const previous = parseJsonc(originalText) as HooksConfig | undefined
+  const previousHooks = isPlainObject(previous?.hooks) ? (previous.hooks ?? {}) : {}
+  const nextHooks = nextConfig.hooks ?? {}
+
+  let text = originalText
+  // Why: touch only the events that actually changed, so comments attached to a user's
+  // own untouched hook entries stay put.
+  for (const eventName of new Set([...Object.keys(previousHooks), ...Object.keys(nextHooks)])) {
+    const nextValue = nextHooks[eventName]
+    if (JSON.stringify(previousHooks[eventName]) === JSON.stringify(nextValue)) {
+      continue
+    }
+    text = applyEdits(
+      text,
+      // Why: `undefined` removes the key, which is how remove() drops an emptied event.
+      modify(text, ['hooks', eventName], nextValue, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 }
+      })
+    )
+  }
+  return text
 }
 
 export function parseDevinHooksConfigText(
