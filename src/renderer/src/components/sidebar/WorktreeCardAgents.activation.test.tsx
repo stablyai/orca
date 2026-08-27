@@ -51,6 +51,7 @@ let mockAgents: DashboardAgentRowData[] = []
 let mockAgentActivityDisplayMode: 'compact' | 'full' | undefined
 let mockTabsByWorktree: Record<string, { id: string }[]> = {}
 let mockAgentStatusByPaneKey: Record<string, { worktreeId?: string }> = {}
+let mockActiveWorktreeId: string | null = null
 let mockActiveTabId: string | null = null
 let mockActiveTabType: string = 'editor'
 const mockSetActiveTab = vi.fn((tabId: string) => {
@@ -75,6 +76,7 @@ function buildMockStoreState(): Record<string, unknown> {
     agentSendPopoverTargetMode: null,
     agentStatusByPaneKey: mockAgentStatusByPaneKey,
     agentStatusEpoch: 0,
+    activeWorktreeId: mockActiveWorktreeId,
     activeTabId: mockActiveTabId,
     activeTabType: mockActiveTabType,
     setActiveTab: mockSetActiveTab,
@@ -155,6 +157,7 @@ describe('WorktreeCardAgents activation', () => {
     mockAgentActivityDisplayMode = undefined
     mockTabsByWorktree = {}
     mockAgentStatusByPaneKey = {}
+    mockActiveWorktreeId = null
     mockActiveTabId = null
     mockActiveTabType = 'editor'
     capturedRowActivations = []
@@ -257,6 +260,81 @@ describe('WorktreeCardAgents activation', () => {
     expect(activationMocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1')
     expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
     expect(staleAgentRowMocks.dismissStaleAgentRowByKey).not.toHaveBeenCalled()
+  })
+
+  it('focuses an agent tab hosted under a sibling worktree key in the same project graph', async () => {
+    // #12739: multi-agent remote projects can index tabs under a different worktree key
+    // than the sidebar card that renders the row. setActiveTab only accepts the owner key.
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'remote-agent-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey,
+        tabId,
+        agentType: 'claude',
+        prompt: 'Remote multi-agent',
+        worktreeId: 'wt-1'
+      })
+    ]
+    mockTabsByWorktree = { 'wt-sibling': [{ id: tabId }] }
+    mockActiveWorktreeId = 'wt-1'
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+
+    renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+    expect(capturedRowActivations).toHaveLength(1)
+    capturedRowActivations[0].onActivate(tabId, paneKey)
+
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenNthCalledWith(1, 'wt-1')
+    // Why: retarget the owning key so setActiveTab ownership can stick.
+    expect(activationMocks.activateAndRevealWorktree).toHaveBeenNthCalledWith(2, 'wt-sibling')
+    expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(tabId, LEAF_A, {
+      ackPaneKeyOnSuccess: paneKey,
+      flashFocusedPane: true,
+      scrollToBottomIfOutputSinceLastView: true
+    })
+  })
+
+  it('retries focus once after reveal when the remote tab lands on the next frame', async () => {
+    mockAgentActivityDisplayMode = 'full'
+    const tabId = 'late-remote-tab'
+    const paneKey = makePaneKey(tabId, LEAF_A)
+    mockAgents = [
+      mockAgent({
+        paneKey,
+        tabId,
+        agentType: 'codex',
+        prompt: 'Late tab',
+        worktreeId: 'wt-1'
+      })
+    ]
+    mockAgentStatusByPaneKey = { [paneKey]: { worktreeId: 'wt-1' } }
+    let rAF: FrameRequestCallback | null = null
+    const originalRAF = globalThis.requestAnimationFrame
+    globalThis.requestAnimationFrame = ((cb: FrameRequestCallback) => {
+      rAF = cb
+      return 1
+    }) as typeof requestAnimationFrame
+
+    try {
+      const { default: WorktreeCardAgents } = await import('./WorktreeCardAgents')
+      renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
+      capturedRowActivations[0].onActivate(tabId, paneKey)
+      expect(activationMocks.activateTabAndFocusPane).not.toHaveBeenCalled()
+
+      mockTabsByWorktree = { 'wt-1': [{ id: tabId }] }
+      expect(rAF).not.toBeNull()
+      rAF?.(0)
+
+      expect(activationMocks.activateTabAndFocusPane).toHaveBeenCalledWith(tabId, LEAF_A, {
+        ackPaneKeyOnSuccess: paneKey,
+        flashFocusedPane: true,
+        scrollToBottomIfOutputSinceLastView: true
+      })
+    } finally {
+      globalThis.requestAnimationFrame = originalRAF
+    }
   })
 
   it('does not pane-focus a fallback terminal when the worker tab is still missing after reveal', async () => {

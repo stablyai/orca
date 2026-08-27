@@ -164,23 +164,48 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
         dismissStaleAgentRowByKey(paneKey)
         return
       }
-      // Why: design-doc rule — every user-initiated worktree switch must route through activateAndRevealWorktree (cross-repo activation + nav history).
-      activateAndRevealWorktree(worktreeId)
-      const tabs = useAppStore.getState().tabsByWorktree[worktreeId] ?? []
-      if (tabs.some((t) => t.id === tabId)) {
+      const focusAgentTab = (): boolean => {
+        // Why: remote/paired projects can host the tab under a sibling worktree key in the
+        // same project graph; only this card's list would miss a live multi-agent tab (#12739).
+        const state = useAppStore.getState()
+        let ownerWorktreeId: string | null = null
+        for (const [wtId, tabs] of Object.entries(state.tabsByWorktree)) {
+          if (tabs?.some((tab) => tab.id === tabId)) {
+            ownerWorktreeId = wtId
+            break
+          }
+        }
+        if (!ownerWorktreeId) {
+          return false
+        }
+        // Why: setActiveTab only accepts tabs owned by activeWorktreeId; activating the
+        // card key alone leaves activeTabId unchanged when the tab lives under a sibling.
+        if (state.activeWorktreeId !== ownerWorktreeId) {
+          activateAndRevealWorktree(ownerWorktreeId)
+        }
         activateTabAndFocusPane(tabId, parsed.leafId, {
           ackPaneKeyOnSuccess: paneKey,
           flashFocusedPane: true,
           scrollToBottomIfOutputSinceLastView: true
         })
-      } else {
-        const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
-        if (liveEntry?.worktreeId === worktreeId) {
-          // Why: orchestration worker status can be worktree-attributed before the renderer knows its tab; keep the live row instead of dismissing as stale.
-          return
-        }
-        dismissStaleAgentRowByKey(paneKey)
+        return true
       }
+      // Why: design-doc rule — every user-initiated worktree switch must route through activateAndRevealWorktree (cross-repo activation + nav history).
+      // Prefer the card worktree first for nav history; focusAgentTab re-targets the owner if needed.
+      activateAndRevealWorktree(worktreeId)
+      if (focusAgentTab()) {
+        return
+      }
+      const liveEntry = useAppStore.getState().agentStatusByPaneKey[paneKey]
+      if (liveEntry?.worktreeId === worktreeId) {
+        // Why: reveal can land remote tabs on the next paint; retry once before
+        // treating a worktree-attributed multi-agent row as inert (#12739).
+        requestAnimationFrame(() => {
+          focusAgentTab()
+        })
+        return
+      }
+      dismissStaleAgentRowByKey(paneKey)
     },
     [worktreeId]
   )
