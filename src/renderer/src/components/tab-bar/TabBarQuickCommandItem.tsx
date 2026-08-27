@@ -1,5 +1,5 @@
 import type { MouseEvent, PointerEvent } from 'react'
-import { Check, Copy, Pencil, Play, Trash2 } from 'lucide-react'
+import { Check, Copy, CopyPlus, Pencil, Play, Trash2 } from 'lucide-react'
 import { CommandItem } from '@/components/ui/command'
 import {
   getTerminalQuickCommandBody,
@@ -14,15 +14,18 @@ import { cn } from '@/lib/utils'
 type TabBarQuickCommandItemProps = {
   entry: HostedTerminalQuickCommand
   showHostLabel: boolean
+  canDuplicate: boolean
   onRun: () => void
   onEdit: () => void
+  onDuplicate: () => void
   onDelete: () => void
 }
 
 function stopRowSelect(event: MouseEvent | PointerEvent): void {
   // Why: cmdk selects the parent CommandItem on click; nested actions must not
   // also run the quick command. preventDefault keeps focus in the search input
-  // so arrow/Enter navigation still works after Copy (Edit/Delete close the menu).
+  // so arrow/Enter navigation still works after Copy (the dialog and Delete
+  // actions close the menu themselves).
   event.preventDefault()
   event.stopPropagation()
 }
@@ -30,8 +33,10 @@ function stopRowSelect(event: MouseEvent | PointerEvent): void {
 export function TabBarQuickCommandItem({
   entry,
   showHostLabel,
+  canDuplicate,
   onRun,
   onEdit,
+  onDuplicate,
   onDelete
 }: TabBarQuickCommandItemProps): React.JSX.Element {
   const { command } = entry
@@ -53,6 +58,17 @@ export function TabBarQuickCommandItem({
               'auto.components.tab.bar.TabBarQuickCommandsButton.69a1441a21',
               'Nothing to copy'
             )
+
+  const duplicateLabel = canDuplicate
+    ? translate(
+        'auto.components.tab.bar.TabBarQuickCommandsButton.4f2a1c8b3d',
+        'Duplicate {{value0}}',
+        { value0: command.label }
+      )
+    : translate(
+        'auto.components.tab.bar.TabBarQuickCommandsButton.7c6d5e4f2a',
+        'Quick command limit reached'
+      )
 
   return (
     <CommandItem
@@ -111,6 +127,20 @@ export function TabBarQuickCommandItem({
           title={copyLabel}
         >
           {status === 'copied' ? <Check className="size-3" /> : <Copy className="size-3" />}
+        </button>
+        <button
+          type="button"
+          disabled={!canDuplicate}
+          onPointerDown={stopRowSelect}
+          onClick={(event) => {
+            stopRowSelect(event)
+            onDuplicate()
+          }}
+          className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-accent hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
+          aria-label={duplicateLabel}
+          title={duplicateLabel}
+        >
+          <CopyPlus className="size-3" />
         </button>
         <button
           type="button"

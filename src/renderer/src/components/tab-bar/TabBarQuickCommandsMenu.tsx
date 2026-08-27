@@ -40,8 +40,10 @@ type TabBarQuickCommandsMenuProps = {
   addHosts: readonly TerminalQuickCommandHost[]
   hostLoadFailed: boolean
   hostOwnershipPending: boolean
+  canDuplicateCommand: (entry: HostedTerminalQuickCommand) => boolean
   onAddCommand: (hostId: TerminalQuickCommandHost['hostId']) => void
   onDeleteCommand: (entry: HostedTerminalQuickCommand) => void
+  onDuplicateCommand: (entry: HostedTerminalQuickCommand) => void
   onEditCommand: (entry: HostedTerminalQuickCommand) => void
   onMenuOpen: () => void
   onRunCommand: (entry: HostedTerminalQuickCommand) => void
@@ -54,8 +56,10 @@ export function TabBarQuickCommandsMenu({
   addHosts,
   hostLoadFailed,
   hostOwnershipPending,
+  canDuplicateCommand,
   onAddCommand,
   onDeleteCommand,
+  onDuplicateCommand,
   onEditCommand,
   onMenuOpen,
   onRunCommand
@@ -170,6 +174,30 @@ export function TabBarQuickCommandsMenu({
     },
     [closeMenu, onRunCommand]
   )
+  const renderCommandItems = (
+    entries: readonly HostedTerminalQuickCommand[]
+  ): React.JSX.Element[] =>
+    entries.map((entry) => (
+      <TabBarQuickCommandItem
+        key={entry.key}
+        entry={entry}
+        showHostLabel={addHosts.length > 1}
+        canDuplicate={canDuplicateCommand(entry)}
+        onRun={() => runAndClose(entry)}
+        onEdit={() => {
+          closeMenu()
+          onEditCommand(entry)
+        }}
+        onDuplicate={() => {
+          closeMenu()
+          onDuplicateCommand(entry)
+        }}
+        onDelete={() => {
+          closeMenu()
+          onDeleteCommand(entry)
+        }}
+      />
+    ))
   const searchInput = useTabBarQuickCommandSearchInput({
     commandListRef,
     commandValue,
@@ -350,41 +378,11 @@ export function TabBarQuickCommandsMenu({
                       )}
                 </CommandEmpty>
               ) : null}
-              {filteredRepoCommands.map((entry) => (
-                <TabBarQuickCommandItem
-                  key={entry.key}
-                  entry={entry}
-                  showHostLabel={addHosts.length > 1}
-                  onRun={() => runAndClose(entry)}
-                  onEdit={() => {
-                    closeMenu()
-                    onEditCommand(entry)
-                  }}
-                  onDelete={() => {
-                    closeMenu()
-                    onDeleteCommand(entry)
-                  }}
-                />
-              ))}
+              {renderCommandItems(filteredRepoCommands)}
               {filteredRepoCommands.length > 0 && filteredGlobalCommands.length > 0 ? (
                 <CommandSeparator className="my-1" />
               ) : null}
-              {filteredGlobalCommands.map((entry) => (
-                <TabBarQuickCommandItem
-                  key={entry.key}
-                  entry={entry}
-                  showHostLabel={addHosts.length > 1}
-                  onRun={() => runAndClose(entry)}
-                  onEdit={() => {
-                    closeMenu()
-                    onEditCommand(entry)
-                  }}
-                  onDelete={() => {
-                    closeMenu()
-                    onDeleteCommand(entry)
-                  }}
-                />
-              ))}
+              {renderCommandItems(filteredGlobalCommands)}
             </CommandList>
             {hostOwnershipPending ? (
               <TabBarQuickCommandHostLoadStatus failed={hostLoadFailed} />

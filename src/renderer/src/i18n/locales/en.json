@@ -3365,7 +3365,9 @@
             "53b17a4b1b": "Couldn't copy",
             "a9a564b7e7": "Copy {{value0}}",
             "69a1441a21": "Nothing to copy",
-            "192a4616a5": "Quick command actions"
+            "192a4616a5": "Quick command actions",
+            "4f2a1c8b3d": "Duplicate {{value0}}",
+            "7c6d5e4f2a": "Quick command limit reached"
           },
           "shell": {
             "icons": {
@@ -7556,7 +7558,9 @@
           "8d525e5f15": "Copied",
           "53b17a4b1b": "Couldn't copy",
           "a9a564b7e7": "Copy {{value0}}",
-          "69a1441a21": "Nothing to copy"
+          "69a1441a21": "Nothing to copy",
+          "4f2a1c8b3d": "Duplicate {{value0}}",
+          "7c6d5e4f2a": "Quick command limit reached"
         },
         "RecentTabOrderControl": {
           "3b17c81ede": "Tab strip order",

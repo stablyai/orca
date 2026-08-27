@@ -2,6 +2,7 @@ import type { TerminalQuickCommand } from '../../../src/shared/terminal-quick-co
 import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   applyTerminalQuickCommandMutation,
+  duplicateTerminalQuickCommand,
   flattenTerminalQuickCommand,
   getTerminalQuickCommandBody,
   isTerminalAgentQuickCommand,
@@ -31,6 +32,7 @@ export {
   MAX_QUICK_COMMAND_TERMINAL_TEXT_LENGTH,
   parseNormalizedTerminalQuickCommands,
   applyTerminalQuickCommandMutation,
+  duplicateTerminalQuickCommand,
   type TerminalQuickCommandMutation
 }
 
