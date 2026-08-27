@@ -71,6 +71,8 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     terminalUseSeparateLightTheme: false,
     terminalThemeLight: 'orca-light',
     terminalDividerColorLight: '#ffffff',
+    tabGroupSplitDividerColorDark: '#71717a',
+    tabGroupSplitDividerColorLight: '#868690',
     terminalInactivePaneOpacity: 0.5,
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 150,

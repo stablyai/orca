@@ -136,6 +136,9 @@ export type GlobalSettings = {
   terminalUseSeparateLightTheme: boolean
   terminalThemeLight: string
   terminalDividerColorLight: string
+  /** Workspace tab-group split (terminal | editor), not the in-terminal pane divider. */
+  tabGroupSplitDividerColorDark: string
+  tabGroupSplitDividerColorLight: string
   terminalInactivePaneOpacity: number
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number

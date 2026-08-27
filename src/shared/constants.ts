@@ -31,6 +31,10 @@ import { DEFAULT_SETUP_AGENT_STARTUP_POLICY } from './setup-agent-startup-policy
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from './terminal-scrollback-policy'
 import { DEFAULT_USAGE_PERCENTAGE_DISPLAY } from './usage-percentage-display'
 import { DEFAULT_STATUS_BAR_USAGE_MODE } from './status-bar-usage-mode'
+import {
+  DEFAULT_TAB_GROUP_SPLIT_DIVIDER_DARK,
+  DEFAULT_TAB_GROUP_SPLIT_DIVIDER_LIGHT
+} from './tab-group-split-divider'
 
 export { DEFAULT_STATUS_BAR_ITEMS } from './status-bar-defaults'
 export {
@@ -224,6 +228,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     terminalThemeLight: 'Builtin Tango Light',
     terminalCustomThemes: [],
     terminalDividerColorLight: '#d4d4d8',
+    tabGroupSplitDividerColorDark: DEFAULT_TAB_GROUP_SPLIT_DIVIDER_DARK,
+    tabGroupSplitDividerColorLight: DEFAULT_TAB_GROUP_SPLIT_DIVIDER_LIGHT,
     terminalInactivePaneOpacity: DEFAULT_TERMINAL_INACTIVE_PANE_OPACITY,
     terminalActivePaneOpacity: 1,
     terminalPaneOpacityTransitionMs: 140,

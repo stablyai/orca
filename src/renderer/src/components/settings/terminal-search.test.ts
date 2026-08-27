@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { getTerminalPaneSearchEntries } from './terminal-search'
-import { getAppearancePaneSearchEntries, getSidebarEntries } from './appearance-search'
+import {
+  getAppearancePaneSearchEntries,
+  getSidebarEntries,
+  getWorkspaceSplitDividerEntries
+} from './appearance-search'
 import {
   getShowPinnedWorktreesInGroupsEntry,
   getWorkspaceCardLayoutEntry
@@ -232,6 +236,14 @@ describe('getTerminalPaneSearchEntries', () => {
       expect(matchesSettingsSearch(query, osc52)).toBe(true)
     }
   )
+
+  it('includes workspace split divider controls in the Appearance catalog', () => {
+    const [darkEntry, lightEntry] = getWorkspaceSplitDividerEntries()
+
+    expect(getAppearancePaneSearchEntries()).toContainEqual(darkEntry)
+    expect(getAppearancePaneSearchEntries()).toContainEqual(lightEntry)
+    expect(matchesSettingsSearch('tab group', getAppearancePaneSearchEntries())).toBe(true)
+  })
 
   it('includes pinned worktree duplicate display in sidebar and Appearance search', () => {
     const entry = getShowPinnedWorktreesInGroupsEntry()

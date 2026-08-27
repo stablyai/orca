@@ -489,8 +489,43 @@ describe('AppearancePane', () => {
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))
 
     expect(container.textContent).toContain('Left Sidebar Appearance')
+    expect(container.textContent).toContain('Workspace Split Divider (Dark)')
+    expect(container.textContent).toContain('Workspace Split Divider (Light)')
     expect(container.textContent).toContain('Status Bar')
     expect(container.textContent).not.toContain('Advanced')
+  })
+
+  it('shows workspace split divider controls for a control-specific search', async () => {
+    mocks.state.settingsSearchQuery = 'tab group'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+
+    expect(container.textContent).toContain('Workspace Split Divider (Dark)')
+    expect(container.textContent).toContain('Workspace Split Divider (Light)')
+    expect(container.textContent).not.toContain('Theme')
+    expect(container.textContent).not.toContain('Advanced')
+  })
+
+  it('updates the workspace split divider color from Window & Sidebar', async () => {
+    mocks.state.settingsSearchQuery = ''
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'), updateSettings)
+    const colorInput = Array.from(container.querySelectorAll<HTMLInputElement>('input')).find(
+      (input) => input.type !== 'color' && input.value.toLowerCase() === '#71717a'
+    )
+
+    expect(container.textContent).toContain('Workspace Split Divider (Dark)')
+    expect(colorInput).toBeDefined()
+
+    await act(async () => {
+      if (!colorInput) {
+        throw new Error('expected a dark workspace split color input')
+      }
+      const assignValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set
+      assignValue?.call(colorInput, '#171717')
+      colorInput.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ tabGroupSplitDividerColorDark: '#171717' })
   })
 
   it('expands status bar controls for a section-label search', async () => {

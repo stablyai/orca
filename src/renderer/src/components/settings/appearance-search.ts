@@ -173,6 +173,58 @@ export const getStatusBarEntries = createLocalizedCatalog((): SettingsSearchEntr
 
 export { getLeftSidebarAppearanceEntry, getSidebarEntries }
 
+const workspaceSplitDividerKeywords = (): string[] => [
+  ...translateSearchKeyword(
+    'auto.components.settings.appearance.search.workspaceSplitDivider.workspace',
+    'workspace'
+  ),
+  ...translateSearchKeyword(
+    'auto.components.settings.appearance.search.workspaceSplitDivider.split',
+    'split'
+  ),
+  ...translateSearchKeyword(
+    'auto.components.settings.appearance.search.workspaceSplitDivider.divider',
+    'divider'
+  ),
+  ...translateSearchKeyword(
+    'auto.components.settings.appearance.search.workspaceSplitDivider.pane',
+    'pane'
+  ),
+  ...translateSearchKeyword(
+    'auto.components.settings.appearance.search.workspaceSplitDivider.color',
+    'color'
+  ),
+  ...translateSearchKeyword(
+    'auto.components.settings.appearance.search.workspaceSplitDivider.tabGroup',
+    'tab group'
+  )
+]
+
+export const getWorkspaceSplitDividerEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate(
+      'auto.components.settings.AppearanceWorkspaceSplitDividerSettings.darkTitle',
+      'Workspace Split Divider (Dark)'
+    ),
+    description: translate(
+      'auto.components.settings.AppearanceWorkspaceSplitDividerSettings.darkDescription',
+      'Color of the split line between workspace panes in dark mode. This is the column between a terminal tab and an editor, not the in-terminal split.'
+    ),
+    keywords: workspaceSplitDividerKeywords()
+  },
+  {
+    title: translate(
+      'auto.components.settings.AppearanceWorkspaceSplitDividerSettings.lightTitle',
+      'Workspace Split Divider (Light)'
+    ),
+    description: translate(
+      'auto.components.settings.AppearanceWorkspaceSplitDividerSettings.lightDescription',
+      'Color of the split line between workspace panes in light mode.'
+    ),
+    keywords: workspaceSplitDividerKeywords()
+  }
+])
+
 export const getAppIconEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('auto.components.settings.appearance.search.2b313598c6', 'App Icon'),
@@ -215,7 +267,7 @@ const getAppearanceSectionEntries = createLocalizedCatalog((): SettingsSearchEnt
     ),
     description: translate(
       'auto.components.settings.AppearancePane.windowSidebarSummary',
-      'Sidebar, status bar, and file explorer'
+      'Sidebar, status bar, file explorer, and workspace split divider'
     )
   }
 ])
@@ -240,6 +292,7 @@ function buildAppearancePaneSearchEntries(
     ...getTitlebarEntries(),
     ...getStatusBarEntries(),
     ...getSidebarEntries(),
+    ...getWorkspaceSplitDividerEntries(),
     ...getAppIconEntries(),
     ...getSystemTrayEntries(options),
     ...getMenuBarIconEntries(options)

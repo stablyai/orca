@@ -6485,7 +6485,7 @@
           "interfaceTitle": "Interface",
           "terminalTitle": "Terminal",
           "windowSidebarTitle": "Window & Sidebar",
-          "windowSidebarSummary": "Sidebar, status bar, and file explorer",
+          "windowSidebarSummary": "Sidebar, status bar, file explorer, and workspace split divider",
           "statusBarCount": "{{value0}} indicators visible.",
           "gitIgnoredGlossary": "Files matched by .gitignore.",
           "statusBarDescription": "Choose which indicators appear in the status bar.",
@@ -11470,6 +11470,12 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "AppearanceWorkspaceSplitDividerSettings": {
+          "darkTitle": "Workspace Split Divider (Dark)",
+          "darkDescription": "Color of the split line between workspace panes in dark mode. This is the column between a terminal tab and an editor, not the in-terminal split.",
+          "lightTitle": "Workspace Split Divider (Light)",
+          "lightDescription": "Color of the split line between workspace panes in light mode."
         }
       },
       "right": {

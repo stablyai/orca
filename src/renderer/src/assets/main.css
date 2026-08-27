@@ -242,9 +242,11 @@
   --markdown-search-match-active: #fb923c;
   /* Why: tab-group splits use a dedicated divider — `--border` is too faint on
      card/editor surfaces when panes are side-by-side or stacked. Default must
-     meet >=3:1 against `--card`, not only the hover/drag strong state. */
+     meet >=3:1 against `--card`, not only the hover/drag strong state.
+     Settings can override --tab-group-split-divider; hover/drag stays a
+     stronger mix of that color so a custom value still has a drag affordance. */
   --tab-group-split-divider: #868690;
-  --tab-group-split-divider-strong: #71717a;
+  --tab-group-split-divider-strong: color-mix(in srgb, var(--tab-group-split-divider) 82%, #000000);
 }
 
 /* ── Dark Mode ───────────────────────────────────────── */
@@ -354,7 +356,7 @@
   --markdown-search-match-active: #fb923c;
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --tab-group-split-divider: #71717a;
-  --tab-group-split-divider-strong: #a1a1aa;
+  --tab-group-split-divider-strong: color-mix(in srgb, var(--tab-group-split-divider) 70%, #ffffff);
 }
 
 .plugin-security-chrome {
