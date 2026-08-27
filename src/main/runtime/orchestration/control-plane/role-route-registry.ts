@@ -103,7 +103,7 @@ export type RouteAdmissionError = {
 }
 
 export type RouteAdmission =
-  | { ok: true; route: RouteRow; verdict: CertificationVerdict }
+  | { ok: true; route: RouteRow; verdict: CertificationVerdict; bootstrap?: true }
   | { ok: false; error: RouteAdmissionError }
 
 export type EligibilityFailure = { code: RouteAdmissionCode; reason: string }
@@ -195,6 +195,16 @@ export type AdmissionRequest = {
   currentCommitSha?: string
   currentRuntimeVersion?: string
   ttlMs?: number
+  /** Operator-declared first launch of a route that has never been proven.
+   *
+   *  Why this has to exist: every certification evidence kind is produced BY a
+   *  real launch, so requiring PASS before any launch is a closed loop — no
+   *  route could ever be certified, and no worker could start on an
+   *  outcome-admitted Run. This opens exactly the UNTESTED case, and only when
+   *  an operator asks for it by name. A route that has already FAILED, or whose
+   *  evidence went STALE, is still refused: those have been proven, and the
+   *  answer was no. */
+  bootstrapUncertified?: boolean
 }
 
 export function admitRoute(request: AdmissionRequest): RouteAdmission {
@@ -250,7 +260,12 @@ export function admitRoute(request: AdmissionRequest): RouteAdmission {
       UNTESTED: 'route_untested',
       UNSUPPORTED: 'route_unsupported'
     }
-    return fail(codeByState[verdict.state], verdict.state, verdict.reason)
+    // A never-proven route is the one state a bootstrap launch may open, and
+    // only to produce the evidence certification will then judge.
+    if (!(request.bootstrapUncertified && verdict.state === 'UNTESTED')) {
+      return fail(codeByState[verdict.state], verdict.state, verdict.reason)
+    }
+    return { ok: true, route, verdict, bootstrap: true }
   }
   // Why last: a reviewer-oriented model may hold a builder role, but only once
   // its own evidence has certified that role. Policy never grants it.

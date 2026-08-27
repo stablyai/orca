@@ -54,6 +54,9 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
       run: getOptionalStringFlag(flags, 'run'),
       from: await resolveCoordinatorTerminalHandle(flags, cwd, client),
+      // Id of a runtime-minted certification intent. The automatic phase-launch
+      // driver mints none, so lifecycle starts stay strict.
+      certificationIntent: getOptionalStringFlag(flags, 'certification-intent'),
       devMode: isDevCliInvocation()
     })
     if (result.result.state !== 'ready') {

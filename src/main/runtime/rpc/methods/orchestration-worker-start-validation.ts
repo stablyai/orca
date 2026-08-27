@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from './orchestration-federation-start-schema'
+import type { WorkerEffect, WorkerSetupReceipt } from './orchestration-worker-topology'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
@@ -193,4 +194,27 @@ export function buildWorkerStartOptions(args: {
         : 'orchestration_default'
       : 'existing_worktree'
   }
+}
+
+/** A reused worktree runs no setup, so its receipt is the not-applicable one. */
+export function reusedWorktreeSetupReceipt(): WorkerSetupReceipt {
+  return {
+    requested: 'not_applicable',
+    effective: 'not_applicable',
+    source: 'existing_worktree',
+    hookFound: false,
+    startupPolicy: 'start-immediately',
+    state: 'not_applicable'
+  }
+}
+
+/** The effects a start begins with: a reused worktree is already an effect, a
+ *  worktree still to be created records its own later. */
+export function initialWorkerEffects(reusedWorktreeId: string | null): WorkerEffect[] {
+  return reusedWorktreeId
+    ? [
+        { kind: 'worktree', action: 'reused', id: reusedWorktreeId },
+        { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
+      ]
+    : []
 }

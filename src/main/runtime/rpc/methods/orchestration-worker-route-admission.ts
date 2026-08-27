@@ -2,6 +2,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ControlPlaneDatabaseHandle } from '../../orchestration/control-plane/control-plane-store'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
+import { assertCertificationIntentMatches } from './orchestration-certification-launch'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
 import { assertOutcomeSerializationAllowed } from '../../orchestration/control-plane/outcome-serialization'
 import { classifyNativeRoute } from '../../../../shared/native-route-contract'
@@ -43,6 +44,15 @@ export function assertWorkerStartRouteAdmitted(args: {
   nowMs?: number
   /** Injectable only so tests can pin a build; production resolves its own. */
   runtimeBuildIdentity?: { id: string; commitSha?: string | null }
+  /** A typed, single-use certification intent the runtime minted and will match
+   *  field-by-field against this launch. Never a caller-declared boolean. */
+  certificationIntent?: string
+  /** What the runtime is ACTUALLY about to launch, for the intent to be matched
+   *  against. Absent when the caller supplied no intent. */
+  intentActual?: {
+    taskId: string
+    worktreeId: string | null
+  }
 }): void {
   if (args.agent && isExcludedWorkerAgent(args.agent)) {
     throw new OrchestrationError(
@@ -111,7 +121,20 @@ export function assertWorkerStartRouteAdmitted(args: {
     // deriving the "current" SHA from the evidence being checked lets that
     // evidence authorise itself. The runtime states what it is running.
     currentCommitSha: build.commitSha ?? undefined,
-    currentRuntimeVersion: build.id
+    currentRuntimeVersion: build.id,
+    // Why verified BEFORE it is allowed to weigh on admission: the intent has to
+    // describe this exact launch, and only the runtime can say what this launch
+    // is. A caller that merely asserts "this is a certification run" gets nothing.
+    bootstrapUncertified: assertCertificationIntentMatches({
+      handle: args.handle,
+      intentId: args.certificationIntent,
+      runId: args.runId,
+      outcomeId: binding.kind === 'admitted' ? binding.outcome.outcome_id : '',
+      taskId: args.intentActual?.taskId ?? '',
+      worktreeId: args.intentActual?.worktreeId ?? '',
+      identity,
+      buildId: build.id
+    })
   })
   if (!admission.ok) {
     throw new OrchestrationError(
@@ -215,6 +238,8 @@ export function assertWorkerStartAdmitted(args: {
   model?: string
   effort?: string
   worktreeId?: string
+  /** Forwarded from the explicit request; the phase-launch driver sets none. */
+  certificationIntent?: string
   /** Set when the start re-engages an existing worker session instead of
    *  creating one. Its worktree is fenced the same way a new one is. */
   terminalHandle?: string
@@ -223,13 +248,22 @@ export function assertWorkerStartAdmitted(args: {
   // live one must not start work at all, whatever route it would have used.
   assertOutcomeNotSerialized(args.handle, args.runId)
   const planned = resolveWorkerStartRole(args.handle, args.taskId)
+  // A retained re-engagement has already launched, so it needs no bootstrap and
+  // must never be able to buy one.
+  if (args.certificationIntent && args.terminalHandle) {
+    throw new OrchestrationError(
+      'certification_intent_invalid',
+      'A certification intent cannot authorise a retained re-engagement; that session already launched.'
+    )
+  }
   assertWorkerStartRouteAdmitted({
     ...args,
     role: planned.role,
     sessionMode: planned.sessionMode,
     agent: args.agent ?? planned.plannedAgent,
     model: args.model ?? planned.plannedModel,
-    effort: args.effort ?? planned.plannedEffort
+    effort: args.effort ?? planned.plannedEffort,
+    intentActual: { taskId: args.taskId, worktreeId: args.worktreeId ?? null }
   })
   // Why resolve the retained tree: a re-engagement names a TERMINAL, not a
   // worktree, so fencing only on an explicit worktree let an already-running
@@ -293,7 +327,16 @@ export function assertFederatedWorkerStartAdmitted(args: {
   effort?: string
   /** Set when the federated start re-engages an existing worker session. */
   terminalHandle?: string
+  certificationIntent?: string
 }): void {
+  // The execution host owns everything that touches execution, so this client
+  // cannot witness a remote launch and must not authorise one as evidence.
+  if (args.certificationIntent) {
+    throw new OrchestrationError(
+      'certification_intent_invalid',
+      'A certification intent is only valid for a local launch this runtime can observe.'
+    )
+  }
   assertOutcomeNotSerialized(args.handle, args.runId)
   assertWorkerStartRouteAdmitted({
     ...args,

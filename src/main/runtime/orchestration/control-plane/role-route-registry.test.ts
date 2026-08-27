@@ -444,3 +444,52 @@ describe('CORRECTION 1 failure classification', () => {
     }
   })
 })
+
+/** The bootstrap opens exactly one certification state: never-proven. A route
+ *  that already FAILED, or whose evidence went STALE, has been proven and the
+ *  answer was no; reopening either would turn the bootstrap into a way to
+ *  relitigate a verdict rather than a way to obtain one. */
+describe('BOOTSTRAP OPENS ONLY THE UNTESTED CASE', () => {
+  const row = route()
+
+  function admit(evidence: RouteEvidence[], bootstrapUncertified: boolean) {
+    return admitRoute({
+      ...baseAdmission,
+      registry: [row],
+      evidence,
+      requested: row.identity,
+      effective: row.identity,
+      requirement: { role: 'builder', sessionMode: 'fresh' },
+      bootstrapUncertified
+    })
+  }
+
+  it('admits a never-proven route when a verified intent authorises it', () => {
+    expect(admit([], true)).toMatchObject({ ok: true, bootstrap: true })
+  })
+
+  it('negative control: the same route is refused without one', () => {
+    expect(admit([], false)).toMatchObject({ ok: false })
+  })
+
+  it('refuses a route whose evidence already FAILED, intent or not', () => {
+    const failed = fullEvidence({
+      identity: row.identity,
+      role: 'builder',
+      sessionMode: 'fresh',
+      outcome: 'FAIL'
+    })
+    expect(admit(failed, true)).toMatchObject({ ok: false })
+    expect(admit(failed, false)).toMatchObject({ ok: false })
+  })
+
+  it('refuses a route whose evidence went STALE, intent or not', () => {
+    const stale = fullEvidence({
+      identity: row.identity,
+      role: 'builder',
+      sessionMode: 'fresh',
+      commitSha: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef'
+    })
+    expect(admit(stale, true)).toMatchObject({ ok: false })
+  })
+})

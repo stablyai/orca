@@ -8,8 +8,12 @@ import {
   findRegistryDrift
 } from '../../orchestration/control-plane/route-registry-discovery'
 import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
+import { mintCertificationIntent } from '../../orchestration/control-plane/certification-intent'
+import { requireCallerOwnedRunTask } from './orchestration-run-scope'
+import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 import { classifyNativeRoute } from '../../../../shared/native-route-contract'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
 import type { RouteIdentity } from '../../orchestration/control-plane/route-registry-types'
@@ -72,6 +76,15 @@ const RoutesParams = z.object({ sha: OptionalString })
 
 /** B1 (correction 2) — the bounded typed operations that register registry rows
  *  and certification evidence, and read back the role matrix. */
+/** Refused rather than coerced: an intent for an agent Orca cannot launch would
+ *  authorise a launch that can never happen. */
+function assertTuiAgent(agent: string): TuiAgent {
+  if (!isTuiAgent(agent)) {
+    throw new OrchestrationError('route_unsupported', `${agent} is not an agent Orca can launch.`)
+  }
+  return agent
+}
+
 export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.routeUpsert',
@@ -170,6 +183,68 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
     }
   }),
 
+  defineMethod({
+    name: 'orchestration.certificationIntent',
+    params: z.object({
+      run: requiredString('--run'),
+      task: requiredString('--task'),
+      worktree: requiredString('--worktree'),
+      agent: requiredString('--agent'),
+      model: OptionalString,
+      reasoning: OptionalString,
+      from: OptionalString
+    }),
+    handler: async (params, { runtime, orchestrationCompatibilityEvidence }) => {
+      const db = runtime.getOrchestrationDb()
+      const store = new ControlPlaneStore(db)
+      // Naming an admitted Run is not authority over it. The mint requires the
+      // same ownership worker-start requires: the caller's own pane must be the
+      // coordinator currently bound to this Run, the Task must belong to it, and
+      // the worktree must be the one that terminal actually sits in.
+      const { run } = requireCallerOwnedRunTask(runtime, db, {
+        from: params.from,
+        run: params.run,
+        task: params.task,
+        callerEvidence: orchestrationCompatibilityEvidence,
+        verb: 'Minting a certification intent'
+      })
+      const callerWorktree = run.coordinator_handle
+        ? await runtime.showTerminal(run.coordinator_handle).catch(() => null)
+        : null
+      if (!callerWorktree || callerWorktree.worktreeId !== params.worktree) {
+        throw new OrchestrationError(
+          'worktree_not_owned',
+          `Worktree ${params.worktree} is not the worktree this Run's coordinator terminal occupies.`
+        )
+      }
+      const outcome = store.getOutcomeByRun(params.run)
+      if (!outcome) {
+        throw new OrchestrationError(
+          'outcome_not_admitted',
+          `Run ${params.run} has no admitted outcome, so there is nothing to certify against.`
+        )
+      }
+      // Bound to the runtime's OWN build, so an intent cannot outlive the
+      // artifact whose route it was issued to prove.
+      const intent = mintCertificationIntent(
+        db,
+        {
+          runId: params.run,
+          taskId: params.task,
+          outcomeId: outcome.outcome_id,
+          worktreeId: params.worktree,
+          identity: {
+            agent: assertTuiAgent(params.agent),
+            model: params.model ?? null,
+            reasoning: params.reasoning ?? null
+          },
+          buildId: resolveRuntimeBuildIdentity().id
+        },
+        new Date().toISOString()
+      )
+      return { intent }
+    }
+  }),
   defineMethod({
     name: 'orchestration.routes',
     params: RoutesParams,

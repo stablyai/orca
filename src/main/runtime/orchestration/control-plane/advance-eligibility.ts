@@ -20,6 +20,7 @@ export type AdvanceIneligibility = {
     | 'outcome_failed'
     | 'completion_gate_failed'
     | 'completion_receipt_missing'
+    | 'certification_bootstrap_dispatch'
   reason: string
 }
 
@@ -32,7 +33,19 @@ export function resolveAdvanceEligibility(args: {
   gateResult: 'PASS' | 'FAIL' | null
   /** True when this Run's contract requires every completion to carry a receipt. */
   receiptRequired: boolean
+  /** True when this Dispatch exists only to produce certification evidence. */
+  certificationBootstrap?: boolean
 }): AdvanceEligibility {
+  // Why first: a bootstrap Dispatch was admitted on a route nothing had proven,
+  // precisely so it could produce the evidence. Letting its completion advance a
+  // real outcome would launder an uncertified route into delivered work.
+  if (args.certificationBootstrap) {
+    return {
+      eligible: false,
+      code: 'certification_bootstrap_dispatch',
+      reason: `Dispatch ${args.dispatch.id} was admitted only to produce certification evidence, so it cannot advance an outcome.`
+    }
+  }
   if (args.dispatch.status !== 'completed') {
     return {
       eligible: false,

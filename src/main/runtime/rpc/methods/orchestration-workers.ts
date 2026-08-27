@@ -1,4 +1,5 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { createDispatchUnderCertificationIntent } from './orchestration-certification-launch'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
@@ -9,7 +10,6 @@ import {
   createWorkerWorktree,
   monitorWorkerSetup,
   requireWorkerAuthority,
-  type WorkerEffect,
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
 import {
@@ -20,6 +20,8 @@ import {
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import {
   buildWorkerStartOptions,
+  initialWorkerEffects,
+  reusedWorktreeSetupReceipt,
   prepareLocalWorkerStart
 } from './orchestration-worker-start-validation'
 import {
@@ -28,7 +30,7 @@ import {
 } from './orchestration-worker-route-admission'
 import { deliverWorkerDispatchPrompt } from './orchestration-worker-dispatch-prompt'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
-import { resolveOrchestrationCaller } from './orchestration-run-scope'
+import { requireCallerOwnedRunTask } from './orchestration-run-scope'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartReadinessTimeoutMs
@@ -52,24 +54,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       const db = runtime.getOrchestrationDb()
       // Why: worker-start was the only Run-scoped verb that skipped this, so a
       // declared --from could name someone else's pane and inherit their depth.
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: params.from,
-        callerEvidence: orchestrationCompatibilityEvidence
+      const { run, task } = requireCallerOwnedRunTask(runtime, db, {
+        from: params.from,
+        run: params.run,
+        task: params.task,
+        callerEvidence: orchestrationCompatibilityEvidence,
+        verb: 'worker-start'
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
-      if (!run || (params.run && params.run !== run.id)) {
-        throw new OrchestrationError(
-          'consumer_fenced',
-          'worker-start requires the coordinator terminal currently bound to the Task Run.'
-        )
-      }
-      const task = db.getTask(params.task)
-      if (!task || task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${params.task} was not found in Run ${run.id}.`
-        )
-      }
 
       if (params.on) {
         // Why here too: a federated worker is still a worker route, and an
@@ -81,7 +72,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           agent: params.agent,
           model: params.model,
           effort: params.effort,
-          terminalHandle: params.terminal
+          terminalHandle: params.terminal,
+          certificationIntent: params.certificationIntent
         })
         return startFederatedWorker({
           params,
@@ -124,7 +116,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         model: params.model,
         effort: params.effort,
         worktreeId: resolvedWorktree?.id,
-        terminalHandle: params.terminal
+        terminalHandle: params.terminal,
+        certificationIntent: params.certificationIntent
       })
       let explicitTerminal
       if (params.terminal) {
@@ -154,33 +147,26 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         // param, so worker-start cannot stall past its transport grace.
         readinessTimeoutMs
       })
-      const started = db.createStartingWorkerDispatch({
-        creator: resolveDispatchCreator(runtime, params.from),
-        maxDepth: runtime.getNestedWorkerMaxDepth(),
-        taskId: task.id,
-        retryOf: params.retryOf,
-        startOptions,
-        runtimeEpoch: runtime.getRuntimeId(),
-        mutationReceipt: orchestrationMutation
+      const started = createDispatchUnderCertificationIntent({
+        handle: db,
+        intentId: params.certificationIntent,
+        claimId: `claim:${orchestrationMutation?.requestId ?? runtime.getRuntimeId()}:${task.id}`,
+        create: () =>
+          db.createStartingWorkerDispatch({
+            creator: resolveDispatchCreator(runtime, params.from),
+            maxDepth: runtime.getNestedWorkerMaxDepth(),
+            taskId: task.id,
+            retryOf: params.retryOf,
+            startOptions,
+            runtimeEpoch: runtime.getRuntimeId(),
+            mutationReceipt: orchestrationMutation
+          })
       })
-      const effects: WorkerEffect[] = []
-      if (resolvedWorktree) {
-        effects.push(
-          { kind: 'worktree', action: 'reused', id: resolvedWorktree.id },
-          { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
-        )
-      }
+      const effects = initialWorkerEffects(resolvedWorktree?.id ?? null)
       let terminalHandle = params.terminal
       let terminalRevealWarning: string | undefined
       let failedStage = 'terminal_create'
-      let setupReceipt: WorkerSetupReceipt = {
-        requested: 'not_applicable',
-        effective: 'not_applicable',
-        source: 'existing_worktree',
-        hookFound: false,
-        startupPolicy: 'start-immediately',
-        state: 'not_applicable'
-      }
+      let setupReceipt: WorkerSetupReceipt = reusedWorktreeSetupReceipt()
       try {
         if (creationWorktree) {
           failedStage = 'worktree_create'

@@ -188,3 +188,34 @@ describe('FAILED_WORK_NO_REVIEW', () => {
     }
   })
 })
+
+/** A bootstrap Dispatch exists only to produce evidence. If its completion could
+ *  advance a real outcome, an uncertified route would be laundered into
+ *  delivered work — the bootstrap would become the bypass. */
+describe('A BOOTSTRAP DISPATCH CANNOT ADVANCE A REAL OUTCOME', () => {
+  const dispatch = { id: 'ctx_boot', status: 'completed' as const }
+
+  it('refuses the advance even when everything else is perfect', () => {
+    expect(
+      resolveAdvanceEligibility({
+        dispatch,
+        outcomeOfReport: 'succeeded',
+        gateResult: 'PASS',
+        receiptRequired: true,
+        certificationBootstrap: true
+      })
+    ).toMatchObject({ eligible: false, code: 'certification_bootstrap_dispatch' })
+  })
+
+  it('negative control: the identical completion advances when it is ordinary work', () => {
+    expect(
+      resolveAdvanceEligibility({
+        dispatch,
+        outcomeOfReport: 'succeeded',
+        gateResult: 'PASS',
+        receiptRequired: true,
+        certificationBootstrap: false
+      })
+    ).toEqual({ eligible: true })
+  })
+})

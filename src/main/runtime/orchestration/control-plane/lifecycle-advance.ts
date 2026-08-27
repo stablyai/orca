@@ -1,3 +1,4 @@
+import { wasCertificationBootstrapDispatch } from './certification-intent'
 import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import type { DispatchContextRow } from '../types'
@@ -166,7 +167,9 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
     gateResult: claim.receipt?.result ?? null,
     // Why not for a review: a reviewer reports corrections, not a gate receipt.
     // Only the completion that produced the commit under gate must carry one.
-    receiptRequired: !isReviewPhase
+    receiptRequired: !isReviewPhase,
+    // Read from the runtime's own intent ledger, never from the report.
+    certificationBootstrap: wasCertificationBootstrapDispatch(db, dispatch.id)
   })
   if (!eligibility.eligible) {
     const wakeMessageId = publishAdvanceBlocked({
