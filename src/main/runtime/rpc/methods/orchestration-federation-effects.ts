@@ -1,3 +1,5 @@
+import { AGENT_READINESS_OUTCOME_UNKNOWN_CODE } from './orchestration-agent-readiness-wait'
+
 export type FederationEffect = {
   kind: 'worktree' | 'terminal' | 'setup' | 'dispatch_input'
   action?: string
@@ -69,6 +71,9 @@ export function isFederationEffectUnknown(error: unknown, stage: string): boolea
       ? (error as { code: string }).code
       : ''
   if (code === 'operation_unknown') {
+    return true
+  }
+  if (code === AGENT_READINESS_OUTCOME_UNKNOWN_CODE && stage === 'agent_readiness') {
     return true
   }
   if (!['worktree_create', 'terminal_create', 'dispatch_input'].includes(stage)) {
