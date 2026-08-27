@@ -1724,7 +1724,11 @@ export class RateLimitService {
       status: 'unavailable'
     }
     const glmFetchPromise = glmConfig?.apiKey
-      ? fetchGlmRateLimits({ platform: glmConfig.platform, apiKey: glmConfig.apiKey })
+      ? fetchGlmRateLimits({
+          platform: glmConfig.platform,
+          apiKey: glmConfig.apiKey,
+          signal
+        })
       : Promise.resolve(glmUnavailableResult)
 
     const [
@@ -1910,7 +1914,12 @@ export class RateLimitService {
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
-    this.trackActiveFailureStreak('glm', glm)
+    // Why: a config resolved mid-cycle would otherwise apply a response fetched with the superseded platform/key.
+    const glmConfigSuperseded =
+      `${glmConfig?.platform ?? ''}|${glmConfig?.apiKey ?? ''}` !== currentGlmConfigHash
+    if (!glmConfigSuperseded) {
+      this.trackActiveFailureStreak('glm', glm)
+    }
 
     // Why: apply a Codex result only when provenance and generation still match, else a raced in-flight fetch overwrites the new account.
     this.updateState({
@@ -1936,7 +1945,11 @@ export class RateLimitService {
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
         : this.state.minimax,
-      glm: glmConfigChanged ? glm : this.applyStalePolicy(glm, previousState.glm)
+      glm: glmConfigSuperseded
+        ? this.state.glm
+        : glmConfigChanged
+          ? glm
+          : this.applyStalePolicy(glm, previousState.glm)
     })
 
     const grokResult = await grokResultPromise

@@ -1,9 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGlmRateLimits } from './glm-fetcher'
-import { okProvider, resetRateLimitProviderMocks } from './rate-limit-service-test-harness'
+import {
+  deferred,
+  flushMicrotasks,
+  okProvider,
+  resetRateLimitProviderMocks
+} from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
   fetchClaudeRateLimits: vi.fn(),
@@ -61,7 +67,11 @@ describe('RateLimitService GLM usage', () => {
 
     await service.refresh()
 
-    expect(fetchGlmRateLimits).toHaveBeenCalledWith({ platform: 'zai', apiKey: 'tok-abc' })
+    expect(fetchGlmRateLimits).toHaveBeenCalledWith({
+      platform: 'zai',
+      apiKey: 'tok-abc',
+      signal: expect.any(AbortSignal)
+    })
     const state = service.getState()
     expect(state.glm?.status).toBe('ok')
     expect(state.glm?.session?.usedPercent).toBe(33)
@@ -106,6 +116,30 @@ describe('RateLimitService GLM usage', () => {
     await service.refresh()
 
     expect(fetchGlmRateLimits).toHaveBeenCalledTimes(2)
+    expect(service.getState().glm?.session?.usedPercent).toBe(10)
+  })
+
+  it('does not apply an in-flight GLM result fetched with a superseded config', async () => {
+    const service = new RateLimitService()
+    let apiKey = 'tok-one'
+    service.setGlmConfigResolver(() => ({ platform: 'zai', apiKey }))
+    const inFlight = deferred<ProviderRateLimits>()
+    vi.mocked(fetchGlmRateLimits).mockImplementationOnce(() => inFlight.promise)
+
+    const first = service.refresh()
+    await flushMicrotasks()
+
+    apiKey = 'tok-two'
+    vi.mocked(fetchGlmRateLimits).mockImplementationOnce(async () => okProvider('glm', 10))
+    const second = service.refresh()
+    await flushMicrotasks()
+
+    inFlight.resolve(okProvider('glm', 50))
+    await first
+
+    expect(service.getState().glm?.session?.usedPercent).not.toBe(50)
+
+    await second
     expect(service.getState().glm?.session?.usedPercent).toBe(10)
   })
 })
