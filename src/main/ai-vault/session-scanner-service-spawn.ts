@@ -18,16 +18,19 @@ import { lowerAiVaultServicePriority } from './session-scanner-service-priority'
 import type { AiVaultServiceSubagentRequest } from './session-scanner-service-protocol'
 import type { AiVaultWorkerScanOptions } from './session-scanner-worker-protocol'
 
-export function spawnAiVaultServiceProcess(): ChildProcess {
+export function spawnAiVaultServiceProcess(
+  args: { baseEnv?: NodeJS.ProcessEnv; platform?: NodeJS.Platform } = {}
+): ChildProcess {
   const entryPath = getAiVaultServiceEntryPath()
   if (!existsSync(entryPath)) {
     throw new Error(`AI Vault service entry not found: ${entryPath}`)
   }
+  const platform = args.platform ?? process.platform
   const child = fork(entryPath, [], {
     stdio: ['ignore', 'ignore', 'pipe', 'ipc'],
     execArgv: ['--max-old-space-size=384'],
-    env: buildAiVaultServiceEnv(),
-    ...(process.platform === 'win32' ? { windowsHide: true } : {})
+    env: buildAiVaultServiceEnv(args.baseEnv, platform),
+    ...(platform === 'win32' ? { windowsHide: true } : {})
   })
   lowerAiVaultServicePriority(child.pid)
   child.unref()

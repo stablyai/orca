@@ -8,7 +8,7 @@ vi.mock('node:fs', () => ({ existsSync: () => true }))
 
 const { spawnAiVaultServiceProcess } = await import('./session-scanner-service-spawn')
 
-function forkOptions(): { env?: NodeJS.ProcessEnv; execArgv?: string[] } {
+function forkOptions(): { env?: NodeJS.ProcessEnv; execArgv?: string[]; windowsHide?: boolean } {
   return forkMock.mock.calls.at(-1)?.[2] ?? {}
 }
 
@@ -37,6 +37,26 @@ describe('spawnAiVaultServiceProcess', () => {
 
     expect(forkOptions().env?.CODEX_HOME).toBe('/home/dev/elsewhere/.codex')
     vi.unstubAllEnvs()
+  })
+
+  it('passes redirected APPDATA to the Windows child', () => {
+    spawnAiVaultServiceProcess({
+      baseEnv: { APPDATA: 'D:\\Profiles\\Ada\\Roaming' },
+      platform: 'win32'
+    })
+
+    expect(forkOptions().env?.APPDATA).toBe('D:\\Profiles\\Ada\\Roaming')
+    expect(forkOptions().windowsHide).toBe(true)
+  })
+
+  it('withholds APPDATA from POSIX children', () => {
+    spawnAiVaultServiceProcess({
+      baseEnv: { APPDATA: '/tmp/not-a-posix-root' },
+      platform: 'linux'
+    })
+
+    expect(forkOptions().env?.APPDATA).toBeUndefined()
+    expect(forkOptions().windowsHide).toBeUndefined()
   })
 
   it('runs the forked Electron binary as plain Node', () => {

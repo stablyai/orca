@@ -13,6 +13,7 @@ export type RelayAiVaultServiceInit = {
   protocol: typeof RELAY_AI_VAULT_SERVICE_PROTOCOL
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  devinTranscriptsDir?: string
 }
 
 export type RelayAiVaultServiceRequest =

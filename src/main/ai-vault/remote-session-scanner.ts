@@ -41,6 +41,7 @@ export async function scanRemoteAiVaultSessions(args: {
   executionHostId: ExecutionHostId
   remoteHome: string
   hostPlatform: RemoteHostPlatform
+  devinTranscriptsDir?: string
   limit?: number
   unlimited?: boolean
   scopePaths?: readonly string[]
@@ -75,7 +76,7 @@ export async function scanRemoteAiVaultSessions(args: {
   const candidates = dedupeCodexRolloutFileAliases(
     (
       await mapRemoteScanBatches(
-        remoteSessionSources(args.remoteHome, args.hostPlatform),
+        remoteSessionSources(args.remoteHome, args.hostPlatform, args.devinTranscriptsDir),
         REMOTE_SCAN_CONCURRENCY,
         (source) => discoverRemoteSourceCandidates({ source, context, issues }),
         args.signal

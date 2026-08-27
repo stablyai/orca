@@ -5,10 +5,10 @@ import type {
   AiVaultSessionTitlesResult
 } from '../shared/ai-vault-session-title'
 import type { SshAiVaultRelayListParams } from '../shared/ssh-ai-vault-relay'
-import type { RemoteHostPlatform } from '../main/ssh/ssh-remote-platform'
 import {
   relayAiVaultServiceLane,
   type RelayAiVaultServiceLane,
+  type RelayAiVaultServiceInit,
   type RelayAiVaultServiceRequest
 } from './ai-vault-service-protocol'
 
@@ -122,10 +122,7 @@ export type RelayAiVaultServiceApi = {
 
 export type RelayAiVaultServiceClientOptions = {
   processFactory: () => ChildProcess
-  init: {
-    remoteHome: string
-    hostPlatform: RemoteHostPlatform
-  }
+  init: Omit<RelayAiVaultServiceInit, 'type' | 'protocol'>
   now?: () => number
   idleTimeoutMs?: number
 }

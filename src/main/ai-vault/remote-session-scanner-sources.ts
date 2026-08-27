@@ -4,6 +4,7 @@ import { joinRemotePath } from '../ssh/ssh-remote-platform'
 import { parseAntigravitySessionContent } from './session-scanner-antigravity-parser'
 import { isAntigravityTranscriptPath } from './session-scanner-antigravity-paths'
 import { parseCodexSessionContent } from './session-scanner-codex-parser'
+import { defaultDevinTranscriptsSegments } from './session-scanner-devin-paths'
 import { parseDevinSessionContent } from './session-scanner-devin-parser'
 import { parseDroidSessionContent } from './session-scanner-droid-parser'
 import { parseMessageGraphSessionContent } from './session-scanner-graph-parsers'
@@ -34,7 +35,8 @@ type RemoteContentParser = (
 
 export function remoteSessionSources(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  devinTranscriptsDir?: string
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
@@ -85,14 +87,7 @@ export function remoteSessionSources(
       ['.json'],
       parseHermesSessionContent
     ),
-    source(
-      'devin',
-      remoteHome,
-      hostPlatform,
-      ['.local', 'share', 'devin', 'cli', 'transcripts'],
-      ['.json'],
-      parseDevinSessionContent
-    ),
+    remoteDevinSource(remoteHome, hostPlatform, devinTranscriptsDir),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
     {
       ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
@@ -124,6 +119,24 @@ export function remoteSessionSources(
     ),
     ...remoteOpenClawSources(remoteHome, hostPlatform)
   ]
+}
+
+function remoteDevinSource(
+  remoteHome: string,
+  hostPlatform: RemoteHostPlatform,
+  transcriptsDir: string | undefined
+): RemoteSessionSource {
+  const fallback = source(
+    'devin',
+    remoteHome,
+    hostPlatform,
+    defaultDevinTranscriptsSegments(hostPlatform.os),
+    ['.json'],
+    parseDevinSessionContent
+  )
+  return transcriptsDir === undefined
+    ? fallback
+    : { ...fallback, rootDir: joinRemotePath(hostPlatform, transcriptsDir) }
 }
 
 function remoteAntigravitySource(

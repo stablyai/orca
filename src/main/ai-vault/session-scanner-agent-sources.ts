@@ -4,6 +4,10 @@ import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
 import { uniqueCodexSessionsDirs } from './session-scanner-codex-paths'
+import {
+  defaultDevinTranscriptsSegments,
+  resolveDevinTranscriptsDir
+} from './session-scanner-devin-paths'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
@@ -33,11 +37,6 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
 // dedicated sessions-root override, so resolution differs from Pi/OMP in shape
 // as well as in variable name.
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
-// Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
-const DEVIN_TRANSCRIPTS_DIR = join(
-  process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
-  'transcripts'
-)
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
 const DROID_PROJECTS_DIR = join(homedir(), '.factory', 'projects')
 
@@ -131,13 +130,12 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
   },
   devin: {
     rootDirs: (options, wslHomeDirs) =>
-      sessionRootDirs(options.devinTranscriptsDir ?? DEVIN_TRANSCRIPTS_DIR, wslHomeDirs, [
-        '.local',
-        'share',
-        'devin',
-        'cli',
-        'transcripts'
-      ]),
+      sessionRootDirs(
+        resolveDevinTranscriptsDir({ override: options.devinTranscriptsDir }),
+        wslHomeDirs,
+        // Why: WSL distro homes are Linux; the Windows APPDATA default is host-local.
+        defaultDevinTranscriptsSegments('linux')
+      ),
     extensions: ['.json']
   },
   hermes: {

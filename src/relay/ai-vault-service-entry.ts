@@ -51,6 +51,7 @@ async function execute(request: RelayAiVaultServiceRequest): Promise<void> {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       remoteHome: init.remoteHome,
       hostPlatform: init.hostPlatform,
+      devinTranscriptsDir: init.devinTranscriptsDir,
       limit: request.params.limit,
       unlimited: request.params.unlimited,
       scopePaths: request.params.scopePaths,
