@@ -4,6 +4,7 @@ import { gitExecFileAsync } from './runner'
 
 export type BranchConflictKind = 'local' | 'remote'
 
+/** Whether `ref` resolves in the repository at `path`. */
 async function hasGitRefAsync(
   path: string,
   ref: string,
@@ -17,6 +18,10 @@ async function hasGitRefAsync(
   }
 }
 
+/**
+ * Whether `branchName` is already taken, and by what. Only refs under a configured
+ * remote count as remote conflicts; `allowedBaseRef` exempts the ref being branched from.
+ */
 export async function getBranchConflictKind(
   path: string,
   branchName: string,
@@ -39,6 +44,12 @@ export async function getBranchConflictKind(
         return false
       }
       const shortRef = trimmed.replace(/^refs\/remotes\//, '')
+      // Why: a ref under a prefix no configured remote owns tracks nothing — a
+      // hand-planted ref, or a fork remote that was removed — so it cannot collide
+      // with a new local branch. Ref *display* still resolves those leniently.
+      if (!remoteNames.some((candidate) => shortRef.startsWith(`${candidate}/`))) {
+        return false
+      }
       return resolveLocalBranchName(trimmed, shortRef, remoteNames) === branchName
     })
 
@@ -48,6 +59,7 @@ export async function getBranchConflictKind(
   }
 }
 
+/** The one remote ref a caller may branch from without it counting as a conflict. */
 function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefined): boolean {
   if (!allowedBaseRef) {
     return false
