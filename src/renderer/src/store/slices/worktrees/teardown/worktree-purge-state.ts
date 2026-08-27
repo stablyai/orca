@@ -170,6 +170,7 @@ export function buildWorktreePurgeState(
     editorDrafts: omitByFileId(s.editorDrafts),
     markdownViewMode: omitByFileId(s.markdownViewMode),
     markdownFrontmatterVisible: omitByFileId(s.markdownFrontmatterVisible),
+    editorTextDirectionByFile: omitByFileId(s.editorTextDirectionByFile),
     // Why: keyed by fileId; the bulk reconcile path previously kept these, leaking a cursor-line / view-mode entry per removed file.
     editorCursorLine: omitByFileId(s.editorCursorLine),
     editorViewMode: omitByFileId(s.editorViewMode),

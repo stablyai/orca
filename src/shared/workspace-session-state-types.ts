@@ -1,4 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
+import type { EditorTextDirectionOverride } from './editor-text-direction'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
@@ -53,6 +54,8 @@ export type WorkspaceSessionState = {
   activeFileIdByWorktree?: Record<string, string | null>
   /** Per-file markdown preview front-matter visibility. Absent entry means hidden. */
   markdownFrontmatterVisible?: Record<string, boolean>
+  /** Per-file document-direction override. Absent entry means follow settings.editorTextDirection. */
+  editorTextDirectionByFile?: Record<string, EditorTextDirectionOverride>
   /** Persisted browser workspaces, keyed by worktree ID. */
   browserTabsByWorktree?: Record<string, BrowserWorkspace[]>
   /** Persisted browser pages, keyed by workspace ID. */

@@ -224,3 +224,48 @@ describe('getEditorPanelRenderModel markdown export affordance', () => {
     ).toBe(false)
   })
 })
+
+describe('canShowTextDirectionToggle', () => {
+  it('stays hidden for LTR-only content so the header keeps no extra chrome', () => {
+    expect(renderModel({}).canShowTextDirectionToggle).toBe(false)
+  })
+
+  it('reveals the toggle once the file holds Hebrew or Arabic text', () => {
+    expect(
+      renderModel({
+        fileContents: { '/repo/README.md': textContent({ content: '# \u05e9\u05dc\u05d5\u05dd' }) }
+      }).canShowTextDirectionToggle
+    ).toBe(true)
+    expect(
+      renderModel({
+        fileContents: {
+          '/repo/README.md': textContent({ content: '# \u0645\u0631\u062d\u0628\u0627' })
+        }
+      }).canShowTextDirectionToggle
+    ).toBe(true)
+  })
+
+  it('prefers the unsaved draft, so typing RTL reveals the toggle before saving', () => {
+    expect(
+      renderModel({ editorDrafts: { '/repo/README.md': '\u05e9\u05dc\u05d5\u05dd' } })
+        .canShowTextDirectionToggle
+    ).toBe(true)
+  })
+
+  it('only scans a bounded prefix, so RTL past the limit does not reveal it', () => {
+    const content = `${'a'.repeat(9000)}\u05e9\u05dc\u05d5\u05dd`
+    expect(
+      renderModel({ fileContents: { '/repo/README.md': textContent({ content }) } })
+        .canShowTextDirectionToggle
+    ).toBe(false)
+  })
+
+  it('stays hidden on diff surfaces, which have no editable content', () => {
+    expect(
+      renderModel({
+        activeFile: markdownFile({ mode: 'diff', diffSource: 'unstaged' }),
+        fileContents: { '/repo/README.md': textContent({ content: '\u05e9\u05dc\u05d5\u05dd' }) }
+      }).canShowTextDirectionToggle
+    ).toBe(false)
+  })
+})

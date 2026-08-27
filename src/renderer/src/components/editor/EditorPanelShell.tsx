@@ -112,6 +112,7 @@ export function EditorPanelShell({
           canOpenPreviewToSide={model.canOpenPreviewToSide}
           canShowMarkdownPreview={model.canShowMarkdownPreview}
           canShowMarkdownTableOfContents={model.canShowMarkdownTableOfContents}
+          canShowTextDirectionToggle={model.canShowTextDirectionToggle}
           isMarkdownTableOfContentsDisabled={model.isMarkdownTableOfContentsDisabled}
           shouldShowMarkdownExportAction={model.shouldShowMarkdownExportAction}
           canExportMarkdownToPdf={model.canExportMarkdownToPdf}

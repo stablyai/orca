@@ -3,7 +3,7 @@ import type { EditorSlice } from '../types/editor-slice'
 import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../../recently-closed-tabs'
 import { notifyHostOfMirroredEditorClose } from '@/runtime/close-mirrored-editor-tab'
 import { type ClosedEditorTabSnapshot, MAX_RECENT_CLOSED_EDITOR_TABS } from '../types/open-file'
-import { removeMarkdownVisibilityKeys } from '../tabs/workspace-editor-item'
+import { removeFileKeyedEntries } from '../tabs/workspace-editor-item'
 import {
   deleteUntouchedUntitledFile,
   shouldDeleteUntouchedUntitledFile
@@ -44,12 +44,16 @@ export function createCloseFileAction(
         )
         const newMarkdownFrontmatterVisible =
           visibilityKeysToRemove.length > 0
-            ? removeMarkdownVisibilityKeys(s.markdownFrontmatterVisible, visibilityKeysToRemove)
+            ? removeFileKeyedEntries(s.markdownFrontmatterVisible, visibilityKeysToRemove)
             : s.markdownFrontmatterVisible
         const newMarkdownTableOfContentsVisible =
           visibilityKeysToRemove.length > 0
-            ? removeMarkdownVisibilityKeys(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
+            ? removeFileKeyedEntries(s.markdownTableOfContentsVisible, visibilityKeysToRemove)
             : s.markdownTableOfContentsVisible
+        const newEditorTextDirectionByFile =
+          visibilityKeysToRemove.length > 0
+            ? removeFileKeyedEntries(s.editorTextDirectionByFile, visibilityKeysToRemove)
+            : s.editorTextDirectionByFile
         // Why: editorCursorLine is keyed by fileId and grows unbounded across a long session without cleanup on close.
         const newEditorCursorLine = { ...s.editorCursorLine }
         delete newEditorCursorLine[fileId]
@@ -182,6 +186,7 @@ export function createCloseFileAction(
           editorViewMode: newEditorViewMode,
           markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
           markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
+          editorTextDirectionByFile: newEditorTextDirectionByFile,
           tabBarOrderByWorktree: nextTabBarOrderByWorktree,
           pendingEditorReveal: null,
           pendingEditorFocusRequest:

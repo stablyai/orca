@@ -1,4 +1,5 @@
 import { detectLanguage } from '@/lib/language-detect'
+import { containsStrongRtlText } from '../../../../shared/strong-rtl-text'
 import { canPreviewLanguage } from '@/lib/file-preview'
 import type { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
@@ -28,6 +29,9 @@ type EditorPanelRenderModelParams = {
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
 }
+
+// Why: a bounded prefix keeps the per-render scan cheap on multi-megabyte files; RTL prose declares itself early.
+const RTL_SCAN_LIMIT = 8192
 
 export function getEditorPanelRenderModel({
   activeFile,
@@ -120,19 +124,22 @@ export function getEditorPanelRenderModel({
     : hasViewModeToggle
       ? mdViewMode
       : 'edit'
-  const inlineMarkdownContent =
+  const editableContent =
     activeFile.mode === 'edit'
       ? (editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null)
       : null
+  // Why: the direction toggle stays hidden until a file actually holds RTL text, so LTR-only headers keep no extra chrome.
+  const canShowTextDirectionToggle =
+    editableContent !== null && containsStrongRtlText(editableContent.slice(0, RTL_SCAN_LIMIT))
   const shouldShowMarkdownExportAction =
     viewerLanguage === 'markdown' &&
     (activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview')
   const inlineMarkdownRenderMode =
-    activeFile.mode === 'edit' && inlineMarkdownContent !== null
+    activeFile.mode === 'edit' && editableContent !== null
       ? getMarkdownRenderMode({
-          exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(inlineMarkdownContent),
+          exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(editableContent),
           hasRichModeUnsupportedContent:
-            getMarkdownRichModeUnsupportedMessage(inlineMarkdownContent) !== null,
+            getMarkdownRichModeUnsupportedMessage(editableContent) !== null,
           viewMode: mdViewMode
         })
       : null
@@ -174,6 +181,7 @@ export function getEditorPanelRenderModel({
     hasEditorToggle: availableEditorToggleModes.length > 1,
     effectiveToggleValue,
     isMarkdownTableOfContentsDisabled: hasViewModeToggle && mdViewMode === 'source',
+    canShowTextDirectionToggle,
     shouldShowMarkdownExportAction,
     canExportMarkdownToPdf,
     canShowMarkdownTableOfContents:

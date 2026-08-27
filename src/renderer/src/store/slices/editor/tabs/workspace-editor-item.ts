@@ -80,6 +80,7 @@ export function removeEditorStateForReplacedPreview(
     | 'editorViewMode'
     | 'markdownFrontmatterVisible'
     | 'markdownTableOfContentsVisible'
+    | 'editorTextDirectionByFile'
     | 'openFiles'
   >,
   replacedFile: Pick<OpenFile, 'id' | 'markdownPreviewSourceFileId'>,
@@ -92,6 +93,7 @@ export function removeEditorStateForReplacedPreview(
   | 'editorViewMode'
   | 'markdownFrontmatterVisible'
   | 'markdownTableOfContentsVisible'
+  | 'editorTextDirectionByFile'
 > {
   const visibilityKeys = [
     replacedFile.id,
@@ -112,7 +114,8 @@ export function removeEditorStateForReplacedPreview(
       markdownViewMode: state.markdownViewMode,
       editorViewMode: state.editorViewMode,
       markdownFrontmatterVisible: state.markdownFrontmatterVisible,
-      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible
+      markdownTableOfContentsVisible: state.markdownTableOfContentsVisible,
+      editorTextDirectionByFile: state.editorTextDirectionByFile
     }
   }
   return {
@@ -128,28 +131,32 @@ export function removeEditorStateForReplacedPreview(
     editorViewMode: Object.fromEntries(
       Object.entries(state.editorViewMode).filter(([fileId]) => fileId !== replacedFile.id)
     ),
-    markdownFrontmatterVisible: removeMarkdownVisibilityKeys(
+    markdownFrontmatterVisible: removeFileKeyedEntries(
       state.markdownFrontmatterVisible,
       visibilityKeys
     ),
-    markdownTableOfContentsVisible: removeMarkdownVisibilityKeys(
+    editorTextDirectionByFile: removeFileKeyedEntries(
+      state.editorTextDirectionByFile,
+      visibilityKeys
+    ),
+    markdownTableOfContentsVisible: removeFileKeyedEntries(
       state.markdownTableOfContentsVisible,
       visibilityKeys
     )
   }
 }
 
-export function removeMarkdownVisibilityKeys(
-  visibility: Record<string, boolean>,
+export function removeFileKeyedEntries<T>(
+  record: Record<string, T>,
   keysToRemove: readonly string[]
-): Record<string, boolean> {
-  let next: Record<string, boolean> | null = null
+): Record<string, T> {
+  let next: Record<string, T> | null = null
   for (const key of keysToRemove) {
-    if (!(key in visibility)) {
+    if (!(key in record)) {
       continue
     }
-    next ??= { ...visibility }
+    next ??= { ...record }
     delete next[key]
   }
-  return next ?? visibility
+  return next ?? record
 }

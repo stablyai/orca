@@ -79,6 +79,7 @@ export function createRecentlyClosedEditorTabs(
             markdownViewMode: {},
             editorViewMode: {},
             markdownFrontmatterVisible: {},
+            editorTextDirectionByFile: {},
             markdownTableOfContentsVisible: {},
             pendingEditorReveal: null,
             pendingEditorFocusRequest: null
@@ -98,6 +99,11 @@ export function createRecentlyClosedEditorTabs(
         )
         const newMarkdownFrontmatterVisible = Object.fromEntries(
           Object.entries(s.markdownFrontmatterVisible).filter(([fileId]) =>
+            remainingFileIds.has(fileId)
+          )
+        )
+        const newEditorTextDirectionByFile = Object.fromEntries(
+          Object.entries(s.editorTextDirectionByFile).filter(([fileId]) =>
             remainingFileIds.has(fileId)
           )
         )
@@ -177,6 +183,7 @@ export function createRecentlyClosedEditorTabs(
           markdownViewMode: newMarkdownViewMode,
           editorViewMode: newEditorViewMode,
           markdownFrontmatterVisible: newMarkdownFrontmatterVisible,
+          editorTextDirectionByFile: newEditorTextDirectionByFile,
           markdownTableOfContentsVisible: newMarkdownTableOfContentsVisible,
           activeFileIdByWorktree: newActiveFileIdByWorktree,
           activeTabTypeByWorktree: newActiveTabTypeByWorktree,

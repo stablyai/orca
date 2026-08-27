@@ -55,6 +55,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isDiffSurface: false,
         diffWordWrap: false,
         editorWordWrap: true,
+        textDirectionRtl: false,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
@@ -82,6 +83,7 @@ describe('EditorPanelMarkdownActionsMenu', () => {
         isDiffSurface: true,
         diffWordWrap: true,
         editorWordWrap: false,
+        textDirectionRtl: false,
         shouldShowMarkdownExportAction: false,
         canExportMarkdownToPdf: false,
         canShowMarkdownFrontmatterToggle: false,
@@ -98,5 +100,54 @@ describe('EditorPanelMarkdownActionsMenu', () => {
     checkboxItems.list[0]?.onCheckedChange?.(false)
     expect(onToggleDiffWordWrap).toHaveBeenCalledOnce()
     expect(onToggleEditorWordWrap).not.toHaveBeenCalled()
+  })
+
+  it('omits Right-to-Left when no toggle is supplied, so diff surfaces keep Monaco LTR layout', () => {
+    renderToStaticMarkup(
+      React.createElement(EditorPanelMarkdownActionsMenu, {
+        isMarkdown: false,
+        isDiffSurface: true,
+        diffWordWrap: false,
+        editorWordWrap: false,
+        textDirectionRtl: false,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    expect(checkboxItems.list.map((item) => item.label)).toEqual(['Word Wrap'])
+  })
+
+  it('reflects and toggles the resolved RTL direction on editable files', () => {
+    const onToggleTextDirection = vi.fn()
+    renderToStaticMarkup(
+      React.createElement(EditorPanelMarkdownActionsMenu, {
+        isMarkdown: false,
+        isDiffSurface: false,
+        diffWordWrap: false,
+        editorWordWrap: true,
+        textDirectionRtl: true,
+        onToggleTextDirection,
+        shouldShowMarkdownExportAction: false,
+        canExportMarkdownToPdf: false,
+        canShowMarkdownFrontmatterToggle: false,
+        markdownFrontmatterVisible: false,
+        onToggleDiffWordWrap: () => {},
+        onToggleEditorWordWrap: () => {},
+        onToggleMarkdownFrontmatter: () => {},
+        onExportMarkdownToPdf: () => {}
+      })
+    )
+
+    const direction = checkboxItems.list.find((item) => item.label === 'Right-to-Left')
+    expect(direction).toMatchObject({ checked: true })
+    direction?.onCheckedChange?.(false)
+    expect(onToggleTextDirection).toHaveBeenCalledOnce()
   })
 })

@@ -1,4 +1,5 @@
 import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
+import type { EditorTextDirectionOverride } from '../../../shared/editor-text-direction'
 import type {
   PersistedOpenFile,
   WorkspaceSessionState
@@ -36,6 +37,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'openFiles'
   | 'editorDrafts'
   | 'markdownFrontmatterVisible'
+  | 'editorTextDirectionByFile'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
   | 'browserTabsByWorktree'
@@ -73,6 +75,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'openFiles',
   'editorDrafts',
   'markdownFrontmatterVisible',
+  'editorTextDirectionByFile',
   'activeFileIdByWorktree',
   'activeTabTypeByWorktree',
   'browserTabsByWorktree',
@@ -107,13 +110,15 @@ export function buildEditorSessionData(
   editorDrafts: Record<string, string>,
   markdownFrontmatterVisible: Record<string, boolean>,
   activeFileIdByWorktree: Record<string, string | null>,
-  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>
+  activeTabTypeByWorktree: Record<string, WorkspaceVisibleTabType>,
+  editorTextDirectionByFile: Record<string, EditorTextDirectionOverride>
 ): Pick<
   WorkspaceSessionState,
   | 'openFilesByWorktree'
   | 'activeFileIdByWorktree'
   | 'activeTabTypeByWorktree'
   | 'markdownFrontmatterVisible'
+  | 'editorTextDirectionByFile'
 > {
   const editFiles = openFiles.filter((f) => f.mode === 'edit')
   const byWorktree: Record<string, PersistedOpenFile[]> = {}
@@ -181,11 +186,16 @@ export function buildEditorSessionData(
     )
   )
 
+  const persistedEditorTextDirectionByFile = Object.fromEntries(
+    Object.entries(editorTextDirectionByFile ?? {}).filter(([fileId]) => allEditFileIds.has(fileId))
+  )
+
   return {
     openFilesByWorktree: byWorktree,
     activeFileIdByWorktree: persistedActiveFileIdByWorktree,
     activeTabTypeByWorktree: persistedActiveTabTypeByWorktree,
-    markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible
+    markdownFrontmatterVisible: persistedMarkdownFrontmatterVisible,
+    editorTextDirectionByFile: persistedEditorTextDirectionByFile
   }
 }
 
@@ -279,7 +289,8 @@ export function buildWorkspaceSessionPayload(
       snapshot.editorDrafts,
       snapshot.markdownFrontmatterVisible,
       snapshot.activeFileIdByWorktree,
-      snapshot.activeTabTypeByWorktree
+      snapshot.activeTabTypeByWorktree,
+      snapshot.editorTextDirectionByFile
     ),
     ...buildBrowserSessionData(
       snapshot.browserTabsByWorktree,

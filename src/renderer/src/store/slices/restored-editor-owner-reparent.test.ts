@@ -402,7 +402,8 @@ describe('restored editor owner reparent', () => {
       state.editorDrafts,
       state.markdownFrontmatterVisible,
       state.activeFileIdByWorktree,
-      state.activeTabTypeByWorktree
+      state.activeTabTypeByWorktree,
+      state.editorTextDirectionByFile
     )
     expect(session.openFilesByWorktree?.[SOURCE]).toBeUndefined()
     expect(session.openFilesByWorktree?.[TARGET]?.[0]).toMatchObject({

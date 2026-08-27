@@ -100,6 +100,7 @@ export function buildWorkspaceSessionPatch(
       'openFiles',
       'editorDrafts',
       'markdownFrontmatterVisible',
+      'editorTextDirectionByFile',
       'activeFileIdByWorktree',
       'activeTabTypeByWorktree'
     ] as const)
@@ -111,7 +112,8 @@ export function buildWorkspaceSessionPatch(
         snapshot.editorDrafts,
         snapshot.markdownFrontmatterVisible,
         snapshot.activeFileIdByWorktree,
-        snapshot.activeTabTypeByWorktree
+        snapshot.activeTabTypeByWorktree,
+        snapshot.editorTextDirectionByFile
       )
     )
   }

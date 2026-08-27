@@ -11470,6 +11470,13 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "EditorTextDirectionSetting": {
+          "3e9a5c3a6f": "Editor Text Direction",
+          "dc19442703": "Base document direction in file editors. Auto picks a direction per line from its first strong character.",
+          "c5017d2c6d": "LTR",
+          "66496ceba1": "Auto",
+          "6b45892278": "RTL"
         }
       },
       "right": {
@@ -14269,14 +14276,18 @@
           "f0fd4174b5": "Open file tab to use rich markdown editing",
           "a10d9b8337": "Open file",
           "2076ecfc9c": "Previous change",
-          "631dab0df3": "Next change"
+          "631dab0df3": "Next change",
+          "7bd0a493a6": "Text Direction",
+          "3cfe5dfe5e": "Right-to-Left",
+          "704af1dc90": "Left-to-Right"
         },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Export as PDF",
           "561251019a": "More actions",
           "8c8b7f5ff5": "Show front matter",
           "10c39d58c1": "Hide front matter",
-          "1eef809708": "Word Wrap"
+          "1eef809708": "Word Wrap",
+          "86c8a19192": "Right-to-Left"
         },
         "EditorPanelShell": {
           "e2c4dec350": "Loading editor..."

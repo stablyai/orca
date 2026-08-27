@@ -90,6 +90,7 @@ export type KeybindingActionId =
   | 'editor.save'
   | 'editor.markdownPreview'
   | 'editor.toggleWordWrap'
+  | 'editor.toggleTextDirection'
   | 'editor.copyContext'
   | 'editor.previousChange'
   | 'editor.nextChange'
@@ -849,6 +850,25 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     searchKeywords: ['shortcut', 'editor', 'word wrap', 'wrap', 'long lines', 'soft wrap'],
     // Why: Alt+Z matches VS Code; bare Alt+letter is not AltGr, so it stays cross-platform (#9974).
     defaultBindings: platformBindings(['Alt+Z'])
+  },
+  {
+    id: 'editor.toggleTextDirection',
+    title: 'Toggle Text Direction (RTL)',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: [
+      'shortcut',
+      'editor',
+      'rtl',
+      'ltr',
+      'right to left',
+      'direction',
+      'bidi',
+      'hebrew',
+      'arabic'
+    ],
+    // Why: unbound by default — VS Code has no equivalent chord to match, so users assign their own (#6169).
+    defaultBindings: platformBindings([])
   },
   {
     id: 'editor.copyContext',

@@ -195,6 +195,8 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     // Why empty: the editor keeps following the terminal font unless the user opts in.
     editorFontFamily: '',
     editorWordWrap: true,
+    // Why: RTL layout is a best-effort Monaco workaround, so it must never change LTR editing by default.
+    editorTextDirection: 'ltr',
     richMarkdownSpellcheckEnabled: true,
     markdownReviewToolsEnabled: true,
     primarySelectionMiddleClickPaste: getDefaultPrimarySelectionMiddleClickPaste(),

@@ -8,6 +8,8 @@ import type { WorkspaceVisibleTabType } from '../../../../../../shared/tab-types
 import type { OpenFile } from '../types/open-file'
 import { buildValidWorktreeIdsForSessionHydration } from '../../degraded-repo-worktree-validity'
 import { buildOwnedEditorFileId } from '../file-ids/editor-file-ids'
+import { isEditorTextDirectionOverride } from '../../../../../../shared/editor-text-direction'
+import { hydrateFileKeyedOverrides } from './hydrate-file-keyed-overrides'
 import {
   addEditorFileIdMigration,
   migrateEditorFileId,
@@ -28,6 +30,7 @@ export function createHydrateEditorSession(
         const persistedActiveFileIdByWorktree = session.activeFileIdByWorktree ?? {}
         const persistedActiveTabTypeByWorktree = session.activeTabTypeByWorktree ?? {}
         const persistedMarkdownFrontmatterVisible = session.markdownFrontmatterVisible ?? {}
+        const persistedEditorTextDirectionByFile = session.editorTextDirectionByFile ?? {}
 
         const validWorktreeIds = buildValidWorktreeIdsForSessionHydration(
           s,
@@ -165,30 +168,25 @@ export function createHydrateEditorSession(
         const nextActiveTabType =
           nextActiveFileId || activeTabType !== 'editor' ? activeTabType : 'terminal'
         const openFileIds = new Set(openFiles.map((file) => file.id))
-        // Why: visible is the default, so restore only per-file hide overrides (`false`); legacy `true` entries collapse to the default.
-        const hiddenFrontmatterEntries = new Map<string, boolean>()
-        for (const [persistedFileId, visible] of Object.entries(
-          persistedMarkdownFrontmatterVisible
-        )) {
-          if (visible) {
-            continue
-          }
-          if (openFileIds.has(persistedFileId)) {
-            hiddenFrontmatterEntries.set(persistedFileId, false)
-          }
-          for (const migrations of Object.values(editorFileIdMigrationsByWorktree)) {
-            const migratedFileId = migrations.get(persistedFileId)
-            if (migratedFileId && openFileIds.has(migratedFileId)) {
-              hiddenFrontmatterEntries.set(migratedFileId, false)
-            }
-          }
-        }
-        const markdownFrontmatterVisible = Object.fromEntries(hiddenFrontmatterEntries)
+        const markdownFrontmatterVisible = hydrateFileKeyedOverrides(
+          persistedMarkdownFrontmatterVisible,
+          openFileIds,
+          editorFileIdMigrationsByWorktree,
+          // Why: visible is the default, so restore only per-file hide overrides (`false`); legacy `true` entries collapse to the default.
+          (visible) => (visible === false ? false : undefined)
+        )
+        const editorTextDirectionByFile = hydrateFileKeyedOverrides(
+          persistedEditorTextDirectionByFile,
+          openFileIds,
+          editorFileIdMigrationsByWorktree,
+          (direction) => (isEditorTextDirectionOverride(direction) ? direction : undefined)
+        )
 
         return {
           openFiles,
           editorDrafts,
           markdownFrontmatterVisible,
+          editorTextDirectionByFile,
           activeFileId: nextActiveFileId,
           activeFileIdByWorktree: filteredActiveFileIdByWorktree,
           activeTabType: nextActiveTabType,

@@ -1049,6 +1049,18 @@ html.native-shell .app-layout {
   color: var(--muted-foreground);
 }
 
+/* Why: Monaco 0.55 exposes no RTL layout option, so direction is scoped to the rendered
+   lines; the gutter, minimap and scrollbar stay LTR where Monaco's own math expects them. */
+.editor-dir-rtl .monaco-editor .view-line {
+  direction: rtl;
+  text-align: right;
+}
+
+/* Unicode first-strong-character rule per line, so a mixed prose-and-code file needs no heuristic. */
+.editor-dir-auto .monaco-editor .view-line {
+  unicode-bidi: plaintext;
+}
+
 .editor-header {
   display: flex;
   align-items: center;

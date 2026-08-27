@@ -17,6 +17,10 @@ type EditorPanelMarkdownActionsMenuProps = {
   diffWordWrap: boolean
   /** File editor wrap preference (`settings.editorWordWrap`). */
   editorWordWrap: boolean
+  /** Whether the resolved direction for this file is RTL. */
+  textDirectionRtl: boolean
+  /** Absent on diff surfaces, where Monaco's LTR-only layout math is not worth fighting. */
+  onToggleTextDirection?: () => void
   shouldShowMarkdownExportAction: boolean
   canExportMarkdownToPdf: boolean
   canShowMarkdownFrontmatterToggle: boolean
@@ -32,6 +36,8 @@ export function EditorPanelMarkdownActionsMenu({
   isDiffSurface,
   diffWordWrap,
   editorWordWrap,
+  textDirectionRtl,
+  onToggleTextDirection,
   shouldShowMarkdownExportAction,
   canExportMarkdownToPdf,
   canShowMarkdownFrontmatterToggle,
@@ -72,6 +78,17 @@ export function EditorPanelMarkdownActionsMenu({
             'Word Wrap'
           )}
         </DropdownMenuCheckboxItem>
+        {onToggleTextDirection ? (
+          <DropdownMenuCheckboxItem
+            checked={textDirectionRtl}
+            onCheckedChange={onToggleTextDirection}
+          >
+            {translate(
+              'auto.components.editor.EditorPanelMarkdownActionsMenu.86c8a19192',
+              'Right-to-Left'
+            )}
+          </DropdownMenuCheckboxItem>
+        ) : null}
         {hasMarkdownActions ? <DropdownMenuSeparator /> : null}
         {canShowMarkdownFrontmatterToggle ? (
           <>

@@ -1,5 +1,6 @@
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorViewMode, MarkdownViewMode } from '../types/open-file'
+import type { EditorTextDirectionOverride } from '../../../../../../shared/editor-text-direction'
 import { clampMarkdownTocPanelWidth } from '../../../../../../shared/markdown-toc-panel-width'
 import {
   clampCombinedDiffFileTreeWidth,
@@ -18,6 +19,11 @@ export type EditorDraftState = {
   setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
   markdownFrontmatterVisible: Record<string, boolean>
   setMarkdownFrontmatterVisible: (fileId: string, visible: boolean) => void
+  editorTextDirectionByFile: Record<string, EditorTextDirectionOverride>
+  setEditorTextDirectionOverride: (
+    fileId: string,
+    direction: EditorTextDirectionOverride | null
+  ) => void
   markdownTableOfContentsVisible: Record<string, boolean>
   setMarkdownTableOfContentsVisible: (fileId: string, visible: boolean) => void
   markdownTocPanelWidth: number
@@ -100,6 +106,23 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
           return { markdownFrontmatterVisible: next }
         }
         return { markdownFrontmatterVisible: { ...s.markdownFrontmatterVisible, [fileId]: false } }
+      }),
+
+    // Per-file document direction; absent means follow settings.editorTextDirection.
+    editorTextDirectionByFile: {},
+    setEditorTextDirectionOverride: (fileId, direction) =>
+      set((s) => {
+        if (direction === null) {
+          if (!(fileId in s.editorTextDirectionByFile)) {
+            return s
+          }
+          const next = { ...s.editorTextDirectionByFile }
+          delete next[fileId]
+          return { editorTextDirectionByFile: next }
+        }
+        return {
+          editorTextDirectionByFile: { ...s.editorTextDirectionByFile, [fileId]: direction }
+        }
       }),
 
     // Markdown table of contents visibility
