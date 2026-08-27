@@ -1914,9 +1914,11 @@ export class RateLimitService {
     if (shouldApplyMiniMax) {
       this.trackActiveFailureStreak('minimax', miniMax)
     }
-    // Why: a config resolved mid-cycle would otherwise apply a response fetched with the superseded platform/key.
+    // Why: re-resolve at completion — a config saved mid-cycle must not apply a response fetched with the superseded platform/key.
+    const glmConfigAtApply = this.glmConfigResolver?.()
     const glmConfigSuperseded =
-      `${glmConfig?.platform ?? ''}|${glmConfig?.apiKey ?? ''}` !== currentGlmConfigHash
+      `${glmConfigAtApply?.platform ?? ''}|${glmConfigAtApply?.apiKey ?? ''}` !==
+      currentGlmConfigHash
     if (!glmConfigSuperseded) {
       this.trackActiveFailureStreak('glm', glm)
     }

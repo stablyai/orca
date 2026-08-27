@@ -123,23 +123,28 @@ describe('RateLimitService GLM usage', () => {
     const service = new RateLimitService()
     let apiKey = 'tok-one'
     service.setGlmConfigResolver(() => ({ platform: 'zai', apiKey }))
-    const inFlight = deferred<ProviderRateLimits>()
-    vi.mocked(fetchGlmRateLimits).mockImplementationOnce(() => inFlight.promise)
+    const firstCycle = deferred<ProviderRateLimits>()
+    const secondCycle = deferred<ProviderRateLimits>()
+    vi.mocked(fetchGlmRateLimits)
+      .mockImplementationOnce(() => firstCycle.promise)
+      .mockImplementationOnce(() => secondCycle.promise)
 
     const first = service.refresh()
     await flushMicrotasks()
 
     apiKey = 'tok-two'
-    vi.mocked(fetchGlmRateLimits).mockImplementationOnce(async () => okProvider('glm', 10))
     const second = service.refresh()
     await flushMicrotasks()
 
-    inFlight.resolve(okProvider('glm', 50))
-    await first
+    firstCycle.resolve(okProvider('glm', 50))
+    await flushMicrotasks()
 
     expect(service.getState().glm?.session?.usedPercent).not.toBe(50)
 
+    secondCycle.resolve(okProvider('glm', 10))
+    await first
     await second
+
     expect(service.getState().glm?.session?.usedPercent).toBe(10)
   })
 })
