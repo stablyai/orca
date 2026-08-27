@@ -247,7 +247,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     minimizeToTrayOnClose: false,
     // Why: default-on everywhere so it round-trips across platforms; only darwin acts on it.
     showMenuBarIcon: true,
-    terminalClipboardOnSelect: false,
+    terminalClipboardOnSelect: true,
     // Why: default on so Zellij/tmux/nvim copy works out of the box. Query
     // replies stay disabled and payload size is capped in the OSC 52 handler.
     // This default only covers new profiles; existing ones persisted `false`
