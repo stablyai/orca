@@ -135,6 +135,7 @@ export function initializeMainProcessAccountServices(): void {
     }
   })
   state.rateLimits.setGeminiCliOAuthEnabledResolver(() => store.getSettings().geminiCliOAuthEnabled)
+  state.rateLimits.setGlmConfigResolver(() => store.getSettings().glmCodingPlanUsage)
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),
