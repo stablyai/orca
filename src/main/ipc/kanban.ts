@@ -1,8 +1,11 @@
 import { ipcMain } from 'electron'
 import { KanbanRequestError, createKanbanClient, type KanbanClient } from '../kanban/client'
+import { markKanbanTaskStarted } from '../kanban/mark-started'
 import type {
   KanbanConnectResult,
   KanbanConnectionStatus,
+  KanbanMarkStartedArgs,
+  KanbanMarkStartedResult,
   KanbanTaskDetails,
   KanbanTaskFilter,
   KanbanTaskListResult
@@ -15,6 +18,8 @@ const MAX_TOKEN_LENGTH = 4096
 const MAX_TASK_ID_LENGTH = 512
 const MAX_LANE_ID_LENGTH = 128
 const MAX_QUERY_LENGTH = 256
+const MAX_PROJECT_NAME_LENGTH = 256
+const MAX_BRANCH_LENGTH = 256
 const VALID_ROLES = new Set(['executor', 'observer', 'creator'])
 const VALID_DUE = new Set(['overdue', 'today', 'week', 'none'])
 
@@ -131,6 +136,61 @@ export function registerKanbanHandlers(): void {
         return null
       }
       return getClient().getTask(id.trim())
+    }
+  )
+
+  ipcMain.handle(
+    'kanban:markStarted',
+    async (_event, args: unknown): Promise<KanbanMarkStartedResult> => {
+      const invalid = (retry: 'all' | 'comment-only'): KanbanMarkStartedResult => ({
+        ok: false,
+        moved: false,
+        commented: false,
+        retry,
+        code: 'server',
+        message: 'Invalid Kanban mark-started request.'
+      })
+      const taskId = readField(args, 'taskId')
+      const projectName = readField(args, 'projectName')
+      const branch = readField(args, 'branch')
+      const retry = readField(args, 'retry')
+      if (
+        typeof taskId !== 'string' ||
+        taskId.trim().length === 0 ||
+        taskId.length > MAX_TASK_ID_LENGTH
+      ) {
+        return invalid('all')
+      }
+      if (
+        typeof projectName !== 'string' ||
+        projectName.trim().length === 0 ||
+        projectName.length > MAX_PROJECT_NAME_LENGTH
+      ) {
+        return invalid('all')
+      }
+      if (
+        branch !== undefined &&
+        branch !== null &&
+        (typeof branch !== 'string' || branch.length > MAX_BRANCH_LENGTH)
+      ) {
+        return invalid('all')
+      }
+      if (
+        retry !== undefined &&
+        retry !== 'all' &&
+        retry !== 'comment-only'
+      ) {
+        return invalid(retry === 'comment-only' ? 'comment-only' : 'all')
+      }
+      const markArgs: KanbanMarkStartedArgs = {
+        taskId: taskId.trim(),
+        projectName: projectName.trim(),
+        branch: typeof branch === 'string' ? branch : null
+      }
+      if (retry === 'all' || retry === 'comment-only') {
+        markArgs.retry = retry
+      }
+      return markKanbanTaskStarted(markArgs, { fetch: globalThis.fetch })
     }
   )
 }

@@ -104,3 +104,21 @@ export type KanbanRequestErrorCode =
 export type KanbanConnectResult =
   | { ok: true; viewer: KanbanViewer }
   | { ok: false; code: KanbanRequestErrorCode; error: string }
+
+export type KanbanMarkStartedArgs = {
+  taskId: string
+  projectName: string
+  branch: string | null
+  retry?: 'all' | 'comment-only'
+}
+
+export type KanbanMarkStartedResult =
+  | { ok: true; moved: boolean; commented: boolean }
+  | {
+      ok: false
+      moved: boolean
+      commented: boolean
+      retry: 'all' | 'comment-only'
+      code: 'unauthorized' | 'network' | 'conflict' | 'invalid_response' | 'server'
+      message: string
+    }

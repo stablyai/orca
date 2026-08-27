@@ -32,6 +32,7 @@ import { toFolderWorkspaceLinkedTask } from '@/components/sidebar/folder-workspa
 import { renderIssueCommandTemplate, ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { syncKanbanTaskAfterWorkspaceStart } from '@/lib/kanban-workspace-start-sync'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 
@@ -231,6 +232,15 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       }
 
       setSidebarOpen(true)
+
+      // Why: after the workspace is created, persisted and activated, sync the
+      // Kanban card (move + comment) before the generic cleanup runs. The helper
+      // never throws, so a board failure cannot fail or roll back creation.
+      void syncKanbanTaskAfterWorkspaceStart({
+        linkedWorkItem: submitLinkedWorkItem,
+        projectName: createDisplayName ?? workspaceName,
+        branch: worktree.branch
+      })
 
       if (persistDraft) {
         clearNewWorkspaceDraft()

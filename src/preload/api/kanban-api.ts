@@ -2,6 +2,8 @@ import type { IpcRenderer } from 'electron'
 import type {
   KanbanConnectResult,
   KanbanConnectionStatus,
+  KanbanMarkStartedArgs,
+  KanbanMarkStartedResult,
   KanbanTaskDetails,
   KanbanTaskFilter,
   KanbanTaskListResult
@@ -13,6 +15,7 @@ export type KanbanApi = {
   status(): Promise<KanbanConnectionStatus>
   listTasks(args?: { filter?: KanbanTaskFilter }): Promise<KanbanTaskListResult>
   getTask(args: { id: string }): Promise<KanbanTaskDetails | null>
+  markStarted(args: KanbanMarkStartedArgs): Promise<KanbanMarkStartedResult>
 }
 
 export function createKanbanApi(ipc: Pick<IpcRenderer, 'invoke'>): KanbanApi {
@@ -24,6 +27,8 @@ export function createKanbanApi(ipc: Pick<IpcRenderer, 'invoke'>): KanbanApi {
     listTasks: (args?: { filter?: KanbanTaskFilter }): Promise<KanbanTaskListResult> =>
       ipc.invoke('kanban:listTasks', args),
     getTask: (args: { id: string }): Promise<KanbanTaskDetails | null> =>
-      ipc.invoke('kanban:getTask', args)
+      ipc.invoke('kanban:getTask', args),
+    markStarted: (args: KanbanMarkStartedArgs): Promise<KanbanMarkStartedResult> =>
+      ipc.invoke('kanban:markStarted', args)
   }
 }

@@ -3,7 +3,7 @@ import { createKanbanApi, type KanbanApi } from './kanban-api'
 import type { PreloadApi } from '../api-types'
 
 describe('kanban preload API', () => {
-  it('exposes exactly the five declared operations under window.api.kanban', () => {
+  it('exposes exactly the six declared operations under window.api.kanban', () => {
     const api = createKanbanApi({ invoke: vi.fn() } as never)
 
     expect(Object.keys(api).sort()).toEqual([
@@ -11,6 +11,7 @@ describe('kanban preload API', () => {
       'disconnect',
       'getTask',
       'listTasks',
+      'markStarted',
       'status'
     ])
 
@@ -30,13 +31,15 @@ describe('kanban preload API', () => {
     await api.status()
     await api.listTasks({ filter: { role: 'executor', due: 'today', urgent: true } })
     await api.getTask({ id: 'K-1' })
+    await api.markStarted({ taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x' })
 
     expect(invoke.mock.calls).toEqual([
       ['kanban:connect', { token: 'token-secret' }],
       ['kanban:disconnect'],
       ['kanban:status'],
       ['kanban:listTasks', { filter: { role: 'executor', due: 'today', urgent: true } }],
-      ['kanban:getTask', { id: 'K-1' }]
+      ['kanban:getTask', { id: 'K-1' }],
+      ['kanban:markStarted', { taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x' }]
     ])
   })
 

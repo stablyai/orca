@@ -1,6 +1,6 @@
 import type { ComposerModel } from './composer-model'
 
-type FolderSubmitOrchestrationInput = Pick<
+export type FolderSubmitOrchestrationInput = Pick<
   ComposerModel,
   | 'clearNewWorkspaceDraft'
   | 'createFolderWorkspace'
@@ -40,6 +40,7 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../../../shared/tui-agent-launch-defaults'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
+import { syncKanbanTaskAfterWorkspaceStart } from '@/lib/kanban-workspace-start-sync'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { translate } from '@/i18n/i18n'
 import {
@@ -169,6 +170,15 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
               'auto.hooks.useComposerState.folderWorkspaceCreateFailedMessage',
               'The folder workspace could not be created. Check the error details above, then try again.'
             )
+          })
+        } else {
+          // Why: after a successful folder create, sync the Kanban card. A folder
+          // workspace has no git branch, so the comment says "ветка без Git".
+          // The helper never throws, so a board failure cannot fail creation.
+          void syncKanbanTaskAfterWorkspaceStart({
+            linkedWorkItem: submitLinkedWorkItem,
+            projectName: smartGitHubMetadata?.workspaceName ?? name,
+            branch: null
           })
         }
       } catch (error) {
