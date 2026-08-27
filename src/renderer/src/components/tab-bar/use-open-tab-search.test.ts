@@ -2,16 +2,11 @@
 
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it } from 'vitest'
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  Repo,
-  Tab,
-  TabContentType,
-  TabGroup,
-  TerminalTab,
-  Worktree
-} from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Tab, TabContentType, TabGroup } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { useOpenTabSearch } from './use-open-tab-search'
@@ -135,7 +130,10 @@ const browserPage: BrowserPage = {
 }
 
 // wt-1 spans two columns: group-1 shows tab-a, group-2 shows tab-c.
-function seedStore(overrides: Partial<AppState> = {}): void {
+function seedStore(
+  overrides: Partial<AppState> = {},
+  executionHostId?: Tab['executionHostId']
+): void {
   useAppStore.setState(
     {
       ...initialAppState,
@@ -162,7 +160,7 @@ function seedStore(overrides: Partial<AppState> = {}): void {
             contentType: 'simulator',
             label: 'zebra sim'
           })
-        ],
+        ].map((tab) => (executionHostId ? { ...tab, executionHostId } : tab)),
         'wt-2': [
           makeUnifiedTab({
             id: 'tab-d',
@@ -245,14 +243,17 @@ describe('useOpenTabSearch', () => {
       hostId: runtimeHost,
       path: '/runtime/wt-1'
     }
-    seedStore({
-      activeWorkspaceExecutionHostId: runtimeHost,
-      repos: [
-        { ...repo, executionHostId: 'local', path: '/local/repo-1' },
-        { ...repo, executionHostId: runtimeHost, path: '/runtime/repo-1' }
-      ],
-      worktreesByRepo: { 'repo-1': [localWorktree, runtimeWorktree] }
-    })
+    seedStore(
+      {
+        activeWorkspaceExecutionHostId: runtimeHost,
+        repos: [
+          { ...repo, executionHostId: 'local', path: '/local/repo-1' },
+          { ...repo, executionHostId: runtimeHost, path: '/runtime/repo-1' }
+        ],
+        worktreesByRepo: { 'repo-1': [localWorktree, runtimeWorktree] }
+      },
+      runtimeHost
+    )
 
     const { result } = renderSearch()
 
@@ -270,14 +271,17 @@ describe('useOpenTabSearch', () => {
       path: '/runtime/wt-1'
     }
     const localWorktree = { ...makeWorktree('wt-1', 'Local'), hostId: 'local' as const }
-    seedStore({
-      activeWorkspaceExecutionHostId: null,
-      repos: [
-        { ...repo, executionHostId: runtimeHost, path: '/runtime/repo-1' },
-        { ...repo, executionHostId: 'local', path: '/local/repo-1' }
-      ],
-      worktreesByRepo: { 'repo-1': [runtimeWorktree, localWorktree] }
-    })
+    seedStore(
+      {
+        activeWorkspaceExecutionHostId: null,
+        repos: [
+          { ...repo, executionHostId: runtimeHost, path: '/runtime/repo-1' },
+          { ...repo, executionHostId: 'local', path: '/local/repo-1' }
+        ],
+        worktreesByRepo: { 'repo-1': [runtimeWorktree, localWorktree] }
+      },
+      runtimeHost
+    )
 
     const { result } = renderSearch()
 

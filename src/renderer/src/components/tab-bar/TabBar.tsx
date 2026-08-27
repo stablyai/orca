@@ -7,6 +7,7 @@ import { useTabBarRuntimeModel } from './use-tab-bar-runtime-model'
 import { useTabBarCreateMenuController } from './use-tab-bar-create-menu-controller'
 import { useTabBarItemProjection } from './use-tab-bar-item-projection'
 import { renderTabBarSurface } from './tab-bar-surface'
+import { useActiveClientHostedBrowserRowId } from '@/lib/pane-manager/client-hosted-browser-row-state'
 
 function TabBarInner(props: TabBarProps): React.JSX.Element {
   const {
@@ -27,6 +28,8 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     resolvedGroupId: runtime.resolvedGroupId,
     terminalOnly,
     mobileEmulatorEnabled: runtime.mobileEmulatorEnabled,
+    managedBrowserCreationEnabled: runtime.managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled: runtime.mobileEmulatorCreationEnabled,
     workspaceHasSimulatorTab: runtime.workspaceHasSimulatorTab,
     showWindowsShellMenu: runtime.showWindowsShellMenu,
     projectRuntimeShellMenuMode: runtime.projectRuntimeShellMenuMode,
@@ -71,6 +74,12 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     start: tabStripNavigation.tabStripOverflowState.canScrollStart,
     end: tabStripNavigation.tabStripOverflowState.canScrollEnd
   })
+  // Read here, not just where the rows render: the real tabs have to know when a row took over.
+  const activeClientHostedBrowserRowId = useActiveClientHostedBrowserRowId({
+    worktreeId,
+    groupId: runtime.resolvedGroupId,
+    groupActiveTabId: props.groupActiveTabId ?? null
+  })
 
   return renderTabBarSurface({
     props,
@@ -79,6 +88,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     itemProjection,
     tabStripNavigation,
     tabStripDragScroll,
+    activeClientHostedBrowserRowId,
     togglePinned
   })
 }

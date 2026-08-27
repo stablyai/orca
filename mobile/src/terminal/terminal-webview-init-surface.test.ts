@@ -26,7 +26,7 @@ type RegisteredWindowListener = {
   type: string
 }
 
-function makeTerminal(writeCallbacks: Array<() => void>) {
+function makeTerminal(writeCallbacks: Array<() => void>, writes: string[]) {
   const terminal = {
     cols: 80,
     rows: 24,
@@ -45,7 +45,8 @@ function makeTerminal(writeCallbacks: Array<() => void>) {
         getLine: () => null
       }
     },
-    write(_data: string, callback?: () => void) {
+    write(data: string, callback?: () => void) {
+      writes.push(data)
       if (callback) {
         writeCallbacks.push(callback)
       }
@@ -93,6 +94,7 @@ describe('terminal WebView init surface replacement', () => {
   let terminalOptions: TerminalOptions[]
   let terminals: TerminalStub[]
   let writeCallbacks: Array<() => void>
+  let writes: string[]
 
   beforeEach(() => {
     animationFrames = []
@@ -100,6 +102,7 @@ describe('terminal WebView init surface replacement', () => {
     terminalOptions = []
     terminals = []
     writeCallbacks = []
+    writes = []
     const addWindowEventListener = window.addEventListener.bind(window)
     vi.spyOn(window, 'addEventListener').mockImplementation(((
       type: string,
@@ -121,7 +124,7 @@ describe('terminal WebView init surface replacement', () => {
     }
     webWindow.Terminal = function (options: TerminalOptions) {
       terminalOptions.push(options)
-      const terminal = makeTerminal(writeCallbacks)
+      const terminal = makeTerminal(writeCallbacks, writes)
       terminals.push(terminal)
       return terminal
     } as unknown as new (options: TerminalOptions) => TerminalStub
@@ -151,6 +154,13 @@ describe('terminal WebView init surface replacement', () => {
         showCursorImmediately: true
       })
     }
+  })
+
+  it('grounds the initial replay without clearing the host live pen', () => {
+    dispatchInit(80, '\x1b[1mBOLD-RUN-LEFT-OPEN')
+    animationFrames.shift()?.()
+
+    expect(writes).toEqual(['\x1b[0m\x1b[1mBOLD-RUN-LEFT-OPEN'])
   })
 
   it('commits only the newest surface when phone-fit init calls overlap', () => {

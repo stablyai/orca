@@ -3,7 +3,7 @@ import { AlertTriangle, ExternalLink, FolderPlus, GitBranchPlus, Star, X } from 
 import { cn } from '../lib/utils'
 import { useAppStore } from '../store'
 import { isGitRepoKind } from '../../../shared/repo-kind'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import {
   dismissPreflightIssue,
   githubProjectKeys,
@@ -231,7 +231,7 @@ export default function Landing(): React.JSX.Element {
 
   const createTargetLabel =
     repos.length > 0 && repos.every((repo) => isGitRepoKind(repo)) ? 'Worktree' : 'Workspace'
-  const canCreateWorktree = repos.length > 0
+  const hasProjects = repos.length > 0
   const hasGitHubProject = useMemo(() => hasGitHubBackedProject(repos), [repos])
   const showGitHubSupportFooter = repos.length === 0 || hasGitHubProject
 
@@ -274,7 +274,7 @@ export default function Landing(): React.JSX.Element {
           {preflightIssues.length > 0 && <PreflightBanner issues={preflightIssues} repos={repos} />}
 
           <p className="text-sm text-muted-foreground text-center">
-            {canCreateWorktree
+            {hasProjects
               ? translate(
                   'auto.components.Landing.9c00bd4adf',
                   'Select a workspace from the sidebar to begin.'
@@ -292,13 +292,7 @@ export default function Landing(): React.JSX.Element {
             </button>
 
             <button
-              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md transition-colors disabled:opacity-40 disabled:cursor-not-allowed enabled:cursor-pointer enabled:hover:bg-accent"
-              disabled={!canCreateWorktree}
-              title={
-                !canCreateWorktree
-                  ? translate('auto.components.Landing.f05d237049', 'Add a project first')
-                  : undefined
-              }
+              className="inline-flex items-center gap-1.5 bg-secondary/70 border border-border/80 text-foreground font-medium text-sm px-4 py-2 rounded-md cursor-pointer hover:bg-accent transition-colors"
               onClick={() => openModal('new-workspace-composer', { telemetrySource: 'unknown' })}
             >
               <GitBranchPlus className="size-3.5" />

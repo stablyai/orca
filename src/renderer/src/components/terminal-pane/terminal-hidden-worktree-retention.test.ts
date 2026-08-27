@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { TERMINAL_WORKTREE_PARK_DELAY_MS } from './terminal-hidden-view-parking'
 import {
   clearTerminalProviderSnapshotCapabilities,
@@ -6,12 +7,87 @@ import {
 } from '../terminal/terminal-provider-snapshot-capability'
 import {
   TERMINAL_HIDDEN_WORKTREE_RETENTION_TTL_MS,
+  createTerminalWorktreeTopologyProjection,
   hasPendingRetentionSpawnWork,
   isEvictionExemptTerminalPty,
   selectForceParkEvictableTabIds,
   selectRetentionForceParkedTerminalWorktrees,
   type TerminalWorktreeRetentionCandidate
 } from './terminal-hidden-worktree-retention'
+
+describe('createTerminalWorktreeTopologyProjection', () => {
+  function tab(worktreeId: string, id = `tab-${worktreeId}`): TerminalTab {
+    return {
+      id,
+      ptyId: `${worktreeId}@@pty-1`,
+      worktreeId,
+      title: 'Original title',
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+  }
+
+  it('keeps the parking dependency stable for a title-only change across 300 worktrees', () => {
+    const inspected: string[] = []
+    const projector = createTerminalWorktreeTopologyProjection((worktreeId) =>
+      inspected.push(worktreeId)
+    )
+    const tabs = Object.fromEntries(
+      Array.from({ length: 300 }, (_, index) => {
+        const worktreeId = `wt-${index}`
+        return [worktreeId, [tab(worktreeId)]]
+      })
+    )
+    const first = projector.project(tabs)
+    inspected.length = 0
+    const changedWorktreeId = 'wt-173'
+    const second = projector.project({
+      ...tabs,
+      [changedWorktreeId]: [{ ...tabs[changedWorktreeId][0], title: 'Updated display title' }]
+    })
+
+    expect(second).toBe(first)
+    expect(inspected).toEqual([changedWorktreeId])
+  })
+
+  it.each([
+    ['PTY assignment', (original: TerminalTab) => ({ ...original, ptyId: null })],
+    [
+      'pending spawn',
+      (original: TerminalTab) => ({ ...original, pendingActivationSpawn: true as const })
+    ],
+    ['tab replacement', (original: TerminalTab) => ({ ...original, id: 'tab-2' })],
+    ['generation remount', (original: TerminalTab) => ({ ...original, generation: 2 })],
+    ['startup cwd', (original: TerminalTab) => ({ ...original, startupCwd: '/tmp' })]
+  ])('changes for %s', (_label, mutate) => {
+    const projector = createTerminalWorktreeTopologyProjection()
+    const originalTab = tab('wt-1', 'tab-1')
+    const first = projector.project({ 'wt-1': [originalTab] })
+    const second = projector.project({ 'wt-1': [mutate(originalTab)] })
+
+    expect(second).not.toBe(first)
+  })
+
+  it('changes for add, remove, and move transitions', () => {
+    const projector = createTerminalWorktreeTopologyProjection()
+    const first = projector.project({ 'wt-1': [tab('wt-1', 'tab-1')], 'wt-2': [] })
+    const added = projector.project({
+      'wt-1': [tab('wt-1', 'tab-1'), tab('wt-1', 'tab-2')],
+      'wt-2': []
+    })
+    const removed = projector.project({ 'wt-1': [tab('wt-1', 'tab-2')], 'wt-2': [] })
+    const moved = projector.project({
+      'wt-1': [],
+      'wt-2': [tab('wt-2', 'tab-2')]
+    })
+
+    expect(added).not.toBe(first)
+    expect(removed).not.toBe(added)
+    expect(moved).not.toBe(removed)
+  })
+})
 
 describe('hasPendingRetentionSpawnWork', () => {
   const remoteTab = {

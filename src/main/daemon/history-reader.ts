@@ -4,8 +4,9 @@ import { stat } from 'node:fs/promises'
 import type { TerminalCheckpointFile } from './types'
 import { getHistorySessionDirName } from './history-paths'
 import { decodeTerminalHistoryLog, LOG_HEADER_BYTES } from './terminal-history-log'
+import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { HeadlessEmulator } from './headless-emulator'
-import { PrioritySemaphore } from './priority-semaphore'
+import { PrioritySemaphore } from '../../shared/priority-semaphore'
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { readTerminalHistoryBufferAsync } from './terminal-history-file-reader'
 import { detectColdRestoreFromLegacyScrollback } from './terminal-history-legacy-scrollback-restore'
@@ -280,6 +281,7 @@ export class HistoryReader {
       const emulator = new HeadlessEmulator({
         cols: checkpoint?.cols ?? meta.cols,
         rows: checkpoint?.rows ?? meta.rows,
+        scrollback: DAEMON_RESTORE_SCROLLBACK_ROWS,
         wslDistro
       })
       const replay = new ColdRestoreReplayWriter(emulator)
@@ -315,9 +317,10 @@ export class HistoryReader {
           }
         }
         const snapshot = emulator.getSnapshot()
+        const lastBatch = log.batches.at(-1)!
         return {
           restoreInfo: coldRestoreInfoFromSnapshot(
-            snapshot,
+            { ...snapshot, pendingOutputSeq: lastBatch.seq },
             snapshot.cwd ?? checkpoint?.cwd ?? meta.cwd,
             meta
           ),

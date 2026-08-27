@@ -6,7 +6,8 @@ import { I18nextProvider } from 'react-i18next'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings, StatusBarItem } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
 const mocks = vi.hoisted(() => ({
   state: {

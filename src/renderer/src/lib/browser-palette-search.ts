@@ -1,9 +1,24 @@
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
-import type { BrowserPage, BrowserWorkspace, Worktree } from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
 import { compareBaseSensitivityLocaleText } from './locale-text-collators'
-import { resolveWorktreeDisplayName } from './worktree-default-display-name'
-import type { MatchRange } from './worktree-palette-search'
+import {
+  comparePaletteTabResults,
+  matchPaletteTabDocument,
+  preparePaletteTabQuery
+} from './palette-match/tab-match'
+import { buildPaletteTabDocument } from './palette-match/tab-document'
+import {
+  resolveWorktreeBranchLabel,
+  resolveWorktreeDisplayName
+} from './worktree-default-display-name'
+import type { ExecutionHostId } from '../../../shared/execution-host'
+import type { MatchRange } from './palette-match/normalized-text'
+import type { PaletteDocument, PaletteDocumentRank } from './palette-match/palette-document'
+import type { PaletteResultQualityClass } from './palette-match/match-quality'
+
+const NO_RANGES: readonly MatchRange[] = []
 
 export type SearchableBrowserPage = {
   page: BrowserPage
@@ -11,11 +26,18 @@ export type SearchableBrowserPage = {
   worktree: Worktree
   repoName: string
   worktreeSortIndex: number
+  executionHostId?: ExecutionHostId
   isCurrentPage: boolean
   isCurrentWorktree: boolean
+  /** Last time the owning browser workspace was focused; null when never focused. */
+  lastActiveAt?: number | null
+  /** Normalized field index, built once per entry rather than per keystroke. */
+  document: PaletteDocument
 }
 
 export type BrowserPaletteSearchResult = {
+  /** Worktree ids collide across hosts; activation must not resolve by id alone. */
+  executionHostId?: ExecutionHostId
   pageId: string
   workspaceId: string
   worktreeId: string
@@ -24,14 +46,19 @@ export type BrowserPaletteSearchResult = {
   workspaceLabel: string | null
   repoName: string
   worktreeName: string
-  workspaceRange: MatchRange | null
-  titleRange: MatchRange | null
-  secondaryRange: MatchRange | null
-  repoRange: MatchRange | null
-  worktreeRange: MatchRange | null
+  branchName: string
+  workspaceRanges: readonly MatchRange[]
+  titleRanges: readonly MatchRange[]
+  secondaryRanges: readonly MatchRange[]
+  repoRanges: readonly MatchRange[]
+  worktreeRanges: readonly MatchRange[]
+  branchRanges: readonly MatchRange[]
   isCurrentPage: boolean
   isCurrentWorktree: boolean
   score: number
+  qualityClass: PaletteResultQualityClass | null
+  rank: PaletteDocumentRank | null
+  lastActiveAt?: number | null
 }
 
 export const BROWSER_PALETTE_QUERY_MAX_BYTES = 2 * 1024
@@ -63,15 +90,27 @@ export function formatBrowserPaletteUrl(url: string): string {
   }
 }
 
-function findRange(text: string, query: string): MatchRange | null {
-  if (!query) {
-    return null
-  }
-  const start = text.toLowerCase().indexOf(query)
-  if (start === -1) {
-    return null
-  }
-  return { start, end: start + query.length }
+/** Ordered to match the row: the formatted URL is shown, the raw URL is a fallback. */
+export function browserPaletteSecondaryTexts(page: BrowserPage): string[] {
+  return [formatBrowserPaletteUrl(page.url), page.url]
+}
+
+export function buildSearchableBrowserPageDocument(args: {
+  page: BrowserPage
+  workspace: BrowserWorkspace
+  worktree: Worktree
+  repoName: string
+}): PaletteDocument {
+  return buildPaletteTabDocument({
+    id: args.page.id,
+    title: args.page.title || formatBrowserPaletteUrl(args.page.url),
+    secondaryTexts: browserPaletteSecondaryTexts(args.page),
+    worktreeName: resolveWorktreeDisplayName(args.worktree),
+    branch: resolveWorktreeBranchLabel(args.worktree),
+    repoName: args.repoName,
+    // Why conditional on a label: an unlabeled workspace has nothing the row renders.
+    workspaceLabel: args.workspace.label ?? ''
+  })
 }
 
 function compareEmptyQueryResults(
@@ -94,195 +133,100 @@ function compareEmptyQueryResults(
   return compareText(a.title, b.title)
 }
 
-function scoreBrowserPageMatch({
-  fieldWeight,
-  matchIndex,
-  entry
-}: {
-  fieldWeight: number
-  matchIndex: number
-  entry: SearchableBrowserPage
-}): number {
-  let score = fieldWeight + matchIndex + entry.worktreeSortIndex * 100
+// Why: empty-query browser ordering is intentionally deterministic and context-first;
+// lastActiveAt only breaks ties between equally-ranked query matches.
+function positionScore(entry: SearchableBrowserPage): number {
   if (entry.isCurrentPage) {
-    score -= 40
-  } else if (entry.isCurrentWorktree) {
-    score -= 10
+    return entry.worktreeSortIndex * 100 - 4000
   }
-  return score
+  return entry.worktreeSortIndex * 100 - (entry.isCurrentWorktree ? 1000 : 0)
+}
+
+function baseResult(entry: SearchableBrowserPage): BrowserPaletteSearchResult {
+  const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
+  const executionHostId = entry.executionHostId ?? entry.worktree.hostId
+  return {
+    ...(executionHostId ? { executionHostId } : {}),
+    pageId: entry.page.id,
+    workspaceId: entry.workspace.id,
+    worktreeId: entry.worktree.id,
+    title: entry.page.title || formattedUrl,
+    secondaryText: formattedUrl,
+    workspaceLabel: entry.workspace.label ?? null,
+    repoName: entry.repoName,
+    // Why resolve: a cleared display name leaves the raw field undefined at runtime.
+    worktreeName: resolveWorktreeDisplayName(entry.worktree),
+    branchName: resolveWorktreeBranchLabel(entry.worktree),
+    workspaceRanges: NO_RANGES,
+    titleRanges: NO_RANGES,
+    secondaryRanges: NO_RANGES,
+    repoRanges: NO_RANGES,
+    worktreeRanges: NO_RANGES,
+    branchRanges: NO_RANGES,
+    isCurrentPage: entry.isCurrentPage,
+    isCurrentWorktree: entry.isCurrentWorktree,
+    score: positionScore(entry),
+    qualityClass: null,
+    rank: null,
+    lastActiveAt: entry.lastActiveAt ?? null
+  }
 }
 
 export function searchBrowserPages(
-  entries: SearchableBrowserPage[],
+  entries: readonly SearchableBrowserPage[],
   query: string
 ): BrowserPaletteSearchResult[] {
   if (isBrowserPaletteQueryTooLarge(query)) {
     return []
   }
-  const trimmed = query.trim()
-  const trimmedQuery = trimmed.toLowerCase()
-  const results: BrowserPaletteSearchResult[] = []
-
-  for (const entry of entries) {
-    const formattedUrl = formatBrowserPaletteUrl(entry.page.url)
-    const title = entry.page.title || formattedUrl
-    const fallbackSecondaryText = formattedUrl
-    // Why: a cleared display name leaves this undefined at runtime; findRange would throw.
-    const worktreeName = resolveWorktreeDisplayName(entry.worktree)
-    const baseResult = {
-      pageId: entry.page.id,
-      workspaceId: entry.workspace.id,
-      worktreeId: entry.worktree.id,
-      title,
-      workspaceLabel: entry.workspace.label ?? null,
-      repoName: entry.repoName,
-      worktreeName,
-      isCurrentPage: entry.isCurrentPage,
-      isCurrentWorktree: entry.isCurrentWorktree
-    }
-
-    if (!trimmedQuery) {
-      results.push({
-        ...baseResult,
-        secondaryText: fallbackSecondaryText,
-        workspaceRange: null,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        // Why: empty-query browser ordering is intentionally deterministic and
-        // context-first. The palette should not invent hidden browser recency
-        // semantics until Orca explicitly tracks them in state.
-        score: entry.isCurrentPage
-          ? -2
-          : entry.isCurrentWorktree
-            ? -1
-            : entry.worktreeSortIndex * 100
-      })
-      continue
-    }
-
-    const titleRange = findRange(title, trimmedQuery)
-    if (titleRange) {
-      results.push({
-        ...baseResult,
-        secondaryText: fallbackSecondaryText,
-        workspaceRange: null,
-        titleRange,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreBrowserPageMatch({
-          fieldWeight: 0,
-          matchIndex: titleRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const formattedUrlRange = findRange(formattedUrl, trimmedQuery)
-    if (formattedUrlRange) {
-      results.push({
-        ...baseResult,
-        secondaryText: formattedUrl,
-        workspaceRange: null,
-        titleRange: null,
-        secondaryRange: formattedUrlRange,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreBrowserPageMatch({
-          fieldWeight: 20,
-          matchIndex: formattedUrlRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const rawUrlRange = findRange(entry.page.url, trimmedQuery)
-    if (rawUrlRange) {
-      results.push({
-        ...baseResult,
-        secondaryText: entry.page.url,
-        workspaceRange: null,
-        titleRange: null,
-        secondaryRange: rawUrlRange,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreBrowserPageMatch({
-          fieldWeight: 24,
-          matchIndex: rawUrlRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const workspaceRange = findRange(entry.workspace.label ?? '', trimmedQuery)
-    if (workspaceRange) {
-      results.push({
-        ...baseResult,
-        secondaryText: fallbackSecondaryText,
-        workspaceRange,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange: null,
-        score: scoreBrowserPageMatch({
-          fieldWeight: 32,
-          matchIndex: workspaceRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const worktreeRange = findRange(worktreeName, trimmedQuery)
-    if (worktreeRange) {
-      results.push({
-        ...baseResult,
-        secondaryText: fallbackSecondaryText,
-        workspaceRange: null,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange: null,
-        worktreeRange,
-        score: scoreBrowserPageMatch({
-          fieldWeight: 40,
-          matchIndex: worktreeRange.start,
-          entry
-        })
-      })
-      continue
-    }
-
-    const repoRange = findRange(entry.repoName, trimmedQuery)
-    if (repoRange) {
-      results.push({
-        ...baseResult,
-        secondaryText: fallbackSecondaryText,
-        workspaceRange: null,
-        titleRange: null,
-        secondaryRange: null,
-        repoRange,
-        worktreeRange: null,
-        score: scoreBrowserPageMatch({
-          fieldWeight: 60,
-          matchIndex: repoRange.start,
-          entry
-        })
-      })
-    }
+  const prepared = preparePaletteTabQuery(query)
+  if (!prepared) {
+    // Why not [] on an over-token query: the empty branch also serves the no-query
+    // listing, so the invalid case is filtered out by the token guard below.
+    return query.trim()
+      ? []
+      : entries.map((entry) => baseResult(entry)).sort(compareEmptyQueryResults)
   }
 
-  return results.sort((a, b) => {
-    if (!trimmedQuery) {
-      return compareEmptyQueryResults(a, b)
+  const results: BrowserPaletteSearchResult[] = []
+  for (const entry of entries) {
+    const base = baseResult(entry)
+    const secondaryTexts = browserPaletteSecondaryTexts(entry.page)
+    const match = matchPaletteTabDocument(entry.document, prepared)
+    if (!match) {
+      continue
     }
-    if (a.score !== b.score) {
-      return a.score - b.score
-    }
-    return compareEmptyQueryResults(a, b)
-  })
+    results.push({
+      ...base,
+      secondaryText:
+        match.secondary !== null ? secondaryTexts[match.secondary.index] : base.secondaryText,
+      workspaceRanges: match.workspaceRanges,
+      titleRanges: match.titleRanges,
+      secondaryRanges: match.secondary?.ranges ?? NO_RANGES,
+      repoRanges: match.repoRanges,
+      worktreeRanges: match.worktreeRanges,
+      branchRanges: match.branchRanges,
+      qualityClass: match.qualityClass,
+      rank: match.rank
+    })
+  }
+
+  return results.sort((a, b) =>
+    a.rank && b.rank
+      ? comparePaletteTabResults(
+          {
+            rank: a.rank,
+            positionScore: a.score,
+            id: a.pageId,
+            lastActiveAt: a.lastActiveAt ?? undefined
+          },
+          {
+            rank: b.rank,
+            positionScore: b.score,
+            id: b.pageId,
+            lastActiveAt: b.lastActiveAt ?? undefined
+          }
+        )
+      : compareEmptyQueryResults(a, b)
+  )
 }

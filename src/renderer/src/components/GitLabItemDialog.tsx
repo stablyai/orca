@@ -44,12 +44,12 @@ import {
 import { useAppStore } from '@/store'
 import type {
   GitLabAssignableUser,
-  GitLabPipelineJob,
   GitLabMRUpdate,
+  GitLabPipelineJob,
   GitLabWorkItem,
   GitLabWorkItemDetails,
   MRComment
-} from '../../../shared/types'
+} from '../../../shared/gitlab-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 
@@ -106,6 +106,15 @@ function jobStatusTone(status: string): string {
     default:
       return 'bg-muted text-muted-foreground'
   }
+}
+
+function showGitLabMutationError(error: unknown): void {
+  const message = error instanceof Error && error.message ? error.message : String(error)
+  toast.error(
+    message === 'undefined' || message === 'null'
+      ? translate('auto.components.GitLabItemDialog.gitlabActionFailed', 'GitLab action failed.')
+      : message
+  )
 }
 
 function StateBadge({ state }: { state: GitLabWorkItem['state'] }): React.JSX.Element {
@@ -580,6 +589,10 @@ export default function GitLabItemDialog({
       } else if (mountedRef.current) {
         toast.error(res.error)
       }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
     } finally {
       if (mountedRef.current) {
         setDetailsSaving(false)
@@ -677,6 +690,10 @@ export default function GitLabItemDialog({
         } else {
           toast.error(result.error)
         }
+      } catch (error) {
+        if (mountedRef.current) {
+          showGitLabMutationError(error)
+        }
       } finally {
         if (mountedRef.current) {
           setRetryingJobId(null)
@@ -725,6 +742,10 @@ export default function GitLabItemDialog({
           useAppStore.getState().recordFeatureInteraction('gitlab-tasks')
         } else {
           toast.error(result.error)
+        }
+      } catch (error) {
+        if (mountedRef.current) {
+          showGitLabMutationError(error)
         }
       } finally {
         if (mountedRef.current) {
@@ -800,6 +821,10 @@ export default function GitLabItemDialog({
       } else {
         toast.error(result.error)
       }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
     } finally {
       if (mountedRef.current) {
         setInlineCommentSubmitting(false)
@@ -837,6 +862,10 @@ export default function GitLabItemDialog({
           toast.error(res.error)
         }
       }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
     } finally {
       if (mountedRef.current) {
         setActionInFlight(null)
@@ -866,6 +895,10 @@ export default function GitLabItemDialog({
           toast.error(res.error)
         }
       }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
     } finally {
       if (mountedRef.current) {
         setActionInFlight(null)
@@ -894,6 +927,10 @@ export default function GitLabItemDialog({
         if (mountedRef.current) {
           toast.error(res.error)
         }
+      }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
       }
     } finally {
       if (mountedRef.current) {
@@ -945,6 +982,10 @@ export default function GitLabItemDialog({
           toast.error(res.error)
         }
       }
+    } catch (error) {
+      if (mountedRef.current) {
+        showGitLabMutationError(error)
+      }
     } finally {
       if (mountedRef.current) {
         setCommentSubmitting(false)
@@ -983,6 +1024,10 @@ export default function GitLabItemDialog({
           }
         } else if (mountedRef.current) {
           toast.error(res.error)
+        }
+      } catch (error) {
+        if (mountedRef.current) {
+          showGitLabMutationError(error)
         }
       } finally {
         if (mountedRef.current) {

@@ -19,13 +19,14 @@ import type {
   SshConfigHostResolution,
   SshRepoReadoption,
   SshTarget,
-  SshTargetAddResult
+  SshTargetAddResult,
+  SshTargetCreateInput
 } from '../../../../shared/ssh-types'
 import { isDuplicateSshTargetAlias } from './ssh-target-duplicate'
 
 type SshApi = {
   listTargets: () => Promise<SshTarget[]>
-  addTarget: (args: { target: Omit<SshTarget, 'id'> }) => Promise<SshTargetAddResult>
+  addTarget: (args: { target: SshTargetCreateInput }) => Promise<SshTargetAddResult>
   listConfigHosts: (args?: SshConfigHostListArgs) => Promise<SshConfigHostListResult>
   resolveConfigHost: (args: { alias: string }) => Promise<SshConfigHostResolution | null>
   importConfig: (args?: { reAdopt?: boolean }) => Promise<{
@@ -43,7 +44,7 @@ export async function saveNewSshHostFromForm({
 }: {
   form: EditingTarget
   ssh: SshApi
-  recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
+  recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   setSshTargetsMetadata: (targets: SshTarget[]) => void
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<'saved' | 'validation-failed' | 'failed'> {
@@ -170,7 +171,7 @@ export async function addAllSshConfigHostsToOrca({
   recordFeatureInteraction
 }: {
   ssh: SshApi
-  recordSshRepoReadoptions: (readoptions: SshRepoReadoption[]) => void
+  recordSshRepoReadoptions: (readoptions: readonly SshRepoReadoption[]) => void
   setSshTargetsMetadata: (targets: SshTarget[]) => void
   recordFeatureInteraction: (feature: 'ssh') => void
 }): Promise<{ kind: 'added'; count: number } | { kind: 'already-synced' } | { kind: 'failed' }> {

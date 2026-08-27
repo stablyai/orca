@@ -30,6 +30,82 @@ vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
   session: { fromPartition: sessionFromPartitionMock }
 }))
+vi.mock('./browser-cookie-clear-store', () => ({
+  openCookieClearStore: (targetSession: {
+    cookies: {
+      get: (filter: object) => Promise<unknown>
+      remove: (url: string, name: string) => Promise<void>
+      set?: (details: Record<string, unknown>) => Promise<void>
+    }
+  }) => ({
+    get: (filter: object) => targetSession.cookies.get(filter),
+    remove: (url: string, name: string) => targetSession.cookies.remove(url, name),
+    // Why (STA-4300): the import writes go through CDP identities; route them to the same spy so
+    // a missing method cannot silently reroute every write down the rejected-cookie path.
+    writeCookieIdentity: (identity: Record<string, unknown>) =>
+      targetSession.cookies.set!(identity),
+    snapshotClearIdentities: async (
+      items: {
+        cookie: {
+          name: string
+          value: string
+          domain?: string
+          path?: string
+          secure?: boolean
+          httpOnly?: boolean
+          sameSite: string
+          expirationDate?: number
+          hostOnly?: boolean
+        }
+        url: string
+      }[]
+    ) =>
+      items.map(({ cookie, url }) => ({
+        url,
+        name: cookie.name,
+        value: cookie.value,
+        domain: cookie.domain,
+        hostOnly: cookie.hostOnly,
+        path: cookie.path,
+        secure: cookie.secure,
+        httpOnly: cookie.httpOnly,
+        sameSite: cookie.sameSite,
+        expirationDate: cookie.expirationDate
+      })),
+    restoreClearIdentities: async (
+      identities: {
+        url: string
+        name: string
+        value: string
+        domain?: string
+        path?: string
+        secure?: boolean
+        httpOnly?: boolean
+        sameSite: string
+        expirationDate?: number
+        hostOnly?: boolean
+      }[]
+    ) => {
+      if (!targetSession.cookies.set) {
+        return
+      }
+      for (const identity of identities.toReversed()) {
+        await targetSession.cookies.set({
+          url: identity.url,
+          name: identity.name,
+          value: identity.value,
+          ...(identity.hostOnly ? {} : { domain: identity.domain }),
+          ...(identity.path ? { path: identity.path } : {}),
+          secure: identity.secure,
+          httpOnly: identity.httpOnly,
+          sameSite: identity.sameSite,
+          ...(identity.expirationDate ? { expirationDate: identity.expirationDate } : {})
+        })
+      }
+    },
+    dispose: () => undefined
+  })
+}))
 
 import { importCookiesFromBrowser, importCookiesFromFile } from './browser-cookie-import'
 import { createChromiumCookieTestDatabase } from './browser-cookie-import-test-database'
@@ -120,7 +196,7 @@ describe('file import excludes the Google cookie family', () => {
 })
 
 describe('native Chromium import excludes the Google cookie family', () => {
-  let clearStorageDataMock: ReturnType<typeof vi.fn>
+  let clearDataMock: ReturnType<typeof vi.fn>
   let cookiesGetMock: ReturnType<typeof vi.fn>
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesSetMock: ReturnType<typeof vi.fn>
@@ -134,7 +210,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
     execFileSyncMock.mockImplementation(() => {
       throw new Error('OS browser version lookup unavailable')
     })
-    clearStorageDataMock = vi.fn().mockResolvedValue(undefined)
+    clearDataMock = vi.fn().mockResolvedValue(undefined)
     cookiesGetMock = vi.fn().mockResolvedValue([])
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesSetMock = vi.fn().mockResolvedValue(undefined)
@@ -145,7 +221,8 @@ describe('native Chromium import excludes the Google cookie family', () => {
         remove: cookiesRemoveMock,
         set: cookiesSetMock
       },
-      clearStorageData: clearStorageDataMock
+      clearData: clearDataMock,
+      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'test')
     })
     platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
   })
@@ -166,7 +243,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
     createChromiumCookieTestDatabase(targetCookiesPath, rows).close()
   }
 
-  it('bulk clears once and restores the live Google cookies before importing', async () => {
+  it('clears the imported domain coordinate by coordinate and never a Google one', async () => {
     const sourceCookiesPath = seedSource([
       { domain: '.google.com', name: 'SID', value: 'transplanted-sid' },
       { domain: '.example.com', name: 'session', value: 'new' }
@@ -186,13 +263,11 @@ describe('native Chromium import excludes the Google cookie family', () => {
       googleCookiesSkipped: 1,
       domains: ['example.com']
     })
-    expect(clearStorageDataMock).toHaveBeenCalledOnce()
-    expect(clearStorageDataMock).toHaveBeenCalledWith({ storages: ['cookies'] })
-    expect(cookiesRemoveMock).not.toHaveBeenCalled()
-    expect(cookiesSetMock.mock.calls.map(([details]) => details.domain)).toEqual([
-      '.google.com',
-      '.example.com'
-    ])
+    // Why (STA-4797): the bulk clear is gone, so the live Google session survives by never being
+    // named as a removal coordinate rather than by riding an excludeOrigins exemption.
+    expect(clearDataMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock.mock.calls).toEqual([['https://example.com/', 'stale']])
+    expect(cookiesSetMock.mock.calls.map(([details]) => details.domain)).toEqual(['.example.com'])
   })
 
   it('reports an excluded Google row even when its encrypted value is invalid', async () => {
@@ -242,7 +317,7 @@ describe('native Chromium import excludes the Google cookie family', () => {
       domains: []
     })
     expect(execFileSyncMock).not.toHaveBeenCalled()
-    expect(clearStorageDataMock).not.toHaveBeenCalled()
+    expect(clearDataMock).not.toHaveBeenCalled()
     expect(cookiesSetMock).not.toHaveBeenCalled()
   })
 
@@ -270,24 +345,44 @@ describe('native Chromium import excludes the Google cookie family', () => {
     ])
   })
 
-  it('fails the import and restores the full snapshot when the bulk clear rejects', async () => {
+  // Why (STA-4090): a rejected removal must restore cookies already deleted in the same clear
+  // without writing imported rows or touching the live Google session.
+  it('fails the import without permanently deleting a cookie removed before a later rejection', async () => {
     const sourceCookiesPath = seedSource([
       { domain: '.example.com', name: 'session', value: 'new' }
     ])
     seedTarget([{ domain: '.example.com', name: 'stale', value: 'stale' }])
-    cookiesGetMock.mockResolvedValue([
+    // Why (STA-4797): the rejecting cookie has to sit on a domain this import actually replaces.
+    // Parked on an unrelated site it is out of the import scope, never enters the removal plan,
+    // and the rejection the case exists to exercise never happens.
+    let jar = [
       existingCookie('.google.com', 'SID'),
+      existingCookie('.example.com', 'removed-first'),
       existingCookie('.example.com', 'stale')
-    ])
-    clearStorageDataMock.mockRejectedValue(new Error('cookie store unavailable'))
+    ]
+    cookiesGetMock.mockImplementation(async () => [...jar])
+    cookiesRemoveMock.mockImplementation(async (_url: string, name: string) => {
+      if (name === 'stale') {
+        throw new Error('cookie store unavailable')
+      }
+      jar = jar.filter((entry) => entry.name !== name)
+    })
+    cookiesSetMock.mockImplementation(async (details: { domain?: string; name: string }) => {
+      if (!jar.some((entry) => entry.name === details.name)) {
+        jar.push(existingCookie(details.domain ?? '.example.com', details.name))
+      }
+    })
 
     const result = await importCookiesFromBrowser(chromeBrowser(sourceCookiesPath), 'persist:test')
 
     expect(result).toMatchObject({ ok: false })
     expect(result.ok || result.reason).toContain('Could not clear existing cookies')
-    expect(clearStorageDataMock).toHaveBeenCalledOnce()
-    expect(cookiesRemoveMock).not.toHaveBeenCalled()
-    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(['SID', 'stale'])
+    expect(clearDataMock).not.toHaveBeenCalled()
+    expect(cookiesRemoveMock.mock.calls.map(([, name]) => name)).toEqual(['removed-first', 'stale'])
+    expect(cookiesSetMock.mock.calls.map(([details]) => details.name)).toEqual(
+      expect.arrayContaining(['removed-first'])
+    )
+    expect(jar.map((entry) => entry.name).sort()).toEqual(['SID', 'removed-first', 'stale'])
     expect(setPendingCookieImportMock).not.toHaveBeenCalled()
   })
 })

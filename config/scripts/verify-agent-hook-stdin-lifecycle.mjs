@@ -320,7 +320,7 @@ async function verifyInstalledLauncher(home, payload) {
   )
   if (
     !command ||
-    !command.includes('"$HOME/.orca/agent-hooks/claude-hook.sh"') ||
+    !command.includes('"${HOME-}/.orca/agent-hooks/claude-hook.sh"') ||
     !command.includes('] && [ -r ') ||
     !command.includes('else { command -p cat')
   ) {

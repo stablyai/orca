@@ -687,7 +687,7 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
-    it('reaps a half-open socket within 8s of foreground', async () => {
+    it('reaps a half-open socket after three fair foreground probe windows', async () => {
       const client = connect('ws://desktop.invalid', 'token', 'server-key')
       const socket = mockSockets[0]!
       openAndAuthenticate(socket)
@@ -696,9 +696,8 @@ describe('mobile rpc-client connection timeout', () => {
       client.notifyForeground()
       expect(sentRequests(socket, 'status.get')).toHaveLength(1)
 
-      await vi.advanceTimersByTimeAsync(8_000)
+      await vi.advanceTimersByTimeAsync(24_000)
       expect(socket.close).toHaveBeenCalled()
-      expect(client.getState()).toBe('reconnecting')
 
       await vi.advanceTimersByTimeAsync(500)
       openAndAuthenticate(mockSockets[mockSockets.length - 1]!)
@@ -714,10 +713,9 @@ describe('mobile rpc-client connection timeout', () => {
       socket.emitCloseOnClose = false
 
       client.notifyForeground()
-      await vi.advanceTimersByTimeAsync(8_000)
+      await vi.advanceTimersByTimeAsync(24_000)
 
       expect(socket.close).toHaveBeenCalledTimes(1)
-      expect(client.getState()).toBe('reconnecting')
       socket.onclose?.()
       expect(client.getState()).toBe('reconnecting')
 
@@ -740,7 +738,8 @@ describe('mobile rpc-client connection timeout', () => {
       client.notifyForeground()
       client.notifyForeground()
       expect(sentRequests(socket, 'status.get')).toHaveLength(1)
-      await vi.advanceTimersByTimeAsync(8_000)
+      await vi.advanceTimersByTimeAsync(24_000)
+      expect(sentRequests(socket, 'status.get')).toHaveLength(3)
       expect(socket.close).toHaveBeenCalledTimes(1)
       expect(client.getState()).toBe('reconnecting')
 
@@ -748,6 +747,7 @@ describe('mobile rpc-client connection timeout', () => {
       expect(mockSockets).toHaveLength(2)
       client.close()
     })
+
     it('keeps a healthy connection when the foreground probe is answered', async () => {
       const { client, socket } = connectAuthenticated()
 
@@ -782,13 +782,14 @@ describe('mobile rpc-client connection timeout', () => {
 
       await vi.advanceTimersByTimeAsync(8_000)
       expect(socket.close).not.toHaveBeenCalled()
-      expect(client.getState()).toBe('connected')
 
       await vi.advanceTimersByTimeAsync(12_000)
       expect(sentRequests(socket, 'status.get')).toHaveLength(2)
       await vi.advanceTimersByTimeAsync(7_999)
       expect(socket.close).not.toHaveBeenCalled()
       await vi.advanceTimersByTimeAsync(1)
+      expect(socket.close).not.toHaveBeenCalled()
+      await vi.advanceTimersByTimeAsync(16_000)
       expect(socket.close).toHaveBeenCalled()
       expect(client.getState()).toBe('reconnecting')
 
@@ -853,18 +854,29 @@ describe('mobile rpc-client connection timeout', () => {
       client.close()
     })
 
-    it('does not count malformed or undecryptable inbound payloads as probe activity', async () => {
+    it('counts authenticated unknown payloads before semantic decoding', async () => {
       const { client, socket } = connectAuthenticated()
 
       client.notifyForeground()
-      socket.receive('undecryptable')
       socket.receive('encrypted:{"unexpected":true}')
       socket.receive('encrypted:{"id":"rpc-incomplete","ok":true}')
       socket.receive(new Uint8Array([0xff, 0x00, 0x01]))
 
       await vi.advanceTimersByTimeAsync(8_000)
+      expect(socket.close).not.toHaveBeenCalled()
+      expect(client.getState()).toBe('connected')
+
+      client.close()
+    })
+
+    it('does not count undecryptable payloads as probe activity', async () => {
+      const { client, socket } = connectAuthenticated()
+
+      client.notifyForeground()
+      socket.receive('undecryptable')
+
+      await vi.advanceTimersByTimeAsync(24_000)
       expect(socket.close).toHaveBeenCalled()
-      expect(client.getState()).toBe('reconnecting')
 
       client.close()
     })

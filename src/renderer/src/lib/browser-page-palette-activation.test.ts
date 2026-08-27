@@ -1,14 +1,10 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  BrowserPage,
-  BrowserWorkspace,
-  FolderWorkspace,
-  Tab,
-  TabGroup,
-  Worktree
-} from '../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../shared/browser-workspace-types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { useAppStore } from '@/store'
@@ -179,13 +175,36 @@ describe('activateBrowserPagePaletteResult', () => {
     })
   })
 
+  it('activates an SSH worktree through its paired-runtime owner alias', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'paired-host'
+          })
+        ]
+      }
+    })
+
+    expect(
+      activateBrowserPagePaletteResult({ ...target, executionHostId: 'runtime:paired-host' }).status
+    ).toBe('activated')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      executionHostId: 'runtime:paired-host'
+    })
+  })
+
   it('activates pages in remote folder workspaces', () => {
     const worktreeId = folderWorkspaceKey('folder-1')
     seedStore({
       worktreesByRepo: {},
       folderWorkspaces: [makeFolderWorkspace({ executionHostId: 'ssh:host-1' })],
       browserTabsByWorktree: { [worktreeId]: [makeWorkspace({ worktreeId })] },
-      browserPagesByWorkspace: { 'ws-1': [makePage({ worktreeId })] }
+      browserPagesByWorkspace: { 'ws-1': [makePage({ worktreeId })] },
+      unifiedTabsByWorktree: { [worktreeId]: [makeBrowserTab({ worktreeId })] },
+      groupsByWorktree: { [worktreeId]: [makeGroup({ worktreeId })] },
+      activeGroupIdByWorktree: { [worktreeId]: 'group-1' }
     })
 
     expect(
@@ -319,12 +338,15 @@ describe('activateBrowserPagePaletteResult group focus', () => {
     expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe('group-1')
   })
 
-  it('still activates the page when no unified tab backs the browser workspace', () => {
+  // Nothing renders the workspace without its unified tab, so reporting success
+  // would leave the previously active tab on screen.
+  it('fails instead of activating when no unified tab backs the browser workspace', () => {
     seedStore({ unifiedTabsByWorktree: {}, groupsByWorktree: { 'wt-1': [] } })
 
-    expect(activateBrowserPagePaletteResult(target)).toMatchObject({
-      status: 'activated'
+    expect(activateBrowserPagePaletteResult(target)).toEqual({
+      status: 'failed',
+      reason: 'missing-tab'
     })
-    expect(useAppStore.getState().activeBrowserTabId).toBe('ws-1')
+    expect(useAppStore.getState().activeBrowserTabId).toBeNull()
   })
 })

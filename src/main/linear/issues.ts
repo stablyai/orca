@@ -1,32 +1,26 @@
 /* eslint-disable max-lines -- Why: Linear issue reads and mutations share the
    same workspace fan-out/error handling, so keeping them together avoids
    drifting auth-clearing behavior between operations. */
+import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
+import type { LinearComment, LinearIssue } from '../../shared/linear/issue-types'
 import type {
-  LinearIssue,
-  LinearIssueUpdate,
-  LinearComment,
   LinearCollectionResult,
   LinearWorkspaceError,
   LinearWorkspaceSelection
-} from '../../shared/types'
+} from '../../shared/linear/workspace-types'
 import type { LinearClient } from '@linear/sdk'
 import { loadLinearSdk } from './linear-sdk'
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
-} from '../../shared/linear-issue-read-limits'
+} from '../../shared/linear/issue-read-limits'
 import {
   isEmptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
-} from '../../shared/linear-issue-attribute-filter'
-import {
-  acquire,
-  release,
-  getClients,
-  isAuthError,
-  clearToken,
-  type LinearClientForWorkspace
-} from './client'
+} from '../../shared/linear/issue-attribute-filter'
+import { acquire, release } from './linear-request-concurrency'
+import { clearToken } from './linear-token-store'
+import { getClients, isAuthError, type LinearClientForWorkspace } from './client'
 import { buildLinearListIssueFilter } from './issue-list-filter'
 import { mapLinearIssue } from './mappers'
 

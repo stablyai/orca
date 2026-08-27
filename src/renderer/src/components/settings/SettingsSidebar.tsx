@@ -3,7 +3,8 @@ import { useMemo } from 'react'
 import { ArrowLeft, Search, Server } from 'lucide-react'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import type { SettingsNavIcon, SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
-import type { GitHubRepositoryIdentity, GlobalSettings } from '../../../../shared/types'
+import type { GitHubRepositoryIdentity } from '../../../../shared/github/pull-request-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useShortcutKeyComboDetails } from '@/hooks/useShortcutLabel'
 import { ShortcutKeyCombo } from '../ShortcutKeyCombo'
 import { cn } from '@/lib/utils'
@@ -17,6 +18,7 @@ import type { SettingsSetupGuideProgress } from './settings-setup-guide-progress
 import { translate } from '@/i18n/i18n'
 import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { useSystemPrefersDark } from '../terminal-pane/use-system-prefers-dark'
+import { useAppStore } from '@/store'
 
 type NavSection = {
   id: string
@@ -45,11 +47,9 @@ type SettingsSidebarProps = {
   generalGroups: NavGroup[]
   repoSections: RepoNavSection[]
   hasRepos: boolean
-  searchQuery: string
   searchInputRef?: RefObject<HTMLInputElement | null>
   searchAutoFocus?: boolean
   onBack: () => void
-  onSearchChange: (query: string) => void
   onSelectSection: (
     sectionId: string,
     modifiers: {
@@ -59,6 +59,47 @@ type SettingsSidebarProps = {
       altKey: boolean
     }
   ) => void
+}
+
+function SettingsSearchField({
+  searchInputRef,
+  searchAutoFocus = false
+}: Pick<SettingsSidebarProps, 'searchInputRef' | 'searchAutoFocus'>): React.JSX.Element {
+  const searchQuery = useAppStore((state) => state.settingsSearchInputQuery)
+  const onSearchChange = useAppStore((state) => state.setSettingsSearchQuery)
+  const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
+
+  return (
+    <div className="border-b border-worktree-sidebar-border px-3 py-3">
+      <div className="relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+        <Input
+          ref={searchInputRef}
+          autoFocus={searchAutoFocus}
+          value={searchQuery}
+          onChange={(event) => onSearchChange(event.target.value)}
+          placeholder={translate(
+            'auto.components.settings.SettingsSidebar.dbceaa8840',
+            'Search settings'
+          )}
+          className="bg-background/60 pl-9 pr-14 text-[13px]"
+        />
+        {searchQuery === '' ? (
+          <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
+            {searchShortcutCombos.map((combo) => (
+              <ShortcutKeyCombo
+                key={combo.keys.join('-')}
+                keys={combo.keys}
+                doubleTap={combo.doubleTap}
+                className="inline-flex gap-0.5"
+                separatorClassName="text-[10px] text-muted-foreground"
+              />
+            ))}
+          </span>
+        ) : null}
+      </div>
+    </div>
+  )
 }
 
 type VisibleInstallStatus = Extract<
@@ -133,11 +174,9 @@ export function SettingsSidebar({
   generalGroups,
   repoSections,
   hasRepos,
-  searchQuery,
   searchInputRef,
   searchAutoFocus = false,
   onBack,
-  onSearchChange,
   onSelectSection
 }: SettingsSidebarProps): React.JSX.Element {
   const setupGuideProgress = useSettingsSetupGuideProgress(true)
@@ -151,7 +190,6 @@ export function SettingsSidebar({
   // Settings should remain a stable place to reopen the checklist.
   const showSetupGuideTopRow =
     setupGuideProgress.ready && setupGuideProgress.doneCount < setupGuideProgress.total
-  const searchShortcutCombos = useShortcutKeyComboDetails('settings.search')
   const navItemClassName = (isActive: boolean): string =>
     cn(
       'flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left text-[13px] outline-none transition-colors duration-150 focus-visible:ring-[3px] focus-visible:ring-worktree-sidebar-ring/50',
@@ -193,35 +231,7 @@ export function SettingsSidebar({
         </Button>
       </div>
 
-      <div className="border-b border-worktree-sidebar-border px-3 py-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            ref={searchInputRef}
-            autoFocus={searchAutoFocus}
-            value={searchQuery}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder={translate(
-              'auto.components.settings.SettingsSidebar.dbceaa8840',
-              'Search settings'
-            )}
-            className="bg-background/60 pl-9 pr-14 text-[13px]"
-          />
-          {searchQuery === '' ? (
-            <span className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
-              {searchShortcutCombos.map((combo) => (
-                <ShortcutKeyCombo
-                  key={combo.keys.join('-')}
-                  keys={combo.keys}
-                  doubleTap={combo.doubleTap}
-                  className="inline-flex gap-0.5"
-                  separatorClassName="text-[10px] text-muted-foreground"
-                />
-              ))}
-            </span>
-          ) : null}
-        </div>
-      </div>
+      <SettingsSearchField searchInputRef={searchInputRef} searchAutoFocus={searchAutoFocus} />
 
       {showSetupGuideTopRow ? (
         <div className="border-b border-worktree-sidebar-border px-3 py-3">

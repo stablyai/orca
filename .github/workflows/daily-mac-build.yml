@@ -5,13 +5,15 @@ name: Daily macOS Dev Build
 # hourly.
 #
 # Schedule is a single UTC cron (GH Actions has no timezone-aware schedules).
-# 14:15 UTC is early morning Pacific year-round (6:15am PST / 7:15am PDT). Minute
+# 18:15 UTC is late morning Pacific year-round (10:15am PST / 11:15am PDT). Minute
 # 15 avoids stacking with hourly-mac-build, which fires at minute 0 every hour.
 #
 # Deliberately narrow scope:
 #   - macOS only. Other platforms keep using RC/stable.
-#   - No tests, no lint, no e2e. This channel trades safety for latency; PR CI
-#     and release-cut remain the gates that matter.
+#   - No tests or lint on the build job. After a live publish we fire-and-forget
+#     the full E2E workflow at the cut SHA (same detached dispatch as
+#     release-cut). A red suite must not fail or delay the daily.
+#   - PR CI and release-cut remain the gates that matter.
 #   - Signed AND notarized, exactly like a release. The notary round trip is the
 #     one slow step kept: macOS anchors a notarized app's TCC grants on identifier
 #     + team rather than on its cdhash, so those grants survive an update. Without
@@ -45,8 +47,8 @@ name: Daily macOS Dev Build
 
 on:
   schedule:
-    # Once a day, early morning Pacific. Single cron — no DST twin, no clock gate.
-    - cron: '15 14 * * *'
+    # Once a day, late morning Pacific. Single cron — no DST twin, no clock gate.
+    - cron: '15 18 * * *'
   workflow_dispatch:
     inputs:
       force:
@@ -70,6 +72,11 @@ env:
 jobs:
   build-daily-mac:
     if: github.repository == 'stablyai/orca'
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.daily.outputs.version }}
+      head_sha: ${{ steps.freshness.outputs.head_sha }}
+      published: ${{ steps.publish_live.outcome == 'success' && 'true' || 'false' }}
     runs-on: blacksmith-6vcpu-macos-15
     # Why 150: it must exceed the worst case the retry budgets below can produce
     # (install 3x10 + publish 2x45 = 120, plus ~25 for checkout/build/verify), or
@@ -269,13 +276,19 @@ jobs:
           # exactly. One source, written once, read twice.
           notes_file="$RUNNER_TEMP/daily-release-notes.md"
           cat >"$notes_file" <<EOF
-          Automated daily macOS dev build from commit \`$short_sha\`.
+          Automated daily macOS and Windows dev build from commit \`$short_sha\`.
 
           Built from [\`stablyai/orca@$short_sha\`](https://github.com/stablyai/orca/commit/$SHA).
 
-          **Unvetted.** No tests ran. Signed and notarized like a release, so it
-          installs through Orca's in-app updater and opens from a manual download
-          without a Gatekeeper prompt — but nothing here has been reviewed.
+          **Unvetted.** No tests ran. The macOS build is signed and notarized like a
+          release, so it installs through Orca's in-app updater and opens from a manual
+          download without a Gatekeeper prompt — but nothing here has been reviewed.
+
+          **Windows builds are unsigned.** They install and update normally once you
+          are on one, but a signed Stable or RC build cannot install one through the
+          in-app updater — download \`orca-windows-setup.exe\` below and run it once
+          (SmartScreen will warn about an unknown publisher). Every later switch,
+          including back to Stable, works in-app from there.
           EOF
           # Why create it up front: electron-builder then uploads into a known tag
           # rather than inferring one from package.json.
@@ -294,6 +307,7 @@ jobs:
             --notes-file "$notes_file"
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
           echo "notes_file=$notes_file" >>"$GITHUB_OUTPUT"
+
 
       - name: Publish daily macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
@@ -469,3 +483,58 @@ jobs:
             gh release delete "$tag" --repo "$DAILY_REPO" --yes --cleanup-tag || \
               echo "::warning::Could not prune $tag"
           done <<<"$stale"
+
+  # Why detached dispatch, not a reusable workflow in this graph: the full suite
+  # is currently red on main. Inlining it here would fail the daily after the
+  # signed build already published. Same pattern as release-cut's post-release-e2e.
+  #
+  # Why --ref main plus the SHA input: daily tags live on orca-daily, not this
+  # repo, so there is no cut tag for `gh workflow run --ref`. The workflow file
+  # comes from main; checkout uses the exact commit this daily built.
+  post-daily-e2e:
+    needs: build-daily-mac
+    if: ${{ needs.build-daily-mac.outputs.published == 'true' && needs.build-daily-mac.outputs.head_sha != '' }}
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Dispatch cut-scoped E2E
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SHA: ${{ needs.build-daily-mac.outputs.head_sha }}
+        run: |
+          for attempt in 1 2 3; do
+            if gh workflow run e2e.yml \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref main \
+              --raw-field "ref=$SHA"; then
+              echo "Dispatched post-daily E2E for $SHA."
+              exit 0
+            fi
+            [[ "$attempt" -eq 3 ]] || sleep "$((attempt * 5))"
+          done
+          echo "::warning::Failed to dispatch post-daily E2E for $SHA after 3 attempts."
+
+  # Why this runs after the mac leg rather than beside it: the tag and version
+  # are computed inside that job, so until it has run nothing else can name the
+  # release to upload into. The cost is small enough not to matter — the Windows
+  # leg measures ~7.5 min (install 2m45, build 35s, NSIS package 3m) against a
+  # ~9.5 min mac run, which keeps a daily run far inside its interval.
+  #
+  # Why `./` rather than a pinned `@main`: `uses:` resolves against the ref this
+  # file itself came from, which for an ordinary dispatch is main. Someone who
+  # deliberately points the Actions "Use workflow from" picker at a branch
+  # already gets that branch's copy of this entire file, so this follows the same
+  # rule instead of inventing a second one.
+  build-daily-win:
+    needs: build-daily-mac
+    # Only once the mac release is actually live: there is no release to upload
+    # into otherwise, and the Windows workflow refuses to create one.
+    if: needs.build-daily-mac.outputs.published == 'true'
+    uses: ./.github/workflows/dev-channel-win-build.yml
+    secrets: inherit
+    with:
+      channel: daily
+      tag: ${{ needs.build-daily-mac.outputs.tag }}
+      ref: ${{ needs.build-daily-mac.outputs.head_sha }}
+      version: ${{ needs.build-daily-mac.outputs.version }}

@@ -1,16 +1,14 @@
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { STREAM_CHUNK_SIZE, JsonRpcErrorCode, RelayErrorCode } from './relay-protocol'
-import type { FileReadResult } from '../providers/types'
+import type { FileReadLimits, FileReadResult } from '../providers/types'
 import {
   createSshFileStreamInactivityDeadline,
   SSH_FILE_STREAM_INACTIVITY_TIMEOUT_MS
 } from './ssh-file-stream-inactivity-deadline'
+import { sshFileStreamReadCap } from './ssh-file-stream-read-cap'
 
 const RESULT_ENCODING_BASE64 = 'base64'
 const SENTINEL_STREAM_ID = -1
-
-const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024
-const MAX_TEXT_FILE_SIZE = 10 * 1024 * 1024
 
 type StreamMetadataResponse = {
   streamId?: number
@@ -37,9 +35,14 @@ export class StreamProtocolError extends Error {
   }
 }
 
+// Why: exceeding a cap the caller itself set is a size verdict, not a protocol fault — callers
+// translate it into their own too-large error rather than leaking the raw stream message.
+export class FileReadCapExceededError extends StreamProtocolError {}
+
 export async function readFileViaStream(
   mux: SshChannelMultiplexer,
-  filePath: string
+  filePath: string,
+  limits?: FileReadLimits
 ): Promise<FileReadResult> {
   // Why: subscribe BEFORE awaiting the metadata response so a chunk arriving
   // immediately after the response cannot beat the listener registration.
@@ -307,11 +310,11 @@ export async function readFileViaStream(
           return
         }
 
-        const cap = metadata.isBinary ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+        const cap = sshFileStreamReadCap(metadata.isBinary, limits)
         if (metadata.totalSize < 0 || metadata.totalSize > cap) {
           streamIdRef.current = metadata.streamId
           fail(
-            new StreamProtocolError(
+            new FileReadCapExceededError(
               `Reported totalSize ${metadata.totalSize} exceeds client cap ${cap}`
             )
           )

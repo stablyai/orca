@@ -10,6 +10,7 @@ import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
+  requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
@@ -64,6 +65,16 @@ describe('execution host identity', () => {
     expect(normalizeExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
     expect(normalizeExecutionHostScope('ssh:')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
     expect(normalizeExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+  })
+
+  it('defaults an omitted scope request to this host, not a fan-out', () => {
+    expect(requestedExecutionHostScope(undefined)).toBe(LOCAL_EXECUTION_HOST_ID)
+    expect(requestedExecutionHostScope(null)).toBe(LOCAL_EXECUTION_HOST_ID)
+    // An empty or unrecognized scope is a real value, so it still fans out.
+    expect(requestedExecutionHostScope('')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(requestedExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(requestedExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(requestedExecutionHostScope('ssh:dev%20box')).toBe('ssh:dev%20box')
   })
 
   it('normalizes visible host id arrays', () => {

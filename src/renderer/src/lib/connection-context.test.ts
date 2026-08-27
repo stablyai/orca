@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import {

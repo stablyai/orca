@@ -396,6 +396,81 @@ describe('configureElectronNetworkCompatibility', () => {
   })
 })
 
+const EXPECTED_DISABLED_FEATURES =
+  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers'
+
+describe('disableUnsupportedChromiumFeatures', () => {
+  it('matches the shared list the real-Electron egress probes launch with', async () => {
+    const { DISABLED_CHROMIUM_FEATURES } = await import('./disabled-chromium-features')
+
+    expect(DISABLED_CHROMIUM_FEATURES.join(',')).toBe(EXPECTED_DISABLED_FEATURES)
+  })
+
+  it('disables FedCM before Chromium sessions are created', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      EXPECTED_DISABLED_FEATURES
+    )
+  })
+
+  it('disables every Direct Sockets surface so a hostile page cannot kill its renderer', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    const disabled = vi
+      .mocked(app.commandLine.appendSwitch)
+      .mock.calls.find(([name]) => name === 'disable-features')?.[1]
+      ?.split(',')
+
+    expect(disabled).toEqual(
+      expect.arrayContaining([
+        'DirectSockets',
+        'DirectSocketsInSharedWorkers',
+        'DirectSocketsInServiceWorkers'
+      ])
+    )
+  })
+
+  it('preserves existing disabled Chromium features', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce('ExistingFeature')
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+  })
+
+  it('does not duplicate features when disable-features already includes them', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce(
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+  })
+})
+
 describe('enableMainProcessGpuFeatures', () => {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   const originalE2EUserDataDir = process.env.ORCA_E2E_USER_DATA_DIR

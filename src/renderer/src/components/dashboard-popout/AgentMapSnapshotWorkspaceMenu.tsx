@@ -17,7 +17,7 @@ import type {
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
 export type AgentMapSnapshotWorkspaceMenuRequest = {
   id: number

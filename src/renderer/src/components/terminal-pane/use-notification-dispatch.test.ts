@@ -4,7 +4,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { buildAgentNotificationId } from '../../../../shared/agent-notification-id'
 
 type MockState = {
@@ -188,6 +188,99 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
     expect(mockState.markTerminalTabUnread).toHaveBeenCalledWith('tab-1')
     expect(mockState.markTerminalPaneUnread).toHaveBeenCalledWith(paneKey)
+  })
+
+  it('builds the notification id from a completion snapshot, not the pinned working row', () => {
+    const pinnedWorkingStartedAt = Date.now() - 60_000
+    // Why: the stored row must name the event's agent, or it is dropped for identity mismatch
+    // and the assertion would hold whichever side of the `??` wins.
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      stateStartedAt: pinnedWorkingStartedAt,
+      agentType: 'claude',
+      terminalTitle: 'claude'
+    })
+    const turnCompletedAt = Date.now()
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'claude',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'review the PR',
+        agentType: 'claude',
+        stateStartedAt: turnCompletedAt
+      }
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        notificationId: buildAgentNotificationId({
+          worktreeId: 'wt-primary',
+          paneKey,
+          stateStartedAt: turnCompletedAt
+        })
+      })
+    )
+  })
+
+  it.each([
+    { clientStateStartedAt: 5_000, hostTurnCompletedAt: 2_000 },
+    { clientStateStartedAt: 2_000, hostTurnCompletedAt: 5_000 }
+  ])(
+    'accepts a host-stamped completion across client/host clock skew %#',
+    ({ clientStateStartedAt, hostTurnCompletedAt }) => {
+      mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+        state: 'working',
+        stateStartedAt: clientStateStartedAt,
+        agentType: 'claude',
+        terminalTitle: 'claude'
+      })
+
+      dispatchTerminalNotification('wt-primary', {
+        source: 'agent-task-complete',
+        terminalTitle: 'claude',
+        paneKey,
+        agentStatusSnapshot: {
+          state: 'done',
+          prompt: 'review the PR',
+          agentType: 'claude',
+          stateStartedAt: hostTurnCompletedAt,
+          localStateStartedAt: clientStateStartedAt,
+          turnCompletedAt: hostTurnCompletedAt
+        }
+      })
+
+      expect(window.api.notifications.dispatch).toHaveBeenCalledWith(
+        expect.objectContaining({ source: 'agent-task-complete' })
+      )
+    }
+  )
+
+  it('drops a host-stamped completion after a newer client turn starts', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      stateStartedAt: 6_000,
+      agentType: 'claude',
+      terminalTitle: 'claude'
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'claude',
+      paneKey,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'previous turn',
+        agentType: 'claude',
+        stateStartedAt: 2_000,
+        localStateStartedAt: 5_000,
+        turnCompletedAt: 2_000
+      }
+    })
+
+    expect(window.api.notifications.dispatch).not.toHaveBeenCalled()
   })
 
   it('uses a live pane key when inactive worktree tab membership is not hydrated', () => {

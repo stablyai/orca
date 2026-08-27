@@ -13,7 +13,7 @@ import { buildAppFontFamily } from './lib/app-font-family'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
 import { useAppStore } from './store'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 
 // Why: the pop-out window is a separate BrowserWindow with its own React root,
@@ -49,10 +49,6 @@ if (!rootElement) {
   recordRendererCrashBreadcrumb('popout_root_missing')
   throw new Error('Pop-out root element not found.')
 }
-
-// The main process loads popout.html with ?view=<name> so a single entry can
-// host different dashboard layouts (kanban, etc.).
-const requestedView = new URLSearchParams(window.location.search).get('view')
 
 function PopoutSettingsSync(): null {
   const settings = useAppStore((state) => state.settings)
@@ -109,7 +105,7 @@ function PopoutRoot(): React.JSX.Element {
         'The dashboard could not finish rendering. Retry to remount it, or reopen it.'
       )}
     >
-      <DashboardPopoutRoot view={requestedView} />
+      <DashboardPopoutRoot />
     </RecoverableRenderErrorBoundary>
   )
 }

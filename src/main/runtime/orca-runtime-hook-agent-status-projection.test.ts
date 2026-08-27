@@ -130,6 +130,23 @@ describe('headless hook agent-status projection (#11761)', () => {
     )
   })
 
+  it('publishes a gated turn end as event metadata, not stored agent status', async () => {
+    const turnCompletedAt = Date.now()
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'working',
+        interactivePrompt: undefined,
+        turnCompletedAt
+      })
+    ])
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+
+    expect(tab).toMatchObject({ type: 'terminal', turnCompletedAt })
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('turnCompletedAt')
+  })
+
   it('publishes no hook transport identity to clients', async () => {
     const agentStatus = await projectAgentStatus([
       hookRow({ launchToken: 'lt-secret', promptInteractionKey: 'turn-1' })

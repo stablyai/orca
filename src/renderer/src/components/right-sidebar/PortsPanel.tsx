@@ -58,6 +58,7 @@ import {
 import type { PortForwardEntry, EnrichedDetectedPort } from '../../../../shared/ssh-types'
 import type { WorkspacePort } from '../../../../shared/workspace-ports'
 import { translate } from '@/i18n/i18n'
+import { openWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-open'
 
 export {
   killWorkspacePortForTarget,
@@ -804,7 +805,6 @@ function SshPortsPanel(): React.JSX.Element {
   const portForwardsByConnection = useAppStore((s) => s.portForwardsByConnection)
   const detectedPortsByConnection = useAppStore((s) => s.detectedPortsByConnection)
   const sshConnectionStates = useAppStore((s) => s.sshConnectionStates)
-  const createBrowserTab = useAppStore((s) => s.createBrowserTab)
   // Why: scope the panel to the active worktree's SSH connection so
   // actions target the correct machine and the disconnected state
   // reflects the active worktree, not some other SSH session.
@@ -884,11 +884,15 @@ function SshPortsPanel(): React.JSX.Element {
         )
         return
       }
-      createBrowserTab(activeWorktree.id, url, {
-        activate: true
+      void openWorkspaceBrowserTab({
+        workspaceId: activeWorktree.id,
+        url,
+        intent: { kind: 'url' }
+      }).catch((error) => {
+        toast.error(error instanceof Error ? error.message : String(error))
       })
     },
-    [activeWorktree?.id, createBrowserTab, settings]
+    [activeWorktree?.id, settings]
   )
 
   const handleDialogClose = useCallback(() => {

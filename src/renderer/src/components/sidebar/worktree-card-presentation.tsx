@@ -3,7 +3,7 @@ import React from 'react'
 import {
   getFlushWorktreeCardPaddingLeft,
   getNewCardStyleParentContentMarginLeft
-} from './worktree-list-indentation'
+} from './worktree-list/rows/indentation'
 import {
   hasWorktreeCardDetails,
   WorktreeCardDetailsHover,
@@ -153,7 +153,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
             comment={metaComment}
             automationProvenance={metaAutomationProvenance}
             cliProvenance={metaCliProvenance}
-            automationHostId={worktree.hostId}
             branchName={showBranchIdentityHover ? branch : undefined}
             workspaceTitle={worktree.displayName}
             identityOrder="branch-first"
@@ -225,7 +224,6 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
         comment={metaComment}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
-        automationHostId={worktree.hostId}
         detailsAfter={hasPorts ? <WorktreeCardPortsDetails ports={workspacePorts} /> : null}
         hoverControl={detailsHoverControl}
         onEditIssue={affiliateListMode ? undefined : handleEditIssue}

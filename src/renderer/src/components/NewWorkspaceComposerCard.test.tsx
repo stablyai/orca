@@ -31,7 +31,9 @@ vi.mock('@/store', () => ({
         setRuntimeEnvironmentStatus: storeMocks.setRuntimeEnvironmentStatus,
         activeModal: 'none',
         settings: { defaultTuiAgent: null, disabledTuiAgents: [] },
-        updateSettings: vi.fn()
+        updateSettings: vi.fn(),
+        projects: [],
+        repos: []
       }),
     {
       getState: () => ({
@@ -60,6 +62,10 @@ vi.mock('@/components/agent/AgentCombobox', () => ({
 vi.mock('@/components/sidebar/AddRemoteHostDialog', () => ({
   AddRemoteHostDialog: ({ mode }: { mode: 'ssh' | 'server' | null }) =>
     mode ? <div data-testid="add-remote-host-dialog" data-mode={mode} /> : null
+}))
+
+vi.mock('@/components/new-workspace/SetProjectLocationDialog', () => ({
+  SetProjectLocationDialog: () => null
 }))
 
 vi.mock('@/components/sparse/SparseCheckoutPresetSelect', () => ({
@@ -155,7 +161,8 @@ const devboxNeedsSetupHostOption: ProjectHostSetupOption = {
   label: 'Devbox',
   detail: 'Project location not set',
   isAvailable: true,
-  attention: false
+  attention: false,
+  canSetLocation: true
 }
 
 const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
@@ -167,6 +174,7 @@ const disconnectedDevboxNeedsSetupHostOption: ProjectHostSetupOption = {
   detail: 'Connect this host to set up projects',
   isAvailable: false,
   attention: false,
+  canSetLocation: false,
   connectAction: { kind: 'ssh', targetId: 'devbox' }
 }
 
@@ -179,6 +187,7 @@ const disconnectedBastionNeedsSetupHostOption: ProjectHostSetupOption = {
   detail: 'Connect this host to set up projects',
   isAvailable: false,
   attention: false,
+  canSetLocation: false,
   connectAction: { kind: 'ssh', targetId: 'bastion' }
 }
 
@@ -601,7 +610,8 @@ describe('NewWorkspaceComposerCard folder task source mode', () => {
     openRunTargetPicker(current.container)
 
     const devboxItem = findRunTargetItem('Devbox')
-    expect(devboxItem?.textContent).toContain('Project location not set')
+    expect(devboxItem?.textContent).not.toContain('Project location not set')
+    expect(devboxItem?.textContent).toContain('Set project location')
     // Not-connected rows stay highlightable (never `disabled`) so they hover like
     // the other rows; they're quieted visually instead.
     expect(devboxItem?.hasAttribute('data-disabled')).toBe(false)

@@ -10,7 +10,7 @@ import type {
   HostedReviewCreationEligibilityArgs,
   HostedReviewInfo
 } from '../../../../shared/hosted-review'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import type { AppState } from '../types'
 import {

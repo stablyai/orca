@@ -140,6 +140,7 @@ describe('editor file operation owner', () => {
           'hub-a',
           {
             targetsHydrated: true,
+            targetGenerations: new Map(),
             targetLabels: new Map([['private', 'private']]),
             removedTargetLabels: new Map(),
             connectionStates: new Map([

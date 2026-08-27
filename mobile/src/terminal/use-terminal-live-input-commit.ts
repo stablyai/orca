@@ -17,6 +17,16 @@ type TerminalLiveInputKeyPressEvent = {
   }
 }
 
+/** `isComposing` is the text system's marked-text range, forwarded by the pinned
+ *  react-native patch on iOS; `onChangeText` would drop the payload entirely.
+ *  Absent means the platform reports no range — not "not composing". */
+type TerminalLiveInputChangeEvent = {
+  readonly nativeEvent: {
+    readonly text: string
+    readonly isComposing?: boolean
+  }
+}
+
 type TerminalLiveInputCommitOptions<TTabType extends string> = {
   readonly activeHandle: string | null
   readonly activeHandleRef: RefObject<string | null>
@@ -36,7 +46,7 @@ type TerminalLiveInputCommitHandlers = {
   readonly handleLiveInputAccessoryBytes: (
     input: TerminalLiveAccessoryInput
   ) => Promise<TerminalLiveAccessoryInputCommitResult>
-  readonly handleLiveInputChange: (text: string) => void
+  readonly handleLiveInputChange: (event: TerminalLiveInputChangeEvent) => void
   readonly handleLiveInputKeyPress: (event: TerminalLiveInputKeyPressEvent) => void
   readonly handleLiveInputSubmit: () => void
 }
@@ -113,7 +123,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
   )
 
   const handleLiveInputChange = useCallback(
-    (text: string) => {
+    ({ nativeEvent }: TerminalLiveInputChangeEvent) => {
       if (!activeHandle || !liveInputTerminalHandles.has(activeHandle)) {
         clearPendingLiveInputCommit()
         return
@@ -121,8 +131,12 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       // Why: iOS kills an active dictation/IME session when JS writes a value
       // that differs from the native field text, so the controlled capture must
       // echo the field verbatim; only the PTY mirror sees normalized text.
-      setLiveInputCapture(text)
-      applyLiveInputMirror(activeHandle, normalizeTerminalTextInput(text))
+      setLiveInputCapture(nativeEvent.text)
+      applyLiveInputMirror(
+        activeHandle,
+        normalizeTerminalTextInput(nativeEvent.text),
+        nativeEvent.isComposing
+      )
     },
     [
       activeHandle,

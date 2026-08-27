@@ -1,3 +1,8 @@
+import {
+  getSelectedDeletableWorkspaceIds,
+  getVisibleDeletableWorkspaceIdentities,
+  getWorkspaceSpaceWorktreeIdentity
+} from './workspace-space-delete-selection'
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSpaceWorktree } from '../../../../shared/workspace-space-types'
 import {
@@ -6,8 +11,6 @@ import {
   filterWorkspaceSpaceRows,
   getLargestWorkspaceSpaceItemSize,
   getLargestWorkspaceSpaceRowSize,
-  getSelectedDeletableWorkspaceIds,
-  getVisibleDeletableWorkspaceIds,
   getWorkspaceSpaceGitStatusRefreshCandidates,
   isWorkspaceSpaceFilterQueryTooLarge,
   isWorkspaceSpaceRowReadyToDelete,
@@ -16,9 +19,15 @@ import {
   resolveWorkspaceSpaceTreemapZoomWorktreeId,
   sortWorkspaceSpaceRows
 } from './workspace-space-presentation'
-import { getWorkspaceDecisionDetails } from './WorkspaceSpaceManagerPanel'
+import {
+  getWorkspaceDecisionDetails,
+  getWorkspaceSpaceDeleteState,
+  getWorkspaceSpaceGitStatusForScan
+} from './WorkspaceSpaceManagerPanel'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 function row(overrides: Partial<WorkspaceSpaceWorktree>): WorkspaceSpaceWorktree {
   return {
@@ -46,6 +55,15 @@ function row(overrides: Partial<WorkspaceSpaceWorktree>): WorkspaceSpaceWorktree
     ...overrides
   }
 }
+
+describe('workspace space Git status scan ownership', () => {
+  it('fails closed instead of reusing a clean result from an older scan', () => {
+    const cleanStatus = new Map([['local|wt', []]])
+
+    expect(getWorkspaceSpaceGitStatusForScan(100, 100, cleanStatus)).toBe(cleanStatus)
+    expect(getWorkspaceSpaceGitStatusForScan(100, 200, cleanStatus).has('local|wt')).toBe(false)
+  })
+})
 
 function ready(
   overrides: Partial<NonNullable<Parameters<typeof isWorkspaceSpaceRowReadyToDelete>[1]>> = {}
@@ -134,12 +152,81 @@ function decisionInputs(
     linearIssueCache: {},
     settings: null,
     activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
     now: 1_000,
     ...overrides
   }
 }
 
 describe('workspace space presentation helpers', () => {
+  it('marks only the active host row active when workspace ids collide', () => {
+    const inputs = decisionInputs({
+      activeWorktreeId: 'wt',
+      activeWorkspaceExecutionHostId: 'local',
+      gitStatusByWorktree: { wt: [] }
+    })
+    const local = getWorkspaceDecisionDetails(
+      row({ worktreeId: 'wt', executionHostId: 'local' }),
+      inputs
+    )
+    const ssh = getWorkspaceDecisionDetails(
+      row({ worktreeId: 'wt', executionHostId: 'ssh:builder' }),
+      inputs
+    )
+
+    expect(local.isActive).toBe(true)
+    expect(ssh.isActive).toBe(false)
+    expect(isWorkspaceSpaceRowReadyToDelete(row({ executionHostId: 'ssh:builder' }), ssh)).toBe(
+      true
+    )
+  })
+
+  it('fails closed when the active workspace host is unknown', () => {
+    const details = getWorkspaceDecisionDetails(
+      row({ worktreeId: 'wt', executionHostId: 'ssh:builder' }),
+      decisionInputs({ activeWorktreeId: 'wt', activeWorkspaceExecutionHostId: null })
+    )
+
+    expect(details.isActive).toBe(true)
+  })
+
+  it("does not expose another host row's force-delete state", () => {
+    const failedOnLocal = {
+      isDeleting: false,
+      error: 'changed files',
+      canForceDelete: true,
+      forceDeleteReason: 'dirty' as const,
+      executionHostId: 'local' as const
+    }
+    const states = {
+      [composeWorktreeHostIdentity('local', 'wt')]: failedOnLocal
+    }
+
+    expect(
+      getWorkspaceSpaceDeleteState(row({ executionHostId: 'ssh:builder' }), states, true)
+    ).toBeUndefined()
+    expect(getWorkspaceSpaceDeleteState(row({ executionHostId: 'local' }), states, true)).toBe(
+      failedOnLocal
+    )
+  })
+
+  it('keeps clean and dirty same-id rows isolated by host', () => {
+    const localRow = row({ worktreeId: 'wt', executionHostId: 'local' })
+    const sshRow = row({ worktreeId: 'wt', executionHostId: 'ssh:builder' })
+    const statuses = new Map([
+      [getWorkspaceSpaceWorktreeIdentity(localRow), []],
+      [getWorkspaceSpaceWorktreeIdentity(sshRow), [{ path: 'dirty.txt' }]]
+    ])
+    const inputs = decisionInputs({ gitStatusByWorktreeIdentity: statuses })
+    const local = getWorkspaceDecisionDetails(localRow, inputs)
+    const ssh = getWorkspaceDecisionDetails(sshRow, inputs)
+
+    expect(local.changedFileCount).toBe(0)
+    expect(ssh.changedFileCount).toBe(1)
+    expect(isWorkspaceSpaceRowReadyToDelete(localRow, local)).toBe(true)
+    expect(isWorkspaceSpaceRowReadyToDelete(sshRow, ssh)).toBe(false)
+  })
+
   it('sorts rows by the selected key and direction', () => {
     const rows = [
       row({ worktreeId: 'small', displayName: 'Small', sizeBytes: 10 }),
@@ -220,9 +307,9 @@ describe('workspace space presentation helpers', () => {
       row({ worktreeId: 'failed', canDelete: true, status: 'error' })
     ]
 
-    expect(getSelectedDeletableWorkspaceIds(rows, new Set(['ok', 'main', 'failed']))).toEqual([
-      'ok'
-    ])
+    expect(
+      getSelectedDeletableWorkspaceIds(rows, new Set(rows.map(getWorkspaceSpaceWorktreeIdentity)))
+    ).toEqual(['ok'])
   })
 
   it('excludes rows that are already deleting from delete actions', () => {
@@ -230,11 +317,18 @@ describe('workspace space presentation helpers', () => {
       row({ worktreeId: 'idle', canDelete: true, status: 'ok' }),
       row({ worktreeId: 'deleting', canDelete: true, status: 'ok' })
     ]
-    const isDeleting = (worktreeId: string): boolean => worktreeId === 'deleting'
+    const isDeleting = (worktree: WorkspaceSpaceWorktree): boolean =>
+      worktree.worktreeId === 'deleting'
 
-    expect(getVisibleDeletableWorkspaceIds(rows, isDeleting)).toEqual(['idle'])
+    expect(getVisibleDeletableWorkspaceIdentities(rows, isDeleting)).toEqual([
+      getWorkspaceSpaceWorktreeIdentity(rows[0])
+    ])
     expect(
-      getSelectedDeletableWorkspaceIds(rows, new Set(['idle', 'deleting']), isDeleting)
+      getSelectedDeletableWorkspaceIds(
+        rows,
+        new Set(rows.map(getWorkspaceSpaceWorktreeIdentity)),
+        isDeleting
+      )
     ).toEqual(['idle'])
   })
 
@@ -372,9 +466,9 @@ describe('workspace space presentation helpers', () => {
       row({ worktreeId: 'ready', status: 'ok' })
     ]
 
-    expect(resolveWorkspaceSpaceInspectedWorktreeId(rows, 'errored')).toBe('errored')
-    expect(resolveWorkspaceSpaceInspectedWorktreeId(rows, 'missing')).toBe('ready')
-    expect(resolveWorkspaceSpaceInspectedWorktreeId([], 'missing')).toBeNull()
+    expect(resolveWorkspaceSpaceInspectedWorktreeId(rows, '|errored')).toBe('|errored')
+    expect(resolveWorkspaceSpaceInspectedWorktreeId(rows, '|missing')).toBe('|ready')
+    expect(resolveWorkspaceSpaceInspectedWorktreeId([], '|missing')).toBeNull()
   })
 
   it('keeps treemap zoom only for ready current scan rows', () => {
@@ -383,16 +477,16 @@ describe('workspace space presentation helpers', () => {
       row({ worktreeId: 'errored', status: 'error' })
     ]
 
-    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, 'ready')).toBe('ready')
-    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, 'errored')).toBeNull()
-    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, 'missing')).toBeNull()
+    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, '|ready')).toBe('|ready')
+    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, '|errored')).toBeNull()
+    expect(resolveWorkspaceSpaceTreemapZoomWorktreeId(rows, '|missing')).toBeNull()
   })
 
   it('prunes selected workspace ids that are absent from the current scan', () => {
-    const selectedIds = new Set(['ready', 'missing'])
+    const selectedIds = new Set(['|ready', '|missing'])
     const pruned = pruneWorkspaceSpaceSelectedIds([row({ worktreeId: 'ready' })], selectedIds)
 
-    expect([...pruned]).toEqual(['ready'])
+    expect([...pruned]).toEqual(['|ready'])
     expect(pruned).not.toBe(selectedIds)
 
     const unchanged = pruneWorkspaceSpaceSelectedIds([row({ worktreeId: 'ready' })], pruned)

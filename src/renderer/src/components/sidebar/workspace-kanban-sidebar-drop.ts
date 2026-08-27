@@ -1,9 +1,9 @@
+import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type {
   WorkspaceStatus,
   WorkspaceStatusDefinition,
-  Worktree,
-  WorktreeMeta
-} from '../../../../shared/types'
+  Worktree
+} from '../../../../shared/worktree/types'
 import {
   parseWorkspaceLaneFullIds,
   resolveFullLaneDropIndex
@@ -55,6 +55,10 @@ function getLaneCardIds(lane: HTMLElement): HTMLElement[] {
   return Array.from(lane.querySelectorAll<HTMLElement>(CARD_SELECTOR))
 }
 
+function getCardWorktreeId(card: HTMLElement): string | undefined {
+  return card.dataset.workspaceBoardWorktreeId ?? card.dataset.workspaceBoardCardId
+}
+
 /**
  * `viewIds` is the lane in the index space `getCardDropTarget` reports, and
  * `fullLaneIds` is the lane's whole membership. Board search hides non-matching
@@ -76,11 +80,10 @@ function toLaneDropIds(lane: HTMLElement): { fullLaneIds: string[]; viewIds: str
   }
   const cards = getLaneCardIds(lane)
   return {
-    fullLaneIds:
-      publishedFullLaneIds ?? cards.flatMap((card) => card.dataset.workspaceBoardCardId ?? []),
+    fullLaneIds: publishedFullLaneIds ?? cards.flatMap((card) => getCardWorktreeId(card) ?? []),
     viewIds: cards
       .filter((card) => card.offsetParent !== null)
-      .flatMap((card) => card.dataset.workspaceBoardCardId ?? [])
+      .flatMap((card) => getCardWorktreeId(card) ?? [])
   }
 }
 
@@ -212,6 +215,8 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
   dropIndex: number
   groups: readonly WorktreeDragGroup[]
   worktreeById: ReadonlyMap<string, Worktree>
+  allWorktreeIds: readonly string[]
+  rankByWorktreeId: ReadonlyMap<string, number>
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   sortBy: string
   now: number
@@ -228,20 +233,6 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
     sourceGroupKeys,
     targetGroupKey: args.status
   })
-  const rankByWorktreeId = writeManualOrder
-    ? (() => {
-        const ranks = new Map<string, number>()
-        for (const group of args.groups) {
-          for (const worktreeId of group.worktreeIds) {
-            const worktree = args.worktreeById.get(worktreeId)
-            if (worktree) {
-              ranks.set(worktreeId, worktree.manualOrder ?? worktree.sortOrder)
-            }
-          }
-        }
-        return ranks
-      })()
-    : undefined
   const order = writeManualOrder
     ? buildManualOrderUpdatesForGroupDrop({
         groups: args.groups,
@@ -249,7 +240,8 @@ export function buildWorkspaceKanbanSidebarDropUpdates(args: {
         draggedIds: args.worktreeIds,
         dropIndex: args.dropIndex,
         now: args.now,
-        rankByWorktreeId
+        rankByWorktreeId: args.rankByWorktreeId,
+        allWorktreeIds: args.allWorktreeIds
       })
     : { changed: false, updates: new Map<string, { manualOrder: number }>() }
 

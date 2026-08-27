@@ -1,4 +1,4 @@
-import type { TerminalPaneLayoutNode } from '../../../shared/types'
+import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 
 /**
  * Single source of truth for turning a set of terminal leaves into a layout

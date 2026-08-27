@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { EDITOR_THEME_CATALOG, type EditorThemeCatalogId } from './editor-themes'
 
 export type EditorColorThemePreference = GlobalSettings['editorColorTheme']

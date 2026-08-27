@@ -1,126 +1,25 @@
-/* eslint-disable max-lines -- Why: field state, base search, AI generation,
-   and cancellation share request guards that need to stay in one hook. */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { getConnectionId } from '@/lib/connection-context'
-import { useAppStore, type AppState } from '@/store'
-import {
-  cancelRuntimeGeneratePullRequestFields,
-  generateRuntimePullRequestFields,
-  type RuntimeGeneratePullRequestFieldsOverrides,
-  type RuntimeGitContext
-} from '@/runtime/runtime-git-client'
-import {
-  getRuntimeRepoBaseRefDefault,
-  searchRuntimeRepoBaseRefDetails
-} from '@/runtime/runtime-repo-client'
-import type { Repo, BaseRefSearchResult } from '../../../../shared/types'
-import type { HostedReviewCreationEligibility } from '../../../../shared/hosted-review'
-import { normalizeHostedReviewBaseRef } from '../../../../shared/hosted-review-refs'
+import { useCallback, useRef, useState } from 'react'
 import {
   DEFAULT_SOURCE_CONTROL_AI_PR_CREATION_DEFAULTS,
   resolveSourceControlAiForOperation
 } from '../../../../shared/source-control-ai'
-import type { SourceControlAiPrCreationDefaults } from '../../../../shared/source-control-ai-types'
 import type {
   PullRequestFieldName,
   PullRequestFieldRevisions
 } from '@/store/slices/pull-request-generation'
-import { resolveCreateReviewDraftTitle } from './create-review-draft-title'
-
-type PullRequestDraftFields = {
-  base: string
-  title: string
-  body: string
-  draft: boolean
-}
-
-type UseCreatePullRequestDialogFieldsOptions = {
-  open: boolean
-  repoId: string
-  worktreeId: string | null
-  worktreePath: string
-  branch: string
-  eligibility: HostedReviewCreationEligibility | null
-  currentBaseRef?: string | null
-  repo?: Pick<Repo, 'sourceControlAi'> | null
-  settings: AppState['settings']
-  submitting: boolean
-  prCreationDefaults?: SourceControlAiPrCreationDefaults
-  sourceControlAiActionsVisible?: boolean
-  // When the composer is hidden by a temporary policy (a hard refresh error) for
-  // the same context rather than dismissed, retain the in-memory draft so
-  // recovery does not discard the user's title/body/base edits. Reopening a
-  // different context still reseeds (guarded by the eligibility key).
-  retainDraftWhenClosed?: boolean
-  onBranchChangedByGeneration?: () => Promise<void>
-  generation?: {
-    generating: boolean
-    generateError: string | null
-    seedRestoreKey?: string | null
-    seed?: PullRequestDraftFields | null
-    seedFieldRevisions?: PullRequestFieldRevisions | null
-    onSeedRestored?: (seedRestoreKey: string) => void
-    onGenerate: (
-      fields: PullRequestDraftFields,
-      fieldRevisions: PullRequestFieldRevisions,
-      overrides?: RuntimeGeneratePullRequestFieldsOverrides
-    ) => void
-    onCancelGenerate: () => void
-  }
-}
-
-type GenerationSeed = {
-  requestId: number
-  fieldRevisions: PullRequestFieldRevisions
-  context: RuntimeGitContext
-}
-
-function createInitialPullRequestFieldRevisions(): PullRequestFieldRevisions {
-  return {
-    base: 0,
-    title: 0,
-    body: 0,
-    draft: 0
-  }
-}
-
-export function stripBaseRef(ref: string): string {
-  return normalizeHostedReviewBaseRef(ref)
-}
-
-function resolveCreateReviewDefaultBaseRef({
-  currentBaseRef,
-  eligibilityDefaultBaseRef
-}: {
-  currentBaseRef?: string | null
-  eligibilityDefaultBaseRef?: string | null
-}): string {
-  // Why: prefer the remote-validated main-process default over the worktree's
-  // local parent base. For a stacked worktree whose parent is local-only,
-  // `currentBaseRef` is that unpushable parent; the eligibility default has
-  // already fallen back to a ref the remote can resolve. Fall back to
-  // `currentBaseRef` only when eligibility supplied no default. Manual
-  // `setUserBase` still wins via the base-resync suppression.
-  return stripBaseRef(eligibilityDefaultBaseRef?.trim() || currentBaseRef?.trim() || '')
-}
-
-export function normalizeCreateReviewBaseSearchResults(
-  results: readonly BaseRefSearchResult[]
-): string[] {
-  const seen = new Set<string>()
-  const branches: string[] = []
-  for (const result of results) {
-    // Why: hosted review APIs take branch names, while base search displays
-    // remote-qualified refs. Detailed search already resolves slashy remotes.
-    const branch = stripBaseRef((result.localBranchName || result.refName).trim())
-    if (!branch || seen.has(branch)) {
-      continue
-    }
-    seen.add(branch)
-    branches.push(branch)
-  }
-  return branches
-}
+import {
+  resolveCreateReviewDefaultBaseRef,
+  stripBaseRef
+} from './create-pull-request-base-ref-normalization'
+import {
+  createInitialPullRequestFieldRevisions,
+  type GenerationSeed,
+  type PullRequestDraftFields,
+  type UseCreatePullRequestDialogFieldsOptions
+} from './create-pull-request-dialog-field-model'
+import { useCreatePullRequestFieldSeeding } from './use-create-pull-request-field-seeding'
+import { useCreatePullRequestBaseRefDiscovery } from './use-create-pull-request-base-ref-discovery'
+import { useCreatePullRequestFieldGeneration } from './use-create-pull-request-field-generation'
 
 export function useCreatePullRequestDialogFields({
   open,
@@ -166,9 +65,6 @@ export function useCreatePullRequestDialogFields({
   const [title, setTitle] = useState('')
   const [body, setBody] = useState('')
   const [draft, setDraft] = useState(false)
-  // Why: stamped with the repo it came from — this hook outlives a repo switch, and a
-  // previous repo's default branch would silently suppress the stacked-PR lookup.
-  const [repoDefault, setRepoDefault] = useState<{ repoId: string; baseRef: string } | null>(null)
   const [baseQuery, setBaseQuery] = useState('')
   const [baseResults, setBaseResults] = useState<string[]>([])
   // Why: lets the picker withhold "no branches match" until a search settles, so
@@ -254,373 +150,87 @@ export function useCreatePullRequestDialogFields({
     [base, body, draft, title]
   )
 
-  useEffect(() => {
-    if (!open) {
-      if (!hasExternalGeneration) {
-        generationRequestIdRef.current += 1
-        if (generateInFlightRef.current) {
-          const requestContext = generationSeedRef.current?.context
-          if (requestContext?.worktreePath) {
-            void cancelRuntimeGeneratePullRequestFields(requestContext)
-          }
-        }
-        generateInFlightRef.current = false
-        // Why: retain the draft + init marker across a temporary policy hide so a
-        // hard-error recovery reopening the same context does not reseed and wipe
-        // edits. A genuine context change still reseeds (the eligibility key on
-        // reopen differs from the retained marker).
-        if (!retainDraftWhenClosed) {
-          generationSeedRef.current = null
-          initializedFromEligibilityRef.current = null
-          syncedDefaultBaseRef.current = null
-          baseEditedByUserRef.current = false
-          setInitializedEligibilityKey(null)
-          autoGeneratedForKeyRef.current = null
-        }
-        setGenerating(false)
-        setGenerateError(null)
-      }
-      return
-    }
-    if (!eligibility) {
-      return
-    }
-    const initializationKey = currentEligibilityKey
-    if (!initializationKey) {
-      return
-    }
-    if (initializedFromEligibilityRef.current === initializationKey) {
-      setInitializedEligibilityKey((current) =>
-        current === initializationKey ? current : initializationKey
-      )
-      return
-    }
-    if (!hasExternalGeneration) {
-      // Why: a branch/context switch invalidates any local AI request; cancel
-      // it before reseeding fields so stale generated text cannot land later.
-      generationRequestIdRef.current += 1
-      const requestContext = generationSeedRef.current?.context
-      if (generateInFlightRef.current && requestContext?.worktreePath) {
-        void cancelRuntimeGeneratePullRequestFields(requestContext)
-      }
-      generateInFlightRef.current = false
-      generationSeedRef.current = null
-      setGenerating(false)
-    }
-    // Why: eligibility refreshes while the dialog is open; only seed fields
-    // once per branch so late refreshes do not overwrite user edits.
-    initializedFromEligibilityRef.current = initializationKey
-    setInitializedEligibilityKey(initializationKey)
-    autoGeneratedForKeyRef.current = null
-    restoredExternalGenerationSeedRef.current = null
-    fieldRevisionsRef.current = createInitialPullRequestFieldRevisions()
-    baseEditedByUserRef.current = false
-    syncedDefaultBaseRef.current = resolvedDefaultBaseRef || null
-    setBase(resolvedDefaultBaseRef)
-    setTitle(resolveCreateReviewDraftTitle({ branch, eligibilityTitle: eligibility.title }))
-    setBody(eligibility.body ?? '')
-    setDraft(resolvedPrDefaults.draft)
-    setBaseQuery('')
-    setBaseResults([])
-    setBaseSearchError(null)
-    setGenerateError(null)
-  }, [
-    branch,
-    currentEligibilityKey,
-    eligibility,
-    hasExternalGeneration,
+  useCreatePullRequestFieldSeeding({
     open,
     repoId,
-    resolvedDefaultBaseRef,
-    resolvedPrDefaults.draft,
-    retainDraftWhenClosed,
     worktreeId,
-    worktreePath
-  ])
+    worktreePath,
+    branch,
+    eligibility,
+    hasExternalGeneration,
+    retainDraftWhenClosed,
+    currentEligibilityKey,
+    resolvedDefaultBaseRef,
+    resolvedPrDefaults,
+    generation,
+    markFieldDirty,
+    initializedFromEligibilityRef,
+    syncedDefaultBaseRef,
+    baseEditedByUserRef,
+    autoGeneratedForKeyRef,
+    generateInFlightRef,
+    generationRequestIdRef,
+    generationSeedRef,
+    restoredExternalGenerationSeedRef,
+    fieldRevisionsRef,
+    setInitializedEligibilityKey,
+    setBase,
+    setTitle,
+    setBody,
+    setDraft,
+    setBaseQuery,
+    setBaseResults,
+    setBaseSearchError,
+    setGenerating,
+    setGenerateError
+  })
 
-  const externalGenerationSeedRestoreKey = generation?.seedRestoreKey
-  const externalGenerationSeed = generation?.seed
-  const externalGenerationSeedFieldRevisions = generation?.seedFieldRevisions
-  const onExternalGenerationSeedRestored = generation?.onSeedRestored
-
-  useEffect(() => {
-    if (
-      !open ||
-      !externalGenerationSeedRestoreKey ||
-      !externalGenerationSeed ||
-      !externalGenerationSeedFieldRevisions ||
-      !initializedFromEligibilityRef.current ||
-      restoredExternalGenerationSeedRef.current === externalGenerationSeedRestoreKey
-    ) {
-      return
-    }
-    // Why: external generation can survive component unmounts; restoring the
-    // request seed keeps revision guards meaningful after the composer remounts.
-    restoredExternalGenerationSeedRef.current = externalGenerationSeedRestoreKey
-    fieldRevisionsRef.current = { ...externalGenerationSeedFieldRevisions }
-    baseEditedByUserRef.current = true
-    setBase(stripBaseRef(externalGenerationSeed.base))
-    setTitle(externalGenerationSeed.title)
-    setBody(externalGenerationSeed.body)
-    setDraft(externalGenerationSeed.draft)
-    setBaseQuery('')
-    setBaseResults([])
-    setBaseSearchError(null)
-    onExternalGenerationSeedRestored?.(externalGenerationSeedRestoreKey)
-  }, [
-    externalGenerationSeed,
-    externalGenerationSeedFieldRevisions,
-    externalGenerationSeedRestoreKey,
-    onExternalGenerationSeedRestored,
-    open
-  ])
-
-  useEffect(() => {
-    if (
-      !open ||
-      !eligibility ||
-      !initializedFromEligibilityRef.current ||
-      !resolvedDefaultBaseRef
-    ) {
-      return
-    }
-    if (syncedDefaultBaseRef.current === resolvedDefaultBaseRef) {
-      return
-    }
-    syncedDefaultBaseRef.current = resolvedDefaultBaseRef
-    if (baseEditedByUserRef.current) {
-      return
-    }
-    // Why: the Source Control compare-base picker can change the intended
-    // review target while generation is in flight; bump the revision so stale
-    // generated details cannot retarget an untouched base back to the old ref.
-    markFieldDirty('base')
-    setBase(resolvedDefaultBaseRef)
-    setBaseQuery('')
-    setBaseResults([])
-    setBaseSearchError(null)
-  }, [eligibility, markFieldDirty, open, resolvedDefaultBaseRef])
-
-  const effectiveGenerating = generation?.generating ?? generating
-  const effectiveGenerateError = generation?.generateError ?? generateError
-  const repoDefaultBaseRef = repoDefault?.repoId === repoId ? repoDefault.baseRef : null
-
-  // Why: resolved separately from eligibility's defaultBaseRef, which reports the
-  // worktree's own base. Consumers that need "is this the repo's default branch?"
-  // must ask this one, not that one.
-  useEffect(() => {
-    // Why: the repo default doesn't move while a repo stays open, so skip the probe
-    // once it is known — on a remote runtime it is an RPC round-trip per composer open.
-    if (!open || repoDefaultBaseRef) {
-      return
-    }
-    let stale = false
-    void getRuntimeRepoBaseRefDefault(settings, repoId)
-      .then((result) => {
-        if (!stale && result.defaultBaseRef) {
-          setRepoDefault({ repoId, baseRef: stripBaseRef(result.defaultBaseRef) })
-        }
-      })
-      .catch(() => undefined)
-    return () => {
-      stale = true
-    }
-  }, [open, repoDefaultBaseRef, repoId, settings])
-
-  useEffect(() => {
-    if (!open || base || !repoDefaultBaseRef) {
-      return
-    }
-    setBase(repoDefaultBaseRef)
-  }, [base, open, repoDefaultBaseRef])
-
-  useEffect(() => {
-    if (!open || baseQuery.trim().length < 2) {
-      setBaseResults([])
-      setBaseSearchPending(false)
-      setBaseSearchError(null)
-      return
-    }
-    let stale = false
-    setBaseSearchPending(true)
-    const timer = window.setTimeout(() => {
-      void searchRuntimeRepoBaseRefDetails(settings, repoId, baseQuery.trim(), 20)
-        .then((results) => {
-          if (!stale) {
-            setBaseResults(normalizeCreateReviewBaseSearchResults(results))
-            setBaseSearchError(null)
-          }
-        })
-        .catch(() => {
-          if (!stale) {
-            setBaseResults([])
-            setBaseSearchError('Branch discovery failed.')
-          }
-        })
-        .finally(() => {
-          if (!stale) {
-            setBaseSearchPending(false)
-          }
-        })
-    }, 200)
-    return () => {
-      stale = true
-      window.clearTimeout(timer)
-    }
-  }, [baseQuery, open, repoId, settings])
-
-  let generateDisabledReason: string | undefined
-  if (submitting) {
-    generateDisabledReason = 'Create PR in progress...'
-  } else if (!resolvedPullRequestAi?.ok) {
-    generateDisabledReason =
-      resolvedPullRequestAi?.error ?? 'Enable Source Control AI in Settings -> Git.'
-  } else if (!base.trim()) {
-    generateDisabledReason = 'Choose a base branch before generating.'
-  }
-  const generateDisabled = !effectiveGenerating && Boolean(generateDisabledReason)
-
-  const handleGenerate = useCallback(
-    async (overrides?: RuntimeGeneratePullRequestFieldsOverrides): Promise<void> => {
-      if (!worktreePath || !base.trim() || effectiveGenerating || generateDisabled) {
-        return
-      }
-      if (generation) {
-        generation.onGenerate(
-          { base, title, body, draft },
-          { ...fieldRevisionsRef.current },
-          overrides
-        )
-        return
-      }
-      const requestId = generationRequestIdRef.current + 1
-      generationRequestIdRef.current = requestId
-      const connectionId = getConnectionId(worktreeId) ?? undefined
-      const requestContext = {
-        // Why: PR generation belongs to the visible worktree owner. Global
-        // focused-host changes must not retarget an in-flight generation.
-        settings,
-        worktreeId,
-        worktreePath,
-        connectionId
-      }
-      const seed = {
-        requestId,
-        fieldRevisions: { ...fieldRevisionsRef.current },
-        context: requestContext
-      }
-      generationSeedRef.current = seed
-      generateInFlightRef.current = true
-      setGenerating(true)
-      setGenerateError(null)
-      try {
-        const result = await generateRuntimePullRequestFields(
-          requestContext,
-          {
-            base: stripBaseRef(base.trim()),
-            title,
-            body,
-            draft,
-            provider: eligibility?.provider,
-            useTemplate: resolvedPrDefaults.useTemplate
-          },
-          overrides
-        )
-        if (result.branchChangedByPreparation) {
-          await onBranchChangedByGeneration?.()
-        }
-        const isCurrentRequest = generationRequestIdRef.current === requestId
-        if (!isCurrentRequest) {
-          return
-        }
-        if (!result.success) {
-          if (result.canceled) {
-            setGenerateError(null)
-            return
-          }
-          setGenerateError(result.error)
-          return
-        }
-
-        const currentSeed = generationSeedRef.current
-        if (!currentSeed || currentSeed.requestId !== requestId) {
-          return
-        }
-        applyGeneratedFields(result.fields, currentSeed.fieldRevisions)
-        useAppStore.getState().recordFeatureInteraction('ai-pr-generation')
-        setGenerateError(null)
-      } catch (error) {
-        if (generationRequestIdRef.current !== requestId) {
-          return
-        }
-        setGenerateError(
-          error instanceof Error ? error.message : 'Failed to generate pull request details'
-        )
-      } finally {
-        if (generationRequestIdRef.current === requestId) {
-          generateInFlightRef.current = false
-          generationSeedRef.current = null
-          setGenerating(false)
-        }
-      }
-    },
-    [
-      base,
-      body,
-      draft,
-      effectiveGenerating,
-      applyGeneratedFields,
-      eligibility?.provider,
-      generation,
-      generateDisabled,
-      onBranchChangedByGeneration,
-      resolvedPrDefaults.useTemplate,
-      settings,
-      title,
-      worktreeId,
-      worktreePath
-    ]
-  )
-
-  const handleCancelGenerate = useCallback((): void => {
-    if (generation) {
-      generation.onCancelGenerate()
-      return
-    }
-    const requestContext = generationSeedRef.current?.context
-    if (!requestContext?.worktreePath || !generateInFlightRef.current) {
-      return
-    }
-    generationRequestIdRef.current += 1
-    generateInFlightRef.current = false
-    generationSeedRef.current = null
-    setGenerating(false)
-    setGenerateError(null)
-    void cancelRuntimeGeneratePullRequestFields(requestContext)
-  }, [generation])
-
-  useEffect(() => {
-    if (
-      !open ||
-      !resolvedPrDefaults.generateDetailsOnOpen ||
-      !initializedFromEligibilityRef.current ||
-      autoGeneratedForKeyRef.current === initializedFromEligibilityRef.current ||
-      generateDisabled ||
-      effectiveGenerating ||
-      !base.trim()
-    ) {
-      return
-    }
-    autoGeneratedForKeyRef.current = initializedFromEligibilityRef.current
-    void handleGenerate()
-  }, [
-    base,
-    effectiveGenerating,
-    generateDisabled,
-    handleGenerate,
+  const repoDefaultBaseRef = useCreatePullRequestBaseRefDiscovery({
     open,
-    resolvedPrDefaults.generateDetailsOnOpen
-  ])
+    repoId,
+    settings,
+    base,
+    baseQuery,
+    setBase,
+    setBaseResults,
+    setBaseSearchPending,
+    setBaseSearchError
+  })
+
+  const {
+    effectiveGenerating,
+    effectiveGenerateError,
+    generateDisabled,
+    generateDisabledReason,
+    handleGenerate,
+    handleCancelGenerate
+  } = useCreatePullRequestFieldGeneration({
+    open,
+    submitting,
+    resolvedPullRequestAi,
+    base,
+    title,
+    body,
+    draft,
+    worktreeId,
+    worktreePath,
+    settings,
+    eligibility,
+    resolvedPrDefaults,
+    generation,
+    onBranchChangedByGeneration,
+    applyGeneratedFields,
+    generating,
+    generateError,
+    setGenerating,
+    setGenerateError,
+    initializedFromEligibilityRef,
+    autoGeneratedForKeyRef,
+    generateInFlightRef,
+    generationRequestIdRef,
+    generationSeedRef,
+    fieldRevisionsRef
+  })
 
   return {
     aiGenerationEnabled: sourceControlAiActionsVisible && resolvedPullRequestAi?.ok === true,

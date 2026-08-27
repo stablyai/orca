@@ -16,17 +16,17 @@ import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
 export type RemoteManagedHookInstallOptions = {
-  /** Explicit CODEX_HOME dir for redirected runtimes (WSL managed runtime
-   *  home). Codex-only: it is the one agent whose home Orca redirects. Also
-   *  defers the config.toml trust write until that file exists, so the
-   *  launch path's only-if-absent seed is never pre-empted. */
+  /** Explicit CODEX_HOME dir for redirected runtimes (for example WSL's managed runtime home). */
   codexHomeDir?: string
+  /** Skip the trust write when a redirected runtime config is seeded by the launch path. */
+  deferTrustUntilConfigToml?: boolean
   /** Explicit GROK_HOME for remote runtimes that redirect Grok's config. */
   grokHomeDir?: string
   /** Stops before starting the next installer when the owning relay request
    *  is cancelled. Individual filesystem mutations remain atomic. */
   signal?: AbortSignal
-  /** Positively detected and enabled agents allowed to mutate config. */
+  /** Positively detected and enabled agents allowed to mutate config.
+   *  Required for any install: omit/empty fails closed (no config mutation). */
   agents?: readonly AgentHookTarget[]
 }
 
@@ -45,13 +45,10 @@ const REMOTE_MANAGED_HOOK_INSTALLERS: readonly RemoteManagedHookInstaller[] = [
   [
     'codex',
     (sftp, remoteHome, options) =>
-      codexHookService.installRemote(
-        sftp,
-        remoteHome,
-        options?.codexHomeDir
-          ? { codexHomeDir: options.codexHomeDir, deferTrustUntilConfigToml: true }
-          : undefined
-      )
+      codexHookService.installRemote(sftp, remoteHome, {
+        codexHomeDir: options?.codexHomeDir,
+        deferTrustUntilConfigToml: options?.deferTrustUntilConfigToml
+      })
   ],
   ['gemini', (sftp, remoteHome) => geminiHookService.installRemote(sftp, remoteHome)],
   ['antigravity', (sftp, remoteHome) => antigravityHookService.installRemote(sftp, remoteHome)],
@@ -81,10 +78,15 @@ export async function installRemoteManagedAgentHooks(
   remoteHome: string,
   options?: RemoteManagedHookInstallOptions
 ): Promise<AgentHookInstallStatus[]> {
+  // Why: omit/empty allowlist must never mean "install every agent" — that
+  // recreates config homes for CLIs the user never installed (issue #11641).
+  const allowedAgents = new Set(options?.agents ?? [])
+  if (allowedAgents.size === 0) {
+    return []
+  }
   const results: AgentHookInstallStatus[] = []
-  const allowedAgents = options?.agents ? new Set(options.agents) : null
   for (const [agent, install] of REMOTE_MANAGED_HOOK_INSTALLERS) {
-    if (allowedAgents && !allowedAgents.has(agent)) {
+    if (!allowedAgents.has(agent)) {
       continue
     }
     // Why: relay requests can disappear during reconnect; do not start more

@@ -6,12 +6,16 @@ import { dirname, join, resolve, sep } from 'node:path'
 import { homedir } from 'node:os'
 import { app } from 'electron'
 import { getSpawnArgsForWindows } from '../win32-utils'
+import {
+  buildWindowsHostInteractiveLoginSpawn,
+  type WindowsHostInteractiveLoginSpawn
+} from '../../shared/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
   CodexManagedAccountSummary,
   CodexRateLimitAccountsState,
   CodexSystemDefaultIdentity
-} from '../../shared/types'
+} from '../../shared/managed-account-types'
 import type {
   CodexRateLimitResetOutcome,
   CodexRateLimitResetResult,
@@ -28,21 +32,19 @@ import type {
 } from '../../shared/codex-reset-credit-attempt-ledger'
 import type { CodexRuntimeHomeService } from './runtime-home-service'
 import { writeFileAtomically } from './fs-utils'
-import { rewriteRelativePathConfigValues } from '../codex/codex-config-path-reference-rewrite'
-import { stripCodexManagedHookTrustEntriesFromConfig } from '../codex/codex-managed-trust-reconciliation'
-import { getCodexManagedHookInstallMaterial } from '../codex/hook-service'
 import { syncSystemConfigIntoManagedCodexHome } from '../codex/codex-config-mirror'
 import { getSystemCodexHomePath } from '../codex/codex-home-paths'
-import { MANAGED_HOOK_TIMEOUT_SECONDS } from '../agent-hooks/installer-utils'
 import { readCodexTopLevelModelProvider } from '../codex/codex-model-provider-config'
 import { resolveCodexCommand } from '../codex-cli/command'
+import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 import {
-  buildWslCodexAvailabilityArgs,
+  buildWslCodexAvailabilityScript,
   buildWslCodexLoginArgs,
   WSL_CODEX_AVAILABILITY_TIMEOUT_MS
 } from './wsl-codex-command'
@@ -56,7 +58,11 @@ import {
   setSelectedCodexAccountIdForTarget,
   type CodexAccountSelectionTarget
 } from './runtime-selection'
-import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-ownership'
+import {
+  assertOwnedHostCodexManagedHomePath,
+  ManagedCodexHomeTemporarilyUnavailableError
+} from './host-codex-managed-home-ownership'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 
 const LOGIN_TIMEOUT_MS = 120_000
 const MAX_LOGIN_OUTPUT_CHARS = 4_000
@@ -67,6 +73,7 @@ const WINDOWS_RM_RETRY_DELAY_MS = 150
 const WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS = 500
 const WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS = 5_000
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
+const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
 type CodexOAuthCredentials = {
   idToken: string | null
@@ -82,14 +89,24 @@ type ResolvedCodexIdentity = {
 
 type CanonicalCodexConfig = {
   contents: string
-  /** Home the config was read from, in the path style Codex sees (Linux-side for WSL); relative settings resolve against it. */
+  /** Host-readable source home; the mirror resolves WSL UNC paths to their Linux spelling. */
   sourceHomePath: string
-  sourceHooksPath: string
+  /** Preserve Linux path semantics when WSL $HOME is under /mnt/<drive>. */
+  sourceConfigDir?: string
 }
 
 export type CodexAccountAddTarget = {
   runtime?: 'host' | 'wsl'
   wslDistro?: string | null
+}
+
+export type CodexAccountReauthenticateOptions = {
+  /**
+   * Local-only intent from the status bar's "Sign in to see usage" action: when
+   * this account's runtime lane had no selection before login, activate the
+   * account that just signed in instead of restoring the empty selection.
+   */
+  activateIfSelectionWasEmpty?: boolean
 }
 
 export type CodexAccountServiceLifecycle = {
@@ -139,6 +156,10 @@ type CodexResetCreditAttempt = {
   promise: Promise<CodexResetCreditConsumeResult> | null
   settledOutcome: CodexRateLimitResetOutcome | null
 }
+
+type CodexResetCreditScopeValidation =
+  | { kind: 'settledReplay' }
+  | { kind: 'providerMutation'; requireCurrentOffer: boolean }
 
 class CodexResetCreditScopeRejection extends Error {
   constructor(
@@ -192,10 +213,14 @@ function removeManagedHomeTreeSync(targetPath: string): void {
   })
 }
 
-function killLoginProcessTree(child: ChildProcess): void {
+function killLoginProcessTree(
+  child: ChildProcess,
+  interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
+): void {
+  const terminationPid = interactiveLogin?.getTerminationPid?.() ?? child.pid
   if (
     process.platform === 'win32' &&
-    typeof child.pid === 'number' &&
+    typeof terminationPid === 'number' &&
     child.exitCode === null &&
     child.signalCode === null
   ) {
@@ -203,7 +228,7 @@ function killLoginProcessTree(child: ChildProcess): void {
       // Why: child.kill() only reaches the direct child (cmd.exe for npm .cmd
       // shims); taskkill /t also ends codex descendants whose open handles on
       // the managed home make post-login file operations fail with ENOTEMPTY.
-      execFileSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
+      execFileSync('taskkill', ['/pid', String(terminationPid), '/t', '/f'], {
         windowsHide: true,
         timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
         stdio: 'ignore'
@@ -297,8 +322,11 @@ export class CodexAccountService {
     return this.serializeMutation(() => this.doAddAccountFromHome(sourceHome, target))
   }
 
-  async reauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
-    return this.serializeMutation(() => this.doReauthenticateAccount(accountId))
+  async reauthenticateAccount(
+    accountId: string,
+    options?: CodexAccountReauthenticateOptions
+  ): Promise<CodexRateLimitAccountsState> {
+    return this.serializeMutation(() => this.doReauthenticateAccount(accountId, options))
   }
 
   async removeAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
@@ -332,7 +360,9 @@ export class CodexAccountService {
       }
       if (existing.state === 'settled' && existing.settledOutcome) {
         return this.serializeMutation(async () => {
-          const { rateLimits } = this.validateResetCreditScope(expectedScope, false)
+          const { rateLimits } = this.validateResetCreditScope(expectedScope, {
+            kind: 'settledReplay'
+          })
           return {
             outcome: existing.settledOutcome!,
             scope: existing.expectedScope,
@@ -424,7 +454,13 @@ export class CodexAccountService {
       if (this.hasPendingResetForTarget(target)) {
         throw new Error('A previous reset attempt for this target still has an unknown outcome.')
       }
-      const codexHomePath = this.runtimeHome.prepareForRateLimitFetch(target)
+      const homeResolution = this.runtimeHome.prepareForRateLimitFetch(target)
+      // Why: reject before the provider mutation — a skip must never be spent
+      // against the system-default home (#STA-4422).
+      if (homeResolution.kind === 'skip') {
+        throw new ManagedCodexHomeTemporarilyUnavailableError()
+      }
+      const codexHomePath = homeResolution.codexHomePath
       return this.rateLimits.consumeCodexRateLimitResetCredit({
         idempotencyKey: randomUUID(),
         target,
@@ -471,7 +507,10 @@ export class CodexAccountService {
       const isFresh = attempt.state === 'fresh'
       let validation: { managedHomePath: string; rateLimits: RateLimitState }
       try {
-        validation = this.validateResetCreditScope(expectedScope, isFresh)
+        validation = this.validateResetCreditScope(expectedScope, {
+          kind: 'providerMutation',
+          requireCurrentOffer: isFresh
+        })
       } catch (error) {
         if (isFresh && error instanceof CodexResetCreditScopeRejection) {
           this.releaseFreshResetAttempt(idempotencyKey, attempt)
@@ -538,7 +577,7 @@ export class CodexAccountService {
 
   private validateResetCreditScope(
     expectedScope: CodexResetCreditExpectedScope,
-    requireCurrentOffer: boolean
+    validation: CodexResetCreditScopeValidation
   ): { managedHomePath: string; rateLimits: RateLimitState } {
     const rateLimitState = this.rateLimits.getState()
     if (!sameRateLimitTarget(rateLimitState.codexTarget, expectedScope.target)) {
@@ -580,30 +619,35 @@ export class CodexAccountService {
       )
     }
 
-    const currentScope = buildCodexResetCreditExpectedScope({
-      target: rateLimitState.codexTarget,
-      account: this.toSummary(account),
-      limits: rateLimitState.codex
-    })
-    // Why: a same-key replay resolves an already-started provider mutation;
-    // its credit snapshot may have refreshed, but its account/runtime identity may not change.
-    if (requireCurrentOffer && !currentScope) {
-      throw new CodexResetCreditScopeRejection(
-        'offerUnavailable',
-        rateLimitState,
-        'The Codex reset-credit offer is no longer available.'
-      )
+    if (validation.kind === 'providerMutation' && validation.requireCurrentOffer) {
+      const currentScope = buildCodexResetCreditExpectedScope({
+        target: rateLimitState.codexTarget,
+        account: this.toSummary(account),
+        limits: rateLimitState.codex
+      })
+      if (!currentScope) {
+        throw new CodexResetCreditScopeRejection(
+          'offerUnavailable',
+          rateLimitState,
+          'The Codex reset-credit offer is no longer available.'
+        )
+      }
+      if (resetScopeKey(expectedScope) !== resetScopeKey(currentScope)) {
+        throw new CodexResetCreditScopeRejection(
+          'offerChanged',
+          rateLimitState,
+          'The Codex reset-credit offer changed before reset.'
+        )
+      }
     }
-    if (
-      requireCurrentOffer &&
-      currentScope &&
-      resetScopeKey(expectedScope) !== resetScopeKey(currentScope)
-    ) {
-      throw new CodexResetCreditScopeRejection(
-        'offerChanged',
-        rateLimitState,
-        'The Codex reset-credit offer changed before reset.'
-      )
+
+    if (validation.kind === 'providerMutation' && expectedScope.target.runtime === 'host') {
+      assertOwnedHostCodexManagedHomePath({
+        candidatePath: account.managedHomePath,
+        managedAccountsRoot: join(app.getPath('userData'), 'codex-accounts'),
+        systemCodexHomePath: getSystemCodexHomePath(),
+        expectedAccountId: account.id
+      })
     }
 
     return { managedHomePath: account.managedHomePath, rateLimits: rateLimitState }
@@ -718,7 +762,7 @@ export class CodexAccountService {
 
   private async doAddAccount(target?: CodexAccountAddTarget): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedHome = this.createManagedHome(accountId, target)
+    const managedHome = await this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
@@ -727,7 +771,7 @@ export class CodexAccountService {
       await this.runCodexLogin(managedHomePath)
       return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
-      this.safeRemoveManagedHome(managedHomePath, accountId)
+      this.removeManagedHomeUnlessUnproven(error, managedHomePath, accountId)
       throw error
     }
   }
@@ -737,7 +781,7 @@ export class CodexAccountService {
     target?: CodexAccountAddTarget
   ): Promise<CodexRateLimitAccountsState> {
     const accountId = randomUUID()
-    const managedHome = this.createManagedHome(accountId, target)
+    const managedHome = await this.createManagedHome(accountId, target)
     const { managedHomePath } = managedHome
     try {
       const canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath)
@@ -746,7 +790,7 @@ export class CodexAccountService {
       this.importCodexAuthFromHome(sourceHome, managedHomePath, accountId)
       return await this.persistCapturedCodexAccount(accountId, managedHome)
     } catch (error) {
-      this.safeRemoveManagedHome(managedHomePath, accountId)
+      this.removeManagedHomeUnlessUnproven(error, managedHomePath, accountId)
       throw error
     }
   }
@@ -764,13 +808,22 @@ export class CodexAccountService {
       throw new Error('A Codex home directory path is required.')
     }
     const authPath = join(resolve(trimmed), 'auth.json')
-    if (!existsSync(authPath)) {
+    let sourceAuthContents: string
+    try {
+      sourceAuthContents = readFileSync(authPath, 'utf-8')
+    } catch (error) {
+      // Why: "no credentials here, run codex login" is only true for a definitive
+      // absence. A locked source file used to produce that advice, which sends the
+      // user to re-run a login they had already completed.
+      if (!isDefinitiveAbsence(error)) {
+        throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+      }
       throw new Error(
         `No Codex credentials found in ${resolve(trimmed)}. Run \`codex login\` into this directory first.`
       )
     }
     const trustedHome = this.assertManagedHomePath(managedHomePath, accountId)
-    writeFileAtomically(join(trustedHome, 'auth.json'), readFileSync(authPath, 'utf-8'), {
+    writeFileAtomically(join(trustedHome, 'auth.json'), sourceAuthContents, {
       mode: 0o600
     })
   }
@@ -847,14 +900,22 @@ export class CodexAccountService {
     return this.getSnapshot()
   }
 
-  private async doReauthenticateAccount(accountId: string): Promise<CodexRateLimitAccountsState> {
+  private async doReauthenticateAccount(
+    accountId: string,
+    options?: CodexAccountReauthenticateOptions
+  ): Promise<CodexRateLimitAccountsState> {
     const account = this.requireAccount(accountId)
-    const managedHomePath = this.ensureManagedHomeForReauthentication(account)
+    const managedHomePath = await this.ensureManagedHomeForReauthentication(account)
     const accountTarget = getCodexSelectionTargetForAccount(account)
     const selectedAccountId = getSelectedCodexAccountIdForTarget(
       this.store.getSettings(),
       accountTarget
     )
+    // Why: decided from the pre-login capture, never a post-login read — the
+    // runtime-home poll runs outside the mutation queue and can clear this lane
+    // while OAuth is open, which would look like an empty selection to activate.
+    const activateAfterLogin =
+      options?.activateIfSelectionWasEmpty === true && selectedAccountId === null
 
     this.safeSyncCanonicalConfigIntoManagedHome(managedHomePath, undefined, account.id)
     await this.runCodexLogin(managedHomePath)
@@ -880,7 +941,7 @@ export class CodexAccountService {
     )
     const activeSelection = setSelectedCodexAccountIdForTarget(
       normalizeCodexRuntimeSelection(settings),
-      selectedAccountId,
+      activateAfterLogin ? accountId : selectedAccountId,
       accountTarget
     )
 
@@ -1128,11 +1189,11 @@ export class CodexAccountService {
     }
   }
 
-  private createManagedHome(
+  private async createManagedHome(
     accountId: string,
     target?: CodexAccountAddTarget
-  ): ManagedHomeLocation {
-    const wslHome = this.tryCreateWslManagedHome(accountId, target)
+  ): Promise<ManagedHomeLocation> {
+    const wslHome = await this.tryCreateWslManagedHome(accountId, target)
     if (wslHome) {
       return wslHome
     }
@@ -1149,25 +1210,30 @@ export class CodexAccountService {
     }
   }
 
-  private tryCreateWslManagedHome(
+  private async tryCreateWslManagedHome(
     accountId: string,
     target?: CodexAccountAddTarget
-  ): ManagedHomeLocation | null {
+  ): Promise<ManagedHomeLocation | null> {
     if (process.platform !== 'win32' || target?.runtime !== 'wsl') {
       return null
     }
 
-    const distroArgs = target.wslDistro?.trim() ? ['-d', target.wslDistro.trim()] : []
-    const infoOutput = execFileSync(
-      'wsl.exe',
-      [...distroArgs, '--', 'bash', '-lc', 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"'],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
-    const [rawDistro, rawHome] = infoOutput
+    const requestedDistro = target.wslDistro?.trim() || undefined
+    const info = await runWslProcess({
+      distro: requestedDistro,
+      loginPath: 'none',
+      script: 'printf "%s\\n%s\\n" "$WSL_DISTRO_NAME" "$HOME"',
+      shell: 'bash',
+      timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+    })
+    if (info.code !== 0 || info.timedOut) {
+      throw new Error('Could not resolve the active WSL home directory for Codex login.')
+    }
+    const [rawDistro, rawHome] = info.stdout
       .replaceAll(String.fromCharCode(0), '')
       .split(/\r?\n/)
       .map((line) => line.trim())
-    const distro = target.wslDistro?.trim() || rawDistro
+    const distro = requestedDistro || rawDistro
     const home = rawHome
     if (!distro || !home?.startsWith('/')) {
       throw new Error('Could not resolve the active WSL home directory for Codex login.')
@@ -1175,25 +1241,23 @@ export class CodexAccountService {
 
     const wslLinuxHomePath = `${home.replace(/\/$/, '')}/.local/share/orca/codex-accounts/${accountId}/home`
     const markerPath = `${wslLinuxHomePath}/.orca-managed-home`
-    execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        distro,
-        '--',
-        'bash',
-        '-lc',
-        `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
+    const created = await runWslProcess({
+      distro,
+      loginPath: 'none',
+      script: `mkdir -p ${shellQuote(wslLinuxHomePath)} && printf '%s\\n' ${shellQuote(accountId)} > ${shellQuote(markerPath)}`,
+      shell: 'bash',
+      timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+    })
+    if (created.code !== 0 || created.timedOut) {
+      throw new Error('Could not create the managed Codex home inside WSL.')
+    }
 
     const managedHomePath = toWindowsWslPath(wslLinuxHomePath, distro)
     let trustedManagedHomePath: string
     try {
       trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, accountId)
     } catch (error) {
-      this.safeRemoveWslManagedHomeCandidate(distro, wslLinuxHomePath, accountId)
+      await this.safeRemoveWslManagedHomeCandidate(distro, wslLinuxHomePath, accountId)
       throw error
     }
 
@@ -1236,12 +1300,6 @@ export class CodexAccountService {
     }
   }
 
-  private isSelfContainedHostManagedHome(managedHomePath: string): boolean {
-    // Why: each host account home is its own launch CODEX_HOME. WSL homes keep
-    // their distro-local seed lane.
-    return !parseWslUncPath(managedHomePath)
-  }
-
   private syncCanonicalConfigIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readCanonicalConfigForManagedHome(managedHomePath),
@@ -1252,36 +1310,13 @@ export class CodexAccountService {
     }
 
     const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
-    if (this.isSelfContainedHostManagedHome(trustedManagedHomePath)) {
-      // Why: this home is codex's live CODEX_HOME, so mirror config with the
-      // trust-preserving merge — the plain overwrite below would wipe the
-      // hook/project trust codex granted in this home, forcing a re-approval and
-      // an app-server re-grant on every account switch.
-      syncSystemConfigIntoManagedCodexHome({
-        runtimeHomePath: trustedManagedHomePath,
-        systemHomePath: getSystemCodexHomePath()
-      })
-      return
-    }
-    // Why: Orca account switching is meant to swap Codex credentials and quota
-    // identity, not silently fork the user's sandbox/config defaults. Syncing
-    // one canonical config into every managed home keeps auth isolated per
-    // account while preserving consistent Codex behavior. Managed homes are
-    // real CODEX_HOMEs for `codex login`, so relative path-valued settings
-    // must keep resolving against the home the config was read from.
-    const material = getCodexManagedHookInstallMaterial()
-    // Why: source-home Orca trust is foreign to each managed home's hooks.json.
-    const sanitizedConfig = stripCodexManagedHookTrustEntriesFromConfig(canonicalConfig.contents, {
-      runtimeHomePath: canonicalConfig.sourceHomePath,
-      sourcePath: canonicalConfig.sourceHooksPath,
-      command: material.command,
-      managedEventLabels: new Set(Object.values(material.eventLabel)),
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
+    // granted there while refreshing ordinary settings from the lane's source.
+    syncSystemConfigIntoManagedCodexHome({
+      runtimeHomePath: trustedManagedHomePath,
+      systemHomePath: canonicalConfig.sourceHomePath,
+      systemConfigDir: canonicalConfig.sourceConfigDir
     })
-    this.writeManagedConfig(
-      trustedManagedHomePath,
-      rewriteRelativePathConfigValues(sanitizedConfig, canonicalConfig.sourceHomePath)
-    )
   }
 
   private readCanonicalConfig(): CanonicalCodexConfig | null {
@@ -1294,8 +1329,7 @@ export class CodexAccountService {
     try {
       return {
         contents: readFileSync(primaryConfigPath, 'utf-8'),
-        sourceHomePath,
-        sourceHooksPath: join(sourceHomePath, 'hooks.json')
+        sourceHomePath
       }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read canonical config:', error)
@@ -1325,8 +1359,8 @@ export class CodexAccountService {
       // path rewrites must anchor to the Linux-side ~/.codex, not the UNC path.
       return {
         contents: readFileSync(configPath, 'utf-8'),
-        sourceHomePath: `${wslHome}/.codex`,
-        sourceHooksPath: `${wslHome}/.codex/hooks.json`
+        sourceHomePath: toWindowsWslPath(`${wslHome}/.codex`, wslInfo.distro),
+        sourceConfigDir: `${wslHome}/.codex`
       }
     } catch (error) {
       console.warn('[codex-accounts] Failed to read WSL canonical config:', error)
@@ -1349,28 +1383,18 @@ export class CodexAccountService {
     )
   }
 
-  private writeManagedConfig(managedHomePath: string, contents: string): void {
-    const configPath = join(managedHomePath, 'config.toml')
-    try {
-      if (existsSync(configPath) && readFileSync(configPath, 'utf-8') === contents) {
-        return
-      }
-    } catch {
-      // Why: a read error must not make a stale config look current; atomic write owns ACL repair and error surfacing.
-    }
-    writeFileAtomically(configPath, contents)
-  }
-
   private getManagedAccountsRoot(): string {
     const root = join(app.getPath('userData'), 'codex-accounts')
     mkdirSync(root, { recursive: true })
     return root
   }
 
-  private ensureManagedHomeForReauthentication(account: CodexManagedAccount): string {
+  private async ensureManagedHomeForReauthentication(
+    account: CodexManagedAccount
+  ): Promise<string> {
     const wslInfo = parseWslUncPath(account.managedHomePath)
     if (wslInfo && process.platform === 'win32') {
-      this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
+      await this.ensureExpectedWslManagedHomeForReauthentication(account, wslInfo)
       return this.assertManagedHomePath(account.managedHomePath, account.id)
     }
 
@@ -1399,10 +1423,10 @@ export class CodexAccountService {
     return this.assertManagedHomePath(expectedManagedHomePath, account.id)
   }
 
-  private ensureExpectedWslManagedHomeForReauthentication(
+  private async ensureExpectedWslManagedHomeForReauthentication(
     account: CodexManagedAccount,
     wslInfo: { distro: string; linuxPath: string }
-  ): void {
+  ): Promise<void> {
     if (
       account.managedHomeRuntime !== 'wsl' ||
       account.wslDistro !== wslInfo.distro ||
@@ -1412,29 +1436,29 @@ export class CodexAccountService {
       return
     }
 
-    execFileSync(
-      'wsl.exe',
-      [
-        '-d',
-        wslInfo.distro,
-        '--',
-        'bash',
-        '-lc',
-        buildEncodedWslBashCommand(
-          [
-            'set -euo pipefail',
-            `candidate=${shellQuote(wslInfo.linuxPath)}`,
-            `expected_marker=${shellQuote(account.id)}`,
-            'marker="$candidate/.orca-managed-home"',
-            'if [ -e "$candidate" ] && [ ! -f "$marker" ]; then exit 41; fi',
-            'if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected_marker" ]; then exit 42; fi',
-            'mkdir -p -- "$candidate"',
-            'printf "%s\\n" "$expected_marker" > "$marker"'
-          ].join('\n')
-        )
-      ],
-      { encoding: 'utf-8', timeout: 5000 }
-    )
+    const result = await runWslProcess({
+      distro: wslInfo.distro,
+      loginPath: 'none',
+      script: [
+        'set -euo pipefail',
+        `candidate=${shellQuote(wslInfo.linuxPath)}`,
+        `expected_marker=${shellQuote(account.id)}`,
+        'marker="$candidate/.orca-managed-home"',
+        'if [ -e "$candidate" ] && [ ! -f "$marker" ]; then exit 41; fi',
+        'if [ -f "$marker" ] && [ "$(cat "$marker")" != "$expected_marker" ]; then exit 42; fi',
+        'mkdir -p -- "$candidate"',
+        'printf "%s\\n" "$expected_marker" > "$marker"'
+      ].join('\n'),
+      shell: 'bash',
+      timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+    })
+    // Why: 41/42 mean the path is not this account's home; re-auth must refuse
+    // rather than write credentials into someone else's directory.
+    if (result.code !== 0 || result.timedOut) {
+      throw new Error(
+        `Could not prepare the managed Codex home in WSL ${wslInfo.distro} for re-authentication.`
+      )
+    }
   }
 
   private isMissingManagedHomeError(error: unknown): boolean {
@@ -1476,7 +1500,7 @@ export class CodexAccountService {
             [
               '-d',
               wslInfo.distro,
-              '--',
+              '--exec',
               'bash',
               '-lc',
               buildEncodedWslBashCommand(
@@ -1500,7 +1524,7 @@ export class CodexAccountService {
                 ].join('\n')
               )
             ],
-            { encoding: 'utf-8', timeout: 5000 }
+            { windowsHide: true, encoding: 'utf-8', timeout: 5000 }
           ).trim()
           if (!canonicalLinuxPath) {
             throw new Error('Managed Codex home directory does not exist on disk.')
@@ -1540,45 +1564,57 @@ export class CodexAccountService {
     })
   }
 
-  private safeRemoveWslManagedHomeCandidate(
+  private async safeRemoveWslManagedHomeCandidate(
     distro: string,
     linuxHomePath: string,
     expectedAccountId: string
-  ): void {
+  ): Promise<void> {
     // Why: creation can fail after mkdir/marker but before trust, so cleanup must verify the marker/account ID inside WSL.
     try {
-      execFileSync(
-        'wsl.exe',
-        [
-          '-d',
-          distro,
-          '--',
-          'bash',
-          '-lc',
-          buildEncodedWslBashCommand(
-            [
-              'set -euo pipefail',
-              `candidate=${shellQuote(linuxHomePath)}`,
-              `expected_marker=${shellQuote(expectedAccountId)}`,
-              'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
-              'candidate_real=$(readlink -f -- "$candidate" 2>/dev/null || true)',
-              'managed_root_real=$(readlink -f -- "$managed_root" 2>/dev/null || true)',
-              'test -n "$candidate_real"',
-              'test -n "$managed_root_real"',
-              'case "$candidate_real" in "$managed_root_real"/*/home) ;; *) exit 0 ;; esac',
-              'test -f "$candidate_real/.orca-managed-home"',
-              'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
-              'rm -rf -- "$candidate_real"',
-              'parent_dir=$(dirname -- "$candidate_real")',
-              'case "$parent_dir" in "$managed_root_real"/*) rmdir -- "$parent_dir" 2>/dev/null || true ;; esac'
-            ].join('\n')
-          )
-        ],
-        { encoding: 'utf-8', timeout: 5000 }
-      )
+      const result = await runWslProcess({
+        distro,
+        loginPath: 'none',
+        script: [
+          'set -euo pipefail',
+          `candidate=${shellQuote(linuxHomePath)}`,
+          `expected_marker=${shellQuote(expectedAccountId)}`,
+          'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
+          'candidate_real=$(readlink -f -- "$candidate" 2>/dev/null || true)',
+          'managed_root_real=$(readlink -f -- "$managed_root" 2>/dev/null || true)',
+          'test -n "$candidate_real"',
+          'test -n "$managed_root_real"',
+          'case "$candidate_real" in "$managed_root_real"/*/home) ;; *) exit 0 ;; esac',
+          'test -f "$candidate_real/.orca-managed-home"',
+          'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
+          'rm -rf -- "$candidate_real"',
+          'parent_dir=$(dirname -- "$candidate_real")',
+          'case "$parent_dir" in "$managed_root_real"/*) rmdir -- "$parent_dir" 2>/dev/null || true ;; esac'
+        ].join('\n'),
+        shell: 'bash',
+        timeoutMs: WSL_MANAGED_HOME_TIMEOUT_MS
+      })
+      if (result.code !== 0 || result.timedOut) {
+        throw new Error(`WSL cleanup exited with ${result.timedOut ? 'a timeout' : result.code}`)
+      }
     } catch (error) {
       console.warn('[codex-accounts] Failed to clean up WSL managed home candidate:', error)
     }
+  }
+
+  /**
+   * Rollback deletes the managed home, so it may only run on a *proven* failure.
+   * An unreadable credential file means the login may well have succeeded, and a
+   * kept home is a recoverable leak where a deleted one is permanent data loss.
+   */
+  private removeManagedHomeUnlessUnproven(
+    error: unknown,
+    managedHomePath: string,
+    accountId: string
+  ): void {
+    if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
+      return
+    }
+    this.safeRemoveManagedHome(managedHomePath, accountId)
   }
 
   private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void {
@@ -1624,7 +1660,7 @@ export class CodexAccountService {
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     const wslInfo = parseWslUncPath(managedHomePath)
     if (wslInfo) {
-      this.assertWslCodexCliAvailable(wslInfo)
+      await this.assertWslCodexCliAvailable(wslInfo)
     }
     // Why: reauthentication starts with an existing auth.json. Only new auth
     // bytes prove this login completed; existence alone would kill the
@@ -1639,25 +1675,36 @@ export class CodexAccountService {
             command: 'wsl.exe',
             args: buildWslCodexLoginArgs(wslInfo.distro, wslInfo.linuxPath),
             env: process.env,
-            codexCommand: 'codex'
+            codexCommand: 'codex',
+            interactiveLogin: null
           }
         : (() => {
             const codexCommand = resolveCodexCommand()
-            // Why: Windows codex may be a .cmd/.bat; spawn+shell:true would trigger DEP0190, so invoke cmd.exe /c explicitly.
-            const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(codexCommand, ['login'])
+            // Why: Windows host login needs a real console; otherwise inherit/hide
+            // leaves the child unable to read a paste-code / device-auth prompt.
+            const interactiveLogin =
+              process.platform === 'win32'
+                ? buildWindowsHostInteractiveLoginSpawn(codexCommand, ['login'])
+                : null
+            const { spawnCmd, spawnArgs } = interactiveLogin
+              ? { spawnCmd: interactiveLogin.command, spawnArgs: interactiveLogin.args }
+              : getSpawnArgsForWindows(codexCommand, ['login'])
             return {
               command: spawnCmd,
               args: spawnArgs,
-              env: {
+              env: withCliRuntimeOnPath(codexCommand, {
                 ...process.env,
                 CODEX_HOME: managedHomePath
-              },
-              codexCommand
+              }),
+              codexCommand,
+              interactiveLogin
             }
           })()
       const child = spawn(spawnConfig.command, spawnConfig.args, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        // Why: prevents a console window flash for .cmd/.bat entrypoints routed through cmd.exe on Windows.
+        stdio: spawnConfig.interactiveLogin
+          ? spawnConfig.interactiveLogin.stdio
+          : ['ignore', 'pipe', 'pipe'],
+        // Why: hide the outer wrapper only. A dedicated login console stays visible.
         windowsHide: true,
         env: spawnConfig.env
       })
@@ -1689,10 +1736,11 @@ export class CodexAccountService {
           clearTimeout(postAuthExitTimeout)
           postAuthExitTimeout = null
         }
-        child.stdout.off('data', appendOutput)
-        child.stderr.off('data', appendOutput)
+        child.stdout?.off('data', appendOutput)
+        child.stderr?.off('data', appendOutput)
         child.off('error', onError)
         child.off('close', onClose)
+        spawnConfig.interactiveLogin?.cleanup?.()
       }
 
       const settle = (callback: () => void): void => {
@@ -1706,7 +1754,7 @@ export class CodexAccountService {
 
       const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
       timeout = setTimeout(() => {
-        killLoginProcessTree(child)
+        killLoginProcessTree(child, spawnConfig.interactiveLogin)
         settle(() => {
           rejectPromise(timeoutError)
         })
@@ -1727,7 +1775,7 @@ export class CodexAccountService {
           }
           postAuthExitTimeout = setTimeout(() => {
             loginTreeKilledAfterAuth = true
-            killLoginProcessTree(child)
+            killLoginProcessTree(child, spawnConfig.interactiveLogin)
           }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
         }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
       }
@@ -1751,7 +1799,14 @@ export class CodexAccountService {
           // Why: the post-auth tree kill is a success path — auth.json already
           // exists and codex only failed to exit on its own, so the forced
           // non-zero exit must not surface as a login failure.
-          if (code === 0 || (loginTreeKilledAfterAuth && existsSync(authJsonPath))) {
+          // Why: the kill only arms after the watcher observed new credential
+          // bytes, so an unreadable auth.json here is a lock, not a failed login.
+          // Only a definitive absence may revoke that verdict — reading a lock as
+          // failure sends the caller's rollback at a home that just authenticated.
+          if (
+            code === 0 ||
+            (loginTreeKilledAfterAuth && readLoginAuthSnapshot(authJsonPath) !== null)
+          ) {
             resolvePromise()
             return
           }
@@ -1766,23 +1821,36 @@ export class CodexAccountService {
         })
       }
 
-      child.stdout.on('data', appendOutput)
-      child.stderr.on('data', appendOutput)
+      child.stdout?.on('data', appendOutput)
+      child.stderr?.on('data', appendOutput)
       child.on('error', onError)
       child.on('close', onClose)
     })
   }
 
-  private assertWslCodexCliAvailable(wslInfo: { distro: string; linuxPath: string }): void {
-    try {
-      execFileSync('wsl.exe', buildWslCodexAvailabilityArgs(wslInfo.distro), {
-        encoding: 'utf-8',
-        timeout: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
-      })
-    } catch (error) {
+  private async assertWslCodexCliAvailable(wslInfo: {
+    distro: string
+    linuxPath: string
+  }): Promise<void> {
+    // This is a PATH lookup, so it needs the login PATH: an nvm-installed codex
+    // lives nowhere else. Marking it 'none' reports a working install as absent.
+    const result = await runWslProcess({
+      distro: wslInfo.distro,
+      loginPath: 'preferred',
+      script: buildWslCodexAvailabilityScript(),
+      // POSIX command lookup; declared because the payload is opaque here.
+      shell: 'sh',
+      timeoutMs: WSL_CODEX_AVAILABILITY_TIMEOUT_MS
+    })
+    if (result.code !== 0 && !result.environmentResolved) {
+      // A miss without the login PATH is "we could not check", not "not
+      // installed" -- claiming absence here is #9725.
+      throw new Error('Could not check the Codex CLI in WSL. Try again.')
+    }
+    if (result.code !== 0 || result.timedOut) {
       throw new Error(
         `Codex CLI is not available in WSL ${wslInfo.distro}. Install Codex in that distro or switch Account location to Windows.`,
-        { cause: error }
+        { cause: new Error(result.stderr.trim() || `codex lookup exited with ${result.code}`) }
       )
     }
   }
@@ -1832,7 +1900,18 @@ export class CodexAccountService {
       this.assertManagedHomePath(managedHomePath, expectedAccountId),
       'auth.json'
     )
-    const authFileContents = readFileSync(authFilePath, 'utf-8')
+    let authFileContents: string
+    try {
+      authFileContents = readFileSync(authFilePath, 'utf-8')
+    } catch (error) {
+      // Why: an unreadable auth.json is not a missing credential. Surfacing it as
+      // a generic failure is what lets the add path's rollback delete a home
+      // holding freshly authenticated bytes.
+      if (isDefinitiveAbsence(error)) {
+        throw error
+      }
+      throw new ManagedCodexHomeTemporarilyUnavailableError(undefined, { cause: error })
+    }
     let parsed: Record<string, unknown>
     try {
       parsed = JSON.parse(authFileContents) as Record<string, unknown>

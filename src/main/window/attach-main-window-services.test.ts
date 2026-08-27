@@ -13,6 +13,7 @@ const {
   systemPreferencesGetMediaAccessStatusMock,
   registerRepoHandlersMock,
   setRepoRemoteClientNotifierMock,
+  setWorktreeCatalogRemoteClientNotifierMock,
   registerWorktreeHandlersMock,
   registerPtyHandlersMock,
   hydrateLocalPtyRegistryAtBootMock,
@@ -35,6 +36,7 @@ const {
   systemPreferencesGetMediaAccessStatusMock: vi.fn(),
   registerRepoHandlersMock: vi.fn(),
   setRepoRemoteClientNotifierMock: vi.fn(),
+  setWorktreeCatalogRemoteClientNotifierMock: vi.fn(),
   registerWorktreeHandlersMock: vi.fn(),
   registerPtyHandlersMock: vi.fn(),
   hydrateLocalPtyRegistryAtBootMock: vi.fn(),
@@ -68,8 +70,15 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('../ipc/repos', () => ({
-  registerRepoHandlers: registerRepoHandlersMock,
+  registerRepoHandlers: registerRepoHandlersMock
+}))
+
+vi.mock('../ipc/repos/repos-changed-notification', () => ({
   setRepoRemoteClientNotifier: setRepoRemoteClientNotifierMock
+}))
+
+vi.mock('../ipc/watched-worktree-catalog-notification', () => ({
+  setWorktreeCatalogRemoteClientNotifier: setWorktreeCatalogRemoteClientNotifierMock
 }))
 
 vi.mock('../ipc/worktrees', () => ({
@@ -121,6 +130,7 @@ type MainWindowStub = {
   once: MockFn
   webContents: {
     id?: number
+    getURL: MockFn
     isDestroyed?: MockFn
     isLoadingMainFrame: MockFn
     on: MockFn
@@ -137,6 +147,8 @@ type RuntimeStub = {
   attachWindow: MockFn
   setNotifier: MockFn
   markRendererReloading: MockFn
+  markRendererReloadCancelled: MockFn
+  markGraphReloadFailed: MockFn
   markGraphUnavailable: MockFn
 }
 
@@ -150,6 +162,7 @@ function createMainWindow(
     once: vi.fn(),
     webContents: {
       id: 1,
+      getURL: vi.fn(() => 'file:///opt/orca/renderer/index.html'),
       isDestroyed: vi.fn(() => false),
       isLoadingMainFrame: vi.fn(() => true),
       on: vi.fn(),
@@ -165,8 +178,9 @@ function createMainWindow(
 
 function createStore(): Store & { flushPendingAsync: MockFn } {
   return {
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     flushPendingAsync: vi.fn(() => Promise.resolve())
-  } as Store & { flushPendingAsync: MockFn }
+  } as unknown as Store & { flushPendingAsync: MockFn }
 }
 
 function createRuntime(): RuntimeStub {
@@ -174,6 +188,8 @@ function createRuntime(): RuntimeStub {
     attachWindow: vi.fn(),
     setNotifier: vi.fn(),
     markRendererReloading: vi.fn(),
+    markRendererReloadCancelled: vi.fn(),
+    markGraphReloadFailed: vi.fn(),
     markGraphUnavailable: vi.fn()
   }
 }
@@ -217,6 +233,7 @@ describe('attachMainWindowServices', () => {
     systemPreferencesGetMediaAccessStatusMock.mockReset()
     registerRepoHandlersMock.mockReset()
     setRepoRemoteClientNotifierMock.mockReset()
+    setWorktreeCatalogRemoteClientNotifierMock.mockReset()
     registerWorktreeHandlersMock.mockReset()
     registerPtyHandlersMock.mockReset()
     hydrateLocalPtyRegistryAtBootMock.mockReset()
@@ -230,13 +247,13 @@ describe('attachMainWindowServices', () => {
     systemPreferencesGetMediaAccessStatusMock.mockReturnValue('granted')
   })
 
-  // #11994: without this wiring, host-local repo IPC mutations never reach paired clients.
-  it('gives the repo IPC handlers the runtime so repo changes reach paired clients', () => {
+  it('gives host-local catalog notifiers the runtime', () => {
     const runtime = createRuntime()
 
     attachMainWindowServices(createMainWindow() as never, createStore(), runtime as never)
 
     expect(setRepoRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
+    expect(setWorktreeCatalogRemoteClientNotifierMock).toHaveBeenCalledWith(runtime)
   })
 
   it('reloads the app renderer through main and marks expected renderer teardown', async () => {
@@ -795,6 +812,21 @@ describe('attachMainWindowServices', () => {
     expect(runWorktreeChangeInvalidatorsMock.mock.invocationCallOrder[0]).toBeLessThan(
       sendMock.mock.invocationCallOrder[0]
     )
+  })
+
+  it('marks renderer process loss as a graph reload failure', () => {
+    const mainWindow = createMainWindow()
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+
+    const handlers = mainWindow.webContents.on.mock.calls
+      .filter(([event]) => event === 'render-process-gone')
+      .map(([, handler]) => handler as () => void)
+    for (const handler of handlers) {
+      handler()
+    }
+
+    expect(runtime.markGraphReloadFailed).toHaveBeenCalledWith(1, 'renderer-process-gone')
   })
 
   it('accepts terminal reveal replies only from the main window renderer', async () => {

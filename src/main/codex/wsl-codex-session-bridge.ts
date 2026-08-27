@@ -1,7 +1,7 @@
-import { execFile } from 'node:child_process'
 import { posix as pathPosix } from 'node:path'
-import { escapeWslShCommandForWindows } from '../../shared/wsl-login-shell-command'
+import { quotePosixShell as quoteBashString } from '../../shared/wsl-login-shell-command'
 import { parseWslUncPath } from '../../shared/wsl-paths'
+import { runWslProcess } from '../wsl/wsl-runner'
 
 export type WslCodexSessionBridgeTarget = {
   distro: string
@@ -54,15 +54,21 @@ export async function syncWslCodexSessionsIntoManagedHome(
     return emptySummary
   }
 
-  const stdout = await execFileUtf8('wsl.exe', [
-    '-d',
-    target.distro,
-    '--',
-    'bash',
-    '-lc',
-    buildWslCodexSessionBridgeShellCommand(paths)
-  ])
-  return parseWslSessionBridgeSummary(stdout)
+  const result = await runWslProcess({
+    distro: target.distro,
+    loginPath: 'none',
+    script: buildWslCodexSessionBridgeShellCommand(paths),
+    // Process substitution and `read -d` are bash-only; dash rejects both.
+    shell: 'bash',
+    timeoutMs: WSL_SESSION_BRIDGE_TIMEOUT_MS
+  })
+  if (result.code !== 0 || result.timedOut) {
+    throw Object.assign(
+      new Error(`WSL codex session bridge failed for ${target.distro} (code ${result.code})`),
+      { code: result.code, stderr: result.stderr, timedOut: result.timedOut }
+    )
+  }
+  return parseWslSessionBridgeSummary(result.stdout)
 }
 
 export function resolveWslCodexSessionBridgeLinuxPaths(
@@ -110,7 +116,7 @@ export function buildWslCodexSessionBridgeShellCommand(
     `done < <(find "$source_sessions_root" -type f -name '*.jsonl' -print0 2>/dev/null)`,
     `printf '{"scannedFiles":%s,"linkedFiles":%s}\\n' "$scanned_files" "$linked_files"`
   ].join('\n')
-  return escapeWslShCommandForWindows(shellCommand)
+  return shellCommand
 }
 
 function getWslSessionBridgeTaskKey(target: WslCodexSessionBridgeTarget): string {
@@ -131,32 +137,6 @@ function wslDistroNamesMatch(left: string, right: string): boolean {
 
 function joinLinuxPath(basePath: string, ...segments: string[]): string {
   return pathPosix.join(basePath, ...segments)
-}
-
-function quoteBashString(value: string): string {
-  return `'${value.replace(/'/g, `'\\''`)}'`
-}
-
-function execFileUtf8(command: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      command,
-      args,
-      {
-        encoding: 'utf-8',
-        maxBuffer: 1024 * 1024,
-        timeout: WSL_SESSION_BRIDGE_TIMEOUT_MS,
-        windowsHide: true
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(stdout)
-      }
-    )
-  })
 }
 
 function parseWslSessionBridgeSummary(stdout: string): WslCodexSessionBridgeSummary {

@@ -7,8 +7,12 @@ import { SessionNotFoundError, type DaemonRequest } from './types'
 
 type DaemonServerPrivate = {
   host: { kill: (sessionId: string, opts?: { immediate?: boolean }) => void | Promise<void> }
-  pendingPtySpawnPreparations: Map<string, Set<{ canceled: boolean; clientId: string }>>
-  routeRequest(clientId: string, request: DaemonRequest): Promise<unknown>
+  preparations: {
+    pending: Map<string, Set<{ canceled: boolean; clientId: string }>>
+  }
+  requestRouter: {
+    route(clientId: string, request: DaemonRequest): Promise<unknown>
+  }
 }
 
 describe('daemon kill attribution', () => {
@@ -38,7 +42,7 @@ describe('daemon kill attribution', () => {
     })
     vi.spyOn(daemon.host, 'kill').mockReturnValue(killFinished)
 
-    const request = daemon.routeRequest('control-42', {
+    const request = daemon.requestRouter.route('control-42', {
       id: 'kill-1',
       type: 'kill',
       payload: { sessionId: 'agent-session', immediate: true }
@@ -71,7 +75,7 @@ describe('daemon kill attribution', () => {
     vi.spyOn(daemon.host, 'kill').mockRejectedValue(new Error('kill refused'))
 
     await expect(
-      daemon.routeRequest('control-42', {
+      daemon.requestRouter.route('control-42', {
         id: 'kill-1',
         type: 'kill',
         payload: { sessionId: 'agent-session', immediate: true }
@@ -98,11 +102,15 @@ describe('daemon kill attribution', () => {
       }
     })
     const daemon = server as unknown as DaemonServerPrivate
-    const pendingPreparation = { canceled: false, clientId: 'control-42' }
-    daemon.pendingPtySpawnPreparations.set('agent-session', new Set([pendingPreparation]))
+    const pendingPreparation = {
+      canceled: false,
+      controller: new AbortController(),
+      clientId: 'control-42'
+    }
+    daemon.preparations.pending.set('agent-session', new Set([pendingPreparation]))
     vi.spyOn(daemon.host, 'kill').mockRejectedValue(new SessionNotFoundError('agent-session'))
 
-    await daemon.routeRequest('control-42', {
+    await daemon.requestRouter.route('control-42', {
       id: 'kill-1',
       type: 'kill',
       payload: { sessionId: 'agent-session', immediate: true }

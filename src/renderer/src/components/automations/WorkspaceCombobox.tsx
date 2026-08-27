@@ -10,7 +10,7 @@ import {
 } from '@/components/ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { cn } from '@/lib/utils'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { translate } from '@/i18n/i18n'
 
 export function WorkspaceCombobox({

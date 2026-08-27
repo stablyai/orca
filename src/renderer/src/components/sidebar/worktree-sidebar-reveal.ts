@@ -1,4 +1,4 @@
-import { GROUP_HEADER_ROW_HEIGHT } from './worktree-list-virtual-rows'
+import { GROUP_HEADER_ROW_HEIGHT } from './worktree-list/viewport/virtual-rows'
 
 const WORKTREE_REVEAL_TOP_CLEARANCE = 6
 export const WORKTREE_SIDEBAR_REVEAL_TOP_INSET =

@@ -5,7 +5,10 @@ import { cn } from '@/lib/utils'
 import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { useAppStore } from '@/store'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import type { GetGitLabRateLimitResult, GitLabRateLimitSnapshot } from '../../../../shared/types'
+import type {
+  GetGitLabRateLimitResult,
+  GitLabRateLimitSnapshot
+} from '../../../../shared/gitlab-types'
 import { getProviderRateLimitScope } from '@/components/settings/provider-account-scope'
 import { ProviderHostScopeControl } from '@/components/settings/ProviderHostScopeControl'
 import { translate } from '@/i18n/i18n'

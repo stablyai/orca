@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 import { getCheckSeverityRank, sortChecksBySeverity } from './pr-check-severity-order'
 import { mapGitLabPipelineJobStatusToConclusion } from './gitlab-pipeline-checks'
 

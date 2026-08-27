@@ -23,10 +23,15 @@ Accounts:
   account list              List managed Claude and Codex accounts on this Orca host
 
 Skills:
+  skills installed          List installed skill selectors
+  skills share              Publish selected skills behind one unlisted link
   skills list               List version-matched skill guides bundled with this Orca CLI
   skills get                Print a version-matched skill guide as Markdown
   skills install            Install bundled Orca skills globally via the community skills CLI
   skills update             Update already-installed Orca skills via the community skills CLI
+
+Hosts:
+  host list                 List targetable machines and how to name each one
 
 Environments:
   environment add           Save a remote Orca runtime from a pairing code
@@ -223,6 +228,7 @@ Common Commands:
   orca agent-context [--json]
   orca account add [--agent claude|codex] [--json]
   orca account list [--json]
+  orca host list [--json]
   orca environment add --name <name> --pairing-code <code> [--json]
   orca environment list [--json]
   orca environment show --environment <selector> [--json]
@@ -446,7 +452,13 @@ function formatCommandFlagHelp(flag: string, commandPath: string[]): string {
     return '--workspace <id|all>  Connected Linear workspace id, or all'
   }
   if (command === 'linear list-issues' && flag === 'cursor') {
-    return '--cursor <cursor>      Opaque cursor returned by a previous list-issues page'
+    return '--cursor <cursor>      Opaque cursor from a previous list-issues page; issued cursors bind the workspace, raw Linear cursors need --workspace'
+  }
+  if (command === 'linear list-issues' && flag === 'priority') {
+    return '--priority <0-4>       0=none, 1=urgent, 2=high, 3=medium, 4=low'
+  }
+  if (command === 'linear list-issues' && flag === 'limit') {
+    return '--limit <n>            Max issues to return; omit to return every match'
   }
   if (command === 'artifacts list' && flag === 'cursor') {
     return '--cursor <cursor>      Opaque cursor returned by a previous artifacts page'
@@ -535,7 +547,8 @@ export function formatFlagHelp(flag: string): string {
     'element-index': '--element-index <n>   Element index from get-app-state',
     title: '--title <text>         Custom title for the terminal tab (omit to reset)',
     enter: '--enter                Append Enter after sending text',
-    force: '--force                Force worktree removal when supported',
+    force:
+      '--force                Force worktree removal when supported; does not force branch deletion',
     focus: '--focus                Reveal the created terminal session in Orca',
     for: '--for exit|tui-idle    Wait condition to satisfy',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',

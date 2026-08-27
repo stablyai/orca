@@ -10,6 +10,7 @@ import {
 import { advancePartialEscapeTail } from '../../shared/terminal-partial-escape-tail'
 import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import { collectHeadlessOscLinkRanges } from './headless-osc-link-ranges'
+import { readTerminalModes } from './headless-emulator-modes'
 import { buildRehydrateSequences } from './terminal-mode-rehydrate-sequences'
 import { TerminalMouseModeMirror } from './terminal-mouse-mode-mirror'
 import { TerminalOscCwdTitleScanner } from './terminal-osc-cwd-title-scanner'
@@ -338,24 +339,6 @@ export class HeadlessEmulator {
   }
 
   private getModes(): TerminalModes {
-    const buffer = this.terminal.buffer.active
-    const mouseTrackingMode = this.mouseModes.mouseTrackingMode
-    return {
-      bracketedPaste: this.terminal.modes.bracketedPasteMode,
-      mouseTracking: mouseTrackingMode !== 'none',
-      mouseTrackingMode,
-      sgrMouseMode: this.mouseModes.sgrMouseMode,
-      sgrMousePixelsMode: this.mouseModes.sgrMousePixelsMode,
-      applicationCursor:
-        buffer.type === 'normal' ? this.terminal.modes.applicationCursorKeysMode : false,
-      alternateScreen: buffer.type === 'alternate',
-      kittyKeyboardFlags: this.getKittyKeyboardFlags()
-    }
-  }
-
-  private getKittyKeyboardFlags(): number {
-    const flags = (this.terminal as TerminalWithSynchronousWrite)._core?.coreService?.kittyKeyboard
-      ?.flags
-    return typeof flags === 'number' ? flags : 0
+    return readTerminalModes(this.terminal, this.mouseModes)
   }
 }

@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { ProjectGroup } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
 import { useAppStore } from '@/store'
 import { useFolderWorkspaceComposerPathStatus } from './folder-workspace-composer-path-status'
 

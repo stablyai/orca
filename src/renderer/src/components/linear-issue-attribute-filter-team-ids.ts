@@ -1,4 +1,4 @@
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 
 /**
  * Resolve which Linear team ids should feed attribute-filter metadata.

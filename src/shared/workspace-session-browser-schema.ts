@@ -3,7 +3,7 @@
  * schemas themselves are unchanged apart from the per-entry tolerance the
  * session schema now declares everywhere. */
 import { z } from 'zod'
-import type { BrowserWorkspace } from './types'
+import type { BrowserWorkspace } from './browser-workspace-types'
 import { normalizeBrowserHistoryEntries } from './workspace-session-browser-history'
 import { salvagingArray } from './zod-salvage'
 
@@ -64,6 +64,10 @@ export const browserPageSchema = z.object({
   // Why: explicit null marks a browser page as client-local even when its
   // worktree is remote-owned; older sessions omit it and keep inferred runtime.
   browserRuntimeEnvironmentId: z.string().nullable().optional(),
+  // Why: the pair the relaunched client rebuilds the remote page handle from. Optional so older
+  // sessions still validate; stripping either half restores the page as a fresh server tab.
+  remoteBrowserPageId: z.string().nullable().optional(),
+  remoteBrowserPageClientHosted: z.boolean().optional(),
   // Why: optional+nullable so sessions persisted before viewport presets were
   // added still validate; without this, zod would strip the field during
   // restore and reset the user's chosen preset on every app restart.

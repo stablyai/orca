@@ -9,20 +9,30 @@ import {
 } from 'node:fs'
 import os from 'node:os'
 import { dirname, join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 
-// Mutable Electron app stub, hoisted so the vi.mock factory closes over it.
-const { electronApp } = vi.hoisted(() => ({
-  electronApp: {
-    isPackaged: true,
-    userDataPath: '',
-    version: '9.9.9',
-    getPath: (): string => electronApp.userDataPath,
-    getVersion: (): string => electronApp.version
-  }
-}))
+import { setAppEnvironment, type AppEnvironment } from '../../shared/app-environment'
 
-vi.mock('electron', () => ({ app: electronApp }))
+// Mutable host stub. Relocation now reads the AppEnvironment port rather than electron's
+// `app`, so orcad's daemon launch path can resolve without Electron in the graph.
+const hostApp = {
+  isPackaged: true,
+  userDataPath: '',
+  appPath: '',
+  version: '9.9.9'
+}
+
+function installHostApp(): void {
+  setAppEnvironment({
+    getPath: () => hostApp.userDataPath,
+    getAppPath: () => hostApp.appPath,
+    getVersion: () => hostApp.version,
+    isPackaged: () => hostApp.isPackaged,
+    onWillQuit: () => {},
+    exit: () => {},
+    getAppMetrics: () => []
+  } as AppEnvironment)
+}
 
 import {
   buildDaemonHostManifest,
@@ -88,9 +98,11 @@ beforeEach(() => {
   mkdirSync(localAppDataDir, { recursive: true })
   process.env.LOCALAPPDATA = localAppDataDir
   buildInstallFixture(installDir)
-  electronApp.isPackaged = true
-  electronApp.userDataPath = userDataDir
-  electronApp.version = '9.9.9'
+  hostApp.isPackaged = true
+  hostApp.userDataPath = userDataDir
+  hostApp.appPath = join(installDir, 'resources', 'app.asar')
+  hostApp.version = '9.9.9'
+  installHostApp()
   setProcessProp('platform', 'win32')
   setProcessProp('execPath', join(installDir, 'Orca.exe'))
   setProcessProp('resourcesPath', join(installDir, 'resources'))
@@ -214,6 +226,18 @@ describe('materializeRelocatedDaemonHost', () => {
     expect(materializeRelocatedDaemonHost()).toBeNull()
     expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
   })
+
+  it('does nothing for a packaged host with no asar root (orcad on win32)', () => {
+    // orcad answers isPackaged() true — it is a shipped build — but it is plain Node: no
+    // asar, no resourcesPath, and no NSIS updater to escape. Relocation staging a copy of
+    // an Electron tree that is not there is the isPackaged-honesty defect, and it would
+    // silently produce a null host on a path whose failures are meant to be visible.
+    hostApp.appPath = join(installDir, 'resources', 'app')
+    installHostApp()
+    expect(materializeRelocatedDaemonHost()).toBeNull()
+    expect(getRelocatedDaemonHost()).toBeNull()
+    expect(existsSync(join(localAppDataDir, 'Orca', 'daemon-host'))).toBe(false)
+  })
 })
 
 describe('getRelocatedDaemonHost', () => {
@@ -248,6 +272,17 @@ describe('pruneOldDaemonHosts', () => {
     expect(existsSync(join(root, '9.9.9'))).toBe(true)
     expect(existsSync(join(root, '2.0.0'))).toBe(true)
     expect(existsSync(join(root, '1.0.0'))).toBe(false)
+  })
+
+  it('reclaims nothing for a packaged host with no asar root (orcad on win32)', () => {
+    const root = join(localAppDataDir, 'Orca', 'daemon-host')
+    mkdirSync(join(root, '1.0.0'), { recursive: true })
+    hostApp.appPath = join(installDir, 'resources', 'app')
+    installHostApp()
+    pruneOldDaemonHosts(new Set())
+    // A Node host owns no daemon-host tree, so deleting under it would be reaching into a
+    // directory layout it never created.
+    expect(existsSync(join(root, '1.0.0'))).toBe(true)
   })
 })
 

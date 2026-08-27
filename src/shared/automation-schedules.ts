@@ -40,8 +40,27 @@ export type AutomationCronScheduleClassification =
   | { kind: 'custom'; label: string }
   | { kind: 'invalid'; label: string }
 
+/** Locale-free schedule shape: the renderer localizes it, the CLI renders it in English. */
+export type AutomationScheduleDescriptor =
+  | { kind: 'hourly'; minute: number }
+  | { kind: 'daily'; hour: number; minute: number }
+  | { kind: 'weekdays'; hour: number; minute: number }
+  | { kind: 'weekly'; hour: number; minute: number; dayOfWeek: number }
+  | { kind: 'custom' }
+  | { kind: 'invalid' }
+
 const DAY_CODES = ['SU', 'MO', 'TU', 'WE', 'TH', 'FR', 'SA'] as const
 const WEEKDAY_CODES = ['MO', 'TU', 'WE', 'TH', 'FR'] as const
+// Why: shared labels feed the CLI, which must stay English regardless of OS or UI locale.
+const EN_DAY_NAMES = [
+  'Sunday',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday'
+] as const
 const MONTH_NAMES = new Map([
   ['JAN', 1],
   ['FEB', 2],
@@ -322,6 +341,11 @@ export function tryParseAutomationRrule(
   }
 }
 
+/** Clock-time portion of a schedule label; numeric shape follows the OS region by convention. */
+export function formatAutomationScheduleTime(hour: number, minute: number): string {
+  return formatTime(hour, minute)
+}
+
 function formatTime(hour: number, minute: number): string {
   const date = new Date()
   date.setHours(hour, minute, 0, 0)
@@ -368,10 +392,7 @@ function formatParsedRruleSchedule(schedule: ReturnType<typeof parseAutomationRr
   if (schedule.preset === 'weekdays') {
     return `Weekdays at ${time}`
   }
-  const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
-    new Date(2026, 0, 4 + schedule.dayOfWeek)
-  )
-  return `${day}s at ${time}`
+  return `${EN_DAY_NAMES[schedule.dayOfWeek]}s at ${time}`
 }
 
 function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleClassification {
@@ -406,15 +427,12 @@ function classifyParsedCronSchedule(rule: ParsedCron): AutomationCronScheduleCla
     }
     const dayOfWeek = getSingleSetValue(rule.daysOfWeek)
     if (dayOfWeek !== null) {
-      const day = new Intl.DateTimeFormat(undefined, { weekday: 'long' }).format(
-        new Date(2026, 0, 4 + dayOfWeek)
-      )
       return {
         kind: 'weekly',
         hour,
         minute,
         dayOfWeek,
-        label: `${day}s at ${time}`
+        label: `${EN_DAY_NAMES[dayOfWeek]}s at ${time}`
       }
     }
   }
@@ -441,6 +459,47 @@ export function formatAutomationSchedule(scheduleExpression: string): string {
     return formatParsedRruleSchedule(parseAutomationRrule(trimmed))
   } catch {
     return 'Invalid schedule'
+  }
+}
+
+function toScheduleDescriptor(
+  classification: AutomationCronScheduleClassification
+): AutomationScheduleDescriptor {
+  const { label: _label, ...descriptor } = classification
+  return descriptor
+}
+
+/**
+ * Parse a cron or RRULE expression into its locale-free shape so callers can render their own
+ * copy. Same single parse path as `formatAutomationSchedule`, minus the English label.
+ */
+export function describeAutomationSchedule(
+  scheduleExpression: string
+): AutomationScheduleDescriptor {
+  try {
+    const trimmed = scheduleExpression.trim()
+    const schedule = parseSchedule(trimmed)
+    if (schedule.kind === 'cron') {
+      return toScheduleDescriptor(classifyParsedCronSchedule(schedule))
+    }
+    const rrule = parseAutomationRrule(trimmed)
+    if (rrule.preset === 'hourly') {
+      return { kind: 'hourly', minute: rrule.minute }
+    }
+    if (rrule.preset === 'weekly') {
+      return {
+        kind: 'weekly',
+        hour: rrule.hour,
+        minute: rrule.minute,
+        dayOfWeek: rrule.dayOfWeek
+      }
+    }
+    if (rrule.preset === 'weekdays') {
+      return { kind: 'weekdays', hour: rrule.hour, minute: rrule.minute }
+    }
+    return { kind: 'daily', hour: rrule.hour, minute: rrule.minute }
+  } catch {
+    return { kind: 'invalid' }
   }
 }
 

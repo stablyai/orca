@@ -38,7 +38,6 @@ describe('WSL skill discovery', () => {
         '/home/alice/.codex/skills/.system/review/SKILL.md',
         '/opt/orca/review/SKILL.md',
         '1700000000',
-        '7',
         markdown
       ),
       record(
@@ -47,7 +46,6 @@ describe('WSL skill discovery', () => {
         '/work/project/.agents/skills/review/SKILL.md',
         '/opt/orca/review/SKILL.md',
         '1700000001',
-        '9',
         markdown
       )
     ].join('')
@@ -62,7 +60,6 @@ describe('WSL skill discovery', () => {
         sourceKind: 'bundled',
         rootPath: homeRoot.path,
         skillFilePath: '/home/alice/.codex/skills/.system/review/SKILL.md',
-        fileCount: 7,
         updatedAt: 1_700_000_000_000
       })
     ])
@@ -75,12 +72,9 @@ describe('WSL skill discovery', () => {
   })
 
   it('builds a distro-side scan for enumeration, reads, and canonical identity', () => {
-    const command = buildWslSkillDiscoveryCommand([
+    const script = buildWslSkillDiscoveryCommand([
       { ...repoRoot, path: "/work/alice's project/.agents/skills" }
     ])
-    const encoded = /printf %s '([^']+)'/.exec(command)?.[1]
-    expect(encoded).toBeTruthy()
-    const script = Buffer.from(encoded!, 'base64').toString('utf8')
 
     expect(script).toContain('find -L "$root_path"')
     expect(script).toContain('realpath -- "$skill_file"')

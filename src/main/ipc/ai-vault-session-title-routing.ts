@@ -4,8 +4,8 @@ import type {
 } from '../../shared/ai-vault-session-title'
 import {
   LOCAL_EXECUTION_HOST_ID,
-  normalizeExecutionHostScope,
-  parseExecutionHostId
+  parseExecutionHostId,
+  requestedExecutionHostScope
 } from '../../shared/execution-host'
 import { resolveLocalAiVaultSessionTitles } from '../ai-vault/session-title-resolver'
 import { parseAiVaultSessionTitlesResult } from '../ai-vault/session-title-result-validation'
@@ -20,9 +20,7 @@ export async function resolveAiVaultSessionTitlesByHost(
   args: AiVaultSessionTitlesArgs,
   resolveRuntime?: RuntimeAiVaultSessionTitleResolver
 ): Promise<AiVaultSessionTitlesResult> {
-  const executionHostScope = normalizeExecutionHostScope(
-    args.executionHostScope ?? LOCAL_EXECUTION_HOST_ID
-  )
+  const executionHostScope = requestedExecutionHostScope(args.executionHostScope)
   if (executionHostScope === LOCAL_EXECUTION_HOST_ID) {
     return resolveLocalAiVaultSessionTitles(args.requests)
   }

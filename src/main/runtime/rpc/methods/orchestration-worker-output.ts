@@ -20,6 +20,7 @@ export async function readExactWorkerOutput(args: {
   terminalHandle: string
   workerState: string
   terminalStatus: RuntimeTerminalState
+  terminalLiveness?: 'live' | 'unverifiable' | 'exited'
   attachedAt: string
   source?: OrchestrationWorkerReadSource
   cursor?: string | number
@@ -100,7 +101,11 @@ export async function readExactWorkerOutput(args: {
       returnedMessageCount: transcript.messages.length
     },
     cursor: nextCursor,
-    status: { worker: args.workerState, terminal: args.terminalStatus },
+    status: {
+      worker: args.workerState,
+      terminal: args.terminalStatus,
+      ...(args.terminalLiveness ? { liveness: args.terminalLiveness } : {})
+    },
     fallbackReason: null,
     warnings: transcript.warnings
   }
@@ -145,7 +150,11 @@ async function readTerminalOutput(
     sourceIdentity,
     terminal: { ...terminal, tail: redactedTerminal.lines },
     cursor: nextCursor,
-    status: { worker: args.workerState, terminal: terminal.status },
+    status: {
+      worker: args.workerState,
+      terminal: args.terminalLiveness === 'unverifiable' ? args.terminalStatus : terminal.status,
+      ...(args.terminalLiveness ? { liveness: args.terminalLiveness } : {})
+    },
     fallbackReason: null,
     warnings: redactedTerminal.warnings
   }
