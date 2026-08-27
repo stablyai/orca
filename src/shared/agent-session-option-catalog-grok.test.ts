@@ -70,9 +70,10 @@ describe('grok session option catalog', () => {
     expect(effortValues(unknown[0])).toEqual(['low', 'medium', 'high', 'xhigh'])
   })
 
-  it('treats a successful discovery as authoritative, unlike the other agents', () => {
+  it('treats a successful discovery as authoritative, unlike additive catalogs', () => {
     expect(GROK_SESSION_OPTION_CATALOG.discoveredModelsAreAuthoritative).toBe(true)
-    for (const agent of ['claude', 'codex', 'gemini', 'cursor'] as const) {
+    expect(getAgentSessionOptionCatalog('codex')?.discoveredModelsAreAuthoritative).toBe(true)
+    for (const agent of ['claude', 'gemini', 'cursor'] as const) {
       expect(getAgentSessionOptionCatalog(agent)?.discoveredModelsAreAuthoritative).toBeUndefined()
     }
   })

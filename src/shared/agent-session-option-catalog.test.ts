@@ -99,6 +99,133 @@ describe('agent session option catalog', () => {
     expect(parsed[2].options).toEqual([])
   })
 
+  it('seeds Codex effort menus from advertised ceilings, not a shared cap', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    const effortValues = (modelId: string): string[] => {
+      const option = catalog.models
+        .find((model) => model.id === modelId)
+        ?.options.find((candidate) => candidate.id === 'effort')
+      return option?.kind.type === 'select' ? option.kind.choices.map(({ value }) => value) : []
+    }
+
+    expect(catalog.models.map(({ id }) => id)).toEqual([
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
+      'gpt-5.5',
+      'gpt-5.4',
+      'gpt-5.4-mini',
+      'gpt-5.3-codex-spark'
+    ])
+    expect(effortValues('gpt-5.6-sol')).toEqual(['low', 'medium', 'high', 'xhigh', 'max', 'ultra'])
+    expect(effortValues('gpt-5.6-luna')).toEqual(['low', 'medium', 'high', 'xhigh', 'max'])
+    expect(effortValues('gpt-5.5')).toEqual(['low', 'medium', 'high', 'xhigh'])
+    expect(catalog.models.flatMap((model) => effortValues(model.id))).not.toContain('minimal')
+    expect(catalog.models.some((model) => model.id === 'gpt-5.2-codex')).toBe(false)
+    expect(catalog.models.some((model) => model.id === 'luna')).toBe(false)
+  })
+
+  it('parses Codex discovery into model-specific reasoning options', () => {
+    const catalog = getAgentSessionOptionCatalog('codex')!
+    expect(catalog.listModels?.command).toBe('codex debug models')
+    expect(catalog.discoveredModelsAreAuthoritative).toBe(true)
+
+    const parsed = catalog.listModels!.parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-5.6-sol',
+            display_name: 'GPT-5.6-Sol',
+            default_reasoning_level: 'low',
+            visibility: 'list',
+            supported_reasoning_levels: [
+              { effort: 'low' },
+              { effort: 'high' },
+              { effort: 'max' },
+              { effort: 'ultra' }
+            ]
+          },
+          {
+            slug: 'gpt-5.6-luna',
+            display_name: 'GPT-5.6-Luna',
+            default_reasoning_level: 'medium',
+            visibility: 'list',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'max' }]
+          },
+          {
+            slug: 'gpt-5.5',
+            display_name: 'GPT-5.5',
+            visibility: 'list',
+            supported_reasoning_levels: [
+              { effort: 'low' },
+              { effort: 'medium' },
+              { effort: 'high' },
+              { effort: 'xhigh' }
+            ]
+          },
+          {
+            slug: 'codex-auto-review',
+            display_name: 'Codex Auto Review',
+            visibility: 'hide',
+            supported_reasoning_levels: [{ effort: 'max' }]
+          }
+        ]
+      })
+    )
+
+    expect(parsed.map(({ id }) => id)).toEqual(['gpt-5.6-sol', 'gpt-5.6-luna', 'gpt-5.5'])
+    expect(
+      parsed[0].options[0].kind.type === 'select'
+        ? parsed[0].options[0].kind.choices.map(({ value }) => value)
+        : []
+    ).toEqual(['low', 'high', 'max', 'ultra'])
+    expect(parsed[0].options[0].kind).toMatchObject({ defaultValue: 'low' })
+    expect(
+      parsed[1].options[0].kind.type === 'select'
+        ? parsed[1].options[0].kind.choices.map(({ value }) => value)
+        : []
+    ).toEqual(['low', 'max'])
+    expect(
+      parsed[2].options[0].kind.type === 'select'
+        ? parsed[2].options[0].kind.choices.map(({ value }) => value)
+        : []
+    ).toEqual(['low', 'medium', 'high', 'xhigh'])
+  })
+
+  it('keeps the Codex seed when model discovery output is malformed', () => {
+    const parse = getAgentSessionOptionCatalog('codex')!.listModels!.parse
+    expect(parse('')).toEqual([])
+    expect(parse('{"models":false}')).toEqual([])
+    expect(parse('garbage')).toEqual([])
+  })
+
+  it('deduplicates Codex models and reasoning levels from discovery', () => {
+    const parse = getAgentSessionOptionCatalog('codex')!.listModels!.parse
+    const parsed = parse(
+      JSON.stringify({
+        models: [
+          {
+            slug: 'gpt-account-frontier',
+            display_name: 'GPT Account Frontier',
+            visibility: 'list',
+            supported_reasoning_levels: [{ effort: 'low' }, { effort: 'low' }, { effort: 'high' }]
+          },
+          { slug: 'gpt-account-frontier', display_name: 'Duplicate row', visibility: 'list' }
+        ]
+      })
+    )
+
+    expect(parsed).toHaveLength(1)
+    expect(parsed[0].label).toBe('GPT Account Frontier')
+    expect(parsed[0].options[0].kind).toMatchObject({
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' }
+      ],
+      defaultValue: 'low'
+    })
+  })
+
   it('keeps the Claude seed when list_models output is unsupported or malformed', () => {
     const parse = getAgentSessionOptionCatalog('claude')!.listModels!.parse
     const unsupported =
@@ -139,6 +266,21 @@ describe('agent session option catalog', () => {
       model: 'gpt-5.3-codex',
       effort: 'high',
       fastMode: true
+    })
+  })
+
+  it('passes a requested Codex effort through launch args instead of capping it', () => {
+    expect(
+      resolveAgentSessionOptionLaunch('codex', { model: 'gpt-5.6-luna', effort: 'max' })
+    ).toEqual({
+      args: ['-m', 'gpt-5.6-luna', '-c', 'model_reasoning_effort=max'],
+      appliedValues: { model: 'gpt-5.6-luna', effort: 'max' }
+    })
+    expect(
+      resolveAgentSessionOptionLaunch('codex', { model: 'gpt-5.6-sol', effort: 'ultra' })
+    ).toEqual({
+      args: ['-m', 'gpt-5.6-sol', '-c', 'model_reasoning_effort=ultra'],
+      appliedValues: { model: 'gpt-5.6-sol', effort: 'ultra' }
     })
   })
 

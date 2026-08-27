@@ -4,7 +4,7 @@ import es from './locales/es.json'
 import ja from './locales/ja.json'
 import ko from './locales/ko.json'
 import zh from './locales/zh.json'
-import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-codex'
 
 const localizedCatalogs = { es, ja, ko, zh }
 const englishSetting = en.auto.components.settings.ExperimentalPane.nativeChat
@@ -25,7 +25,17 @@ const codexEffortValues = new Set(
 
 describe('native chat locale copy', () => {
   it('covers every Codex effort choice', () => {
-    expect([...codexEffortValues].sort()).toEqual([...localizedEffortValues].sort())
+    const localized = new Set<string>(localizedEffortValues)
+    expect([...codexEffortValues].every((value) => localized.has(value))).toBe(true)
+    expect(localizedEffortValues).toEqual([
+      'minimal',
+      'low',
+      'medium',
+      'high',
+      'xhigh',
+      'max',
+      'ultra'
+    ])
   })
 
   it.each(Object.entries(localizedCatalogs))(

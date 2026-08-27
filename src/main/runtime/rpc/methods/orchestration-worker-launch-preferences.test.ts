@@ -36,48 +36,53 @@ describe('orchestration worker launch preferences', () => {
   it.each([
     {
       model: 'gpt-5.6-sol',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-      rejected: ['future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['minimal', 'future-effort']
     },
     {
       model: 'gpt-5.6-terra',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
-      rejected: ['future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh', 'max', 'ultra'],
+      rejected: ['minimal', 'future-effort']
     },
     {
       model: 'gpt-5.6-luna',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh', 'max'],
-      rejected: ['ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh', 'max'],
+      rejected: ['ultra', 'minimal', 'future-effort']
     },
     {
       model: 'gpt-5.5',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
-    },
-    {
-      model: 'gpt-5.2-codex',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
     },
     {
       model: 'gpt-5.4',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
     },
     {
       model: 'gpt-5.4-mini',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
     },
     {
       model: 'gpt-5.3-codex-spark',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
+    },
+    {
+      model: 'gpt-5.2-codex',
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
     },
     {
       model: 'future-codex-model',
-      accepted: ['minimal', 'low', 'medium', 'high', 'xhigh'],
-      rejected: ['max', 'ultra', 'future-effort']
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
+    },
+    {
+      model: 'luna',
+      accepted: ['low', 'medium', 'high', 'xhigh'],
+      rejected: ['max', 'ultra', 'minimal', 'future-effort']
     }
   ])('enforces the Codex effort ceiling for $model', ({ model, accepted, rejected }) => {
     const catalog = getAgentSessionOptionCatalog('codex')!
@@ -102,6 +107,32 @@ describe('orchestration worker launch preferences', () => {
         resolveWorkerLaunchPreferences({ agent: 'codex', model, effort: effortValue })
       ).toThrow(`does not support effort ${effortValue}`)
     }
+  })
+
+  it('passes a supported Codex max/ultra request through instead of capping it', () => {
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'codex',
+        model: 'gpt-5.6-luna',
+        effort: 'max'
+      }).preferences
+    ).toEqual({ model: 'gpt-5.6-luna', effort: 'max' })
+    expect(
+      resolveWorkerLaunchPreferences({
+        agent: 'codex',
+        model: 'gpt-5.6-sol',
+        effort: 'ultra'
+      }).preferences
+    ).toEqual({ model: 'gpt-5.6-sol', effort: 'ultra' })
+  })
+
+  it('rejects an unsupported Codex effort instead of silently substituting a lower tier', () => {
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.6-luna', effort: 'ultra' })
+    ).toThrow('does not support effort ultra')
+    expect(() =>
+      resolveWorkerLaunchPreferences({ agent: 'codex', model: 'gpt-5.5', effort: 'max' })
+    ).toThrow('does not support effort max')
   })
 
   it('rejects effort without a model', () => {

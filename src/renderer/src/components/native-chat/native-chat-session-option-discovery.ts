@@ -1,6 +1,7 @@
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   createClaudeCatalogOptions,
+  createCodexCatalogOptions,
   getAgentSessionOptionCatalog,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
@@ -96,6 +97,11 @@ export async function discoverNativeChatCatalogModels(
             effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
             supportsFastMode: model.supportsFastMode
           })
-        : []
+        : agent === 'codex'
+          ? createCodexCatalogOptions({
+              effortLevelIds: model.thinkingLevels?.map(({ id }) => id) ?? [],
+              ...(model.defaultThinkingLevel ? { defaultEffort: model.defaultThinkingLevel } : {})
+            })
+          : []
   }))
 }
