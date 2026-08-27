@@ -22,7 +22,8 @@ describe('generateTextFromPrompt', () => {
         execute,
         missingBinaryLocation: 'remote host'
       },
-      'mission-plan'
+      'mission-plan',
+      { useAgentDefaultModel: true }
     )
 
     expect(result).toEqual({
@@ -33,7 +34,8 @@ describe('generateTextFromPrompt', () => {
     expect(execute).toHaveBeenCalledWith(
       expect.objectContaining({
         binary: 'pi',
-        label: 'Pi'
+        label: 'Pi',
+        args: expect.not.arrayContaining(['--model', 'github-copilot/gpt-5.4-mini'])
       }),
       '/repo',
       expect.any(Number),
