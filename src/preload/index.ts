@@ -8,6 +8,7 @@ import type {
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
+import { symbolIndex } from './symbol-index'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -1827,6 +1828,11 @@ const api = {
 
     status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
   },
+  // Why: symbol-index bindings live in `./symbol-index`, mirroring the
+  // `./gitlab` split, so adding or changing a `symbolIndex.*` channel
+  // doesn't surface as a merge conflict on every upstream sync of this
+  // central preload file.
+  symbolIndex,
 
   linear: {
     connect: (args: {
