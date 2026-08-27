@@ -43,6 +43,11 @@ import {
   buildBrowserClickedLinkRoutingScript,
   buildBrowserIframeClickedLinkRoutingScript
 } from './browser-clicked-link-routing'
+import {
+  createPageInitiatedTabBudget,
+  type PageInitiatedTabBudget
+} from './browser-page-initiated-tab-budget'
+import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
@@ -233,6 +238,8 @@ export class BrowserManager {
   // Why: reverse map gives O(1) guest→tab lookups on every mouse/load/permission/popup event.
   private readonly tabIdByWebContentsId = new Map<number, string>()
   private readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
+  // Why: keyed by the opener tree's root so named child popups can't each mint a fresh tab quota.
+  private readonly pageInitiatedTabBudgetByRootGuestId = new Map<number, PageInitiatedTabBudget>()
   // Why: guests are keyed by page id but renderer visibility by workspace id; bridge the mismatch to activate the right tab before capture.
   private readonly workspaceIdByPageId = new Map<string, string>()
   private readonly sessionProfileIdByPageId = new Map<string, string | null>()
@@ -392,6 +399,16 @@ export class BrowserManager {
     }
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     return null
+  }
+
+  /** Shared across the whole opener tree, so a chain of popups draws from one budget. */
+  private tryConsumePageInitiatedTab(rootGuestWebContentsId: number): boolean {
+    let budget = this.pageInitiatedTabBudgetByRootGuestId.get(rootGuestWebContentsId)
+    if (!budget) {
+      budget = createPageInitiatedTabBudget()
+      this.pageInitiatedTabBudgetByRootGuestId.set(rootGuestWebContentsId, budget)
+    }
+    return budget.tryConsume(Date.now())
   }
 
   private resolveRendererForBrowserTab(browserTabId: string): Electron.WebContents | null {
@@ -758,8 +775,9 @@ export class BrowserManager {
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName }) => {
-      const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
+    guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
+      const ownerContext = this.resolvePopupOwnerContext(guest.id)
+      const browserTabId = ownerContext?.browserTabId ?? null
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
       const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
@@ -781,6 +799,33 @@ export class BrowserManager {
           })
         }
         // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
+        return { action: 'deny' }
+      }
+
+      // Why: an unnamed, featureless window.open() is Chromium's own new-tab shape, so an Orca tab is
+      // the honest presentation; a floating origin-bar window is not. Opener-dependent shapes are
+      // excluded by isNewBrowserTabPopupIntent and still get a real child window below.
+      if (
+        ownerContext &&
+        externalUrl &&
+        isNewBrowserTabPopupIntent({ frameName, disposition, features })
+      ) {
+        // Why: one activation lets a page loop window.open, and each routed tab persists into
+        // workspace session state, so it survives the quit that used to clear popup windows.
+        if (!this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(externalUrl),
+            action: 'blocked'
+          })
+          return { action: 'deny' }
+        }
+        if (this.openLinkInOrcaTab(ownerContext.browserTabId, externalUrl)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(externalUrl),
+            action: 'opened-in-orca'
+          })
+        }
+        // Why: a recognized new-tab intent must never fall through to a native popup if its renderer vanished mid-open.
         return { action: 'deny' }
       }
 
@@ -1243,6 +1288,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+    this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
     this.authUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
@@ -1444,6 +1490,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.popupOwnerContextByGuestId.clear()
+    this.pageInitiatedTabBudgetByRootGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
