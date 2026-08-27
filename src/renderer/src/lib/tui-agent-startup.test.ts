@@ -173,6 +173,36 @@ describe('buildAgentStartupPlan', () => {
     ).toBe("prime-agent -- 'help me name this config'")
   })
 
+  it('passes the prompt to Gajae Code as a positional argv behind a `--` separator', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'gjc',
+        prompt: 'Summarize the failing tests',
+        cmdOverrides: {},
+        platform: 'linux'
+      })
+    ).toEqual({
+      agent: 'gjc',
+      launchCommand: "gjc -- 'Summarize the failing tests'",
+      expectedProcess: 'gjc',
+      followupPrompt: null,
+      launchConfig: emptyLaunchConfig('gjc')
+    })
+  })
+
+  // Why: `gjc resume` is its own launch alias and `stats`/`models` are subcommands, so an
+  // unseparated prompt of exactly those words would dispatch instead of seeding the composer.
+  it('keeps subcommand-shaped Gajae Code prompts as the positional prompt', () => {
+    expect(
+      buildAgentStartupPlan({
+        agent: 'gjc',
+        prompt: 'resume',
+        cmdOverrides: {},
+        platform: 'linux'
+      })?.launchCommand
+    ).toBe("gjc -- 'resume'")
+  })
+
   it('uses cursor-agent as the actual launch binary', () => {
     expect(
       buildAgentStartupPlan({

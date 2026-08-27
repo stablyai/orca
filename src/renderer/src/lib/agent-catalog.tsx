@@ -135,6 +135,15 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     homepageUrl: 'https://github.com/PrimeIntellect-ai/prime-agent'
   },
   {
+    id: 'gjc',
+    label: translate('auto.lib.agent.catalog.c851f042e2', 'Gajae Code'),
+    cmd: 'gjc',
+    // Why: no faviconDomain — gajae-code.com serves an inline data-URI favicon, so
+    // Google's favicon service 404s and would render its generic globe placeholder
+    // instead of the agent's mark; the letter glyph fallback is the honest icon.
+    homepageUrl: 'https://gajae-code.com'
+  },
+  {
     id: 'gemini',
     label: translate('auto.lib.agent.catalog.12e6baa4f7', 'Gemini'),
     cmd: 'gemini',
