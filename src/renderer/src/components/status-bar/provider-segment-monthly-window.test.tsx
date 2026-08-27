@@ -142,7 +142,7 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).not.toContain('25% used')
   })
 
-  it('prefers Cursor Models over a higher-used Other models bucket in compact mode', async () => {
+  it('renders the same unlabeled Cursor bars and percents in compact and verbose status-bar modes', async () => {
     const { ProviderSegment } = await import('./StatusBar')
     const limits: ProviderRateLimits = {
       provider: 'cursor',
@@ -158,13 +158,22 @@ describe('ProviderSegment monthly window', () => {
       status: 'ok'
     }
 
-    const markup = renderToStaticMarkup(
+    const compact = renderToStaticMarkup(
       <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
     )
+    const verbose = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="verbose" />
+    )
 
-    expect(markup).toContain('6% used Cursor Models')
-    expect(markup).not.toContain('Other models')
-    expect(markup).not.toContain('80% used')
+    for (const markup of [compact, verbose]) {
+      expect(markup.match(/data-usage-bar/g)).toHaveLength(2)
+      expect(markup).toContain('6%')
+      expect(markup).toContain('80%')
+      expect(markup).not.toContain('used')
+      expect(markup).not.toContain('Cursor Models')
+      expect(markup).not.toContain('Other models')
+      expect(markup).not.toContain('30d')
+    }
   })
 
   // Why: #8378 — status-bar chip showed fixed window size ("5h") while the

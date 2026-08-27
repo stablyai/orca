@@ -61,7 +61,7 @@ import {
 } from './tooltip'
 import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { UsageRosterPanel, getTightestUsageSection } from './UsageRosterPanel'
+import { UsageRosterPanel, getTightestUsageSection, isCursorUsageBucket } from './UsageRosterPanel'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { formatRateLimitWindowChipLabel } from '@/lib/window-label-formatter'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
@@ -1181,6 +1181,27 @@ function VerboseProviderUsage({
   p: ProviderRateLimits
   display: UsagePercentageDisplay
 }): React.JSX.Element {
+  if (p.provider === 'cursor' && p.buckets && p.buckets.length > 0) {
+    const cursorBuckets = p.buckets.filter((bucket) => isCursorUsageBucket(bucket.name))
+    if (cursorBuckets.length > 0) {
+      return (
+        <>
+          {cursorBuckets.map((bucket, index) => (
+            <React.Fragment key={bucket.name}>
+              {index > 0 ? <span className="text-muted-foreground">·</span> : null}
+              <span className="inline-flex items-center gap-1.5">
+                <MiniBar usedPct={clampUsedPercent(bucket.usedPercent)} display={display} />
+                <span className="tabular-nums">
+                  {getDisplayedUsagePercentage(bucket.usedPercent, display)}%
+                </span>
+              </span>
+            </React.Fragment>
+          ))}
+        </>
+      )
+    }
+  }
+
   if (p.buckets && p.buckets.length > 0) {
     const visibleBuckets = p.buckets.filter((bucket) => STATUS_BAR_BUCKET_NAMES.has(bucket.name))
     return (
@@ -1275,6 +1296,9 @@ export function ProviderSegment({
   }
 
   const tightest = getTightestUsageSection(p)
+  const showCursorBucketChip =
+    p.provider === 'cursor' &&
+    (p.buckets?.some((bucket) => isCursorUsageBucket(bucket.name)) ?? false)
 
   // Fetching with no prior data
   if (p.status === 'fetching' && !tightest) {
@@ -1312,9 +1336,9 @@ export function ProviderSegment({
   return (
     <span className="inline-flex items-center gap-1.5">
       <ProviderIcon provider={provider} />
-      {mode === 'verbose' ? (
+      {mode === 'verbose' || showCursorBucketChip ? (
         <>
-          {tightest && !compact ? (
+          {tightest && !compact && !showCursorBucketChip ? (
             <MiniBar usedPct={clampUsedPercent(tightest.window.usedPercent)} display={display} />
           ) : null}
           <VerboseProviderUsage p={p} display={display} />

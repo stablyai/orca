@@ -54,21 +54,27 @@ function shortLabel(
     : formatWindowLabel(section.window.windowMinutes)
 }
 
+export function isCursorUsageBucket(name: string): boolean {
+  return name === 'Cursor Models' || name === 'Other models'
+}
+
+function cursorUsageSections(p: ProviderRateLimits, sections: UsageSection[]): UsageSection[] {
+  if (p.provider !== 'cursor') {
+    return []
+  }
+  return sections.filter((section) => isCursorUsageBucket(section.label))
+}
+
 export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | null {
   const sections = usedSections(p)
   if (sections.length === 0) {
     return null
   }
-  // Cursor's compact chip should show included-model usage, not API/"Other models",
-  // even when that bucket is more consumed.
-  const cursorModels = sections.find((s) => s.label === 'Cursor Models')
-  const tightest =
-    cursorModels ??
-    sections.reduce((current, candidate) =>
-      clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
-        ? candidate
-        : current
-    )
+  const tightest = sections.reduce((current, candidate) =>
+    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
+      ? candidate
+      : current
+  )
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
@@ -99,7 +105,7 @@ function UsageMetric({
 
   return (
     <span data-usage-window={section.label} className="flex shrink-0 items-center gap-1.5">
-      <span className="text-[10px] text-muted-foreground">{label}</span>
+      {label ? <span className="text-[10px] text-muted-foreground">{label}</span> : null}
       {showBar ? (
         <span data-usage-bar className="h-[5px] w-7 overflow-hidden rounded-full bg-muted">
           <span
@@ -133,7 +139,10 @@ export function UsageRow({
   const name = getProviderDisplayName(p.provider)
   const plan = formatPlanLabel(p.planType)
   const reset = hasUsage ? soonestResetLabel(sections, now) : null
-  const tightest = mode === 'compact' ? getTightestUsageSection(p) : null
+  const cursorBars = cursorUsageSections(p, sections)
+  const showInlineCursorBars = mode === 'compact' && cursorBars.length > 0
+  const tightest = mode === 'compact' && !showInlineCursorBars ? getTightestUsageSection(p) : null
+  const verboseSections = cursorBars.length > 0 ? cursorBars : sections
 
   return (
     <div data-usage-mode={mode} className="flex min-w-0 flex-1 flex-col gap-1">
@@ -156,6 +165,12 @@ export function UsageRow({
               </span>
             ) : null}
           </>
+        ) : showInlineCursorBars ? (
+          <span className="ml-auto flex flex-wrap items-center gap-x-2.5 gap-y-1">
+            {cursorBars.map((section) => (
+              <UsageMetric key={section.label} section={section} label="" display={display} />
+            ))}
+          </span>
         ) : tightest ? (
           <span className="ml-auto">
             <UsageMetric
@@ -171,7 +186,7 @@ export function UsageRow({
       </div>
       {hasUsage && mode === 'verbose' ? (
         <div className="flex flex-wrap items-center gap-x-2.5 gap-y-1 pl-[30px]">
-          {sections.map((section) => (
+          {verboseSections.map((section) => (
             <UsageMetric
               key={section.label}
               section={section}
