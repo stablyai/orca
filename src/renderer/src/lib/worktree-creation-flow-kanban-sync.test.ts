@@ -11,7 +11,7 @@ const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
 const kanbanSyncMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/kanban-workspace-start-sync', () => ({
-  syncKanbanTaskAfterWorkspaceStart: kanbanSyncMock
+  syncKanbanWorktreeAfterStart: kanbanSyncMock
 }))
 
 type TestActiveView = 'terminal' | 'tasks'
@@ -163,11 +163,10 @@ describe('background worktree creation kanban sync', () => {
     )
 
     await vi.waitFor(() => expect(kanbanSyncMock).toHaveBeenCalled())
-    expect(kanbanSyncMock).toHaveBeenCalledWith({
-      linkedWorkItem: expect.objectContaining({ provider: 'kanban', kanbanIdentifier: 'K-1' }),
-      projectName: 'Widgets fix',
-      branch: 'feature-x'
-    })
+    expect(kanbanSyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'kanban', kanbanIdentifier: 'K-1' }),
+      expect.objectContaining({ displayName: 'Widgets fix', branch: 'feature-x' })
+    )
   })
 
   it('never syncs the Kanban card when background creation fails', async () => {

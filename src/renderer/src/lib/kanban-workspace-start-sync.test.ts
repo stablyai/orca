@@ -3,7 +3,8 @@ import type { KanbanMarkStartedResult } from '../../../shared/kanban-types'
 import {
   getKanbanTaskIdFromLinkedItem,
   retryKanbanCardUpdate,
-  syncKanbanTaskAfterWorkspaceStart
+  syncKanbanTaskAfterWorkspaceStart,
+  syncKanbanWorktreeAfterStart
 } from './kanban-workspace-start-sync'
 
 const mocks = vi.hoisted(() => ({
@@ -54,6 +55,22 @@ describe('getKanbanTaskIdFromLinkedItem', () => {
 })
 
 describe('syncKanbanTaskAfterWorkspaceStart', () => {
+  it('maps a created worktree to the task sync payload', async () => {
+    syncKanbanWorktreeAfterStart(
+      { provider: 'kanban', kanbanIdentifier: 'K-1' },
+      { displayName: 'Widgets', branch: 'feature-x' }
+    )
+
+    await vi.waitFor(() =>
+      expect(mocks.markStarted).toHaveBeenCalledWith({
+        taskId: 'K-1',
+        projectName: 'Widgets',
+        branch: 'feature-x',
+        retry: 'all'
+      })
+    )
+  })
+
   it('does not call markStarted for a non-Kanban linked item', async () => {
     await syncKanbanTaskAfterWorkspaceStart({
       linkedWorkItem: { provider: 'github', kanbanIdentifier: undefined },

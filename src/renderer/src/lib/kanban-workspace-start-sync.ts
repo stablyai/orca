@@ -9,6 +9,11 @@ export type KanbanSyncLinkedItem = {
   kanbanIdentifier?: string
 }
 
+type StartedWorktree = {
+  displayName: string
+  branch: string | null
+}
+
 export function getKanbanTaskIdFromLinkedItem(
   linkedWorkItem: KanbanSyncLinkedItem | null | undefined
 ): string | null {
@@ -98,4 +103,15 @@ export async function syncKanbanTaskAfterWorkspaceStart(args: {
     return
   }
   await retryKanbanCardUpdate(taskId, args.projectName, args.branch, 'all')
+}
+
+export function syncKanbanWorktreeAfterStart(
+  linkedWorkItem: KanbanSyncLinkedItem | null | undefined,
+  worktree: StartedWorktree
+): void {
+  void syncKanbanTaskAfterWorkspaceStart({
+    linkedWorkItem,
+    projectName: worktree.displayName,
+    branch: worktree.branch
+  })
 }
