@@ -46,6 +46,40 @@ risk — but the headroom is roughly 2x on time and 1.7x on bytes, not the ~4x t
 parse, and the read rejects, so a busy host loses the table rather than
 receiving a wrong one.
 
+## When a read wedges
+
+The vendored reader pushes every callback onto a module-global queue and drains
+that queue only when the request holding its `requestInProgress` latch
+completes. If a Toolhelp32 snapshot never comes back — an EDR hook, a restricted
+token, a worker that dies — the latch is stuck for the life of the process and
+every later call parks another closure in that queue.
+
+Two guards, and they work together:
+
+- a **3 s deadline** on each read, so a caller gets a rejection instead of a
+  promise that never settles;
+- a **sticky wedge**: once a read misses its deadline and has not called back,
+  the module refuses every further read until that read's callback fires.
+
+The wedge used to be a 30 s cooldown that let one probe through per window. That
+bounded the *rate* of new callbacks but not the total: a permanently wedged
+reader retained one more closure every 30 s for as long as the app ran, and each
+probe also blocked its caller for the full 3 s deadline first. Gating on the
+outstanding read instead bounds retention at exactly one callback, and gives up
+nothing on recovery — a probe queued behind the latch could never have observed
+recovery anyway, whereas the stuck callback firing is the drain itself. On the
+relay's bare addon, which has no queue of its own, it is also what keeps Orca
+from re-entering `CreateToolhelp32Snapshot` while a call is still running.
+
+That last part is not just tidiness. The addon runs each read as a
+`Napi::AsyncWorker`, so a wedged read holds a libuv threadpool slot for good. On
+the relay the JS queue is not there to absorb the retries, so one probe per
+window would have pinned all four default threads inside ~2 minutes — hanging
+every async `fs` and DNS call in that process, not only the process table.
+
+A wedge does **not** engage the PowerShell fallback; see the next section for
+why only absence does.
+
 ## The relay has no binding, and falls back
 
 Relay deployment installs only `node-pty` and `@parcel/watcher` on the remote

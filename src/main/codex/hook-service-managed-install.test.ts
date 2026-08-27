@@ -31,7 +31,7 @@ import { CodexHookService } from './hook-service'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 
 const WINDOWS_POWERSHELL_LAUNCHER =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -WindowStyle Hidden -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 const homes = setupCodexHookHomes(homedirMock, getPathMock)
 
