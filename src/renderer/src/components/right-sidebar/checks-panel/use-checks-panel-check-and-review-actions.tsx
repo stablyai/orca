@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import {
   buildFixBrokenChecksPrompt,
