@@ -87,15 +87,12 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
     return translate('auto.components.status.bar.tooltip.f90b3d7a16', 'Run Kimi to refresh')
   }
   if (p.provider === 'cursor') {
-    switch (p.usageMetadata?.failureKind) {
-      case 'missing-credentials':
-      case 'stale-token':
-        return translate(
-          'auto.components.status.bar.tooltip.cursorSignInRequired',
-          'Sign in required'
-        )
-      default:
-        break
+    const failureKind = p.usageMetadata?.failureKind
+    if (failureKind === 'missing-credentials' || failureKind === 'stale-token') {
+      return translate(
+        'auto.components.status.bar.tooltip.cursorSignInRequired',
+        'Sign in required'
+      )
     }
   }
   if (p.provider === 'claude') {
@@ -154,19 +151,18 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
     )
   }
   if (p.provider === 'cursor') {
-    switch (p.usageMetadata?.failureKind) {
-      case 'missing-credentials':
-        return translate(
-          'auto.components.status.bar.tooltip.cursorMissingCredentials',
-          'Sign in to Cursor from cursor-agent or the Cursor IDE, then retry usage.'
-        )
-      case 'stale-token':
-        return translate(
-          'auto.components.status.bar.tooltip.cursorStaleToken',
-          'Cursor sign-in expired. Sign in again from cursor-agent or the Cursor IDE, then retry usage.'
-        )
-      default:
-        break
+    const failureKind = p.usageMetadata?.failureKind
+    if (failureKind === 'missing-credentials') {
+      return translate(
+        'auto.components.status.bar.tooltip.cursorMissingCredentials',
+        'Sign in to Cursor from cursor-agent or the Cursor IDE, then retry usage.'
+      )
+    }
+    if (failureKind === 'stale-token') {
+      return translate(
+        'auto.components.status.bar.tooltip.cursorStaleToken',
+        'Cursor sign-in expired. Sign in again from cursor-agent or the Cursor IDE, then retry usage.'
+      )
     }
   }
   if (p.provider === 'claude') {
