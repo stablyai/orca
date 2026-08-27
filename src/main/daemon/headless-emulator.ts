@@ -302,6 +302,10 @@ export class HeadlessEmulator {
     return lines
   }
 
+  getKittyKeyboardFlags(): number {
+    return this.getModes().kittyKeyboardFlags ?? 0
+  }
+
   getBufferTailLines(limit: number): string[] {
     const buffer = this.terminal.buffer.active
     const start = Math.max(0, buffer.length - Math.max(0, Math.floor(limit)))

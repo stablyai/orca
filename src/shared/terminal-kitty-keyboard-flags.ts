@@ -8,6 +8,11 @@ export function kittyReportsAllKeysAsEscapeCodes(flags: number): boolean {
   return (flags & KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES) !== 0
 }
 
+// Codex/Claude accept synthesized CSI-u events in disambiguation mode even though physical Enter remains CR.
+export function kittyModeAcceptsSyntheticCsiUEnter(flags: number): boolean {
+  return (flags & (KITTY_DISAMBIGUATE_ESCAPE_CODES | KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES)) !== 0
+}
+
 /**
  * Boundary validation for the optional `kittyKeyboardFlags` snapshot field
  * shared by Electron IPC, remote JSON decoding, and tracker restore.

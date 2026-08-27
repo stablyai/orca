@@ -85,6 +85,8 @@ export const TerminalSend = TerminalHandle.extend({
   interrupt: z.unknown().optional(),
   // Why: older hosts strip this optional intent and retain their direct-send behavior.
   agentPrompt: z.literal(true).optional(),
+  // Why: its text includes the legacy trailing CR, so older hosts preserve exact raw behavior.
+  quickCommand: z.literal(true).optional(),
   resolvedLaunchDraft: z
     .object({
       text: z.string(),

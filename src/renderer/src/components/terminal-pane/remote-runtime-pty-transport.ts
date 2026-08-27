@@ -19,7 +19,10 @@ import type {
   RuntimeTerminalResolvePane,
   RuntimeTerminalSend
 } from '../../../../shared/runtime-types'
-import { TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import {
+  TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
+  TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import { agentResumeHostAuthorityCapability } from '../../runtime/agent-resume-host-authority-capability'
 import {
   isTerminalInputTooLargeWithDeferredMeasurement,
@@ -53,6 +56,7 @@ import {
   createRemoteRuntimePtyTextBatcher,
   createRemoteRuntimeViewportBatcher
 } from './remote-runtime-pty-batching'
+import { createTerminalInputOrderingLane } from './terminal-input-ordering-lane'
 import {
   REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS,
   RemoteRuntimePtyRecoveryState
@@ -83,8 +87,10 @@ import {
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
+const REMOTE_QUICK_COMMAND_SEND_TIMEOUT_MS = 30_000
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
 const REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES = 64
+const REMOTE_RUNTIME_MAX_PENDING_CLAIM_INPUT_BYTES = 256 * 1024
 const HOST_SESSION_ATTACH_POLL_MS = 150
 const HOST_SESSION_REPLACEMENT_POLL_MAX_MS = 1_000
 const HOST_SESSION_ATTACH_TIMEOUT_MS = 15_000
@@ -172,6 +178,46 @@ export function createRemoteRuntimePtyTransport(
   const attachmentReadyWaiters = new Set<(ready: boolean) => void>()
   // Why: transport methods overlap during remounts; only the latest pane lifecycle may install a returned PTY.
   let lifecycleEpoch = 0
+  const lifecycleEpochWaiters = new Set<() => void>()
+
+  function advanceLifecycleEpoch(): number {
+    lifecycleEpoch += 1
+    for (const notify of lifecycleEpochWaiters) {
+      notify()
+    }
+    return lifecycleEpoch
+  }
+
+  function awaitInputTailOrLifecycleChange(
+    promise: Promise<unknown>,
+    expectedLifecycleEpoch: number
+  ): Promise<'settled' | 'changed'> {
+    if (lifecycleEpoch !== expectedLifecycleEpoch) {
+      return Promise.resolve('changed')
+    }
+    return new Promise((resolve) => {
+      let finished = false
+      const finish = (result: 'settled' | 'changed'): void => {
+        if (finished) {
+          return
+        }
+        finished = true
+        lifecycleEpochWaiters.delete(onLifecycleChange)
+        resolve(result)
+      }
+      const onLifecycleChange = (): void => {
+        if (lifecycleEpoch !== expectedLifecycleEpoch) {
+          finish('changed')
+        }
+      }
+      lifecycleEpochWaiters.add(onLifecycleChange)
+      void promise.then(
+        () => finish('settled'),
+        () => finish('settled')
+      )
+      onLifecycleChange()
+    })
+  }
   let handle: string | null = null
   let remotePtyId: string | null = null
   let authoritativeExecutionHostId: ExecutionHostId | null = executionHostId ?? null
@@ -265,8 +311,14 @@ export function createRemoteRuntimePtyTransport(
   })
   let lastRecoveryStateKey = ''
   let pendingViewportClaim = false
+  let unacknowledgedInputTail: {
+    handle: string
+    lifecycleEpoch: number
+    promise: Promise<void>
+  } | null = null
   let pendingClaimInput: { text: string; queryReply: boolean }[] = []
   let pendingClaimQueryReplyCount = 0
+  let pendingClaimInputBytes = 0
   let terminalCreateRetryWait: {
     timer: ReturnType<typeof setTimeout>
     resolve: (continueRetrying: boolean) => void
@@ -348,15 +400,26 @@ export function createRemoteRuntimePtyTransport(
     pendingViewportClaim = false
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
+    pendingClaimInputBytes = 0
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(false)
     }
     viewportClaimReadyWaiters.clear()
   }
-  const queuePendingClaimInput = (text: string, queryReply: boolean): void => {
+  const queuePendingClaimInput = (text: string, queryReply: boolean): boolean => {
+    const textBytes = new TextEncoder().encode(text).byteLength
+    if (textBytes > REMOTE_RUNTIME_MAX_PENDING_CLAIM_INPUT_BYTES) {
+      return false
+    }
+    if (pendingClaimInputBytes + textBytes > REMOTE_RUNTIME_MAX_PENDING_CLAIM_INPUT_BYTES) {
+      return false
+    }
     if (queryReply && pendingClaimQueryReplyCount >= REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES) {
       const oldestReply = pendingClaimInput.findIndex((segment) => segment.queryReply)
       if (oldestReply !== -1) {
+        pendingClaimInputBytes -= new TextEncoder().encode(
+          pendingClaimInput[oldestReply].text
+        ).byteLength
         pendingClaimInput.splice(oldestReply, 1)
         pendingClaimQueryReplyCount -= 1
         const left = pendingClaimInput[oldestReply - 1]
@@ -370,12 +433,15 @@ export function createRemoteRuntimePtyTransport(
     const tail = pendingClaimInput.at(-1)
     if (!queryReply && tail && !tail.queryReply) {
       tail.text += text
-      return
+      pendingClaimInputBytes += textBytes
+      return true
     }
     pendingClaimInput.push({ text, queryReply })
+    pendingClaimInputBytes += textBytes
     if (queryReply) {
       pendingClaimQueryReplyCount += 1
     }
+    return true
   }
   // Why: clearing the claim flag without draining strands the queued bytes.
   const flushPendingClaimInput = (stream: RemoteRuntimeMultiplexedTerminal): void => {
@@ -383,6 +449,7 @@ export function createRemoteRuntimePtyTransport(
     pendingViewportClaim = false
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
+    pendingClaimInputBytes = 0
     for (const segment of queued) {
       stream.sendInput(segment.text)
     }
@@ -1191,6 +1258,7 @@ export function createRemoteRuntimePtyTransport(
         }
         adoptExecutionMetadata(terminal)
         const replacedPtyId = remotePtyId
+        advanceLifecycleEpoch()
         handle = terminal.handle
         remotePtyId = toRemoteRuntimePtyId(terminal.handle, currentRuntimeEnvironmentId)
         unregisterShutdownHandlers(replacedPtyId)
@@ -1236,17 +1304,35 @@ export function createRemoteRuntimePtyTransport(
 
   async function sendInputAcceptedToRuntime(data: string): Promise<boolean> {
     const targetHandle = handle
+    const targetLifecycleEpoch = lifecycleEpoch
     if (!connected || !targetHandle || recoveryBlocksIo()) {
       return false
     }
-    if (!data) {
-      return true
+    const pendingFallback = unacknowledgedInputTail
+    if (
+      pendingFallback &&
+      pendingFallback.handle === targetHandle &&
+      pendingFallback.lifecycleEpoch === targetLifecycleEpoch
+    ) {
+      await awaitInputTailOrLifecycleChange(pendingFallback.promise, targetLifecycleEpoch)
     }
     await inputBatcher.drain()
+    const fallbackAfterValidation = unacknowledgedInputTail
+    if (
+      fallbackAfterValidation &&
+      fallbackAfterValidation.handle === targetHandle &&
+      fallbackAfterValidation.lifecycleEpoch === targetLifecycleEpoch
+    ) {
+      await awaitInputTailOrLifecycleChange(fallbackAfterValidation.promise, targetLifecycleEpoch)
+    }
     if (!connected || handle !== targetHandle || recoveryBlocksIo()) {
       return false
     }
-    if (pendingViewportClaim && !getCurrentMultiplexedStream(targetHandle)) {
+    if (
+      pendingViewportClaim &&
+      !getCurrentMultiplexedStream(targetHandle) &&
+      (data.length > 0 || inputBatcher.hasPending())
+    ) {
       const ready = await new Promise<boolean>((resolve) => {
         viewportClaimReadyWaiters.add(resolve)
       })
@@ -1256,6 +1342,9 @@ export function createRemoteRuntimePtyTransport(
     }
     // Why: normal sendInput may be awaiting size validation; drain it before acknowledged writes so terminal bytes stay ordered.
     const text = `${inputBatcher.takePending()}${data}`
+    if (!text) {
+      return true
+    }
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(text)
       if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -1290,6 +1379,72 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
+  async function sendQuickCommandToRuntime(data: string): Promise<boolean> {
+    const targetHandle = handle
+    const targetLifecycleEpoch = lifecycleEpoch
+    const targetEnvironmentId = currentRuntimeEnvironmentId
+    return inputOrderingLane.enqueueQuickCommand(async () => {
+      if (!connected || !targetHandle || recoveryBlocksIo()) {
+        return false
+      }
+      if (!(await sendInputAcceptedToRuntime(''))) {
+        return false
+      }
+      if (
+        !connected ||
+        handle !== targetHandle ||
+        lifecycleEpoch !== targetLifecycleEpoch ||
+        currentRuntimeEnvironmentId !== targetEnvironmentId ||
+        recoveryBlocksIo()
+      ) {
+        return false
+      }
+      const supportsQuickCommand =
+        useAppStore
+          .getState()
+          .runtimeStatusByEnvironmentId.get(targetEnvironmentId)
+          ?.status?.capabilities?.includes(TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY) === true
+      const legacyPrompt = data.endsWith('\r') ? data.slice(0, -1) : null
+      if (!supportsQuickCommand && !legacyPrompt) {
+        return false
+      }
+      try {
+        const result = await callRuntime<{ send: RuntimeTerminalSend }>(
+          'terminal.send',
+          {
+            terminal: targetHandle,
+            text: supportsQuickCommand ? data : legacyPrompt!,
+            ...(supportsQuickCommand
+              ? { quickCommand: true as const }
+              : { agentPrompt: true as const, enter: true }),
+            client: { id: clientId, type: 'desktop' },
+            ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
+          },
+          REMOTE_QUICK_COMMAND_SEND_TIMEOUT_MS
+        )
+        if (
+          !connected ||
+          handle !== targetHandle ||
+          lifecycleEpoch !== targetLifecycleEpoch ||
+          currentRuntimeEnvironmentId !== targetEnvironmentId ||
+          recoveryBlocksIo()
+        ) {
+          return false
+        }
+        return result.send.accepted === true
+      } catch (error) {
+        if (lifecycleEpoch === targetLifecycleEpoch && handle === targetHandle) {
+          if (runtimeTerminalErrorMessage(error).includes('terminal_input_queue_full')) {
+            notifyWriteUnavailable()
+          } else {
+            handleRemoteTerminalError(error)
+          }
+        }
+        return false
+      }
+    })
+  }
+
   function notifyWriteUnavailable(): void {
     if (!destroyed) {
       storedCallbacks.onWriteUnavailable?.()
@@ -1299,7 +1454,7 @@ export function createRemoteRuntimePtyTransport(
   const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
-    if (!connected || !targetHandle || recoveryBlocksIo()) {
+    if (!connected || !targetHandle || (recoveryBlocksIo() && !queryReply)) {
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
@@ -1308,16 +1463,29 @@ export function createRemoteRuntimePtyTransport(
     }
     if (pendingViewportClaim) {
       // Why: a claim during subscribe/reconnect has no stream record yet; hold its input so the stream emits claim+input in one order.
-      queuePendingClaimInput(text, queryReply)
-      return true
+      return queuePendingClaimInput(text, queryReply)
     }
-    void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
-      terminal: targetHandle,
-      text,
-      client: { id: clientId, type: 'desktop' },
-      ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
-    })
-      .then((result) => {
+    const previous =
+      unacknowledgedInputTail?.handle === targetHandle &&
+      unacknowledgedInputTail.lifecycleEpoch === targetLifecycleEpoch
+        ? unacknowledgedInputTail.promise
+        : Promise.resolve()
+    const current = previous.then(async () => {
+      if (
+        !connected ||
+        lifecycleEpoch !== targetLifecycleEpoch ||
+        handle !== targetHandle ||
+        (recoveryBlocksIo() && !queryReply)
+      ) {
+        return
+      }
+      try {
+        const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
+          terminal: targetHandle,
+          text,
+          client: { id: clientId, type: 'desktop' },
+          ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
+        })
         if (
           connected &&
           lifecycleEpoch === targetLifecycleEpoch &&
@@ -1326,17 +1494,32 @@ export function createRemoteRuntimePtyTransport(
         ) {
           notifyWriteUnavailable()
         }
-      })
-      .catch((error) => {
+      } catch (error) {
         if (lifecycleEpoch !== targetLifecycleEpoch || handle !== targetHandle) {
           return
         }
-        if (runtimeTerminalErrorMessage(error).includes('terminal_not_writable')) {
+        const message = runtimeTerminalErrorMessage(error)
+        if (
+          message.includes('terminal_not_writable') ||
+          message.includes('terminal_input_queue_full')
+        ) {
           notifyWriteUnavailable()
         } else {
           handleRemoteTerminalError(error)
         }
-      })
+      }
+    })
+    unacknowledgedInputTail = {
+      handle: targetHandle,
+      lifecycleEpoch: targetLifecycleEpoch,
+      promise: current
+    }
+    const clearTail = (): void => {
+      if (unacknowledgedInputTail?.promise === current) {
+        unacknowledgedInputTail = null
+      }
+    }
+    void current.then(clearTail, clearTail)
     return true
   }
 
@@ -1344,6 +1527,24 @@ export function createRemoteRuntimePtyTransport(
     REMOTE_TERMINAL_INPUT_FLUSH_MS,
     sendUnacknowledgedInput
   )
+  const inputOrderingLane = createTerminalInputOrderingLane()
+
+  function sendInputAcceptedInOrder(data: string): Promise<boolean> {
+    const targetHandle = handle
+    const targetLifecycleEpoch = lifecycleEpoch
+    return inputOrderingLane.enqueueQuickCommand(async () => {
+      if (
+        !connected ||
+        !targetHandle ||
+        handle !== targetHandle ||
+        lifecycleEpoch !== targetLifecycleEpoch ||
+        recoveryBlocksIo()
+      ) {
+        return false
+      }
+      return sendInputAcceptedToRuntime(data)
+    })
+  }
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
     const targetHandle = handle
@@ -1428,11 +1629,16 @@ export function createRemoteRuntimePtyTransport(
   }
 
   function rebindRemoteTerminalHandle(nextHandle: string): void {
+    advanceLifecycleEpoch()
     clearPublishedHandleWait()
+    clearPendingViewportClaim()
+    inputOrderingLane.clear()
     const replacedPtyId = remotePtyId
     unregisterShutdownHandlers(replacedPtyId)
     handle = nextHandle
     remotePtyId = toRemoteRuntimePtyId(nextHandle, currentRuntimeEnvironmentId)
+    // Bytes queued for the retired handle are no longer safe to replay on its replacement.
+    inputBatcher.clear()
     resetRecoveryReplacementPolicy()
     resetSameHandleEndReuse()
     registerShutdownHandlers(remotePtyId)
@@ -1987,7 +2193,7 @@ export function createRemoteRuntimePtyTransport(
   const transport: PtyTransport = {
     async connect(options) {
       cancelTerminalCreateRetryWait()
-      const connectLifecycleEpoch = ++lifecycleEpoch
+      const connectLifecycleEpoch = advanceLifecycleEpoch()
       const createEnvironmentId = currentRuntimeEnvironmentId
       lastConnectOptions = options
       lastAttachOptions = null
@@ -2221,7 +2427,8 @@ export function createRemoteRuntimePtyTransport(
     },
 
     attach(options) {
-      const attachLifecycleEpoch = ++lifecycleEpoch
+      const attachLifecycleEpoch = advanceLifecycleEpoch()
+      inputOrderingLane.clear()
       const generation = ++attachGeneration
       cancelTerminalCreateRetryWait()
       recovery.cancel()
@@ -2321,7 +2528,7 @@ export function createRemoteRuntimePtyTransport(
     },
 
     disconnect() {
-      lifecycleEpoch += 1
+      advanceLifecycleEpoch()
       attachGeneration += 1
       cancelTerminalCreateRetryWait()
       recovery.cancel()
@@ -2330,6 +2537,7 @@ export function createRemoteRuntimePtyTransport(
       clearPublishedHandleWait()
       inputBatcher.flush()
       inputBatcher.clear()
+      inputOrderingLane.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       if (!connected && !handle) {
@@ -2356,7 +2564,7 @@ export function createRemoteRuntimePtyTransport(
       // Why first: the successor transport owns the PTY after detach, and the batcher flushes
       // below can throw past the census drop — a stranded gauge outlives the transport.
       outputProcessor.disposePendingSideEffectGauge()
-      lifecycleEpoch += 1
+      advanceLifecycleEpoch()
       attachGeneration += 1
       cancelTerminalCreateRetryWait()
       recovery.cancel()
@@ -2365,6 +2573,7 @@ export function createRemoteRuntimePtyTransport(
       clearPublishedHandleWait()
       inputBatcher.flush()
       inputBatcher.clear()
+      inputOrderingLane.clear()
       viewportBatcher.flush()
       outputProcessor.clearAccumulatedState()
       unregisterShutdownHandlers(remotePtyId)
@@ -2378,21 +2587,33 @@ export function createRemoteRuntimePtyTransport(
     },
 
     sendInput(data: string): boolean {
-      if (!connected || !handle || recoveryBlocksIo()) {
-        return false
-      }
-      if (!data) {
-        return true
-      }
-      // Why: literal LF bytes from paste/programmatic input must survive; callers use \r or the enter flag for semantic Enter.
-      return inputBatcher.push(data)
+      const targetHandle = handle
+      const targetLifecycleEpoch = lifecycleEpoch
+      return inputOrderingLane.enqueueInput(() => {
+        if (
+          !connected ||
+          !targetHandle ||
+          handle !== targetHandle ||
+          lifecycleEpoch !== targetLifecycleEpoch ||
+          recoveryBlocksIo()
+        ) {
+          return false
+        }
+        if (!data) {
+          return true
+        }
+        // Why: literal LF bytes from paste/programmatic input must survive; callers use \r or the enter flag for semantic Enter.
+        return inputBatcher.push(data)
+      }, data.length)
     },
 
     // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate(data: string): boolean {
       const targetHandle = handle
       const targetLifecycleEpoch = lifecycleEpoch
-      if (!connected || !targetHandle || recoveryBlocksIo()) {
+      // Query replies remain best-effort writable while recovery is backoff-latched;
+      // lifecycle and handle fencing below still prevents delivery to a replacement PTY.
+      if (!connected || !targetHandle) {
         return false
       }
       if (!data) {
@@ -2401,12 +2622,7 @@ export function createRemoteRuntimePtyTransport(
       // Why: wait behind async validation, but keep the reply as its own host-classifiable write.
       if (inputBatcher.hasPendingValidation()) {
         inputBatcher.enqueueAfterValidation(() => {
-          if (
-            !connected ||
-            lifecycleEpoch !== targetLifecycleEpoch ||
-            handle !== targetHandle ||
-            recoveryBlocksIo()
-          ) {
+          if (!connected || lifecycleEpoch !== targetLifecycleEpoch || handle !== targetHandle) {
             return
           }
           const pending = inputBatcher.takePending()
@@ -2418,13 +2634,23 @@ export function createRemoteRuntimePtyTransport(
         return true
       }
       const pending = inputBatcher.takePending()
-      if (pending && !sendUnacknowledgedInput(pending)) {
-        return false
+      if (pending) {
+        // Streams and viewport claims preserve query replies as distinct input
+        // frames; only the legacy RPC fallback needs one combined write.
+        if (getCurrentMultiplexedStream(targetHandle) || pendingViewportClaim) {
+          if (!sendUnacknowledgedInput(pending)) {
+            return false
+          }
+          return sendUnacknowledgedInput(data, true)
+        }
+        return sendUnacknowledgedInput(`${pending}${data}`)
       }
       return sendUnacknowledgedInput(data, true)
     },
 
-    sendInputAccepted: sendInputAcceptedToRuntime,
+    sendInputAccepted: sendInputAcceptedInOrder,
+
+    sendQuickCommand: sendQuickCommandToRuntime,
 
     claimViewport(cols: number, rows: number): boolean {
       if (!connected || !handle) {
@@ -2588,6 +2814,7 @@ export function createRemoteRuntimePtyTransport(
       }
       recovery.dispose()
       inputBatcher.clear()
+      inputOrderingLane.clear()
       viewportBatcher.clear()
     }
   }

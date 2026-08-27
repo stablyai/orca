@@ -405,6 +405,7 @@ describe('HeadlessEmulator', () => {
 
       await emulator.write('\x1b[>1u')
       expect(emulator.getSnapshot().modes.kittyKeyboardFlags).toBe(1)
+      expect(emulator.getKittyKeyboardFlags()).toBe(1)
     })
 
     it('snapshots the active-buffer kitty flags (alt screen keeps its own set)', async () => {

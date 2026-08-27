@@ -98,6 +98,7 @@ import { MAX_QUICK_COMMANDS } from '../../shared/terminal-quick-commands'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
+  AGENT_PROMPT_CSI_U_SUBMIT,
   buildAgentPromptPasteBytes,
   getAgentPromptSubmitDelayMs,
   getTerminalPasteIngestMs
@@ -13660,6 +13661,87 @@ describe('OrcaRuntimeService', () => {
     expect(afterWrite).toHaveBeenCalledOnce()
   })
 
+  it('does not write a suffix after cancellation during the async write guard', async () => {
+    const writes: string[] = []
+    let releaseGuard: () => void = () => {}
+    const guardGate = new Promise<void>((resolve) => {
+      releaseGuard = resolve
+    })
+    const beforeWrite = vi.fn(async () => guardGate)
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
+      write: (_ptyId: string, data: string) => {
+        writes.push(data)
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => null
+    })
+    runtime.attachWindow(1)
+    runtime.syncWindowGraph(1, {
+      tabs: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          title: 'terminal',
+          activeLeafId: 'pane:1',
+          layout: null
+        }
+      ],
+      leaves: [
+        {
+          tabId: 'tab-1',
+          worktreeId: TEST_WORKTREE_ID,
+          leafId: 'pane:1',
+          paneRuntimeId: 1,
+          ptyId: 'pty-1'
+        }
+      ]
+    })
+    const [terminal] = (await runtime.listTerminals()).terminals
+    const controller = new AbortController()
+    const pending = runtime.sendTerminal(
+      terminal.handle,
+      { enter: true },
+      { beforeWrite, signal: controller.signal }
+    )
+
+    await vi.waitFor(() => expect(beforeWrite).toHaveBeenCalledOnce())
+    controller.abort()
+    releaseGuard()
+
+    await expect(pending).rejects.toThrow('request_aborted')
+    expect(writes).toEqual([])
+  })
+
+  it('rejects queued input from an older same-id PTY generation', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    let releaseFirst: () => void = () => {}
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve
+    })
+    let firstStarted: () => void = () => {}
+    const firstStartedPromise = new Promise<void>((resolve) => {
+      firstStarted = resolve
+    })
+    const first = runtime.enqueueTerminalInputWrite('pty-queue', async () => {
+      firstStarted()
+      await firstGate
+    })
+    await firstStartedPromise
+    const secondWrite = vi.fn(async () => undefined)
+    const second = runtime.enqueueTerminalInputWrite('pty-queue', secondWrite)
+
+    runtime.onPtyExit('pty-queue', 0)
+    runtime.onPtySpawned('pty-queue', undefined, { awaitsRegistration: false })
+    releaseFirst()
+
+    await first
+    await expect(second).rejects.toThrow('terminal_handle_stale')
+    expect(secondWrite).not.toHaveBeenCalled()
+  })
+
   it('creates visible terminal sessions without asking the renderer to focus a tab', async () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'pty-bg' })
     const createTerminal = vi.fn()
@@ -17507,6 +17589,38 @@ describe('OrcaRuntimeService', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('uses negotiated CSI-u submit for a supported agent TUI', async () => {
+    const writes: string[] = []
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setPtyController({
+      spawn: vi.fn().mockResolvedValue({ id: 'pty-negotiated' }),
+      write: (_ptyId, data) => {
+        writes.push(data)
+        if (data.includes(AGENT_PROMPT_CSI_U_SUBMIT)) {
+          runtime.onPtyData('pty-negotiated', 'agent accepted', Date.now())
+        }
+        return true
+      },
+      kill: () => true,
+      getForegroundProcess: async () => 'codex',
+      confirmForegroundProcess: async () => 'codex'
+    })
+    const { handle } = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
+      launchAgent: 'codex'
+    })
+    runtime.onPtyData('pty-negotiated', '\x1b[>1u', Date.now())
+    runtime.onPtyData('pty-negotiated', '\x1b]0;Codex working\x07', Date.now())
+    await new Promise<void>((resolve) => setImmediate(resolve))
+    await expect(runtime.isTerminalRunningSettledPromptAgent(handle)).resolves.toBe(true)
+
+    await expect(
+      runtime.sendTerminalAgentPrompt(handle, 'review this', { preferProtocolSubmit: true })
+    ).resolves.toMatchObject({ accepted: true })
+    expect(writes).toEqual([
+      `${buildAgentPromptPasteBytes('review this')}${AGENT_PROMPT_CSI_U_SUBMIT}`
+    ])
   })
 
   it.each(['claude', 'codex'] as const)(

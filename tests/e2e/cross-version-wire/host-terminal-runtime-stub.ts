@@ -152,6 +152,8 @@ export function createHostTerminalRuntimeStub(
       }
       return { accepted: true }
     },
+    enqueueTerminalInputWrite: async <T>(_ptyId: string, write: () => Promise<T>): Promise<T> =>
+      write(),
     beginMobileInputFloor: () => ({ commit: () => {}, rollback: () => {} }),
     isTerminalInputLocked: () => false,
     getTerminalInputLock: () => null,

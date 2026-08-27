@@ -1,5 +1,5 @@
 import { execFile as execFileCb, execFileSync } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { promisify } from 'node:util'
@@ -10,7 +10,11 @@ import {
   recognizeAgentProcessFromCommandLine
 } from '../shared/agent-process-recognition'
 import { getFirstCommandToken } from '../shared/command-token-scanner'
-import { getProcessTableSnapshot, type ProcessTableRow } from '../shared/process-table-snapshot'
+import {
+  getFreshProcessTableSnapshot,
+  getProcessTableSnapshot,
+  type ProcessTableRow
+} from '../shared/process-table-snapshot'
 import {
   resolveOuterWrapperForegroundProcess,
   shouldInspectOuterWrapperForegroundProcess
@@ -20,6 +24,8 @@ import {
   resolveWindowsAgentForegroundProcess,
   shouldInspectWindowsAgentForeground
 } from '../main/providers/windows-agent-foreground-process'
+
+export { listShellProfiles } from './shell-profile-list'
 
 const execFile = promisify(execFileCb)
 
@@ -233,10 +239,11 @@ function candidateMatchesFallbackWrapper(
 
 async function getRecognizedForegroundDescendant(
   pid: number,
-  fallbackProcess?: string | null
+  fallbackProcess?: string | null,
+  fresh = false
 ): Promise<string | null> {
   try {
-    const rows = await getProcessTableSnapshot()
+    const rows = await (fresh ? getFreshProcessTableSnapshot() : getProcessTableSnapshot())
     const root = rows.find((row) => row.pid === pid)
     const candidates = collectDescendants(rows, pid).sort(
       (a, b) => candidateScore(b) - candidateScore(a)
@@ -281,18 +288,30 @@ async function getRecognizedForegroundDescendant(
  */
 export async function getForegroundProcessName(
   pid: number,
-  fallbackProcess?: string | null
+  fallbackProcess?: string | null,
+  options: { fresh?: boolean } = {}
 ): Promise<string | null> {
   if (fallbackProcess) {
     const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
     if (fallbackRecognition) {
+      if (options.fresh) {
+        // Fresh confirmation must prove the cached agent still owns the PTY.
+        if (process.platform === 'win32') {
+          return (
+            (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, { fresh: true })) ??
+            null
+          )
+        }
+        return await getRecognizedForegroundDescendant(pid, fallbackProcess, true)
+      }
       // Why: node-pty can report OMP's wrapped Pi; enrich only that ambiguous
       // fallback so authoritative OMP reads keep the zero-subprocess fast path.
       if (shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) {
         if (process.platform === 'win32') {
           return (
-            (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ??
-            fallbackRecognition.processName
+            (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {
+              fresh: options.fresh
+            })) ?? fallbackRecognition.processName
           )
         }
         return (
@@ -307,14 +326,20 @@ export async function getForegroundProcessName(
         return fallbackProcess
       }
       return (
-        (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {})) ?? fallbackProcess
+        (await resolveWindowsAgentForegroundProcess(pid, fallbackProcess, {
+          fresh: options.fresh
+        })) ?? fallbackProcess
       )
     }
     if (!isShellProcess(fallbackProcess) && !isAgentForegroundWrapperProcess(fallbackProcess)) {
       return fallbackProcess
     }
   }
-  const recognized = await getRecognizedForegroundDescendant(pid, fallbackProcess)
+  const recognized = await getRecognizedForegroundDescendant(
+    pid,
+    fallbackProcess,
+    options.fresh === true
+  )
   if (recognized) {
     return recognized
   }
@@ -330,43 +355,4 @@ export async function getForegroundProcessName(
   } catch {
     return null
   }
-}
-
-/**
- * List available shell profiles from /etc/shells (or known fallbacks).
- */
-export function listShellProfiles(): { name: string; path: string }[] {
-  const profiles: { name: string; path: string }[] = []
-  const seen = new Set<string>()
-
-  try {
-    const content = readFileSync('/etc/shells', 'utf-8')
-    for (const line of content.split('\n')) {
-      const trimmed = line.trim()
-      if (!trimmed || trimmed.startsWith('#')) {
-        continue
-      }
-      if (!existsSync(trimmed)) {
-        continue
-      }
-      if (seen.has(trimmed)) {
-        continue
-      }
-      seen.add(trimmed)
-
-      const name = trimmed.split('/').pop() || trimmed
-      profiles.push({ name, path: trimmed })
-    }
-  } catch {
-    // /etc/shells may not exist on all systems; fall back to known shells
-    for (const candidate of ['/bin/bash', '/bin/zsh', '/bin/sh']) {
-      if (existsSync(candidate) && !seen.has(candidate)) {
-        seen.add(candidate)
-        const name = candidate.split('/').pop()!
-        profiles.push({ name, path: candidate })
-      }
-    }
-  }
-
-  return profiles
 }

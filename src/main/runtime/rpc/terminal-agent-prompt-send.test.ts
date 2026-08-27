@@ -45,7 +45,8 @@ describe('terminal agent prompt send RPC', () => {
     expect(response.ok).toBe(true)
     expect(runtime.isTerminalRunningSettledPromptAgent).toHaveBeenCalledWith('terminal-1')
     expect(sendTerminalAgentPrompt).toHaveBeenCalledWith('terminal-1', 'review this change', {
-      beforeWrite: undefined,
+      beforeWrite: expect.any(Function),
+      preferProtocolSubmit: true,
       signal: undefined
     })
     expect(sendTerminal).not.toHaveBeenCalled()
@@ -81,7 +82,7 @@ describe('terminal agent prompt send RPC', () => {
     expect(sendTerminal).toHaveBeenCalledWith(
       'terminal-1',
       { text: 'echo x', enter: true, interrupt: false },
-      { beforeWrite: undefined, signal: undefined }
+      { beforeWrite: expect.any(Function), signal: undefined }
     )
     expect(sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
@@ -113,5 +114,49 @@ describe('terminal agent prompt send RPC', () => {
 
     expect(response.ok).toBe(true)
     expect(sendTerminal.mock.calls[0][2].signal).toBe(controller.signal)
+  })
+
+  it('classifies agent prompts after queue admission', async () => {
+    let releaseWrite!: () => void
+    const writeReady = new Promise<void>((resolve) => {
+      releaseWrite = resolve
+    })
+    const enqueueTerminalInputWrite = vi
+      .fn()
+      .mockImplementation(async <T>(_ptyId: string, write: () => Promise<T>): Promise<T> => {
+        await writeReady
+        return write()
+      }) as OrcaRuntimeService['enqueueTerminalInputWrite']
+    const isSettledAgent = vi.fn().mockResolvedValue(false)
+    const sendTerminal = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 7
+    })
+    const runtime = makeRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      enqueueTerminalInputWrite,
+      isTerminalRunningSettledPromptAgent: isSettledAgent,
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const request = dispatcher.dispatch(
+      makeRequest({
+        terminal: 'terminal-1',
+        text: 'echo x',
+        enter: true,
+        agentPrompt: true,
+        client: { id: 'orca-cli', type: 'desktop' }
+      })
+    )
+    await vi.waitFor(() => expect(enqueueTerminalInputWrite).toHaveBeenCalledOnce())
+    expect(isSettledAgent).not.toHaveBeenCalled()
+
+    releaseWrite()
+    await expect(request).resolves.toMatchObject({ ok: true })
+    expect(isSettledAgent).toHaveBeenCalledWith('terminal-1')
+    expect(sendTerminal).toHaveBeenCalledOnce()
   })
 })

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   AGENT_PROMPT_BRACKETED_PASTE_END,
   AGENT_PROMPT_BRACKETED_PASTE_START,
+  AGENT_PROMPT_CSI_U_SUBMIT,
   buildAgentPromptPasteBytes,
   buildAgentPromptSubmitBytes,
   getAgentPromptSubmitDelayMs,
@@ -14,6 +15,10 @@ const BEGIN = AGENT_PROMPT_BRACKETED_PASTE_START
 const END = AGENT_PROMPT_BRACKETED_PASTE_END
 
 describe('agent prompt injection bytes', () => {
+  it('encodes negotiated Enter as CSI-u', () => {
+    expect(AGENT_PROMPT_CSI_U_SUBMIT).toBe('\x1b[13u')
+  })
+
   it('always bracket-pastes prompts so agent TUIs treat newlines as content', () => {
     expect(buildAgentPromptPasteBytes('line one\nline two')).toBe(
       `${BEGIN}line one\nline two${END}`

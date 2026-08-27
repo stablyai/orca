@@ -10,6 +10,7 @@ import {
   TERMINAL_INPUT_MAX_BYTES
 } from '../../../../shared/terminal-input'
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clipboard-text'
+import { TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   createRemoteRuntimeTransportMocks,
   type MultiplexSubscriptionCallbacks
@@ -38,8 +39,20 @@ const {
 })
 
 describe('createRemoteRuntimePtyTransport', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     resetRemoteRuntimeTransport()
+    const { useAppStore } = await import('@/store')
+    useAppStore.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        [
+          'env-1',
+          {
+            checkedAt: Date.now(),
+            status: { capabilities: [TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY] }
+          } as never
+        ]
+      ])
+    })
   })
 
   it('resubscribes with the latest pane viewport after the remote stream closes', async () => {
@@ -359,6 +372,154 @@ describe('createRemoteRuntimePtyTransport', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('flushes queued input before sending typed Quick Command intent', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            send: {
+              handle: 'terminal-1',
+              accepted: true,
+              bytesWritten: args.params.text.length
+            }
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+    runtimeCall.mockClear()
+    subscriptionSendBinary.mockClear()
+
+    expect(transport.sendInput('draft')).toBe(true)
+    await expect(transport.sendQuickCommand?.('echo x\r')).resolves.toBe(true)
+
+    const sendCalls = runtimeCall.mock.calls.filter((call) => call[0].method === 'terminal.send')
+    expect(sendCalls.map((call) => call[0].params)).toEqual([
+      {
+        terminal: 'terminal-1',
+        text: 'draft',
+        client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
+        viewport: { cols: 80, rows: 24 },
+        claimViewport: true
+      },
+      {
+        terminal: 'terminal-1',
+        text: 'echo x\r',
+        quickCommand: true,
+        client: { id: expect.stringMatching(/^desktop:tab-1:pane:1:/), type: 'desktop' },
+        viewport: { cols: 80, rows: 24 },
+        claimViewport: true
+      }
+    ])
+    expect(subscriptionSendBinary).not.toHaveBeenCalled()
+  })
+
+  it('uses legacy agent-prompt intent when the remote host lacks Quick Command support', async () => {
+    const { useAppStore } = await import('@/store')
+    useAppStore.setState({
+      runtimeStatusByEnvironmentId: new Map([
+        ['env-1', { checkedAt: Date.now(), status: { capabilities: [] } } as never]
+      ])
+    })
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      return Promise.resolve({
+        ok: true,
+        result: {
+          send: { handle: 'terminal-1', accepted: true, bytesWritten: args.params.text.length }
+        }
+      })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    runtimeCall.mockClear()
+
+    await expect(transport.sendQuickCommand?.('echo x\r')).resolves.toBe(true)
+
+    expect(
+      runtimeCall.mock.calls.find(([call]) => call.method === 'terminal.send')?.[0].params
+    ).toMatchObject({
+      terminal: 'terminal-1',
+      text: 'echo x',
+      agentPrompt: true,
+      enter: true
+    })
+  })
+
+  it('fences trailing input and repeated Quick Commands behind the first remote submit', async () => {
+    let releaseFirst!: () => void
+    let quickCommandCount = 0
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send' && args.params.quickCommand === true) {
+        quickCommandCount += 1
+        if (quickCommandCount === 1) {
+          return new Promise((resolve) => {
+            releaseFirst = () =>
+              resolve({
+                ok: true,
+                result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 4 } }
+              })
+          })
+        }
+        return Promise.resolve({
+          ok: true,
+          result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 4 } }
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } }
+      })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+    runtimeCall.mockClear()
+
+    const first = transport.sendQuickCommand?.('one\r')
+    expect(transport.sendInput('typed-after-one')).toBe(true)
+    const second = transport.sendQuickCommand?.('two\r')
+    await vi.waitFor(() =>
+      expect(
+        runtimeCall.mock.calls.filter(([call]) => call.method === 'terminal.send')
+      ).toHaveLength(1)
+    )
+
+    releaseFirst()
+    await expect(first).resolves.toBe(true)
+    await expect(second).resolves.toBe(true)
+    const sends = runtimeCall.mock.calls
+      .map(([call]) => call)
+      .filter((call) => call.method === 'terminal.send')
+    expect(sends.map((call) => call.params.text)).toEqual(['one\r', 'typed-after-one', 'two\r'])
   })
 
   it('returns false when acknowledged terminal input is rejected by the runtime', async () => {

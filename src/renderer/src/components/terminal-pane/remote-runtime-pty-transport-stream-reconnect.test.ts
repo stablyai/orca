@@ -14,6 +14,7 @@ let subscriptionCallbacks: MultiplexSubscriptionCallbacks = null
 let resolvedPaneHandle = 'terminal-1'
 
 const {
+  runtimeCall,
   runtimeSubscribe,
   subscriptionSendBinary,
   emitMultiplexReady,
@@ -568,6 +569,56 @@ describe('createRemoteRuntimePtyTransport', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('does not block an empty Quick Command flush on an uninstalled viewport claim', async () => {
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    runtimeCall.mockImplementation(async (request: { method: string }) => {
+      if (request.method === 'terminal.send') {
+        return {
+          ok: true,
+          result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 7 } }
+        }
+      }
+      if (request.method === 'terminal.resolvePane') {
+        return {
+          ok: true,
+          result: {
+            terminal: {
+              handle: 'terminal-1',
+              tabId: 'tab-1',
+              leafId: 'pane:1',
+              worktreeId: 'wt-1'
+            }
+          }
+        }
+      }
+      return { ok: true, result: {} }
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:terminal-1',
+      cols: 80,
+      rows: 24,
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+    expect(transport.claimViewport?.(101, 33)).toBe(true)
+
+    await expect(transport.sendQuickCommand?.('echo x\r')).resolves.toBe(true)
+    expect(runtimeCall).toHaveBeenCalledWith(expect.objectContaining({ method: 'terminal.send' }))
+    transport.destroy?.()
   })
 
   it('releases pending claimed input when reconnect subscription fails', async () => {

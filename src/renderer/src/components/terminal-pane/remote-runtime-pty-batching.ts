@@ -11,6 +11,7 @@ export type RemoteRuntimePtyBatcher = {
   hasPendingValidation: () => boolean
   enqueueAfterValidation: (action: () => void) => void
   drain: () => Promise<void>
+  hasPending: () => boolean
   takePending: () => string
   flush: () => void
   clear: () => void
@@ -171,6 +172,7 @@ export function createRemoteRuntimePtyTextBatcher(
     hasPendingValidation: (): boolean => validationTail !== null,
     enqueueAfterValidation,
     drain,
+    hasPending: (): boolean => pending.length > 0,
     takePending,
     flush,
     clear

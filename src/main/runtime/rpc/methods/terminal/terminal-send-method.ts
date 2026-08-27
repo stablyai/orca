@@ -22,6 +22,23 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       await assertTerminalSendTextWithinLimit(params.text)
       await assertTerminalSendTextWithinLimit(params.resolvedLaunchDraft?.text)
       const queryReplyClientId = clientId ?? params.client?.id
+      const quickCommandPrompt =
+        params.quickCommand === true && params.text?.endsWith('\r')
+          ? params.text.slice(0, -1)
+          : null
+      if (
+        params.quickCommand === true &&
+        (!quickCommandPrompt ||
+          params.enter !== undefined ||
+          params.interrupt !== undefined ||
+          params.agentPrompt !== undefined ||
+          params.resolvedLaunchDraft !== undefined ||
+          params.requireAgentStatus !== undefined ||
+          params.inputKind !== undefined ||
+          params.client?.type !== 'desktop')
+      ) {
+        throw new InvalidArgumentError('Invalid terminal Quick Command')
+      }
       if (
         params.inputKind === 'query-reply' &&
         (!params.text ||
@@ -29,6 +46,7 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
           params.enter === true ||
           params.interrupt === true ||
           params.agentPrompt === true ||
+          params.quickCommand === true ||
           params.requireAgentStatus !== undefined ||
           params.client?.type !== 'mobile' ||
           !queryReplyClientId ||
@@ -145,14 +163,23 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
       }
       const mobileFloorClientId = resolveMobileFloorClientId(driver, params.client)
       const mobileFloorClaim: MobileInputFloorClaimHolder = { current: null }
-      const beforeWrite = assertSendPreconditions
-      const useSettledAgentPrompt =
+      const isCliAgentPrompt =
         params.agentPrompt === true &&
         hasText &&
         params.enter === true &&
         params.interrupt !== true &&
-        params.client?.type === 'desktop' &&
-        (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+        params.client?.type === 'desktop'
+      const quickCommandBeforeWrite =
+        (params.quickCommand === true || isCliAgentPrompt) && !assertSendPreconditions
+          ? async (ptyId: string): Promise<void> => {
+              assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
+              if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+                throw new Error('terminal_guard_not_writable')
+              }
+            }
+          : undefined
+      const beforeWrite = assertSendPreconditions ?? quickCommandBeforeWrite
+      const settledAgentPrompt = quickCommandPrompt ?? (isCliAgentPrompt ? params.text! : null)
       const reserveWrite =
         params.inputKind !== 'query-reply' && leaf?.ptyId && mobileFloorClientId
           ? (ptyId: string): void => {
@@ -165,27 +192,43 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
           : undefined
       let result
       try {
-        result = useSettledAgentPrompt
-          ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
-              beforeWrite,
-              signal
-            })
-          : await runtime.sendTerminal(
-              params.terminal,
-              {
-                text: params.text,
-                enter: params.enter === true,
-                interrupt: params.interrupt === true
-              },
-              {
+        const write = async () => {
+          const useSettledAgentPrompt =
+            settledAgentPrompt !== null &&
+            (await runtime.isTerminalRunningSettledPromptAgent(params.terminal))
+          return useSettledAgentPrompt
+            ? runtime.sendTerminalAgentPrompt(params.terminal, settledAgentPrompt!, {
                 beforeWrite,
                 signal,
-                ...(reserveWrite ? { reserveWrite } : {}),
-                ...(params.inputKind !== 'query-reply' && mobileFloorClientId
-                  ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
-                  : {})
-              }
-            )
+                preferProtocolSubmit: true
+              })
+            : runtime.sendTerminal(
+                params.terminal,
+                {
+                  text: params.text,
+                  enter: params.enter === true,
+                  interrupt: params.interrupt === true
+                },
+                {
+                  beforeWrite,
+                  signal,
+                  ...(reserveWrite ? { reserveWrite } : {}),
+                  ...(params.inputKind !== 'query-reply' && mobileFloorClientId
+                    ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }
+                    : {})
+                }
+              )
+        }
+        if (leaf?.ptyId && runtime.enqueueTerminalInputWrite) {
+          const queued = runtime.enqueueTerminalInputWrite(
+            leaf.ptyId,
+            write,
+            typeof params.text === 'string' ? Buffer.byteLength(params.text, 'utf8') : 0
+          )
+          result = queued ? await queued : await write()
+        } else {
+          result = await write()
+        }
       } catch (error) {
         mobileFloorClaim.current?.rollback()
         const refusedReason = getTerminalSendGuardRefusedReason(error)

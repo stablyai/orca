@@ -11693,6 +11693,118 @@
       "demotionRule": "Keep experimental or demote to protection none if direct shell/mobile/query input is reframed, an unrecognized target receives bracketed paste, a prompt can emit duplicate Enter, mixed-version decoding rejects the optional field, or the deterministic fake-composer candidate requires a rescue send."
     },
     {
+      "id": "terminal-input.quick-command-agent-submit",
+      "title": "Quick Commands submit recognized agent composers without changing raw terminal input",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-input",
+      "layer": "renderer-transport-rpc-runtime-pty-contract",
+      "surfaces": [
+        "Quick Commands context menu",
+        "local and paired PTY transports",
+        "terminal.send RPC",
+        "agent prompt injection",
+        "PTY writes"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "A source-built macOS Electron journey covers the visible Quick Commands context-menu path, a real PTY, and a fake Codex that explicitly negotiates CSI-u keyboard input. Focused units prove zero-wait negotiated Codex/Claude submission, fresh foreground ownership, exact CSI-u bytes, the unchanged conservative fallback, multiline and repeated prompts, exact raw shell/non-target bytes, insert-only semantics, local input draining, bounded trailing/repeated local and paired ordering, worktree/folder ownership, stale pane refusal, mobile-floor recheck before write, mixed-version field stripping, and invalid intent shapes. Direct SSH units prove that fresh foreground confirmation executes on the relay host; a live SSH artifact remains outstanding.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/14525",
+        "https://github.com/stablyai/orca/pull/14608",
+        "https://github.com/stablyai/orca/pull/14962"
+      ],
+      "invariant": "A terminal Quick Command configured to append Enter submits exactly once only when a fresh authoritative foreground read proves the exact target is Claude or Codex. If that exact PTY also proves active Kitty keyboard negotiation, the runtime writes one bracketed-paste frame immediately followed by exactly one CSI-u Enter event without waiting for redraw; otherwise the existing marker-gated quiet/hard fallback remains unchanged. Shells, other terminal applications, insert-only commands, and multiline command flattening retain their prior raw byte contracts.",
+      "oracle": "Launch a fake Codex that emits CSI > 1 u and treats CSI-u Enter after a complete bracketed-paste frame as its submission barrier. Invoke the configured command through the visible terminal context menu. The fake PTY must receive exact bracketed-paste bytes followed immediately by ESC [ 13 u, require no timer or redraw before acceptance, report one Enter and one submission, and render ORCA_TERMINAL_SEND_REPORT ok. Runtime tests independently require fresh Claude/Codex foreground confirmation plus Kitty keyboard negotiation that accepts a synthesized CSI-u Enter parser event for zero-wait submission; absent confirmation or incompatible flags retain the existing marker-gated quiet/hard fallback. Multiline and repeated prompts retain exact framing. With the protocol path explicitly disabled, the identical E2E oracle must receive one raw command-plus-CR stream, report one premature Enter, and no submission. Focused RPC and transport tests retain shell/non-target, insert-only, multiline flattening, ordered local/paired input, and old-host contracts.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/headless-emulator.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-agent-prompt-send.test.ts src/relay/pty-handler-spawn-admission.test.ts src/relay/pty-shell-utils.test.ts src/renderer/src/runtime/runtime-terminal-quick-command.test.ts src/renderer/src/components/terminal-pane/terminal-quick-command-dispatch.test.ts src/renderer/src/components/terminal-pane/terminal-input-ordering-lane.test.ts src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts src/shared/terminal-quick-commands.test.ts src/shared/agent-prompt-injection.test.ts",
+        "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-quick-command-agent-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+        "pnpm exec electron-vite build --mode e2e && ORCA_E2E_EXPECT_QUICK_COMMAND_STALLED=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-quick-command-agent-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/main/daemon/headless-emulator.test.ts",
+        "src/main/providers/ssh-pty-provider.test.ts",
+        "src/main/runtime/orca-runtime.test.ts",
+        "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
+        "src/relay/pty-handler-spawn-admission.test.ts",
+        "src/relay/pty-shell-utils.test.ts",
+        "src/renderer/src/runtime/runtime-terminal-quick-command.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-quick-command-dispatch.test.ts",
+        "src/renderer/src/components/terminal-pane/terminal-input-ordering-lane.test.ts",
+        "src/renderer/src/components/terminal-pane/pty-transport-input-write.test.ts",
+        "src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-input-coalescing.test.ts",
+        "src/shared/terminal-quick-commands.test.ts",
+        "src/shared/agent-prompt-injection.test.ts",
+        "tests/e2e/terminal-quick-command-agent-submit.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/orca-runtime.test.ts",
+          "assertions": [
+            "freshly confirmed Codex and Claude with negotiated keyboard flags submit as paste plus CSI-u with zero timer advancement",
+            "missing foreground confirmation or keyboard negotiation retains the existing conservative settlement path",
+            "multiline and repeated prompts retain exact zero-wait framing"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/terminal-agent-prompt-send.test.ts",
+          "assertions": [
+            "recognized agent targets use settled prompt delivery without the legacy CR",
+            "shell and non-target fallback retains exact raw command-plus-CR bytes",
+            "older hosts strip optional intent while retaining the raw payload"
+          ]
+        },
+        {
+          "file": "tests/e2e/terminal-quick-command-agent-submit.spec.ts",
+          "assertions": [
+            "visible context-menu invocation emits concatenated bracketed paste plus CSI-u Enter bytes in order",
+            "the negotiated fake composer reports zero premature Enter and exactly one submission without a redraw wait",
+            "the rendered terminal shows the submission marker",
+            "the explicit disabled control retains raw command-plus-CR and does not submit"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-26",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec electron-vite build --mode e2e && SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-quick-command-agent-submit.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "durationSeconds": 18.2,
+          "summary": "Candidate passed three exact-build runs, each receiving one PTY chunk containing bracketed paste plus CSI-u Enter, with prematureEnters=0, receivedEnters=1, submitted=true, and the visible success marker. Latest main and the candidate with dispatch disabled each received one raw command-plus-CR chunk with prematureEnters=1 and submitted=false."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 90,
+        "scope": "focused contracts plus one isolated Electron Quick Commands/PTY journey"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "The finalized candidate oracle passed three consecutive isolated source-built Electron launches; CI history is not yet collected."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Latest main and the candidate with the fix disabled were deterministically red with one premature Enter. The candidate was green with one exact framed-paste-plus-CSI-u chunk and a visible submission marker in three consecutive runs. Physical Windows and live SSH/paired journeys remain outstanding."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Only append-Enter Quick Commands add two bounded sequential runtime calls on local/SSH transports (exact-pane resolution then terminal.send); environment targets may also perform the existing coalesced status.get compatibility check. A cheap foreground read rejects shells and non-targets without confirmation. Negotiated Claude/Codex targets add one fresh host-owned confirmation; paired transports reuse their established handle. The owning runtime then awaits only its already-maintained per-PTY emulator write chain; Enter-compatible Kitty flags select one immediate paste-plus-CSI-u write with no timer or screen scan. Unknown flags retain the existing bounded PTY-local render listener and fallback. Direct SSH adds one request method; an older relay rejects it and the runtime fails closed to the existing fallback. There is no polling, retry, hot-path per-chunk screen scan, global session listing, provider fanout, or renderer work."
+      },
+      "promotionCriteria": [
+        "Collect source-built physical Windows plus live SSH and paired-runtime Quick Command journeys.",
+        "Collect stable CI and flake history for the finalized fake-composer oracle."
+      ],
+      "knownGaps": [
+        "No physical Windows, live Linux, SSH, or paired-runtime E2E artifact is attached.",
+        "Live account-backed Claude and Codex were not used; the deterministic fake exercises their shared foreground and composer contract.",
+        "An old host safely retains legacy raw command-plus-CR behavior until that host updates."
+      ],
+      "demotionRule": "Keep experimental or demote to protection none if a shell/non-target is reframed, insert-only input submits, exact pane ownership can drift, the fake composer requires timing sleeps or rescue input, mixed-version decoding rejects intent, or one invocation can emit duplicate Enter."
+    },
+    {
       "id": "terminal-input.agent-prompt-injection",
       "title": "Orchestration agent prompts arrive as bracketed paste before submit",
       "maturity": "experimental",

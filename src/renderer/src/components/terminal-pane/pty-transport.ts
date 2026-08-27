@@ -5,6 +5,8 @@ import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
 import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
+import { sendRuntimeTerminalQuickCommand } from '../../runtime/runtime-terminal-quick-command'
+import { createTerminalInputOrderingLane } from './terminal-input-ordering-lane'
 
 export {
   ensurePtyDispatcher,
@@ -34,6 +36,9 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   const {
     connectionId,
     cwd,
+    worktreeId,
+    tabId,
+    leafId,
     shellOverride,
     onPtyExit,
     onTitleChange,
@@ -46,6 +51,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
   let connected = false
   let destroyed = false
   let ptyId: string | null = null
+  let bindingGeneration = 0
   let suppressAttentionEvents = false
   let storedCallbacks: Parameters<PtyTransport['connect']>[0]['callbacks'] = {}
 
@@ -58,6 +64,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       }
     }
   })
+  const inputOrderingLane = createTerminalInputOrderingLane()
   const outputProcessor = createPtyOutputProcessor({
     onTitleChange,
     onBell,
@@ -76,12 +83,16 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getCallbacks: () => storedCallbacks,
     getSuppressAttentionEvents: () => suppressAttentionEvents,
     markExited: () => {
+      inputWriteQueue.clear()
       connected = false
       ptyId = null
     },
     onPtyExit
   })
   const bind = (id: string): void => {
+    // Fence queued bytes before a reconnect can reuse the same PTY id.
+    inputWriteQueue.clear()
+    bindingGeneration += 1
     ptyId = id
     connected = true
   }
@@ -117,6 +128,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     disconnect() {
       handlers.clearAccumulatedState()
       inputWriteQueue.clear()
+      inputOrderingLane.clear()
       if (ptyId) {
         const id = ptyId
         window.api.pty.kill(id)
@@ -131,6 +143,7 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       outputProcessor.disposePendingSideEffectGauge()
       handlers.clearAccumulatedState()
       inputWriteQueue.clear()
+      inputOrderingLane.clear()
       if (ptyId) {
         if (options?.preserveExitObserver === false) {
           handlers.unregisterAll(ptyId)
@@ -144,26 +157,70 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     sendInput(data) {
-      return connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
+      const id = ptyId
+      const generation = bindingGeneration
+      return inputOrderingLane.enqueueInput(
+        () =>
+          connected && id !== null && ptyId === id && bindingGeneration === generation
+            ? inputWriteQueue.enqueue(id, data)
+            : false,
+        data.length
+      )
     },
 
     sendInputImmediate(data) {
       return connected && ptyId ? inputWriteQueue.enqueueQueryReply(ptyId, data) : false
     },
 
+    async sendQuickCommand(data) {
+      const targetId = ptyId
+      const targetGeneration = bindingGeneration
+      return inputOrderingLane.enqueueQuickCommand(async () => {
+        if (
+          !connected ||
+          !targetId ||
+          bindingGeneration !== targetGeneration ||
+          !worktreeId ||
+          !tabId ||
+          !leafId
+        ) {
+          return false
+        }
+        await inputWriteQueue.waitForDrain()
+        if (!connected || ptyId !== targetId || bindingGeneration !== targetGeneration) {
+          return false
+        }
+        return await sendRuntimeTerminalQuickCommand({
+          worktreeId,
+          tabId,
+          leafId,
+          expectedPtyId: targetId,
+          text: data,
+          isCurrent: () => connected && ptyId === targetId && bindingGeneration === targetGeneration
+        })
+      })
+    },
+
     ...(connectionId
       ? {}
       : {
           async sendInputAccepted(data: string): Promise<boolean> {
-            if (!connected || !ptyId) {
-              return false
-            }
             const id = ptyId
-            await inputWriteQueue.waitForDrain()
-            if (!connected || ptyId !== id) {
-              return false
-            }
-            return writeAcceptedIpcPtyInput(id, data, () => connected && ptyId === id)
+            const generation = bindingGeneration
+            return inputOrderingLane.enqueueQuickCommand(async () => {
+              if (!connected || !id || ptyId !== id || bindingGeneration !== generation) {
+                return false
+              }
+              await inputWriteQueue.waitForDrain()
+              if (!connected || ptyId !== id || bindingGeneration !== generation) {
+                return false
+              }
+              return writeAcceptedIpcPtyInput(
+                id,
+                data,
+                () => connected && ptyId === id && bindingGeneration === generation
+              )
+            })
           }
         }),
 

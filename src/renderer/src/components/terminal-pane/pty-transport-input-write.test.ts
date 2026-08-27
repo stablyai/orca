@@ -7,12 +7,19 @@ import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../../../shared/clip
 import { PTY_INPUT_WRITE_QUEUE_MAX_PENDING_REPLIES } from './pty-input-write-queue'
 import { installIpcPtyWindow, restorePtySpecWindow } from './pty-transport-test-harness'
 
+const mocks = vi.hoisted(() => ({ sendRuntimeTerminalQuickCommand: vi.fn() }))
+
+vi.mock('../../runtime/runtime-terminal-quick-command', () => ({
+  sendRuntimeTerminalQuickCommand: mocks.sendRuntimeTerminalQuickCommand
+}))
+
 describe('createIpcPtyTransport', () => {
   const originalWindow = (globalThis as { window?: typeof window }).window
   let onWriteUnavailable: ((payload: { id: string }) => void) | null = null
 
   beforeEach(() => {
     vi.resetModules()
+    mocks.sendRuntimeTerminalQuickCommand.mockReset().mockResolvedValue(true)
     onWriteUnavailable = null
     installIpcPtyWindow(originalWindow, {
       writeUnavailable: (callback) => {
@@ -71,6 +78,123 @@ describe('createIpcPtyTransport', () => {
     const sshTransport = createIpcPtyTransport({ connectionId: 'ssh-1' })
     await sshTransport.connect({ url: '', callbacks: {} })
     expect(sshTransport.sendInputAccepted).toBeUndefined()
+  })
+
+  it('drains queued local input before sending typed Quick Command intent', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      leafId: 'd45db739-fb66-40d3-9533-d537772ad03f'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(transport.sendInput('draft')).toBe(true)
+    await expect(transport.sendQuickCommand?.('echo x\r')).resolves.toBe(true)
+
+    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'draft')
+    expect(mocks.sendRuntimeTerminalQuickCommand).toHaveBeenCalledWith({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      leafId: 'd45db739-fb66-40d3-9533-d537772ad03f',
+      expectedPtyId: 'pty-1',
+      text: 'echo x\r',
+      isCurrent: expect.any(Function)
+    })
+    expect(vi.mocked(window.api.pty.write).mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.sendRuntimeTerminalQuickCommand.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('fences trailing input and repeated Quick Commands behind the first submit', async () => {
+    let releaseFirst!: (accepted: boolean) => void
+    mocks.sendRuntimeTerminalQuickCommand
+      .mockImplementationOnce(() => new Promise<boolean>((resolve) => (releaseFirst = resolve)))
+      .mockResolvedValue(true)
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      leafId: 'd45db739-fb66-40d3-9533-d537772ad03f'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+
+    const first = transport.sendQuickCommand?.('one\r')
+    expect(transport.sendInput('typed-after-one')).toBe(true)
+    const second = transport.sendQuickCommand?.('two\r')
+    await Promise.resolve()
+    expect(window.api.pty.write).not.toHaveBeenCalled()
+    expect(mocks.sendRuntimeTerminalQuickCommand).toHaveBeenCalledTimes(1)
+
+    releaseFirst(true)
+    await expect(first).resolves.toBe(true)
+    await expect(second).resolves.toBe(true)
+    expect(window.api.pty.write).toHaveBeenCalledWith('pty-1', 'typed-after-one')
+    expect(mocks.sendRuntimeTerminalQuickCommand.mock.calls.map(([args]) => args.text)).toEqual([
+      'one\r',
+      'two\r'
+    ])
+  })
+
+  it('drops deferred input after a same-id PTY rebind', async () => {
+    let releaseFirst!: (accepted: boolean) => void
+    mocks.sendRuntimeTerminalQuickCommand.mockImplementationOnce(
+      (args: { isCurrent?: () => boolean }) =>
+        new Promise<boolean>((resolve) => {
+          releaseFirst = () => resolve(args.isCurrent?.() ?? true)
+        })
+    )
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      leafId: 'd45db739-fb66-40d3-9533-d537772ad03f'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+
+    const quickCommand = transport.sendQuickCommand?.('one\r')
+    expect(transport.sendInput('stale trailing input')).toBe(true)
+    await Promise.resolve()
+    transport.detach?.()
+    transport.attach?.({ existingPtyId: 'pty-1', callbacks: {} })
+
+    releaseFirst(true)
+    await expect(quickCommand).resolves.toBe(false)
+    await Promise.resolve()
+
+    expect(window.api.pty.write).not.toHaveBeenCalled()
+  })
+
+  it('drops deferred input when the PTY exits before same-id reattach', async () => {
+    let releaseFirst!: (accepted: boolean) => void
+    let emitExit: ((payload: { id: string; code: number }) => void) | undefined
+    mocks.sendRuntimeTerminalQuickCommand.mockImplementationOnce(
+      () => new Promise<boolean>((resolve) => (releaseFirst = resolve))
+    )
+    installIpcPtyWindow(originalWindow, {
+      exit: (callback) => {
+        emitExit = callback
+      }
+    })
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const transport = createIpcPtyTransport({
+      worktreeId: 'worktree-1',
+      tabId: 'tab-1',
+      leafId: 'd45db739-fb66-40d3-9533-d537772ad03f'
+    })
+    await transport.connect({ url: '', callbacks: {} })
+
+    const quickCommand = transport.sendQuickCommand?.('one\r')
+    expect(transport.sendInput('stale trailing input')).toBe(true)
+    await Promise.resolve()
+    emitExit?.({ id: 'pty-1', code: 0 })
+    transport.attach?.({ existingPtyId: 'pty-1', callbacks: {} })
+
+    releaseFirst(true)
+    await expect(quickCommand).resolves.toBe(true)
+    await Promise.resolve()
+
+    expect(window.api.pty.write).not.toHaveBeenCalled()
   })
 
   it('chunks large local IPC terminal input before renderer-to-main writes', async () => {

@@ -7,6 +7,7 @@ import path from 'node:path'
 const SCRIPT_PATH = import.meta.filename
 const BEGIN = '\x1b[200~'
 const END = '\x1b[201~'
+const CSI_U_ENTER = '\x1b[13u'
 const DEFAULT_TIMEOUT_MS = 15_000
 const COMPOSER_RENDER_MS = 1_200
 
@@ -175,6 +176,7 @@ async function parentMain() {
       shellQuote(marker),
       '--timeout-ms',
       String(timeoutMs),
+      '--negotiate-csi-u',
       ...(expectBlocked ? ['--permission-before-send'] : []),
       ...(process.platform === 'win32' ? ['--allow-unframed-paste'] : [])
     ]))
@@ -284,6 +286,7 @@ async function fakeAgentMain() {
   const pasteFramingRequired = !hasFlag('allow-unframed-paste')
   const swallowFirstEnter = hasFlag('swallow-first-enter')
   const permissionBeforeSend = hasFlag('permission-before-send')
+  const negotiateCsiU = hasFlag('negotiate-csi-u')
   if (!reportPath || !marker) {
     throw new Error('--fake-agent requires --report and --marker')
   }
@@ -291,19 +294,25 @@ async function fakeAgentMain() {
     process.stdin.setRawMode(true)
   }
   process.stdin.resume()
-  process.stdout.write('OpenAI Codex\nmodel: fake\ndirectory: fixture\n> ')
+  process.stdout.write(
+    `${negotiateCsiU ? '\x1b[>1u' : ''}OpenAI Codex\nmodel: fake\ndirectory: fixture\n> `
+  )
   if (permissionBeforeSend) {
     process.stdout.write('\nPermission required\nAllow once\nAllow always\nReject\n')
   }
 
   let input = ''
+  const inputChunksHex = []
   let countedCarriages = 0
+  let countedCsiUEnters = 0
   let prematureEnters = 0
   let receivedEnters = 0
   let swallowedEnters = 0
   let composerReady = false
   let renderScheduled = false
   let finished = false
+  let firstInputAtMs = null
+  let submitObservedAtMs = null
 
   const writeReport = async (submitted) => {
     const hasBracketedPasteFrame = input.includes(BEGIN) && input.includes(END)
@@ -318,7 +327,12 @@ async function fakeAgentMain() {
       pasteFramingRequired,
       hasBracketedPasteFrame,
       markerReceived: input.includes(marker),
-      receivedBytes: Buffer.byteLength(input, 'utf8')
+      receivedBytes: Buffer.byteLength(input, 'utf8'),
+      inputHex: Buffer.from(input, 'utf8').toString('hex'),
+      inputChunksHex,
+      composerReady,
+      firstInputAtMs,
+      submitObservedAtMs
     }
     await writeFile(reportPath, JSON.stringify(report, null, 2))
     return report
@@ -339,9 +353,35 @@ async function fakeAgentMain() {
     setTimeout(() => void writeReport(false), 250)
   }
   process.stdin.on('data', (chunk) => {
+    firstInputAtMs ??= Date.now()
+    inputChunksHex.push(Buffer.from(chunk).toString('hex'))
     input += chunk.toString('utf8')
+    let nextCsiUEnter = input.indexOf(CSI_U_ENTER, countedCsiUEnters)
+    while (nextCsiUEnter !== -1) {
+      countedCsiUEnters = nextCsiUEnter + CSI_U_ENTER.length
+      const pasteStart = input.lastIndexOf(BEGIN, nextCsiUEnter)
+      const pasteEnd = input.lastIndexOf(END, nextCsiUEnter)
+      receivedEnters += 1
+      if (pasteStart === -1 || pasteEnd < pasteStart || pasteEnd + END.length > nextCsiUEnter) {
+        prematureEnters += 1
+      } else if (swallowFirstEnter && swallowedEnters === 0) {
+        swallowedEnters += 1
+        void writeReport(false)
+      } else {
+        submitObservedAtMs = Date.now()
+        clearTimeout(timeout)
+        composerReady = true
+        process.stdout.write('\x1b]0;Codex working\x07')
+        void finish()
+        return
+      }
+      nextCsiUEnter = input.indexOf(CSI_U_ENTER, countedCsiUEnters)
+    }
     if (!renderScheduled && input.includes(marker)) {
       renderScheduled = true
+      setTimeout(() => {
+        process.stdout.write('\x1b[?25h')
+      }, COMPOSER_RENDER_MS)
       setTimeout(() => {
         composerReady = true
         const pasteStart = input.indexOf(BEGIN)
@@ -350,13 +390,14 @@ async function fakeAgentMain() {
           pasteStart !== -1 && pasteEnd !== -1
             ? input.slice(pasteStart + BEGIN.length, pasteEnd)
             : input
-        process.stdout.write(`\x1b[?25h\x1b[2J\x1b[H› ${composer}`)
-      }, COMPOSER_RENDER_MS)
+        process.stdout.write(`\x1b[?2026h\x1b[2J\x1b[H› ${composer}\x1b[?25h\x1b[?2026l`)
+      }, COMPOSER_RENDER_MS + 900)
     }
     let nextCarriage = input.indexOf('\r', countedCarriages)
     while (nextCarriage !== -1) {
       countedCarriages = nextCarriage + 1
       if (composerReady) {
+        submitObservedAtMs = Date.now()
         receivedEnters += 1
         if (swallowFirstEnter && swallowedEnters === 0) {
           swallowedEnters += 1
@@ -371,6 +412,9 @@ async function fakeAgentMain() {
       }
       prematureEnters += 1
       nextCarriage = input.indexOf('\r', countedCarriages)
+    }
+    if (prematureEnters > 0) {
+      void writeReport(false)
     }
   })
 }

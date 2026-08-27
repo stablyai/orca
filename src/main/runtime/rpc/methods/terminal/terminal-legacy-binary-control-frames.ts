@@ -48,8 +48,13 @@ export function registerLegacyBinaryControlFrames(
       if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
         return
       }
-      void controls.getDesktopClaimTail().then(async (claimed) => {
-        if (!claimed || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+      const write = async (): Promise<void> => {
+        const claimed = await controls.getDesktopClaimTail()
+        if (
+          !claimed ||
+          controls.isClosed() ||
+          isTerminalInputLockedForClient(runtime, ptyId, params.client)
+        ) {
           return
         }
         const outcome = await sendTerminalStreamInput(runtime, {
@@ -59,6 +64,15 @@ export function registerLegacyBinaryControlFrames(
           isMobile
         })
         if (!controls.isClosed() && outcome === 'rejected' && supportsWriteUnavailable) {
+          controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)
+        }
+      }
+      void (
+        runtime.enqueueTerminalInputWrite
+          ? runtime.enqueueTerminalInputWrite(ptyId, write, Buffer.byteLength(text, 'utf8'))
+          : write()
+      ).catch(() => {
+        if (!controls.isClosed() && supportsWriteUnavailable) {
           controls.sendFrame(TerminalStreamOpcode.WriteUnavailable)
         }
       })

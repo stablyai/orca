@@ -42,6 +42,14 @@ import {
 } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise
+  })
+  return { promise, resolve }
+}
+
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
   let handler: PtyHandler
@@ -72,6 +80,7 @@ describe('PtyHandler', () => {
     expect(methods).toContain('pty.clearBuffer')
     expect(methods).toContain('pty.hasChildProcesses')
     expect(methods).toContain('pty.getForegroundProcess')
+    expect(methods).toContain('pty.confirmForegroundProcess')
     expect(methods).toContain('pty.inspectProcess')
     expect(methods).toContain('pty.listProcesses')
     expect(methods).toContain('pty.getDefaultShell')
@@ -89,6 +98,22 @@ describe('PtyHandler', () => {
     await expect(dispatcher.callRequest('pty.inspectProcess', { id: 'missing' })).rejects.toThrow(
       'terminal_gone'
     )
+  })
+
+  it('drops fresh foreground evidence when the relay PTY is replaced during the scan', async () => {
+    const foreground = deferred<string | null>()
+    vi.spyOn(ptyShellUtils, 'getForegroundProcessName').mockReturnValueOnce(foreground.promise)
+    const { id } = await spawnPty({ cols: 80, rows: 24 })
+    const confirmation = dispatcher.callRequest('pty.confirmForegroundProcess', { id })
+    await vi.waitFor(() => expect(ptyShellUtils.getForegroundProcessName).toHaveBeenCalled())
+
+    const ptys = (handler as unknown as { ptys: Map<string, unknown> }).ptys
+    const managed = ptys.get(id)
+    expect(managed).toBeDefined()
+    ptys.set(id, { ...(managed as object), incarnationId: 'replacement' })
+    foreground.resolve('codex')
+
+    await expect(confirmation).resolves.toBeNull()
   })
 
   it('spawns a PTY and returns an id', async () => {

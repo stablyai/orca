@@ -3,6 +3,7 @@ import { iterateTerminalInputChunks, TERMINAL_INPUT_CHUNK_MAX_BYTES } from './te
 export const AGENT_PROMPT_BRACKETED_PASTE_START = '\x1b[200~'
 export const AGENT_PROMPT_BRACKETED_PASTE_END = '\x1b[201~'
 export const AGENT_PROMPT_SUBMIT = '\r'
+export const AGENT_PROMPT_CSI_U_SUBMIT = '\x1b[13u'
 
 // Why: Windows ConPTY ingests pasted input linearly (first byte written -> child observes
 // ESC[201~), and the cost is input ingest, not rendering -- the child repaints in ~0 ms on
