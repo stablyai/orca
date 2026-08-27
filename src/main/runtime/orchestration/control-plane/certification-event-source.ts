@@ -38,6 +38,11 @@ export type CertificationObservationSource = {
    *  when the runtime could not read one. Never the requested identity. */
   observedEffectiveIdentity(dispatchId: string): RouteIdentity | null
   agentStatusSnapshot(): readonly AgentStatusIpcPayload[]
+  /** The recorded PreTool decision for this Dispatch, when the runtime keeps
+   *  one. Absent today, which is why `pretool_acceptance` fails closed. */
+  pretoolDecision?(dispatchId: string): 'accepted' | 'denied' | null
+  /** The recorded safe-launch admission decision, when the runtime keeps one. */
+  safeLaunchAdmission?(dispatchId: string): 'admitted' | 'refused' | null
 }
 
 export type EvidenceObservationRequest = {
@@ -123,24 +128,39 @@ function isRejection(payload: string | null): boolean {
   }
 }
 
-/** A real prevention event: a replayed or otherwise unauthorised completion for
- *  this Dispatch was rejected, or its capability was revoked at settlement. */
+/** A real prevention event: a duplicate or unauthorised completion for this
+ *  Dispatch was actually REJECTED. Capability revocation at settlement is not
+ *  evidence — every clean completion revokes, so accepting it minted PASS for a
+ *  Dispatch nothing was ever replayed against. */
 function duplicatePrevented(db: OrchestrationDb, dispatch: DispatchContextRow): boolean {
-  return (
-    Boolean(dispatch.capability_revoked_at) ||
-    completionMessages(db, dispatch).some((message) => isRejection(message.payload))
-  )
+  return completionMessages(db, dispatch).some((message) => isRejection(message.payload))
 }
 
-/** A real recovery transition: the Dispatch failed or was escalated for a
- *  liveness fault and the runtime recorded the transition. */
+/** A real recovery TRANSITION: the Dispatch failed or stalled AND the work was
+ *  afterwards picked up again. A failure on its own is just a failure — treating
+ *  it as recovery certified a route for surviving something it never survived.
+ *  The recovery is evidenced by a later Dispatch for the same Task. */
 function recoveryTransition(db: OrchestrationDb, dispatch: DispatchContextRow): boolean {
-  if (dispatch.status === 'failed' || dispatch.termination_reason) {
-    return true
+  const failed =
+    dispatch.status === 'failed' ||
+    Boolean(dispatch.termination_reason) ||
+    db
+      .getRunMailboxHistory(dispatch.run_id, 200, ['escalation'])
+      .some(
+        (message) =>
+          readPayloadDispatchId(message.payload) === dispatch.id &&
+          /stalled|crashed/.test(message.subject)
+      )
+  if (!failed) {
+    return false
   }
-  return db
-    .getRunMailboxHistory(dispatch.run_id, 200, ['escalation'])
-    .some((message) => readPayloadDispatchId(message.payload) === dispatch.id)
+  const later = db.db
+    .prepare(
+      `SELECT count(*) AS n FROM dispatch_contexts
+       WHERE task_id = ? AND id <> ? AND rowid > (SELECT rowid FROM dispatch_contexts WHERE id = ?)`
+    )
+    .get(dispatch.task_id, dispatch.id, dispatch.id) as { n: number } | undefined
+  return (later?.n ?? 0) > 0
 }
 
 /** The role actually executed: a builder produced an accepted completion, a
@@ -155,8 +175,10 @@ function roleExecuted(
   }
   const rows = db.db
     .prepare(
+      // A start_unknown phase means Orca does not know whether the session
+      // started, which is the opposite of proof that the role executed.
       `SELECT count(*) AS n FROM control_plane_phase_launches
-       WHERE dispatch_id = ? AND kind = 'review' AND state IN ('started', 'start_unknown')`
+       WHERE dispatch_id = ? AND kind = 'review' AND state = 'started'`
     )
     .get(dispatch.id) as { n: number } | undefined
   return (rows?.n ?? 0) > 0
@@ -206,24 +228,36 @@ export function observeCertificationEvidence(args: {
     }
 
     case 'pretool_acceptance': {
+      // Why not "a tool row exists": a hook row proves a tool was SEEN, not that
+      // a PreTool decision was made and accepted. The runtime records no such
+      // decision today, so this fails closed rather than certifying a proxy.
       const status = selectDispatchAgentStatus(dispatch, source.agentStatusSnapshot())
-      if (!status?.toolName) {
+      const decision = source.pretoolDecision?.(dispatch.id) ?? null
+      if (decision !== 'accepted') {
         return no(
           'no_pretool_event',
-          `No agent-hook tool event observed for Dispatch ${dispatch.id}.`
+          status?.toolName
+            ? `Dispatch ${dispatch.id} has a tool event (${status.toolName}) but no recorded PreTool acceptance decision; a tool row is not a decision.`
+            : `No accepted PreTool decision recorded for Dispatch ${dispatch.id}.`
         )
       }
-      return ok(`Agent-hook tool event observed (${status.toolName}).`)
+      return ok('An accepted PreTool decision was recorded for this Dispatch.')
     }
 
     case 'safe_launch_acceptance': {
+      // Why not "a token exists": a launch token proves a pane was prepared, not
+      // that a safe-launch admission decision was recorded. Both are required,
+      // and the decision is the part that is actually about admission.
       if (!dispatch.launch_token_hash) {
+        return no('no_safe_launch_token', `Dispatch ${dispatch.id} has no launch token.`)
+      }
+      if (source.safeLaunchAdmission?.(dispatch.id) !== 'admitted') {
         return no(
           'no_safe_launch_token',
-          `Dispatch ${dispatch.id} has no launch token, so the safe launcher did not admit it.`
+          `Dispatch ${dispatch.id} has a launch token but no recorded safe-launch admission decision; a token is not an admission.`
         )
       }
-      return ok('Safe launcher minted a launch token for this Dispatch.')
+      return ok('A safe-launch admission decision was recorded for this Dispatch.')
     }
 
     case 'task_dispatch_worktree_binding': {

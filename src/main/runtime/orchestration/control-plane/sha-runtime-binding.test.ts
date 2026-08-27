@@ -110,10 +110,10 @@ describe('SHA_RUNTIME_BINDING', () => {
     expect(() => start(runId, BUILD_B)).toThrow(/route_not_certified|stale|UNTESTED|untested/i)
   })
 
-  it('rejects evidence whose SHA contradicts itself for one build (SHA A -> SHA B)', () => {
+  it('does not let the evidence being checked decide which SHA is current', () => {
     const { runId } = world({ sha: SHA_A, build: BUILD_A })
-    // A second SHA appearing under the SAME build is a contradiction, so the
-    // pinned candidate SHA can no longer match anything.
+    // Evidence for a DIFFERENT commit exists under the same build. The runtime
+    // states what it is running, so that evidence cannot make itself current.
     new RouteRegistryStore(db!).recordRouteEvidence({
       routeKey: 'codex|gpt-5.5|xhigh',
       kind: 'fresh_launch',
@@ -125,7 +125,20 @@ describe('SHA_RUNTIME_BINDING', () => {
       commitSha: SHA_B,
       detail: null
     })
-    expect(() => start(runId, BUILD_A)).toThrow(/route_stale/)
+    expect(() =>
+      assertWorkerStartRouteAdmitted({
+        handle: db!,
+        runId,
+        agent: 'codex',
+        model: 'gpt-5.5',
+        effort: 'xhigh',
+        role: 'builder',
+        sessionMode: 'fresh',
+        taskCapabilities: ['bounded_implementation'],
+        nowMs: NOW,
+        runtimeBuildIdentity: { id: BUILD_A, commitSha: SHA_B }
+      })
+    ).toThrow(/route_stale/)
   })
 
   it('pins one SHA per build and refuses to guess when they disagree', () => {

@@ -1,5 +1,5 @@
 import { findCatalogModel, getAgentSessionOptionCatalog } from './agent-session-option-catalog'
-import { AGENT_HOOK_TARGETS } from './agent-hook-types'
+import { hasAgentHookIngestion } from './agent-hook-types'
 import type { AgentSessionOptionCatalog } from './agent-session-option-catalog-types'
 import type { TuiAgent } from './tui-agent'
 import { TUI_AGENT_CONFIG } from './tui-agent-config'
@@ -35,7 +35,8 @@ export type NativeRouteCapability = {
   agent: TuiAgent
   /** Orca has a launch configuration for this agent at all. */
   launcherSupported: boolean
-  /** Orca installs its managed agent hooks into this agent's CLI. */
+  /** Orca can receive hook events for this agent, by managed script OR by the
+   *  agent's own plugin. Not the same as "Orca installs scripts into it". */
   hookSupported: boolean
   /** Excluded from Orca worker routing by explicit policy, whatever else holds. */
   excludedFromWorkerRouting: boolean
@@ -66,7 +67,7 @@ function orchestrationFacts(agent: TuiAgent): {
 } {
   return {
     launcherSupported: Boolean(TUI_AGENT_CONFIG[agent]),
-    hookSupported: (AGENT_HOOK_TARGETS as readonly string[]).includes(agent),
+    hookSupported: hasAgentHookIngestion(agent),
     excludedFromWorkerRouting: EXCLUDED_FROM_WORKER_ROUTING.includes(agent)
   }
 }
@@ -137,11 +138,22 @@ export function classifyNativeRoute(args: {
       reason: `${args.agent} is excluded from Orca worker routing by explicit policy.`
     }
   }
-  if (!capability.hasCatalog || !capability.canApplyModelAtLaunch) {
+  if (!capability.launcherSupported) {
     return {
       verdict: 'TRULY_UNSUPPORTED',
       capability,
-      reason: `Native Orca has no way to apply a model to ${args.agent} at launch.`
+      reason: `Native Orca has no launch configuration for ${args.agent}.`
+    }
+  }
+  if (!capability.hasCatalog || !capability.canApplyModelAtLaunch) {
+    // Why not TRULY_UNSUPPORTED: Orca launches this agent, and may resume and
+    // observe it. What it cannot do is PIN and verify a model through its own
+    // structured catalog, which makes the effective identity unprovable — a
+    // weaker statement than "there is no route".
+    return {
+      verdict: 'IDENTITY_PROOF_INCOMPLETE',
+      capability,
+      reason: `Native Orca launches ${args.agent} but has no session-option catalog for it, so a model cannot be pinned or verified through Orca's own contract.`
     }
   }
   if (!capability.optedIntoWorkerLaunch) {

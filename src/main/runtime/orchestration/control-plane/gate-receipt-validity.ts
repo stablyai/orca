@@ -57,6 +57,7 @@ export type GateReuseVerdict =
         | 'receipt_failed'
         | 'high_risk_policy'
         | 'dependency_unreadable'
+        | 'no_declared_inputs'
       reason: string
     }
 
@@ -83,6 +84,13 @@ function stableHashes(hashes: Readonly<Record<string, string>>): string {
     .join(',')
 }
 
+/** True when the gate declares at least one real input, not just its own
+ *  configuration. Config-only inputs never change with the tree, so a receipt
+ *  built from them alone can never be invalidated by anything. */
+function hasDeclaredFileInput(hashes: Readonly<Record<string, string>>): boolean {
+  return Object.keys(hashes).some((key) => !key.startsWith('config:'))
+}
+
 function changedInputs(
   previous: Readonly<Record<string, string>>,
   current: Readonly<Record<string, string>>
@@ -103,6 +111,16 @@ export function canReuseGateReceipt(args: {
       reuse: false,
       code: 'high_risk_policy',
       reason: 'High-risk policy requires the full gate set to rerun.'
+    }
+  }
+  // Why before anything else: a gate that declares no file inputs has nothing
+  // to be invalidated BY, so its receipt would be reusable across every commit
+  // forever. An empty dependency set is a missing declaration, not a proof.
+  if (!hasDeclaredFileInput(args.current.inputHashes)) {
+    return {
+      reuse: false,
+      code: 'no_declared_inputs',
+      reason: `Gate ${args.current.gateId} declares no file inputs, so nothing could ever invalidate its receipt.`
     }
   }
   const receipt = args.receipt

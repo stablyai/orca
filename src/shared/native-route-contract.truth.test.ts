@@ -63,10 +63,25 @@ describe('ORCA_NATIVE_ROUTE_TRUTH', () => {
     }
   })
 
-  it('opencode has no session-option catalog at all, so GLM is truly unsupported natively', () => {
+  it('opencode IS a native route: Orca launches, resumes and observes it', () => {
     const capability = resolveNativeRouteCapability('opencode', 'glm-5.3')
+    // Orca has a launch configuration for it...
+    expect(capability.launcherSupported).toBe(true)
+    // ...and receives its hook events through OpenCode's own plugin, even
+    // though Orca does not install managed hook scripts into it. Conflating
+    // those two facts is what wrongly reported this route as unsupported.
+    expect(capability.hookSupported).toBe(true)
+    // What is genuinely missing is a session-option catalog, so Orca cannot
+    // pin or verify the model through its own contract.
     expect(capability.hasCatalog).toBe(false)
     expect(classifyNativeRoute({ agent: 'opencode', model: 'glm-5.3' }).verdict).toBe(
+      'IDENTITY_PROOF_INCOMPLETE'
+    )
+  })
+
+  it('TRULY_UNSUPPORTED is reserved for no launcher at all, or policy exclusion', () => {
+    // Local Qwen is excluded from worker routing by explicit policy.
+    expect(classifyNativeRoute({ agent: 'qwen-code', model: 'qwen3.5' }).verdict).toBe(
       'TRULY_UNSUPPORTED'
     )
   })

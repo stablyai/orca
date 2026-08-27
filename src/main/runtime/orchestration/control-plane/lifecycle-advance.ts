@@ -125,7 +125,7 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
   // B9: a completing Dispatch can no longer be holding a validation lease.
   // Looked up by owner, not by scope, so a worktree-scoped lease is released
   // even though the completion path only knows the Dispatch.
-  const lease = store.findValidationLeaseByOwner(dispatch.id)
+  const lease = store.findValidationLeaseByOwner(dispatch.id, new Date(nowMs).toISOString())
   const leaseReleased = lease
     ? releaseValidationLease(store, {
         scopeKey: lease.scope_key,

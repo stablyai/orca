@@ -60,8 +60,11 @@ export const ORCHESTRATION_OUTCOME_INTAKE_METHODS: RpcMethod[] = [
           { code: 'relation_rejected', outcomeId: rejected.leftOutcomeId, runId: '' }
         )
       }
+      const db = runtime.getOrchestrationDb()
       const result = admitOutcomeIntake(store, {
         batchId: params.batchId,
+        // Why: an outcome bound to a Run that does not exist is unreachable.
+        runExists: (runId) => Boolean(db.getRun(runId)),
         outcomes: params.outcomes,
         detected: params.detected,
         relations: (params.relations ?? []).filter(

@@ -47,7 +47,16 @@ export function readDispatchRouteIdentity(
  *  and nothing about what the provider is actually running. Only `observed`
  *  may back effective-identity certification.
  */
-export type EffectiveIdentityProvenance = 'observed' | 'requested_copy' | 'none'
+export type EffectiveIdentityProvenance =
+  /** A provider/session receipt reported this identity. The only kind that may
+   *  back effective-identity certification. */
+  | 'observed'
+  /** Orca's catalog transformed the request. Proves the request was accepted,
+   *  not what the provider is running. */
+  | 'derived'
+  /** A byte-for-byte clone of the request. */
+  | 'requested_copy'
+  | 'none'
 
 export type DispatchLaunchReceipt = {
   requested: RouteIdentity | null
@@ -112,9 +121,12 @@ export function readDispatchLaunchReceipt(
   if (stamped === 'observed') {
     return { requested, effective, effectiveProvenance: 'observed' }
   }
+  // Why not "differs from requested implies observed": a catalog may legitimately
+  // transform a request (cursor composes effort into the model id) without any
+  // provider having reported anything. Only an explicit stamp is provenance.
   return {
     requested,
     effective,
-    effectiveProvenance: sameSelection(requested, effective) ? 'requested_copy' : 'observed'
+    effectiveProvenance: sameSelection(requested, effective) ? 'requested_copy' : 'derived'
   }
 }

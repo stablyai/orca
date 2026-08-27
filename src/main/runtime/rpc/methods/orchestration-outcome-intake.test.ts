@@ -13,6 +13,7 @@ describe('BATCH_2_TO_5_INTAKE', () => {
   afterEach(() => {
     db?.close()
     db = undefined
+    runIdsByIndex.clear()
   })
 
   const METHOD = ORCHESTRATION_OUTCOME_INTAKE_METHODS.find(
@@ -29,10 +30,24 @@ describe('BATCH_2_TO_5_INTAKE', () => {
     } as never)
   }
 
+  // Why real Runs: intake now refuses to bind an outcome to a Run that does
+  // not exist, because such an outcome is unreachable.
+  const runIdsByIndex = new Map<number, string>()
+
   function outcome(index: number) {
+    db ??= new OrchestrationDb(':memory:')
+    let runId = runIdsByIndex.get(index)
+    if (!runId) {
+      runId = db.createRun({
+        objective: `Outcome ${index}`,
+        coordinatorHandle: `term_coord_${index}`,
+        coordinatorPaneKey: `pane_${index}:leaf`
+      }).id
+      runIdsByIndex.set(index, runId)
+    }
     return {
       outcomeId: `out_${index}`,
-      runId: `run_${index}`,
+      runId,
       title: `Outcome ${index}`,
       fingerprint: `f_${index}`
     }
@@ -49,7 +64,7 @@ describe('BATCH_2_TO_5_INTAKE', () => {
     })) as { batchId: string; count: number; admitted: { outcomeId: string; runId: string }[] }
     expect(receipt.batchId).toBe('batch_1')
     expect(receipt.count).toBe(3)
-    expect(receipt.admitted.map((entry) => entry.runId)).toEqual(['run_1', 'run_2', 'run_3'])
+    expect(receipt.admitted.map((entry) => entry.outcomeId)).toEqual(['out_1', 'out_2', 'out_3'])
     // Each outcome kept its own distinct Run identity.
     expect(new Set(receipt.admitted.map((entry) => entry.runId)).size).toBe(3)
   })
@@ -62,7 +77,7 @@ describe('BATCH_2_TO_5_INTAKE', () => {
     await expect(
       call({
         batchId: 'batch_2',
-        outcomes: [outcome(9), { ...outcome(1), runId: 'run_conflict' }]
+        outcomes: [outcome(9), { ...outcome(1), runId: outcome(5).runId }]
       })
     ).rejects.toMatchObject({ code: 'outcome_intake_rejected' })
     // out_9 came FIRST in the failing batch and must not survive it.

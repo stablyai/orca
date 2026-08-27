@@ -101,6 +101,14 @@ CREATE INDEX IF NOT EXISTS idx_control_plane_outcomes_batch
 
 -- B2: explicit representation of semantic overlap / resource collision between
 -- two outcomes admitted in the same intake batch. An undecided pair is refused.
+-- Correction: binds a batch id to the manifest it was admitted with, so a
+-- replay carrying different outcomes is a conflict rather than an enlargement.
+CREATE TABLE IF NOT EXISTS control_plane_intake_batches (
+  batch_id             TEXT PRIMARY KEY,
+  manifest_fingerprint TEXT NOT NULL,
+  created_at           TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS control_plane_outcome_relations (
   left_outcome_id  TEXT NOT NULL,
   right_outcome_id TEXT NOT NULL,

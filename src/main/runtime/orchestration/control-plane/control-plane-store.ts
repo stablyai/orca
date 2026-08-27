@@ -132,6 +132,21 @@ export class ControlPlaneStore {
       .run(row.left_outcome_id, row.right_outcome_id, row.kind, row.decision, row.rationale)
   }
 
+  getIntakeBatch(batchId: string): { batch_id: string; manifest_fingerprint: string } | undefined {
+    return this.handle.db
+      .prepare('SELECT * FROM control_plane_intake_batches WHERE batch_id = ?')
+      .get(batchId) as { batch_id: string; manifest_fingerprint: string } | undefined
+  }
+
+  putIntakeBatch(row: { batch_id: string; manifest_fingerprint: string }): void {
+    this.handle.db
+      .prepare(
+        `INSERT OR IGNORE INTO control_plane_intake_batches (batch_id, manifest_fingerprint)
+         VALUES (?, ?)`
+      )
+      .run(row.batch_id, row.manifest_fingerprint)
+  }
+
   listOutcomeRelations(outcomeId: string): OutcomeRelationRow[] {
     return this.handle.db
       .prepare(
@@ -219,12 +234,15 @@ export class ControlPlaneStore {
   }
 
   /** Any live lease this Dispatch owns, whatever scope it was taken on. */
-  findValidationLeaseByOwner(owner: string): ValidationLeaseRow | undefined {
+  findValidationLeaseByOwner(owner: string, nowIso?: string): ValidationLeaseRow | undefined {
     return this.handle.db
       .prepare(
-        'SELECT * FROM control_plane_validation_leases WHERE owner = ? AND released_at IS NULL'
+        // Why the expiry filter: an expired lease is not a live credential, and
+        // returning one let a stale holder re-enter a scope it no longer owns.
+        `SELECT * FROM control_plane_validation_leases
+         WHERE owner = ? AND released_at IS NULL AND expires_at > ?`
       )
-      .get(owner) as ValidationLeaseRow | undefined
+      .get(owner, nowIso ?? new Date().toISOString()) as ValidationLeaseRow | undefined
   }
 
   putValidationLease(row: ValidationLeaseRow): void {

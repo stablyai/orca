@@ -67,9 +67,11 @@ function evidenceFor(
     outcome: 'PASS' as const,
     observedAt: new Date().toISOString(),
     // Why resolved, not literal: worker-start now admits evidence only when it
-    // carries THIS runtime build's identity, so a hand-written version is stale.
+    // carries THIS runtime build's identity — both the version AND the commit
+    // it was built from — so hand-written values go stale immediately. HEAD
+    // below stays the COMPLETED WORK's sha, which is a different concept.
     runtimeVersion: resolveRuntimeBuildIdentity().id,
-    commitSha: HEAD,
+    commitSha: resolveRuntimeBuildIdentity().commitSha ?? HEAD,
     detail: null
   }))
 }

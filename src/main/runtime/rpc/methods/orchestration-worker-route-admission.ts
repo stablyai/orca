@@ -3,15 +3,13 @@ import type { ControlPlaneDatabaseHandle } from '../../orchestration/control-pla
 import type { OrchestrationDb } from '../../orchestration/db'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
+import { assertOutcomeSerializationAllowed } from '../../orchestration/control-plane/outcome-serialization'
 import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { admitRoute } from '../../orchestration/control-plane/role-route-registry'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
-import {
-  resolveCandidateCommitSha,
-  resolveRuntimeBuildIdentity
-} from '../../orchestration/control-plane/runtime-build-identity'
+import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 import type {
   RouteRole,
   SessionMode,
@@ -43,7 +41,7 @@ export function assertWorkerStartRouteAdmitted(args: {
   taskCapabilities?: readonly TaskCapability[]
   nowMs?: number
   /** Injectable only so tests can pin a build; production resolves its own. */
-  runtimeBuildIdentity?: { id: string }
+  runtimeBuildIdentity?: { id: string; commitSha?: string | null }
 }): void {
   if (args.agent && isExcludedWorkerAgent(args.agent)) {
     throw new OrchestrationError(
@@ -89,10 +87,10 @@ export function assertWorkerStartRouteAdmitted(args: {
       allowUnknownQuota: resolveAllowUnknownQuota(args.handle, binding)
     },
     nowMs: args.nowMs ?? Date.now(),
-    // Why both: evidence earned on another commit or another build of this
-    // runtime proves nothing about the code about to run, so it reads STALE
-    // rather than silently admitting a worker on a route nobody re-certified.
-    currentCommitSha: resolveCandidateCommitSha(evidence, build.id) ?? undefined,
+    // Why the runtime's own commit and not one derived from the evidence:
+    // deriving the "current" SHA from the evidence being checked lets that
+    // evidence authorise itself. The runtime states what it is running.
+    currentCommitSha: build.commitSha ?? undefined,
     currentRuntimeVersion: build.id
   })
   if (!admission.ok) {
@@ -132,10 +130,13 @@ export function assertWorktreeMutationAllowed(args: {
 }): void {
   const store = new ControlPlaneStore(args.handle)
   const scopeKey = validationScopeKeyForWorktree(args.worktreeId)
-  const lease = args.dispatchId ? store.findValidationLeaseByOwner(args.dispatchId) : undefined
+  const nowMs = args.nowMs ?? Date.now()
+  const lease = args.dispatchId
+    ? store.findValidationLeaseByOwner(args.dispatchId, new Date(nowMs).toISOString())
+    : undefined
   const guard = assertMutationAllowed(store, {
     scopeKey,
-    nowMs: args.nowMs ?? Date.now(),
+    nowMs,
     holderLeaseId: lease?.scope_key === scopeKey ? lease.lease_id : undefined
   })
   if (!guard.allowed) {
@@ -198,6 +199,20 @@ export function assertWorkerStartAdmitted(args: {
    *  creating one. Its worktree is fenced the same way a new one is. */
   terminalHandle?: string
 }): void {
+  // Why before the route check: an outcome an operator serialized against a
+  // live one must not start work at all, whatever route it would have used.
+  const serialization = assertOutcomeSerializationAllowed({
+    db: args.handle as unknown as OrchestrationDb,
+    store: new ControlPlaneStore(args.handle),
+    runId: args.runId
+  })
+  if (!serialization.allowed) {
+    throw new OrchestrationError('serialized_with_active_outcome', serialization.reason, {
+      blockingOutcomeId: serialization.blockingOutcomeId,
+      blockingRunId: serialization.blockingRunId,
+      blockingDispatchId: serialization.blockingDispatchId
+    })
+  }
   const planned = resolveWorkerStartRole(args.handle, args.taskId)
   assertWorkerStartRouteAdmitted({
     ...args,

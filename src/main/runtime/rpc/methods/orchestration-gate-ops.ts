@@ -253,6 +253,13 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
             'release requires --dispatch: only the Dispatch that holds a lease may release it.'
           )
         }
+        const releasing = db.getDispatchContextById(params.dispatch)
+        if (!releasing || releasing.run_id !== runId) {
+          throw new OrchestrationError(
+            'invalid_argument',
+            `--dispatch ${params.dispatch} is not a Dispatch on Run ${runId}.`
+          )
+        }
         return {
           scopeKey,
           ...releaseValidationLease(store, {
@@ -267,6 +274,16 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
       if (!dispatchId) {
         throw new OrchestrationError('invalid_argument', 'acquire requires --dispatch.')
       }
+      // Why verify: the owner field gates who may later release the lease, so a
+      // caller-supplied string that names nothing would let anyone claim and
+      // release ownership of a protected worktree.
+      const ownerDispatch = db.getDispatchContextById(dispatchId)
+      if (!ownerDispatch || ownerDispatch.run_id !== runId) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          `--dispatch ${dispatchId} is not a Dispatch on Run ${runId}, so it cannot own a lease here.`
+        )
+      }
       const idempotencyKey = params.idempotencyKey ?? `${dispatchId}:${params.leaseId ?? 'default'}`
       const acquisition = acquireValidationLease(store, {
         scopeKey,
@@ -277,9 +294,11 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
         ttlMs: params.ttlMs
       })
       if (!acquisition.ok) {
-        throw new OrchestrationError(acquisition.code, acquisition.reason, {
-          lease: acquisition.lease
-        })
+        throw new OrchestrationError(
+          acquisition.code,
+          acquisition.reason,
+          acquisition.code === 'held_by_other_owner' ? { lease: acquisition.lease } : undefined
+        )
       }
       return { scopeKey, ...acquisition }
     }

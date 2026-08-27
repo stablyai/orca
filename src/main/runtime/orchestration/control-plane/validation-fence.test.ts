@@ -3,7 +3,11 @@ import { OrchestrationDb } from '../db'
 import { createRootDispatch } from '../db/root-dispatch-test-fixture'
 import { ControlPlaneStore } from './control-plane-store'
 import { canReuseGateReceipt, findGateReceipt, recordGateReceipt } from './gate-receipt-validity'
-import { acquireValidationLease, assertMutationAllowed } from './validation-lease'
+import {
+  DEFAULT_VALIDATION_LEASE_TTL_MS,
+  acquireValidationLease,
+  assertMutationAllowed
+} from './validation-lease'
 import {
   resolveValidationScopeKey,
   validationScopeKeyForRun,
@@ -99,8 +103,15 @@ describe('B9 correction 2: a live suite fences worktree mutation', () => {
       idempotencyKey: 'idem',
       nowMs: NOW
     })
-    expect(store.findValidationLeaseByOwner(dispatch.id)).toMatchObject({ scope_key: scopeKey })
-    expect(store.findValidationLeaseByOwner('ctx_other')).toBeUndefined()
+    // The lookup is now expiry-aware, so it needs the clock the lease was taken on.
+    const nowIso = new Date(NOW + 1000).toISOString()
+    expect(store.findValidationLeaseByOwner(dispatch.id, nowIso)).toMatchObject({
+      scope_key: scopeKey
+    })
+    expect(store.findValidationLeaseByOwner('ctx_other', nowIso)).toBeUndefined()
+    // An expired lease is not a live credential, whoever owns it.
+    const afterExpiry = new Date(NOW + DEFAULT_VALIDATION_LEASE_TTL_MS + 1000).toISOString()
+    expect(store.findValidationLeaseByOwner(dispatch.id, afterExpiry)).toBeUndefined()
   })
 })
 

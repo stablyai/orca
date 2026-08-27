@@ -38,6 +38,7 @@ export type LeaseAcquisition =
       lease: ValidationLease
       reason: string
     }
+  | { ok: false; code: 'invalid_ttl'; reason: string }
 
 function toLease(row: ValidationLeaseRow): ValidationLease {
   return {
@@ -69,9 +70,43 @@ export function acquireValidationLease(
     ttlMs?: number
   }
 ): LeaseAcquisition {
-  const existing = store.getValidationLease(args.scopeKey)
   const ttl = args.ttlMs ?? DEFAULT_VALIDATION_LEASE_TTL_MS
+  if (!Number.isFinite(ttl) || ttl <= 0) {
+    // Why reject rather than clamp: a zero or negative TTL mints a lease that is
+    // already expired, which reads as "protected" to the acquirer and as "free"
+    // to everyone else.
+    return {
+      ok: false,
+      code: 'invalid_ttl',
+      reason: `A validation lease TTL must be a positive number of milliseconds; received ${String(args.ttlMs)}.`
+    }
+  }
+  // Why the transaction: read-then-write is a TOCTOU window. Two acquirers can
+  // both see the scope free and the second silently overwrites the first's
+  // ownership. BEGIN IMMEDIATE takes the write lock for the whole decision.
+  store.db.exec('BEGIN IMMEDIATE')
+  try {
+    return acquireInsideTransaction(store, args, ttl)
+  } catch (error) {
+    store.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
+function acquireInsideTransaction(
+  store: ControlPlaneStore,
+  args: {
+    scopeKey: string
+    leaseId: string
+    owner: string
+    idempotencyKey: string
+    nowMs: number
+  },
+  ttl: number
+): LeaseAcquisition {
+  const existing = store.getValidationLease(args.scopeKey)
   if (existing && isActive(existing, args.nowMs)) {
+    store.db.exec('COMMIT')
     if (existing.idempotency_key === args.idempotencyKey) {
       return { ok: true, lease: toLease(existing), duplicate: true, reclaimed: false }
     }
@@ -92,6 +127,7 @@ export function acquireValidationLease(
     released_at: null
   }
   store.putValidationLease(row)
+  store.db.exec('COMMIT')
   return {
     ok: true,
     lease: toLease(row),

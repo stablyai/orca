@@ -38,6 +38,10 @@ export type OutcomeAdmissionCode =
   | 'fingerprint_conflict'
   | 'intake_size_invalid'
   | 'duplicate_outcome_id'
+  | 'duplicate_run_id'
+  | 'unknown_run'
+  | 'batch_manifest_conflict'
+  | 'relation_decision_conflict'
   | 'undecided_relation'
 
 export type OutcomeAdmissionError = {
@@ -121,6 +125,9 @@ export type OutcomeRelationDeclaration = {
 
 export type OutcomeIntakeRequest = {
   batchId: string
+  /** Existence check for a claimed Run, supplied by the caller that owns the
+   *  Run table. Omitted only by pure-function tests. */
+  runExists?: (runId: string) => boolean
   outcomes: readonly OutcomeAdmissionRequest[]
   /** Every detected overlap or collision must carry an explicit decision. */
   relations?: readonly OutcomeRelationDeclaration[]
@@ -144,6 +151,25 @@ function relationKey(left: string, right: string, kind: string): string {
 /** Intake of 2–5 independent outcomes. Each is admitted to its own Run and
  *  stays independently addressable; an undetermined overlap or collision is a
  *  refusal, never an implicit merge. */
+/** A stable fingerprint of everything the manifest asserts. Any change to the
+ *  outcomes, the detected overlaps or the decisions is a different batch. */
+export function intakeManifestFingerprint(request: OutcomeIntakeRequest): string {
+  return outcomeFingerprint([
+    ...request.outcomes
+      .map((outcome) => `o:${outcome.outcomeId}:${outcome.runId}:${outcome.fingerprint}`)
+      .sort(),
+    ...(request.detected ?? [])
+      .map((pair) => `d:${pair.leftOutcomeId}:${pair.rightOutcomeId}:${pair.kind}`)
+      .sort(),
+    ...(request.relations ?? [])
+      .map(
+        (relation) =>
+          `r:${relation.leftOutcomeId}:${relation.rightOutcomeId}:${relation.kind}:${relation.decision}`
+      )
+      .sort()
+  ])
+}
+
 export function admitOutcomeIntake(
   store: ControlPlaneStore,
   request: OutcomeIntakeRequest
@@ -160,6 +186,32 @@ export function admitOutcomeIntake(
         outcomeId: first?.outcomeId ?? '',
         runId: first?.runId ?? '',
         reason: `Intake must carry ${MIN_OUTCOME_INTAKE}–${MAX_OUTCOME_INTAKE} outcomes; received ${request.outcomes.length}.`
+      }
+    }
+  }
+  const runIds = new Set<string>()
+  for (const outcome of request.outcomes) {
+    if (runIds.has(outcome.runId)) {
+      return {
+        ok: false,
+        error: {
+          code: 'duplicate_run_id',
+          outcomeId: outcome.outcomeId,
+          runId: outcome.runId,
+          reason: `Run ${outcome.runId} appears twice in one intake batch; each outcome needs its own Run.`
+        }
+      }
+    }
+    runIds.add(outcome.runId)
+    if (request.runExists && !request.runExists(outcome.runId)) {
+      return {
+        ok: false,
+        error: {
+          code: 'unknown_run',
+          outcomeId: outcome.outcomeId,
+          runId: outcome.runId,
+          reason: `Run ${outcome.runId} does not exist, so an outcome cannot be bound to it.`
+        }
       }
     }
   }
@@ -198,6 +250,23 @@ export function admitOutcomeIntake(
     }
   }
 
+  // Why a manifest fingerprint: `batchId` alone identified nothing, so the same
+  // batch id could be replayed with a DIFFERENT outcome list and simply enlarge
+  // the batch. The batch is what the manifest says it is.
+  const fingerprint = intakeManifestFingerprint(request)
+  const priorBatch = store.getIntakeBatch(request.batchId)
+  if (priorBatch && priorBatch.manifest_fingerprint !== fingerprint) {
+    return {
+      ok: false,
+      error: {
+        code: 'batch_manifest_conflict',
+        outcomeId: first?.outcomeId ?? '',
+        runId: first?.runId ?? '',
+        reason: `Batch ${request.batchId} was already admitted with a different manifest; a replay must be identical.`
+      }
+    }
+  }
+
   // Why one transaction: admitting outcome 1 and failing on outcome 3 would
   // leave a half-admitted batch, and a caller that retried would then collide
   // with its own partial write. Intake is all-or-nothing.
@@ -213,6 +282,26 @@ export function admitOutcomeIntake(
       admitted.push(result.outcome)
     }
     for (const relation of request.relations ?? []) {
+      // Why compare first: the table replaces on (left, right, kind), so a
+      // later batch could quietly flip `serialize` to `independent` and let two
+      // colliding outcomes run together.
+      const existing = store
+        .listOutcomeRelations(relation.leftOutcomeId)
+        .find(
+          (row) => row.right_outcome_id === relation.rightOutcomeId && row.kind === relation.kind
+        )
+      if (existing && existing.decision !== relation.decision) {
+        store.db.exec('ROLLBACK')
+        return {
+          ok: false,
+          error: {
+            code: 'relation_decision_conflict',
+            outcomeId: relation.leftOutcomeId,
+            runId: '',
+            reason: `${relation.kind} between ${relation.leftOutcomeId} and ${relation.rightOutcomeId} is already decided ${existing.decision}; it cannot be changed to ${relation.decision} by a later intake.`
+          }
+        }
+      }
       store.insertOutcomeRelation({
         left_outcome_id: relation.leftOutcomeId,
         right_outcome_id: relation.rightOutcomeId,
@@ -221,6 +310,7 @@ export function admitOutcomeIntake(
         rationale: relation.rationale
       })
     }
+    store.putIntakeBatch({ batch_id: request.batchId, manifest_fingerprint: fingerprint })
     store.db.exec('COMMIT')
     return { ok: true, admitted }
   } catch (error) {

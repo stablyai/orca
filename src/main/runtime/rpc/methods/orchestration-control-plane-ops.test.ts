@@ -237,9 +237,18 @@ describe('correction 2: bounded control-plane operations', () => {
 
   it('acquires, checks and releases the validation lease through the typed operation', async () => {
     const state = harness.setup()
+    // Why a real Dispatch: the owner field decides who may later release the
+    // lease, so it must name a Dispatch that actually exists on this Run.
+    const task = state.db.createTask({ spec: 'validate' })
+    const owner = state.db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: { agent: 'codex' }
+    }).dispatch.id
     const acquired = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'acquire', dispatch: 'ctx_1' },
+      { from: 'term_coord', action: 'acquire', dispatch: owner },
       state.ctx
     )) as { scopeKey: string; lease: { leaseId: string } }
     const blocked = (await harness.call(
@@ -257,24 +266,27 @@ describe('correction 2: bounded control-plane operations', () => {
         state.ctx
       )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
-    const impostor = (await harness.call(
-      'orchestration.validationLease',
-      {
-        from: 'term_coord',
-        action: 'release',
-        leaseId: acquired.lease.leaseId,
-        dispatch: 'ctx_impostor'
-      },
-      state.ctx
-    )) as { released: boolean }
-    expect(impostor.released).toBe(false)
+    const impostor = (await harness
+      .call(
+        'orchestration.validationLease',
+        {
+          from: 'term_coord',
+          action: 'release',
+          leaseId: acquired.lease.leaseId,
+          dispatch: 'ctx_impostor'
+        },
+        state.ctx
+      )
+      .catch((error: unknown) => error)) as { released?: boolean }
+    // An owner that is not a Dispatch on this Run cannot even be named.
+    expect(impostor.released).toBeUndefined()
     const released = (await harness.call(
       'orchestration.validationLease',
       {
         from: 'term_coord',
         action: 'release',
         leaseId: acquired.lease.leaseId,
-        dispatch: 'ctx_1'
+        dispatch: owner
       },
       state.ctx
     )) as { released: boolean }

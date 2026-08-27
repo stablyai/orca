@@ -175,9 +175,75 @@ describe('B2 intake of 2-5 independent outcomes', () => {
 
   it('rejects a duplicate outcome id inside one intake batch', () => {
     const cp = store()
+    // The same outcome twice also repeats its Run, and a repeated Run is
+    // refused first because two outcomes can never share one Run.
     expect(
       admitOutcomeIntake(cp, { batchId: 'b', outcomes: [outcome(1), outcome(1)] })
+    ).toMatchObject({ ok: false, error: { code: 'duplicate_run_id' } })
+    // A repeated outcome id on distinct Runs is still its own rejection.
+    expect(
+      admitOutcomeIntake(cp, {
+        batchId: 'b',
+        outcomes: [outcome(1), { ...outcome(1), runId: 'run_other' }]
+      })
     ).toMatchObject({ ok: false, error: { code: 'duplicate_outcome_id' } })
+  })
+
+  it('rejects two outcomes claiming the same Run before anything is written', () => {
+    const cp = store()
+    expect(
+      admitOutcomeIntake(cp, {
+        batchId: 'b',
+        outcomes: [outcome(1), { ...outcome(2), runId: outcome(1).runId }]
+      })
+    ).toMatchObject({ ok: false, error: { code: 'duplicate_run_id' } })
+    expect(cp.getOutcomeById('out_1')).toBeUndefined()
+  })
+
+  it('refuses to bind an outcome to a Run that does not exist', () => {
+    const cp = store()
+    expect(
+      admitOutcomeIntake(cp, {
+        batchId: 'b',
+        outcomes: [outcome(1), outcome(2)],
+        runExists: () => false
+      })
+    ).toMatchObject({ ok: false, error: { code: 'unknown_run' } })
+  })
+
+  it('refuses a replay of one batch id carrying a different manifest', () => {
+    const cp = store()
+    expect(
+      admitOutcomeIntake(cp, { batchId: 'batch_1', outcomes: [outcome(1), outcome(2)] }).ok
+    ).toBe(true)
+    expect(
+      admitOutcomeIntake(cp, { batchId: 'batch_1', outcomes: [outcome(3), outcome(4)] })
+    ).toMatchObject({ ok: false, error: { code: 'batch_manifest_conflict' } })
+  })
+
+  it('refuses to change an overlap decision a previous intake already recorded', () => {
+    const cp = store()
+    const relation = {
+      leftOutcomeId: 'out_1',
+      rightOutcomeId: 'out_2',
+      kind: 'resource_collision' as const,
+      rationale: 'Same worktree.'
+    }
+    expect(
+      admitOutcomeIntake(cp, {
+        batchId: 'b1',
+        outcomes: [outcome(1), outcome(2)],
+        relations: [{ ...relation, decision: 'serialize' }]
+      }).ok
+    ).toBe(true)
+    expect(
+      admitOutcomeIntake(cp, {
+        batchId: 'b2',
+        outcomes: [outcome(1), outcome(2)],
+        relations: [{ ...relation, decision: 'independent' }]
+      })
+    ).toMatchObject({ ok: false, error: { code: 'relation_decision_conflict' } })
+    expect(cp.listOutcomeRelations('out_1')[0].decision).toBe('serialize')
   })
 })
 

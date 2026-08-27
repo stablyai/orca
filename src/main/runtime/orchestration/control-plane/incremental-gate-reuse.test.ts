@@ -180,4 +180,26 @@ describe('INCREMENTAL_GATE_REUSE', () => {
     expect(plan.reuse).toEqual([])
     expect(plan.rerun[0].reason).toMatch(/could not read/)
   })
+
+  it('never reuses a gate that declares no real inputs at all', () => {
+    const store = world()
+    // Config-only inputs never change with the tree, so a receipt built from
+    // them alone could never be invalidated by anything — a permanent PASS.
+    const configOnly = {
+      gateId: 'gate-empty',
+      finalSha: SHA_A,
+      inputHashes: { 'config:policyVersion': 'v1', 'config:commandIdentity': 'gate-empty' },
+      policyVersion: 'v1',
+      commandIdentity: 'gate-empty'
+    }
+    recordGateReceipt(store, {
+      scopeKey: SCOPE,
+      inputs: configOnly,
+      result: 'PASS',
+      recordedAt: '2026-08-27T18:00:00Z'
+    })
+    const plan = planGateSet({ store, scopeKey: SCOPE, gates: [configOnly] })
+    expect(plan.reuse).toEqual([])
+    expect(plan.rerun[0].reason).toMatch(/declares no file inputs/)
+  })
 })
