@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 import {
   createCollaborationTopology,
   type CollaborationTopology
@@ -70,7 +71,7 @@ describe('orchestration.collaborationPublish', () => {
     }).id
     producerTaskId = createTask('producer')
     subscriberTaskIds = [createTask('subscriber-a'), createTask('subscriber-b')]
-    dispatchId = db.createDispatchContext(producerTaskId, 'term_worker', WORKER_PANE_KEY).id
+    dispatchId = createRootDispatch(db, producerTaskId, 'term_worker', WORKER_PANE_KEY).id
     if (buildTopology) {
       registerCollaborationRuntimeTopology(runtime, runId, buildTopology())
     }

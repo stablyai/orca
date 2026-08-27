@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db/orchestration-db'
+import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 import { prepareCollaborationCheckpoint } from '../../collaboration/collaboration-checkpoint-store'
 import { buildCollaborationTaskMailboxAddress } from '../../collaboration/collaboration-task-mailbox'
 import { encodeCollaborationMessagePayload } from '../../collaboration/collaboration-message-payload'
@@ -60,7 +61,7 @@ describe('orchestration.collaborationAck', () => {
       coordinatorPaneKey: 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     }).id
     taskId = db.createTask({ spec: 'worker', runId }).id
-    dispatchId = db.createDispatchContext(taskId, 'term_worker', WORKER_PANE_KEY).id
+    dispatchId = createRootDispatch(db, taskId, 'term_worker', WORKER_PANE_KEY).id
   }
 
   afterEach(() => {
