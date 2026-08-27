@@ -31,7 +31,8 @@ import {
 } from './row-builders'
 import {
   compareFolderWorkspacesForDisplay,
-  getRenderableFolderWorkspaces
+  getRenderableFolderWorkspaces,
+  partitionFolderWorkspacesForPinnedDisplay
 } from './folder-workspace-lanes'
 import { getPinnedWorktreeDisplayPolicy } from './row-types'
 import type {
@@ -76,7 +77,10 @@ export function buildRows(
   const projectIndex = buildProjectGroupingIndex(projectGrouping)
   // Membership is decided once, above the groupBy switch: every mode renders the
   // same set of folder workspaces and only chooses where they land (#15362).
+  // Pin is a later placement choice on that same set, matching git worktrees.
   const renderableFolderWorkspaces = getRenderableFolderWorkspaces(folderWorkspaces, projectGroups)
+  const { pinned: pinnedFolderWorkspaces, natural: naturalFolderWorkspaces } =
+    partitionFolderWorkspacesForPinnedDisplay(renderableFolderWorkspaces, pinnedDisplayPolicy)
   const cyclicLineageIds = nestLineage
     ? getCyclicProjectedWorktreeLineageIds(lineageById, worktreeMap)
     : new Set<string>()
@@ -134,6 +138,7 @@ export function buildRows(
   })
   emitPinnedGroup(
     pinnedSectionWorktrees,
+    pinnedFolderWorkspaces,
     repoMap,
     defaultHostId,
     collapsedGroups,
@@ -145,28 +150,29 @@ export function buildRows(
     worktreeMap,
     nestLineage,
     cyclicLineageIds,
-    noticeHostContextLabelByRepoId
+    noticeHostContextLabelByRepoId,
+    pinnedDisplayPolicy === 'duplicate-in-groups'
   )
   if (groupBy === 'none') {
     // Why folder workspaces gate this too: an account with only folder
     // workspaces rendered nothing at all in flat mode before (#15362).
-    if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
+    if (naturalWorktrees.length > 0 || naturalFolderWorkspaces.length > 0) {
       result.push({
         type: 'header',
         key: ALL_GROUP_KEY,
         label: ALL_GROUP_META.label,
-        count: naturalWorktrees.length + renderableFolderWorkspaces.length,
+        count: naturalWorktrees.length + naturalFolderWorkspaces.length,
         tone: ALL_GROUP_META.tone,
         icon: ALL_GROUP_META.icon,
         hostWorktreeCounts: getLaneHostWorktreeCounts(
           naturalWorktrees,
-          renderableFolderWorkspaces,
+          naturalFolderWorkspaces,
           repoMap,
           defaultHostId
         ),
         hostWorktreeIds: getLaneHostWorktreeIds(
           naturalWorktrees,
-          renderableFolderWorkspaces,
+          naturalFolderWorkspaces,
           repoMap,
           defaultHostId
         ),
@@ -181,7 +187,7 @@ export function buildRows(
           hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels,
           cyclicLineageIds
         })
-        for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
+        for (const pair of [...naturalFolderWorkspaces].sort((left, right) =>
           compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
         )) {
           result.push(buildFolderWorkspaceRow(pair, 0))
@@ -205,7 +211,7 @@ export function buildRows(
     pendingByRepo,
     repoOrder,
     projectOrderBy,
-    folderWorkspaces: renderableFolderWorkspaces
+    folderWorkspaces: naturalFolderWorkspaces
   })
 
   const sectionContext: SectionAppendContext = {
@@ -239,7 +245,7 @@ export function buildRows(
   appendProjectGroupSections(sectionContext, {
     orderedGroups,
     projectGroups,
-    folderWorkspaces: renderableFolderWorkspaces,
+    folderWorkspaces: naturalFolderWorkspaces,
     projectOrderBy,
     repoOrder
   })

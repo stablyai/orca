@@ -79,4 +79,34 @@ describe('host-qualified reveal lookup finds folder workspaces', () => {
       )
     ).toBe(-1)
   })
+
+  it('prefers the natural copy over the pinned duplicate', () => {
+    const rows: RenderRow[] = [
+      {
+        type: 'folder-workspace',
+        key: `pinned:folder-workspace:${FOLDER_WORKSPACE.id}`,
+        folderWorkspace: { ...FOLDER_WORKSPACE, isPinned: true },
+        projectGroup: PROJECT_GROUP,
+        depth: 0,
+        groupDepth: 0,
+        sectionKey: 'pinned'
+      } as RenderRow,
+      {
+        type: 'folder-workspace',
+        key: `folder-workspace:${FOLDER_WORKSPACE.id}`,
+        folderWorkspace: { ...FOLDER_WORKSPACE, isPinned: true },
+        projectGroup: PROJECT_GROUP,
+        depth: 0,
+        groupDepth: 0
+      } as RenderRow
+    ]
+
+    expect(
+      findPreferredRenderRowIndexForWorktreeIdentity(
+        rows,
+        { id: folderWorkspaceKey(FOLDER_WORKSPACE.id), hostId: undefined },
+        'duplicate-in-groups'
+      )
+    ).toBe(1)
+  })
 })

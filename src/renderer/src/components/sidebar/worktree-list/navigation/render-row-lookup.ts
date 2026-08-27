@@ -4,6 +4,7 @@ import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
 import { getWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { RenderRow } from '../listing/render-row'
+import { PINNED_GROUP_KEY } from '../grouping/group-keys'
 import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
 import { isPinnedWorktreeRow, type WorktreeItemRow } from '../listing/renderable-rows'
 
@@ -96,6 +97,13 @@ export function findPreferredRenderRowIndexForWorktree(
     if (pinnedDisplayPolicy === 'duplicate-in-groups' && itemRow && !isPinnedWorktreeRow(itemRow)) {
       return index
     }
+    if (
+      pinnedDisplayPolicy === 'duplicate-in-groups' &&
+      row.type === 'folder-workspace' &&
+      row.sectionKey !== PINNED_GROUP_KEY
+    ) {
+      return index
+    }
   }
   return fallbackIndex
 }
@@ -112,7 +120,13 @@ export function findPreferredRenderRowIndexForWorktreeIdentity(
     // Why: host-qualified reveals are emitted for folder workspaces too, and a
     // walker that only knows item rows returns -1 so the reveal never lands.
     if (row.type === 'folder-workspace') {
-      if (folderWorkspaceKey(row.folderWorkspace.id) === worktree.id) {
+      if (folderWorkspaceKey(row.folderWorkspace.id) !== worktree.id) {
+        continue
+      }
+      if (fallbackIndex === -1) {
+        fallbackIndex = index
+      }
+      if (pinnedDisplayPolicy !== 'duplicate-in-groups' || row.sectionKey !== PINNED_GROUP_KEY) {
         return index
       }
       continue

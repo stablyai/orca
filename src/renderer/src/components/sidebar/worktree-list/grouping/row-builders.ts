@@ -256,14 +256,17 @@ export function appendWorktreeRows(
  *  grouped-lane and flat emitters so their rows cannot diverge. */
 export function buildFolderWorkspaceRow(
   pair: RenderableFolderWorkspace,
-  groupDepth: number
+  groupDepth: number,
+  sectionKey?: string
 ): FolderWorkspaceRow {
+  const id = pair.folderWorkspace.id
   return {
     type: 'folder-workspace',
-    key: `folder-workspace:${pair.folderWorkspace.id}`,
+    key: sectionKey ? `${sectionKey}:folder-workspace:${id}` : `folder-workspace:${id}`,
     folderWorkspace: pair.folderWorkspace,
     projectGroup: pair.projectGroup,
     depth: 0,
-    groupDepth
+    groupDepth,
+    ...(sectionKey ? { sectionKey } : {})
   }
 }

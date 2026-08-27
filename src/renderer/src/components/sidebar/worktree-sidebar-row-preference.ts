@@ -53,11 +53,32 @@ export function getRenderedWorktreesInSidebarOrder(
     getPreferredWorktreeRows(itemRows, pinnedDisplayPolicy).map((row) => row.rowKey)
   )
   const renderedWorktrees: Worktree[] = []
+  const seenFolderIds = new Set<string>()
+  const naturalFolderIds = new Set(
+    rows
+      .filter(
+        (row): row is Extract<HostSectionRow, { type: 'folder-workspace' }> =>
+          row.type === 'folder-workspace' && row.sectionKey !== PINNED_GROUP_KEY
+      )
+      .map((row) => row.folderWorkspace.id)
+  )
 
   for (const row of rows) {
     if (row.type === 'item' && preferredRowKeys.has(row.rowKey)) {
       renderedWorktrees.push(row.worktree)
     } else if (row.type === 'folder-workspace') {
+      const folderId = row.folderWorkspace.id
+      if (seenFolderIds.has(folderId)) {
+        continue
+      }
+      if (
+        pinnedDisplayPolicy === 'duplicate-in-groups' &&
+        row.sectionKey === PINNED_GROUP_KEY &&
+        naturalFolderIds.has(folderId)
+      ) {
+        continue
+      }
+      seenFolderIds.add(folderId)
       renderedWorktrees.push(folderWorkspaceToWorktree(row.folderWorkspace))
     }
   }

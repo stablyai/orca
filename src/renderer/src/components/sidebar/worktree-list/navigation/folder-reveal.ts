@@ -3,7 +3,7 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
-import { getProjectGroupHeaderKey } from '../grouping/group-keys'
+import { PINNED_GROUP_KEY, getProjectGroupHeaderKey } from '../grouping/group-keys'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { getFolderWorkspaceLaneKey } from '../grouping/folder-workspace-lanes'
 import type { WorktreeGroupBy } from '../grouping/row-types'
@@ -84,6 +84,9 @@ export function getFolderWorkspaceRevealGroupKeys(
     }
     keys.unshift(getProjectGroupHeaderKey(group.id))
     groupId = group.parentGroupId
+  }
+  if (folderWorkspace.isPinned) {
+    keys.unshift(PINNED_GROUP_KEY)
   }
 
   // Under non-repo grouping the project-group headers above do not exist, so the

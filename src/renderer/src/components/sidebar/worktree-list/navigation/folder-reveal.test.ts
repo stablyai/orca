@@ -154,4 +154,16 @@ describe('reveal keys under non-repo grouping', () => {
     expect(keys).toContain(getProjectGroupHeaderKey(group.id))
     expect(keys.some((key) => key.startsWith('workspace-status:'))).toBe(false)
   })
+
+  it('includes Pinned so a collapsed Pinned section can be expanded', () => {
+    const pinned = makeFolderWorkspace({ isPinned: true })
+    const keys = getFolderWorkspaceRevealGroupKeys(
+      folderWorkspaceKey(pinned.id),
+      [pinned],
+      [group],
+      { groupBy: 'repo', workspaceStatuses: [], defaultHostId: 'local' }
+    )
+    expect(keys).toContain('pinned')
+    expect(keys[0]).toBe('pinned')
+  })
 })
