@@ -30,6 +30,7 @@ import type {
   GenerateBranchNameResult,
   GenerateCommitMessageResult,
   GeneratePullRequestFieldsResult,
+  GenerateTextResult,
   InternalTextGenerationResult,
   SpawnSourceControlAgent,
   TextGenerationOperation
@@ -71,6 +72,30 @@ async function executeGenerationPlan(input: {
         operation: input.operation,
         spawnAgent: input.spawnAgent
       })
+}
+
+export async function generateText(input: {
+  prompt: string
+  params: GenerateParams
+  target: CommitMessageGenerationTarget
+  operation: TextGenerationOperation
+  spawnAgent: SpawnSourceControlAgent
+}): Promise<GenerateTextResult> {
+  const planned = planCommitMessageGeneration(
+    { ...input.params, backslash: commandBackslashMode(input.target) },
+    input.prompt
+  )
+  if (!planned.ok) {
+    return { success: false, error: planned.error }
+  }
+  const result = await executeGenerationPlan({
+    ...input,
+    plan: planned.plan,
+    emptyResultName: 'text'
+  })
+  return result.success
+    ? { success: true, text: result.rawOutput, agentLabel: result.agentLabel }
+    : { success: false, error: result.error, canceled: result.canceled }
 }
 
 export async function generateCommitMessage(input: {
