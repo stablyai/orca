@@ -1415,6 +1415,7 @@ type RuntimeStore = {
     agentStatusHooksEnabled?: GlobalSettings['agentStatusHooksEnabled']
     defaultTaskSource?: GlobalSettings['defaultTaskSource']
     defaultTaskViewPreset?: GlobalSettings['defaultTaskViewPreset']
+    workItemStartPromptDelivery?: GlobalSettings['workItemStartPromptDelivery']
     visibleTaskProviders?: GlobalSettings['visibleTaskProviders']
     defaultRepoSelection?: GlobalSettings['defaultRepoSelection']
     defaultLinearTeamSelection?: GlobalSettings['defaultLinearTeamSelection']
@@ -4119,6 +4120,7 @@ export class OrcaRuntimeService {
     | 'agentStatusHooksEnabled'
     | 'defaultTaskSource'
     | 'defaultTaskViewPreset'
+    | 'workItemStartPromptDelivery'
     | 'visibleTaskProviders'
     | 'defaultRepoSelection'
     | 'defaultLinearTeamSelection'
@@ -4147,6 +4149,7 @@ export class OrcaRuntimeService {
       agentStatusHooksEnabled: settings.agentStatusHooksEnabled !== false,
       defaultTaskSource: settings.defaultTaskSource ?? 'github',
       defaultTaskViewPreset: settings.defaultTaskViewPreset ?? 'issues',
+      workItemStartPromptDelivery: settings.workItemStartPromptDelivery ?? 'draft',
       visibleTaskProviders: settings.visibleTaskProviders ?? [...TASK_PROVIDERS],
       defaultRepoSelection: settings.defaultRepoSelection ?? null,
       defaultLinearTeamSelection: settings.defaultLinearTeamSelection ?? null,
@@ -4199,6 +4202,7 @@ export class OrcaRuntimeService {
       | 'agentDefaultEnv'
       | 'defaultTaskSource'
       | 'defaultTaskViewPreset'
+      | 'workItemStartPromptDelivery'
       | 'visibleTaskProviders'
       | 'defaultRepoSelection'
       | 'defaultLinearTeamSelection'
@@ -4221,6 +4225,7 @@ export class OrcaRuntimeService {
       | 'agentStatusHooksEnabled'
       | 'defaultTaskSource'
       | 'defaultTaskViewPreset'
+      | 'workItemStartPromptDelivery'
       | 'visibleTaskProviders'
       | 'defaultRepoSelection'
       | 'defaultLinearTeamSelection'

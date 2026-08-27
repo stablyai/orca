@@ -92,6 +92,7 @@ describe('Store', () => {
     expect(settings.rightSidebarOpenByDefault).toBe(true)
     expect(settings.showTasksButton).toBe(true)
     expect(settings.showAutomationsButton).toBe(true)
+    expect(settings.workItemStartPromptDelivery).toBe('draft')
     expect(settings.visibleTaskProviders).toEqual(['github', 'gitlab', 'linear', 'jira'])
     expect(settings.openInApplications).toEqual([
       { id: 'vscode', label: 'VS Code', command: 'code' }
@@ -106,6 +107,27 @@ describe('Store', () => {
     expect(settings.notifications.customSoundVolume).toBe(100)
     expect(settings.notifications.suppressWhenFocused).toBe(true)
   })
+
+  it('defaults an existing profile without a work item Start preference to draft', async () => {
+    const persisted = getDefaultPersistedState(testState.dir)
+    delete persisted.settings.workItemStartPromptDelivery
+    writeDataFile(persisted)
+
+    expect((await createStore()).getSettings().workItemStartPromptDelivery).toBe('draft')
+  })
+
+  it.each(['draft', 'submit-after-ready'] as const)(
+    'persists the %s work item Start preference',
+    async (workItemStartPromptDelivery) => {
+      const store = await createStore()
+      store.updateSettings({ workItemStartPromptDelivery })
+      store.flush()
+
+      expect((await createStore()).getSettings().workItemStartPromptDelivery).toBe(
+        workItemStartPromptDelivery
+      )
+    }
+  )
 
   it('repairs a persisted terminal line height outside xterm bounds', async () => {
     const persisted = getDefaultPersistedState(testState.dir)

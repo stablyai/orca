@@ -91,7 +91,8 @@ vi.mock('@/store', () => ({
 
 const baseSettings = {
   visibleTaskProviders: ['github', 'gitlab', 'linear'],
-  defaultTaskSource: 'github'
+  defaultTaskSource: 'github',
+  workItemStartPromptDelivery: 'draft'
 } as GlobalSettings
 
 const INCOMPLETE_BANNER = 'Some visible providers still need setup'
@@ -104,12 +105,14 @@ function renderPane(): string {
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
-async function renderInteractivePane(): Promise<HTMLDivElement> {
+async function renderInteractivePane(
+  updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn()
+): Promise<HTMLDivElement> {
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
   await act(async () => {
-    root?.render(<TasksPane settings={baseSettings} updateSettings={vi.fn()} />)
+    root?.render(<TasksPane settings={baseSettings} updateSettings={updateSettings} />)
   })
   return container
 }
@@ -161,6 +164,25 @@ describe('TasksPane', () => {
     expect(markup).toContain('Linear setup steps')
     expect(markup).toContain('Hide providers you do not use')
     expect(markup).toContain('API access, the agent skill, and Show in Tasks')
+  })
+
+  it('defaults the Start behavior control to Draft and persists Submit after ready', async () => {
+    const updateSettings = vi.fn()
+    await renderInteractivePane(updateSettings)
+    const control = container?.querySelector(
+      '[role="radiogroup"][aria-label="Work item Start behavior"]'
+    )
+    const draft = control?.querySelector('[role="radio"][aria-label="Draft"]')
+    const submit = control?.querySelector('[role="radio"][aria-label="Submit after ready"]')
+
+    expect(draft?.getAttribute('aria-checked')).toBe('true')
+    expect(submit?.getAttribute('aria-checked')).toBe('false')
+    await act(async () => {
+      ;(submit as HTMLButtonElement | null)?.click()
+    })
+    expect(updateSettings).toHaveBeenCalledWith({
+      workItemStartPromptDelivery: 'submit-after-ready'
+    })
   })
 
   it('does not warn on a fresh install where nothing is connected yet', () => {

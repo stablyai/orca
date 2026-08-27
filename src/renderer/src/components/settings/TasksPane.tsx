@@ -12,7 +12,11 @@ import { LinearIcon } from '@/components/icons/LinearIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSubsectionHeader } from './SettingsFormControls'
+import {
+  SettingsRow,
+  SettingsSegmentedControl,
+  SettingsSubsectionHeader
+} from './SettingsFormControls'
 import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
@@ -24,10 +28,14 @@ import {
   JIRA_INTEGRATION_SECTION_ID,
   LINEAR_INTEGRATION_SECTION_ID
 } from './task-provider-integration-section-ids'
-import { getTasksPaneSearchKeywords } from './tasks-search'
+import { getTasksPaneSearchKeywords, getWorkItemStartBehaviorSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
 import { useTaskSourceProviderReadiness } from './use-task-source-provider-readiness'
 import { translate } from '@/i18n/i18n'
+import {
+  resolveWorkItemStartPromptDelivery,
+  type WorkItemStartPromptDelivery
+} from '../../../../shared/work-item-start-prompt-delivery'
 
 type TasksPaneProps = {
   settings: GlobalSettings
@@ -144,6 +152,66 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
 
   return (
     <div className="space-y-6">
+      <SearchableSetting
+        title={translate(
+          'auto.components.settings.TasksPane.workItemStartBehavior',
+          'Work item Start behavior'
+        )}
+        description={translate(
+          'auto.components.settings.TasksPane.workItemStartBehaviorDescription',
+          'Choose whether Start leaves the work item prompt editable or submits it after the agent is ready.'
+        )}
+        keywords={getWorkItemStartBehaviorSearchKeywords()}
+      >
+        <SettingsRow
+          label={translate(
+            'auto.components.settings.TasksPane.workItemStartBehavior',
+            'Work item Start behavior'
+          )}
+          description={translate(
+            'auto.components.settings.TasksPane.workItemStartBehaviorDescription',
+            'Choose whether Start leaves the work item prompt editable or submits it after the agent is ready.'
+          )}
+          control={
+            <SettingsSegmentedControl<WorkItemStartPromptDelivery>
+              size="sm"
+              ariaLabel={translate(
+                'auto.components.settings.TasksPane.workItemStartBehavior',
+                'Work item Start behavior'
+              )}
+              value={resolveWorkItemStartPromptDelivery(settings.workItemStartPromptDelivery)}
+              onChange={(workItemStartPromptDelivery) =>
+                updateSettings({ workItemStartPromptDelivery })
+              }
+              options={[
+                {
+                  value: 'draft',
+                  label: translate(
+                    'auto.components.settings.TasksPane.workItemStartDraft',
+                    'Draft'
+                  ),
+                  ariaLabel: translate(
+                    'auto.components.settings.TasksPane.workItemStartDraft',
+                    'Draft'
+                  )
+                },
+                {
+                  value: 'submit-after-ready',
+                  label: translate(
+                    'auto.components.settings.TasksPane.workItemStartSubmit',
+                    'Submit after ready'
+                  ),
+                  ariaLabel: translate(
+                    'auto.components.settings.TasksPane.workItemStartSubmit',
+                    'Submit after ready'
+                  )
+                }
+              ]}
+            />
+          }
+        />
+      </SearchableSetting>
+
       <section className="space-y-3">
         <SettingsSubsectionHeader
           title={translate(

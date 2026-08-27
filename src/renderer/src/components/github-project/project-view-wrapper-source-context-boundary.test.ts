@@ -65,4 +65,14 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
     expect(contextSection).toContain('repo: dialogRepo')
     expect(dialogSection).toContain('sourceContext={rowActions.dialogSourceContext}')
   })
+
+  it('passes the persisted Start preference from both Project Start and Issue Use', () => {
+    const actionSource = componentSource('useProjectRowActions.ts')
+    const wrapperSource = componentSource('ProjectViewWrapper.tsx')
+
+    for (const source of [actionSource, wrapperSource]) {
+      expect(source).toContain('promptDelivery: resolveWorkItemStartPromptDelivery(')
+      expect(source).toContain('settings?.workItemStartPromptDelivery')
+    }
+  })
 })

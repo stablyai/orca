@@ -20,7 +20,28 @@ export const getTasksPaneSearchKeywords = createLocalizedCatalog(() => [
   ...translateSearchKeyword('auto.components.settings.tasks.search.connect', 'connect')
 ])
 
+export const getWorkItemStartBehaviorSearchKeywords = createLocalizedCatalog(() => [
+  ...translateSearchKeyword('auto.components.settings.tasks.search.start', 'start'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.prompt', 'prompt'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.draft', 'draft'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.submit', 'submit'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.ready', 'ready'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.issue', 'issue'),
+  ...translateSearchKeyword('auto.components.settings.tasks.search.workItem', 'work item')
+])
+
 export const getTasksPaneSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate(
+      'auto.components.settings.tasks.search.workItemStartBehavior',
+      'Work item Start behavior'
+    ),
+    description: translate(
+      'auto.components.settings.tasks.search.workItemStartBehaviorDescription',
+      'Choose whether Start leaves the work item prompt editable or submits it after the agent is ready.'
+    ),
+    keywords: getWorkItemStartBehaviorSearchKeywords()
+  },
   {
     title: translate('auto.components.settings.tasks.search.5b8e4aace5', 'Task Providers'),
     description: translate(
