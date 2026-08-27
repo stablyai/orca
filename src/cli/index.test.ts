@@ -290,6 +290,59 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('lists previously hidden root-help command groups (#13201)', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+    const rootHelp = String(logSpy.mock.calls[0][0])
+
+    // Why: each served entry was independently invisible in `orca --help` (#13201).
+    const expectedEntryPrefixes = [
+      '  claude-teams ',
+      'Agent Hooks:',
+      '  agent hooks status ',
+      '  agent hooks on ',
+      '  agent hooks off ',
+      'Artifacts:',
+      '  artifacts list ',
+      '  artifacts share ',
+      '  artifacts update ',
+      '  artifacts unshare ',
+      '  artifacts delete ',
+      'Mobile Emulator (iOS Simulator / Android):',
+      '  emulator devices ',
+      '  emulator shutdown ',
+      '  emulator install ',
+      '  emulator launch ',
+      '  emulator permissions ',
+      '  emulator ax ',
+      '  emulator logcat ',
+      '  select-all ',
+      '  full-screenshot ',
+      '  pdf ',
+      '  cookie get ',
+      '  cookie set ',
+      '  cookie delete ',
+      '  geolocation ',
+      '  viewport ',
+      '  intercept enable ',
+      '  intercept disable ',
+      '  intercept list ',
+      '  capture start ',
+      '  capture stop ',
+      '  console ',
+      '  network '
+    ]
+    const rootHelpLines = rootHelp.split('\n')
+    for (const prefix of expectedEntryPrefixes) {
+      expect(
+        rootHelpLines.some((line) => line.startsWith(prefix)),
+        `missing root-help entry: ${prefix.trim()}`
+      ).toBe(true)
+    }
+    logSpy.mockRestore()
+  })
+
   it('advertises host-local account management', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
