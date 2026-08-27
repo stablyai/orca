@@ -552,6 +552,38 @@ describe('planCommitMessageGeneration', () => {
     })
   })
 
+  it('plans Antigravity with the prompt as the --print value, not stdin', () => {
+    const result = planCommitMessageGeneration(
+      {
+        agentId: 'antigravity',
+        model: 'gemini-3.6-flash',
+        agentArgs: '--add-dir . --effort low --dangerously-skip-permissions'
+      },
+      'COMMIT PROMPT'
+    )
+
+    expect(result).toEqual({
+      ok: true,
+      plan: {
+        binary: 'agy',
+        args: [
+          '--print',
+          'COMMIT PROMPT',
+          '--sandbox',
+          '--model',
+          'gemini-3.6-flash',
+          '--add-dir',
+          '.',
+          '--effort',
+          'low',
+          '--dangerously-skip-permissions'
+        ],
+        stdinPayload: null,
+        label: 'Antigravity'
+      }
+    })
+  })
+
   it('rejects invalid per-action CLI arguments before spawning', () => {
     const result = planCommitMessageGeneration(
       {

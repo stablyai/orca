@@ -710,8 +710,12 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     id: 'antigravity',
     label: 'Antigravity',
     binary: 'agy',
-    promptDelivery: 'stdin',
-    buildArgs: ({ model }) => ['--print', '--sandbox', '--model', model],
+    // Why: agy's --print/-p/--prompt is a required string flag. A valueless
+    // `--print --sandbox` makes `--sandbox` the user request (STA-4011).
+    // Keep the prompt immediately after --print so extra recipe args cannot
+    // land between the flag and its value.
+    promptDelivery: 'argv',
+    buildArgs: ({ prompt, model }) => ['--print', prompt, '--sandbox', '--model', model],
     modelSource: 'dynamic',
     modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
     models: [
