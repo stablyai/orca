@@ -142,6 +142,31 @@ describe('ProviderSegment monthly window', () => {
     expect(markup).not.toContain('25% used')
   })
 
+  it('prefers Cursor Models over a higher-used Other models bucket in compact mode', async () => {
+    const { ProviderSegment } = await import('./StatusBar')
+    const limits: ProviderRateLimits = {
+      provider: 'cursor',
+      session: null,
+      weekly: null,
+      monthly: windowOf(15, 43200),
+      buckets: [
+        { ...windowOf(6, 43200), name: 'Cursor Models' },
+        { ...windowOf(80, 43200), name: 'Other models' }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    const markup = renderToStaticMarkup(
+      <ProviderSegment p={limits} compact={false} display="used" mode="compact" />
+    )
+
+    expect(markup).toContain('6% used Cursor Models')
+    expect(markup).not.toContain('Other models')
+    expect(markup).not.toContain('80% used')
+  })
+
   // Why: #8378 — status-bar chip showed fixed window size ("5h") while the
   // usage popup showed remaining time for the same resetsAt.
   it('shows remaining session time on the chip when resetsAt is known (repro-8378)', async () => {

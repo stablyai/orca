@@ -59,13 +59,16 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
   if (sections.length === 0) {
     return null
   }
-  // Why: the footer promises one quiet summary per provider; choose urgency by
-  // consumption even when the user displays the complementary “% left” value.
-  const tightest = sections.reduce((current, candidate) =>
-    clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
-      ? candidate
-      : current
-  )
+  // Cursor's compact chip should show included-model usage, not API/"Other models",
+  // even when that bucket is more consumed.
+  const cursorModels = sections.find((s) => s.label === 'Cursor Models')
+  const tightest =
+    cursorModels ??
+    sections.reduce((current, candidate) =>
+      clampUsedPercent(candidate.window.usedPercent) > clampUsedPercent(current.window.usedPercent)
+        ? candidate
+        : current
+    )
   return { ...tightest, label: shortLabel(p, tightest, true) }
 }
 
