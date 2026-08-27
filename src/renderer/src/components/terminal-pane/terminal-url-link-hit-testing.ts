@@ -38,6 +38,8 @@ type UrlLinkClickFallbackDeps = {
   /** Resolved per click: the pane's PTY (and its runtime binding) may not exist at install time. */
   getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
+  /** Live read of the user's mouse-input gate; the suppressor restores to it. */
+  getMouseEventsRequireAlt?: () => boolean
   getLinkActionContext?: () => TerminalLinkActionContext | null
   getActionDestinations?: () => TerminalHttpLinkActionDestinations
 }
@@ -178,7 +180,8 @@ export function installHttpLinkClickFallback(
       const context = deps.getLinkActionContext?.()
       return Boolean(context?.pointerGesture.canRequestAction(event) && isLinkMouseEvent(event))
     },
-    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event))
+    (event) => Boolean(deps.getLinkActionContext?.()?.pointerGesture.canRequestAction(event)),
+    deps.getMouseEventsRequireAlt
   )
   const handleMouseUp = (event: MouseEvent): void => {
     if (!isDesktopHttpLinkFallbackActivation(event)) {

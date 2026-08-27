@@ -37,6 +37,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { shouldClaimMiddleClickForPrimarySelection } from './terminal-middle-click-paste-claim'
 import {
   collectLeafIdsInOrder,
   EMPTY_LAYOUT,
@@ -2725,7 +2726,7 @@ function TerminalPane(
   )
 
   const getPrimarySelectionMiddleClickPane = useCallback(
-    (target: EventTarget | null) => {
+    (target: EventTarget | null, altKey: boolean) => {
       if (!terminalShouldHandleMiddleClick(target)) {
         return null
       }
@@ -2737,10 +2738,16 @@ function TerminalPane(
         manager.getPanes().find((pane) => pane.container.contains(target)) ??
         manager.getActivePane() ??
         manager.getPanes()[0]
-      if (!clickedPane || clickedPane.terminal.modes.mouseTrackingMode !== 'none') {
+      if (!clickedPane) {
         return null
       }
-      return clickedPane
+      return shouldClaimMiddleClickForPrimarySelection({
+        mouseTrackingMode: clickedPane.terminal.modes.mouseTrackingMode,
+        mouseEventsRequireAlt: clickedPane.terminal.options.mouseEventsRequireAlt === true,
+        altKey
+      })
+        ? clickedPane
+        : null
     },
     [terminalShouldHandleMiddleClick]
   )
@@ -2750,7 +2757,7 @@ function TerminalPane(
       if (event.button !== 1 || !isPrimarySelectionEnabled()) {
         return
       }
-      const clickedPane = getPrimarySelectionMiddleClickPane(event.target)
+      const clickedPane = getPrimarySelectionMiddleClickPane(event.target, event.altKey)
       if (!clickedPane) {
         return
       }
@@ -2843,7 +2850,7 @@ function TerminalPane(
       if (
         event.button === 1 &&
         isPrimarySelectionEnabled() &&
-        getPrimarySelectionMiddleClickPane(event.target)
+        getPrimarySelectionMiddleClickPane(event.target, event.altKey)
       ) {
         event.preventDefault()
         event.stopPropagation()

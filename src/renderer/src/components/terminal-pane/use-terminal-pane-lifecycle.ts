@@ -1253,6 +1253,8 @@ export function useTerminalPaneLifecycle({
           ...linkDeps,
           getSourceOwner: () => getHttpLinkSourceOwnerForPane(pane.id),
           requestOpenLinksInAppPreference,
+          getMouseEventsRequireAlt: () =>
+            settingsRef.current?.terminalMouseEventsRequireAlt === true,
           getLinkActionContext: () => getLinkActionContext(pane.id),
           getActionDestinations: () => getHttpLinkActionDestinations(pane.id)
         })

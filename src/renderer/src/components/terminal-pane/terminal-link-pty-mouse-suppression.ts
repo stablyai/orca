@@ -28,12 +28,15 @@ export function installTerminalLinkPtyMouseSuppression(
   terminal: Terminal,
   shouldSuppressMouseEvent: (event: MouseEvent) => boolean,
   shouldDeferPlainMouseEvent: (event: MouseEvent) => boolean = () => false,
-  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true
+  shouldContinueDeferring: (event: MouseEvent) => boolean = () => true,
+  // Why a getter, not a snapshot: applyTerminalAppearance owns this option and can
+  // rewrite it mid-gesture, so restoring a saved value would strand the pane.
+  getMouseEventsRequireAlt: () => boolean = () => false
 ): TerminalLinkPtyMouseSuppression {
   const terminalElement = terminal.element
   const ownerDocument = terminalElement?.ownerDocument
   const ownerWindow = ownerDocument?.defaultView
-  let previousMouseEventsRequireAlt: boolean | null = null
+  let suppressing = false
   let restoreQueued = false
   let deferredPtyInput: DeferredPtyInput[] | null = null
   let capturesPtyInput = false
@@ -43,16 +46,16 @@ export function installTerminalLinkPtyMouseSuppression(
 
   const restore = (): void => {
     restoreQueued = false
-    if (previousMouseEventsRequireAlt === null) {
+    if (!suppressing) {
       return
     }
-    terminal.options.mouseEventsRequireAlt = previousMouseEventsRequireAlt
-    previousMouseEventsRequireAlt = null
+    terminal.options.mouseEventsRequireAlt = getMouseEventsRequireAlt()
+    suppressing = false
     ownerDocument?.removeEventListener('mouseup', queueRestore)
     ownerWindow?.removeEventListener('blur', restore)
   }
   const queueRestore = (): void => {
-    if (restoreQueued || previousMouseEventsRequireAlt === null) {
+    if (restoreQueued || !suppressing) {
       return
     }
     restoreQueued = true
@@ -90,7 +93,7 @@ export function installTerminalLinkPtyMouseSuppression(
       return
     }
     restore()
-    previousMouseEventsRequireAlt = Boolean(terminal.options.mouseEventsRequireAlt)
+    suppressing = true
     // Why: an Orca-owned link gesture must not also reach a mouse-aware child TUI.
     terminal.options.mouseEventsRequireAlt = true
     ownerDocument?.addEventListener('mouseup', queueRestore)
