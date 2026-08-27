@@ -155,12 +155,15 @@ describe('resolveWorktreeOperationRouteResult', () => {
     expect(resolveWorktreeOperationRouteResult({}, WORKTREE_ID)).toEqual({ kind: 'missing' })
   })
 
-  it('fails a paired-client ownerless stale publication closed instead of routing it locally', () => {
+  it('fails a paired-client publication closed when no repo row can own it', () => {
+    // Why: a worktree row on its own carries no host evidence. This is the fail-closed case
+    // #9994 was defending — an owner that really is missing, not merely unstamped.
     expect(
       resolveWorktreeOperationRouteResult(
         {
-          repos: [{ id: 'repo-1' } as never],
+          repos: [],
           runtimeEnvironments: [{ id: 'disconnected-hub' }],
+          runtimeEnvironmentCatalogHydrated: true,
           worktreesByRepo: { 'repo-1': [worktree(undefined)] }
         },
         WORKTREE_ID
@@ -168,12 +171,13 @@ describe('resolveWorktreeOperationRouteResult', () => {
     ).toEqual({ kind: 'missing' })
   })
 
-  it('fails ownerless rows closed until the saved-runtime catalog is hydrated', () => {
+  it('fails ownerless rows closed mid-hydration while a saved runtime could own them', () => {
     expect(
       resolveWorktreeOperationRouteResult(
         {
+          settings: { activeRuntimeEnvironmentId: 'hub-b' } as never,
           repos: [{ id: 'repo-1' } as never],
-          runtimeEnvironments: [],
+          runtimeEnvironments: [{ id: 'hub-a' }, { id: 'hub-b' }],
           runtimeEnvironmentCatalogHydrated: false,
           worktreesByRepo: { 'repo-1': [worktree(undefined)] }
         },
