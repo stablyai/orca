@@ -37,6 +37,7 @@ import { useAppStore } from '../../store'
 import {
   ClaudeIcon,
   GeminiIcon,
+  GlmIcon,
   MiniMaxIcon,
   OpenAIIcon,
   OpenCodeGoIcon
@@ -48,6 +49,7 @@ import {
   getAccountsGeminiSearchEntries,
   getAccountsLocationSearchEntries,
   getAccountsGrokSearchEntries,
+  getAccountsGlmSearchEntries,
   getAccountsMiniMaxSearchEntries,
   getAccountsOpencodeSearchEntries,
   getAccountsPaneSearchEntries
@@ -364,6 +366,7 @@ export function AccountsPane({
   const codexRateLimits = useAppStore((s) => s.rateLimits.codex)
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
+  const glmRateLimits = useAppStore((s) => s.rateLimits.glm)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
@@ -1985,6 +1988,87 @@ export function AccountsPane({
     ) : null,
     matchesSettingsSearch(searchQuery, getAccountsGrokSearchEntries()) ? (
       <GrokAccountsSection key="grok" />
+    ) : null,
+    matchesSettingsSearch(searchQuery, getAccountsGlmSearchEntries()) ? (
+      <section key="glm" id="accounts-glm" className="space-y-4 scroll-mt-6">
+        <div className="flex items-start justify-between gap-3">
+          <div className="space-y-1">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <GlmIcon size={16} />
+              {translate('auto.components.settings.AccountsPane.glmTitle', 'GLM Coding Plan')}
+            </h3>
+            <p className="text-xs text-muted-foreground">
+              {translate(
+                'auto.components.settings.AccountsPane.glmDesc',
+                'Enter your GLM Coding Plan API key from Z.AI or Zhipu to show 5-hour and weekly usage in the status bar.'
+              )}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <SettingsSegmentedControl<'zai' | 'zhipu'>
+              value={settings.glmCodingPlanUsage?.platform ?? 'zai'}
+              onChange={(platform) =>
+                updateSettings({
+                  glmCodingPlanUsage: {
+                    platform,
+                    apiKey: settings.glmCodingPlanUsage?.apiKey ?? ''
+                  }
+                })
+              }
+              ariaLabel={translate(
+                'auto.components.settings.AccountsPane.glmPlatform',
+                'GLM platform'
+              )}
+              size="sm"
+              options={[
+                { value: 'zai', label: 'Z.AI' },
+                { value: 'zhipu', label: 'Zhipu' }
+              ]}
+            />
+          </div>
+          <Input
+            type="password"
+            placeholder={translate(
+              'auto.components.settings.AccountsPane.glmApiKeyPlaceholder',
+              'Paste your GLM API key'
+            )}
+            value={settings.glmCodingPlanUsage?.apiKey ?? ''}
+            onChange={(e) =>
+              updateSettings({
+                glmCodingPlanUsage: {
+                  platform: settings.glmCodingPlanUsage?.platform ?? 'zai',
+                  apiKey: e.target.value
+                }
+              })
+            }
+          />
+          {settings.glmCodingPlanUsage?.apiKey ? (
+            <Button
+              variant="outline"
+              size="xs"
+              onClick={() => updateSettings({ glmCodingPlanUsage: null })}
+            >
+              {translate('auto.components.settings.AccountsPane.glmRemoveKey', 'Remove API key')}
+            </Button>
+          ) : null}
+          {glmRateLimits?.status === 'ok' && (glmRateLimits?.session || glmRateLimits?.weekly) ? (
+            <div className="flex items-center gap-2 text-xs">
+              <Badge variant="secondary" className="tabular-nums">
+                {glmRateLimits.session
+                  ? `${Math.round(glmRateLimits.session.usedPercent)}% (5h)`
+                  : null}
+                {glmRateLimits.session && glmRateLimits.weekly ? ' · ' : null}
+                {glmRateLimits.weekly
+                  ? `${Math.round(glmRateLimits.weekly.usedPercent)}% (wk)`
+                  : null}
+              </Badge>
+            </div>
+          ) : null}
+        </div>
+      </section>
     ) : null
   ].filter(Boolean)
 

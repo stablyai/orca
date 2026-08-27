@@ -212,6 +212,27 @@ export const getAccountsGrokSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsGlmSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: translate('auto.components.settings.accounts.search.glmTitle', 'GLM Coding Plan'),
+    description: translate(
+      'auto.components.settings.accounts.search.glmDesc',
+      'API-key-based usage tracking for GLM Coding Plan (Z.AI / Zhipu).'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.accounts.search.glmKw', 'glm'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zaiKw', 'zai'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.zhipuKw', 'zhipu'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.apiKeyKw', 'api key'),
+      ...translateSearchKeyword('auto.components.settings.accounts.search.quotaKw', 'quota'),
+      ...translateSearchKeyword(
+        'auto.components.settings.accounts.search.statusBarKw',
+        'status bar'
+      )
+    ]
+  }
+])
+
 export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAccountsLocationSearchEntries(),
   ...getAccountsClaudeSearchEntries(),
