@@ -120,11 +120,6 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import {
-  archiveReleasedCodexWorkerThread,
-  reconcileCodexWorkerThreadForDispatch,
-  retryCodexWorkerThreadLifecycleBacklog
-} from './orchestration/codex-worker-thread-lifecycle'
-import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
@@ -2852,8 +2847,6 @@ export class OrcaRuntimeService {
   private ptyForegroundProcessReads = new Map<string, PtyForegroundProcessReadEntry>()
   private ptyDelayedForegroundSnapshotTitleObservations = new Map<string, number>()
   private _orchestrationDb: OrchestrationDb | null = null
-  private codexWorkerThreadLifecycleByDispatch = new Map<string, Promise<void>>()
-  private codexWorkerThreadBacklogReconciliation: Promise<void> | null = null
   private messageWaitersByHandle = new Map<string, Set<MessageWaiter>>()
   // Why: mobile clients subscribe to terminal output via terminal.subscribe.
   // These listeners fire on every onPtyData call, enabling real-time streaming
@@ -3399,72 +3392,14 @@ export class OrcaRuntimeService {
     return this.getLocalProviderFn ? this.getLocalProviderFn() : null
   }
 
-  private workerDispatchRequestedCodex(dispatchId: string): boolean {
-    const worker = this._orchestrationDb?.getWorkerDispatch(dispatchId)
-    if (!worker?.start_options) {
-      return false
-    }
-    try {
-      return (JSON.parse(worker.start_options) as { agent?: unknown }).agent === 'codex'
-    } catch {
-      return false
-    }
-  }
-
-  private async proveCodexWorkerThreadsBeforeWorktreeRemoval(worktreeId: string): Promise<void> {
-    if (!this._orchestrationDb) {
-      return
-    }
-    const resources = this._orchestrationDb.listOwnedWorkerTerminalResourcesForWorktree(worktreeId)
-    for (const resource of resources) {
-      if (resource.codex_thread_id) {
-        continue
-      }
-      try {
-        await this.reconcileCodexWorkerThreadLifecycle(resource.owner_dispatch_id)
-      } catch (error) {
-        console.warn('[worktree-teardown] Codex worker thread discovery failed', {
-          worktreeId,
-          resourceId: resource.id,
-          dispatchId: resource.owner_dispatch_id,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-      const refreshed = this._orchestrationDb.getWorkerTerminalResource(resource.id) ?? resource
-      if (
-        !refreshed.codex_thread_id &&
-        this.workerDispatchRequestedCodex(resource.owner_dispatch_id)
-      ) {
-        throw new Error(
-          `Cannot remove worktree ${worktreeId}: exact Codex thread identity is not proven for disposable worker ${resource.owner_dispatch_id}. Retry after provider-session discovery.`
-        )
-      }
-    }
-  }
-
   private async stopPtysForDestructiveWorktreeRemoval(
     worktreeId: string,
     options: { connectionId?: string; allowUnverifiedStop?: boolean } = {}
   ): Promise<void> {
-    await this.proveCodexWorkerThreadsBeforeWorktreeRemoval(worktreeId)
     const { connectionId, allowUnverifiedStop } = options
     const provider = connectionId ? this.getSshProviderFn?.(connectionId) : this.getLocalProvider()
     if (!provider) {
       throw new Error(`PTY provider unavailable for worktree deletion: ${worktreeId}`)
-    }
-    const workerResources =
-      this._orchestrationDb?.listOwnedWorkerTerminalResourcesForWorktree(worktreeId) ?? []
-    for (const resource of workerResources) {
-      try {
-        await this.reconcileCodexWorkerThreadLifecycle(resource.owner_dispatch_id)
-      } catch (error) {
-        console.warn('[worktree-teardown] Codex worker thread identity capture deferred', {
-          worktreeId,
-          resourceId: resource.id,
-          dispatchId: resource.owner_dispatch_id,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
     }
     const teardownResult = await killAllProcessesForWorktree(worktreeId, {
       runtime: this,
@@ -3480,40 +3415,6 @@ export class OrcaRuntimeService {
       ...(allowUnverifiedStop ? { allowUnverifiedStop: true } : {}),
       ...(connectionId ? { includeLocalRegistry: false } : {})
     })
-    if (!allowUnverifiedStop && this._orchestrationDb && workerResources.length > 0) {
-      for (const resource of workerResources) {
-        try {
-          this._orchestrationDb.reconcileMissingWorkerTerminal(
-            resource.owner_dispatch_id,
-            'The disposable worker terminal was removed with its worktree.'
-          )
-        } catch (error) {
-          console.warn('[worktree-teardown] worker lifecycle settlement deferred', {
-            worktreeId,
-            resourceId: resource.id,
-            dispatchId: resource.owner_dispatch_id,
-            error: error instanceof Error ? error.message : String(error)
-          })
-        }
-      }
-      const finalized =
-        this._orchestrationDb.finalizeOwnedWorkerTerminalResourcesForRemovedWorktree(worktreeId)
-      for (const resource of finalized) {
-        if (resource.codex_archive_state !== 'requested' || !resource.codex_thread_id) {
-          continue
-        }
-        try {
-          await this.archiveReleasedCodexWorkerThread(resource.owner_dispatch_id, resource.id)
-        } catch (error) {
-          console.warn('[worktree-teardown] Codex worker thread archive deferred', {
-            worktreeId,
-            resourceId: resource.id,
-            dispatchId: resource.owner_dispatch_id,
-            error: error instanceof Error ? error.message : String(error)
-          })
-        }
-      }
-    }
     const total =
       teardownResult.runtimeStopped +
       teardownResult.providerStopped +
@@ -4639,11 +4540,6 @@ export class OrcaRuntimeService {
     // are rediscovered; this pass runs per scope (local and each reconnected provider).
     void reconcileRequestedWorkerTerminalReleases(this).catch((error) => {
       console.warn('[orchestration] worker terminal release reconciliation failed', { error })
-    })
-    void this.reconcilePendingCodexWorkerThreadLifecycles().catch((error) => {
-      console.warn('[orchestration] Codex worker thread restart reconciliation failed', {
-        error: error instanceof Error ? error.message : String(error)
-      })
     })
     return result
   }
@@ -16533,70 +16429,6 @@ export class OrcaRuntimeService {
       observedAfter,
       statuses: this.getAgentStatusSnapshotFn?.() ?? []
     })
-  }
-
-  async reconcileCodexWorkerThreadLifecycle(dispatchId: string): Promise<void> {
-    const active = this.codexWorkerThreadLifecycleByDispatch.get(dispatchId)
-    if (active) {
-      return active
-    }
-    const db = this.getOrchestrationDb()
-    const reconciliation = reconcileCodexWorkerThreadForDispatch({
-      db,
-      dispatchId,
-      getExactWorkerProviderSession: (handle, observedAfter) =>
-        this.getExactWorkerProviderSession(handle, observedAfter)
-    })
-      .then(() => undefined)
-      .finally(() => {
-        if (this.codexWorkerThreadLifecycleByDispatch.get(dispatchId) === reconciliation) {
-          this.codexWorkerThreadLifecycleByDispatch.delete(dispatchId)
-        }
-      })
-    this.codexWorkerThreadLifecycleByDispatch.set(dispatchId, reconciliation)
-    return reconciliation
-  }
-
-  async reconcilePendingCodexWorkerThreadLifecycles(): Promise<void> {
-    if (this.codexWorkerThreadBacklogReconciliation) {
-      return this.codexWorkerThreadBacklogReconciliation
-    }
-    const reconciliation = this.reconcilePendingCodexWorkerThreadLifecyclesOnce().finally(() => {
-      if (this.codexWorkerThreadBacklogReconciliation === reconciliation) {
-        this.codexWorkerThreadBacklogReconciliation = null
-      }
-    })
-    this.codexWorkerThreadBacklogReconciliation = reconciliation
-    return reconciliation
-  }
-
-  private async reconcilePendingCodexWorkerThreadLifecyclesOnce(): Promise<void> {
-    const db = this.getOrchestrationDb()
-    for (const resource of db.listWorkerTerminalResourcesAwaitingProviderSession()) {
-      if (!this.workerDispatchRequestedCodex(resource.owner_dispatch_id)) {
-        continue
-      }
-      try {
-        await this.reconcileCodexWorkerThreadLifecycle(resource.owner_dispatch_id)
-      } catch (error) {
-        console.warn('[orchestration] Codex worker thread naming retry failed', {
-          resourceId: resource.id,
-          dispatchId: resource.owner_dispatch_id,
-          error: error instanceof Error ? error.message : String(error)
-        })
-      }
-    }
-    const result = await retryCodexWorkerThreadLifecycleBacklog({ db })
-    if (result.attempted > 0) {
-      console.info('[orchestration] Codex worker thread lifecycle reconciliation', result)
-    }
-    await reconcileRequestedWorkerTerminalReleases(this)
-  }
-
-  async archiveReleasedCodexWorkerThread(dispatchId: string, resourceId: string): Promise<void> {
-    const db = this.getOrchestrationDb()
-    db.requestWorkerCodexThreadArchive(dispatchId, resourceId)
-    await archiveReleasedCodexWorkerThread({ db, dispatchId, resourceId })
   }
 
   validateOrchestrationAgentLauncher(agent: TuiAgent): void {

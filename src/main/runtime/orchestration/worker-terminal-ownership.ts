@@ -26,8 +26,6 @@ export type WorkerTerminalRetainedReason =
   | 'federation_unsupported'
 
 export type WorkerTerminalArchiveStatus = 'captured' | 'empty' | 'unavailable'
-export type WorkerCodexThreadNameState = 'pending' | 'applied' | 'user_named'
-export type WorkerCodexThreadArchiveState = 'not_requested' | 'requested' | 'archived'
 
 export type WorkerTerminalResourceRow = {
   id: string
@@ -47,11 +45,6 @@ export type WorkerTerminalResourceRow = {
   release_error: string | null
   archive_source: string | null
   archive_status: WorkerTerminalArchiveStatus | null
-  codex_thread_id: string | null
-  codex_auto_name: string | null
-  codex_name_state: WorkerCodexThreadNameState | null
-  codex_archive_state: WorkerCodexThreadArchiveState | null
-  codex_lifecycle_error: string | null
   created_at: string
   updated_at: string
 }

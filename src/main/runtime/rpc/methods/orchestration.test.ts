@@ -2206,12 +2206,6 @@ describe('orchestration RPC methods', () => {
     it('starts a fresh agent in the coordinator current worktree', async () => {
       setup()
       mockCurrentWorkerStart()
-      const reconcileCodexWorkerThreadLifecycle = vi.fn().mockResolvedValue(undefined)
-      ;(
-        runtime as unknown as {
-          reconcileCodexWorkerThreadLifecycle: (dispatchId: string) => Promise<void>
-        }
-      ).reconcileCodexWorkerThreadLifecycle = reconcileCodexWorkerThreadLifecycle
       const task = db.createTask({ spec: 'implement worker start' })
 
       const result = (await call('orchestration.workerStart', {
@@ -2245,7 +2239,6 @@ describe('orchestration RPC methods', () => {
         'term_worker',
         expect.stringContaining('--dispatch-capability dcap_')
       )
-      expect(reconcileCodexWorkerThreadLifecycle).toHaveBeenCalledWith(result.dispatchId)
     })
 
     it('applies and reports opaque per-invocation model preferences', async () => {

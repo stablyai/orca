@@ -12,8 +12,6 @@ import {
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
-import { deferCodexWorkerReleaseUntilThreadIdentity } from './orchestration-worker-release-codex-guard'
-import { archiveSummary } from './orchestration-worker-release-receipt'
 
 export type WorkerReleaseReceipt = {
   dispatchId: string
@@ -37,6 +35,48 @@ const activeReleaseByRuntime = new WeakMap<
   OrcaRuntimeService,
   Map<string, Promise<WorkerReleaseReceipt>>
 >()
+
+export function exposeWorkerTerminalResource(resource: WorkerTerminalResourceRow): {
+  id: string
+  ownershipState: string
+  releaseState: string
+  retainedReason: string | null
+  terminalHandle: string
+  worktreeId: string | null
+  originDispatchId: string
+  ownerDispatchId: string
+  releaseRequestedAt: string | null
+  releaseCompletedAt: string | null
+  releaseError: string | null
+  archive: { source: string | null; status: string | null }
+} {
+  return {
+    id: resource.id,
+    ownershipState: resource.ownership_state,
+    releaseState: resource.release_state,
+    retainedReason: resource.retained_reason,
+    terminalHandle: resource.terminal_handle,
+    worktreeId: resource.worktree_id,
+    originDispatchId: resource.origin_dispatch_id,
+    ownerDispatchId: resource.owner_dispatch_id,
+    releaseRequestedAt: resource.release_requested_at,
+    releaseCompletedAt: resource.release_completed_at,
+    releaseError: resource.release_error,
+    archive: { source: resource.archive_source, status: resource.archive_status }
+  }
+}
+
+export function archiveSummary(
+  resource: WorkerTerminalResourceRow | null
+): { source: string | null; status: string | null } | null {
+  if (!resource) {
+    return null
+  }
+  if (!resource.archive_source && !resource.archive_status) {
+    return null
+  }
+  return { source: resource.archive_source, status: resource.archive_status }
+}
 
 // Completes a durably requested release: re-prove exact identity, freeze output, close only the
 // exact agent terminal, settle. Shared between the RPC method and the startup reconciler.
@@ -125,28 +165,6 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
 
-  // The terminal is still exact and live here, so this is the last safe chance to persist
-  // its provider session before closing it. Naming failures do not weaken terminal-release
-  // identity; the durable Codex lifecycle row remains retryable after restart.
-  try {
-    await runtime.reconcileCodexWorkerThreadLifecycle(dispatchId)
-  } catch (error) {
-    console.warn('[orchestration] Codex worker thread identity capture deferred at release', {
-      dispatchId,
-      resourceId: resource.id,
-      error: error instanceof Error ? error.message : String(error)
-    })
-  }
-  const deferredCodexRelease = deferCodexWorkerReleaseUntilThreadIdentity({
-    db,
-    dispatchId,
-    resource,
-    workerStartOptions: worker.start_options
-  })
-  if (deferredCodexRelease) {
-    return deferredCodexRelease
-  }
-
   const archive = db.getWorkerTerminalArchive(dispatchId)
   let archiveSource = resource.archive_source as 'transcript' | 'terminal' | null
   let archiveStatus: WorkerTerminalArchiveStatus | null = resource.archive_status
@@ -220,28 +238,13 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
   const released = db.settleWorkerTerminalRelease(resource.id)
-  let codexArchiveRecovery: string | undefined
-  if (released.codex_thread_id) {
-    try {
-      await runtime.archiveReleasedCodexWorkerThread(dispatchId, released.id)
-    } catch (error) {
-      codexArchiveRecovery =
-        'The exact Codex worker thread archive is durably pending and will retry after restart or the next provider-session update.'
-      console.warn('[orchestration] Codex worker thread archive deferred', {
-        dispatchId,
-        resourceId: released.id,
-        error: error instanceof Error ? error.message : String(error)
-      })
-    }
-  }
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
   return {
     dispatchId,
     state: 'released',
     processAction:
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
-    archive: archiveSummary(released),
-    ...(codexArchiveRecovery ? { recovery: codexArchiveRecovery } : {})
+    archive: archiveSummary(released)
   }
 }
 

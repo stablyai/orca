@@ -2292,11 +2292,6 @@ void app.whenReady().then(async () => {
     (sessions) => {
       // Healthy session.tabs streams need a push when transcript identity changes.
       publishProviderSessionChanges(sessions)
-      void runtime?.reconcilePendingCodexWorkerThreadLifecycles().catch((error) => {
-        console.warn('[orchestration] Codex worker thread session reconciliation failed', {
-          error: error instanceof Error ? error.message : String(error)
-        })
-      })
     }
   )
   // Why: hook rows are the only carrier of live agent state on a headless host, and
