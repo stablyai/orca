@@ -18,11 +18,6 @@ describe('computer-use e2e workflow', () => {
       join(projectDir, 'tests/e2e/helpers/computer-cli-driver.ts'),
       'utf8'
     )
-    const windowsStoreE2e = readFileSync(
-      join(projectDir, 'tests/e2e/computer-windows-store.e2e.ts'),
-      'utf8'
-    )
-
     expect(driver).not.toContain('await delay(3500)')
     expect(driver).toContain("await waitForComputerWindowTitle('gedit', fileName, 15000)")
     expect(cliDriver).toContain('ORCA_DEV_USER_DATA_PATH')
@@ -30,12 +25,6 @@ describe('computer-use e2e workflow', () => {
     expect(cliDriver).toContain('retryMissingRuntimeMetadata')
     expect(cliDriver).toContain('Could not read Orca runtime metadata')
     expect(cliDriver).toContain("'serve', '--no-pairing', '--json'")
-
-    expect(windowsStoreE2e).toMatch(
-      /for \(const buttonName of \['One', 'Plus', 'Two', 'Equals'\]\) \{[\s\S]*findRoleIndex\(state\.result\.snapshot\.treeText, `button \$\{buttonName\}`\)[\s\S]*state = parseJsonOutput/
-    )
-    expect(windowsStoreE2e).not.toMatch(/const one = findRoleIndex/)
-    expect(windowsStoreE2e).not.toMatch(/for \(const index of \[one, plus, two, equals\]\)/)
   })
 
   it('triggers on computer-use shared contracts, scripts, and agent skill changes', () => {
@@ -64,6 +53,28 @@ describe('computer-use e2e workflow', () => {
     expect(triggerPaths).not.toContain('src/shared/runtime-types.ts')
   })
 
+  it('triggers when the Windows Store E2E test or its launcher changes', () => {
+    const workflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
+    )
+
+    expect(workflow.on.pull_request.paths).toEqual(
+      expect.arrayContaining([
+        'tests/e2e/computer-windows-store.e2e.ts',
+        'tests/e2e/helpers/Invoke-SettingsApplicationFrame.ps1',
+        'tests/e2e/helpers/windows-settings-frame.ts',
+        'tests/e2e/helpers/windows-settings-frame.unit.test.ts'
+      ])
+    )
+
+    const windowsRuns = workflow.jobs.windows.steps
+      .map((step) => step.run)
+      .filter((run) => typeof run === 'string')
+    expect(windowsRuns).toContain(
+      'pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-windows.e2e.ts tests/e2e/computer-windows-store.e2e.ts'
+    )
+  })
+
   it('runs focused computer-use regression tests in the PR native-smoke job', () => {
     const workflow = parse(
       readFileSync(join(projectDir, '.github/workflows/computer-e2e.yml'), 'utf8')
@@ -82,6 +93,7 @@ describe('computer-use e2e workflow', () => {
       'config/scripts/computer-use-modifier-safety.test.mjs',
       'config/scripts/computer-use-skill-guidance.test.mjs',
       'config/scripts/computer-use-smoke.test.mjs',
+      'tests/e2e/helpers/windows-settings-frame.unit.test.ts',
       'src/main/computer/computer-provider-lifecycle.test.ts',
       'src/main/computer/computer-provider-unavailable-message.test.ts',
       'src/main/computer/sidecar-client.test.ts',

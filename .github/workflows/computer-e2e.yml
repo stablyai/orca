@@ -50,6 +50,9 @@ on:
       - 'tests/e2e/computer-mac-safari.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
       - 'tests/e2e/computer-windows-store.e2e.ts'
+      - 'tests/e2e/helpers/Invoke-SettingsApplicationFrame.ps1'
+      - 'tests/e2e/helpers/windows-settings-frame.ts'
+      - 'tests/e2e/helpers/windows-settings-frame.unit.test.ts'
       - 'tests/e2e/helpers/computer-cli-driver.ts'
       - 'tests/e2e/helpers/computer-driver.ts'
       - 'tests/e2e/vitest.config.ts'
@@ -102,6 +105,7 @@ jobs:
           config/scripts/computer-use-modifier-safety.test.mjs
           config/scripts/computer-use-skill-guidance.test.mjs
           config/scripts/computer-use-smoke.test.mjs
+          tests/e2e/helpers/windows-settings-frame.unit.test.ts
           src/main/computer/computer-provider-lifecycle.test.ts
           src/main/computer/computer-provider-unavailable-message.test.ts
           src/main/computer/sidecar-client.test.ts

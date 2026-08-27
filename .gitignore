@@ -161,3 +161,5 @@ tests/e2e/.cross-version-checkouts/
 # IS committed). Also keeps oxfmt/oxlint, which honor this file, from walking
 # vendored gems.
 /mobile/vendor/
+# PowerShell module analysis cache dumped in local dir
+/Microsoft/Windows/PowerShell/
