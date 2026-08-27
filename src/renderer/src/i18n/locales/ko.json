@@ -14981,6 +14981,11 @@
     "total": "총 {{count}}개",
     "card": {
       "you": "나",
+      "stop": {
+        "action": "에이전트 중지",
+        "confirm": "에이전트를 중지할까요?",
+        "tooltip": "에이전트 중지 — 프로세스를 종료하고 터미널을 닫습니다"
+      },
       "time": {
         "justNow": "방금",
         "minutes": "{{count}}분",

@@ -20,6 +20,7 @@ import {
 } from './dashboard-workspace-payload-validation'
 import { isDashboardFilterOptions } from './dashboard-filter-payload-validation'
 export { isDashboardSpawnAgentArgs } from './dashboard-agent-launch-validation'
+export { isDashboardStopAgentArgs } from './dashboard-stop-agent-validation'
 
 const MAX_DASHBOARD_CARDS = 1_000
 const MAX_DASHBOARD_SUBAGENTS = 100

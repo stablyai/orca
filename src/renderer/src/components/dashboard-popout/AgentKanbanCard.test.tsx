@@ -2,6 +2,7 @@
 
 import '@testing-library/jest-dom/vitest'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
@@ -53,6 +54,7 @@ function renderCard(props: {
   now: number
   repoIcon?: RepoIcon | null
   onOpenTerminal?: () => void
+  onStop?: () => void
 }): ReturnType<typeof render> {
   return render(
     <TooltipProvider>
@@ -61,6 +63,7 @@ function renderCard(props: {
         repoIcon={props.repoIcon}
         now={props.now}
         onOpenTerminal={props.onOpenTerminal ?? vi.fn()}
+        onStop={props.onStop ?? vi.fn()}
       />
     </TooltipProvider>
   )
@@ -99,6 +102,7 @@ describe('AgentKanbanCard', () => {
           card={{ ...attentionCard, askSummary: undefined }}
           now={2_000}
           onOpenTerminal={vi.fn()}
+          onStop={vi.fn()}
         />
       </TooltipProvider>
     )
@@ -213,7 +217,7 @@ describe('AgentKanbanCard', () => {
 
     const cardElement = container.firstElementChild!
     const header = cardElement.querySelector('button')!.firstElementChild!
-    const footer = cardElement.lastElementChild!
+    const footer = cardElement.querySelectorAll('button')[1]
     expect(header).toHaveTextContent('Sparse-checkout parser')
     expect(header).not.toHaveTextContent('dashboard-review')
     expect(footer).toHaveTextContent('dashboard-review')
@@ -243,6 +247,7 @@ describe('AgentKanbanCard', () => {
 
   it('skips structured-clone rerenders until visible card data or its age changes', () => {
     const onOpenTerminal = vi.fn()
+    const onStop = vi.fn()
     const initial = card({
       startedAt: 1_000,
       subagents: [{ id: 'child-1', name: 'Review loop', dotState: 'working' }]
@@ -255,6 +260,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={repoIcon}
           now={61_500}
           onOpenTerminal={onOpenTerminal}
+          onStop={onStop}
         />
       </TooltipProvider>
     )
@@ -269,6 +275,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ ...repoIcon }}
           now={62_000}
           onOpenTerminal={onOpenTerminal}
+          onStop={onStop}
         />
       </TooltipProvider>
     )
@@ -281,6 +288,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ ...repoIcon }}
           now={121_500}
           onOpenTerminal={onOpenTerminal}
+          onStop={onStop}
         />
       </TooltipProvider>
     )
@@ -299,6 +307,7 @@ describe('AgentKanbanCard', () => {
           card={{ ...initial, workingMode: 'monitoring' }}
           now={2_000}
           onOpenTerminal={vi.fn()}
+          onStop={vi.fn()}
         />
       </TooltipProvider>
     )
@@ -308,6 +317,7 @@ describe('AgentKanbanCard', () => {
 
   it('rerenders when the repo icon changes', () => {
     const onOpenTerminal = vi.fn()
+    const onStop = vi.fn()
     const initial = card({ startedAt: 1_000 })
     const { rerender } = render(
       <TooltipProvider>
@@ -316,6 +326,7 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ type: 'lucide', name: 'Rocket' }}
           now={61_500}
           onOpenTerminal={onOpenTerminal}
+          onStop={onStop}
         />
       </TooltipProvider>
     )
@@ -328,10 +339,63 @@ describe('AgentKanbanCard', () => {
           repoIcon={{ type: 'lucide', name: 'Database' }}
           now={61_500}
           onOpenTerminal={onOpenTerminal}
+          onStop={onStop}
         />
       </TooltipProvider>
     )
     expect(agentIconRender).toHaveBeenCalledTimes(2)
+  })
+
+  it('arms an inline confirmation before stopping an idle agent', async () => {
+    const user = userEvent.setup()
+    const onStop = vi.fn()
+    const onOpenTerminal = vi.fn()
+    renderCard({
+      card: card({ bucket: 'idle', dotState: 'idle' }),
+      now: 2_000,
+      onOpenTerminal,
+      onStop
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Stop agent' }))
+    expect(onStop).not.toHaveBeenCalled()
+    // Opening the terminal is the card's own click target — stopping must not trip it.
+    expect(onOpenTerminal).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Stop agent?' }))
+    expect(onStop).toHaveBeenCalledTimes(1)
+    expect(onOpenTerminal).not.toHaveBeenCalled()
+  })
+
+  it('disarms the inline confirmation when the pointer leaves the card', async () => {
+    const user = userEvent.setup()
+    const onStop = vi.fn()
+    const { container } = renderCard({
+      card: card({ bucket: 'idle', dotState: 'done' }),
+      now: 2_000,
+      onStop
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Stop agent' }))
+    fireEvent.mouseLeave(container.firstElementChild as HTMLElement)
+
+    expect(screen.queryByRole('button', { name: 'Stop agent?' })).not.toBeInTheDocument()
+    expect(onStop).not.toHaveBeenCalled()
+  })
+
+  it('hands a still-running agent straight to the board so it can confirm in a dialog', async () => {
+    const user = userEvent.setup()
+    const onStop = vi.fn()
+    renderCard({
+      card: card({ bucket: 'working', dotState: 'working' }),
+      now: 2_000,
+      onStop
+    })
+
+    await user.click(screen.getByRole('button', { name: 'Stop agent' }))
+
+    expect(onStop).toHaveBeenCalledTimes(1)
+    expect(screen.queryByRole('button', { name: 'Stop agent?' })).not.toBeInTheDocument()
   })
 
   it('updates the relative age when the UI language changes', async () => {

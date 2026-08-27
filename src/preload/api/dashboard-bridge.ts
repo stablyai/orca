@@ -3,7 +3,8 @@ import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
-  DashboardSpawnAgentArgs
+  DashboardSpawnAgentArgs,
+  DashboardStopAgentArgs
 } from '../../shared/dashboard-snapshot'
 import type { PreloadApi } from '../api-types'
 
@@ -37,6 +38,12 @@ export const dashboardApi = {
     ipcRenderer.on('ui:ackDashboardAgent', listener)
     return () => ipcRenderer.removeListener('ui:ackDashboardAgent', listener)
   },
+  onStopAgent: (callback: (args: DashboardStopAgentArgs) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, args: DashboardStopAgentArgs): void =>
+      callback(args)
+    ipcRenderer.on('ui:stopDashboardAgent', listener)
+    return () => ipcRenderer.removeListener('ui:stopDashboardAgent', listener)
+  },
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, args: DashboardSpawnAgentArgs): void =>
       callback(args)
@@ -68,6 +75,8 @@ export const dashboardApi = {
     ipcRenderer.invoke('dashboardPopout:revealAgent', args),
   ackAgent: (paneKey: string): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:ackAgent', { paneKey }),
+  stopAgent: (args: DashboardStopAgentArgs): Promise<void> =>
+    ipcRenderer.invoke('dashboardPopout:stopAgent', args),
   spawnAgent: (args: DashboardSpawnAgentArgs): Promise<void> =>
     ipcRenderer.invoke('dashboardPopout:spawnAgent', args),
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs): Promise<void> =>

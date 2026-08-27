@@ -2,7 +2,8 @@ import type {
   DashboardRevealAgentArgs,
   DashboardSleepWorkspaceArgs,
   DashboardSnapshot,
-  DashboardSpawnAgentArgs
+  DashboardSpawnAgentArgs,
+  DashboardStopAgentArgs
 } from '../../shared/dashboard-snapshot'
 import type {
   TerminalPreviewConnectResult,
@@ -17,6 +18,7 @@ export type DashboardApi = {
   onSnapshotRequested: (callback: () => void) => () => void
   onRevealAgent: (callback: (args: DashboardRevealAgentArgs) => void) => () => void
   onAckAgent: (callback: (paneKey: string) => void) => () => void
+  onStopAgent: (callback: (args: DashboardStopAgentArgs) => void) => () => void
   onSpawnAgent: (callback: (args: DashboardSpawnAgentArgs) => void) => () => void
   onSleepWorkspace: (callback: (args: DashboardSleepWorkspaceArgs) => void) => () => void
   requestSnapshot: () => Promise<void>
@@ -24,6 +26,7 @@ export type DashboardApi = {
   onViewRequested: (callback: (view: 'board' | 'map') => void) => () => void
   revealAgent: (args: DashboardRevealAgentArgs) => Promise<void>
   ackAgent: (paneKey: string) => Promise<void>
+  stopAgent: (args: DashboardStopAgentArgs) => Promise<void>
   spawnAgent: (args: DashboardSpawnAgentArgs) => Promise<void>
   sleepWorkspace: (args: DashboardSleepWorkspaceArgs) => Promise<void>
 }
