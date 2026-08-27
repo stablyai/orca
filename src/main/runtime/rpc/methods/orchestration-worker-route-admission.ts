@@ -3,6 +3,7 @@ import type { ControlPlaneDatabaseHandle } from '../../orchestration/control-pla
 import type { OrchestrationDb } from '../../orchestration/db'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
+import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { admitRoute } from '../../orchestration/control-plane/role-route-registry'
@@ -45,7 +46,8 @@ export function assertWorkerStartRouteAdmitted(args: {
     )
   }
   const store = new ControlPlaneStore(args.handle)
-  if (resolveOutcomeBinding(store, args.runId).kind === 'legacy_unbound') {
+  const binding = resolveOutcomeBinding(store, args.runId)
+  if (binding.kind === 'legacy_unbound') {
     return
   }
   if (!args.agent) {
@@ -71,7 +73,12 @@ export function assertWorkerStartRouteAdmitted(args: {
     requirement: {
       role: args.role ?? 'builder',
       sessionMode: args.sessionMode ?? 'fresh',
-      taskCapabilities: args.taskCapabilities
+      taskCapabilities: args.taskCapabilities,
+      // Why read the policy here: the outcome's explicit UNKNOWN-quota opt-in is
+      // the operator's decision for the whole outcome. The automatic advance
+      // already honours it, so a manual worker-start that ignored it would make
+      // the opt-in unusable on the one path an operator actually drives.
+      allowUnknownQuota: resolveAllowUnknownQuota(args.handle, binding)
     },
     nowMs: args.nowMs ?? Date.now()
   })
@@ -82,6 +89,17 @@ export function assertWorkerStartRouteAdmitted(args: {
       { routeKey: admission.error.routeKey, state: admission.error.state }
     )
   }
+}
+
+/** The outcome policy's quota opt-in, or false when the Run has no policy yet. */
+function resolveAllowUnknownQuota(
+  handle: ControlPlaneDatabaseHandle,
+  binding: ReturnType<typeof resolveOutcomeBinding>
+): boolean {
+  if (binding.kind !== 'admitted') {
+    return false
+  }
+  return new OutcomePolicyStore(handle).get(binding.outcome.outcome_id)?.allowUnknownQuota ?? false
 }
 
 /** B9 (correction 2) — the mutation fence on the one path that puts a mutating
