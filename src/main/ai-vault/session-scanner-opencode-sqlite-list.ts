@@ -5,7 +5,8 @@ import {
 } from './session-scanner-opencode-sqlite-paths'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import { openReadonlySyncDatabase } from '../sqlite/readonly-sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
 // Why: the SQLite session-list query + reader lives in its own electron-free
@@ -19,9 +20,7 @@ type SessionRow = {
 }
 
 function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
+  return openReadonlySyncDatabase(dbPath)
 }
 
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
