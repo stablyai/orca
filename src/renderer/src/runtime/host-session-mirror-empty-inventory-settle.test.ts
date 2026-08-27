@@ -281,7 +281,7 @@ describe('empty host inventory settling the session mirror', () => {
     expect(hasHostSessionMirrorHydrated(environmentId, WORKTREE)).toBe(false)
   })
 
-  it('keeps a legacy zero-terminal result without host scope unverifiable', async () => {
+  it('treats a legacy zero-terminal result without host scope as none', async () => {
     const result = await probeHostLiveTerminals(
       'env-legacy-zero',
       vi.fn(async () => ({
@@ -292,7 +292,7 @@ describe('empty host inventory settling the session mirror', () => {
       }))
     )
 
-    expect(result).toBe('unverifiable')
+    expect(result).toBe('none')
   })
 
   it('accepts a legacy live result without host scope', async () => {
@@ -313,7 +313,10 @@ describe('empty host inventory settling the session mirror', () => {
     expect(result).toBe('live')
   })
 
-  it('keeps a scope-less legacy empty inventory parked', async () => {
+  // Why: pre-hostScope hosts cannot prove emptiness; parking them forever would
+  // strand auto-resume on every truly-empty legacy host, so their best-effort
+  // empty keeps settling as it did before authoritative inventories existed.
+  it('settles a scope-less legacy empty inventory', async () => {
     const environmentId = 'env-legacy-scope-less'
     const call = vi.fn(async () => ({
       ok: true,
@@ -328,8 +331,8 @@ describe('empty host inventory settling the session mirror', () => {
     settleEmptyInventory(environmentId)
     await flushProbe()
 
-    expect(resumeSweeps).toBe(0)
-    expect(hasHostSessionMirrorHydrated(environmentId, WORKTREE)).toBe(false)
+    expect(resumeSweeps).toBe(1)
+    expect(hasHostSessionMirrorHydrated(environmentId, WORKTREE)).toBe(true)
   })
 
   it('rejects a present malformed host scope as unverifiable', async () => {

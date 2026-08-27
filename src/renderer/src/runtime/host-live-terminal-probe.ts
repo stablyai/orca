@@ -40,6 +40,7 @@ function isTerminalListResult(value: unknown): value is ValidTerminalListResult 
   }
   const hostScope = (value as { hostScope?: unknown }).hostScope
   if (hostScope === undefined) {
+    // Older hosts do not publish scope; preserve their best-effort list result.
     return true
   }
   return (
@@ -76,13 +77,10 @@ async function probeHost(
   // An omitted execution host is an incomplete census. In particular, a relay
   // can list its local PTYs while an SSH child host is still starting up.
   const hostScope = response.result.hostScope
-  const { terminals, totalCount } = response.result
-  if (!hostScope) {
-    return terminals.length > 0 || totalCount > 0 ? 'live' : 'unverifiable'
-  }
   if (hostScope && hostScope.omittedHostIds.length > 0) {
     return 'unverifiable'
   }
+  const { terminals, totalCount } = response.result
   return terminals.length > 0 || (typeof totalCount === 'number' && totalCount > 0)
     ? 'live'
     : 'none'
