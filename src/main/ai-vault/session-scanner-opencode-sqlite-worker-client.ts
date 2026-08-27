@@ -3,6 +3,9 @@ import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-typ
 import type {
   OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
+  OpenCodeSqliteNativeChatPageAfterRequest,
+  OpenCodeSqliteNativeChatPageRequest,
+  OpenCodeSqliteNativeChatSignalRequest,
   OpenCodeSqliteParseRequest,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
@@ -32,6 +35,9 @@ export type WorkerFactory = () => Worker
 type OpenCodeSqliteRequestBody =
   | Omit<OpenCodeSqliteListRequest, 'id'>
   | Omit<OpenCodeSqliteParseRequest, 'id'>
+  | Omit<OpenCodeSqliteNativeChatPageRequest, 'id'>
+  | Omit<OpenCodeSqliteNativeChatSignalRequest, 'id'>
+  | Omit<OpenCodeSqliteNativeChatPageAfterRequest, 'id'>
 
 type PendingCall = {
   request: OpenCodeSqliteWorkerRequest
@@ -141,7 +147,12 @@ export class OpenCodeSqliteWorkerClient {
     }
   }
 
-  private dispatch(request: OpenCodeSqliteRequestBody, timeoutMs: number): Promise<unknown> {
+  /**
+   * Enqueue one worker request and await its response. Public on purpose: the
+   * native-chat dispatch module (session-scanner-opencode-sqlite-native-chat-dispatch)
+   * rides this same FIFO/timeout/respawn lifecycle instead of duplicating it.
+   */
+  dispatch(request: OpenCodeSqliteRequestBody, timeoutMs: number): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const id = this.nextId++
       // A fresh burst from full idle starts a new scan: clear any death count
