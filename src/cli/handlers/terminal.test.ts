@@ -1,9 +1,25 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClient } from '../runtime-client'
 import { parseArgs } from '../args'
+import type * as FormatModule from '../format'
+import { printResult } from '../format'
 import { printHelp } from '../help'
 import { COMMAND_SPECS } from '../specs'
+import type * as SelectorsModule from '../selectors'
 import { TERMINAL_HANDLERS } from './terminal'
+
+vi.mock('../selectors', async () => {
+  const actual = await vi.importActual<typeof SelectorsModule>('../selectors')
+  return {
+    ...actual,
+    getBrowserWorktreeSelector: vi.fn(async () => 'active')
+  }
+})
+
+vi.mock('../format', async () => {
+  const actual = await vi.importActual<typeof FormatModule>('../format')
+  return { ...actual, printResult: vi.fn() }
+})
 
 describe('terminal close CLI', () => {
   afterEach(() => {
@@ -59,6 +75,67 @@ describe('terminal close CLI', () => {
     const help = String(log.mock.calls[0]?.[0])
     expect(help).toContain('orca terminal close [--terminal <handle>] [--tab] [--json]')
     expect(help).toContain('durable persistence')
+  })
+})
+
+describe('terminal create CLI contract', () => {
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it.each([
+    ['null', null],
+    ['undefined', undefined],
+    ['non-string', 42],
+    ['empty', ''],
+    ['whitespace-only', '   ']
+  ])('fails closed for a %s terminal handle', async (_label, handle) => {
+    vi.mocked(printResult).mockClear()
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        terminal: {
+          handle,
+          worktreeId: 'wt-1',
+          title: null
+        }
+      }
+    })
+
+    await expect(
+      TERMINAL_HANDLERS['terminal create']({
+        flags: new Map([['worktree', 'active']]),
+        client: { call, isRemote: false } as unknown as RuntimeClient,
+        cwd: process.cwd(),
+        json: true
+      })
+    ).rejects.toMatchObject({
+      code: 'invalid_response',
+      message: expect.stringContaining('without a terminal handle')
+    })
+    expect(printResult).not.toHaveBeenCalled()
+  })
+
+  it('prints a successful create response with a valid handle', async () => {
+    vi.mocked(printResult).mockClear()
+    const result = {
+      result: {
+        terminal: {
+          handle: 'term-created',
+          worktreeId: 'wt-1',
+          title: null
+        }
+      }
+    }
+    const call = vi.fn().mockResolvedValue(result)
+
+    await TERMINAL_HANDLERS['terminal create']({
+      flags: new Map([['worktree', 'active']]),
+      client: { call, isRemote: false } as unknown as RuntimeClient,
+      cwd: process.cwd(),
+      json: true
+    })
+
+    expect(printResult).toHaveBeenCalledWith(result, true, expect.any(Function))
   })
 })
 
