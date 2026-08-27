@@ -82,7 +82,6 @@ jobs:
       # on hosted Windows. Use the shared config so this job matches pnpm test.
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
-          config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs

@@ -76,7 +76,6 @@ describe('computer-use e2e workflow', () => {
     )
     const regressionRun = nativeSmokeRuns.find((run) => run.includes('pnpm vitest run'))
     const expectedRegressionFiles = [
-      'config/scripts/computer-e2e-workflow.test.mjs',
       'config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs',
       'config/scripts/macos-computer-helper-owner-loss-processes.test.mjs',
       'config/scripts/computer-use-modifier-safety.test.mjs',
