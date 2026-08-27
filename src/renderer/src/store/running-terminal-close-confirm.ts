@@ -1,5 +1,6 @@
 import { create } from 'zustand'
 import type { CloseTerminalDialogCopyKind } from '@/components/terminal-pane/CloseTerminalDialog'
+import { installSharedStoreWriteChainTelemetry } from './store-write-chain-telemetry'
 
 /** A pending confirmation for closing a terminal tab whose shell still has a
  *  running child process. `onConfirm` performs the original close. */
@@ -46,9 +47,14 @@ function mergeRequests(
 // useAppStore.getState() would throw there. Nothing outside the dialog reads this state,
 // so the AppState coupling would buy nothing.
 export const useRunningTerminalCloseConfirmStore = create<RunningTerminalCloseConfirmState>()((
-  set,
-  get
+  _set,
+  get,
+  api
 ) => {
+  // Why rebind: actions close over `set`, so the patched api.setState must be
+  // the one they capture or their writes escape the shared chain counter.
+  installSharedStoreWriteChainTelemetry(api)
+  const set = api.setState
   const queuedRequests: RunningTerminalCloseConfirmRequest[] = []
   // Why: a queued request replaces the visible one in place, so a double-click or held
   // Enter meant for the tab the user was looking at would land on the next tab's prompt and

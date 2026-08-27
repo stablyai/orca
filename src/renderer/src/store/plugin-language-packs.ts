@@ -4,6 +4,7 @@ import {
   isPluginLanguagePackRegistration,
   type PluginLanguagePackRegistration
 } from '../../../shared/plugins/plugin-language-pack-artifact'
+import { installSharedStoreWriteChainTelemetry } from './store-write-chain-telemetry'
 
 type PluginLanguagePackState = {
   packs: PluginLanguagePackRegistration[]
@@ -14,39 +15,51 @@ type PluginLanguagePackState = {
 let requestGeneration = 0
 let changeSubscriptionStarted = false
 
-export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set) => ({
-  packs: [],
-  loaded: false,
-  fetchPacks: async () => {
-    const generation = ++requestGeneration
-    const api = window.api?.plugins
-    if (!api?.listLanguagePacks) {
-      if (generation === requestGeneration) {
-        set({ packs: [], loaded: true })
+export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((
+  _set,
+  _get,
+  storeApi
+) => {
+  // Why rebind: actions close over `set`, so the patched setState must be the
+  // one they capture or their writes escape the shared chain counter.
+  installSharedStoreWriteChainTelemetry(storeApi)
+  const set = storeApi.setState
+  return {
+    packs: [],
+    loaded: false,
+    fetchPacks: async () => {
+      const generation = ++requestGeneration
+      const api = window.api?.plugins
+      if (!api?.listLanguagePacks) {
+        if (generation === requestGeneration) {
+          set({ packs: [], loaded: true })
+        }
+        return
       }
-      return
-    }
-    try {
-      const response = await api.listLanguagePacks()
-      const packs = Array.isArray(response) ? response.filter(isPluginLanguagePackRegistration) : []
-      // Why: a non-array response and a rejected member are different upstream bugs; keep them distinguishable in the log.
-      if (!Array.isArray(response)) {
-        console.warn(`[plugins] Ignoring non-array language-pack list (${typeof response})`)
-      } else if (packs.length !== response.length) {
-        console.warn(
-          `[plugins] Ignoring ${response.length - packs.length} of ${response.length} malformed language packs`
-        )
-      }
-      if (generation === requestGeneration) {
-        set({ packs, loaded: true })
-      }
-    } catch {
-      if (generation === requestGeneration) {
-        set({ packs: [], loaded: true })
+      try {
+        const response = await api.listLanguagePacks()
+        const packs = Array.isArray(response)
+          ? response.filter(isPluginLanguagePackRegistration)
+          : []
+        // Why: a non-array response and a rejected member are different upstream bugs; keep them distinguishable in the log.
+        if (!Array.isArray(response)) {
+          console.warn(`[plugins] Ignoring non-array language-pack list (${typeof response})`)
+        } else if (packs.length !== response.length) {
+          console.warn(
+            `[plugins] Ignoring ${response.length - packs.length} of ${response.length} malformed language packs`
+          )
+        }
+        if (generation === requestGeneration) {
+          set({ packs, loaded: true })
+        }
+      } catch {
+        if (generation === requestGeneration) {
+          set({ packs: [], loaded: true })
+        }
       }
     }
   }
-}))
+})
 
 export function ensurePluginLanguagePacksLoaded(): void {
   const state = usePluginLanguagePackStore.getState()

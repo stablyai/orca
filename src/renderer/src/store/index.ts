@@ -52,6 +52,7 @@ import {
   registerRuntimeHttpLinkBrowserOpener
 } from '@/lib/http-link-routing'
 import { installStoreListenerCensus } from './store-listener-census'
+import { installSharedStoreWriteChainTelemetry } from './store-write-chain-telemetry'
 import {
   registerRendererMemoryProfileContributor,
   summarizeStateCollectionSizes
@@ -61,6 +62,11 @@ import { estimateStateCollectionKB } from '@/lib/state-collection-byte-estimate'
 export const useAppStore = create<AppState>()((...a) => {
   // Why: the inner api is only reachable here, before create() copies subscribe onto the hook.
   installStoreListenerCensus(a[2])
+  // Shared installer: the standalone stores join the same write-chain counter.
+  installSharedStoreWriteChainTelemetry(a[2])
+  // Why rebind: slices close over `set` at creation, so patching api.setState
+  // alone would count useAppStore.setState callers and miss every slice action.
+  a[0] = a[2].setState
   return {
     ...createRepoSlice(...a),
     ...createSparsePresetsSlice(...a),

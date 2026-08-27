@@ -9,6 +9,7 @@ import {
 } from '../crash-reporting/crash-breadcrumb-store'
 import { startSpan } from '../observability/tracer'
 import { TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB } from '../../shared/terminal-webgl-diagnostics'
+import { STORE_WRITE_CHAIN_BREADCRUMB } from '../../shared/store-write-chain-diagnostics'
 
 function sanitizeRendererBreadcrumbData(value: unknown): CrashReportBreadcrumbData | undefined {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -54,7 +55,8 @@ const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'terminal_safe_fit_retry_exhausted',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
-  TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
+  TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB,
+  STORE_WRITE_CHAIN_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
 // Why: these carry no message identity — they are per-tab telemetry whose rate,
@@ -73,6 +75,13 @@ function rendererBreadcrumbCoalesceKey(
   data: CrashReportBreadcrumbData | undefined
 ): string | undefined {
   if (NAME_ONLY_COALESCED_BREADCRUMB_NAMES.has(name)) {
+    return name
+  }
+  // Why name-only: the payload is a captured dispatch stack — high-cardinality
+  // by construction, so keying on it would defeat coalescing. One driver
+  // dominates any given write-chain storm, and pending-payload resolution
+  // keeps the newest stack in the single slot the storm owns.
+  if (name === STORE_WRITE_CHAIN_BREADCRUMB) {
     return name
   }
   // Why trigger and not name alone: `burst` means damping engaged a commit

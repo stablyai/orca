@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { create } from 'zustand'
 import type { PluginHostListEntry, PluginHostPanel } from '../../../preload/api-types'
+import { installSharedStoreWriteChainTelemetry } from './store-write-chain-telemetry'
 
 /** A panel contribution from an enabled plugin, flattened for sidebar use. */
 export type ActivePluginPanel = PluginHostPanel & {
@@ -46,68 +47,74 @@ function schedulePluginListRetry(generation: number): void {
   }, delayMs)
 }
 
-export const usePluginPanelsStore = create<PluginPanelsState>()((set) => ({
-  plugins: [],
-  panelErrors: {},
-  fetchStatus: 'idle',
-  fetchPlugins: async () => {
-    const generation = ++pluginListGeneration
-    // Why: preload may predate the plugins namespace (web client pairing an
-    // older desktop build); treat a missing bridge as "no plugins" fail-soft.
-    const pluginsApi = window.api?.plugins
-    if (!pluginsApi) {
-      if (generation === pluginListGeneration) {
-        pluginListRetryAttempt = 0
-        set({ fetchStatus: 'ready', plugins: [], panelErrors: {} })
+export const usePluginPanelsStore = create<PluginPanelsState>()((_set, _get, api) => {
+  // Why rebind: actions close over `set`, so the patched api.setState must be
+  // the one they capture or their writes escape the shared chain counter.
+  installSharedStoreWriteChainTelemetry(api)
+  const set = api.setState
+  return {
+    plugins: [],
+    panelErrors: {},
+    fetchStatus: 'idle',
+    fetchPlugins: async () => {
+      const generation = ++pluginListGeneration
+      // Why: preload may predate the plugins namespace (web client pairing an
+      // older desktop build); treat a missing bridge as "no plugins" fail-soft.
+      const pluginsApi = window.api?.plugins
+      if (!pluginsApi) {
+        if (generation === pluginListGeneration) {
+          pluginListRetryAttempt = 0
+          set({ fetchStatus: 'ready', plugins: [], panelErrors: {} })
+        }
+        return
       }
-      return
+      set({ fetchStatus: 'loading' })
+      try {
+        const plugins = await pluginsApi.list()
+        if (generation === pluginListGeneration) {
+          pluginListRetryAttempt = 0
+          set((state) => ({
+            plugins,
+            fetchStatus: 'ready',
+            panelErrors: retainInstalledPanelErrors(state.panelErrors, plugins)
+          }))
+        }
+      } catch {
+        if (generation === pluginListGeneration) {
+          // A failed authority refresh must not leave previously enabled panel
+          // documents mounted from stale state. Bounded retries recover from a
+          // transient preload/main startup race without spinning indefinitely.
+          set({ plugins: [], panelErrors: {}, fetchStatus: 'error' })
+          schedulePluginListRetry(generation)
+        }
+      }
+    },
+    setPlugins: (plugins) => {
+      pluginListGeneration += 1
+      pluginListRetryAttempt = 0
+      if (pluginListRetryTimer) {
+        clearTimeout(pluginListRetryTimer)
+        pluginListRetryTimer = null
+      }
+      set((state) => ({
+        plugins,
+        fetchStatus: 'ready',
+        panelErrors: retainInstalledPanelErrors(state.panelErrors, plugins)
+      }))
+    },
+    setPanelHealth: (tabKey, health) => {
+      set((state) => {
+        const panelErrors = { ...state.panelErrors }
+        if (health === 'error') {
+          panelErrors[tabKey] = true
+        } else {
+          delete panelErrors[tabKey]
+        }
+        return { panelErrors }
+      })
     }
-    set({ fetchStatus: 'loading' })
-    try {
-      const plugins = await pluginsApi.list()
-      if (generation === pluginListGeneration) {
-        pluginListRetryAttempt = 0
-        set((state) => ({
-          plugins,
-          fetchStatus: 'ready',
-          panelErrors: retainInstalledPanelErrors(state.panelErrors, plugins)
-        }))
-      }
-    } catch {
-      if (generation === pluginListGeneration) {
-        // A failed authority refresh must not leave previously enabled panel
-        // documents mounted from stale state. Bounded retries recover from a
-        // transient preload/main startup race without spinning indefinitely.
-        set({ plugins: [], panelErrors: {}, fetchStatus: 'error' })
-        schedulePluginListRetry(generation)
-      }
-    }
-  },
-  setPlugins: (plugins) => {
-    pluginListGeneration += 1
-    pluginListRetryAttempt = 0
-    if (pluginListRetryTimer) {
-      clearTimeout(pluginListRetryTimer)
-      pluginListRetryTimer = null
-    }
-    set((state) => ({
-      plugins,
-      fetchStatus: 'ready',
-      panelErrors: retainInstalledPanelErrors(state.panelErrors, plugins)
-    }))
-  },
-  setPanelHealth: (tabKey, health) => {
-    set((state) => {
-      const panelErrors = { ...state.panelErrors }
-      if (health === 'error') {
-        panelErrors[tabKey] = true
-      } else {
-        delete panelErrors[tabKey]
-      }
-      return { panelErrors }
-    })
   }
-}))
+})
 
 function retainInstalledPanelErrors(
   panelErrors: Readonly<Record<string, true>>,

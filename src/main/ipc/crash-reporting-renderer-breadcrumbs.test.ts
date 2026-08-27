@@ -393,6 +393,46 @@ describe('renderer breadcrumb IPC routing', () => {
     ])
   })
 
+  // Why name-only: the payload is a captured dispatch stack — high-cardinality
+  // by construction, so a payload-derived key would defeat coalescing and let
+  // a sub-limit write-chain oscillation evict the pre-crash trail.
+  it('coalesces store write-chain captures by name so a storm cannot flood the ring', () => {
+    for (let index = 0; index < 5; index += 1) {
+      emitRendererBreadcrumb({
+        name: 'store_write_chain_depth',
+        data: {
+          depth: 40,
+          burstsSinceInstall: index + 1,
+          stack: `Error: store write chain depth\n    at driverEffect${index}`
+        }
+      })
+    }
+
+    expect(recordCrashBreadcrumbMock).not.toHaveBeenCalled()
+    expect(recordCoalescedCrashBreadcrumbMock).toHaveBeenCalledTimes(5)
+    for (const call of recordCoalescedCrashBreadcrumbMock.mock.calls) {
+      expect(call[0]).toMatchObject({
+        coalesceKey: 'store_write_chain_depth',
+        minIntervalMs: 30_000
+      })
+    }
+  })
+
+  it('keeps a long write-chain stack intact through renderer payload sanitizing', () => {
+    const stack = `Error: store write chain depth\n${'    at driverEffectLoop (renderer)\n'.repeat(60)}`
+    expect(stack.length).toBeGreaterThan(240)
+
+    emitRendererBreadcrumb({
+      name: 'store_write_chain_depth',
+      data: { depth: 40, burstsSinceInstall: 1, stack }
+    })
+
+    const [args] = recordCoalescedCrashBreadcrumbMock.mock.calls[0] as [{ data: { stack: string } }]
+    // `stack`-keyed fields get the 4000-char stack budget, not the 240-char
+    // string budget — the driver frames are the entire point of the crumb.
+    expect(args.data.stack).toBe(stack)
+  })
+
   it('records non-error renderer breadcrumbs without coalescing', () => {
     emitRendererBreadcrumb({ name: 'renderer_bootstrap_started', data: { dev: true } })
 
