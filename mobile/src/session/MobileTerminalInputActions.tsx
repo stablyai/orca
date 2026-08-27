@@ -1,5 +1,5 @@
 import { ActivityIndicator, Pressable, type StyleProp, type ViewStyle } from 'react-native'
-import { ImagePlus, Mic } from 'lucide-react-native'
+import { ClipboardPaste, ImagePlus, Mic } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 
 type DictationState = {
@@ -10,12 +10,14 @@ type DictationState = {
 
 type MobileTerminalInputActionsProps = {
   readonly canSend: boolean
+  readonly canPaste: boolean
   readonly isAttaching: boolean
   readonly dictation: DictationState
   readonly dictationMode: 'toggle' | 'hold'
   readonly buttonStyle: StyleProp<ViewStyle>
   readonly activeButtonStyle: StyleProp<ViewStyle>
   readonly disabledButtonStyle: StyleProp<ViewStyle>
+  readonly onPaste: () => void
   readonly onAttachImage: () => void
   readonly onAttachFile: () => void
   readonly onDictationToggle: () => void
@@ -28,12 +30,14 @@ type MobileTerminalInputActionsProps = {
 // surfaces offer identical multimodal entry points (and the JSX lives once).
 export function MobileTerminalInputActions({
   canSend,
+  canPaste,
   isAttaching,
   dictation,
   dictationMode,
   buttonStyle,
   activeButtonStyle,
   disabledButtonStyle,
+  onPaste,
   onAttachImage,
   onAttachFile,
   onDictationToggle,
@@ -44,6 +48,16 @@ export function MobileTerminalInputActions({
   const dictationActive = dictation.isStarting || dictation.isRecording
   return (
     <>
+      {canPaste && (
+        <Pressable
+          style={[buttonStyle, !canSend && disabledButtonStyle]}
+          disabled={!canSend}
+          onPress={onPaste}
+          accessibilityLabel="Paste from clipboard"
+        >
+          <ClipboardPaste size={17} color={colors.textSecondary} strokeWidth={2.2} />
+        </Pressable>
+      )}
       <Pressable
         style={[buttonStyle, (!canSend || isAttaching) && disabledButtonStyle]}
         disabled={!canSend || isAttaching}
