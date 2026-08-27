@@ -173,6 +173,12 @@ describe('launchAgentInNewTab', () => {
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
   })
 
+  // Enable native-chat routing on top of the beforeEach default settings.
+  const enableNativeChat = () => {
+    store.settings.experimentalNativeChat = true
+    store.settings.openAgentTabsInChatByDefault = true
+  }
+
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -212,15 +218,31 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
+  it('routes Windows Cursor startup prompts after ready', async () => {
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({
+      agent: 'cursor',
+      worktreeId: 'wt-1',
+      prompt: 'fix the startup path',
+      launchPlatform: 'win32'
+    })
+
+    expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
+      'tab-1',
+      expect.objectContaining({ command: "cursor-agent '--yolo'" })
+    )
+    expect(mockPasteDraftWhenAgentReady).toHaveBeenCalledWith(
+      expect.objectContaining({
+        content: 'fix the startup path',
+        agent: 'cursor',
+        submit: false
+      })
+    )
+  })
+
   it('opens supported submit-after-ready launches in chat and seeds a launch prompt echo', async () => {
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
-    }
+    enableNativeChat()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
@@ -249,14 +271,7 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('opens local Grok submit-after-ready launches in native chat', async () => {
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
-    }
+    enableNativeChat()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({
@@ -280,14 +295,7 @@ describe('launchAgentInNewTab', () => {
   })
 
   it('keeps Model-A SSH Grok launches in terminal mode', async () => {
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: null,
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
-    }
+    enableNativeChat()
     store.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1', path: '/repo' }]
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -495,14 +503,8 @@ describe('launchAgentInNewTab', () => {
 
   it('propagates the default chat mode to paired web runtime launches', async () => {
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: 'web-runtime',
-      experimentalNativeChat: true,
-      openAgentTabsInChatByDefault: true
-    }
+    store.settings.activeRuntimeEnvironmentId = 'web-runtime'
+    enableNativeChat()
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })

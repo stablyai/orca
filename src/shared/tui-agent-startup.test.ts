@@ -49,6 +49,56 @@ describe('draft prefill teardown ordering (#14975)', () => {
 })
 
 describe('tui agent startup plans', () => {
+  it('keeps Windows Cursor startup prompts out of argv', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'cursor',
+      prompt: '  fix the startup path  ',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toBe('cursor-agent')
+    expect(plan?.launchCommand).not.toContain('fix the startup path')
+    expect(plan?.followupPrompt).toBe('fix the startup path')
+  })
+
+  it('keeps non-Windows Cursor startup prompts in argv', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'cursor',
+      prompt: 'fix the startup path',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan?.launchCommand).toContain('fix the startup path')
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('keeps empty Windows Cursor launches clean with no synthetic followup', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'cursor',
+      prompt: '',
+      cmdOverrides: {},
+      platform: 'win32',
+      allowEmptyPromptLaunch: true
+    })
+
+    expect(plan?.launchCommand).toBe('cursor-agent')
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
+  it('keeps other Windows argv agents on argv', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'codex',
+      prompt: 'fix the startup path',
+      cmdOverrides: {},
+      platform: 'win32'
+    })
+
+    expect(plan?.launchCommand).toContain('fix the startup path')
+    expect(plan?.followupPrompt).toBeNull()
+  })
+
   it.each(['powershell', 'cmd'] as const)(
     'keeps the established invalid-quote error on %s',
     (shell) => {

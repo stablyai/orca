@@ -1,5 +1,6 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
+import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -13,6 +14,7 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import { resolveSourceControlAgentSaveTarget } from './source-control-agent-action-dialog-support'
+import { getTuiAgentPromptInjectionMode } from '../../../../shared/tui-agent-config'
 
 type RunSourceControlAgentActionStartArgs = {
   selectedAgent: TuiAgent
@@ -84,6 +86,12 @@ export async function runSourceControlAgentActionStart({
     launchAcceptedNotified = true
     onLaunchAccepted?.()
   }
+  const effectivePromptDelivery =
+    promptDelivery === 'auto-submit' &&
+    getTuiAgentPromptInjectionMode(selectedAgent, launchPlatform ?? CLIENT_PLATFORM) ===
+      'stdin-after-start'
+      ? 'submit-after-ready'
+      : promptDelivery
   if (onStart) {
     launched = await onStart({
       agent: selectedAgent,
@@ -100,7 +108,7 @@ export async function runSourceControlAgentActionStart({
       groupId: groupId ?? worktreeId,
       prompt: trimmedCommandInput,
       agentArgs,
-      promptDelivery,
+      promptDelivery: effectivePromptDelivery,
       launchPlatform,
       launchSource
     })

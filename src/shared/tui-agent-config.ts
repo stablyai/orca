@@ -30,6 +30,7 @@ export type TuiAgentConfig = {
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>
   expectedProcess: string
   promptInjectionMode: AgentPromptInjectionMode
+  promptInjectionModeByPlatform?: Partial<Record<NodeJS.Platform, AgentPromptInjectionMode>>
   /** Option terminator required before positional prompts that may look like CLI syntax. */
   argvPromptSeparator?: '--'
   /** Native CLI flag that seeds the input without submitting (e.g. Claude's `--prefill <text>`); preferred over the paste-after-ready path. */
@@ -256,6 +257,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'cursor-agent',
     expectedProcess: 'cursor-agent',
     promptInjectionMode: 'argv',
+    // Why: installed Windows cursor-agent resolves to a .cmd shim that rejects argv prompts (#8793); deliver after start instead.
+    promptInjectionModeByPlatform: { win32: 'stdin-after-start' },
     // Why: first-launch trust menu swallows the bracketed paste; pre-write the .workspace-trusted marker so it skips (agent-trust-presets.ts).
     preflightTrust: 'cursor'
   },
@@ -343,6 +346,14 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
 
 export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
+}
+
+export function getTuiAgentPromptInjectionMode(
+  agent: TuiAgent,
+  platform: NodeJS.Platform
+): AgentPromptInjectionMode {
+  const config = TUI_AGENT_CONFIG[agent]
+  return config.promptInjectionModeByPlatform?.[platform] ?? config.promptInjectionMode
 }
 
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
