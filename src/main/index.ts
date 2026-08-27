@@ -174,12 +174,15 @@ import {
   type WindowsGpuFallbackEnvironment
 } from './startup/gpu-fallback-marker'
 import { applyGpuFallbackCommandLineSwitches } from './startup/gpu-fallback-switches'
+import { clearGpuCrashHistory, openGpuCrashHistoryLaunch } from './startup/gpu-crash-history-store'
 import {
   DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
   DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
   GpuCrashFallbackTracker,
-  isGpuFallbackCrashCandidate
+  isGpuFallbackCrashCandidate,
+  type GpuCrashHistoryLaunch
 } from './crash-reporting/gpu-crash-fallback-decision'
+import { GpuCrashFallbackCoordinator } from './crash-reporting/gpu-crash-fallback-coordinator'
 import {
   promptForGpuFallbackRestart,
   type GpuFallbackRestartDecision
@@ -450,10 +453,8 @@ let managedWslCliReconciliationReady: Promise<void> = Promise.resolve()
 let managedWslCliStartupBarrierReady: Promise<void> = Promise.resolve()
 // Why: the serve barrier fails open, so this state tells headless clients a WSL PTY launch may still race an un-migrated registration ('settled' = off-Windows no-op).
 let managedWslCliReconciliationStatus: 'pending' | 'settled' | 'failed' = 'settled'
-const gpuCrashFallbackTracker = new GpuCrashFallbackTracker({
-  windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
-  threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD
-})
+let gpuCrashHistoryLaunch: GpuCrashHistoryLaunch | null = null
+let gpuCrashFallbackCoordinator: GpuCrashFallbackCoordinator | null = null
 let gpuFallbackActiveThisLaunch = false
 let gpuFeatureStatus: Electron.GPUFeatureStatus | null = null
 let localPtyStartupReady: Promise<void> = Promise.resolve()
@@ -1497,6 +1498,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
         },
         webContentsId
       )
+      attributeGpuCascadeCrash(details.reason, details.exitCode ?? null)
     },
     shouldRecoverRenderer: (details, webContentsId) =>
       shouldRecoverRendererAfterProcessGone({
@@ -1845,7 +1847,11 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
   if (isServeMode || process.platform !== 'win32') {
     return
   }
-  const marker = readActiveGpuFallbackMarker(app.getPath('userData'), getGpuFallbackEnvironment())
+  const environment = getGpuFallbackEnvironment()
+  // Why: claim this launch's sequence number even when nothing crashes — a
+  // crash-free launch is the only evidence that a crashing streak ended.
+  gpuCrashHistoryLaunch = openGpuCrashHistoryLaunch(app.getPath('userData'), environment)
+  const marker = readActiveGpuFallbackMarker(app.getPath('userData'), environment)
   if (!marker) {
     return
   }
@@ -1860,13 +1866,39 @@ function maybeApplyGpuFallbackForThisLaunch(): void {
   })
 }
 
+function getGpuCrashFallbackCoordinator(): GpuCrashFallbackCoordinator {
+  gpuCrashFallbackCoordinator ??= new GpuCrashFallbackCoordinator({
+    tracker: new GpuCrashFallbackTracker({
+      windowMs: DEFAULT_GPU_CRASH_FALLBACK_WINDOW_MS,
+      threshold: DEFAULT_GPU_CRASH_FALLBACK_THRESHOLD,
+      history: gpuCrashHistoryLaunch
+    })
+  })
+  return gpuCrashFallbackCoordinator
+}
+
+// Why: names the GPU fault behind an otherwise unexplained renderer death; the
+// GPU child crash it trails was already counted, so nothing is recorded here.
+function attributeGpuCascadeCrash(reason: string, exitCode: number | null): void {
+  if (
+    !getGpuCrashFallbackCoordinator().claimRendererCascade({ reason, exitCode, at: Date.now() })
+  ) {
+    return
+  }
+  recordCrashBreadcrumb('gpu_cascade', { reason, exitCode })
+}
+
 // Why: a burst of GPU child crashes means HW acceleration is unusable — persist a build-scoped marker and offer software rendering.
 async function handleGpuChildCrash(reason: string, exitCode: number | null): Promise<void> {
   // Software rendering already active or shutting down: nothing more to do.
   if (gpuFallbackActiveThisLaunch || isQuitting || isServeMode) {
     return
   }
-  const result = gpuCrashFallbackTracker.recordGpuCrash(performance.now())
+  const result = getGpuCrashFallbackCoordinator().recordGpuChildCrash({
+    msSinceLaunch: performance.now(),
+    at: Date.now(),
+    exitCode
+  })
   if (!result.shouldEngageFallback) {
     return
   }
@@ -1894,6 +1926,9 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
   }
   if (restartDecision !== 'restart') {
     recordDurableCrashBreadcrumb('gpu_fallback_restart_deferred', fallbackData)
+    // Why: the persisted evidence still satisfies the rules, so without a
+    // cooldown "Keep Running" re-prompts on the first GPU crash of every launch.
+    gpuCrashHistoryLaunch?.noteRestartDeclined(Date.now())
     return
   }
   const environment = getWindowsGpuFallbackEnvironment()
@@ -1913,6 +1948,9 @@ async function handleGpuChildCrash(reason: string, exitCode: number | null): Pro
     console.warn('[gpu-fallback] failed to persist marker:', error)
     return
   }
+  // Why: the marker now carries the verdict; stale crashes must not re-engage
+  // the moment the user turns hardware acceleration back on.
+  clearGpuCrashHistory(app.getPath('userData'))
   isQuitting = true
   relaunchApp('gpu-fallback', fallbackData)
   // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
