@@ -42,6 +42,25 @@ async function readTitle(codexHome: string, index: number): Promise<string | nul
 }
 
 describe('codex session index title cache', () => {
+  it('resolves Codex home from archived_sessions when home is not passed', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-codex-title-archived-'))
+    tempRoots.push(root)
+    const codexHome = join(root, 'codex-home')
+    await mkdir(join(codexHome, 'archived_sessions'), { recursive: true })
+    await writeFile(
+      join(codexHome, 'session_index.jsonl'),
+      `${JSON.stringify({ id: 'archived-session', thread_name: 'ads: WiiM US' })}\n`
+    )
+
+    expect(
+      await readCodexSessionIndexTitle(
+        join(codexHome, 'archived_sessions', 'rollout-archived-session.jsonl'),
+        null,
+        'archived-session'
+      )
+    ).toBe('ads: WiiM US')
+  })
+
   it('caps cached title indexes by Codex home', async () => {
     const homes: string[] = []
 

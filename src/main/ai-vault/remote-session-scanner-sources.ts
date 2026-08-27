@@ -200,32 +200,34 @@ function remoteCodexSources(
       'codex-runtime-home',
       'home'
     )
-  ].map((codexHome) => ({
-    agent: 'codex',
-    rootDir: joinRemotePath(hostPlatform, codexHome, 'sessions'),
-    codexHome,
-    extensions: ['.jsonl'],
-    parse: (file, content, context) =>
-      parseCodexSessionContent({
-        file,
-        content,
-        platform: context.hostPlatform.os,
-        codexHome,
-        executionHostId: context.executionHostId,
-        executionHostPlatform: context.hostPlatform.os,
-        signal: context.signal,
-        readIndexedTitle: async (sessionId) =>
-          (
-            await remoteCodexIndexTitles({
-              provider: context.provider,
-              codexHome,
-              hostPlatform,
-              titleCaches: context.titleCaches,
-              signal: context.signal
-            })
-          ).get(sessionId) ?? null
-      })
-  }))
+  ].flatMap((codexHome) =>
+    (['sessions', 'archived_sessions'] as const).map((historyDirName) => ({
+      agent: 'codex' as const,
+      rootDir: joinRemotePath(hostPlatform, codexHome, historyDirName),
+      codexHome,
+      extensions: ['.jsonl'],
+      parse: (file, content, context) =>
+        parseCodexSessionContent({
+          file,
+          content,
+          platform: context.hostPlatform.os,
+          codexHome,
+          executionHostId: context.executionHostId,
+          executionHostPlatform: context.hostPlatform.os,
+          signal: context.signal,
+          readIndexedTitle: async (sessionId) =>
+            (
+              await remoteCodexIndexTitles({
+                provider: context.provider,
+                codexHome,
+                hostPlatform,
+                titleCaches: context.titleCaches,
+                signal: context.signal
+              })
+            ).get(sessionId) ?? null
+        })
+    }))
+  )
 }
 
 function remoteOpenClawSources(
