@@ -2,6 +2,23 @@ import { vi } from 'vitest'
 import { hookRuntime } from './floating-terminal-panel-test-harness'
 import type { FloatingTerminalPanelBounds } from './floating-terminal-panel-bounds'
 
+vi.mock('@/components/tab-group/useTabDragSplit', () => ({
+  useTabDragSplit: () => ({
+    activeDrag: null,
+    collisionDetection: () => [],
+    hoveredDropTarget: null,
+    hoveredTabInsertion: null,
+    isTabDragActiveRef: { current: false },
+    onDragCancel: () => undefined,
+    onDragEnd: () => undefined,
+    onDragMove: () => undefined,
+    onDragOver: () => undefined,
+    onDragStart: () => undefined,
+    sensors: [],
+    setDragRootNode: () => undefined
+  })
+}))
+
 export type ReactElementLike = {
   type: unknown
   props: Record<string, unknown>

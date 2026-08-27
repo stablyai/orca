@@ -3,6 +3,7 @@
  * handling in one surface so the floating worktree does not drift from the
  * main tab model while still keeping the DOM-mounted panes local. */
 import { Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { DndContext, DragOverlay } from '@dnd-kit/core'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { FileText, Globe, Minus, TerminalSquare } from 'lucide-react'
 import { toast } from 'sonner'
@@ -10,7 +11,10 @@ import EmulatorPane from '@/components/emulator-pane/EmulatorPane'
 import { ShortcutKeyCombo } from '@/components/ShortcutKeyCombo'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import TabBar from '@/components/tab-bar/TabBar'
+import TabDragPreview from '@/components/tab-bar/TabDragPreview'
+import { TabDragProvider } from '@/components/tab-group/tab-drag-context'
 import { resolveGroupTabFromVisibleId } from '@/components/tab-group/tab-group-visible-id'
+import { useTabDragSplit } from '@/components/tab-group/useTabDragSplit'
 import TerminalPane, { type TerminalPaneHandle } from '@/components/terminal-pane/TerminalPane'
 import { shouldDeferParkedPtyExitTabClose } from '@/components/terminal-pane/terminal-parked-tab-watchers'
 import { useTerminalTabColdParking } from '@/components/terminal-pane/use-terminal-tab-cold-parking'
@@ -154,7 +158,7 @@ type FloatingPanelShortcutResolution =
   | { kind: 'chrome'; action: KeybindingActionId }
 
 const FLOATING_TERMINAL_NO_DRAG_SELECTOR =
-  'button,input,textarea,select,[role="menuitem"],[data-testid="sortable-tab"],[data-floating-terminal-no-drag]'
+  'button,input,textarea,select,[role="menuitem"],.terminal-tab-strip,[data-floating-terminal-no-drag]'
 const FLOATING_TERMINAL_SHORTCUT_SURFACE_SELECTOR = '[data-floating-terminal-shortcut-surface]'
 
 type FloatingTerminalPanelBoundsState = {
@@ -341,6 +345,10 @@ export function FloatingTerminalPanel({
     bounds: FloatingTerminalPanelBounds
     moved: boolean
   } | null>(null)
+  const tabDrag = useTabDragSplit({
+    worktreeId: FLOATING_TERMINAL_WORKTREE_ID,
+    enabled: open
+  })
 
   const activeGroup = useMemo(
     () =>
@@ -1825,56 +1833,78 @@ export function FloatingTerminalPanel({
           onPointerCancel={handleDragEnd}
           onDoubleClick={handleTitlebarDoubleClick}
         >
-          <div className="flex h-full min-w-0 flex-1">
-            <TabBar
-              tabs={terminalItems}
-              activeTabId={activeTerminalId}
-              worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
-              expandedPaneByTabId={expandedPaneByTabId}
-              onActivate={activateFloatingItem}
-              onClose={closeFloatingItemConfirmed}
-              onCloseOthers={closeOthers}
-              onCloseToRight={closeToRight}
-              onCloseToLeft={closeToLeft}
-              onNewTerminalTab={() => createFloatingTerminalTab()}
-              onNewTerminalWithShell={createFloatingTerminalTab}
-              onNewBrowserTab={createFloatingBrowserTab}
-              onNewFileTab={createFloatingMarkdownTab}
-              onOpenFileTab={openFloatingMarkdownTab}
-              newTabMenuOrder="markdown-first"
-              onSetCustomTitle={setTabCustomTitle}
-              onSetTabColor={setTabColor}
-              onTogglePaneExpand={(tabId) =>
-                setTabPaneExpanded(tabId, expandedPaneByTabId[tabId] !== true)
-              }
-              editorFiles={editorItems}
-              browserTabs={browserItems}
-              activeFileId={activeEditorUnifiedId}
-              activeBrowserTabId={activeBrowserId}
-              activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
-              activeTabType={activeTabType}
-              onActivateFile={activateFloatingItem}
-              onCloseFile={closeFloatingItemConfirmed}
-              onActivateBrowserTab={activateFloatingItem}
-              onCloseBrowserTab={closeFloatingItemConfirmed}
-              onDuplicateBrowserTab={(browserTabId) => {
-                const source = browserTabs.find((tab) => tab.id === browserTabId)
-                if (!source) {
-                  return
-                }
-                createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
-                  ...buildDuplicatedBrowserTabOptions(source),
-                  targetGroupId: activeGroup?.id,
-                  browserRuntimeEnvironmentId: null
-                })
-              }}
-              onCloseAllFiles={closeAllFiles}
-              onMakePreviewFilePermanent={makePreviewFilePermanent}
-              onPinFile={pinFile}
-              tabBarOrder={tabBarOrder}
-              tabStripChrome="floating-panel"
-            />
-          </div>
+          <TabDragProvider
+            isTabDragActive={tabDrag.activeDrag !== null}
+            isTabDragActiveRef={tabDrag.isTabDragActiveRef}
+          >
+            <DndContext
+              sensors={tabDrag.sensors}
+              collisionDetection={tabDrag.collisionDetection}
+              onDragStart={tabDrag.onDragStart}
+              onDragMove={tabDrag.onDragMove}
+              onDragOver={tabDrag.onDragOver}
+              onDragEnd={tabDrag.onDragEnd}
+              onDragCancel={tabDrag.onDragCancel}
+              autoScroll={false}
+            >
+              <div ref={tabDrag.setDragRootNode} className="flex h-full min-w-0 flex-1">
+                <TabBar
+                  tabs={terminalItems}
+                  activeTabId={activeTerminalId}
+                  worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                  expandedPaneByTabId={expandedPaneByTabId}
+                  onActivate={activateFloatingItem}
+                  onClose={closeFloatingItemConfirmed}
+                  onCloseOthers={closeOthers}
+                  onCloseToRight={closeToRight}
+                  onCloseToLeft={closeToLeft}
+                  onNewTerminalTab={() => createFloatingTerminalTab()}
+                  onNewTerminalWithShell={createFloatingTerminalTab}
+                  onNewBrowserTab={createFloatingBrowserTab}
+                  onNewFileTab={createFloatingMarkdownTab}
+                  onOpenFileTab={openFloatingMarkdownTab}
+                  newTabMenuOrder="markdown-first"
+                  onSetCustomTitle={setTabCustomTitle}
+                  onSetTabColor={setTabColor}
+                  onTogglePaneExpand={(tabId) =>
+                    setTabPaneExpanded(tabId, expandedPaneByTabId[tabId] !== true)
+                  }
+                  editorFiles={editorItems}
+                  browserTabs={browserItems}
+                  activeFileId={activeEditorUnifiedId}
+                  activeBrowserTabId={activeBrowserId}
+                  activeSimulatorTabId={
+                    activeTab?.contentType === 'simulator' ? activeTab.id : null
+                  }
+                  activeTabType={activeTabType}
+                  onActivateFile={activateFloatingItem}
+                  onCloseFile={closeFloatingItemConfirmed}
+                  onActivateBrowserTab={activateFloatingItem}
+                  onCloseBrowserTab={closeFloatingItemConfirmed}
+                  onDuplicateBrowserTab={(browserTabId) => {
+                    const source = browserTabs.find((tab) => tab.id === browserTabId)
+                    if (!source) {
+                      return
+                    }
+                    createBrowserTab(FLOATING_TERMINAL_WORKTREE_ID, source.url, {
+                      ...buildDuplicatedBrowserTabOptions(source),
+                      targetGroupId: activeGroup?.id,
+                      browserRuntimeEnvironmentId: null
+                    })
+                  }}
+                  onCloseAllFiles={closeAllFiles}
+                  onMakePreviewFilePermanent={makePreviewFilePermanent}
+                  onPinFile={pinFile}
+                  tabBarOrder={tabBarOrder}
+                  tabStripChrome="floating-panel"
+                  hoveredTabInsertion={tabDrag.hoveredTabInsertion}
+                />
+              </div>
+              <DragOverlay dropAnimation={null}>
+                {tabDrag.activeDrag ? <TabDragPreview drag={tabDrag.activeDrag} /> : null}
+              </DragOverlay>
+            </DndContext>
+          </TabDragProvider>
           <FloatingTerminalWindowControls
             maximized={maximized}
             onToggleMaximized={toggleMaximized}
