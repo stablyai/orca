@@ -87,6 +87,7 @@ describe('runRemoteOrcaCli', () => {
       getRunMailboxOwnerIdsForHandle: vi.fn(() => []),
       findActiveRemoteAttachmentForPane: vi.fn(() => undefined)
     }
+    const getOrchestrationDb = vi.fn(() => db)
     const runtime = {
       getRuntimeId: () => 'runtime-test',
       getStatus: () => ({
@@ -97,7 +98,7 @@ describe('runRemoteOrcaCli', () => {
         liveTabCount: 1,
         liveLeafCount: 1
       }),
-      getOrchestrationDb: () => db,
+      getOrchestrationDb,
       getTerminalPaneKey: () => null,
       getLiveTerminalPaneKey: (handle: string) =>
         handle === 'term_windows' ? 'tab_windows:leaf_windows' : null,
@@ -141,7 +142,7 @@ describe('runRemoteOrcaCli', () => {
         meta: { query: 'auth bug', limit: 5, returned: 0, limitReached: false }
       }))
     } as unknown as OrcaRuntimeService
-    return { runtime, db }
+    return { runtime, db, getOrchestrationDb }
   }
 
   it.each([
@@ -179,6 +180,66 @@ describe('runRemoteOrcaCli', () => {
       })
     }
   )
+
+  it('prints orchestration check help through the SSH legacy fallback without dispatching RPC', async () => {
+    const { runtime, db, getOrchestrationDb } = createRuntime()
+
+    const result = await runRemoteOrcaCli(
+      runtime,
+      {
+        argv: ['orchestration', 'check', '--help'],
+        cwd: '/home/alice/repo',
+        env: { ORCA_TERMINAL_HANDLE: 'term_ssh' }
+      },
+      LEGACY_FALLBACK_OPTIONS
+    )
+
+    expect(result.stderr).toBe('')
+    expect(result.exitCode).toBe(0)
+    expect(result.stdout).toMatchInlineSnapshot(`
+      "orca orchestration check
+
+      Usage: orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--json]
+        default: return the bound Run's oldest unacknowledged FIFO batch.
+        --ack: acknowledge the prior whole batch before checking/waiting.
+        --peek: return only unread messages without marking them read.
+        --all: return every message for the handle; does not mark read.
+        --wait: block until a matching message arrives or --timeout-ms expires.
+                Emits JSON keepalive lines to stderr every 15s so the caller can
+                tell the process is alive. \`_keepalive\` is unrelated to heartbeat
+                messages; \`_heartbeat\` remains as a deprecated compatibility alias.
+                Filter with \`jq "select(._keepalive|not)"\` when merging streams.
+
+      Check messages for a terminal
+
+      Options:
+        --help                 Show this help message
+        --json                 Emit machine-readable JSON
+        --pairing-code
+        --environment
+        --terminal <handle>  Runtime-issued terminal handle
+        --run <run_id>
+        --ack <delivery_id>
+        --unread
+        --peek
+        --all
+        --types <type,...>
+        --format               Render returned rows as local text
+        --wait
+        --timeout-ms <ms>     Maximum wait time before timing out
+        --retry-request
+
+      Notes:
+        On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".
+        --format renders the returned rows as local text only; it never writes to another terminal.
+        A bound Run replays the same Delivery until --ack; process every message before acknowledging.
+      "
+    `)
+    expect(db.getCurrentRunForPane).not.toHaveBeenCalled()
+    expect(db.getUnreadMessages).not.toHaveBeenCalled()
+    expect(db.markAsRead).not.toHaveBeenCalled()
+    expect(getOrchestrationDb).not.toHaveBeenCalled()
+  })
 
   it('uses the remote ORCA_TERMINAL_HANDLE as orchestration sender identity', async () => {
     const { runtime, db } = createRuntime()

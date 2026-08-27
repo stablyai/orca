@@ -28,6 +28,7 @@ import {
   getRemoteOrchestrationPayload,
   resolveRemoteOrchestrationSender
 } from './ssh-remote-orchestration-send'
+import { getRemoteOrchestrationHelp } from './ssh-remote-orchestration-help'
 import { formatInProcessRemoteCliResult } from './ssh-remote-cli-in-process-result'
 
 export type { RemoteOrcaCliRequest, RemoteOrcaCliResult } from './ssh-remote-cli-host-passthrough'
@@ -102,6 +103,10 @@ async function runLegacyRemoteOrcaCli(
   passthroughFailure: HostCliUnavailableError
 ): Promise<RemoteOrcaCliResult> {
   const dispatcher = new RpcDispatcher({ runtime })
+  const orchestrationHelp = getRemoteOrchestrationHelp(parsed)
+  if (orchestrationHelp) {
+    return { stdout: `${orchestrationHelp}\n`, stderr: '', exitCode: 0 }
+  }
   const help = getRemoteLinearHelp(parsed)
   if (help) {
     return { stdout: `${help}\n`, stderr: '', exitCode: 0 }
