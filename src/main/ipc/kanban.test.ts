@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import type * as Os from 'node:os'
+import { join } from 'node:path'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { KanbanConnectResult, KanbanTaskDetails } from '../../shared/kanban-types'
 import type * as KanbanClientModule from '../kanban/client'
@@ -36,6 +40,13 @@ vi.mock('../kanban/client', async (importOriginal) => {
 import { registerKanbanHandlers } from './kanban'
 
 type HandlerMap = Record<string, (_event: unknown, args?: unknown) => unknown>
+
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  })
+}
 
 describe('registerKanbanHandlers', () => {
   const handlers: HandlerMap = {}
@@ -136,17 +147,6 @@ describe('registerKanbanHandlers', () => {
 
     expect(result.ok).toBe(false)
     expect(connectMock).not.toHaveBeenCalled()
-  })
-
-  it('disconnects and returns connection status', async () => {
-    getStatusMock.mockReturnValue({ connected: false, reason: 'missing' })
-    registerKanbanHandlers()
-
-    await handlers['kanban:disconnect'](null)
-    const status = await handlers['kanban:status'](null)
-
-    expect(disconnectMock).toHaveBeenCalled()
-    expect(status).toEqual({ connected: false, reason: 'missing' })
   })
 
   it('forwards a valid filter to listTasks', async () => {
@@ -266,5 +266,71 @@ describe('registerKanbanHandlers', () => {
 
     expect(result).toBeNull()
     expect(getTaskMock).not.toHaveBeenCalled()
+  })
+
+  // Why: this test drives the REAL client through the IPC handlers so the
+  // state machine is exercised, not forced. It fails if `disconnect` drops
+  // its `authInvalidated = false` reset or its credential clearing, and if a
+  // successful reconnect fails to refresh the status back to connected.
+  it('disconnect clears invalid auth state and reconnect restores connected', async () => {
+    const tempHome = mkdtempSync(join(tmpdir(), 'orca-kanban-ipc-'))
+    try {
+      vi.resetModules()
+      const { setSecretStore } = await import('../../shared/secret-store')
+      setSecretStore({
+        isEncryptionAvailable: () => true,
+        encryptString: (value: string) => Buffer.from(value),
+        decryptString: (value: Buffer) => value.toString('utf-8'),
+        describeProtectionGap: () => null
+      })
+      vi.doMock('node:os', async () => {
+        const actual = await vi.importActual<typeof Os>('node:os')
+        return { ...actual, homedir: () => tempHome }
+      })
+
+      const fetchMock = vi.fn<typeof fetch>()
+      const clientModule = await vi.importActual<typeof KanbanClientModule>('../kanban/client')
+      createClientMock.mockImplementation(() =>
+        clientModule.createKanbanClient({
+          fetch: fetchMock as typeof fetch,
+          now: () => Date.parse('2026-08-27T10:00:00Z')
+        })
+      )
+      const kanbanModule = await import('./kanban')
+      kanbanModule.registerKanbanHandlers()
+
+      const viewer = { id: 'user-1', name: 'Ada', level: 'admin' }
+
+      fetchMock.mockResolvedValueOnce(jsonResponse(viewer))
+      expect(await handlers['kanban:connect'](null, { token: 'token-secret' })).toEqual({
+        ok: true,
+        viewer
+      })
+      expect(await handlers['kanban:status'](null)).toEqual({ connected: true, viewer })
+
+      fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'nope' }, 401))
+      await expect(
+        handlers['kanban:listTasks'](null, { filter: { role: 'executor' } })
+      ).rejects.toMatchObject({ code: 'unauthorized' })
+      expect(await handlers['kanban:status'](null)).toEqual({
+        connected: false,
+        reason: 'invalid'
+      })
+
+      await handlers['kanban:disconnect'](null)
+      expect(await handlers['kanban:status'](null)).toEqual({
+        connected: false,
+        reason: 'missing'
+      })
+
+      fetchMock.mockResolvedValueOnce(jsonResponse(viewer))
+      expect(await handlers['kanban:connect'](null, { token: 'token-new' })).toEqual({
+        ok: true,
+        viewer
+      })
+      expect(await handlers['kanban:status'](null)).toEqual({ connected: true, viewer })
+    } finally {
+      rmSync(tempHome, { recursive: true, force: true })
+    }
   })
 })

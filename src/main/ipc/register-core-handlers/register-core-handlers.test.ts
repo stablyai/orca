@@ -528,7 +528,9 @@ describe('registerCoreHandlers', () => {
     expect(registerGitHubHandlersMock).toHaveBeenCalledWith(store, stats)
     expect(registerLinearHandlersMock).toHaveBeenCalled()
     expect(registerJiraHandlersMock).toHaveBeenCalled()
-    expect(registerKanbanHandlersMock).toHaveBeenCalled()
+    // Why: core registration must call the Kanban registrar exactly once —
+    // a missing call (removal) or a duplicated call both fail this assertion.
+    expect(registerKanbanHandlersMock).toHaveBeenCalledTimes(1)
     expect(registerBitbucketHandlersMock).toHaveBeenCalled()
     expect(registerGitLabHandlersMock).toHaveBeenCalledWith(store)
     expect(registerHostedReviewHandlersMock).toHaveBeenCalledWith(store, stats)
@@ -673,5 +675,8 @@ describe('registerCoreHandlers', () => {
     // Why: ipcMain.handle throws on duplicate channel registration, so the
     // memory handler must not be wired up a second time on reactivation.
     expect(registerMemoryHandlersMock).not.toHaveBeenCalled()
+    // Why: the once-only module guard also protects the Kanban registrar, so
+    // a second registerCoreHandlers call must never duplicate it.
+    expect(registerKanbanHandlersMock).not.toHaveBeenCalled()
   })
 })
