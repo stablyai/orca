@@ -116,5 +116,31 @@ export const SKILL_COMMAND_SPECS: CommandSpec[] = [
       'orca skills update --skill orca-cli --local',
       'orca skills update --all --dry-run'
     ]
+  },
+  {
+    path: ['skills', 'remove'],
+    summary: 'Remove installed Orca skills via the community skills CLI',
+    usage: 'orca skills remove [--skill <name>]... [--all] [--local] [--dry-run] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'skill', 'all', 'local', 'dry-run'],
+    notes: [
+      'Reads the bundled skill registry locally without contacting the Orca runtime.',
+      'Resolves to the same `npx skills remove <names...>` command used by Orca Settings, ' +
+        'plus the non-interactive flags an unattended host needs (`npx --yes` and `-y`), ' +
+        'then runs it and forwards its output and exit code.',
+      'Removes the global install (all projects, adds --global) by default. Use --local to ' +
+        'remove from the current project only (project is the skills CLI default scope).',
+      'Only removes skills that are already installed; use `orca skills install` first.',
+      'Use --dry-run to print the resolved command without running it.',
+      'With --json, the skill listing and --dry-run emit JSON; a real remove streams ' +
+        "npx's own non-JSON output live and rejects --json.",
+      'Omit --skill and --all to list removable skill names.',
+      'Intended for headless hosts (SSH, containers, CI) with no desktop Settings UI to copy the remove command from.'
+    ],
+    examples: [
+      'orca skills remove',
+      'orca skills remove --skill computer-use',
+      'orca skills remove --skill orca-cli --local',
+      'orca skills remove --all --dry-run'
+    ]
   }
 ]
