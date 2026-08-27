@@ -10,13 +10,12 @@
  * one tab as "damping did not reach the oscillating input".
  */
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
+import { REACT_NESTED_UPDATE_LIMIT } from '../../../../shared/react-update-depth-attribution'
 
 export const TERMINAL_TAB_PARK_FLIP_WINDOW_MS = 60_000
 /** Flips per window that no sane park policy should reach. Breadcrumb only. */
 export const TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT = 12
 
-/** react-dom 19.2.x nested commit limit. */
-const REACT_NESTED_UPDATE_LIMIT = 50
 /** Measured upper bound after the passive-effect pin engages. */
 const PARK_PIN_SETTLE_COMMITS = 6
 /** Worst-case commits from pane, watcher, and store work per verdict flip. */

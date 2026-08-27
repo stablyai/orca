@@ -48,12 +48,14 @@ function recordRendererBreadcrumbTrace(
 // suppressed count instead.
 const DUPLICATE_TAB_OWNER_BREADCRUMB = 'terminal_tab_id_owned_by_multiple_worktrees'
 const PARK_VERDICT_CHURN_BREADCRUMB = 'terminal_park_verdict_churn'
+const REACT_COMMIT_CASCADE_BREADCRUMB = 'react_commit_cascade'
 const COALESCED_RENDERER_BREADCRUMB_NAMES = new Set([
   'renderer_error',
   'renderer_unhandled_rejection',
   'terminal_safe_fit_retry_exhausted',
   DUPLICATE_TAB_OWNER_BREADCRUMB,
   PARK_VERDICT_CHURN_BREADCRUMB,
+  REACT_COMMIT_CASCADE_BREADCRUMB,
   TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB
 ])
 const RENDERER_BREADCRUMB_COALESCE_MS = 30_000
@@ -81,6 +83,13 @@ function rendererBreadcrumbCoalesceKey(
   // two slots per storm regardless of tab count.
   if (name === PARK_VERDICT_CHURN_BREADCRUMB) {
     return `${name}:${String(data?.trigger ?? '')}`
+  }
+  // Why keyed on surface and driver frame: the popout and the main window can
+  // cascade independently, and two different driving writes are two different
+  // bugs that last-write coalescing would collapse into one. A driverless crumb
+  // (storeWrites 0, a useState loop) keys separately for the same reason.
+  if (name === REACT_COMMIT_CASCADE_BREADCRUMB) {
+    return `${name}:${String(data?.rendererSurface ?? '')}:${String(data?.driverFrame ?? '')}`
   }
   // Preserve distinct GPU failures and atlas-reset triggers while coalescing each storm.
   if (name === TERMINAL_WEBGL_DIAGNOSTIC_BREADCRUMB) {

@@ -604,7 +604,7 @@ describe('wrapPosixHookCommand', () => {
 })
 
 const qualifiedWindowsPowerShellCommand =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -WindowStyle Hidden -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 function decodeWindowsHookCommand(command: string): string {
   const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
@@ -762,7 +762,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
     // applies to the exact same string (#16003).
     const command = wrapRuntimeHomeHookCommand('claude-hook')
 
-    expect(command).toContain('powershell.exe" -NoProfile -WindowStyle Hidden -EncodedCommand ')
+    expect(command).toContain('powershell.exe" -NoProfile -EncodedCommand ')
     expect(command).not.toMatch(/-ExecutionPolicy/i)
   })
 
