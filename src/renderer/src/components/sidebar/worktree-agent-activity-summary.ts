@@ -127,7 +127,7 @@ function getWorktreeAgentActivitySummaries(
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
     }
-    applyLiveAgentState(summary, entry)
+    applyLiveAgentState(summary, entry, orchestration)
   }
 
   for (const unsupported of Object.values(state.migrationUnsupportedByPtyId ?? {})) {
@@ -219,10 +219,26 @@ function agentStatusPaneIdsByTabIdEqual(
   return true
 }
 
+/** Terminal states the runtime records for a Dispatch. Its own verdict, not a
+ *  hook event or a title glyph. */
+const SETTLED_DISPATCH_STATUSES = new Set(['completed', 'failed', 'circuit_broken'])
+
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>,
+  orchestration?: AgentStatusOrchestrationContext
 ): void {
+  // Why the runtime outranks the hook: a Dispatch the control plane already
+  // settled is finished whatever its last hook event or terminal title said,
+  // and reading only those spun the worker's dot for the full 30-minute
+  // staleness window after it was done.
+  if (
+    orchestration?.dispatchStatus &&
+    SETTLED_DISPATCH_STATUSES.has(orchestration.dispatchStatus)
+  ) {
+    summary.hasLiveDone = true
+    return
+  }
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
   } else if (entry.interrupted === true) {

@@ -128,6 +128,13 @@ export async function drivePhaseLaunches(args: {
 
   for (const pending of store.listActionable(args.runId)) {
     const request = toRequest(pending)
+    if (!request && pending.dispatch_id) {
+      // A row with no route but an existing Dispatch already launched: calling
+      // that `blocked` would strand a live worker and report it as never started.
+      store.markStarted(pending.phase_id, pending.dispatch_id, nowIso)
+      launched.push(report(store, pending.phase_id))
+      continue
+    }
     if (!request) {
       store.markOutcome(
         pending.phase_id,

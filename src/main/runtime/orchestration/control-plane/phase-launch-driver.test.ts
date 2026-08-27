@@ -395,3 +395,74 @@ describe('correction 3: a blocked phase resumes once the route is certified', ()
     expect(store.getByTask(task.id)?.state).toBe('failed')
   })
 })
+
+/** PARTIAL_START_WITH_NO_ROUTE_STRANDS_ITS_DISPATCH — a phase whose route was
+ *  cleared but whose Dispatch already exists was routed to `blocked` before
+ *  reconcile ran, reporting a live worker as one that never started. */
+describe('correction 3: a started phase is never reported as blocked', () => {
+  let db: OrchestrationDb
+  afterEach(() => db?.close())
+
+  function startedThenRouteless(clearRoute: boolean) {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'review' })
+    const store = new PhaseLaunchStore(db)
+    store.recordPlanned({
+      phaseId: `phase_${task.id}`,
+      runId: task.run_id,
+      outcomeId: 'out_1',
+      taskId: task.id,
+      kind: 'review',
+      route: REVIEWER,
+      terminalHandle: null,
+      worktreeId: 'repo::wt',
+      boundSha: 'a1b2c3d4e5f6'
+    })
+    // A partial start: the Dispatch exists, but the row was re-opened and its
+    // route lost before the driver could record the outcome.
+    db.db
+      .prepare(
+        `UPDATE control_plane_phase_launches
+         SET dispatch_id = 'ctx_partial', state = 'pending'${clearRoute ? ', agent = NULL' : ''}
+         WHERE phase_id = ?`
+      )
+      .run(`phase_${task.id}`)
+    return { task, runId: task.run_id, store }
+  }
+
+  it('adopts the existing Dispatch instead of blocking the phase', async () => {
+    const { runId, task, store } = startedThenRouteless(true)
+    const start = vi.fn(async () => ({ kind: 'started', dispatchId: 'ctx_second' }) as const)
+    await drivePhaseLaunches({ db, runId, nowMs: NOW, starter: starter(start) })
+    expect(store.getByTask(task.id)).toMatchObject({
+      state: 'started',
+      dispatch_id: 'ctx_partial'
+    })
+    // The whole point: no second session for work already running.
+    expect(start).not.toHaveBeenCalled()
+  })
+
+  it('negative control: a routeless phase with no Dispatch is still blocked', async () => {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'review' })
+    const store = new PhaseLaunchStore(db)
+    store.recordPlanned({
+      phaseId: `phase_${task.id}`,
+      runId: task.run_id,
+      outcomeId: 'out_1',
+      taskId: task.id,
+      kind: 'review',
+      route: REVIEWER,
+      terminalHandle: null,
+      worktreeId: 'repo::wt',
+      boundSha: 'a1b2c3d4e5f6'
+    })
+    db.db
+      .prepare(`UPDATE control_plane_phase_launches SET agent = NULL WHERE phase_id = ?`)
+      .run(`phase_${task.id}`)
+    const start = vi.fn(async () => ({ kind: 'started', dispatchId: 'ctx_never' }) as const)
+    await drivePhaseLaunches({ db, runId: task.run_id, nowMs: NOW, starter: starter(start) })
+    expect(start).not.toHaveBeenCalled()
+    expect(store.getByTask(task.id)).toMatchObject({ state: 'blocked', dispatch_id: null })
+  })
+})
