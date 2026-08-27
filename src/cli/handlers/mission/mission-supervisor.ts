@@ -28,6 +28,7 @@ export type MissionPlan =
 export type MissionPlanRpcResult = {
   mission: string
   agent: string
+  agentCandidates?: string[]
   plan: MissionPlan
 }
 
@@ -54,6 +55,7 @@ export async function executeMissionRun(input: {
   from: string
   worktree: string
   agent: string
+  agentCandidates?: readonly string[]
   tasks: readonly MissionTask[]
   maxConcurrency: number
 }): Promise<MissionSummary> {
@@ -144,6 +146,7 @@ async function superviseMission(input: {
   from: string
   worktree: string
   agent: string
+  agentCandidates?: readonly string[]
   maxConcurrency: number
 }): Promise<MissionSummary> {
   const started = new Set<string>()
@@ -166,38 +169,18 @@ async function superviseMission(input: {
       }
     }
 
-    let capacity =
+    const capacity =
       input.maxConcurrency - tasks.filter((task) => task.status === 'dispatched').length
-    const ready = tasks.filter((task) => task.status === 'ready' && !started.has(task.id))
-    let startedAny = false
-    for (const task of ready) {
-      if (capacity <= 0) {
-        break
-      }
-      const worker = await input.client.call<{
-        taskId: string
-        dispatchId: string
-        state: string
-        lastError?: string
-      }>('orchestration.workerStart', {
-        task: task.id,
-        run: input.runId,
-        from: input.from,
-        worktree: input.worktree,
-        agent: input.agent,
-        devMode: isDevCliInvocation()
-      })
-      if (worker.result.state !== 'ready') {
-        throw new RuntimeClientError(
-          'mission_worker_start_failed',
-          worker.result.lastError ?? `Worker ${worker.result.dispatchId} failed to become ready.`
-        )
-      }
-      started.add(task.id)
-      startedAny = true
-      capacity -= 1
-    }
-    if (startedAny) {
+    const wave = tasks
+      .filter((task) => task.status === 'ready' && !started.has(task.id))
+      .slice(0, Math.max(0, capacity))
+    if (wave.length > 0) {
+      await Promise.all(
+        wave.map(async (task) => {
+          await startMissionWorker(input, task.id)
+          started.add(task.id)
+        })
+      )
       continue
     }
 
@@ -241,6 +224,71 @@ async function superviseMission(input: {
       })
     }
   }
+}
+
+type MissionWorkerStartResult = {
+  taskId: string
+  dispatchId: string
+  state: string
+  failedStage?: string
+  lastError?: string
+}
+
+const RETRYABLE_WORKER_START_STAGES = new Set(['terminal_create', 'agent_readiness'])
+
+async function startMissionWorker(
+  input: {
+    client: RuntimeClient
+    runId: string
+    from: string
+    worktree: string
+    agent: string
+    agentCandidates?: readonly string[]
+  },
+  taskId: string
+): Promise<void> {
+  const candidates = input.agentCandidates?.length ? input.agentCandidates : [input.agent]
+  const failures: string[] = []
+  let retryOf: string | undefined
+
+  for (const [index, agent] of candidates.entries()) {
+    try {
+      const worker = await input.client.call<MissionWorkerStartResult>('orchestration.workerStart', {
+        task: taskId,
+        run: input.runId,
+        from: input.from,
+        worktree: input.worktree,
+        agent,
+        ...(retryOf ? { retryOf } : {}),
+        devMode: isDevCliInvocation()
+      })
+      if (worker.result.state === 'ready') {
+        return
+      }
+
+      const reason =
+        worker.result.lastError ?? `Worker ${worker.result.dispatchId} failed to become ready.`
+      const hasNext = index + 1 < candidates.length
+      if (hasNext && RETRYABLE_WORKER_START_STAGES.has(worker.result.failedStage ?? '')) {
+        failures.push(`${agent}: ${reason}`)
+        retryOf = worker.result.dispatchId
+        continue
+      }
+      throw new RuntimeClientError('mission_worker_start_failed', reason)
+    } catch (error) {
+      const hasNext = index + 1 < candidates.length
+      if (hasNext && error instanceof RuntimeClientError && error.code === 'agent_unconfigured') {
+        failures.push(`${agent}: ${error.message}`)
+        continue
+      }
+      throw error
+    }
+  }
+
+  throw new RuntimeClientError(
+    'mission_worker_start_failed',
+    `No mission agent could start task ${taskId}: ${failures.join('; ')}`
+  )
 }
 
 function orderTasksForCreation(tasks: readonly MissionTask[]): MissionTask[] {

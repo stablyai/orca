@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { HandlerContext } from '../dispatch'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
 import { MISSION_HANDLERS } from './mission'
 
 type TaskState = {
@@ -13,6 +13,7 @@ type TaskState = {
 type MissionPlanResult = {
   mission: string
   agent: string
+  agentCandidates?: string[]
   plan:
     | { mode: 'single-agent' }
     | {
@@ -54,6 +55,156 @@ function makeContext(
 describe('mission start supervisor', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+  })
+
+  it('does not activate or launch Orca before planning a mission from an existing pane', async () => {
+    const openOrca = vi.fn()
+    const call = vi.fn().mockRejectedValue(new Error('planner_probe'))
+    const client = { call, openOrca, isRemote: false } as unknown as RuntimeClient
+
+    await expect(
+      MISSION_HANDLERS['mission start'](
+        makeContext(client, {
+          text: 'inspect routing',
+          worktree: 'id:repo::worktree',
+          from: 'term_coord'
+        })
+      )
+    ).rejects.toThrow('planner_probe')
+
+    expect(openOrca).not.toHaveBeenCalled()
+    expect(call).toHaveBeenCalledWith('mission.plan', {
+      text: 'inspect routing',
+      worktree: 'id:repo::worktree',
+      agent: undefined
+    })
+  })
+
+  it('falls back to the next mission agent when worker startup fails before task delivery', async () => {
+    const task: TaskState = { id: 'task_mission', key: 'mission', deps: [], status: 'ready' }
+    let completed = false
+    const call = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'mission.plan') {
+        return response<MissionPlanResult>({
+          mission: 'worker fallback',
+          agent: 'pi',
+          agentCandidates: ['pi', 'codex'],
+          plan: { mode: 'single-agent' }
+        })
+      }
+      if (method === 'orchestration.runCreate') {
+        return response({ run: { id: 'run_fallback', objective: 'worker fallback' } })
+      }
+      if (method === 'orchestration.taskCreate') {
+        return response({ task: { id: task.id, status: task.status } })
+      }
+      if (method === 'orchestration.taskList') {
+        task.status = completed ? 'completed' : task.status
+        return response({ runId: 'run_fallback', tasks: [task], count: 1 })
+      }
+      if (method === 'orchestration.workerStart') {
+        if (params?.agent === 'pi') {
+          task.status = 'failed'
+          return response({
+            runId: 'run_fallback',
+            taskId: task.id,
+            dispatchId: 'ctx_pi',
+            state: 'failed',
+            failedStage: 'agent_readiness',
+            lastError: 'Pi could not become ready.'
+          })
+        }
+        if (params?.retryOf !== 'ctx_pi') {
+          throw new RuntimeClientError(
+            'task_not_startable',
+            'Failed Task requires retryOf the latest failed Dispatch.'
+          )
+        }
+        task.status = 'dispatched'
+        return response({
+          runId: 'run_fallback',
+          taskId: task.id,
+          dispatchId: 'ctx_codex',
+          state: 'ready'
+        })
+      }
+      if (method === 'orchestration.check' && params?.wait) {
+        completed = true
+        return response({ deliveryId: 'delivery_done', timedOut: false, cancelled: false })
+      }
+      if (method === 'orchestration.check' && params?.ack) {
+        return response({ deliveryId: null, timedOut: false, cancelled: false })
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const client = { call, isRemote: false } as unknown as RuntimeClient
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await MISSION_HANDLERS['mission start'](
+      makeContext(client, {
+        text: 'worker fallback',
+        worktree: 'id:repo::worktree',
+        from: 'term_coord'
+      })
+    )
+
+    const workerAgents = call.mock.calls
+      .filter(([method]) => method === 'orchestration.workerStart')
+      .map(([, params]) => params?.agent)
+    expect(workerAgents).toEqual(['pi', 'codex'])
+    const workerStarts = call.mock.calls.filter(([method]) => method === 'orchestration.workerStart')
+    expect(workerStarts[1]?.[1]).toMatchObject({ retryOf: 'ctx_pi' })
+  })
+
+  it('does not retry another agent after an ambiguous dispatch-input failure', async () => {
+    const task: TaskState = { id: 'task_mission', key: 'mission', deps: [], status: 'ready' }
+    const call = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      void params
+      if (method === 'mission.plan') {
+        return response<MissionPlanResult>({
+          mission: 'unsafe retry guard',
+          agent: 'pi',
+          agentCandidates: ['pi', 'codex'],
+          plan: { mode: 'single-agent' }
+        })
+      }
+      if (method === 'orchestration.runCreate') {
+        return response({ run: { id: 'run_guard', objective: 'unsafe retry guard' } })
+      }
+      if (method === 'orchestration.taskCreate') {
+        return response({ task: { id: task.id, status: task.status } })
+      }
+      if (method === 'orchestration.taskList') {
+        return response({ runId: 'run_guard', tasks: [task], count: 1 })
+      }
+      if (method === 'orchestration.workerStart') {
+        return response({
+          runId: 'run_guard',
+          taskId: task.id,
+          dispatchId: 'ctx_pi',
+          state: 'failed',
+          failedStage: 'dispatch_input',
+          lastError: 'Prompt delivery outcome is ambiguous.'
+        })
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const client = { call, isRemote: false } as unknown as RuntimeClient
+
+    await expect(
+      MISSION_HANDLERS['mission start'](
+        makeContext(client, {
+          text: 'unsafe retry guard',
+          worktree: 'id:repo::worktree',
+          from: 'term_coord'
+        })
+      )
+    ).rejects.toMatchObject({ code: 'mission_worker_start_failed' })
+
+    const workerAgents = call.mock.calls
+      .filter(([method]) => method === 'orchestration.workerStart')
+      .map(([, params]) => params?.agent)
+    expect(workerAgents).toEqual(['pi'])
   })
 
   it('materializes collaboration topology, starts independent workers concurrently, waits by Run mailbox, and acknowledges lifecycle delivery', async () => {
@@ -191,6 +342,78 @@ describe('mission start supervisor', () => {
       expect.objectContaining({ ack: 'delivery_1', peek: true })
     )
     expect(log).toHaveBeenCalledWith(expect.stringContaining('Mission run run_1 completed'))
+  })
+
+  it('starts one ready wave concurrently up to maxConcurrency', async () => {
+    const tasks = new Map<string, TaskState>([
+      ['task_a', { id: 'task_a', key: 'a', deps: [], status: 'ready' }],
+      ['task_b', { id: 'task_b', key: 'b', deps: [], status: 'ready' }],
+      ['task_c', { id: 'task_c', key: 'c', deps: [], status: 'ready' }]
+    ])
+    let activeStarts = 0
+    let maxActiveStarts = 0
+    let taskListCount = 0
+    const call = vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      if (method === 'mission.plan') {
+        return response<MissionPlanResult>({
+          mission: 'parallel three',
+          agent: 'pi',
+          plan: {
+            mode: 'orchestration',
+            objective: 'Parallel three',
+            maxConcurrency: 3,
+            tasks: [
+              { key: 'a', spec: 'A', deps: [] },
+              { key: 'b', spec: 'B', deps: [] },
+              { key: 'c', spec: 'C', deps: [] }
+            ]
+          }
+        })
+      }
+      if (method === 'orchestration.runCreate') {
+        return response({ run: { id: 'run_parallel', objective: 'Parallel three' } })
+      }
+      if (method === 'orchestration.taskCreate') {
+        const key = String(params?.displayName)
+        return response({ task: { id: `task_${key}`, status: 'ready' } })
+      }
+      if (method === 'orchestration.taskList') {
+        taskListCount += 1
+        if (taskListCount > 1) {
+          for (const task of tasks.values()) {
+            task.status = 'completed'
+          }
+        }
+        return response({ runId: 'run_parallel', tasks: [...tasks.values()], count: tasks.size })
+      }
+      if (method === 'orchestration.workerStart') {
+        activeStarts += 1
+        maxActiveStarts = Math.max(maxActiveStarts, activeStarts)
+        await new Promise((resolve) => setTimeout(resolve, 10))
+        activeStarts -= 1
+        return response({
+          runId: 'run_parallel',
+          taskId: String(params?.task),
+          dispatchId: `ctx_${String(params?.task)}`,
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        })
+      }
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const client = { call, isRemote: false } as unknown as RuntimeClient
+    vi.spyOn(console, 'log').mockImplementation(() => undefined)
+
+    await MISSION_HANDLERS['mission start'](
+      makeContext(client, {
+        text: 'parallel three',
+        worktree: 'id:repo::worktree',
+        from: 'term_coord'
+      })
+    )
+
+    expect(maxActiveStarts).toBe(3)
   })
 
   it('waits for capacity before starting a third ready task', async () => {
