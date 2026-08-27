@@ -2,6 +2,28 @@ import type { RefinementCtx } from 'zod'
 import { isPluginCommandAliasActionId } from './plugin-command-actions'
 import { getKeybindingConflictIdentity } from '../keybindings'
 
+// Why: these hosts are served by built-in providers; a plugin declaring them
+// would shadow built-in routing. Mirrors KNOWN_NON_GITEA_HOSTS in
+// src/main/gitea/repository-ref.ts (kept in sync manually — main is not shared).
+const KNOWN_NON_GITEA_HOSTS = [
+  'github.com',
+  'gitlab.com',
+  'bitbucket.org',
+  'dev.azure.com',
+  'ssh.dev.azure.com'
+]
+
+// Why: ids served by built-in providers must stay unambiguous in provider
+// routing; a plugin declaring one would shadow or collide with built-ins.
+const BUILTIN_FORGE_PROVIDER_IDS = new Set([
+  'github',
+  'gitlab',
+  'bitbucket',
+  'azure-devops',
+  'gitea',
+  'unsupported'
+])
+
 type IdentifiedContribution = { id: string }
 type PathContribution = { path: string }
 
@@ -15,6 +37,7 @@ type ContributionValidationManifest = {
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
     agents: PathContribution[]
+    forgeProviders: { id: string; hosts: string[]; modulePath: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -68,6 +91,31 @@ export function validatePluginManifestContributions(
       `${path} path`,
       ctx
     )
+  }
+  rejectDuplicateValues(
+    manifest.contributes.forgeProviders,
+    (entry) => (entry as { id: string }).id,
+    'forgeProviders',
+    'forge provider id',
+    ctx
+  )
+  for (const [index, provider] of manifest.contributes.forgeProviders.entries()) {
+    // modulePath is already guaranteed required by the zod schema.
+    if (BUILTIN_FORGE_PROVIDER_IDS.has(provider.id)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'forgeProviders', index, 'id'],
+        message: `reserved built-in forge provider id: ${provider.id}`
+      })
+    }
+    const reservedHosts = provider.hosts.filter((host) => KNOWN_NON_GITEA_HOSTS.includes(host))
+    if (reservedHosts.length > 0) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'forgeProviders', index, 'hosts'],
+        message: `reserved built-in provider host: ${reservedHosts.join(', ')}`
+      })
+    }
   }
   const keybindingIdentities = new Set<string>()
   for (const [index, keybinding] of manifest.contributes.keybindings.entries()) {

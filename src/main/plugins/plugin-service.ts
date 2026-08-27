@@ -38,6 +38,7 @@ import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
 import { assertPluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
+import { bindPluginForgeProviderResolvers } from '../source-control/plugin-forge-provider-bridge'
 
 export type { PluginRuntimeDelegate } from './plugin-host-service-bindings'
 export type { PluginLogLine } from './plugin-log-buffer'
@@ -167,6 +168,7 @@ export class PluginService {
       (plugin) => isPluginApproved(enabled, plugin, consentLists),
       this.options.getKeybindings?.()
     )
+    bindPluginForgeProviderResolvers(this.contentPacks.forgeProviders)
     this.contentPacksReady = true
     const nextSpecs = collectApprovedWorkerSpecs(next, (plugin) => this.isRuntimeApproved(plugin))
     // Notify before slow shutdown so feature-off unmounts panels immediately.
@@ -221,7 +223,6 @@ export class PluginService {
       !this.options.getPluginKillListEntry?.(plugin.pluginKey)
     )
   }
-
   workerState(pluginKey: string): { state: PluginRunState; restarts: number } {
     return this.workerController.state(pluginKey)
   }
@@ -294,8 +295,8 @@ export class PluginService {
       plugins: this.discovered,
       eventBus: this.eventBus,
       workerController: this.workerController,
-      isRuntimeApproved: (plugin) => this.isRuntimeApproved(plugin),
-      logWarning: (pluginKey, line) => this.logBuffer.append(pluginKey, 'warn', line)
+      isRuntimeApproved: (p) => this.isRuntimeApproved(p),
+      logWarning: (key, line) => this.logBuffer.append(key, 'warn', line)
     })
   }
 
@@ -319,10 +320,9 @@ export class PluginService {
       (plugin) => this.activationState(plugin) === 'approved',
       this.options.getKeybindings?.()
     )
+    bindPluginForgeProviderResolvers(this.contentPacks.forgeProviders)
     this.contentPacksReady = true
-    const nextSpecs = collectApprovedWorkerSpecs(this.discovered, (plugin) =>
-      this.isRuntimeApproved(plugin)
-    )
+    const nextSpecs = collectApprovedWorkerSpecs(this.discovered, this.isRuntimeApproved.bind(this))
     await this.workerController.reconcile(nextSpecs)
     this.notifyChanged(true)
   }

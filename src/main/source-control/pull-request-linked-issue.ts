@@ -17,8 +17,11 @@ function inferIssueProvider(
   meta: PullRequestLinkedIssueMeta,
   provider?: HostedReviewProvider | null
 ): 'github' | 'gitlab' | null {
-  if (provider === 'github' || provider === 'gitlab') {
-    return provider
+  if (provider === 'github') {
+    return 'github'
+  }
+  if (provider === 'gitlab') {
+    return 'gitlab'
   }
   if (provider) {
     return null

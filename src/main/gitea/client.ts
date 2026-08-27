@@ -214,6 +214,13 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
   }
 }
 
+export async function isGiteaTokenVerifiedAtBase(baseUrl: string): Promise<boolean> {
+  const user = await requestJsonAtBase<{ login?: string | null }>(baseUrl, '/user', {
+    timeoutMs: 4000
+  })
+  return user !== null
+}
+
 export async function getGiteaPullRequest(
   repoPath: string,
   prNumber: number,

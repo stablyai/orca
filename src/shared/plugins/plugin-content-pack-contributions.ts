@@ -53,3 +53,19 @@ export type PluginLanguagePackContribution = z.infer<typeof pluginLanguagePackCo
 export type PluginKeybindingContribution = z.infer<typeof pluginKeybindingContributionSchema>
 export type PluginVmRecipeContribution = z.infer<typeof pluginVmRecipeContributionSchema>
 export type PluginAgentProfileContribution = z.infer<typeof pluginAgentProfileContributionSchema>
+
+export const PLUGIN_FORGE_PROVIDER_LIMIT = 8
+
+const hostPatternSchema = z.string().min(1).max(256)
+
+export const pluginForgeProviderContributionSchema = z
+  .object({
+    id: z.string().min(1).max(64),
+    displayName: z.string().min(1).max(64),
+    hosts: z.array(hostPatternSchema).min(1).max(64),
+    modulePath: pluginRelativePathSchema,
+    supportsReviewCreation: z.boolean().default(true)
+  })
+  .strict()
+
+export type PluginForgeProviderContribution = z.infer<typeof pluginForgeProviderContributionSchema>

@@ -22,13 +22,14 @@ export const HOSTED_REVIEW_LINK_KEYS: readonly HostedReviewLinkKey[] = [
 
 export const CLEARED_HOSTED_REVIEW_LINK_UPDATES: Pick<
   WorktreeMeta,
-  HostedReviewLinkKey | 'pushTarget'
+  HostedReviewLinkKey | 'pushTarget' | 'linkedPluginReview'
 > = {
   linkedPR: null,
   linkedGitLabMR: null,
   linkedBitbucketPR: null,
   linkedAzureDevOpsPR: null,
   linkedGiteaPR: null,
+  linkedPluginReview: null,
   pushTarget: undefined
 }
 
@@ -40,7 +41,10 @@ export const hostedReviewLinkClearTombstonesByWorktreeId = new Map<
 export const hostedReviewLinkWorktreeIdAliases = new Map<string, string>()
 
 export function hasHostedReviewLinks(worktree: Worktree): boolean {
-  return HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null)
+  return (
+    HOSTED_REVIEW_LINK_KEYS.some((key) => worktree[key] != null) ||
+    (worktree.linkedPluginReview ?? null) !== null
+  )
 }
 
 export function hasBranchScopedHostedReviewContext(worktree: Worktree): boolean {
@@ -48,7 +52,11 @@ export function hasBranchScopedHostedReviewContext(worktree: Worktree): boolean 
 }
 
 export function hasHostedReviewLinkUpdates(updates: Partial<WorktreeMeta>): boolean {
-  return HOSTED_REVIEW_LINK_KEYS.some((key) => key in updates) || 'pushTarget' in updates
+  return (
+    HOSTED_REVIEW_LINK_KEYS.some((key) => key in updates) ||
+    'linkedPluginReview' in updates ||
+    'pushTarget' in updates
+  )
 }
 
 export function getHostedReviewLinkMutationGeneration(worktreeId: string): number {

@@ -13,6 +13,7 @@ import {
   getGiteaAuthStatus,
   getGiteaPullRequestForBranch,
   getGiteaPullRequestForBranchOrThrow,
+  isGiteaTokenVerifiedAtBase,
   normalizeGiteaApiBaseUrl
 } from './client'
 import { _resetGiteaRepoRefCache } from './repository-ref'
@@ -396,6 +397,23 @@ describe('Gitea client', () => {
       tokenConfigured: true
     })
     expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://git.example.com/api/v1/user')
+  })
+
+  it('verifies a token against a specific base URL via /user', async () => {
+    const fetchMock = vi.fn(async (_url: string, _init?: RequestInit) =>
+      Response.json({ login: 'gitea-user' })
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(isGiteaTokenVerifiedAtBase('https://git.example.com/api/v1')).resolves.toBe(true)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toBe('https://git.example.com/api/v1/user')
+  })
+
+  it('reports an unauthenticated token when /user is rejected', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 401 }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(isGiteaTokenVerifiedAtBase('https://git.example.com/api/v1')).resolves.toBe(false)
   })
 
   it('cancels unread error-response bodies so bundled undici cannot crash on socket close', async () => {

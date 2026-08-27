@@ -25,6 +25,9 @@ function reviewLinkForProvider(
       return { linkedReviewNumber: input.linkedAzureDevOpsPR ?? null }
     case 'gitea':
       return { linkedReviewNumber: input.linkedGiteaPR ?? null }
+    default:
+      // Plugin providers keep their own linked number outside the builtin fields.
+      return { linkedReviewNumber: input.linkedPluginReview?.[provider] ?? null }
   }
 }
 
@@ -39,6 +42,7 @@ export async function getHostedReviewForBranch(
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
+    linkedPluginReview?: Record<string, number> | null
     currentHeadOid?: string | null
     /**
      * Set by surfaces that only ever render the selected worktree, which is the
@@ -57,7 +61,8 @@ export async function getHostedReviewForBranch(
     input.linkedGitLabMR == null &&
     input.linkedBitbucketPR == null &&
     input.linkedAzureDevOpsPR == null &&
-    input.linkedGiteaPR == null
+    input.linkedGiteaPR == null &&
+    (input.linkedPluginReview == null || Object.keys(input.linkedPluginReview).length === 0)
   ) {
     return null
   }

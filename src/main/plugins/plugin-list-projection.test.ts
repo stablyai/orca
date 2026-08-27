@@ -26,6 +26,7 @@ function serviceWith(
     worker?: ReturnType<PluginService['workerState']>
     vmRecipes?: ReturnType<PluginService['contentPacks']['vmRecipes']['preview']>
     commands?: ReturnType<PluginService['contentPacks']['commands']['preview']>
+    forgeProviders?: ReturnType<PluginService['contentPacks']['forgeProviders']['preview']>
   } = {}
 ): PluginService {
   return {
@@ -39,7 +40,8 @@ function serviceWith(
     activationError: () => null,
     contentPacks: {
       vmRecipes: { preview: () => options.vmRecipes ?? [] },
-      commands: { preview: () => options.commands ?? [] }
+      commands: { preview: () => options.commands ?? [] },
+      forgeProviders: { preview: () => options.forgeProviders ?? [] }
     }
   } as unknown as PluginService
 }

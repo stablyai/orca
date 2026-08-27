@@ -4,6 +4,18 @@ import type {
   HostedReviewInfo,
   HostedReviewProvider
 } from '../../shared/hosted-review'
+import type {
+  ApproveHostedReviewInput,
+  ApproveHostedReviewResult,
+  CommentHostedReviewInput,
+  CommentHostedReviewResult,
+  ListHostedReviewCommentsInput,
+  ListHostedReviewCommentsResult,
+  ListHostedReviewIssuesInput,
+  ListHostedReviewIssuesResult,
+  MergeHostedReviewInput,
+  MergeHostedReviewResult
+} from '../../shared/hosted-review-actions'
 import {
   getAzureDevOpsPullRequest,
   getAzureDevOpsPullRequestForBranchOrThrow,
@@ -17,11 +29,16 @@ import {
 } from '../bitbucket/client'
 import { createBitbucketPullRequest } from '../bitbucket/pull-request-creation'
 import {
+  getGiteaAuthStatus,
   getGiteaPullRequest,
   getGiteaPullRequestForBranchOrThrow,
-  getGiteaRepoSlug
+  getGiteaRepoSlug,
+  isGiteaTokenVerifiedAtBase
 } from '../gitea/client'
-import { createGiteaPullRequest } from '../gitea/pull-request-creation'
+import {
+  createGiteaPullRequest,
+  isGiteaReviewCreationAuthenticated
+} from '../gitea/pull-request-creation'
 import {
   createGitHubPullRequest,
   getGitHubPRLookupRateLimitBlock,
@@ -42,6 +59,7 @@ import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
 } from './hosted-review-git-options'
+import { resolvePluginForgeProvider } from './plugin-forge-provider-bridge'
 
 export type ForgeProviderId = Exclude<HostedReviewProvider, 'unsupported'>
 
@@ -63,6 +81,14 @@ export type ForgeReviewByNumberInput = ForgeProviderRepositoryContext & {
   number: number
 }
 
+export type ForgeProviderCopy = {
+  shortLabel: string
+  reviewLabel: string
+  titleLabel: string
+  providerName: string
+  authInstruction: string
+}
+
 export type ForgeProvider = {
   id: ForgeProviderId
   supportsReviewCreation: boolean
@@ -75,6 +101,13 @@ export type ForgeProvider = {
     connectionId?: string | null,
     options?: HostedReviewExecutionOptions
   ): Promise<CreateHostedReviewResult>
+  copy?: ForgeProviderCopy
+  isAuthenticated?(context: ForgeProviderRepositoryContext): Promise<boolean>
+  mergeReview?(input: MergeHostedReviewInput): Promise<MergeHostedReviewResult>
+  commentReview?(input: CommentHostedReviewInput): Promise<CommentHostedReviewResult>
+  approveReview?(input: ApproveHostedReviewInput): Promise<ApproveHostedReviewResult>
+  listReviewComments?(input: ListHostedReviewCommentsInput): Promise<ListHostedReviewCommentsResult>
+  listIssues?(input: ListHostedReviewIssuesInput): Promise<ListHostedReviewIssuesResult>
 }
 
 function hostedReviewExecutionArgs(
@@ -207,8 +240,6 @@ const bitbucketForgeProvider = {
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
-    // Why: surface a real lookup failure so eligibility records `unavailable`
-    // instead of a false "No pull request found".
     const pr = await getBitbucketPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
@@ -240,8 +271,6 @@ const azureDevOpsForgeProvider = {
       ...hostedReviewExecutionArgs(context)
     ),
   async getReviewForBranch(input) {
-    // Why: surface a real lookup failure so eligibility records `unavailable`
-    // instead of a false "No pull request found".
     const pr = await getAzureDevOpsPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
@@ -266,11 +295,31 @@ const azureDevOpsForgeProvider = {
 const giteaForgeProvider = {
   id: 'gitea',
   supportsReviewCreation: true,
+  copy: {
+    shortLabel: 'PR',
+    reviewLabel: 'pull request',
+    titleLabel: 'Pull Request',
+    providerName: 'Gitea',
+    authInstruction: 'Set ORCA_GITEA_TOKEN'
+  },
+  async isAuthenticated(context) {
+    if (!isGiteaReviewCreationAuthenticated()) {
+      return false
+    }
+    const configuredBase = process.env.ORCA_GITEA_API_BASE_URL?.trim()
+    if (configuredBase) {
+      return (await getGiteaAuthStatus()).authenticated
+    }
+    const repo = await getGiteaRepoSlug(
+      context.repoPath,
+      context.connectionId,
+      ...hostedReviewExecutionArgs(context)
+    )
+    return repo ? isGiteaTokenVerifiedAtBase(repo.apiBaseUrl) : isGiteaReviewCreationAuthenticated()
+  },
   resolveRepository: (context) =>
     getGiteaRepoSlug(context.repoPath, context.connectionId, ...hostedReviewExecutionArgs(context)),
   async getReviewForBranch(input) {
-    // Why: surface a real lookup failure so eligibility records `unavailable`
-    // instead of a false "No pull request found".
     const pr = await getGiteaPullRequestForBranchOrThrow(
       input.repoPath,
       input.branch,
@@ -309,10 +358,17 @@ export function getForgeProviderById(id: ForgeProviderId): ForgeProvider {
 export async function getForgeProviderForRepository(
   context: ForgeProviderRepositoryContext
 ): Promise<ForgeProvider | null> {
-  for (const provider of FORGE_PROVIDERS) {
+  for (const provider of FORGE_PROVIDERS.slice(0, 4)) {
     if (await provider.resolveRepository(context)) {
       return provider
     }
+  }
+  const pluginProvider = await resolvePluginForgeProvider(context)
+  if (pluginProvider) {
+    return pluginProvider
+  }
+  if (await giteaForgeProvider.resolveRepository(context)) {
+    return giteaForgeProvider
   }
   return null
 }
@@ -322,3 +378,7 @@ export async function detectHostedReviewProvider(
 ): Promise<HostedReviewProvider> {
   return (await getForgeProviderForRepository(context))?.id ?? 'unsupported'
 }
+
+// Why: re-export the injected plugin forge provider accessors so consumers
+// (hosted-review-creation, plugin-service) import them from one place.
+export * from './plugin-forge-provider-bridge'
