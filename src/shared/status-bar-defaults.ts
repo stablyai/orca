@@ -10,6 +10,7 @@ export const DEFAULT_STATUS_BAR_ITEMS: StatusBarItem[] = [
   'minimax',
   'grok',
   'cursor',
+  'glm',
   'ssh',
   'resource-usage',
   'ports'
