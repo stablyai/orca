@@ -101,6 +101,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   },
   ...BROWSER_HANDLER_GROUPS,
   {
+    name: 'mission',
+    keys: ['mission start'],
+    load: async () => (await import('./handlers/mission.js')).MISSION_HANDLERS
+  },
+  {
     name: 'orchestration',
     keys: [
       'orchestration run-create',
