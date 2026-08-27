@@ -293,6 +293,7 @@ const DEFAULT_ON_KIMI_STATUS_BAR_ITEM: StatusBarItem = 'kimi'
 const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
+const DEFAULT_ON_GLM_STATUS_BAR_ITEM: StatusBarItem = 'glm'
 
 function normalizeHydratedVisibleWorkspaceHostIds(ui: PersistedUIState): VisibleWorkspaceHostIds {
   const visibleHostIds = normalizeVisibleExecutionHostIds(ui.visibleWorkspaceHostIds)
@@ -2487,22 +2488,28 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
           ? statusBarItemsWithAntigravity
           : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+      const statusBarItemsWithGlm =
+        ui._glmStatusBarDefaultAdded || statusBarItemsWithGrok.includes('glm')
+          ? statusBarItemsWithGrok
+          : [...statusBarItemsWithGrok, DEFAULT_ON_GLM_STATUS_BAR_ITEM]
       if (
         (!ui._portsStatusBarDefaultAdded ||
           !ui._kimiStatusBarDefaultAdded ||
           !ui._minimaxStatusBarDefaultAdded ||
           !ui._antigravityStatusBarDefaultAdded ||
-          !ui._grokStatusBarDefaultAdded) &&
+          !ui._grokStatusBarDefaultAdded ||
+          !ui._glmStatusBarDefaultAdded) &&
         typeof window !== 'undefined'
       ) {
         window.api.ui
           .set({
-            statusBarItems: statusBarItemsWithGrok,
+            statusBarItems: statusBarItemsWithGlm,
             _portsStatusBarDefaultAdded: true,
             _kimiStatusBarDefaultAdded: true,
             _minimaxStatusBarDefaultAdded: true,
             _antigravityStatusBarDefaultAdded: true,
-            _grokStatusBarDefaultAdded: true
+            _grokStatusBarDefaultAdded: true,
+            _glmStatusBarDefaultAdded: true
           })
           .catch(console.error)
       }
