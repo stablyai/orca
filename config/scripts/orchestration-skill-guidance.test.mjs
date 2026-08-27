@@ -325,6 +325,15 @@ describe('orchestration skill guidance', () => {
     )
 
     expect(workerLoop).toContain('opaque provider model id with `--model`')
+    expect(workerLoop).toContain(
+      'pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level and that agent/model supports it.'
+    )
+    expect(workerLoop).toContain(
+      'Naming only an agent is not a model request: pass `--agent` alone so the stored model and effort defaults for that agent still apply.'
+    )
+    expect(workerLoop).not.toContain(
+      'For a per-invocation Claude, Codex, or Cursor launch requested by the user'
+    )
     expect(workerLoop).toContain('`--effort` requires `--model`')
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
     expect(workerLoop).toContain(
@@ -367,7 +376,10 @@ describe('orchestration skill guidance', () => {
       'Quality, depth, thoroughness, or meticulousness language is not a request for a specific agent, model, or effort; treat it as one only when the user names an agent, model, or effort level.'
     )
     expect(workerLoop).toContain(
-      "A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is never permission to override the user's defaults, including for a deep second pass, retry, or verification; if a stronger model or effort is genuinely needed, ask the user through `ask` or a decision gate."
+      "A coordinator's quality judgment—results seem shallow, a deeper second pass or retry seems useful, or a stronger model seems preferable—is never permission to override the user's defaults, including for a deep second pass, retry, or verification; if a stronger model or effort is genuinely needed, the coordinator must stop and ask the user directly in its own turn, then wait for the answer—there is no CLI path for this: `ask` is worker-to-coordinator and fails with `dispatch_inactive` from a coordinator, while a decision gate records a coordinator-managed DAG decision rather than reaching the user."
+    )
+    expect(workerLoop).not.toContain(
+      'if a stronger model or effort is genuinely needed, ask the user through `ask` or a decision gate.'
     )
     expect(workerLoop).toContain(
       'If worker-start fails with `agent_unconfigured`, no default worker agent is configured: retry that launch with an explicit `--agent` and tell the user to set a default worker agent in Settings > Orchestration.'
