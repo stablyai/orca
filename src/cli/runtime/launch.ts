@@ -1,24 +1,25 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
-import { resolve } from 'node:path'
-import { StringDecoder } from 'node:string_decoder'
+import { basename, resolve } from 'node:path'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
 } from '../../shared/serve-update-handoff'
+import { acquireForegroundServeLock, releaseForegroundServeLock } from './foreground-serve-lock'
 import {
-  getEphemeralVmRecipeResultConnection,
-  parseEphemeralVmRecipeResult
-} from '../../shared/ephemeral-vm-recipes'
-import { getDefaultUserDataPath } from './metadata'
+  SERVE_ALREADY_RUNNING_EXIT_CODE,
+  SERVE_ALREADY_RUNNING_MESSAGE,
+  shouldSpawnForegroundServe
+} from './foreground-serve-policy'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
+import { getDefaultUserDataPath } from './metadata'
+import { waitForRecipeJson } from './serve-recipe-json'
 import {
   readServeUpdateHandoffSync,
   resumeInterruptedServeUpdate,
   superviseForegroundServe
 } from './serve-update-supervisor'
+import { getCliStatus } from './status'
 import { RuntimeClientError } from './types'
-
-const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
 
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
@@ -29,6 +30,17 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
+    const packagedBundlePath = packagedOrcaAppBundlePath(overrideExecutable)
+    if (packagedBundlePath) {
+      // Why: exec'ing Contents/MacOS/Orca skips Launch Services. On macOS 26 that
+      // aborts in +[NSApplication sharedApplication] / _RegisterApplication
+      // before any JS runs. Dev Electron lives in Electron.app and must still
+      // be exec'd with the app root — only the packaged Orca.app is re-opened.
+      spawnDetached('open', [packagedBundlePath], {
+        env: stripElectronRunAsNode(process.env)
+      })
+      return
+    }
     spawnDetached(overrideExecutable, getExecutableAppArgs(), {
       ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
@@ -38,7 +50,7 @@ export function launchOrcaApp(): void {
 
   if (process.env.ELECTRON_RUN_AS_NODE === '1') {
     if (process.platform === 'darwin') {
-      const appBundlePath = getMacAppBundlePath(process.execPath)
+      const appBundlePath = packagedOrcaAppBundlePath(process.execPath)
       if (appBundlePath) {
         // Why: launching the inner MacOS binary directly can trigger macOS app
         // launch failures and bypass normal bundle lifecycle. The public
@@ -74,7 +86,7 @@ function spawnDetached(command: string, args: string[], options: SpawnOptions): 
   child.unref()
 }
 
-export function serveOrcaApp(
+export async function serveOrcaApp(
   args: {
     json?: boolean
     port?: string | null
@@ -85,6 +97,31 @@ export function serveOrcaApp(
     projectRoot?: string | null
   } = {}
 ): Promise<number> {
+  if (args.recipeJson === true) {
+    return spawnForegroundServe(args)
+  }
+
+  // Why: two CLIs can both see an idle profile and both exec Electron before
+  // JS's single-instance lock runs. Reserve the profile first, then spawn.
+  const userDataPath = getDefaultUserDataPath()
+  const lock = await acquireForegroundServeLock(userDataPath)
+  if (!lock) {
+    process.stderr.write(`${SERVE_ALREADY_RUNNING_MESSAGE}\n`)
+    return SERVE_ALREADY_RUNNING_EXIT_CODE
+  }
+  try {
+    const status = await getCliStatus(userDataPath)
+    if (!shouldSpawnForegroundServe(status.result)) {
+      process.stderr.write(`${SERVE_ALREADY_RUNNING_MESSAGE}\n`)
+      return SERVE_ALREADY_RUNNING_EXIT_CODE
+    }
+    return await spawnForegroundServe(args)
+  } finally {
+    await releaseForegroundServeLock(lock)
+  }
+}
+
+async function spawnForegroundServe(args: Parameters<typeof serveOrcaApp>[0]): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
   const childArgs = [...getExecutableAppArgs()]
   if (process.env.ORCA_APPIMAGE_NO_SANDBOX === '1') {
@@ -165,95 +202,12 @@ export function serveOrcaApp(
   })
 }
 
-function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<number> {
-  return new Promise((resolve, reject) => {
-    let output = ''
-    let settled = false
-    const timeout = setTimeout(() => {
-      finish(new RuntimeClientError('runtime_serve_failed', 'Timed out waiting for recipe JSON.'))
-      child.kill('SIGTERM')
-    }, 60000)
-    const finish = (error?: Error): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timeout)
-      child.stdout?.off('data', onData)
-      child.off('error', onError)
-      child.off('close', onClose)
-      if (error) {
-        reject(error)
-        return
-      }
-      child.stdout?.destroy?.()
-      child.unref()
-      resolve(0)
-    }
-    const writeIgnoredRecipeStdout = (): void => {
-      // Why: non-readiness child stdout is untrusted and cannot be safely
-      // redacted, including schema-valid results with arbitrary user data.
-      process.stderr.write(`${IGNORED_NON_RECIPE_STDOUT}\n`)
-    }
-    const processRecipeOutputLine = (line: string): void => {
-      const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
-      if (!normalizedLine.trim()) {
-        return
-      }
-      const parsed = parseEphemeralVmRecipeResult(normalizedLine)
-      if (!parsed.ok) {
-        writeIgnoredRecipeStdout()
-        return
-      }
-      if (getEphemeralVmRecipeResultConnection(parsed.result).type !== 'orca-server') {
-        writeIgnoredRecipeStdout()
-        return
-      }
-      process.stdout.write(`${normalizedLine.trim()}\n`)
-      finish()
-    }
-    const stdoutDecoder = new StringDecoder('utf8')
-    const onData = (chunk: Buffer | string): void => {
-      output += typeof chunk === 'string' ? chunk : stdoutDecoder.write(chunk)
-      while (!settled) {
-        const newlineIndex = output.indexOf('\n')
-        if (newlineIndex === -1) {
-          return
-        }
-        const line = output.slice(0, newlineIndex)
-        output = output.slice(newlineIndex + 1)
-        processRecipeOutputLine(line)
-      }
-    }
-    const onError = (error: Error): void => {
-      finish(error)
-    }
-    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
-      if (settled) {
-        return
-      }
-      output += stdoutDecoder.end()
-      if (output.trim()) {
-        processRecipeOutputLine(output)
-      }
-      if (settled) {
-        return
-      }
-      finish(
-        new RuntimeClientError(
-          'runtime_serve_failed',
-          typeof code === 'number'
-            ? `Orca serve exited before printing valid recipe JSON with code ${code}.`
-            : `Orca serve exited before printing valid recipe JSON via ${signal}.`
-        )
-      )
-    }
-    child.stdout?.on('data', onData)
-    child.once('error', onError)
-    // Why: `exit` can precede the final piped stdout data. `close` waits until
-    // stdio closes so a last recipe chunk is not mistaken for missing output.
-    child.once('close', onClose)
-  })
+function packagedOrcaAppBundlePath(executable: string): string | null {
+  const appBundlePath = getMacAppBundlePath(executable)
+  if (!appBundlePath) {
+    return null
+  }
+  return basename(appBundlePath) === 'Orca.app' ? appBundlePath : null
 }
 
 function getExecutableAppArgs(): string[] {
