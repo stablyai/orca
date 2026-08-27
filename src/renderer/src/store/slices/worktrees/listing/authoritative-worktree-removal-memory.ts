@@ -1,6 +1,14 @@
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
 import { AUTHORITATIVE_REMOVAL_MEMORY_LIMIT } from './worktree-slice-constants'
 
+/** SSH fallback reads and paired-runtime catalog refreshes can both resurrect a row mid-delete. */
+export function shouldRememberAuthoritativeWorktreeRemoval(
+  hostId: ExecutionHostId | undefined
+): hostId is ExecutionHostId {
+  const kind = hostId ? parseExecutionHostId(hostId)?.kind : undefined
+  return kind === 'ssh' || kind === 'runtime'
+}
+
 // Why: main retires the persisted SSH metadata a scan proved gone, but that IPC is async and the next fallback
 // read can already be in flight, so this session memory covers the window until the delete lands. It is not the
 // durable half: reloads start empty and rely on the metadata itself being gone.

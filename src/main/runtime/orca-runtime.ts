@@ -616,7 +616,8 @@ import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetr
 import {
   isWindowsAbsolutePathLike,
   isPathInsideOrEqual,
-  normalizeRuntimePathForComparison
+  normalizeRuntimePathForComparison,
+  normalizeWorktreeSelectorPathForComparison
 } from '../../shared/cross-platform-path'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import { resolveTerminalStartupCwd } from '../../shared/terminal-startup-cwd'
@@ -41436,7 +41437,10 @@ function branchSelectorMatches(branch: string, selector: string): boolean {
 }
 
 function runtimePathsEqual(left: string, right: string): boolean {
-  return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
+  return (
+    normalizeWorktreeSelectorPathForComparison(left) ===
+    normalizeWorktreeSelectorPathForComparison(right)
+  )
 }
 
 /**
@@ -41455,7 +41459,7 @@ function runtimeWorktreeIdentityKey(worktreeId: string): string {
   // Same suffix rule: this keys PTY refresh, sleep, and mutation-queue state per session.
   const parsed = splitWorktreeId(worktreeId)
   return parsed
-    ? `${parsed.repoId}\0${normalizeRuntimePathForComparison(parsed.worktreePath)}`
+    ? `${parsed.repoId}\0${normalizeWorktreeSelectorPathForComparison(parsed.worktreePath)}`
     : worktreeId
 }
 
@@ -41463,7 +41467,7 @@ function runtimeWorktreeLookupKey(worktreeId: string): string {
   const parsed = splitWorktreeId(worktreeId)
   return JSON.stringify(
     parsed
-      ? ['parsed', parsed.repoId, normalizeRuntimePathForComparison(parsed.worktreePath)]
+      ? ['parsed', parsed.repoId, normalizeWorktreeSelectorPathForComparison(parsed.worktreePath)]
       : ['raw', worktreeId]
   )
 }

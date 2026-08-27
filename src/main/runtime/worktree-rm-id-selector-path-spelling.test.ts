@@ -143,6 +143,28 @@ describe('worktree id selectors vs. the path spelling git reports (#16243)', () 
     }
   )
 
+  it('resolves /tmp against a scan that reports /private/tmp (#16753)', async () => {
+    const gitPath = '/private/tmp/orca/workspaces/plugin-host'
+    const gitRepo = '/private/tmp/orca/repo'
+    scanReports(gitPath, gitRepo)
+    const runtime = new OrcaRuntimeService(makeStore(gitRepo) as never)
+
+    await expect(
+      runtime.showManagedWorktree(`id:${REPO_ID}::/tmp/orca/workspaces/plugin-host`)
+    ).resolves.toMatchObject({ path: gitPath })
+    await expect(
+      runtime.showManagedWorktree('path:/tmp/orca/workspaces/plugin-host')
+    ).resolves.toMatchObject({ path: gitPath })
+
+    const internals = runtime as unknown as RemovalInternals
+    await expect(
+      internals.resolveWorktreeRemovalTarget(
+        `id:${REPO_ID}::/tmp/orca/workspaces/plugin-host`,
+        LOCAL_EXECUTION_HOST_ID
+      )
+    ).resolves.toMatchObject({ repoId: REPO_ID, path: gitPath })
+  })
+
   it('still refuses an id whose path names a different workspace', async () => {
     scanReports(WORKTREE_PATH)
     const runtime = new OrcaRuntimeService(makeStore() as never)

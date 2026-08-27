@@ -1,8 +1,11 @@
 import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
 import { getWorktreeOperationOwnerHostIds } from '@/lib/worktree-operation-route'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { resolveWorkspaceCleanupRemovalHostId } from '../../../../../../shared/workspace-cleanup-host-identity'
-import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
+import {
+  rememberAuthoritativelyRemovedWorktrees,
+  shouldRememberAuthoritativeWorktreeRemoval
+} from '../listing/authoritative-worktree-removal-memory'
 import { worktreeHostMatchOptions, worktreeMatchesHost } from '../listing/worktree-host-ownership'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
@@ -134,7 +137,7 @@ export function dropConfirmedHostRow(
       sortEpoch: state.sortEpoch + 1
     }
   })
-  if (parseExecutionHostId(requiredExecutionHostId)?.kind === 'ssh') {
+  if (shouldRememberAuthoritativeWorktreeRemoval(requiredExecutionHostId)) {
     rememberAuthoritativelyRemovedWorktrees(requiredExecutionHostId, [worktreeId])
   }
   return sameIdSurvives

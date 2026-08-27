@@ -2,7 +2,6 @@ import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
@@ -28,7 +27,10 @@ import {
 import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
 import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
-import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
+import {
+  rememberAuthoritativelyRemovedWorktrees,
+  shouldRememberAuthoritativeWorktreeRemoval
+} from '../listing/authoritative-worktree-removal-memory'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
 import {
   isRuntimeRepoNotFoundError,
@@ -153,6 +155,10 @@ export function createRemoveWorktree(
           if (currentResolution.kind === 'resolved') {
             removalGenerationGuard?.assertCurrent()
           }
+          // Why (#16753): selector_not_found is often a path-spelling miss; forgetting the row lets the next scan resurrect it.
+          if (isRuntimeSelectorNotFoundError(error) && !isRuntimeRepoNotFoundError(error)) {
+            throw error
+          }
           try {
             removalResult = await window.api.worktrees.forgetLocal({
               worktreeId,
@@ -224,7 +230,7 @@ export function createRemoveWorktree(
       forgetHugeRepoWarningDismissalsForWorktrees([worktreeId])
       // Why: forget-local is legal while the host is unreachable, so record the removal here too — otherwise an
       // in-flight metadata read that snapshotted this row re-appends it, and disconnected polls never drop it.
-      if (hostId && parseExecutionHostId(hostId)?.kind === 'ssh') {
+      if (shouldRememberAuthoritativeWorktreeRemoval(hostId)) {
         rememberAuthoritativelyRemovedWorktrees(hostId, [worktreeId])
       }
 

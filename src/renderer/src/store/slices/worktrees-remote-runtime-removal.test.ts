@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
+import { getAuthoritativelyRemovedWorktreeIds } from './worktrees/listing/authoritative-worktree-removal-memory'
 import {
   createTestStore,
   mockApi,
@@ -36,7 +37,12 @@ describe('worktree remote runtime mutations', () => {
 
   it('removes worktrees through the active remote runtime environment', async () => {
     const store = createTestStore()
-    const wt = makeWorktree({ id: 'repo1::/path/wt1', repoId: 'repo1', path: '/path/wt1' })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1'
+    })
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-rm',
       ok: true,
@@ -50,7 +56,7 @@ describe('worktree remote runtime mutations', () => {
 
     const result = await store
       .getState()
-      .removeWorktree({ id: wt.id, executionHostId: null }, false, {
+      .removeWorktree({ id: wt.id, executionHostId: 'runtime:env-1' }, false, {
         snapshotPruneBatchId: 'batch-1'
       })
 
@@ -79,6 +85,7 @@ describe('worktree remote runtime mutations', () => {
       backendOwnsPtyTeardown: true
     })
     expect(store.getState().worktreesByRepo.repo1).toEqual([])
+    expect([...(getAuthoritativelyRemovedWorktreeIds('runtime:env-1') ?? [])]).toEqual([wt.id])
   })
 
   it('cleans up a preserved branch through the same host qualifier the removal used', async () => {
@@ -411,37 +418,60 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
   })
 
-  it.each(['repo_not_found', 'selector_not_found'])(
-    'forgets a mirrored row when the remote returns %s',
-    async (errorCode) => {
-      const store = createTestStore()
-      const wt = makeWorktree({
-        id: 'repo-gone::/path/stale',
-        repoId: 'repo-gone',
-        path: '/path/stale',
-        hostId: 'runtime:env-1'
-      })
-      runtimeEnvironmentCall.mockResolvedValue({
-        id: 'rpc-rm',
-        ok: false,
-        error: { code: errorCode, message: errorCode },
-        _meta: { runtimeId: 'runtime-remote' }
-      })
-      store.setState({
-        settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
-        worktreesByRepo: { 'repo-gone': [wt] }
-      } as Partial<AppState>)
+  it('forgets a mirrored row when the remote returns repo_not_found', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo-gone::/path/stale',
+      repoId: 'repo-gone',
+      path: '/path/stale',
+      hostId: 'runtime:env-1'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-rm',
+      ok: false,
+      error: { code: 'repo_not_found', message: 'repo_not_found' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { 'repo-gone': [wt] }
+    } as Partial<AppState>)
 
-      const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
 
-      expect(result).toEqual({ ok: true })
-      expect(mockApi.worktrees.forgetLocal).toHaveBeenCalledWith({
-        worktreeId: wt.id,
-        hostId: 'runtime:env-1'
-      })
-      expect(store.getState().worktreesByRepo['repo-gone']).toEqual([])
-    }
-  )
+    expect(result).toEqual({ ok: true })
+    expect(mockApi.worktrees.forgetLocal).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      hostId: 'runtime:env-1'
+    })
+    expect(store.getState().worktreesByRepo['repo-gone']).toEqual([])
+  })
+
+  it('does not forget a live remote row when the host returns selector_not_found (#16753)', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/path/wt1',
+      hostId: 'runtime:env-1'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-rm',
+      ok: false,
+      error: { code: 'selector_not_found', message: 'selector_not_found' },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [wt] }
+    } as Partial<AppState>)
+
+    const result = await store.getState().removeWorktree({ id: wt.id, executionHostId: null })
+
+    expect(result).toEqual({ ok: false, error: 'selector_not_found' })
+    expect(mockApi.worktrees.forgetLocal).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
+  })
 
   it('does not forget a row that becomes ambiguous while remote removal is in flight', async () => {
     const store = createTestStore()
