@@ -42,7 +42,6 @@ inline src/relay/git-handler.ts
 inline src/relay/pty-handler.ts
 inline src/relay/workspace-space-scan.ts
 inline src/renderer/src/components/GitLabItemDialog.tsx
-inline src/renderer/src/components/JiraIssueWorkspace.tsx
 inline src/renderer/src/components/LinearItemDrawer.tsx
 inline src/renderer/src/components/TaskPage.tsx
 inline src/renderer/src/components/Terminal.tsx
