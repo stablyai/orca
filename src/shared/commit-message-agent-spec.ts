@@ -1,12 +1,16 @@
 import type { TuiAgent } from './tui-agent'
 import { isTuiAgentEnabled } from './tui-agent-selection'
-import { assertJsonTextStructureWithinLimits } from './json-text-structure-limit'
 import {
   CLAUDE_MODEL_LIST_ARGS,
   CLAUDE_MODEL_LIST_STDIN,
   parseClaudeModelList
 } from './claude-model-list-probe'
 import { labelFromModelId } from './model-id-label'
+import {
+  CODEX_MODEL_LIST_ARGS,
+  CODEX_MODEL_LIST_JSON_STRUCTURE_LIMITS,
+  parseCodexModelList
+} from './codex-model-list-probe'
 
 /* eslint-disable max-lines -- Why: this is the single registry for non-interactive commit-message agents, their model discovery parsers, and UI capabilities. */
 
@@ -81,10 +85,7 @@ export type CommitMessageAgentCapability = {
   defaultModelId: string
 }
 
-export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = {
-  structuralTokens: 64 * 1024,
-  nestingDepth: 16
-} as const
+export const COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS = CODEX_MODEL_LIST_JSON_STRUCTURE_LIMITS
 
 const BASIC_THINKING_LEVELS: ThinkingLevel[] = [
   { id: 'low', label: 'Low' },
@@ -172,39 +173,25 @@ export function parseClaudeModels(stdout: string): CommitMessageModel[] {
 }
 
 export function parseCodexModels(stdout: string): CommitMessageModel[] {
-  try {
-    assertJsonTextStructureWithinLimits(stdout, COMMIT_MESSAGE_MODEL_JSON_STRUCTURE_LIMITS)
-    const parsed = JSON.parse(stdout) as {
-      models?: {
-        slug?: string
-        display_name?: string
-        supported_reasoning_levels?: { effort?: string }[]
-        default_reasoning_level?: string
-      }[]
-    }
-    return uniqueModels(
-      (parsed.models ?? [])
-        .filter((model) => model.slug && model.display_name)
-        .map((model) => ({
-          id: model.slug!,
-          label: model.display_name!,
-          ...(model.supported_reasoning_levels?.length
-            ? {
-                thinkingLevels: model.supported_reasoning_levels
-                  .map((level) => level.effort)
-                  .filter((effort): effort is string => Boolean(effort))
-                  .map((effort) => ({
-                    id: effort,
-                    label: effort === 'xhigh' ? 'Extra High' : labelFromModelId(effort)
-                  })),
-                defaultThinkingLevel: model.default_reasoning_level ?? 'low'
-              }
-            : {})
-        }))
-    )
-  } catch {
-    return []
-  }
+  return uniqueModels(
+    parseCodexModelList(stdout).map((model) => ({
+      id: model.id,
+      label: model.label,
+      ...(model.effortLevels.length > 0
+        ? {
+            thinkingLevels: model.effortLevels.map((effort) => ({
+              id: effort,
+              label: effort === 'xhigh' ? 'Extra High' : labelFromModelId(effort)
+            })),
+            defaultThinkingLevel: model.effortLevels.includes(model.defaultEffort ?? '')
+              ? model.defaultEffort!
+              : model.effortLevels.includes('low')
+                ? 'low'
+                : model.effortLevels[0]
+          }
+        : {})
+    }))
+  )
 }
 
 export function parseLineModels(stdout: string): CommitMessageModel[] {
@@ -401,7 +388,7 @@ export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageA
     modelSource: 'dynamic',
     modelDiscovery: {
       binary: 'codex',
-      args: ['debug', 'models'],
+      args: [...CODEX_MODEL_LIST_ARGS],
       parse: parseCodexModels
     },
     // Why: ordered to match the official `codex` model picker — descending

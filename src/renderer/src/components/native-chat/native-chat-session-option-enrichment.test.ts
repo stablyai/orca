@@ -317,4 +317,78 @@ describe('native chat session option enrichment', () => {
       })
     ).resolves.toBeNull()
   })
+
+  it('uses discovered Codex models and their per-model reasoning levels', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'probe',
+      models: [
+        {
+          id: 'gpt-5.6-sol',
+          label: 'GPT-5.6 Sol',
+          thinkingLevels: [
+            { id: 'low', label: 'Low' },
+            { id: 'high', label: 'High' },
+            { id: 'max', label: 'Max' },
+            { id: 'ultra', label: 'Ultra' }
+          ],
+          defaultThinkingLevel: 'high'
+        },
+        { id: 'account-only-model', label: 'Account only model' }
+      ]
+    })
+
+    const discovered = await discoverNativeChatCatalogModels('codex', {
+      settings: {},
+      worktreeId: 'repo::/worktree',
+      worktreePath: '/worktree'
+    })
+    expect(discovered?.map(({ id }) => id)).toEqual(['gpt-5.6-sol', 'account-only-model'])
+    expect(discovered?.[0].options[0].kind).toMatchObject({
+      type: 'select',
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' },
+        { value: 'max', label: 'Max' },
+        { value: 'ultra', label: 'Ultra' }
+      ],
+      defaultValue: 'high'
+    })
+    expect(discovered?.[1].options).toEqual([])
+
+    const listener = vi.fn()
+    subscribeNativeChatEnrichedModels('codex', 'local', listener)
+    ensureNativeChatModelEnrichment({
+      agent: 'codex',
+      hostKey: 'local',
+      discover: async () => discovered
+    })
+    await vi.waitFor(() => expect(listener).toHaveBeenCalledOnce())
+    const enriched = readNativeChatEnrichedModels('codex', 'local')!
+    expect(enriched.map(({ id }) => id)).toEqual(['gpt-5.6-sol', 'account-only-model'])
+    expect(enriched[0].options[0].kind).toMatchObject({
+      choices: [
+        { value: 'low', label: 'Low' },
+        { value: 'high', label: 'High' },
+        { value: 'max', label: 'Max' },
+        { value: 'ultra', label: 'Ultra' }
+      ]
+    })
+  })
+
+  it('does not advertise the Codex spec fallback when probing is unavailable', async () => {
+    mocks.discoverRuntimeCommitMessageModels.mockResolvedValue({
+      success: true,
+      catalogOrigin: 'spec',
+      models: [{ id: 'gpt-5.5', label: 'GPT-5.5' }]
+    })
+
+    await expect(
+      discoverNativeChatCatalogModels('codex', {
+        settings: {},
+        worktreeId: 'repo::/worktree',
+        worktreePath: '/worktree'
+      })
+    ).resolves.toBeNull()
+  })
 })
