@@ -10,6 +10,7 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from './terminal-identity'
+import { lifecycleRejectionRecovery } from '../../orchestration-lifecycle-rejection-recovery'
 
 /** B5 — the two typed worker operations. Everything a worker used to assemble
  *  by hand (message type, recipient, payload JSON, lifecycle flag ordering) is
@@ -147,7 +148,11 @@ export const ORCHESTRATION_WORKER_OPERATION_HANDLERS: Record<string, CommandHand
     )
     await requireWorkerDoneSettlement(client, 'worker_done', serializedPayload, result.result)
     if (result.result.lifecycle?.action === 'rejected') {
-      throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
+      throw new RuntimeClientError(
+        result.result.lifecycle.code,
+        result.result.lifecycle.reason,
+        lifecycleRejectionRecovery(result.result.lifecycle.code)
+      )
     }
     printResult(result, json, (value) =>
       value.message ? `Reported ${value.message.id}` : `Queued ${value.relay?.messageId}`

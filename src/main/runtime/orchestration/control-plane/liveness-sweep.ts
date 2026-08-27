@@ -72,6 +72,35 @@ export function listActiveDispatchesForRun(
     .all(runId) as DispatchContextRow[]
 }
 
+function isDispatchSettled(dispatch: DispatchContextRow): boolean {
+  return dispatch.status !== 'pending' && dispatch.status !== 'dispatched'
+}
+
+/** Settled Dispatches whose marker never got a terminal verdict.
+ *
+ *  Why this exists: a Dispatch that dies between two sweeps leaves the sweep's
+ *  active set before anything can finalize its marker, so the last thing
+ *  written stays `live` until the TTL — the exact false `live` the marker
+ *  contract forbids. One more sweep closes it out.
+ */
+function listDispatchesNeedingLivenessFinalization(
+  db: OrchestrationDb,
+  runId: string
+): DispatchContextRow[] {
+  const settled = db.db
+    .prepare(
+      `SELECT * FROM dispatch_contexts
+       WHERE run_id = ? AND status NOT IN ('pending', 'dispatched')
+       ORDER BY rowid ASC`
+    )
+    .all(runId) as DispatchContextRow[]
+  const store = new ControlPlaneStore(db)
+  return settled.filter((dispatch) => {
+    const marker = store.getLivenessMarker(dispatch.id)
+    return marker !== undefined && marker.terminal === 0
+  })
+}
+
 async function collectSignals(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
@@ -90,7 +119,7 @@ async function collectSignals(
     processLiveness,
     approvedWaitUntilIso: source.approvedWaitUntil(dispatch.id),
     terminalOwnership: resource?.ownership_state ?? null,
-    settled: false
+    settled: isDispatchSettled(dispatch)
   }
 }
 
@@ -113,7 +142,10 @@ export async function runLivenessSweep(args: {
   dispatchId?: string
 }): Promise<LivenessSweepResult> {
   const { db, runId, source, nowMs } = args
-  const all = listActiveDispatchesForRun(db, runId)
+  const all = [
+    ...listActiveDispatchesForRun(db, runId),
+    ...listDispatchesNeedingLivenessFinalization(db, runId)
+  ]
   const dispatches = args.dispatchId ? all.filter((row) => row.id === args.dispatchId) : all
   if (dispatches.length === 0) {
     return { swept: 0, wakes: [], publishedMessageIds: [] }
