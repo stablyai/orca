@@ -339,4 +339,21 @@ describe('startup ordering', () => {
     expect(desktopSetWebContents).toBeGreaterThanOrEqual(0)
     expect(desktopAutomationStart).toBeGreaterThan(desktopSetWebContents)
   })
+
+  it('installs the serve supervisor disconnect quit after the app environment and data path exist', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
+    const setEnvironment = source.indexOf('setAppEnvironment(new ElectronAppEnvironment())')
+    const initData = source.indexOf('initDataPath()')
+    const installSupervisorQuit = source.indexOf(
+      'installServeSupervisorDisconnectQuit(isServeMode)'
+    )
+
+    expect(setEnvironment).toBeGreaterThanOrEqual(0)
+    expect(initData).toBeGreaterThan(setEnvironment)
+    // Why: the call validates the supervisor handoff env against getCanonicalUserDataPath(),
+    // so it needs both the installed app environment and the captured canonical path. At
+    // module scope it resolved neither and threw 'AppEnvironment not initialized', killing
+    // every macOS `orca serve` process at startup.
+    expect(installSupervisorQuit).toBeGreaterThan(initData)
+  })
 })

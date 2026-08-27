@@ -758,7 +758,6 @@ if (app.isPackaged && process.platform !== 'win32') {
 }
 configureDevUserDataPath(is.dev)
 configureOrcaUserDataPathEnv()
-installServeSupervisorDisconnectQuit(isServeMode)
 
 // Why: just past createMainWindow's 10s ready-to-show fallback, so a window revealed that way still gets its tray icon.
 const TRAY_CREATE_FALLBACK_MS = 12_000
@@ -973,6 +972,11 @@ if (hasSingleInstanceLock) {
   installDevParentSignalQuit(shouldCoupleToDevParent)
   // Why: run after configureDevUserDataPath but before app.setName('Orca') (whenReady), which changes the resolved path on case-sensitive filesystems.
   initDataPath()
+  // Why here rather than at module scope: this validates the supervisor handoff env
+  // against getCanonicalUserDataPath(), so it needs setAppEnvironment() installed above
+  // and the canonical path captured just now. At module scope it threw
+  // 'AppEnvironment not initialized' and killed every macOS `orca serve` at startup.
+  installServeSupervisorDisconnectQuit(isServeMode)
   // Why here: initDataPath above gives the canonical userData path for the record file; the write
   // itself lands for the next launch (see macos-press-and-hold-default.ts).
   applyMacPressAndHoldDefaultAtStartup(getCanonicalUserDataPath())
