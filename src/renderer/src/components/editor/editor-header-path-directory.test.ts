@@ -110,6 +110,16 @@ describe('listEditorHeaderDirectory', () => {
 })
 
 describe('openEditorHeaderPathFile', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getState.mockReturnValue({
+      settings: {},
+      openFiles: [],
+      unifiedTabsByWorktree: {},
+      activateTab
+    })
+  })
+
   it('opens an ordinary file in the current group', () => {
     const openFile = vi.fn()
     const openMarkdownPreview = vi.fn()
