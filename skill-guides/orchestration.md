@@ -235,13 +235,13 @@ orca orchestration worker-start --task <task_b> --worktree current --agent claud
 
 `current` and exact existing worktrees create a fresh agent terminal and do not rerun setup. Reuse an existing agent only with `--terminal <handle>`; reusing a terminal does not inject the configured worker defaults.
 
-For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level and that agent/model supports it. Naming only an agent is not a model request: pass `--agent` alone so the stored model and effort defaults for that agent still apply. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt. For example, use the following only when the user has specifically requested Claude `opus` at high effort:
+For a per-invocation Claude, Codex, or Cursor launch, pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level or the task requires that exact effort, and that agent/model supports it. Naming only an agent is not a model request: pass `--agent` alone so the stored model and effort defaults for that agent still apply. These options apply only to fresh agent terminals, override general agent default arguments, and are reported under `launch.requested` and `launch.effective` in the receipt. For example, use the following only when the user has specifically requested Claude `opus` at high effort:
 
 ```bash
 orca orchestration worker-start --task <task_id> --worktree current --agent claude --model opus --effort high --json
 ```
 
-`--effort` requires `--model`, and neither option can combine with `--terminal`. A connected worker server must advertise launch-preference support before Orca forwards either option.
+`--effort` requires `--model`, and neither option can combine with `--terminal`. A requested effort with no named model therefore cannot be applied on its own: ask the user which model to pair with it rather than substituting one. A connected worker server must advertise launch-preference support before Orca forwards either option.
 
 For a new worktree, setup runs by default and agent-first creation reuses the returned startup agent terminal:
 

@@ -326,7 +326,10 @@ describe('orchestration skill guidance', () => {
 
     expect(workerLoop).toContain('opaque provider model id with `--model`')
     expect(workerLoop).toContain(
-      'pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level and that agent/model supports it.'
+      'pass an opaque provider model id with `--model` only when the user names a model or the task requires that exact model; pass `--effort` only when the user names an effort level or the task requires that exact effort, and that agent/model supports it.'
+    )
+    expect(workerLoop).not.toContain(
+      'pass `--effort` only when the user names an effort level and that agent/model supports it.'
     )
     expect(workerLoop).toContain(
       'Naming only an agent is not a model request: pass `--agent` alone so the stored model and effort defaults for that agent still apply.'
@@ -335,6 +338,9 @@ describe('orchestration skill guidance', () => {
       'For a per-invocation Claude, Codex, or Cursor launch requested by the user'
     )
     expect(workerLoop).toContain('`--effort` requires `--model`')
+    expect(workerLoop).toContain(
+      'A requested effort with no named model therefore cannot be applied on its own: ask the user which model to pair with it rather than substituting one.'
+    )
     expect(workerLoop).toContain('neither option can combine with `--terminal`')
     expect(workerLoop).toContain(
       'use the following only when the user has specifically requested Claude `opus` at high effort'
