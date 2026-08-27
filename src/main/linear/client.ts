@@ -1,5 +1,5 @@
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient, loadLinearSdk } from './linear-sdk'
 import { LEGACY_WORKSPACE_ID } from './linear-credential-paths'
 import {
   clearLegacyViewerOnDisk,
@@ -50,7 +50,7 @@ export function getClient(workspaceId?: string | null): LinearClient | null {
   if (!token) {
     return null
   }
-  return new (loadLinearSdk().LinearClient)({ apiKey: token })
+  return createLinearClient({ apiKey: token })
 }
 
 export function getClients(
@@ -83,7 +83,7 @@ export function getClients(
     }
     clients.push({
       workspace,
-      client: new (loadLinearSdk().LinearClient)({ apiKey: token }),
+      client: createLinearClient({ apiKey: token }),
       apiKey: token
     })
   }
@@ -91,7 +91,7 @@ export function getClients(
 }
 
 export function getPublicFileUrlClient(entry: LinearClientForWorkspace): LinearClient {
-  return new (loadLinearSdk().LinearClient)({
+  return createLinearClient({
     apiKey: entry.apiKey,
     headers: {
       'public-file-urls-expire-in': String(LINEAR_PUBLIC_FILE_URL_EXPIRY_SECONDS)
@@ -114,7 +114,7 @@ export async function connect(
   { ok: true; viewer: LinearViewer; workspace: LinearWorkspace } | { ok: false; error: string }
 > {
   try {
-    const client = new (loadLinearSdk().LinearClient)({ apiKey })
+    const client = createLinearClient({ apiKey })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)
@@ -208,7 +208,7 @@ export async function testConnection(
   }
 
   try {
-    const client = new (loadLinearSdk().LinearClient)({ apiKey: token })
+    const client = createLinearClient({ apiKey: token })
     const me = await client.viewer
     const org = await me.organization
     const workspace = workspaceFromLinearData(me, org)

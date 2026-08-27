@@ -9,7 +9,7 @@ import type {
   LinearWorkspaceSelection
 } from '../../shared/linear/workspace-types'
 import type { LinearClient } from '@linear/sdk'
-import { loadLinearSdk } from './linear-sdk'
+import { createLinearClient } from './linear-sdk'
 import {
   LINEAR_ISSUE_API_PAGE_SIZE_MAX,
   clampLinearIssueListLimit
@@ -597,9 +597,7 @@ async function runLinearWrite<T>(
 ): Promise<T> {
   await acquire()
   try {
-    const client = signal
-      ? new (loadLinearSdk().LinearClient)({ apiKey: entry.apiKey, signal })
-      : entry.client
+    const client = signal ? createLinearClient({ apiKey: entry.apiKey, signal }) : entry.client
     return await write(client)
   } catch (error) {
     if (error instanceof LinearWriteFailure) {
