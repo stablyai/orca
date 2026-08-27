@@ -43,7 +43,12 @@ function folder(
   linked: WorkspaceLinkedItem | null,
   executionHostId?: ExecutionHostId
 ): KanbanFolderWorkspaceCandidate {
-  return { id, isArchived: false, linkedTask: linked, ...(executionHostId ? { executionHostId } : {}) }
+  return {
+    id,
+    isArchived: false,
+    linkedTask: linked,
+    ...(executionHostId ? { executionHostId } : {})
+  }
 }
 
 function archivedFolder(

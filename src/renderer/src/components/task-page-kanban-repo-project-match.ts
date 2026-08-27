@@ -19,9 +19,7 @@ function repositoryPathForCompare(ref: RemoteRepoRef): string {
 }
 
 function sameRepository(a: RemoteRepoRef, b: RemoteRepoRef): boolean {
-  return (
-    a.provider === b.provider && repositoryPathForCompare(a) === repositoryPathForCompare(b)
-  )
+  return a.provider === b.provider && repositoryPathForCompare(a) === repositoryPathForCompare(b)
 }
 
 /**

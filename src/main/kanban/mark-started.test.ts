@@ -98,11 +98,7 @@ describe('markKanbanTaskStarted', () => {
 
     expect(result).toEqual({ ok: true, moved: true, commented: true })
     expect(fetchMock).toHaveBeenCalledTimes(3)
-    const [listCall, moveCall, commentCall] = [
-      callArgs(0),
-      callArgs(1),
-      callArgs(2)
-    ]
+    const [listCall, moveCall, commentCall] = [callArgs(0), callArgs(1), callArgs(2)]
     expect(listCall[0]).toBe('https://kanban.fpimi.ru/api/tasks')
     expect(moveCall[0]).toBe('https://kanban.fpimi.ru/api/tasks/K-1/move')
     expect(JSON.parse(String(moveCall[1].body))).toEqual({ lane: 'L-inwork', task_version: 1 })
@@ -115,7 +111,9 @@ describe('markKanbanTaskStarted', () => {
   })
 
   it('skips the move when the task is already in the В работе lane', async () => {
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ...LIST, tasks: [rawTask({ lane: 'L-inwork' })] }))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ...LIST, tasks: [rawTask({ lane: 'L-inwork' })] })
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     const { markKanbanTaskStarted, deps } = await loadMarkStarted()
 
@@ -132,7 +130,9 @@ describe('markKanbanTaskStarted', () => {
   it('refetches and retries the move once after a first 409', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(LIST))
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'conflict' }, 409))
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ...LIST, tasks: [rawTask({ task_version: 2 })] }))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ...LIST, tasks: [rawTask({ task_version: 2 })] })
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     fetchMock.mockResolvedValueOnce(jsonResponse({ ok: true }))
     const { markKanbanTaskStarted, deps } = await loadMarkStarted()
@@ -160,7 +160,9 @@ describe('markKanbanTaskStarted', () => {
   it('fails with a typed conflict when the second move also 409s', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse(LIST))
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'conflict' }, 409))
-    fetchMock.mockResolvedValueOnce(jsonResponse({ ...LIST, tasks: [rawTask({ task_version: 2 })] }))
+    fetchMock.mockResolvedValueOnce(
+      jsonResponse({ ...LIST, tasks: [rawTask({ task_version: 2 })] })
+    )
     fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'conflict' }, 409))
     const { markKanbanTaskStarted, deps } = await loadMarkStarted()
 

@@ -12,15 +12,17 @@ import { mapKanbanTaskList } from './task-mapping'
 export const KANBAN_STARTED_LANE_NAME = 'В работе'
 
 export const KANBAN_TASK_NOT_FOUND_MESSAGE = 'The Kanban task could not be found on the board.'
-export const KANBAN_STARTED_LANE_MISSING_MESSAGE =
-  'The board has no lane named "В работе".'
+export const KANBAN_STARTED_LANE_MISSING_MESSAGE = 'The board has no lane named "В работе".'
 
 export type KanbanMarkStartedDeps = {
   fetch: typeof fetch
   timeoutMs?: number
 }
 
-const RESULT_CODE: Record<KanbanRequestErrorCode, Extract<KanbanMarkStartedResult, { ok: false }>['code']> = {
+const RESULT_CODE: Record<
+  KanbanRequestErrorCode,
+  Extract<KanbanMarkStartedResult, { ok: false }>['code']
+> = {
   invalid_token: 'unauthorized',
   unauthorized: 'unauthorized',
   forbidden: 'unauthorized',
@@ -181,10 +183,16 @@ async function moveOnce(args: {
   timeoutMs: number
   fetchFn: typeof fetch
 }): Promise<void> {
-  await requestJson(args.fetchFn, `/api/tasks/${encodeURIComponent(args.taskId)}/move`, args.token, args.timeoutMs, {
-    method: 'POST',
-    body: { lane: args.laneId, task_version: args.taskVersion }
-  })
+  await requestJson(
+    args.fetchFn,
+    `/api/tasks/${encodeURIComponent(args.taskId)}/move`,
+    args.token,
+    args.timeoutMs,
+    {
+      method: 'POST',
+      body: { lane: args.laneId, task_version: args.taskVersion }
+    }
+  )
 }
 
 async function postComment(args: {
@@ -194,10 +202,16 @@ async function postComment(args: {
   timeoutMs: number
   fetchFn: typeof fetch
 }): Promise<void> {
-  await requestJson(args.fetchFn, `/api/tasks/${encodeURIComponent(args.taskId)}/comments`, args.token, args.timeoutMs, {
-    method: 'POST',
-    body: { text: args.text }
-  })
+  await requestJson(
+    args.fetchFn,
+    `/api/tasks/${encodeURIComponent(args.taskId)}/comments`,
+    args.token,
+    args.timeoutMs,
+    {
+      method: 'POST',
+      body: { text: args.text }
+    }
+  )
 }
 
 /**

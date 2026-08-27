@@ -4,10 +4,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '@/store/types'
-import {
-  buildKanbanTaskLinkedWorkItem,
-  type LinkedWorkItemSummary
-} from '@/lib/new-workspace'
+import { buildKanbanTaskLinkedWorkItem, type LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import {
   matchKanbanTaskRepository,

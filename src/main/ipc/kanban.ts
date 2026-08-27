@@ -175,11 +175,7 @@ export function registerKanbanHandlers(): void {
       ) {
         return invalid('all')
       }
-      if (
-        retry !== undefined &&
-        retry !== 'all' &&
-        retry !== 'comment-only'
-      ) {
+      if (retry !== undefined && retry !== 'all' && retry !== 'comment-only') {
         return invalid(retry === 'comment-only' ? 'comment-only' : 'all')
       }
       const markArgs: KanbanMarkStartedArgs = {

@@ -43,19 +43,13 @@ export function showKanbanCardUpdateToast(args: {
   // comment-only retry must stay comment-only instead of restarting from `all`.
   const retry = args.result.retry
   toast.error(
-    translate(
-      'auto.components.kanban.sync.failed',
-      'Не удалось обновить карточку Kanban.'
-    ),
+    translate('auto.components.kanban.sync.failed', 'Не удалось обновить карточку Kanban.'),
     {
       description: args.result.message,
       duration: Infinity,
       dismissible: true,
       action: {
-        label: translate(
-          'auto.components.kanban.sync.retry',
-          'Повторить обновление карточки'
-        ),
+        label: translate('auto.components.kanban.sync.retry', 'Повторить обновление карточки'),
         onClick: () => {
           void retryKanbanCardUpdate(args.taskId, args.projectName, args.branch, retry)
         }

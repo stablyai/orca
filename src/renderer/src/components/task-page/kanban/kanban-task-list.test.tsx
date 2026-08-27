@@ -104,9 +104,7 @@ describe('KanbanTaskList', () => {
     )
     expect(host.textContent).toContain('t1')
     expect(host.textContent).toContain('Открыто')
-    expect(host.textContent).toContain(
-      new Date('2026-08-28').toLocaleDateString(getIntlLocale())
-    )
+    expect(host.textContent).toContain(new Date('2026-08-28').toLocaleDateString(getIntlLocale()))
     expect(host.querySelector('[aria-label="Urgent"]')).not.toBeNull()
     expect(host.textContent).toContain('example.com/org/repo')
   })

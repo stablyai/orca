@@ -62,9 +62,7 @@ function makeKanbanPrepared(): PreparedQuickSubmit {
   } satisfies PreparedQuickSubmit
 }
 
-function makeState(
-  overrides: Partial<QuickCreationExecutionInput>
-): QuickCreationExecutionInput {
+function makeState(overrides: Partial<QuickCreationExecutionInput>): QuickCreationExecutionInput {
   return {
     clearNewWorkspaceDraft: vi.fn(),
     createMultiple: false,

@@ -71,9 +71,7 @@ function makeKanbanPrepared(): PreparedFullSubmit {
 
 function makeState(overrides: Partial<FullCreationExecutionInput>): FullCreationExecutionInput {
   return {
-    applyWorktreeMeta: vi
-      .fn<FullCreationExecutionInput['applyWorktreeMeta']>()
-      .mockResolvedValue(),
+    applyWorktreeMeta: vi.fn<FullCreationExecutionInput['applyWorktreeMeta']>().mockResolvedValue(),
     clearNewWorkspaceDraft: vi.fn<FullCreationExecutionInput['clearNewWorkspaceDraft']>(),
     createWorktree: vi.fn<FullCreationExecutionInput['createWorktree']>(),
     effectivePresetId: null,

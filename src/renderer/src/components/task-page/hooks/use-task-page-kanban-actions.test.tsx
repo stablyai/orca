@@ -6,9 +6,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { AppState } from '@/store/types'
-import type {
-  KanbanRepoCandidate
-} from '@/components/task-page-kanban-repo-project-match'
+import type { KanbanRepoCandidate } from '@/components/task-page-kanban-repo-project-match'
 import type { KanbanTaskDetails, KanbanTaskSummary } from '../../../../../shared/kanban-types'
 import type * as KanbanWorkspaceLinkModule from '@/components/task-page-kanban-workspace-link'
 import type * as WorktreeActivationModule from '@/lib/worktree-activation'
@@ -114,9 +112,10 @@ beforeEach(() => {
   findLinkMock.mockReset().mockReturnValue(null)
   globalThis.window.api = {
     kanban: {
-      status: vi
-        .fn()
-        .mockResolvedValue({ connected: true, viewer: { id: 'u1', name: 'User One', level: 'admin' } }),
+      status: vi.fn().mockResolvedValue({
+        connected: true,
+        viewer: { id: 'u1', name: 'User One', level: 'admin' }
+      }),
       connect: vi.fn(),
       disconnect: vi.fn(),
       listTasks: vi.fn(),

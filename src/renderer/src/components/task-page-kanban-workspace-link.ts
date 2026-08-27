@@ -29,10 +29,7 @@ export type KanbanTaskWorkspaceLink =
 
 // Why: the exact linked Kanban id is the only link identity that counts; a
 // legacy GitHub/Jira item or a different card id must never resume this card.
-function isKanbanTaskLink(
-  item: WorkspaceLinkedItem | null | undefined,
-  taskId: string
-): boolean {
+function isKanbanTaskLink(item: WorkspaceLinkedItem | null | undefined, taskId: string): boolean {
   return item?.provider === 'kanban' && item.kanbanIdentifier === taskId
 }
 
@@ -64,8 +61,7 @@ export function findKanbanTaskWorkspaceLink({
     }
   }
   const folderWorkspace = folderWorkspaces.find(
-    (candidate) =>
-      !candidate.isArchived && isKanbanTaskLink(candidate.linkedTask, taskId)
+    (candidate) => !candidate.isArchived && isKanbanTaskLink(candidate.linkedTask, taskId)
   )
   if (folderWorkspace) {
     return {

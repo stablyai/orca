@@ -403,7 +403,10 @@ describe('registerKanbanHandlers markStarted', () => {
     ['non-string projectName', { taskId: 'K-1', projectName: 42, branch: 'feature-x' }],
     ['non-string branch', { taskId: 'K-1', projectName: 'Widgets', branch: 42 }],
     ['oversized branch', { taskId: 'K-1', projectName: 'Widgets', branch: 'x'.repeat(400) }],
-    ['invalid retry', { taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x', retry: 'nonsense' }]
+    [
+      'invalid retry',
+      { taskId: 'K-1', projectName: 'Widgets', branch: 'feature-x', retry: 'nonsense' }
+    ]
   ])('rejects %s without touching the operation', async (_label, args) => {
     registerKanbanHandlers()
 

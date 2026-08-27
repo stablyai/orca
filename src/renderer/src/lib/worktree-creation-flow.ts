@@ -265,7 +265,9 @@ async function executeWorktreeCreation(
   // helper never throws and no-ops for non-Kanban items, so a board failure
   // cannot fail or roll back creation.
   void syncKanbanTaskAfterWorkspaceStart({
-    linkedWorkItem: preparedRequest.linkedWorkItem, projectName: worktree.displayName, branch: worktree.branch
+    linkedWorkItem: preparedRequest.linkedWorkItem,
+    projectName: worktree.displayName,
+    branch: worktree.branch
   })
 
   // Why: awaiting the note IPC before the swap would add a visible round-trip to

@@ -19,7 +19,10 @@ describe('matchKanbanTaskRepository', () => {
       repositoryUrls: [WIDGETS_HTTPS],
       repos: [repo('repo-widgets', WIDGETS_GIT)]
     })
-    expect(result).toEqual({ kind: 'unique', repo: { id: 'repo-widgets', gitRemoteIdentity: { remoteUrl: WIDGETS_GIT } } })
+    expect(result).toEqual({
+      kind: 'unique',
+      repo: { id: 'repo-widgets', gitRemoteIdentity: { remoteUrl: WIDGETS_GIT } }
+    })
   })
 
   it('matches an SSH/SCP card URL against an HTTPS remote', () => {
