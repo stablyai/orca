@@ -45,6 +45,7 @@ export const MISSION_HANDLERS: Record<string, CommandHandler> = {
       from,
       worktree,
       agent: planned.result.agent,
+      agentCandidates: planned.result.agentCandidates,
       tasks,
       maxConcurrency
     })
