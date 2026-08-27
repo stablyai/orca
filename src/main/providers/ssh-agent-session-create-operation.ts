@@ -10,6 +10,7 @@ import {
   type PtySourceReceivingActivation
 } from '../../shared/pty-source-receiving-activation'
 import { validateClaimedSshSpawn } from './ssh-agent-session-claim-validation'
+import { parseSshRelayProcessId } from './ssh-relay-process-id'
 
 export const SSH_AGENT_SESSION_CAPABILITY_PROBE_TIMEOUT_MS = 5_000
 
@@ -171,6 +172,7 @@ function parseSshPtySpawnResult(value: unknown): PtySpawnResult {
       ? (value as PtySpawnResult)
       : ({} as PtySpawnResult)
   const activation = parsePtySourceReceivingActivation(result.sourceActivation)
+  const relayProcessId = parseSshRelayProcessId(result.relayProcessId)
   if (
     activation &&
     (typeof result.id !== 'string' ||
@@ -180,5 +182,9 @@ function parseSshPtySpawnResult(value: unknown): PtySpawnResult {
   ) {
     throw new Error('Invalid SSH PTY source activation identity')
   }
-  return activation ? { ...result, sourceActivation: activation } : result
+  return {
+    ...result,
+    ...(relayProcessId ? { relayProcessId } : {}),
+    ...(activation ? { sourceActivation: activation } : {})
+  }
 }

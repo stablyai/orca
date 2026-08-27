@@ -4,6 +4,7 @@ import type {
   SleepingAgentLaunchConfig
 } from '../../../../shared/agent-session-resume'
 import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TerminalStartupCwdMissingDirFallback } from '../../../../shared/terminal-startup-cwd'
@@ -76,6 +77,10 @@ export type AdoptStablePaneResult = {
   materialized?: true
 }
 
+export type AdoptStablePaneOutcome =
+  | AdoptStablePaneResult
+  | { result: null; owner: null; absenceVerdict: PtyLivenessVerdict }
+
 export type PtySpawnIpcDeps = {
   runtime?: OrcaRuntimeService
   store?: Store
@@ -87,7 +92,7 @@ export type PtySpawnIpcDeps = {
     onCodexHomePtySpawned?: (args: CodexHomePtySpawnedLifecycleArgs) => void
   }
   getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
-  adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
+  adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneOutcome | null>
   assertFolderWorkspacePtyPathUsable: (worktreeId: string | undefined) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,

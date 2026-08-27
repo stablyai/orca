@@ -2,6 +2,7 @@ import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../pro
 import type { CodexPaneHomeRoute } from '../../../codex/codex-pane-account-registry'
 import type { CodexAccountSelectionTarget } from '../../../codex-accounts/runtime-selection'
 import type { SleepingAgentLaunchConfig } from '../../../../shared/agent-session-resume'
+import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import type { ClaudeRuntimeAuthPreparation } from '../../../claude-accounts/runtime-auth-service'
 import type { PtySpawnTiming } from '../../pty-spawn-timing'
 import { createPtySpawnTiming } from '../../pty-spawn-timing'
@@ -28,6 +29,7 @@ export type PtyIpcSpawnState = {
   finishTerminalInstall: () => void
   result: PtySpawnResult
   stablePaneOwner: StablePaneOwner | null
+  stablePaneAbsenceVerdict: PtyLivenessVerdict | undefined
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
@@ -105,6 +107,7 @@ export function createPtyIpcSpawnState(
     finishTerminalInstall: () => {},
     result: { id: '' },
     stablePaneOwner: null,
+    stablePaneAbsenceVerdict: undefined,
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,

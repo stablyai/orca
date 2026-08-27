@@ -52,7 +52,7 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
     }
   }
   ctx.spawnTiming.mark('stable_adoption_setup')
-  ctx.preAdoptedStablePane =
+  const stablePaneAdoption =
     ctx.earlyStablePaneOwner && ctx.earlyWorktreeId
       ? await ctx.deps.adoptStablePane({
           cols: args.cols,
@@ -65,6 +65,9 @@ export async function preparePtyIpcSpawnPreflight(ctx: PtyIpcSpawnState): Promis
           ownsPaneSpawnReservation: true
         })
       : null
+  ctx.preAdoptedStablePane = stablePaneAdoption?.result ? stablePaneAdoption : null
+  ctx.stablePaneAbsenceVerdict =
+    stablePaneAdoption?.result === null ? stablePaneAdoption.absenceVerdict : undefined
   ctx.spawnTiming.mark('stable_adoption')
   if (ctx.earlyStablePaneOwner && !ctx.preAdoptedStablePane) {
     const pathUsable = ctx.deps.assertFolderWorkspacePtyPathUsable(args.worktreeId)

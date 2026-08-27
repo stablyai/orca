@@ -80,6 +80,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
       ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
       ...(ctx.validatedLeafId ? { leafId: ctx.validatedLeafId } : {}),
       state: 'attached',
+      ...(ctx.result.relayProcessId ? { relayProcessId: ctx.result.relayProcessId } : {}),
       lastAttachedAt: Date.now()
     })
   }

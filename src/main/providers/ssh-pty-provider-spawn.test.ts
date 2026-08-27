@@ -225,19 +225,31 @@ describe('spawn', () => {
   })
 
   it('sends pty.spawn request through multiplexer', async () => {
-    mux.request.mockResolvedValue({ id: 'pty-1' })
+    mux.request.mockResolvedValue({ id: 'pty-1', relayProcessId: 'relay-process-1' })
 
     const result = await provider.spawn({ cols: 80, rows: 24 })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 80,
       rows: 24,
       cwd: undefined,
       env: { [POWERLEVEL10K_WIZARD_DISABLE_ENV]: 'true' }
     })
-    expect(result).toEqual({ id: scopedPty1 })
+    expect(result).toEqual({ id: scopedPty1, relayProcessId: 'relay-process-1' })
     expect(provider.hasPty(scopedPty1)).toBe(true)
   })
+
+  it.each(['', 'x'.repeat(129), 42])(
+    'rejects a malformed relay process identity %j',
+    async (relayProcessId) => {
+      mux.request.mockResolvedValue({ id: 'pty-1', relayProcessId })
+
+      await expect(provider.spawn({ cols: 80, rows: 24 })).rejects.toThrow(
+        'Invalid SSH relay process identity'
+      )
+    }
+  )
 
   it('keeps a spawned PTY live across an overlapping stale process list', async () => {
     mux.request.mockResolvedValueOnce({ id: 'pty-new' }).mockResolvedValueOnce([])
@@ -278,6 +290,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: '/home/user',
@@ -316,6 +329,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -338,6 +352,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -359,6 +374,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -377,6 +393,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -401,6 +418,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -427,6 +445,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -453,6 +472,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -484,6 +504,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -515,6 +536,7 @@ describe('spawn', () => {
     })
 
     expectRequest(mux.request, 'pty.spawn', {
+      requestRelayProcessId: true,
       cols: 120,
       rows: 40,
       cwd: undefined,
@@ -542,6 +564,7 @@ describe('spawn', () => {
       'pty.attach',
       {
         id: 'pty-old',
+        requestRelayProcessId: true,
         cols: 80,
         rows: 24,
         suppressReplayNotification: true,
@@ -589,6 +612,7 @@ describe('spawn', () => {
 
     expectRequest(mux.request, 'pty.attach', {
       id: 'pty-old',
+      requestRelayProcessId: true,
       cols: 80,
       rows: 24,
       suppressReplayNotification: true,
@@ -614,6 +638,7 @@ describe('spawn', () => {
 
     expectRequest(mux.request, 'pty.attach', {
       id: 'pty-old',
+      requestRelayProcessId: true,
       cols: 80,
       rows: 24,
       suppressReplayNotification: true,
@@ -635,6 +660,7 @@ describe('spawn', () => {
       'pty.attach',
       {
         id: 'pty-old',
+        requestRelayProcessId: true,
         cols: 80,
         rows: 24,
         suppressReplayNotification: true,

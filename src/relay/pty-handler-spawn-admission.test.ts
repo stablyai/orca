@@ -53,7 +53,8 @@ describe('PtyHandler', () => {
     ;({ dispatcher, handler, originalPlatform } = beginPtyHandlerTest({
       mockPtySpawn,
       mockPtyInstance,
-      mockCreateShellPromptReadinessProbe
+      mockCreateShellPromptReadinessProbe,
+      relayProcessId: 'relay-process-1'
     }))
   })
 
@@ -96,6 +97,16 @@ describe('PtyHandler', () => {
     expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })
     expect(mockPtySpawn).toHaveBeenCalled()
     expect(handler.activePtyCount).toBe(1)
+  })
+
+  it('returns process identity only when a client requests it', async () => {
+    const legacySpawn = await spawnPty({ cols: 80, rows: 24 })
+    const spawned = await spawnPty({ cols: 80, rows: 24, requestRelayProcessId: true })
+    const attached = await attachPty({ id: spawned.id, requestRelayProcessId: true })
+
+    expect(legacySpawn).not.toHaveProperty('relayProcessId')
+    expect(spawned).toMatchObject({ relayProcessId: 'relay-process-1' })
+    expect(attached).toMatchObject({ relayProcessId: 'relay-process-1' })
   })
 
   it('replays an operation-owned spawn after its first response becomes stale', async () => {

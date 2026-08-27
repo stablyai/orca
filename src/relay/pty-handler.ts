@@ -186,6 +186,7 @@ type ManagedPty = {
 type RelayAgentSessionCreateResult = {
   id: string
   incarnationId: string
+  relayProcessId?: string
   replay?: string
   agentSessionEnsure?: unknown
   sourceActivation?: PtySourceReceivingActivation
@@ -453,7 +454,11 @@ export class PtyHandler {
     Promise<RelayAgentSessionCreateResult>
   >()
 
-  constructor(dispatcher: RelayDispatcher, graceTimeMs = DEFAULT_GRACE_TIME_MS) {
+  constructor(
+    dispatcher: RelayDispatcher,
+    graceTimeMs = DEFAULT_GRACE_TIME_MS,
+    private readonly relayProcessId?: string
+  ) {
     this.dispatcher = dispatcher
     this.graceTimeMs = graceTimeMs
     this.registerHandlers()
@@ -1414,7 +1419,11 @@ export class PtyHandler {
       const sourceActivation =
         context && this.sourcePublication?.receivingActivation?.(result.id, context.clientId)
       const { sourceActivation: _staleActivation, ...stableResult } = result
-      return { ...stableResult, ...(sourceActivation ? { sourceActivation } : {}) }
+      return {
+        ...stableResult,
+        ...this.requestedRelayProcess(params),
+        ...(sourceActivation ? { sourceActivation } : {})
+      }
     }
     if (this.agentSessionCreateOperations.size >= AGENT_SESSION_CREATE_OPERATION_LIMIT) {
       throw new Error('agent_session_operation_capacity')
@@ -1528,6 +1537,7 @@ export class PtyHandler {
       return {
         id: managed.id,
         incarnationId: managed.incarnationId,
+        ...this.requestedRelayProcess(params),
         agentSessionEnsure: result,
         ...(sourceActivation ? { sourceActivation } : {}),
         ...(adoptedReplay ? { replay: adoptedReplay } : {})
@@ -1552,6 +1562,7 @@ export class PtyHandler {
   ): Promise<{
     id: string
     incarnationId: string
+    relayProcessId?: string
     sourceActivation?: PtySourceReceivingActivation
   }> {
     const pty = await this.loadPty()
@@ -1756,8 +1767,15 @@ export class PtyHandler {
     return {
       id,
       incarnationId: managed.incarnationId,
+      ...this.requestedRelayProcess(params),
       ...(sourceActivation ? { sourceActivation } : {})
     }
+  }
+
+  private requestedRelayProcess(params: Record<string, unknown>): { relayProcessId?: string } {
+    return params.requestRelayProcessId === true && this.relayProcessId
+      ? { relayProcessId: this.relayProcessId }
+      : {}
   }
 
   private async attach(
@@ -1765,6 +1783,7 @@ export class PtyHandler {
     context?: RequestContext
   ): Promise<{
     incarnationId: string
+    relayProcessId?: string
     replay?: string
     sourceRecovery?: PtySourceRecoveryResult
     sourceActivation?: PtySourceReceivingActivation
@@ -1821,6 +1840,7 @@ export class PtyHandler {
     if (typeof activation === 'object') {
       return {
         incarnationId: managed.incarnationId,
+        ...this.requestedRelayProcess(params),
         sourceRecovery: activation,
         ...(sourceActivation ? { sourceActivation } : {})
       }
@@ -1844,6 +1864,7 @@ export class PtyHandler {
     ) {
       return {
         incarnationId: managed.incarnationId,
+        ...this.requestedRelayProcess(params),
         ...(sourceActivation ? { sourceActivation } : {})
       }
     }
@@ -1859,6 +1880,7 @@ export class PtyHandler {
       if (params.suppressReplayNotification) {
         return {
           incarnationId: managed.incarnationId,
+          ...this.requestedRelayProcess(params),
           replay,
           ...(sourceActivation ? { sourceActivation } : {})
         }
@@ -1867,6 +1889,7 @@ export class PtyHandler {
     }
     return {
       incarnationId: managed.incarnationId,
+      ...this.requestedRelayProcess(params),
       ...(sourceActivation ? { sourceActivation } : {})
     }
   }

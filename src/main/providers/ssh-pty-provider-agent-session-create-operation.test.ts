@@ -113,6 +113,7 @@ describe('SSH fresh agent-session create operations', () => {
         cwd: undefined,
         env: { POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD: 'true' },
         command: 'codex',
+        requestRelayProcessId: true,
         agentSessionCreateOperationId: 'a'.repeat(43)
       },
       expect.objectContaining({ beforeResolve: expect.any(Function) })
@@ -133,7 +134,7 @@ describe('SSH fresh agent-session create operations', () => {
     expect(request).toHaveBeenCalledOnce()
   })
 
-  it('keeps a client-selected old-relay spawn byte-for-byte legacy', async () => {
+  it('keeps a client-selected old-relay spawn free of structured-create fields', async () => {
     request.mockResolvedValueOnce({ id: 'pty-legacy' })
 
     await expect(
@@ -152,7 +153,8 @@ describe('SSH fresh agent-session create operations', () => {
         rows: 24,
         cwd: undefined,
         env: { POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD: 'true' },
-        command: 'codex'
+        command: 'codex',
+        requestRelayProcessId: true
       },
       expect.objectContaining({ beforeResolve: expect.any(Function) })
     )

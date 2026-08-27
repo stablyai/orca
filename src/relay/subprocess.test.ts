@@ -768,11 +768,13 @@ describe('Subprocess: Relay entry point', () => {
     expect(resp.error).toBeUndefined()
     const status = resp.result as {
       pid: number
+      relayProcessId: string
       memory: { rss: number }
       ptys: { active: number }
       socket: { owned: boolean; listening: boolean; clients: number }
     }
     expect(status.pid).toBeGreaterThan(0)
+    expect(status.relayProcessId).toMatch(/^[0-9a-f-]{36}$/)
     expect(status.memory.rss).toBeGreaterThan(0)
     expect(status.ptys.active).toBe(0)
     expect(status.socket).toMatchObject({ owned: true, listening: true, clients: 0 })

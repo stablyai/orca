@@ -60,7 +60,11 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
         throw new Error('client_disconnected')
       }
     }
-    if (args.agentSessionEnsure && !ctx.preAdoptedStablePane) {
+    if (
+      args.agentSessionEnsure &&
+      !ctx.preAdoptedStablePane &&
+      ctx.stablePaneAbsenceVerdict?.status !== 'unverifiable'
+    ) {
       // Why: daemon-backed claims can outlive this controller; import all
       // proven owners before deciding that an identity is absent.
       await reconcileAgentSessionOwnerListings()
@@ -136,6 +140,7 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
             owner: stablePaneOwnerCandidate,
             worktreeId: args.worktreeId,
             connectionId: args.connectionId,
+            absenceVerdict: ctx.stablePaneAbsenceVerdict,
             resolveOwner: () =>
               resolveStablePaneOwner(
                 ctx.deps.runtime,
@@ -148,6 +153,10 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
           })
       ctx.result = stablePaneSpawn.result
       ctx.stablePaneOwner = stablePaneSpawn.owner
+      ctx.stablePaneAbsenceVerdict =
+        'absenceVerdict' in stablePaneSpawn
+          ? stablePaneSpawn.absenceVerdict
+          : ctx.stablePaneAbsenceVerdict
       if (
         ctx.stablePaneOwner &&
         ctx.isNewDaemonSession &&

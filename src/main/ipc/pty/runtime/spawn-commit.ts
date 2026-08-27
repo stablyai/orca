@@ -37,6 +37,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
+  const agentStartupSuppressed = ctx.stablePaneAbsenceVerdict?.status === 'unverifiable'
   try {
     ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
       store: ctx.hostSessionBinding?.store,
@@ -110,7 +111,6 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   ) {
     markNativeWindowsConptyPty(ctx.result.id)
   }
-  const relayResultId = getRelayPtyId(args.connectionId, ctx.result.id)
   const persistSshLease = (): void => {
     if (!ctx.deps.store || !args.connectionId) {
       return
@@ -118,13 +118,14 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     // Why: SSH leases keep relay ids for remote reconciliation, while session bindings keep app-facing ids for hydration.
     ctx.deps.store.upsertSshRemotePtyLease({
       targetId: args.connectionId,
-      ptyId: relayResultId,
+      ptyId: getRelayPtyId(args.connectionId, ctx.result.id),
       ...(typeof args.worktreeId === 'string' ? { worktreeId: args.worktreeId } : {}),
       ...(typeof args.tabId === 'string' ? { tabId: args.tabId } : {}),
       ...(typeof args.leafId === 'string' && isTerminalLeafId(args.leafId)
         ? { leafId: args.leafId }
         : {}),
       state: 'attached',
+      ...(ctx.result.relayProcessId ? { relayProcessId: ctx.result.relayProcessId } : {}),
       lastAttachedAt: Date.now()
     })
   }
@@ -219,12 +220,15 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
   if (!ctx.stablePaneOwner) {
-    ctx.deps.runtime?.noteTerminalSpawnCommand?.(ctx.result.id, ctx.launchCommand ?? null)
+    ctx.deps.runtime?.noteTerminalSpawnCommand?.(
+      ctx.result.id,
+      agentStartupSuppressed ? null : (ctx.launchCommand ?? null)
+    )
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+  if (!agentStartupSuppressed && ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
     markClaudePtySpawned(ctx.result.id)
   }
-  if (args.telemetry && !ctx.stablePaneOwner) {
+  if (!agentStartupSuppressed && args.telemetry && !ctx.stablePaneOwner) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
@@ -283,6 +287,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const response = {
     id: ctx.result.id,
     ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
+    ...(agentStartupSuppressed ? { agentStartupSuppressed: true as const } : {}),
     ...(ctx.stablePaneOwner && (ctx.stablePaneOwner.handle || args.preAllocatedHandle)
       ? {
           stablePaneOwner: {

@@ -10,3 +10,15 @@ export function isSshPtyIdentityMismatchError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
   return message.includes(SSH_PTY_IDENTITY_MISMATCH_ERROR) || /identity mismatch/i.test(message)
 }
+
+/** A reachable relay answered that this exact PTY id is absent. */
+export class SshPtyAbsentFromRelayError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'SshPtyAbsentFromRelayError'
+  }
+}
+
+export function isSshPtyAbsentFromRelayError(error: unknown): boolean {
+  return error instanceof SshPtyAbsentFromRelayError
+}

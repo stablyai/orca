@@ -12,6 +12,8 @@ export type PtySpawnResult = {
   id: string
   /** Opaque provider-owned identity for this process behind a reusable PTY id. */
   incarnationId?: PtyIncarnationId
+  /** Opaque identity of the SSH relay process that owns this PTY. */
+  relayProcessId?: string
   /** Relay source identity installed before adjacent source frames are decoded. */
   sourceActivation?: PtySourceReceivingActivation
   /** The provider observed this exact spawn exit before its control reply settled. */

@@ -24,6 +24,10 @@ import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+  const agentStartupSuppressed = ctx.stablePaneAbsenceVerdict?.status === 'unverifiable'
+  const suppressedAgentStartupWasRequested =
+    agentStartupSuppressed &&
+    Boolean(args.launchAgent || args.launchConfig || args.resumeProviderSession)
   const { rendererPreSignaled, rendererAlreadyRegistered } = await persistPtyIpcSpawnCommit(ctx)
 
   // Why: seed the headless emulator before registerPty so concurrent live PTY data lands on top of the seed, not replacing it (mobile keeps the daemon-restored scrollback).
@@ -76,8 +80,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     const agentLaunchAuthority = admitRendererAgentLaunchAuthority({
       launchToken: args.launchToken,
       spawnEnv: ctx.spawnEnv,
-      launchAgent: args.launchAgent,
-      launchConfig: ctx.effectiveLaunchConfig,
+      launchAgent: agentStartupSuppressed ? undefined : args.launchAgent,
+      launchConfig: agentStartupSuppressed ? undefined : ctx.effectiveLaunchConfig,
       isReattach: ctx.result.isReattach === true,
       hasStablePaneOwner: ctx.stablePaneOwner !== null,
       incarnationId: ctx.result.incarnationId
@@ -118,10 +122,10 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   if (!ctx.stablePaneOwner) {
     ctx.deps.runtime?.noteTerminalSpawnCommand?.(
       ctx.result.id,
-      typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
+      !agentStartupSuppressed && typeof ctx.launchCommand === 'string' ? ctx.launchCommand : null
     )
   }
-  if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
+  if (!agentStartupSuppressed && ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
     markClaudePtySpawned(ctx.result.id)
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
@@ -170,7 +174,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     })
   }
   // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event (missing required field skips it).
-  if (args.telemetry && !ctx.stablePaneOwner) {
+  if (!agentStartupSuppressed && args.telemetry && !ctx.stablePaneOwner) {
     const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
     const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
     const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
@@ -192,7 +196,7 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
     ctx.snapshotKittyFlagsCoverReconciledSeq
       ? { snapshotSeq: ctx.reconciledSnapshotSeq }
       : { snapshotKittyKeyboardFlags: undefined }),
-    ...(!ctx.result.isReattach && ctx.effectiveLaunchConfig
+    ...(!agentStartupSuppressed && !ctx.result.isReattach && ctx.effectiveLaunchConfig
       ? { launchConfig: ctx.effectiveLaunchConfig }
       : {}),
     // Why: a daemon-retry race can surface isReattach even for a minted session id, and a reattach must never claim its cwd was remapped.
@@ -201,7 +205,8 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
       : {}),
     // Why: the pane asked to resume and got a fresh session instead; only the
     // renderer can say so, and a reattach never ran this launch command.
-    ...(ctx.codexResumeLaunch.notifyResumeUnavailable && !ctx.result.isReattach
+    ...((ctx.codexResumeLaunch.notifyResumeUnavailable || suppressedAgentStartupWasRequested) &&
+    !ctx.result.isReattach
       ? { agentResumeUnavailable: true as const }
       : {})
   }

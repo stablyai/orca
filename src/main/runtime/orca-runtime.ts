@@ -1952,17 +1952,21 @@ type RuntimePtyController = {
     preAllocatedHandle: string
     tabId: string
     leafId: string
-  }): Promise<{
-    result: PtySpawnResult
-    owner: {
-      handle?: string
-      tabId: string
-      leafId: string
-      ptyId: string
-      incarnationId?: string
-    }
-    materialized?: true
-  } | null>
+  }): Promise<
+    | {
+        result: PtySpawnResult
+        owner: {
+          handle?: string
+          tabId: string
+          leafId: string
+          ptyId: string
+          incarnationId?: string
+        }
+        materialized?: true
+      }
+    | { result: null; owner: null; absenceVerdict: PtyLivenessVerdict }
+    | null
+  >
   spawn?(opts: {
     cols: number
     rows: number
@@ -2003,12 +2007,14 @@ type RuntimePtyController = {
       }
       materialized?: true
     }
+    stablePaneAbsenceVerdict?: PtyLivenessVerdict
   }): Promise<{
     id: string
     incarnationId?: PtyIncarnationId
     wslDistro?: string
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
+    agentStartupSuppressed?: true
   }>
   write(ptyId: string, data: string): boolean
   writeWithSettlement?(ptyId: string, data: string): Promise<boolean>
@@ -28979,7 +28985,7 @@ export class OrcaRuntimeService {
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
         }
-        const adoptedBeforeLaunch = await this.ptyController.adoptStablePane?.({
+        const stablePaneAdoption = await this.ptyController.adoptStablePane?.({
           cols: 120,
           rows: 40,
           cwd,
@@ -28989,9 +28995,14 @@ export class OrcaRuntimeService {
           tabId,
           leafId
         })
-        const launchToken = launchOpts.launchConfig
-          ? (launchOpts.launchToken ?? randomUUID())
-          : undefined
+        const adoptedBeforeLaunch = stablePaneAdoption?.result ? stablePaneAdoption : null
+        const stablePaneAbsenceVerdict =
+          stablePaneAdoption?.result === null ? stablePaneAdoption.absenceVerdict : undefined
+        const earlyAgentStartupSuppressed = stablePaneAbsenceVerdict?.status === 'unverifiable'
+        const launchToken =
+          !earlyAgentStartupSuppressed && launchOpts.launchConfig
+            ? (launchOpts.launchToken ?? randomUUID())
+            : undefined
         const baseEnv = {
           ...launchOpts.env,
           ...(launchToken ? { ORCA_AGENT_LAUNCH_TOKEN: launchToken } : {})
@@ -29008,26 +29019,27 @@ export class OrcaRuntimeService {
         )
         let agentTeamsPlan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
         try {
-          agentTeamsPlan = adoptedBeforeLaunch
-            ? undefined
-            : await buildClaudeAgentTeamsLaunchPlan({
-                command: claudeAgentTeamsSourceCommand,
-                mode: effectiveClaudeAgentTeamsMode,
-                baseEnv: {
-                  ...process.env,
-                  ...baseEnv
-                },
-                createTeamEnv: (shimDir, shimBin) =>
-                  this.claudeAgentTeams.createLaunchEnv({
-                    leaderHandle: preAllocatedHandle,
-                    baseEnv: {
-                      ...process.env,
-                      ...baseEnv
-                    },
-                    shimDir,
-                    shimBin
-                  }).env
-              })
+          agentTeamsPlan =
+            adoptedBeforeLaunch || earlyAgentStartupSuppressed
+              ? undefined
+              : await buildClaudeAgentTeamsLaunchPlan({
+                  command: claudeAgentTeamsSourceCommand,
+                  mode: effectiveClaudeAgentTeamsMode,
+                  baseEnv: {
+                    ...process.env,
+                    ...baseEnv
+                  },
+                  createTeamEnv: (shimDir, shimBin) =>
+                    this.claudeAgentTeams.createLaunchEnv({
+                      leaderHandle: preAllocatedHandle,
+                      baseEnv: {
+                        ...process.env,
+                        ...baseEnv
+                      },
+                      shimDir,
+                      shimBin
+                    }).env
+                })
         } catch (error) {
           releaseStablePaneCreate?.()
           throw error
@@ -29039,8 +29051,9 @@ export class OrcaRuntimeService {
           claudeAgentTeamsSourceCommand !== launchOpts.command
             ? agentTeamsPlan.command
             : undefined
-        const effectiveLaunchConfig =
-          launchOpts.launchConfig && agentTeamsPlan
+        const effectiveLaunchConfig = earlyAgentStartupSuppressed
+          ? undefined
+          : launchOpts.launchConfig && agentTeamsPlan
             ? {
                 ...launchOpts.launchConfig,
                 agentCommand: launchOpts.launchConfig.agentCommand
@@ -29080,26 +29093,32 @@ export class OrcaRuntimeService {
             cols: 120,
             rows: 40,
             cwd,
-            command: sequencedStartupCommand
-              ? launchOpts.command
-              : (agentTeamsPlan?.command ?? launchOpts.command),
-            launchAgent: launchOpts.launchAgent,
+            command: earlyAgentStartupSuppressed
+              ? undefined
+              : sequencedStartupCommand
+                ? launchOpts.command
+                : (agentTeamsPlan?.command ?? launchOpts.command),
+            launchAgent: earlyAgentStartupSuppressed ? undefined : launchOpts.launchAgent,
             commandDelivery: 'provider',
-            startupCommandDelivery: launchOpts.startupCommandDelivery,
+            startupCommandDelivery: earlyAgentStartupSuppressed
+              ? undefined
+              : launchOpts.startupCommandDelivery,
             env,
             envToDelete: mergeTerminalEnvDeletionKeys(
               launchOpts.envToDelete,
               agentTeamsPlan?.envToDelete
             ),
-            resumeProviderSession: launchOpts.resumeProviderSession,
-            telemetry: launchOpts.telemetry,
+            resumeProviderSession: earlyAgentStartupSuppressed
+              ? undefined
+              : launchOpts.resumeProviderSession,
+            telemetry: earlyAgentStartupSuppressed ? undefined : launchOpts.telemetry,
             connectionId: workspace.connectionId,
             worktreeId: workspace.id,
             preAllocatedHandle,
             tabId,
             leafId,
             ...(terminalColorQueryReplies ? { terminalColorQueryReplies } : {}),
-            ...(launchOpts.agentSessionClaim
+            ...(!earlyAgentStartupSuppressed && launchOpts.agentSessionClaim
               ? {
                   agentSessionEnsure: {
                     claim: launchOpts.agentSessionClaim,
@@ -29112,7 +29131,7 @@ export class OrcaRuntimeService {
                   }
                 }
               : {}),
-            ...(launchOpts.agentSessionCreateOperationId
+            ...(!earlyAgentStartupSuppressed && launchOpts.agentSessionCreateOperationId
               ? { agentSessionCreateOperationId: launchOpts.agentSessionCreateOperationId }
               : {}),
             ...(launchOpts.signal ? { signal: launchOpts.signal } : {}),
@@ -29120,6 +29139,7 @@ export class OrcaRuntimeService {
               ? { onPtySpawnCommitted: reportPtySpawnCommitted }
               : {}),
             ...(adoptedBeforeLaunch ? { adoptedStablePane: adoptedBeforeLaunch } : {}),
+            ...(stablePaneAbsenceVerdict ? { stablePaneAbsenceVerdict } : {}),
             ...(launchOpts.sessionId ? { sessionId: launchOpts.sessionId } : {}),
             ...(!adoptedBeforeLaunch && launchOpts.isNewSession ? { isNewSession: true } : {}),
             // Why: a host-initiated create has no renderer session writer, so
@@ -29133,6 +29153,10 @@ export class OrcaRuntimeService {
         if (!result.stablePaneOwner) {
           reportPtySpawnCommitted()
         }
+        const agentStartupSuppressed = result.agentStartupSuppressed === true
+        const publishedLaunchConfig = agentStartupSuppressed ? undefined : effectiveLaunchConfig
+        const publishedLaunchToken = agentStartupSuppressed ? undefined : launchToken
+        const publishedLaunchAgent = agentStartupSuppressed ? undefined : launchOpts.launchAgent
         const adoptedStablePane = Boolean(result.stablePaneOwner)
         if (result.agentSessionEnsure) {
           const canonicalSurface = result.agentSessionEnsure.owner.surface
@@ -29178,12 +29202,12 @@ export class OrcaRuntimeService {
               pty.title = null
               pty.titleUpdatedAt = null
             }
-            pty.launchConfig = effectiveLaunchConfig
-              ? copySleepingAgentLaunchConfig(effectiveLaunchConfig)
+            pty.launchConfig = publishedLaunchConfig
+              ? copySleepingAgentLaunchConfig(publishedLaunchConfig)
               : null
-            pty.launchToken = launchToken ?? null
-            pty.launchIncarnationId = launchToken ? pty.incarnationId : null
-            pty.launchAgent = launchOpts.launchAgent ?? null
+            pty.launchToken = publishedLaunchToken ?? null
+            pty.launchIncarnationId = publishedLaunchToken ? pty.incarnationId : null
+            pty.launchAgent = publishedLaunchAgent ?? null
           }
           pty.tabId = tabId
           pty.paneKey = paneKey
@@ -29214,9 +29238,9 @@ export class OrcaRuntimeService {
               ptyId: result.id,
               title: launchOpts.title ?? null,
               ...(cwd !== workspace.path ? { cwd } : {}),
-              ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
-              ...(launchToken ? { launchToken } : {}),
-              ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+              ...(publishedLaunchConfig ? { launchConfig: publishedLaunchConfig } : {}),
+              ...(publishedLaunchToken ? { launchToken: publishedLaunchToken } : {}),
+              ...(publishedLaunchAgent ? { launchAgent: publishedLaunchAgent } : {}),
               ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
               activate: presentation === 'focused',
               ...(presentation ? { presentation } : {}),

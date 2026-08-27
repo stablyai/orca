@@ -1,9 +1,10 @@
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
+import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import { makePaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Store } from '../../../persistence'
 import { retireTerminalSurfaceFromPersistence } from '../../../runtime/mobile-session-terminal-persistence-retirement'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from '../../../providers/types'
+import type { PtySpawnResult } from '../../../providers/types'
 import { parseAppSshPtyId } from '../../../providers/ssh-pty-id'
 import {
   isDaemonEndpointGoneError,
@@ -13,22 +14,14 @@ import {
 import { ptyIncarnationById, ptyOwnership } from '../provider/ownership-state'
 import { isPtyAlreadyGoneError } from '../provider/liveness'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { resolveSshRelayAbsenceVerdict } from './ssh-relay-absence-verdict'
+import {
+  withoutAgentStartupIntent,
+  type StablePaneSpawnContext
+} from './stable-pane-spawn-fallback'
+import type { StablePaneAdoption, StablePaneOwner } from './stable-pane-types'
 
-export type StablePaneOwner = {
-  handle?: string
-  tabId: string
-  leafId: string
-  ptyId: string
-  incarnationId?: string
-  hasPersistedBinding?: true
-  persistedIncarnationId?: string
-  runtimeIncarnationId?: string
-}
-export type StablePaneAdoption = {
-  result: PtySpawnResult
-  owner: StablePaneOwner
-  materialized?: true
-} | null
+export type { StablePaneOwner } from './stable-pane-types'
 export const stablePaneAdoptionsByOwnerKey = new Map<string, Promise<StablePaneAdoption>>()
 
 export function resolvePersistedStablePaneOwner(
@@ -36,7 +29,10 @@ export function resolvePersistedStablePaneOwner(
   paneKey: string,
   worktreeId: string,
   connectionId: string | null | undefined
-): Pick<StablePaneOwner, 'tabId' | 'leafId' | 'ptyId' | 'incarnationId'> | null {
+): Pick<
+  StablePaneOwner,
+  'tabId' | 'leafId' | 'ptyId' | 'incarnationId' | 'bindingRelayProcessId'
+> | null {
   if (!store || typeof store.getWorkspaceSession !== 'function') {
     return null
   }
@@ -55,11 +51,18 @@ export function resolvePersistedStablePaneOwner(
     return null
   }
   const incarnationId = session.terminalPtyIncarnationsByPaneKey?.[paneKey]
+  const relayPtyId = parseAppSshPtyId(ptyId)?.relayPtyId
+  const bindingRelayProcessId =
+    connectionId && relayPtyId
+      ? store.getSshRemotePtyLeases(connectionId).find((lease) => lease.ptyId === relayPtyId)
+          ?.relayProcessId
+      : undefined
   return {
     tabId: parsed.tabId,
     leafId: parsed.leafId,
     ptyId,
-    ...(incarnationId ? { incarnationId } : {})
+    ...(incarnationId ? { incarnationId } : {}),
+    ...(bindingRelayProcessId ? { bindingRelayProcessId } : {})
   }
 }
 
@@ -114,6 +117,9 @@ export function resolveStablePaneOwner(
       ? { incarnationId: runtimeIncarnationId ?? persisted?.incarnationId }
       : {}),
     ...(persisted ? { hasPersistedBinding: true as const } : {}),
+    ...(persisted?.bindingRelayProcessId
+      ? { bindingRelayProcessId: persisted.bindingRelayProcessId }
+      : {}),
     ...(persisted?.incarnationId ? { persistedIncarnationId: persisted.incarnationId } : {}),
     ...(runtimeIncarnationId ? { runtimeIncarnationId } : {})
   }
@@ -154,18 +160,6 @@ export function retirePersistedStablePaneOwner(
   store.setWorkspaceSession(retired, hostId)
   store.flushOrThrow()
   return true
-}
-
-export type StablePaneSpawnContext = {
-  runtime: OrcaRuntimeService | undefined
-  store?: Store
-  provider: IPtyProvider
-  spawnOptions: PtySpawnOptions
-  owner: StablePaneOwner | null
-  worktreeId?: string
-  connectionId?: string | null
-  resolveOwner?: () => StablePaneOwner | null
-  onFreshSpawn?: (result: PtySpawnResult) => void
 }
 
 export function stablePanePersistenceFence(
@@ -211,7 +205,10 @@ export function persistAdmittedStablePaneBinding(args: {
 
 export async function attachStablePaneOwner(
   args: StablePaneSpawnContext & { owner: StablePaneOwner }
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner } | null> {
+): Promise<
+  | { result: PtySpawnResult; owner: StablePaneOwner }
+  | { result: null; owner: null; absenceVerdict: PtyLivenessVerdict }
+> {
   const { owner, provider, runtime, spawnOptions } = args
   let result: PtySpawnResult
   try {
@@ -242,18 +239,32 @@ export async function attachStablePaneOwner(
     if (!isPtyAlreadyGoneError(error)) {
       throw error
     }
+    const absenceVerdict = args.connectionId
+      ? await resolveSshRelayAbsenceVerdict({
+          provider,
+          bindingRelayProcessId: owner.bindingRelayProcessId
+        })
+      : ({ status: 'exited' } as const)
     const ownerBeforeRetire = args.resolveOwner?.()
     if (
       ownerBeforeRetire &&
       (ownerBeforeRetire.ptyId !== owner.ptyId ||
         ownerBeforeRetire.runtimeIncarnationId !== owner.runtimeIncarnationId ||
         ownerBeforeRetire.hasPersistedBinding !== owner.hasPersistedBinding ||
+        ownerBeforeRetire.bindingRelayProcessId !== owner.bindingRelayProcessId ||
         ownerBeforeRetire.persistedIncarnationId !== owner.persistedIncarnationId)
     ) {
       throw new Error('terminal_pane_owner_changed')
     }
-    runtime?.onPtyExit(owner.ptyId, 0, owner.incarnationId)
-    clearProviderPtyState(owner.ptyId)
+    if (absenceVerdict.status === 'unverifiable') {
+      runtime?.markPtyLivenessUnverifiable(owner.ptyId, absenceVerdict.reason)
+      runtime?.onPtyExit(owner.ptyId, -1, owner.incarnationId)
+    } else {
+      runtime?.onPtyExit(owner.ptyId, 0, owner.incarnationId)
+    }
+    clearProviderPtyState(owner.ptyId, {
+      preserveAgentSessionOwners: absenceVerdict.status === 'unverifiable'
+    })
     ptyOwnership.delete(owner.ptyId)
     if (
       args.worktreeId &&
@@ -264,7 +275,7 @@ export async function attachStablePaneOwner(
     if (args.resolveOwner?.()) {
       throw new Error('terminal_pane_owner_changed')
     }
-    return null
+    return { result: null, owner: null, absenceVerdict }
   }
   if (
     result.id !== owner.ptyId ||
@@ -278,16 +289,24 @@ export async function attachStablePaneOwner(
   return { result, owner }
 }
 
-export async function spawnForStablePane(
-  args: StablePaneSpawnContext
-): Promise<{ result: PtySpawnResult; owner: StablePaneOwner | null }> {
+export async function spawnForStablePane(args: StablePaneSpawnContext): Promise<{
+  result: PtySpawnResult
+  owner: StablePaneOwner | null
+  absenceVerdict?: PtyLivenessVerdict
+}> {
+  let absenceVerdict = args.absenceVerdict
   if (args.owner) {
     const attached = await attachStablePaneOwner({ ...args, owner: args.owner })
-    if (attached) {
+    if (attached.result) {
       return attached
     }
+    absenceVerdict = attached.absenceVerdict
   }
-  const result = await args.provider.spawn(args.spawnOptions)
+  const result = await args.provider.spawn(
+    absenceVerdict?.status === 'unverifiable'
+      ? withoutAgentStartupIntent(args.spawnOptions)
+      : args.spawnOptions
+  )
   args.onFreshSpawn?.(result)
-  return { result, owner: null }
+  return { result, owner: null, ...(absenceVerdict ? { absenceVerdict } : {}) }
 }

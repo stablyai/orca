@@ -77,6 +77,7 @@ export type PtyHandlerTestMocks = {
   mockPtySpawn: Mock
   mockPtyInstance: MockPtyInstance
   mockCreateShellPromptReadinessProbe: Mock
+  relayProcessId?: string
 }
 
 /** Mirrors the shared beforeEach: pin the platform, reset node-pty mocks, build handler + dispatcher. */
@@ -85,7 +86,8 @@ export function beginPtyHandlerTest(mocks: PtyHandlerTestMocks): {
   handler: PtyHandler
   originalPlatform: PropertyDescriptor | undefined
 } {
-  const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe } = mocks
+  const { mockPtySpawn, mockPtyInstance, mockCreateShellPromptReadinessProbe, relayProcessId } =
+    mocks
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
   Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   vi.useFakeTimers()
@@ -108,7 +110,11 @@ export function beginPtyHandlerTest(mocks: PtyHandlerTestMocks): {
   mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 
   const dispatcher = createMockDispatcher()
-  const handler = new PtyHandler(dispatcher as unknown as RelayDispatcher)
+  const handler = new PtyHandler(
+    dispatcher as unknown as RelayDispatcher,
+    undefined,
+    relayProcessId
+  )
   return { dispatcher, handler, originalPlatform }
 }
 

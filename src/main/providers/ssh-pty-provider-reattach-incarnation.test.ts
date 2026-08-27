@@ -30,6 +30,43 @@ describe('SSH PTY provider session reattach incarnation', () => {
     )
   })
 
+  it('requests and returns the relay process identity on reattach', async () => {
+    const mux = {
+      request: vi.fn().mockResolvedValue({
+        incarnationId: 'incarnation-reattached',
+        relayProcessId: 'relay-process-1'
+      }),
+      notify: vi.fn(),
+      onNotification: vi.fn().mockReturnValue(vi.fn())
+    }
+    const provider = new SshPtyProvider('conn-1', mux as never)
+
+    await expect(
+      provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })
+    ).resolves.toMatchObject({ relayProcessId: 'relay-process-1' })
+    expect(mux.request).toHaveBeenCalledWith(
+      'pty.attach',
+      expect.objectContaining({ requestRelayProcessId: true }),
+      expect.any(Object)
+    )
+  })
+
+  it('rejects a malformed relay process identity on reattach', async () => {
+    const mux = {
+      request: vi.fn().mockResolvedValue({
+        incarnationId: 'incarnation-reattached',
+        relayProcessId: 42
+      }),
+      notify: vi.fn(),
+      onNotification: vi.fn().mockReturnValue(vi.fn())
+    }
+    const provider = new SshPtyProvider('conn-1', mux as never)
+
+    await expect(provider.spawn({ cols: 80, rows: 24, sessionId: 'pty-old' })).rejects.toThrow(
+      'Invalid SSH relay process identity'
+    )
+  })
+
   it('fails closed when generic reattach requires source restoration', async () => {
     const mux = {
       request: vi.fn().mockResolvedValue({

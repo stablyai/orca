@@ -211,6 +211,7 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+  relayProcessId?: string
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */

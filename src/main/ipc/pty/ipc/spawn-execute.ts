@@ -55,6 +55,7 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
           owner: stablePaneOwnerCandidate,
           worktreeId: args.worktreeId,
           connectionId: args.connectionId,
+          absenceVerdict: ctx.stablePaneAbsenceVerdict,
           resolveOwner: () =>
             resolveStablePaneOwner(
               ctx.deps.runtime,
@@ -66,6 +67,10 @@ export async function executePtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<void> {
         })
     ctx.result = stablePaneSpawn.result
     ctx.stablePaneOwner = stablePaneSpawn.owner
+    ctx.stablePaneAbsenceVerdict =
+      'absenceVerdict' in stablePaneSpawn
+        ? stablePaneSpawn.absenceVerdict
+        : ctx.stablePaneAbsenceVerdict
     if (
       ctx.stablePaneOwner &&
       ctx.isMintedSessionId &&

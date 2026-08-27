@@ -16,13 +16,13 @@ import type {
 } from '../host-env/types'
 import type { CodexResumeLaunch, PreparedCodexResumeHome } from '../host-env/codex-resume'
 import type { StablePaneOwner } from '../pane/stable-owner'
-import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
+import type { AdoptStablePaneArgs, AdoptStablePaneOutcome } from '../ipc/spawn-types'
 import type { finishPtyShutdown } from '../provider/liveness'
 
 export type PtyRuntimeControllerDeps = {
   runtime?: OrcaRuntimeService
   store?: Store
-  adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneResult | null>
+  adoptStablePane: (args: AdoptStablePaneArgs) => Promise<AdoptStablePaneOutcome | null>
   getLocalPtyStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
   getLocalPtyProviderStartupPromise: (connectionId?: string | null) => Promise<void> | undefined
   prepareCodexResumeHome: (args: {

@@ -70,7 +70,12 @@ export function normalizeSshRemotePtyLease(value: unknown): SshRemotePtyLease | 
     createdAt: typeof raw.createdAt === 'number' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'number' ? raw.updatedAt : now,
     ...(typeof raw.lastAttachedAt === 'number' ? { lastAttachedAt: raw.lastAttachedAt } : {}),
-    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {})
+    ...(typeof raw.lastDetachedAt === 'number' ? { lastDetachedAt: raw.lastDetachedAt } : {}),
+    ...(typeof raw.relayProcessId === 'string' &&
+    raw.relayProcessId.length > 0 &&
+    raw.relayProcessId.length <= 128
+      ? { relayProcessId: raw.relayProcessId }
+      : {})
   }
 }
 

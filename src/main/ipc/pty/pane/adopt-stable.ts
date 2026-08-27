@@ -8,13 +8,13 @@ import {
   resolveStablePaneOwner,
   stablePaneAdoptionsByOwnerKey
 } from './stable-owner'
-import type { AdoptStablePaneArgs, AdoptStablePaneResult } from '../ipc/spawn-types'
+import type { AdoptStablePaneArgs, AdoptStablePaneOutcome } from '../ipc/spawn-types'
 
 export async function adoptStablePane(
   runtime: OrcaRuntimeService | undefined,
   store: Store | undefined,
   args: AdoptStablePaneArgs
-): Promise<AdoptStablePaneResult | null> {
+): Promise<AdoptStablePaneOutcome | null> {
   const paneKey = makePaneKey(args.tabId, args.leafId)
   const ownerKey = makePaneSpawnReservationKey(args.worktreeId, args.connectionId, paneKey)
   const pendingAdoption = ownerKey ? stablePaneAdoptionsByOwnerKey.get(ownerKey) : undefined

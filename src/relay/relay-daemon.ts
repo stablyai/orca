@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { installRelayLogRotation } from './rotating-log-writer'
 import { readLaunchVersion } from './relay-handshake'
 import type { RelayLaunchOptions } from './relay-launch-options'
@@ -31,10 +32,12 @@ export async function runRelayDaemon(
 
   const primaryChannel = new RelayPrimaryChannel()
   const launchVersion = readLaunchVersion()
+  const relayProcessId = randomUUID()
   const runtime = new RelayRuntimeServices(
     primaryChannel.dispatcher,
     options.graceTimeMs,
-    launchVersion
+    launchVersion,
+    relayProcessId
   )
   let reconnectListener: RelayReconnectListener | null = null
   const agentHooks = new RelayAgentHookRuntime(
@@ -85,7 +88,8 @@ export async function runRelayDaemon(
     socketOwnership,
     lifecycle,
     options,
-    startedAt
+    startedAt,
+    relayProcessId
   )
 
   try {
@@ -123,12 +127,14 @@ function registerRelayStatus(
   socketOwnership: RelaySocketOwnership,
   lifecycle: RelayGraceLifecycle,
   options: RelayLaunchOptions,
-  startedAt: number
+  startedAt: number,
+  relayProcessId: string
 ): void {
   primaryChannel.dispatcher.onRequest('relay.status', async () => ({
     capabilities: SKILL_RELAY_CAPABILITIES,
     pid: process.pid,
     uptimeMs: Date.now() - startedAt,
+    relayProcessId,
     detached: options.detached,
     stdoutAlive: primaryChannel.isAlive,
     memory: process.memoryUsage(),

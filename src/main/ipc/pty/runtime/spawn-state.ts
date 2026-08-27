@@ -10,11 +10,13 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../../../shared/codex-startup-delivery'
+import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict'
 import type {
   AgentSessionExecutionClaim,
   AgentSessionSurfaceBinding
 } from '../../../../shared/agent-session-host-authority'
 import { localProvider } from '../provider/registry'
+import { withoutAgentStartupIntent } from '../pane/stable-pane-spawn-fallback'
 
 export type RuntimePtySpawnState = {
   deps: PtyRuntimeControllerDeps
@@ -70,6 +72,7 @@ export type RuntimePtySpawnState = {
     agentSessionEnsure?: unknown
   }
   stablePaneOwner: StablePaneOwner | null
+  stablePaneAbsenceVerdict: PtyLivenessVerdict | undefined
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
@@ -124,15 +127,25 @@ export type RuntimePtySpawnArgs = {
     }
     materialized?: true
   }
+  stablePaneAbsenceVerdict?: PtyLivenessVerdict
 }
 
 export function createRuntimePtySpawnState(
   deps: PtyRuntimeControllerDeps,
   args: RuntimePtySpawnArgs
 ): RuntimePtySpawnState {
+  const effectiveArgs =
+    args.stablePaneAbsenceVerdict?.status === 'unverifiable'
+      ? {
+          ...args,
+          ...withoutAgentStartupIntent(args),
+          resumeProviderSession: undefined,
+          telemetry: undefined
+        }
+      : args
   return {
     deps,
-    args,
+    args: effectiveArgs,
     codexHomeLaunchStartedAt: undefined,
     codexHomeLaunchStartedSequence: undefined,
     preAdoptedStablePane: null,
@@ -173,6 +186,7 @@ export function createRuntimePtySpawnState(
     finishTerminalInstall: () => {},
     result: { id: '' },
     stablePaneOwner: null,
+    stablePaneAbsenceVerdict: effectiveArgs.stablePaneAbsenceVerdict,
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,

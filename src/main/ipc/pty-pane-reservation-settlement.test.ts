@@ -117,6 +117,7 @@ describe('registerPtyHandlers', () => {
       }),
       flushOrThrow: vi.fn(),
       persistPtyBinding: vi.fn(),
+      getSshRemotePtyLeases: vi.fn(() => []),
       upsertSshRemotePtyLease: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
       markSshRemotePtyLease: vi.fn()
@@ -136,6 +137,7 @@ describe('registerPtyHandlers', () => {
       seedHeadlessTerminal: vi.fn(),
       getDriver: vi.fn(() => ({ kind: 'host' })),
       onPtySpawned: vi.fn(),
+      markPtyLivenessUnverifiable: vi.fn(),
       onPtyExit: vi.fn(),
       onPtyData: vi.fn()
     }
@@ -172,9 +174,12 @@ describe('registerPtyHandlers', () => {
         sessionId: deadPtyId,
         command: undefined
       })
-      expect(remoteSpawn.mock.calls[1]?.[0]).toMatchObject({
-        command: 'codex resume exact-dead-ssh-provider-session'
-      })
+      expect(remoteSpawn.mock.calls[1]?.[0]).toMatchObject({ command: undefined })
+      expect(runtime.markPtyLivenessUnverifiable).toHaveBeenCalledWith(
+        deadPtyId,
+        expect.stringContaining('cannot be proven')
+      )
+      expect(runtime.onPtyExit).toHaveBeenCalledWith(deadPtyId, -1, 'inc-dead-ssh-owner')
       expect(store.setWorkspaceSession).toHaveBeenCalledWith(expect.anything(), hostId)
       expect(store.persistPtyBinding).toHaveBeenCalledWith(
         expect.objectContaining({
