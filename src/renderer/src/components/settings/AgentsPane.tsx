@@ -175,6 +175,7 @@ export function AgentsPane({
   const catalog = getAgentCatalog()
   const defaultAgent = settings.defaultTuiAgent
   const cmdOverrides = settings.agentCmdOverrides ?? {}
+  const commandProfilesByAgent = settings.agentCommandProfiles ?? {}
   const agentDefaultArgs = settings.agentDefaultArgs ?? {}
   const agentDefaultEnv = settings.agentDefaultEnv ?? {}
   const disabledAgents = normalizeDisabledTuiAgents(settings.disabledTuiAgents)
@@ -232,7 +233,12 @@ export function AgentsPane({
     sessionSourceHome:
       isDetected && agent.id === 'codex'
         ? buildCodexSessionSourceHomeControl(settings, updateSettings)
-        : undefined
+        : undefined,
+    commandProfiles: commandProfilesByAgent[agent.id] ?? [],
+    onSaveCommandProfiles: (value) =>
+      updateSettings({
+        agentCommandProfiles: { ...commandProfilesByAgent, [agent.id]: value }
+      })
   })
 
   return (

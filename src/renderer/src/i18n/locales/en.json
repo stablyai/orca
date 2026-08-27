@@ -6420,6 +6420,12 @@
           "agentPermissionsDescription": "Choose whether Orca launches agents with fewer permission prompts or with manual checks.",
           "agentPermissionsYolo": "Yolo",
           "agentPermissionsManual": "Manual",
+          "profileLabel": "Name",
+          "profileCmd": "Command",
+          "removeProfile": "Remove profile",
+          "commandProfiles": "Command profiles",
+          "addProfile": "Add profile",
+          "commandProfilesHint": "Extra named commands for this agent (e.g. a second account or wrapper). Pick one when starting a new session.",
           "3f1bdf3cb4": "Environment text is too large to parse safely.",
           "codexSessionSource": "Codex home to import from",
           "codexSessionSourceInfo": "About importing Codex history",
@@ -15702,6 +15708,10 @@
         "AgentSettingsDialog": {
           "50cdb57c03": "Manage AI agents, set a default, and customize commands.",
           "fc0268e4ed": "Agents"
+        },
+        "AgentProfileSelect": {
+          "label": "Command profile",
+          "default": "Default command"
         }
       },
       "activity": {

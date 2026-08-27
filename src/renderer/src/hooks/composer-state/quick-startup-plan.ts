@@ -12,6 +12,7 @@ import {
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
+import { applyAgentCommandProfile } from '../../../../shared/agent-command-profile'
 
 export type QuickComposerStartupInput = {
   agent: TuiAgent | null
@@ -23,6 +24,7 @@ export type QuickComposerStartupInput = {
   shell: AgentStartupShell | null | undefined
   isRemote: boolean
   telemetrySource: WorktreeCreationRequest['telemetrySource']
+  profileId?: string | null
 }
 
 export type QuickComposerStartup = {
@@ -33,6 +35,12 @@ export type QuickComposerStartup = {
 
 export function buildQuickComposerStartup(input: QuickComposerStartupInput): QuickComposerStartup {
   const { agent, draftPrompt, prompt, settings } = input
+  const cmdOverrides = applyAgentCommandProfile(
+    settings?.agentCmdOverrides ?? {},
+    agent,
+    input.profileId,
+    agent ? settings?.agentCommandProfiles?.[agent] : undefined
+  )
   const sessionOptions =
     agent === null
       ? undefined
@@ -58,7 +66,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
       : buildAgentDraftLaunchPlan({
           agent,
           draft: draftPrompt,
-          cmdOverrides: settings?.agentCmdOverrides ?? {},
+          cmdOverrides,
           agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
           agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
           sessionOptions,
@@ -84,7 +92,7 @@ export function buildQuickComposerStartup(input: QuickComposerStartupInput): Qui
     startupPlan = buildAgentStartupPlan({
       agent,
       prompt,
-      cmdOverrides: settings?.agentCmdOverrides ?? {},
+      cmdOverrides,
       agentArgs: resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs),
       agentEnv: resolveTuiAgentLaunchEnv(agent, settings?.agentDefaultEnv),
       sessionOptions,

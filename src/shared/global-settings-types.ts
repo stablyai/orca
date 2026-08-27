@@ -25,6 +25,7 @@ import type { CtrlTabOrderMode } from './tab-types'
 import type { TerminalColorOverrides } from './terminal-color-overrides'
 import type { TerminalQuickCommand } from './terminal-quick-command-types'
 import type { TuiAgent } from './tui-agent'
+import type { AgentCommandProfile } from './agent-command-profile'
 import type {
   AgentDashboardMode,
   BranchPrefixStrategy,
@@ -361,6 +362,10 @@ export type GlobalSettings = {
   geminiCliOAuthEnabled: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
+  /** Extra named command profiles per agent, selectable at launch time in addition
+   *  to the single agentCmdOverrides default (e.g. running the same agent under a
+   *  second CLI wrapper/account). A missing key means no extra profiles. */
+  agentCommandProfiles?: Partial<Record<TuiAgent, AgentCommandProfile[]>>
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).
    *  History-only: does not change which account/config/hooks Orca uses. */
   codexSessionSourceHome?: {

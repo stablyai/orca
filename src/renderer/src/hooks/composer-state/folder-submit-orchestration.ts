@@ -31,6 +31,7 @@ import { useCallback } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { settleComposerSubmit } from '@/lib/composer-submit-cancellation'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
+import { applyAgentCommandProfile } from '../../../../shared/agent-command-profile'
 import {
   resolveFolderWorkspaceLaunchDraft,
   submitFolderWorkspaceCreate
@@ -77,7 +78,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
   const { canResolveFolderSmartGitHubSubmit } = decisions
 
   const submitFolderTarget = useCallback(
-    async (requestedAgent: TuiAgent | null): Promise<void> => {
+    async (requestedAgent: TuiAgent | null, requestedProfileId?: string | null): Promise<void> => {
       if (!selectedProjectGroup?.parentPath || folderCreateDisabled) {
         return
       }
@@ -120,7 +121,12 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           note,
           quickAgent: agent,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
-          agentCmdOverrides: settings?.agentCmdOverrides,
+          agentCmdOverrides: applyAgentCommandProfile(
+            settings?.agentCmdOverrides ?? {},
+            agent,
+            requestedProfileId,
+            agent ? settings?.agentCommandProfiles?.[agent] : undefined
+          ),
           agentArgs: agent
             ? resolveTuiAgentLaunchArgs(agent, settings?.agentDefaultArgs)
             : undefined,
@@ -201,6 +207,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
       resolvePendingSmartGitHubSubmit,
       selectedProjectGroup,
       settings?.agentCmdOverrides,
+      settings?.agentCommandProfiles,
       settings?.agentDefaultArgs,
       settings?.agentDefaultEnv,
       settings?.autoRenameBranchFromWork,

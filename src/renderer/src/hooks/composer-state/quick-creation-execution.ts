@@ -84,7 +84,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
       workspaceNameSeed: string,
       workspaceRunContext: WorktreeCreationRequest['workspaceRunContext'],
       repoId: string,
-      selectedRepo: Repo
+      selectedRepo: Repo,
+      requestedProfileId?: string | null
     ): Promise<void> => {
       const prepared = await prepareQuickSubmit(
         smartGitHubResolution,
@@ -135,7 +136,8 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         platform: selectedRepoAgentLaunchPlatform,
         shell: selectedRepoStartupShell,
         isRemote: selectedRepoIsRemote,
-        telemetrySource
+        telemetrySource,
+        profileId: requestedProfileId
       })
 
       const startupPolicySettlement = await settleComposerSubmit(

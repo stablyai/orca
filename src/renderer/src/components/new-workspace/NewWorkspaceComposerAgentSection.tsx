@@ -1,6 +1,7 @@
 import React from 'react'
 import { ChevronDown, Settings2 } from 'lucide-react'
 import AgentCombobox from '@/components/agent/AgentCombobox'
+import { AgentProfileSelect } from '@/components/agent/AgentProfileSelect'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -11,6 +12,9 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
   NewWorkspaceComposerCardProps,
   | 'quickAgent'
   | 'onQuickAgentChange'
+  | 'quickAgentProfileId'
+  | 'onQuickAgentProfileChange'
+  | 'quickAgentCommandProfiles'
   | 'onOpenAgentSettings'
   | 'createDisabled'
   | 'onCreate'
@@ -27,6 +31,9 @@ type NewWorkspaceComposerAgentSectionProps = Pick<
 export function NewWorkspaceComposerAgentSection({
   quickAgent,
   onQuickAgentChange,
+  quickAgentProfileId,
+  onQuickAgentProfileChange,
+  quickAgentCommandProfiles,
   onOpenAgentSettings,
   createDisabled,
   onCreate,
@@ -76,6 +83,13 @@ export function NewWorkspaceComposerAgentSection({
           triggerClassName="h-9 w-full min-w-0 border-input text-sm focus:border-ring focus:ring-[3px] focus:ring-ring/50"
           onTriggerEnter={createDisabled ? undefined : onCreate}
         />
+        {quickAgentCommandProfiles && quickAgentCommandProfiles.length > 0 && (
+          <AgentProfileSelect
+            profiles={quickAgentCommandProfiles}
+            value={quickAgentProfileId ?? null}
+            onValueChange={(profileId) => onQuickAgentProfileChange?.(profileId)}
+          />
+        )}
       </div>
 
       <div className="!mb-2">
