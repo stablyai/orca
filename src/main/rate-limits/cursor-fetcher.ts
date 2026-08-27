@@ -1,4 +1,8 @@
 import { net } from 'electron'
+import {
+  CURSOR_MODELS_BUCKET_NAME,
+  CURSOR_OTHER_MODELS_BUCKET_NAME
+} from '../../shared/cursor-usage-buckets'
 import type {
   ProviderRateLimits,
   RateLimitBucket,
@@ -104,7 +108,7 @@ function buildBuckets(
   const autoPercent = toFiniteNumber(usage.autoPercentUsed)
   if (autoPercent !== null) {
     buckets.push({
-      name: 'Cursor Models',
+      name: CURSOR_MODELS_BUCKET_NAME,
       usedPercent: clampPercent(autoPercent),
       windowMinutes,
       resetsAt,
@@ -114,7 +118,7 @@ function buildBuckets(
   const apiPercent = toFiniteNumber(usage.apiPercentUsed)
   if (apiPercent !== null) {
     buckets.push({
-      name: 'Other models',
+      name: CURSOR_OTHER_MODELS_BUCKET_NAME,
       usedPercent: clampPercent(apiPercent),
       windowMinutes,
       resetsAt,
@@ -178,7 +182,8 @@ function mapDashboardResponse(
 export async function fetchCursorRateLimits(
   options: { signal?: AbortSignal; authReadResult?: CursorAuthReadResult } = {}
 ): Promise<ProviderRateLimits> {
-  const authResult = options.authReadResult ?? (await readCursorAuthSession())
+  const authResult =
+    options.authReadResult ?? (await readCursorAuthSession({ signal: options.signal }))
   if (authResult.status === 'missing') {
     return result('unavailable', 'Not signed in to Cursor — run cursor-agent and sign in', {
       usageMetadata: { failureKind: 'missing-credentials', source: 'cli' }

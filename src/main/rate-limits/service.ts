@@ -1698,7 +1698,7 @@ export class RateLimitService {
     // Why: fetched in parallel with Grok — both are independent, tokenless-until-read providers with no dedicated fetch cycle.
     // Why: the auth read is folded into this chain (rather than awaited above) so a
     // slow `cursor-agent status` spawn never delays the other providers' fetches.
-    const cursorResultPromise = readCursorAuthSession()
+    const cursorResultPromise = readCursorAuthSession({ signal })
       .then((auth) => {
         this.cursorAuthConfigured = auth.status === 'ok'
         if (signal.aborted) {

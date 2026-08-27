@@ -5,6 +5,7 @@ import { SettingsSegmentedControl } from '@/components/settings/SettingsFormCont
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 import { translate } from '@/i18n/i18n'
 import { formatRateLimitWindowChipLabel, formatWindowLabel } from '@/lib/window-label-formatter'
+import { isCursorUsageBucket } from '../../../../shared/cursor-usage-buckets'
 import type { ProviderRateLimits, RateLimitWindow } from '../../../../shared/rate-limit-types'
 import {
   clampUsedPercent,
@@ -52,10 +53,6 @@ function shortLabel(
   return useRemainingDuration
     ? formatRateLimitWindowChipLabel(section.window)
     : formatWindowLabel(section.window.windowMinutes)
-}
-
-export function isCursorUsageBucket(name: string): boolean {
-  return name === 'Cursor Models' || name === 'Other models'
 }
 
 function cursorUsageSections(p: ProviderRateLimits, sections: UsageSection[]): UsageSection[] {

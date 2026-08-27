@@ -156,7 +156,10 @@ function extractCliAccessToken(stdout: string): string | null {
 }
 
 /** Returns a result when the CLI produced one, or null to fall through to the IDE db. */
-async function readFromCli(deps: CursorAuthDeps): Promise<CursorAuthReadResult | null> {
+async function readFromCli(
+  deps: CursorAuthDeps,
+  signal?: AbortSignal
+): Promise<CursorAuthReadResult | null> {
   let program: string | null
   try {
     program = await deps.resolveCliProgram()
@@ -166,28 +169,44 @@ async function readFromCli(deps: CursorAuthDeps): Promise<CursorAuthReadResult |
   if (!program) {
     return null
   }
+  if (signal?.aborted) {
+    return null
+  }
   let result: ProcessResult
   try {
     result = await deps.runProcess({
       program,
       args: ['status', '--format', 'json'],
-      timeoutMs: CLI_STATUS_TIMEOUT_MS
+      timeoutMs: CLI_STATUS_TIMEOUT_MS,
+      signal
     })
   } catch {
     return { status: 'error', error: CLI_SPAWN_ERROR_MESSAGE }
+  }
+  if (signal?.aborted) {
+    return null
   }
   const accessToken = extractCliAccessToken(result.stdout)
   return accessToken ? { status: 'ok', accessToken, source: 'cli' } : null
 }
 
+export type ReadCursorAuthSessionOptions = {
+  deps?: CursorAuthDeps
+  signal?: AbortSignal
+}
+
 // Why: Orca never runs `cursor-agent login`; it only reads the session the CLI
 // or Cursor IDE already established.
 export async function readCursorAuthSession(
-  deps: CursorAuthDeps = buildDefaultCursorAuthDeps()
+  options: ReadCursorAuthSessionOptions = {}
 ): Promise<CursorAuthReadResult> {
-  const cliResult = await readFromCli(deps)
+  const deps = options.deps ?? buildDefaultCursorAuthDeps()
+  const cliResult = await readFromCli(deps, options.signal)
   if (cliResult) {
     return cliResult
+  }
+  if (options.signal?.aborted) {
+    return { status: 'missing' }
   }
 
   let ideToken: string | null

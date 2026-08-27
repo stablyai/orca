@@ -46,7 +46,7 @@ describe('readCursorAuthSession', () => {
       readIdeAccessToken
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     expect(result).toEqual({ status: 'ok', accessToken: 'cli-token-123', source: 'cli' })
     expect(runProcess).toHaveBeenCalledWith(
@@ -67,7 +67,7 @@ describe('readCursorAuthSession', () => {
       readIdeAccessToken: vi.fn().mockReturnValue('ide-token-456')
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     expect(result).toEqual({ status: 'ok', accessToken: 'ide-token-456', source: 'ide' })
     expect(runProcess).not.toHaveBeenCalled()
@@ -79,7 +79,7 @@ describe('readCursorAuthSession', () => {
       readIdeAccessToken: vi.fn().mockReturnValue(null)
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     expect(result).toEqual({ status: 'missing' })
   })
@@ -93,7 +93,7 @@ describe('readCursorAuthSession', () => {
       readIdeAccessToken: vi.fn().mockReturnValue(null)
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     expect(result).toEqual({ status: 'missing' })
   })
@@ -109,7 +109,7 @@ describe('readCursorAuthSession', () => {
       readIdeAccessToken: vi.fn().mockReturnValue(null)
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     expect(result).toEqual({ status: 'missing' })
   })
@@ -120,7 +120,7 @@ describe('readCursorAuthSession', () => {
       runProcess: vi.fn().mockRejectedValue(new Error('spawn failed leaking secret-token-abc'))
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     expect(result.status).toBe('error')
     expect(JSON.stringify(result)).not.toContain('secret-token-abc')
@@ -134,7 +134,7 @@ describe('readCursorAuthSession', () => {
       })
     })
 
-    const result = await readCursorAuthSession(deps)
+    const result = await readCursorAuthSession({ deps })
 
     // Why: a db read failure degrades to "missing" (like a missing file would),
     // so there is no error string at all for a token to leak through.
@@ -154,8 +154,44 @@ describe('readCursorAuthSession', () => {
       readIdeAccessToken
     })
 
-    await readCursorAuthSession(deps)
+    await readCursorAuthSession({ deps })
 
+    expect(readIdeAccessToken).not.toHaveBeenCalled()
+  })
+
+  it('forwards the abort signal into the cursor-agent ProcessSpec', async () => {
+    const controller = new AbortController()
+    const runProcess = vi
+      .fn()
+      .mockResolvedValue(
+        processResult({ stdout: JSON.stringify({ auth: { accessToken: 'cli-token' } }) })
+      )
+    const deps = makeDeps({
+      resolveCliProgram: vi.fn().mockResolvedValue('/usr/local/bin/cursor-agent'),
+      runProcess
+    })
+
+    await readCursorAuthSession({ deps, signal: controller.signal })
+
+    expect(runProcess).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: controller.signal
+      })
+    )
+  })
+
+  it('skips the IDE fallback when the abort signal is already aborted', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const readIdeAccessToken = vi.fn().mockReturnValue('ide-token')
+    const deps = makeDeps({
+      resolveCliProgram: vi.fn().mockResolvedValue(null),
+      readIdeAccessToken
+    })
+
+    const result = await readCursorAuthSession({ deps, signal: controller.signal })
+
+    expect(result).toEqual({ status: 'missing' })
     expect(readIdeAccessToken).not.toHaveBeenCalled()
   })
 })
