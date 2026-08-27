@@ -464,8 +464,10 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
-  it('leaves a user-typed name reusable on the SSH create path', async () => {
-    // Why: `nautilus` is retired here, yet the user typed it — it must neither be skipped nor burned.
+  it('keeps a typed name on its retired cwd yet still records it as spent on the SSH create path', async () => {
+    // Why: a name the user typed is a request, so `nautilus` stays `nautilus` even where this host
+    // spent that cwd. The write half is unconditional — otherwise a client that predates the
+    // provenance bit leaves the registry blind and the next generated create collides here.
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -517,9 +519,70 @@ describe('registerWorktreeHandlers', () => {
       name: 'nautilus'
     })
 
-    expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
+    expect(store.getRetiredWorktreeNameRegistry).not.toHaveBeenCalled()
+    expect(store.addRetiredWorktreeName).toHaveBeenCalledWith('repo-ssh', 'nautilus')
     expect(result).toMatchObject({
       worktree: expect.objectContaining({ path: '/remote/repo-nautilus' })
+    })
+  })
+
+  it('never consults the retirement registry for a name outside the creature pool', async () => {
+    // Why: the pool holds ordinary words, so only pool-shaped names may be redirected. Everything
+    // else must skip the registry entirely — including its backfill scan.
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'ssh',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1',
+      worktreeBaseRef: 'origin/main'
+    }
+    const provider = {
+      exec: vi.fn().mockImplementation(async (args: string[]) => {
+        if (args[0] === 'remote') {
+          return { stdout: 'origin\n', stderr: '' }
+        }
+        return { stdout: '', stderr: '' }
+      }),
+      fetchRemoteTrackingRef: vi.fn().mockResolvedValue(undefined),
+      addWorktree: vi.fn().mockResolvedValue(undefined),
+      listWorktrees: vi.fn().mockResolvedValue([
+        {
+          path: '/remote/repo',
+          head: 'base123',
+          branch: 'refs/heads/main',
+          isBare: false,
+          isMainWorktree: true
+        },
+        {
+          path: '/remote/repo-improve-dashboard',
+          head: 'abc123',
+          branch: 'refs/heads/improve-dashboard',
+          isBare: false,
+          isMainWorktree: false
+        }
+      ]),
+      worktreeIsClean: vi.fn().mockResolvedValue({ clean: true })
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getSshGitProviderMock.mockReturnValue(provider)
+    getActiveMultiplexerMock.mockReturnValue({
+      request: vi.fn().mockResolvedValue(undefined),
+      notify: vi.fn()
+    })
+    store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)
+
+    const result = await handlers['worktrees:create'](null, {
+      repoId: 'repo-ssh',
+      name: 'improve-dashboard'
+    })
+
+    expect(store.getRetiredWorktreeNameRegistry).not.toHaveBeenCalled()
+    expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
+    expect(result).toMatchObject({
+      worktree: expect.objectContaining({ path: '/remote/repo-improve-dashboard' })
     })
   })
 })

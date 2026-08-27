@@ -358,9 +358,10 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     expect(store.addRetiredWorktreeName).toHaveBeenCalledWith('repo-1', 'nautilus-2')
   })
 
-  it('leaves a user-typed name reusable even when the same name is retired', async () => {
-    // Why: the creature pool contains ordinary words ("orca", "runner", "molly"). Silently
-    // renaming a deliberate `nautilus` to `nautilus-2` — and burning it — is the wrong trade.
+  it('keeps a typed name on its retired cwd yet still records it as spent', async () => {
+    // Why: a name the user typed is a request, so `nautilus` stays `nautilus` even where this host
+    // spent that cwd. The write half is unconditional — otherwise a client that predates the
+    // provenance bit leaves the registry blind and the next generated create collides here.
     store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: ['nautilus'] })
     computeWorktreePathMock.mockReturnValue('C:\\workspaces\\nautilus')
     ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\nautilus')
@@ -383,6 +384,28 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       'origin/main',
       false
     )
+    expect(store.getRetiredWorktreeNameRegistry).not.toHaveBeenCalled()
+    expect(store.addRetiredWorktreeName).toHaveBeenCalledWith('repo-1', 'nautilus')
+  })
+
+  it('never consults the retirement registry for a name outside the creature pool', async () => {
+    // Why: the pool holds ordinary words, so only pool-shaped names may be redirected. Everything
+    // else must skip the registry entirely — including its backfill scan.
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\fix-login')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\fix-login')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/fix-login',
+        head: 'abc123',
+        branch: 'refs/heads/fix-login',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'fix-login' })
+
+    expect(store.getRetiredWorktreeNameRegistry).not.toHaveBeenCalled()
     expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
   })
 

@@ -1136,21 +1136,16 @@ import {
 } from '../ipc/worktree-remote'
 import {
   getBranchNameOverrideCandidate,
-  getGeneratedWorktreeCreateCandidate,
-  getWorktreeCreateCandidate,
-  isGeneratedWorktreeCreateName,
   WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS
 } from '../worktree-create-candidates'
 import { WORKTREE_CREATE_DEDUPE_TTL_MS } from '../../shared/new-workspace/worktree-create-retry-policy'
+import { planWorktreeCreateNames } from '../worktree-create-name-plan'
 import {
   failedWorktreeCreationNeedsRetirement,
   getRetiredNameRegistryForRepo,
   retireGeneratedWorktreeName
 } from '../worktree-name-retirement'
-import {
-  createRetiredNameLookup,
-  type RetiredNameRegistry
-} from '../../shared/worktree/retired-name-registry'
+import type { RetiredNameRegistry } from '../../shared/worktree/retired-name-registry'
 import { normalizeSparseDirectories } from '../ipc/sparse-checkout-directories'
 import type { PtyBindingSourceExpectation, Store } from '../persistence'
 import { collectLayoutLeafIdsInOrder } from '../persistence/restoring-sessions/terminal-layout-normalization'
@@ -25432,12 +25427,16 @@ export class OrcaRuntimeService {
     let branchConflictKind: 'local' | 'remote' | null = null
     let worktreePath = ''
     let worktreePathResolved = false
-    const shouldRetireGeneratedName =
-      args.nameWasGenerated === true && isGeneratedWorktreeCreateName(sanitizedName)
-    const retiredNameRegistry = shouldRetireGeneratedName
-      ? await getRetiredNameRegistryForRepo(this.store, repo, this.store.getRepos(), settings)
-      : null
-    const isRetiredName = retiredNameRegistry ? createRetiredNameLookup(retiredNameRegistry) : null
+    // Why the alias: `this.store` is nullable, and narrowing does not survive into the closure
+    // below — capturing it once here is what keeps `loadRetiredNames` type-safe.
+    const retirementStore = this.store
+    const namePlan = await planWorktreeCreateNames({
+      sanitizedName,
+      requestedName: args.name,
+      nameWasGenerated: args.nameWasGenerated,
+      loadRetiredNames: () =>
+        getRetiredNameRegistryForRepo(retirementStore, repo, retirementStore.getRepos(), settings)
+    })
     // Why: runtime/mobile create-from-review callers should get a new workspace
     // even when the PR branch or review branch name is already in use.
     for (
@@ -25445,21 +25444,12 @@ export class OrcaRuntimeService {
       attempts < WORKTREE_CREATE_MAX_SUFFIX_ATTEMPTS;
       suffix += 1
     ) {
-      effectiveSanitizedName = shouldRetireGeneratedName
-        ? getGeneratedWorktreeCreateCandidate(
-            sanitizedName,
-            suffix,
-            retiredNameRegistry?.exhaustedTiers
-          )
-        : getWorktreeCreateCandidate(sanitizedName, suffix)
-      effectiveRequestedName = shouldRetireGeneratedName
-        ? effectiveSanitizedName
-        : args.name.trim()
-          ? getWorktreeCreateCandidate(args.name, suffix)
-          : effectiveSanitizedName
-      if (isRetiredName?.(effectiveSanitizedName)) {
+      const nameCandidate = namePlan.candidateAt(suffix)
+      if (!nameCandidate) {
         continue
       }
+      effectiveSanitizedName = nameCandidate.sanitizedName
+      effectiveRequestedName = nameCandidate.requestedName
       attempts += 1
       branchName = await resolveCreateBranchName(
         repo.path,
@@ -25762,14 +25752,14 @@ export class OrcaRuntimeService {
                       settings.refreshLocalBaseRefOnWorktreeCreate
                     ))) ?? {}
     } catch (error) {
-      if (shouldRetireGeneratedName && failedWorktreeCreationNeedsRetirement(error)) {
+      if (namePlan.retiresCreatedName && failedWorktreeCreationNeedsRetirement(error)) {
         await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
       }
       throw error
     }
 
     // Why: fallible metadata work after creation must not leave a real workspace name reusable.
-    if (shouldRetireGeneratedName) {
+    if (namePlan.retiresCreatedName) {
       await retireGeneratedWorktreeName(this.store, repo, settings, effectiveSanitizedName)
     }
 

@@ -5073,13 +5073,61 @@ describe('OrcaRuntimeService', () => {
     expect(addRetiredWorktreeName).toHaveBeenCalledWith(TEST_REPO_ID, 'nautilus')
   })
 
-  it('neither skips nor retires a name the user typed', async () => {
-    // Why: the pool contains ordinary words. Retirement only ever applies to generated names.
+  it('retires a pool-shaped name a failed create left behind even with no provenance bit', async () => {
+    // Why: the failure paths are where a blind registry bites hardest — the directory survives the
+    // rollback, so a later generated create that reuses it inherits the previous agent history.
+    // Recording is shape-decided, so it must fire here for a client that never sent the bit.
     const addRetiredWorktreeName = vi.fn()
+    const runtime = new OrcaRuntimeService({ ...store, addRetiredWorktreeName })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/nautilus')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/nautilus')
+    vi.mocked(addSparseWorktree).mockRejectedValueOnce(
+      Object.assign(new Error('sparse setup failed'), { cleanupFailed: true })
+    )
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'nautilus',
+        sparseCheckout: { directories: ['packages/web'] }
+      })
+    ).rejects.toThrow('sparse setup failed')
+
+    expect(addRetiredWorktreeName).toHaveBeenCalledWith(TEST_REPO_ID, 'nautilus')
+  })
+
+  it('leaves a coined name unrecorded when a create fails', async () => {
+    // Why: the shape gate has to hold on the failure paths too, or a failed `fix-login` burns a
+    // name the generator could never have produced.
+    const addRetiredWorktreeName = vi.fn()
+    const runtime = new OrcaRuntimeService({ ...store, addRetiredWorktreeName })
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/fix-login')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/fix-login')
+    vi.mocked(addSparseWorktree).mockRejectedValueOnce(
+      Object.assign(new Error('sparse setup failed'), { cleanupFailed: true })
+    )
+
+    await expect(
+      runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'fix-login',
+        sparseCheckout: { directories: ['packages/web'] }
+      })
+    ).rejects.toThrow('sparse setup failed')
+
+    expect(addRetiredWorktreeName).not.toHaveBeenCalled()
+  })
+
+  it('keeps a typed name on its retired cwd yet still records it as spent', async () => {
+    // Why: a name the user typed is a request, so `nautilus` stays `nautilus` even where this host
+    // spent that cwd. The write half is unconditional — otherwise a client that predates the
+    // provenance bit leaves the registry blind and the next generated create collides here.
+    const addRetiredWorktreeName = vi.fn()
+    const getRetiredWorktreeNameRegistry = vi.fn(() => ({ exhaustedTiers: 0, names: ['nautilus'] }))
     const runtime = new OrcaRuntimeService({
       ...store,
       addRetiredWorktreeName,
-      getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: ['nautilus'] })
+      getRetiredWorktreeNameRegistry
     })
     const createdWorktree = {
       path: '/tmp/workspaces/nautilus',
@@ -5100,6 +5148,43 @@ describe('OrcaRuntimeService', () => {
     })
 
     expect(result.worktree.path).toBe(createdWorktree.path)
+    expect(computeWorktreePathMock).toHaveBeenCalledWith(
+      'nautilus',
+      expect.anything(),
+      expect.anything()
+    )
+    expect(getRetiredWorktreeNameRegistry).not.toHaveBeenCalled()
+    expect(addRetiredWorktreeName).toHaveBeenCalledWith(TEST_REPO_ID, 'nautilus')
+  })
+
+  it('never consults the retirement registry for a name outside the creature pool', async () => {
+    // Why: the pool contains ordinary words, so only pool-shaped names may be redirected. A name
+    // the user coined must not even pay for the registry read, which can hit disk.
+    const addRetiredWorktreeName = vi.fn()
+    const getRetiredWorktreeNameRegistry = vi.fn(() => ({ exhaustedTiers: 0, names: ['nautilus'] }))
+    const runtime = new OrcaRuntimeService({
+      ...store,
+      addRetiredWorktreeName,
+      getRetiredWorktreeNameRegistry
+    })
+    const createdWorktree = {
+      path: '/tmp/workspaces/fix-login',
+      head: 'def',
+      branch: 'fix-login',
+      isBare: false,
+      isMainWorktree: false
+    }
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(listWorktrees).mockResolvedValue([...MOCK_GIT_WORKTREES, createdWorktree])
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: 'id:repo-1',
+      name: 'fix-login'
+    })
+
+    expect(result.worktree.path).toBe(createdWorktree.path)
+    expect(getRetiredWorktreeNameRegistry).not.toHaveBeenCalled()
     expect(addRetiredWorktreeName).not.toHaveBeenCalled()
   })
 
