@@ -22,6 +22,19 @@ export function hasHostTextSelection(
   return selection.toString().trim() !== ''
 }
 
+type CopyChordEventLike = Pick<KeyboardEvent, 'key' | 'metaKey' | 'ctrlKey' | 'altKey' | 'shiftKey'>
+
+// Why: only a binding that collides with the platform's native copy has a copy to yield to. A grab
+// shortcut rebound to something else — the workaround #12323 recommends — must keep firing with
+// text selected, so the selection exemption is scoped to the copy chord rather than applied to
+// every binding.
+export function isNativeCopyChord(event: CopyChordEventLike, platform: NodeJS.Platform): boolean {
+  if (event.key.toLowerCase() !== 'c' || event.altKey || event.shiftKey) {
+    return false
+  }
+  return platform === 'darwin' ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey
+}
+
 export function isEditableKeyboardTarget(target: EventTarget | EditableTargetLike | null): boolean {
   const element =
     target && typeof target === 'object' && ('closest' in target || 'isContentEditable' in target)

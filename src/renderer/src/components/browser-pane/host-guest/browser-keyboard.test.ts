@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { hasHostTextSelection, isEditableKeyboardTarget } from './browser-keyboard'
+import {
+  hasHostTextSelection,
+  isEditableKeyboardTarget,
+  isNativeCopyChord
+} from './browser-keyboard'
 
 // Why: the old fakes passed a single joined selector to `closest`, so any
 // `selector.includes(token)` check matched every token. Use the real DOM instead.
@@ -100,5 +104,44 @@ describe('hasHostTextSelection', () => {
 
     window.getSelection()?.removeAllRanges()
     expect(hasHostTextSelection()).toBe(false)
+  })
+})
+
+describe('isNativeCopyChord', () => {
+  const chord = (over: Partial<KeyboardEvent> = {}): KeyboardEvent =>
+    ({
+      key: 'c',
+      metaKey: false,
+      ctrlKey: false,
+      altKey: false,
+      shiftKey: false,
+      ...over
+    }) as KeyboardEvent
+
+  it('recognizes the platform copy chord', () => {
+    expect(isNativeCopyChord(chord({ metaKey: true }), 'darwin')).toBe(true)
+    expect(isNativeCopyChord(chord({ ctrlKey: true }), 'win32')).toBe(true)
+    expect(isNativeCopyChord(chord({ ctrlKey: true }), 'linux')).toBe(true)
+  })
+
+  it('rejects the other platform primary modifier', () => {
+    expect(isNativeCopyChord(chord({ ctrlKey: true }), 'darwin')).toBe(false)
+    expect(isNativeCopyChord(chord({ metaKey: true }), 'win32')).toBe(false)
+  })
+
+  it('rejects a different key', () => {
+    expect(isNativeCopyChord(chord({ key: 'g', metaKey: true }), 'darwin')).toBe(false)
+  })
+
+  // Why: Ctrl+Shift+C and Alt variants are their own bindings, not the document copy chord, so a
+  // grab shortcut mapped to one of them keeps working with text selected.
+  it('rejects added Alt or Shift', () => {
+    expect(isNativeCopyChord(chord({ metaKey: true, shiftKey: true }), 'darwin')).toBe(false)
+    expect(isNativeCopyChord(chord({ metaKey: true, altKey: true }), 'darwin')).toBe(false)
+    expect(isNativeCopyChord(chord({ ctrlKey: true, shiftKey: true }), 'linux')).toBe(false)
+  })
+
+  it('rejects a bare key with no primary modifier', () => {
+    expect(isNativeCopyChord(chord(), 'darwin')).toBe(false)
   })
 })

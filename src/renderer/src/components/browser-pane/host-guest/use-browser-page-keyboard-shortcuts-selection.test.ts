@@ -5,7 +5,7 @@ import { renderHook } from '@testing-library/react'
 const { getShortcutPlatformMock, useAppStoreMock, useBrowserPageWebviewShortcutsMock } = vi.hoisted(
   () => ({
     getShortcutPlatformMock: vi.fn(() => 'darwin' as NodeJS.Platform),
-    useAppStoreMock: vi.fn(() => undefined),
+    useAppStoreMock: vi.fn((_selector?: (state: unknown) => unknown): unknown => undefined),
     useBrowserPageWebviewShortcutsMock: vi.fn()
   })
 )
@@ -19,6 +19,13 @@ vi.mock('./use-browser-page-webview-shortcuts', () => ({
 import { useBrowserPageKeyboardShortcuts } from './use-browser-page-keyboard-shortcuts'
 
 const startGrabIntent = vi.fn()
+
+/** Mirrors the store selector the hook uses: `useAppStore((s) => s.keybindings)`. */
+function setKeybindingOverrides(overrides: Record<string, string[]> | undefined): void {
+  useAppStoreMock.mockImplementation((selector?: (state: unknown) => unknown) =>
+    selector ? selector({ keybindings: overrides }) : undefined
+  )
+}
 
 function renderShortcuts(): void {
   renderHook(() =>
@@ -64,6 +71,7 @@ function pressGrabShortcut(target: EventTarget): void {
 describe('useBrowserPageKeyboardShortcuts — grab shortcut vs host text selection', () => {
   beforeEach(() => {
     startGrabIntent.mockClear()
+    setKeybindingOverrides(undefined)
     ;(window as unknown as { api: unknown }).api = {
       browser: {
         onGrabModeToggle: vi.fn(() => vi.fn()),
@@ -112,6 +120,21 @@ describe('useBrowserPageKeyboardShortcuts — grab shortcut vs host text selecti
     renderShortcuts()
 
     pressGrabShortcut(prose)
+
+    expect(startGrabIntent).toHaveBeenCalledWith('copy')
+  })
+
+  // Why: #12323's own workaround is to rebind Grab Page Element off Cmd+C. A chord that does not
+  // collide with native copy has no copy to yield to, so a stray selection must not disable it.
+  it('still arms a grab shortcut rebound off the copy chord while text is selected', () => {
+    setKeybindingOverrides({ 'browser.grabElement': ['Mod+G'] })
+    const prose = mountTranscriptProse()
+    renderShortcuts()
+    selectAcross(prose)
+
+    prose.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'g', metaKey: true, bubbles: true, cancelable: true })
+    )
 
     expect(startGrabIntent).toHaveBeenCalledWith('copy')
   })
