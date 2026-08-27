@@ -3195,10 +3195,8 @@ export class OrcaRuntimeService {
   // reconnect-scan bounding for sequential soft freezes.
   private readonly terminalFocusNavigationCoalescer =
     new TerminalFocusNavigationCoalescer<RuntimeTerminalFocus>()
-  private pendingMobileSessionPtyInventoryRefreshByTarget = new Map<
-    string | null,
-    Promise<PtyControllerInventory | null>
-  >()
+  private pendingMobileSessionPtyAggregateInventoryRefresh: Promise<PtyControllerInventory | null> | null =
+    null
   private leaves = new Map<string, RuntimeLeafRecord>()
   // Why: PTY output is a per-keystroke hot path. Looking up affected leaves by
   // ptyId keeps active TUI redraws independent of the total open terminal count.
@@ -9126,19 +9124,18 @@ export class OrcaRuntimeService {
       // Non-floating refreshes all query the aggregate controller inventory;
       // coalesce targeted and all-worktree callers so they cannot invalidate
       // one another through the shared aggregate generation fence.
-      const refreshKey = null
-      const pending = this.pendingMobileSessionPtyInventoryRefreshByTarget.get(refreshKey)
+      const pending = this.pendingMobileSessionPtyAggregateInventoryRefresh
       if (pending) {
         return pending
       }
       // Why: reconnect exit bursts share one authoritative daemon inventory
       // instead of multiplying a full cross-generation list RPC per stale tab.
       const refresh = this.performMobileSessionPtyRecordsRefresh(targetWorktreeId).finally(() => {
-        if (this.pendingMobileSessionPtyInventoryRefreshByTarget.get(refreshKey) === refresh) {
-          this.pendingMobileSessionPtyInventoryRefreshByTarget.delete(refreshKey)
+        if (this.pendingMobileSessionPtyAggregateInventoryRefresh === refresh) {
+          this.pendingMobileSessionPtyAggregateInventoryRefresh = null
         }
       })
-      this.pendingMobileSessionPtyInventoryRefreshByTarget.set(refreshKey, refresh)
+      this.pendingMobileSessionPtyAggregateInventoryRefresh = refresh
       return refresh
     }
     return await this.performMobileSessionPtyRecordsRefresh(targetWorktreeId)

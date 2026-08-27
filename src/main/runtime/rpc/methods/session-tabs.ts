@@ -7,23 +7,13 @@ import {
   WorktreeTabSelector
 } from './session-tabs-schemas'
 import { SESSION_TAB_CLOSE_METHODS } from './session-tab-close-methods'
-import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
-import { listSessionTabsInventory, subscribeSessionTabsInventory } from './session-tabs-inventory'
-import { projectSessionTabBrowserPlacements } from './session-tab-browser-placement-projection'
-import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import {
+  listSessionTabsInventory,
+  projectSessionTabsForClient,
+  subscribeSessionTabsInventory
+} from './session-tabs-inventory'
 import { SESSION_TAB_MARKDOWN_METHODS } from './session-tab-markdown-methods'
 import { SESSION_TAB_MUTATION_METHODS } from './session-tab-mutation-methods'
-
-function projectSessionTabsForClient(
-  snapshot: RuntimeMobileSessionTabsResult,
-  clientKind: 'mobile' | 'runtime' | undefined,
-  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
-) {
-  return projectSessionTabBrowserPlacements(
-    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
-    clientCapabilities
-  )
-}
 
 export const SESSION_TAB_METHODS: RpcAnyMethod[] = [
   defineMethod({

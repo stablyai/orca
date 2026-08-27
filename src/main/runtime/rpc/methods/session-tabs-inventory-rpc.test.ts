@@ -43,8 +43,23 @@ describe('session tabs inventory RPC methods', () => {
     expect(JSON.parse(messages[0]!).result).toEqual({ snapshots: [] })
   })
 
-  it('keeps a capable client fail-closed when the authoritative census fails', async () => {
-    const legacyListAll = vi.fn()
+  // Why: a census failure only invalidates the emptiness verdict — a hard error
+  // here would blank the whole list for exactly the clients that negotiated the
+  // capability (e.g. one configured-but-disconnected SSH host). The unlabeled
+  // list keeps empty results behind the client probe, which stays unverifiable
+  // for the same omitted-host condition.
+  it('serves a capable client an unlabeled best-effort list when the census fails', async () => {
+    const legacyListAll = vi.fn(async () => [
+      {
+        worktree: 'wt-local',
+        publicationEpoch: 'epoch-local',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    ])
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
@@ -65,11 +80,10 @@ describe('session tabs inventory RPC methods', () => {
       }
     )
 
-    expect(legacyListAll).not.toHaveBeenCalled()
-    expect(JSON.parse(messages[0]!)).toMatchObject({
-      ok: false,
-      error: expect.objectContaining({ code: 'runtime_error' })
-    })
+    expect(legacyListAll).toHaveBeenCalledTimes(1)
+    const result = JSON.parse(messages[0]!).result
+    expect(result.snapshots).toEqual([expect.objectContaining({ worktree: 'wt-local' })])
+    expect(result.authoritative).toBeUndefined()
   })
 
   it('propagates disconnect errors to legacy clients instead of falling back', async () => {

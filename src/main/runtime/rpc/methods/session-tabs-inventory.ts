@@ -17,16 +17,24 @@ function clientUnderstandsAuthoritativeInventory(context: RpcContext): boolean {
   )
 }
 
+export function projectSessionTabsForClient(
+  snapshot: RuntimeMobileSessionTabsResult,
+  clientKind: 'mobile' | 'runtime' | undefined,
+  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
+): RuntimeMobileSessionTabsResult {
+  return projectSessionTabBrowserPlacements(
+    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    clientCapabilities
+  )
+}
+
 function projectInventory(
   inventory: SessionTabsInventory,
   context: RpcContext
 ): SessionTabsInventory {
   return {
     snapshots: inventory.snapshots.map((snapshot) =>
-      projectSessionTabBrowserPlacements(
-        projectSessionTabAgentStatus(snapshot, context.clientKind, context.clientCapabilities),
-        context.clientCapabilities
-      )
+      projectSessionTabsForClient(snapshot, context.clientKind, context.clientCapabilities)
     ),
     ...(inventory.authoritative && clientUnderstandsAuthoritativeInventory(context)
       ? { authoritative: true as const }
@@ -43,12 +51,10 @@ export async function listSessionTabsInventory(context: RpcContext): Promise<Ses
   try {
     return projectInventory(await collectInventory(), context)
   } catch (error) {
-    // Why: legacy clients never negotiated authoritative empties; restore the
-    // pre-diff best-effort list so their renderer probes instead of erroring.
-    if (
-      clientUnderstandsAuthoritativeInventory(context) ||
-      !(error instanceof Error && error.message === 'terminal_liveness_unavailable')
-    ) {
+    // Why: a census failure only invalidates the emptiness verdict, so every
+    // client gets the best-effort list unlabeled — capable clients then gate
+    // empty results behind their liveness probe instead of losing the list.
+    if (!(error instanceof Error && error.message === 'terminal_liveness_unavailable')) {
       throw error
     }
     if (signal?.aborted) {
@@ -83,10 +89,7 @@ export async function subscribeSessionTabsInventory(
     }
     emit({
       type: 'updated',
-      ...projectSessionTabBrowserPlacements(
-        projectSessionTabAgentStatus(snapshot, context.clientKind, context.clientCapabilities),
-        context.clientCapabilities
-      )
+      ...projectSessionTabsForClient(snapshot, context.clientKind, context.clientCapabilities)
     })
   }, pairedDeviceId)
   runtime.registerSubscriptionCleanup(
@@ -102,6 +105,7 @@ export async function subscribeSessionTabsInventory(
     connectionId
   )
   if (closed) {
+    context.signal?.removeEventListener('abort', abortInventory)
     return
   }
   const inventory = await listSessionTabsInventory({

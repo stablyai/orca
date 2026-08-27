@@ -8037,6 +8037,7 @@
           "file": "tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts",
           "assertions": [
             "unpublished empty inventory keeps resume dispatch at zero with the original daemon session, process id, and writer as the sole live writer",
+            "an authoritative empty inventory settles the mirror and releases exactly one resume dispatch with zero liveness probes",
             "re-enabling unconditional empty hydration makes the identical oracle red with one resume dispatch, two session ids, two process ids, and two writer calls"
           ]
         },

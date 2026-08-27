@@ -402,4 +402,13 @@ describe('authoritative session tab inventory publication', () => {
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
     await expect(pending).resolves.toEqual({ snapshots: [], authoritative: true })
   })
+
+  it('reports no authoritative support behind the e2e disable override', () => {
+    vi.stubEnv('ORCA_E2E_DISABLE_AUTHORITATIVE_SESSION_TABS_INVENTORY', '1')
+    try {
+      expect(createInventoryRuntime().supportsAuthoritativeSessionTabsInventory()).toBe(false)
+    } finally {
+      vi.unstubAllEnvs()
+    }
+  })
 })

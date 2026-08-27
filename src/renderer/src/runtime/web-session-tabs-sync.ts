@@ -4050,9 +4050,7 @@ function captureHostSessionMirrorSettleFence(
       expected.connectionGeneration ?? getRuntimeEnvironmentConnectionGeneration(environmentId),
     pairingRevision: expected.pairingRevision ?? getRuntimeEnvironmentRevision(environmentId),
     trackingGeneration:
-      expected.trackingGeneration ??
-      sessionTabsTrackingGenerationByEnvironment.get(environmentId) ??
-      0
+      expected.trackingGeneration ?? getWebSessionTabsTrackingGeneration(environmentId)
   }
 }
 
@@ -4060,8 +4058,7 @@ function hostSessionMirrorSettleFenceIsCurrent(fence: HostSessionMirrorSettleFen
   return (
     getRuntimeEnvironmentConnectionGeneration(fence.environmentId) === fence.connectionGeneration &&
     getRuntimeEnvironmentRevision(fence.environmentId) === fence.pairingRevision &&
-    (sessionTabsTrackingGenerationByEnvironment.get(fence.environmentId) ?? 0) ===
-      fence.trackingGeneration
+    getWebSessionTabsTrackingGeneration(fence.environmentId) === fence.trackingGeneration
   )
 }
 
@@ -4934,8 +4931,7 @@ export function useWebSessionTabsSync(): void {
             expectedEnvironmentPairingRevision: environments.find(
               (environment) => environment.environmentId === environmentId
             )?.expectedEnvironmentPairingRevision,
-            expectedTrackingGeneration:
-              sessionTabsTrackingGenerationByEnvironment.get(environmentId) ?? 0
+            expectedTrackingGeneration: getWebSessionTabsTrackingGeneration(environmentId)
           })
         }
       }
@@ -4968,8 +4964,7 @@ export function useWebSessionTabsSync(): void {
         continue
       }
       let requestedInitialLoad = false
-      const expectedTrackingGeneration =
-        sessionTabsTrackingGenerationByEnvironment.get(environmentId) ?? 0
+      const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
       environmentIdBySubscriptionSpec.push(environmentId)
       subscriptionSpecs.push({
         subscribe: (isCurrent, { visibilityGeneration }) => {

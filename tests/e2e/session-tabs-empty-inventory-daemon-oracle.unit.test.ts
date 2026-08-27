@@ -137,6 +137,31 @@ describe('unpublished empty inventory daemon oracle', () => {
     await host.dispose()
   })
 
+  it('settles an authoritative empty inventory and releases the dispatch without a probe', async () => {
+    const call = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { call } } })
+    let resumeSweeps = 0
+    parkUntilHostSessionMirrorHydrates(ENVIRONMENT_ID, WORKTREE, () => {
+      resumeSweeps += 1
+    })
+
+    applyWebSessionTabsStorePatch(() => ({}), {
+      frames: [],
+      fullInventory: {
+        environmentId: ENVIRONMENT_ID,
+        publishedSnapshotCount: 0,
+        authoritative: true
+      }
+    })()
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect({
+      resumeSweeps,
+      mirrorHydrated: hasHostSessionMirrorHydrated(ENVIRONMENT_ID, WORKTREE),
+      probeCalls: call.mock.calls.length
+    }).toEqual({ resumeSweeps: 1, mirrorHydrated: true, probeCalls: 0 })
+  })
+
   it('records legacy unconditional empty hydration releasing the resume dispatch', async () => {
     const subprocesses: ReturnType<typeof createWriterSubprocess>[] = []
     const host = new TerminalHost({
