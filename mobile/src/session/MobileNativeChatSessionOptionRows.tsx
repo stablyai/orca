@@ -170,16 +170,6 @@ export function DescriptorRows({
 }): React.JSX.Element {
   const locked = disabled || !descriptor.settable
   // Why: flip-only without a baseline is an action — never claim On/Off.
-  if (descriptor.action?.type === 'toggle-command') {
-    return (
-      <ActionRow
-        label={`Toggle ${descriptor.label.toLowerCase()}`}
-        disabled={locked}
-        grouped={grouped}
-        onPress={onInvokeAction}
-      />
-    )
-  }
   // Why: agent-picker opens the TUI; it is not a set of radio choices.
   if (descriptor.action?.type === 'agent-picker') {
     return (

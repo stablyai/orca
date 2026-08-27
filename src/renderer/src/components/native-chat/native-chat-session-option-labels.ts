@@ -15,12 +15,43 @@ export function nativeChatSessionOptionLabel(descriptor: SessionOptionDescriptor
       return translate('components.native-chat.composer.fastMode', 'Fast mode')
     case 'thinking':
       return translate('components.native-chat.composer.thinking', 'Thinking')
+    case 'permissionMode':
+      return translate('components.native-chat.composer.permissionMode', 'Mode')
     default:
       return descriptor.label
   }
 }
 
-export function nativeChatSessionChoiceLabel(choice: SessionOptionSelectChoice): string {
+/** Localized label for a permission-mode value, scoped to that option: these
+ *  values collide with other catalogs — Cursor ships a model literally named
+ *  `auto` — and a shared switch would relabel it in every non-English locale. */
+function permissionModeChoiceLabel(value: string): string | null {
+  switch (value) {
+    case 'manual':
+      return translate('components.native-chat.composer.optionValue.manual', 'Manual')
+    case 'acceptEdits':
+      return translate('components.native-chat.composer.optionValue.acceptEdits', 'Accept edits')
+    case 'plan':
+      return translate('components.native-chat.composer.optionValue.plan', 'Plan')
+    case 'auto':
+      return translate('components.native-chat.composer.optionValue.auto', 'Auto')
+    case 'bypassPermissions':
+      return translate(
+        'components.native-chat.composer.optionValue.bypassPermissions',
+        'Bypass permissions'
+      )
+    default:
+      return null
+  }
+}
+
+export function nativeChatSessionChoiceLabel(
+  choice: SessionOptionSelectChoice,
+  optionId?: string
+): string {
+  if (optionId === 'permissionMode') {
+    return permissionModeChoiceLabel(choice.value) ?? choice.label
+  }
   switch (choice.value) {
     case 'minimal':
       return translate('components.native-chat.composer.optionValue.minimal', 'Minimal')
@@ -82,6 +113,26 @@ export function nativeChatModelPillLabel(descriptor: SessionOptionDescriptor): s
   )
 }
 
+/** Visible text for the Mode pill. Always names the current mode, including the
+ *  manual default — unlike the shared options pill, showing the selection is
+ *  this control's whole purpose. */
+export function nativeChatPermissionModePillLabel(descriptor: SessionOptionDescriptor): string {
+  if (
+    descriptor.valueSource === 'unknown' ||
+    descriptor.kind.type !== 'select' ||
+    !descriptor.kind.currentValue
+  ) {
+    return translate('components.native-chat.composer.permissionMode', 'Mode')
+  }
+  return nativeChatSessionChoiceLabel(
+    descriptor.kind.choices.find((choice) => choice.value === descriptor.kind.currentValue) ?? {
+      value: descriptor.kind.currentValue,
+      label: descriptor.kind.currentValue
+    },
+    'permissionMode'
+  )
+}
+
 export function nativeChatOptionsPillTitle(
   descriptors: readonly SessionOptionDescriptor[]
 ): string {
@@ -110,7 +161,8 @@ export function nativeChatOptionsPillLabel(
           choice ?? {
             value: descriptor.kind.currentValue,
             label: descriptor.kind.currentValue
-          }
+          },
+          descriptor.id
         )
       )
     } else if (descriptor.kind.type === 'boolean' && descriptor.kind.currentValue === true) {

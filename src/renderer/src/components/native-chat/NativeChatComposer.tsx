@@ -2,16 +2,9 @@ import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import {
-  sendNativeChatMessage,
-  sendNativeChatTypedCommand,
-  sendNativeChatMessageWithImageAttachments,
-  submitNativeChatPrompt
-} from './native-chat-runtime-send'
-import type { NativeChatSendHandle } from './native-chat-runtime-send'
+import { startNativeChatComposerSend } from './native-chat-composer-send-dispatch'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
 import {
   applyMentionSuggestion,
@@ -217,21 +210,27 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
     const { pickAttachment } = useNativeChatFileAttachmentActions(attachExternalPaths)
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
       useNativeChatDictationActions({ textareaRef, setDictationPressed })
-    const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
-      useNativeChatSessionOptionCommand({
-        agent,
-        disabled,
-        onSlashCommand,
-        resolveTarget,
-        setHistory
-      })
+    const {
+      dispatch: dispatchSessionOptionCommand,
+      dispatchModeCycle: dispatchSessionOptionModeCycle,
+      isDispatching: isDispatchingSessionOption
+    } = useNativeChatSessionOptionCommand({
+      agent,
+      disabled,
+      onSlashCommand,
+      resolveTarget,
+      setHistory,
+      readTerminalScreen
+    })
 
     const { surface: sessionOptionsSurface, snapshot: sessionOptionsSnapshot } =
       useNativeChatSessionOptions({
         agent,
         terminalTabId,
+        paneKey,
         targetPtyId,
         dispatchCommand: dispatchSessionOptionCommand,
+        dispatchModeCycle: dispatchSessionOptionModeCycle,
         onAgentPicker: onSwitchToTerminal,
         readTerminalScreen
       })
@@ -260,28 +259,14 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         agent,
         readScreen: () => readTerminalScreen?.()
       })
-      let pendingHandle: NativeChatSendHandle | null = null
-      // Why: image attachments take the attachment send path even for a
-      // command/unknown send, otherwise `clearImageAttachments()` below drops
-      // them silently when the text starts with the agent's slash/skill prefix.
-      if (classification !== 'chat' && imagePaths.length === 0) {
-        pendingHandle =
-          agent === 'codex' && isSlashCommandDraft(text)
-            ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-            : sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
-      } else if (imagePaths.length > 0) {
-        pendingHandle = sendNativeChatMessageWithImageAttachments(
-          target.settings,
-          target.ptyId,
-          text,
-          imagePaths,
-          sendOptions
-        )
-      } else if (text.trim().length > 0) {
-        pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
-      } else {
-        submitNativeChatPrompt(target.settings, target.ptyId)
-      }
+      const pendingHandle = startNativeChatComposerSend({
+        agent,
+        text,
+        imagePaths,
+        target,
+        classification,
+        sendOptions
+      })
       if (classification !== 'chat') {
         if (pendingHandle) {
           trackPendingSend(pendingHandle)

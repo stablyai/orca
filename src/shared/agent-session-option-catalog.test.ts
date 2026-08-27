@@ -234,3 +234,73 @@ describe('agent session option catalog', () => {
     })
   })
 })
+
+describe('session-scoped options', () => {
+  it('exposes Claude permission mode as a session option, not a model option', () => {
+    const catalog = getAgentSessionOptionCatalog('claude')
+    const mode = catalog?.sessionOptions?.find((option) => option.id === 'permissionMode')
+    expect(mode?.kind.type).toBe('select')
+    expect(
+      catalog?.models.some((model) => model.options.some((o) => o.id === 'permissionMode'))
+    ).toBe(false)
+  })
+})
+
+describe('claude permission mode', () => {
+  const modeOption = () =>
+    getAgentSessionOptionCatalog('claude')?.sessionOptions?.find((o) => o.id === 'permissionMode')
+
+  it('maps every choice except bypass to --permission-mode', () => {
+    expect(modeOption()?.apply.launchArgs?.('plan')).toEqual(['--permission-mode', 'plan'])
+    expect(modeOption()?.apply.launchArgs?.('acceptEdits')).toEqual([
+      '--permission-mode',
+      'acceptEdits'
+    ])
+  })
+
+  it('maps bypass to the dangerous-skip flag Orca already uses for yolo', () => {
+    expect(modeOption()?.apply.launchArgs?.('bypassPermissions')).toEqual([
+      '--dangerously-skip-permissions'
+    ])
+  })
+
+  it('yields to user-supplied permission args', () => {
+    expect(modeOption()?.apply.agentArgsOverride?.(['--permission-mode', 'plan'])).toBe(true)
+    expect(modeOption()?.apply.agentArgsOverride?.(['--dangerously-skip-permissions'])).toBe(true)
+    expect(modeOption()?.apply.agentArgsOverride?.(['--model', 'opus'])).toBe(false)
+  })
+
+  it('drives the shift+tab cycle mid-session', () => {
+    expect(modeOption()?.apply.midSession).toEqual({
+      kind: 'cycle-key',
+      key: '\x1b[Z',
+      detect: 'claude-permission-mode'
+    })
+  })
+})
+
+describe('claude fast mode', () => {
+  const fastMode = () =>
+    getAgentSessionOptionCatalog('claude')
+      ?.models.find((model) => model.id === 'opus')
+      ?.options.find((option) => option.id === 'fastMode')
+
+  // Why: a bare `/fast` opens a confirmation panel (Tab to toggle · Enter to
+  // confirm) that a dispatch leaves hanging and unapplied. The argument form
+  // sets the value outright.
+  it('sets the value outright rather than opening the confirmation panel', () => {
+    const midSession = fastMode()?.apply.midSession
+    expect(midSession?.kind).toBe('command')
+    if (midSession?.kind !== 'command') {
+      throw new Error('fast mode must dispatch a command')
+    }
+    expect(midSession.build(true)).toBe('/fast on')
+    expect(midSession.build(false)).toBe('/fast off')
+    expect(midSession.build(true)).not.toBe('/fast')
+  })
+
+  it('still recognizes a bare /fast as the panel that invalidates tracked state', () => {
+    const midSession = fastMode()?.apply.midSession
+    expect(midSession?.kind === 'command' && midSession.pickerCommand).toBe('/fast')
+  })
+})

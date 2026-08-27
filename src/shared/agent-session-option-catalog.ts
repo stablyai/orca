@@ -21,6 +21,7 @@ export type {
   AgentSessionOptionCatalog,
   CatalogAgentInteractionDetection,
   CatalogCommandDelivery,
+  CatalogCycleKeyDetection,
   CatalogMidSessionApply,
   CatalogModel,
   CatalogOption,

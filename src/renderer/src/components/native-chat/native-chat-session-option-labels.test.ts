@@ -2,6 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import { translate } from '@/i18n/i18n'
 import {
   nativeChatModelPillLabel,
+  nativeChatOptionsPillLabel,
+  nativeChatPermissionModePillLabel,
   nativeChatSessionChoiceLabel
 } from './native-chat-session-option-labels'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat-session-options'
@@ -58,5 +60,113 @@ describe('nativeChatSessionChoiceLabel', () => {
       'components.native-chat.composer.optionValue.ultra',
       'Ultra'
     )
+  })
+})
+
+describe('nativeChatSessionChoiceLabel — permission mode', () => {
+  it('labels permission-mode choices', () => {
+    expect(
+      nativeChatSessionChoiceLabel({ value: 'bypassPermissions', label: 'raw' }, 'permissionMode')
+    ).toBe('Bypass permissions')
+    expect(
+      nativeChatSessionChoiceLabel({ value: 'acceptEdits', label: 'raw' }, 'permissionMode')
+    ).toBe('Accept edits')
+  })
+
+  // Why: Cursor ships a model whose value is literally `auto`. An unscoped
+  // switch would relabel it from the catalog's own text in every locale.
+  it('leaves a model choice named auto to the catalog label', () => {
+    expect(nativeChatSessionChoiceLabel({ value: 'auto', label: 'Auto (Cursor)' }, 'model')).toBe(
+      'Auto (Cursor)'
+    )
+    expect(nativeChatSessionChoiceLabel({ value: 'auto', label: 'Auto (Cursor)' })).toBe(
+      'Auto (Cursor)'
+    )
+  })
+
+  it('still labels effort choices without an option id', () => {
+    expect(nativeChatSessionChoiceLabel({ value: 'xhigh', label: 'raw' })).toBe('Extra high')
+  })
+
+  it('falls back to the catalog label for an unknown mode value', () => {
+    expect(
+      nativeChatSessionChoiceLabel({ value: 'dontAsk', label: 'Do not ask' }, 'permissionMode')
+    ).toBe('Do not ask')
+  })
+})
+
+function permissionModeDescriptor(currentValue: string): SessionOptionDescriptor {
+  return {
+    id: 'permissionMode',
+    label: 'Mode',
+    kind: {
+      type: 'select',
+      currentValue,
+      choices: [
+        { value: 'manual', label: 'Manual' },
+        { value: 'plan', label: 'Plan' }
+      ]
+    },
+    valueSource: 'reported',
+    settable: true
+  }
+}
+
+function effortDescriptor(currentValue: string): SessionOptionDescriptor {
+  return {
+    id: 'effort',
+    label: 'Effort',
+    kind: {
+      type: 'select',
+      currentValue,
+      choices: [{ value: currentValue, label: currentValue }]
+    },
+    valueSource: 'applied',
+    settable: true
+  }
+}
+
+describe('nativeChatOptionsPillLabel', () => {
+  it('names a lone unknown effort control explicitly', () => {
+    expect(nativeChatOptionsPillLabel([effortDescriptor('high')])).toBe('High')
+  })
+
+  it('falls back to a generic title when nothing contributes a label', () => {
+    expect(
+      nativeChatOptionsPillLabel([{ ...effortDescriptor('high'), valueSource: 'unknown' }])
+    ).toBe('Effort')
+  })
+})
+
+describe('nativeChatPermissionModePillLabel', () => {
+  it('shows the current mode, including the manual default', () => {
+    expect(nativeChatPermissionModePillLabel(permissionModeDescriptor('manual'))).toBe('Manual')
+    expect(nativeChatPermissionModePillLabel(permissionModeDescriptor('plan'))).toBe('Plan')
+  })
+
+  it('falls back to the localized "Mode" label when the value source is unknown', () => {
+    expect(
+      nativeChatPermissionModePillLabel({
+        ...permissionModeDescriptor('manual'),
+        valueSource: 'unknown'
+      })
+    ).toBe('Mode')
+  })
+
+  it('falls back to the choice catalog label for an unrecognized mode value', () => {
+    expect(
+      nativeChatPermissionModePillLabel({
+        ...permissionModeDescriptor('dontAsk'),
+        kind: {
+          type: 'select',
+          currentValue: 'dontAsk',
+          choices: [
+            { value: 'manual', label: 'Manual' },
+            { value: 'plan', label: 'Plan' },
+            { value: 'dontAsk', label: 'Do not ask' }
+          ]
+        }
+      })
+    ).toBe('Do not ask')
   })
 })

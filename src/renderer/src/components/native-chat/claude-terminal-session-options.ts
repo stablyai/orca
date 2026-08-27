@@ -203,6 +203,84 @@ function findClaudeCatalogModel(
  *   reported id is one the picker actually lists; omitting it falls back to the
  *   version-neutral seed families.
  */
+type ClaudePermissionMode = 'manual' | 'acceptEdits' | 'plan' | 'auto' | 'bypassPermissions'
+
+// Claude's status-line labels. Every mode names itself, manual included
+// (`⏸ manual mode on`) — observed live, not derivable from the binary's table.
+const MODE_BY_INDICATOR: [string, ClaudePermissionMode][] = [
+  ['manual mode on', 'manual'],
+  ['accept edits on', 'acceptEdits'],
+  ['plan mode on', 'plan'],
+  ['auto mode on', 'auto'],
+  ['bypass permissions on', 'bypassPermissions']
+]
+
+// Why: the live indicator renders just below the composer; anything further
+// up the viewport is scrolled-past conversation text and may be stale.
+const INDICATOR_WINDOW_SIZE = 8
+
+/** Drops the trailing blank run a viewport taller than its content leaves
+ *  behind. Only that run: dropping interior blanks would let the indicator
+ *  window creep up past blank-separated conversation text. */
+function withoutTrailingBlankRows(lines: readonly string[]): readonly string[] {
+  let end = lines.length
+  while (end > 0 && !lines[end - 1]) {
+    end -= 1
+  }
+  return lines.slice(0, end)
+}
+
+// Claude marks fast mode with this glyph; absence on a confirmed Claude screen
+// means off.
+const FAST_MODE_GLYPH = '\u21AF'
+const FAST_MODE_PANEL_TITLE = 'fast mode (research preview)'
+
+/** Whether the live status line carries the fast-mode glyph. Skips the
+ *  confirmation panel's title row, which carries it too — we never open that
+ *  panel ourselves, but a user can. */
+function matchFastModeGlyph(lines: readonly string[]): boolean {
+  return lines.some(
+    (line) => line.includes(FAST_MODE_GLYPH) && !line.toLowerCase().includes(FAST_MODE_PANEL_TITLE)
+  )
+}
+
+/** Reads fast mode WITHOUT requiring Claude's banner. Affirmative only: absence
+ *  cannot mean off here, since we have no proof this screen is even Claude's. */
+export function readClaudeFastModeFromTerminalScreen(
+  screen: string | null | undefined
+): true | null {
+  return screen && matchFastModeGlyph(normalizedScreenLines(screen)) ? true : null
+}
+
+/** The mode named by the status line nearest the composer, or null if none of
+ *  them is on screen. */
+function matchPermissionModeIndicator(lines: readonly string[]): ClaudePermissionMode | null {
+  const window = withoutTrailingBlankRows(lines).slice(-INDICATOR_WINDOW_SIZE)
+  let mode: ClaudePermissionMode | null = null
+  for (const line of window) {
+    const lowered = line.toLowerCase()
+    for (const [indicator, value] of MODE_BY_INDICATOR) {
+      // Only the status glyph may precede it: digits and bullets would let a
+      // list item ("3. Auto mode on: …") pose as live status. Over-restricting
+      // just reports manual, Claude's default — under-restricting reports a lie.
+      if (new RegExp(`^[^a-z0-9.*•-]*${indicator}`).test(lowered)) {
+        mode = value
+      }
+    }
+  }
+  return mode
+}
+
+/** Reads the mode WITHOUT requiring Claude's banner, which scrolls out of the
+ *  viewport after the first screenful. The status line identifies itself, so an
+ *  affirmative match stands alone — but absence cannot mean manual here, since
+ *  we have no proof this screen is even Claude's. */
+export function readClaudePermissionModeFromTerminalScreen(
+  screen: string | null | undefined
+): ClaudePermissionMode | null {
+  return screen ? matchPermissionModeIndicator(normalizedScreenLines(screen)) : null
+}
+
 export function readClaudeSessionOptionsFromTerminalScreen(
   screen: string | null | undefined,
   models?: readonly CatalogModel[]
@@ -230,6 +308,10 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   const effort = effortLabel ? EFFORT_ID_BY_LABEL[effortLabel.toLowerCase()] : undefined
   if (effort && model.options.some((option) => option.id === 'effort')) {
     result.effort = effort
+  }
+  // The banner proves this is Claude, so a missing glyph is a truthful `off`.
+  if (model.options.some((option) => option.id === 'fastMode')) {
+    result.fastMode = matchFastModeGlyph(lines)
   }
   return result
 }

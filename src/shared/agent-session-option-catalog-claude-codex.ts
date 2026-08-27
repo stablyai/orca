@@ -118,12 +118,54 @@ function parseClaudeCatalogModels(stdout: string): CatalogModel[] {
   })
 }
 
+// Why `/fast on|off` rather than a bare `/fast`: the bare form opens a
+// confirmation panel (Tab to toggle · Enter to confirm) that a dispatch leaves
+// hanging and unapplied. The argument form sets the value outright, which also
+// makes this an absolute setter instead of a flip needing a known baseline.
 const CLAUDE_FAST_MODE: CatalogOption = {
   id: 'fastMode',
   label: 'Fast mode',
   category: 'mode',
   kind: { type: 'boolean', defaultValue: false },
-  apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+  apply: {
+    midSession: {
+      kind: 'command',
+      build: (value) => `/fast ${value ? 'on' : 'off'}`,
+      // A bare `/fast` typed in the terminal opens the panel, and its outcome is
+      // not observable from here — so it invalidates whatever we had tracked.
+      pickerCommand: '/fast'
+    }
+  }
+}
+
+const CLAUDE_PERMISSION_MODE: CatalogOption = {
+  id: 'permissionMode',
+  label: 'Mode',
+  category: 'mode',
+  kind: {
+    type: 'select',
+    choices: [
+      { value: 'manual', label: 'Manual' },
+      { value: 'acceptEdits', label: 'Accept edits' },
+      { value: 'plan', label: 'Plan' },
+      { value: 'auto', label: 'Auto' },
+      { value: 'bypassPermissions', label: 'Bypass permissions' }
+    ],
+    defaultValue: 'manual'
+  },
+  apply: {
+    // Why: Claude refuses bypassPermissions unless the process launched with
+    // --dangerously-skip-permissions, so that choice is launch-granted only.
+    launchArgs: (value) =>
+      value === 'bypassPermissions'
+        ? ['--dangerously-skip-permissions']
+        : ['--permission-mode', String(value)],
+    agentArgsOverride: (tokens) =>
+      hasFlag(tokens, ['--permission-mode', '--dangerously-skip-permissions']),
+    // Shift+Tab cycles Claude's mode one step per press; there is no slash
+    // command for mode and no menu — press-and-observe until the target shows.
+    midSession: { kind: 'cycle-key', key: '\x1b[Z', detect: 'claude-permission-mode' }
+  }
 }
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
@@ -160,6 +202,7 @@ export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
       options: []
     }
   ],
+  sessionOptions: [CLAUDE_PERMISSION_MODE],
   modelApply: {
     launchArgs: (value) => ['--model', String(value)],
     agentArgsOverride: (tokens) => hasFlag(tokens, ['--model']),

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { emitNativeChatMessageSent } from '@/lib/native-chat-telemetry'
+import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
@@ -12,7 +13,15 @@ import {
   createClaudeModelSwitchConfirmationObserver,
   type ClaudeModelSwitchConfirmationObserver
 } from './claude-model-switch-confirmation'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
+import { cycleClaudePermissionMode } from './claude-permission-mode-cycle'
+import { readNativeChatLiveScreen } from './native-chat-live-screen'
+import { readClaudePermissionModeFromTerminalScreen } from './claude-terminal-session-options'
+import type {
+  NativeChatModeCycleDispatch,
+  NativeChatSessionOptionDispatchCommand
+} from './native-chat-session-option-command-dispatch'
+
+type ActiveObserver = { dispose: () => void }
 
 export function useNativeChatSessionOptionCommand(args: {
   agent: AgentType
@@ -20,10 +29,15 @@ export function useNativeChatSessionOptionCommand(args: {
   onSlashCommand?: (command: string) => void
   resolveTarget: () => NativeChatResolvedTarget | null
   setHistory: Dispatch<SetStateAction<HistoryState>>
-}): { dispatch: NativeChatSessionOptionDispatchCommand; isDispatching: boolean } {
-  const { agent, disabled, onSlashCommand, resolveTarget, setHistory } = args
+  readTerminalScreen?: () => string | null
+}): {
+  dispatch: NativeChatSessionOptionDispatchCommand
+  dispatchModeCycle: NativeChatModeCycleDispatch
+  isDispatching: boolean
+} {
+  const { agent, disabled, onSlashCommand, resolveTarget, setHistory, readTerminalScreen } = args
   const mountedRef = useRef(true)
-  const activeObserversRef = useRef(new Set<ClaudeModelSwitchConfirmationObserver>())
+  const activeObserversRef = useRef(new Set<ActiveObserver>())
   const activeSendsRef = useRef(new Set<AbortController>())
   // Why: expose an in-flight flag so the composer can block a normal send while
   // an option command's body+delayed-Enter (and its confirmation observer) is
@@ -127,5 +141,45 @@ export function useNativeChatSessionOptionCommand(args: {
     [agent, disabled, onSlashCommand, resolveTarget, setHistory]
   )
 
-  return { dispatch, isDispatching }
+  const dispatchModeCycle = useCallback<NativeChatModeCycleDispatch>(
+    async ({ key, target: targetMode }) => {
+      const target = resolveTarget()
+      if (!target || disabled) {
+        return { outcome: 'unknown', reason: 'unreadable', presses: 0, observed: [] }
+      }
+      const sendController = new AbortController()
+      activeSendsRef.current.add(sendController)
+      setIsDispatching(true)
+      try {
+        // Why: chat sends keep a delayed Enter for 500ms — drain it first so it
+        // cannot land mid-cycle and silently pick a mode the user never chose.
+        cancelNativeChatPtySends(target.ptyId)
+        await waitForNativeChatPtyIdle(target.ptyId)
+        if (!mountedRef.current || sendController.signal.aborted) {
+          return { outcome: 'unknown', reason: 'cancelled', presses: 0, observed: [] }
+        }
+        return await cycleClaudePermissionMode({
+          target: targetMode,
+          key,
+          // Why: read the status line directly. The banner-gated scrape returns
+          // nothing once Claude's header scrolls away, which would stall the
+          // cycler on an unreadable mode and refuse to press at all.
+          readMode: () =>
+            readNativeChatLiveScreen({
+              ptyId: target.ptyId,
+              readTerminalScreen,
+              parse: readClaudePermissionModeFromTerminalScreen
+            }),
+          sendKey: (nextKey) => sendRuntimePtyInput(target.settings, target.ptyId, nextKey),
+          isCancelled: () => !mountedRef.current || sendController.signal.aborted
+        })
+      } finally {
+        activeSendsRef.current.delete(sendController)
+        setIsDispatching(activeSendsRef.current.size > 0)
+      }
+    },
+    [disabled, readTerminalScreen, resolveTarget]
+  )
+
+  return { dispatch, dispatchModeCycle, isDispatching }
 }

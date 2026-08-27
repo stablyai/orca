@@ -27,6 +27,9 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   models: readonly CatalogModel[]
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
+  /** The live session's actual launch args, for gating bypass permissions. */
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
 }): SessionOptionDescriptor[] {
   return buildSharedSnapshot({
     ...args,

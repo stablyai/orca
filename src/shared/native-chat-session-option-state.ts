@@ -1,7 +1,7 @@
 import type { AgentType } from './agent-status-types'
-import type {
-  CatalogMidSessionApply,
-  AgentSessionOptionCatalog
+import {
+  getAgentSessionOptionCatalog,
+  type AgentSessionOptionCatalog
 } from './agent-session-option-catalog'
 import type { SessionOptionValue, SessionOptionValueSource } from './native-chat-session-options'
 
@@ -14,12 +14,25 @@ export type NativeChatSessionOptionRecord = {
   agent: AgentType
   model?: TrackedNativeChatSessionOption
   valuesByModel: Record<string, Record<string, TrackedNativeChatSessionOption>>
+  /** Options that belong to the session, not to the selected model. */
+  sessionValues: Record<string, TrackedNativeChatSessionOption>
 }
 
 export function createNativeChatSessionOptionRecord(
   agent: AgentType
 ): NativeChatSessionOptionRecord {
-  return { agent, valuesByModel: {} }
+  return { agent, valuesByModel: {}, sessionValues: {} }
+}
+
+/** Deep-copies one bucket of tracked values, tolerating a record rehydrated
+ *  from a cache written before that bucket existed. */
+function cloneTrackedOptionValues(
+  values: Record<string, TrackedNativeChatSessionOption> | undefined
+): Record<string, TrackedNativeChatSessionOption> {
+  // `?? {}`: records rehydrated from a cache written before sessionValues existed.
+  return Object.fromEntries(
+    Object.entries(values ?? {}).map(([id, tracked]) => [id, { ...tracked }])
+  )
 }
 
 export function cloneNativeChatSessionOptionRecord(
@@ -31,16 +44,11 @@ export function cloneNativeChatSessionOptionRecord(
     valuesByModel: Object.fromEntries(
       Object.entries(record.valuesByModel).map(([modelId, values]) => [
         modelId,
-        Object.fromEntries(Object.entries(values).map(([id, tracked]) => [id, { ...tracked }]))
+        cloneTrackedOptionValues(values)
       ])
-    )
+    ),
+    sessionValues: cloneTrackedOptionValues(record.sessionValues)
   }
-}
-
-export function isFlipOnlyMidSession(
-  midSession: CatalogMidSessionApply | undefined
-): midSession is Extract<CatalogMidSessionApply, { kind: 'toggle-command' }> {
-  return midSession?.kind === 'toggle-command'
 }
 
 export function getTrackedSessionOption(
@@ -93,6 +101,16 @@ export function setTrackedSessionOption(
     record.model = { value, source }
     return typeof value === 'string' ? value : null
   }
+  // Why: a session-scoped option has no model to file under; returning null
+  // means "no model id to persist against", which is exactly right for it.
+  if (
+    getAgentSessionOptionCatalog(record.agent)?.sessionOptions?.some(
+      (option) => option.id === optionId
+    )
+  ) {
+    record.sessionValues[optionId] = { value, source }
+    return null
+  }
   const modelId =
     (typeof record.model?.value === 'string' ? record.model.value : null) ?? fallbackModelId
   if (!modelId) {
@@ -124,16 +142,31 @@ export function applyNativeChatReportedSessionOptions(
   record: NativeChatSessionOptionRecord,
   values: Record<string, SessionOptionValue>
 ): boolean {
+  const sessionOptionIds = new Set(
+    (getAgentSessionOptionCatalog(record.agent)?.sessionOptions ?? []).map((option) => option.id)
+  )
+  let changed = false
+  for (const [id, value] of Object.entries(values)) {
+    if (!sessionOptionIds.has(id)) {
+      continue
+    }
+    const current = record.sessionValues[id]
+    if (current?.value !== value || current.source !== 'reported') {
+      changed = true
+    }
+    record.sessionValues[id] = { value, source: 'reported' }
+  }
   const modelId = typeof values.model === 'string' ? values.model : null
   if (!modelId) {
-    return false
+    // Why: a session option is still truthful without a readable model.
+    return changed
   }
   const modelChanged = record.model?.value !== modelId
-  let changed = modelChanged || record.model?.source !== 'reported'
+  changed = changed || modelChanged || record.model?.source !== 'reported'
   record.model = { value: modelId, source: 'reported' }
   const modelValues = modelChanged ? {} : { ...record.valuesByModel[modelId] }
   for (const [id, value] of Object.entries(values)) {
-    if (id === 'model') {
+    if (id === 'model' || sessionOptionIds.has(id)) {
       continue
     }
     const current = modelValues[id]

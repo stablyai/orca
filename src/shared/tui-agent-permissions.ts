@@ -43,6 +43,32 @@ function normalizeArgs(value: string | null | undefined): string {
   return value?.trim() ?? ''
 }
 
+/** Whether the launch actually granted permission bypass, whatever else is on
+ *  the command line. Distinct from resolveTuiAgentPermissionMode, which asks
+ *  "are these exactly the yolo preset?" and so reports 'mixed' once any extra
+ *  arg is present — a session with the flag plus `--verbose` still has bypass. */
+export function hasYoloTuiAgentLaunch(args: {
+  agent: TuiAgent
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
+}): boolean {
+  const yoloArgs = YOLO_TUI_AGENT_ARGS[args.agent]
+  const yoloEnv = YOLO_TUI_AGENT_ENV[args.agent]
+  if (!yoloArgs && !yoloEnv) {
+    return false
+  }
+  const tokens = normalizeArgs(args.agentArgs).split(/\s+/).filter(Boolean)
+  const argsGranted =
+    !yoloArgs ||
+    yoloArgs
+      .split(/\s+/)
+      .filter(Boolean)
+      .every((part) => tokens.includes(part))
+  const envGranted =
+    !yoloEnv || Object.entries(yoloEnv).every(([name, value]) => args.agentEnv?.[name] === value)
+  return argsGranted && envGranted
+}
+
 function sameEnv(
   left: Record<string, string> | null | undefined,
   right: Record<string, string> | null | undefined

@@ -8,11 +8,30 @@ import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
 } from './native-chat-session-options'
-import {
-  isFlipOnlyMidSession,
-  type NativeChatSessionOptionRecord,
-  type TrackedNativeChatSessionOption
+import type {
+  NativeChatSessionOptionRecord,
+  TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
+import { hasYoloTuiAgentLaunch } from './tui-agent-permissions'
+
+const PERMISSION_MODE_OPTION_ID = 'permissionMode'
+const BYPASS_PERMISSIONS_VALUE = 'bypassPermissions'
+
+/** Marks bypass unselectable when the session wasn't launched with the flag.
+ *  Claude refuses that mode outright, so offering it would only ever fail. */
+function gatePermissionModeChoices(
+  choices: readonly SessionOptionSelectChoice[],
+  bypassAvailable: boolean
+): SessionOptionSelectChoice[] {
+  if (bypassAvailable) {
+    return [...choices]
+  }
+  return choices.map((choice) =>
+    choice.value === BYPASS_PERMISSIONS_VALUE
+      ? { ...choice, unavailable: { action: 'open-agent-permissions-setting' as const } }
+      : choice
+  )
+}
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
 
@@ -49,7 +68,6 @@ function settableState(args: {
 
 function actionForApply(
   apply: { midSession?: CatalogMidSessionApply },
-  tracked: TrackedNativeChatSessionOption | undefined,
   mode: NativeChatSessionOptionMode
 ): SessionOptionDescriptor['action'] {
   if (mode !== 'live') {
@@ -58,9 +76,7 @@ function actionForApply(
   if (apply.midSession?.kind === 'agent-picker') {
     return { type: 'agent-picker' }
   }
-  // Why: only unknown flip-only options are actions; once we have a tracked
-  // baseline the UI can show absolute On/Off without inventing a start state.
-  return isFlipOnlyMidSession(apply.midSession) && !tracked ? { type: 'toggle-command' } : undefined
+  return undefined
 }
 
 function optionDescriptor(args: {
@@ -69,9 +85,12 @@ function optionDescriptor(args: {
   mode: NativeChatSessionOptionMode
   modelIsCliDefault: boolean
   composedModelApply: AgentSessionOptionCatalog['modelApply']
+  permissionModeBypassAvailable?: boolean
 }): SessionOptionDescriptor | null {
   const { option, tracked, mode, modelIsCliDefault, composedModelApply } = args
-  const action = actionForApply(option.apply, tracked, mode)
+  const permissionModeBypassAvailable = args.permissionModeBypassAvailable ?? false
+  const isPermissionMode = option.id === PERMISSION_MODE_OPTION_ID
+  const action = actionForApply(option.apply, mode)
   const settable = settableState({ mode, apply: option.apply, composedModelApply })
   // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
   // a draft names this option's value exactly when a model was picked. Under the CLI's
@@ -79,16 +98,23 @@ function optionDescriptor(args: {
   const showDefault = mode === 'draft' && !tracked && !modelIsCliDefault
   const valueSource = tracked?.source ?? (showDefault ? 'default' : 'unknown')
   if (option.kind.type === 'select') {
-    const choices = choiceWithCurrent(option.kind.choices, tracked)
+    const withCurrent = choiceWithCurrent(option.kind.choices, tracked)
+    const choices = isPermissionMode
+      ? gatePermissionModeChoices(withCurrent, permissionModeBypassAvailable)
+      : withCurrent
     if (choices.length <= 1) {
       return null
     }
+    // Why: Claude starts in bypass under the launch flag, so infer it as the
+    // checkmarked mode until the terminal scrape reports the real one.
+    const inferredBypass =
+      isPermissionMode && !tracked && permissionModeBypassAvailable
+        ? BYPASS_PERMISSIONS_VALUE
+        : undefined
     const currentValue =
       typeof tracked?.value === 'string'
         ? tracked.value
-        : showDefault
-          ? option.kind.defaultValue
-          : undefined
+        : (inferredBypass ?? (showDefault ? option.kind.defaultValue : undefined))
     return {
       id: option.id,
       label: option.label,
@@ -195,6 +221,10 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
+  /** The live session's actual launch args (not the settings default for new
+   *  sessions) — used only to gate Claude's bypassPermissions choice. */
+  agentArgs?: string | null
+  agentEnv?: Record<string, string> | null
 }): SessionOptionDescriptor[] {
   const { catalog, models, record, mode, modelLabel } = args
   if (models.length === 0) {
@@ -212,7 +242,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
-  const modelAction = actionForApply(catalog.modelApply, modelTracked, mode)
+  const modelAction = actionForApply(catalog.modelApply, mode)
   const snapshot: SessionOptionDescriptor[] = [
     {
       id: 'model',
@@ -228,6 +258,29 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       ...(modelAction ? { action: modelAction } : {})
     }
   ]
+  // Before the unknown-model return below: session options outlive model truth.
+  // An observed bypass mode is itself proof of the grant — Claude would not be
+  // in that mode otherwise — so it backstops a launch-args lookup miss.
+  const trackedPermissionMode = record.sessionValues[PERMISSION_MODE_OPTION_ID]?.value
+  const permissionModeBypassAvailable =
+    hasYoloTuiAgentLaunch({
+      agent: 'claude',
+      agentArgs: args.agentArgs,
+      agentEnv: args.agentEnv
+    }) || trackedPermissionMode === BYPASS_PERMISSIONS_VALUE
+  for (const option of catalog.sessionOptions ?? []) {
+    const descriptor = optionDescriptor({
+      option,
+      tracked: record.sessionValues[option.id],
+      mode,
+      modelIsCliDefault: false,
+      composedModelApply: catalog.modelApply,
+      permissionModeBypassAvailable
+    })
+    if (descriptor) {
+      snapshot.push(descriptor)
+    }
+  }
   if (!effectiveModelId) {
     return snapshot
   }

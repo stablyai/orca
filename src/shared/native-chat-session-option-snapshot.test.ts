@@ -30,7 +30,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
-    expect(snapshot).toHaveLength(1)
+    // Claude also carries a session-scoped permission-mode descriptor.
+    expect(snapshot).toHaveLength(2)
     const model = snapshot[0]!
     expect(model).toMatchObject({ id: 'model', category: 'model', valueSource: 'unknown' })
     if (model.kind.type !== 'select') {
@@ -52,7 +53,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       mode: 'live',
       modelLabel: 'Model'
     })
-    expect(snapshot.map((descriptor) => descriptor.id)).toEqual(['model', 'effort'])
+    expect(snapshot.map((descriptor) => descriptor.id)).toEqual([
+      'model',
+      'permissionMode',
+      'effort'
+    ])
     expect(snapshot[0]).toMatchObject({ valueSource: 'dispatched' })
   })
 
@@ -225,9 +230,11 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
   })
 
-  it('marks flip-only toggles without a baseline as toggle actions', () => {
+  // Fast mode is read from Claude's ↯ glyph and set with `/fast on|off`, so an
+  // unknown baseline needs no Toggle action — there is no blind flip left.
+  it('offers a plain boolean for an untracked toggle, with no toggle action', () => {
     const record = claudeRecord()
-    record.model = { value: 'opus', source: 'reported' }
+    record.model = { value: 'opus', source: 'dispatched' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
@@ -236,7 +243,8 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model'
     })
     const fastMode = snapshot.find((descriptor) => descriptor.id === 'fastMode')
-    expect(fastMode).toMatchObject({ action: { type: 'toggle-command' } })
+    expect(fastMode).toMatchObject({ settable: true, kind: { type: 'boolean' } })
+    expect(fastMode?.action).toBeUndefined()
   })
 })
 
@@ -319,7 +327,8 @@ describe('defaults on load', () => {
     })
     expect(CLAUDE_SESSION_OPTION_CATALOG.models.some((model) => model.isDefault)).toBe(true)
     expect(CLAUDE_SESSION_OPTION_CATALOG.defaultModelIsCliDefault).toBeUndefined()
-    expect(snapshot).toHaveLength(1)
+    // Claude also carries a session-scoped permission-mode descriptor.
+    expect(snapshot).toHaveLength(2)
     expect(snapshot[0]).toMatchObject({ valueSource: 'unknown' })
   })
 

@@ -23,7 +23,6 @@ import {
   clearNativeChatSessionModel,
   createNativeChatSessionOptionRecord,
   getTrackedSessionOption,
-  isFlipOnlyMidSession,
   matchNativeChatCatalogModelId,
   setTrackedSessionOption,
   type NativeChatSessionOptionRecord
@@ -224,18 +223,6 @@ export function useMobileNativeChatSessionOptions(args: {
         if (!apply || apply.midSession?.kind === 'agent-picker') {
           return false
         }
-        const flipOnly = isFlipOnlyMidSession(apply.midSession)
-        const trackedToggle = flipOnly
-          ? getTrackedSessionOption(record, previousModelId, id)
-          : undefined
-        if (flipOnly && !trackedToggle) {
-          // Why: a flip from an unknown baseline cannot honor an absolute target.
-          return false
-        }
-        // Why: same absolute target must never re-dispatch a flip (would invert the agent).
-        if (flipOnly && trackedToggle?.value === value) {
-          return true
-        }
         const command = buildNativeChatSessionOptionCommand({
           optionId: id,
           value,
@@ -277,7 +264,7 @@ export function useMobileNativeChatSessionOptions(args: {
           }
         }
         // Why: flip-only never heals via agent report — track as applied best-known.
-        setTrackedSessionOption(record, id, value, flipOnly ? 'applied' : 'dispatched')
+        setTrackedSessionOption(record, id, value, 'dispatched')
         bump()
         return true
       })
@@ -311,10 +298,6 @@ export function useMobileNativeChatSessionOptions(args: {
           bump()
           onAgentPicker?.()
           return true
-        }
-        if (isFlipOnlyMidSession(midSession) && !getTrackedSessionOption(record, modelId, id)) {
-          // Why: an unknown baseline remains unknown after one inversion.
-          return (await dispatchCommand(midSession.command)) !== 'rejected'
         }
         return false
       })
