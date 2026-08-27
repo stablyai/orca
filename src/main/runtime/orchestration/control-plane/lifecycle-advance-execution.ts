@@ -24,6 +24,14 @@ export function executePlan(args: {
   const address = `run:${runId}`
 
   if (plan.kind === 'blocked') {
+    // Why the dedupe: a replayed completion re-runs the advance, and without
+    // this the coordinator is woken a second time for the SAME stall. Phases
+    // are already replay-safe through their unique index; the blocker branch
+    // needs the same guarantee, keyed on (dispatch, code).
+    const existing = findProtectedBlocker(db, runId, dispatch.id, plan.code)
+    if (existing) {
+      return { phase: null, wakeMessageId: existing }
+    }
     const message = db.insertMessage({
       runId,
       from: 'orca:runtime-lifecycle',
@@ -183,4 +191,33 @@ export function publishReviewComplete(args: {
   })
   args.notify?.(`run:${args.runId}`, 'escalation')
   return message.id
+}
+
+/** The id of an already-published protected blocker for this exact Dispatch and
+ *  code, or null. Scanning the Run's own escalation history keeps the guard
+ *  additive: no new table, and it survives a restart because the mailbox does. */
+function findProtectedBlocker(
+  db: OrchestrationDb,
+  runId: string,
+  dispatchId: string,
+  code: string
+): string | null {
+  for (const message of db.getRunMailboxHistory(runId, 100, ['escalation'])) {
+    if (!message.payload) {
+      continue
+    }
+    try {
+      const payload = JSON.parse(message.payload) as {
+        protectedBlocker?: boolean
+        code?: string
+        dispatchId?: string
+      }
+      if (payload.protectedBlocker && payload.code === code && payload.dispatchId === dispatchId) {
+        return message.id
+      }
+    } catch {
+      // A malformed payload is not a match.
+    }
+  }
+  return null
 }
