@@ -7,7 +7,7 @@ import type {
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
-import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { getOptionalPresentStringFlag, getOptionalStringFlag, getRequiredStringFlag } from './flags'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -142,6 +142,9 @@ export async function getBrowserWorktreeSelector(
   }
 }
 
+const EMPTY_TERMINAL_HANDLE_MESSAGE =
+  '--terminal requires a non-empty handle. Omit --terminal to target the active terminal in the current worktree.'
+
 // Why: mirrors browser's implicit active-tab targeting. When --terminal is
 // omitted, resolve the active terminal in the current worktree so commands
 // like `orca terminal send --text "hello" --enter` Just Work.
@@ -150,7 +153,7 @@ export async function getTerminalHandle(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
-  const explicit = getOptionalStringFlag(flags, 'terminal')
+  const explicit = getOptionalPresentStringFlag(flags, 'terminal', EMPTY_TERMINAL_HANDLE_MESSAGE)
   if (explicit) {
     return explicit
   }

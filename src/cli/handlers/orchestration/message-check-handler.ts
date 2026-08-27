@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { getOptionalStringFlag } from '../../flags'
+import { getOptionalPresentStringFlag, getOptionalStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import type { RuntimeRpcSuccess } from '../../runtime-client'
 import {
@@ -39,7 +39,11 @@ export const ORCHESTRATION_CHECK_HANDLER: Record<string, CommandHandler> = {
       )
     }
     const timeoutMs = getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms')
-    const explicitTerminal = getOptionalStringFlag(flags, 'terminal')
+    const explicitTerminal = getOptionalPresentStringFlag(
+      flags,
+      'terminal',
+      '--terminal requires a non-empty handle. Omit --terminal to use the current terminal.'
+    )
     const terminal = await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
     const stopKeepalive = wait ? startCheckKeepalive(timeoutMs) : null
     let result: Awaited<ReturnType<typeof client.call<CheckResult>>>

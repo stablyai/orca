@@ -269,7 +269,7 @@ Common Commands:
 Selectors:
   --repo <selector>         Registered repo selector such as id:<id>, name:<name>, or path:<path>
   --worktree <selector>     Worktree selector such as id:<repo-id>::<path>, name:<displayName>, branch:<branch>, issue:<number>, path:<path>, or active/current
-  --terminal <handle>       Runtime-issued terminal handle returned by \`orca terminal list --json\`
+  --terminal <handle>       Runtime-issued terminal handle from \`orca terminal list --json\`. Omit to target the worktree-active pane; an empty value is not omission.
   --parent-worktree <selector> Parent worktree selector such as id:<repo-id>::<path>, branch:<branch>, issue:<number>, path:<path>, or active/current
   --no-parent               Force no parent lineage for unrelated worktree creation/update
 
@@ -587,7 +587,8 @@ export function formatFlagHelp(flag: string): string {
       '--restore-window     Bring the target app/window forward before the operation',
     session: '--session <id>        Snapshot namespace for a related computer-use workflow',
     setup: '--setup run|skip|inherit Setup policy for repo-defined setup hooks',
-    terminal: '--terminal <handle>  Runtime-issued terminal handle',
+    terminal:
+      '--terminal <handle>  Runtime-issued terminal handle; omit to target the worktree-active pane. An empty value is not omission.',
     text: '--text <text>          Text payload to send or type',
     'text-stdin': '--text-stdin          Read text payload from stdin',
     'task-id': '--task-id <id>        Task id to include in orchestration payload JSON',
