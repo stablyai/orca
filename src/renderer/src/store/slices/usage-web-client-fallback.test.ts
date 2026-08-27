@@ -4,7 +4,8 @@ import type { AppState } from '../types'
 import {
   createClaudeUsageSlice,
   createCodexUsageSlice,
-  createOpenCodeUsageSlice
+  createOpenCodeUsageSlice,
+  createGeminiUsageSlice
 } from './usage-provider-slices'
 
 // Paired web clients resolve unbridged desktop usage calls to undefined.
@@ -25,7 +26,8 @@ function stubWebClientFallback(): void {
     api: {
       claudeUsage: provider,
       codexUsage: provider,
-      openCodeUsage: provider
+      openCodeUsage: provider,
+      geminiUsage: provider
     }
   })
 }
@@ -61,5 +63,14 @@ describe('usage slices in the web client (preload fallback -> undefined)', () =>
     await expect(store.getState().enableOpenCodeUsage()).resolves.toBeUndefined()
     expect(store.getState().openCodeUsageScanState).toBeNull()
     expect(store.getState().openCodeUsageSummary).toBeNull()
+  })
+
+  it('gemini: fetch and enable no-op without throwing', async () => {
+    stubWebClientFallback()
+    const store = create<AppState>()((...args) => createGeminiUsageSlice(...args) as AppState)
+    await expect(store.getState().fetchGeminiUsage()).resolves.toBeUndefined()
+    await expect(store.getState().enableGeminiUsage()).resolves.toBeUndefined()
+    expect(store.getState().geminiUsageScanState).toBeNull()
+    expect(store.getState().geminiUsageSummary).toBeNull()
   })
 })

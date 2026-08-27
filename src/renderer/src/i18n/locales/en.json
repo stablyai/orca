@@ -4057,7 +4057,8 @@
           "eb6a066185": "claude",
           "eee19cfade": "overview",
           "grokUsageTab": "Grok",
-          "trackingSince": "Tracking since {{value0}}"
+          "trackingSince": "Tracking since {{value0}}",
+          "geminiUsageTab": "Gemini"
         },
         "UsageOverviewPane": {
           "22ed1b7669": "sessions",
@@ -4077,7 +4078,8 @@
           "ca6bc5fded": "Refresh",
           "e06d1baf5c": "Refresh usage overview",
           "c760c481c5": "Usage Overview",
-          "55c910f4f1": "- some model prices are unavailable"
+          "55c910f4f1": "- some model prices are unavailable",
+          "enableGemini": "Enable Gemini"
         },
         "share": {
           "card": {
@@ -4114,7 +4116,9 @@
             "e7f0a1b2c3": "subscription",
             "d6e9f0a1b2": "credits",
             "a3b6c7d8e9": "grok usage",
-            "9f2a3b4c5d": "xai"
+            "9f2a3b4c5d": "xai",
+            "gemini": "gemini",
+            "antigravity": "antigravity"
           }
         },
         "usage": {
@@ -4122,7 +4126,8 @@
             "model": {
               "bc474051e5": "OpenCode",
               "eb220d193b": "Codex",
-              "544d6d4c16": "Claude"
+              "544d6d4c16": "Claude",
+              "geminiLabel": "Gemini"
             },
             "sections": {
               "9564a3b21b": "sessions -",
@@ -4181,6 +4186,54 @@
           "e5a6b7c8d9": "Weekly credits used",
           "f6b7c8d9e0": "Billing period reset",
           "a7b8c9d0e1": "Grok account settings"
+        },
+        "GeminiUsageDailyChart": {
+          "dailyUsage": "Daily usage",
+          "dailyUsageSubtitle": "Token consumption over the last active days.",
+          "input": "Input",
+          "output": "Output",
+          "cachedInput": "Cached input",
+          "reasoning": "Reasoning",
+          "tokens": "tokens"
+        },
+        "GeminiUsagePane": {
+          "byModel": "By model",
+          "topModel": "Top model:",
+          "byProject": "By project",
+          "topProject": "Top project:",
+          "recentSessions": "Recent sessions",
+          "recentSessionsDesc": "Most recent local Gemini & Antigravity sessions in this scope.",
+          "headingLastActive": "Last active",
+          "headingProject": "Project",
+          "headingModel": "Model",
+          "headingEvents": "Events",
+          "headingInput": "Input",
+          "headingOutput": "Output",
+          "headingTotal": "Total",
+          "unknown": "Unknown",
+          "scopeOrca": "In Orca worktrees",
+          "scopeAll": "All local Gemini & Antigravity sessions",
+          "rangeLast7Days": "Last 7 days",
+          "rangeLast30Days": "Last 30 days",
+          "rangeLast90Days": "Last 90 days",
+          "rangeAllTime": "All time",
+          "title": "Gemini & Antigravity Usage Tracking",
+          "enableLabel": "Enable Gemini usage analytics",
+          "disabledDesc": "Reads local Gemini CLI and Antigravity logs to show token, model, and session stats.",
+          "lastScanError": " • Last scan error: {{value0}}",
+          "optionsLabel": "Gemini usage options",
+          "filters": "Filters",
+          "refreshAria": "Refresh Gemini usage",
+          "refresh": "Refresh",
+          "scope": "Scope",
+          "range": "Range",
+          "emptyMessage": "No local Gemini or Antigravity usage found yet for this scope.",
+          "inputTokens": "Input tokens",
+          "outputTokens": "Output tokens",
+          "cachedInput": "Cached input",
+          "reasoningOutput": "Reasoning output",
+          "sessionsEvents": "Sessions / Events",
+          "estimatedCost": "Estimated cost"
         }
       },
       "sparse": {

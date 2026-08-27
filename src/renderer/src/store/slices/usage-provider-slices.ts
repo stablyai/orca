@@ -14,6 +14,11 @@ import type {
   OpenCodeUsageScope,
   OpenCodeUsageSnapshot
 } from '../../../../shared/opencode-usage-types'
+import type {
+  GeminiUsageRange,
+  GeminiUsageScope,
+  GeminiUsageSnapshot
+} from '../../../../shared/gemini-usage-types'
 import type { AppState } from '../types'
 
 type UsageSnapshot = {
@@ -258,10 +263,12 @@ function createUsageProviderSlice<
 type ClaudeUsageShape = UsageShape<ClaudeUsageScope, ClaudeUsageRange, ClaudeUsageSnapshot>
 type CodexUsageShape = UsageShape<CodexUsageScope, CodexUsageRange, CodexUsageSnapshot>
 type OpenCodeUsageShape = UsageShape<OpenCodeUsageScope, OpenCodeUsageRange, OpenCodeUsageSnapshot>
+type GeminiUsageShape = UsageShape<GeminiUsageScope, GeminiUsageRange, GeminiUsageSnapshot>
 
 export type ClaudeUsageSlice = ProviderUsageSlice<'claude', 'Claude', ClaudeUsageShape>
 export type CodexUsageSlice = ProviderUsageSlice<'codex', 'Codex', CodexUsageShape>
 export type OpenCodeUsageSlice = ProviderUsageSlice<'openCode', 'OpenCode', OpenCodeUsageShape>
+export type GeminiUsageSlice = ProviderUsageSlice<'gemini', 'Gemini', GeminiUsageShape>
 
 export const createClaudeUsageSlice = createUsageProviderSlice<
   'claude',
@@ -296,4 +303,17 @@ export const createOpenCodeUsageSlice = createUsageProviderSlice<
   initialRange: '30d',
   getApi: () => window.api.openCodeUsage,
   hasCachedData: (state) => state.hasAnyOpenCodeData
+})
+
+export const createGeminiUsageSlice = createUsageProviderSlice<
+  'gemini',
+  'Gemini',
+  GeminiUsageShape
+>({
+  prefix: 'gemini',
+  name: 'Gemini',
+  initialScope: 'orca',
+  initialRange: '30d',
+  getApi: () => window.api.geminiUsage,
+  hasCachedData: (state) => state.hasAnyGeminiData
 })

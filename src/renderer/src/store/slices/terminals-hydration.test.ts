@@ -9,6 +9,26 @@ vi.mock('@/components/terminal-pane/pty-transport', () => ({
   ensurePtyDispatcher: vi.fn()
 }))
 
+const createUsageMock = () => ({
+  getScanState: vi.fn().mockResolvedValue({
+    enabled: false,
+    isScanning: false,
+    lastScanStartedAt: null,
+    lastScanCompletedAt: null,
+    lastScanError: null,
+    hasAnyClaudeData: false,
+    hasAnyCodexData: false,
+    hasAnyOpenCodeData: false,
+    hasAnyGeminiData: false
+  }),
+  setEnabled: vi.fn().mockResolvedValue({}),
+  refresh: vi.fn().mockResolvedValue({}),
+  getSummary: vi.fn().mockResolvedValue(null),
+  getDaily: vi.fn().mockResolvedValue([]),
+  getBreakdown: vi.fn().mockResolvedValue([]),
+  getRecentSessions: vi.fn().mockResolvedValue([])
+})
+
 const mockApi = {
   worktrees: {
     list: vi.fn().mockResolvedValue([]),
@@ -38,54 +58,10 @@ const mockApi = {
     getGitHub: vi.fn().mockResolvedValue(null),
     setGitHub: vi.fn().mockResolvedValue(undefined)
   },
-  claudeUsage: {
-    getScanState: vi.fn().mockResolvedValue({
-      enabled: false,
-      isScanning: false,
-      lastScanStartedAt: null,
-      lastScanCompletedAt: null,
-      lastScanError: null,
-      hasAnyClaudeData: false
-    }),
-    setEnabled: vi.fn().mockResolvedValue({}),
-    refresh: vi.fn().mockResolvedValue({}),
-    getSummary: vi.fn().mockResolvedValue(null),
-    getDaily: vi.fn().mockResolvedValue([]),
-    getBreakdown: vi.fn().mockResolvedValue([]),
-    getRecentSessions: vi.fn().mockResolvedValue([])
-  },
-  codexUsage: {
-    getScanState: vi.fn().mockResolvedValue({
-      enabled: false,
-      isScanning: false,
-      lastScanStartedAt: null,
-      lastScanCompletedAt: null,
-      lastScanError: null,
-      hasAnyCodexData: false
-    }),
-    setEnabled: vi.fn().mockResolvedValue({}),
-    refresh: vi.fn().mockResolvedValue({}),
-    getSummary: vi.fn().mockResolvedValue(null),
-    getDaily: vi.fn().mockResolvedValue([]),
-    getBreakdown: vi.fn().mockResolvedValue([]),
-    getRecentSessions: vi.fn().mockResolvedValue([])
-  },
-  openCodeUsage: {
-    getScanState: vi.fn().mockResolvedValue({
-      enabled: false,
-      isScanning: false,
-      lastScanStartedAt: null,
-      lastScanCompletedAt: null,
-      lastScanError: null,
-      hasAnyOpenCodeData: false
-    }),
-    setEnabled: vi.fn().mockResolvedValue({}),
-    refresh: vi.fn().mockResolvedValue({}),
-    getSummary: vi.fn().mockResolvedValue(null),
-    getDaily: vi.fn().mockResolvedValue([]),
-    getBreakdown: vi.fn().mockResolvedValue([]),
-    getRecentSessions: vi.fn().mockResolvedValue([])
-  }
+  claudeUsage: createUsageMock(),
+  codexUsage: createUsageMock(),
+  openCodeUsage: createUsageMock(),
+  geminiUsage: createUsageMock()
 }
 
 // @ts-expect-error -- mocked browser preload API

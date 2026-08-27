@@ -4498,6 +4498,7 @@ const api = {
   claudeUsage: createUsageProviderApi(ipcRenderer, 'claudeUsage'),
   codexUsage: createUsageProviderApi(ipcRenderer, 'codexUsage'),
   openCodeUsage: createUsageProviderApi(ipcRenderer, 'openCodeUsage'),
+  geminiUsage: createUsageProviderApi(ipcRenderer, 'geminiUsage'),
 
   aiVault: {
     listSessions: (args?: AiVaultListArgs): Promise<unknown> =>

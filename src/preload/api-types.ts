@@ -13,6 +13,7 @@ import type {
   ClaudeUsageApi,
   CodexUsageApi,
   OpenCodeUsageApi,
+  GeminiUsageApi,
   RateLimitsApi
 } from './api/agent-usage-api'
 import type { AiVaultApi } from './api/ai-vault-api'
@@ -130,6 +131,7 @@ export type PreloadApi = {
   claudeUsage: ClaudeUsageApi
   codexUsage: CodexUsageApi
   openCodeUsage: OpenCodeUsageApi
+  geminiUsage: GeminiUsageApi
   aiVault: AiVaultApi
   nativeChat: NativeChatApi
   fs: FilesystemApi['fs']

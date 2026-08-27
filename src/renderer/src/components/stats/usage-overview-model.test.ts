@@ -14,6 +14,11 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
+import type {
+  GeminiUsageDailyPoint,
+  GeminiUsageScanState,
+  GeminiUsageSummary
+} from '../../../../shared/gemini-usage-types'
 import { getRecentUsageDays } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
@@ -47,6 +52,17 @@ function enabledOpenCodeScanState(): OpenCodeUsageScanState {
     lastScanCompletedAt: 600,
     lastScanError: null,
     hasAnyOpenCodeData: true
+  }
+}
+
+function enabledGeminiScanState(): GeminiUsageScanState {
+  return {
+    enabled: true,
+    isScanning: false,
+    lastScanStartedAt: 700,
+    lastScanCompletedAt: 800,
+    lastScanError: null,
+    hasAnyGeminiData: true
   }
 }
 
@@ -142,6 +158,31 @@ describe('usage overview model', () => {
         totalTokens: 1_600
       }
     ]
+    const geminiSummary: GeminiUsageSummary = {
+      scope: 'orca',
+      range: '30d',
+      sessions: 1,
+      events: 2,
+      inputTokens: 1_500,
+      cachedInputTokens: 500,
+      outputTokens: 600,
+      reasoningOutputTokens: 200,
+      totalTokens: 2_100,
+      estimatedCostUsd: 0.01,
+      topModel: 'gemini-2.5-pro',
+      topProject: 'orca-gemini',
+      hasAnyGeminiData: true
+    }
+    const geminiDaily: GeminiUsageDailyPoint[] = [
+      {
+        day: '2026-05-15',
+        inputTokens: 1_500,
+        cachedInputTokens: 500,
+        outputTokens: 600,
+        reasoningOutputTokens: 200,
+        totalTokens: 2_100
+      }
+    ]
 
     const overview = buildUsageOverview({
       claude: {
@@ -158,27 +199,34 @@ describe('usage overview model', () => {
         scanState: enabledOpenCodeScanState(),
         summary: openCodeSummary,
         daily: openCodeDaily
+      },
+      gemini: {
+        scanState: enabledGeminiScanState(),
+        summary: geminiSummary,
+        daily: geminiDaily
       }
     })
 
-    expect(overview.totalTokens).toBe(10_800)
-    expect(overview.newInputTokens).toBe(2_950)
-    expect(overview.cacheTokens).toBe(5_550)
-    expect(overview.outputTokens).toBe(2_200)
-    expect(overview.reasoningTokens).toBe(400)
-    expect(overview.sessions).toBe(4)
-    expect(overview.activityCount).toBe(9)
+    expect(overview.totalTokens).toBe(12_900)
+    expect(overview.newInputTokens).toBe(3_950)
+    expect(overview.cacheTokens).toBe(6_050)
+    expect(overview.outputTokens).toBe(2_800)
+    expect(overview.reasoningTokens).toBe(600)
+    expect(overview.sessions).toBe(5)
+    expect(overview.activityCount).toBe(11)
     expect(overview.activeDays).toBe(3)
-    expect(overview.estimatedCostUsd).toBeCloseTo(0.09)
-    expect(overview.cacheShare).toBeCloseTo(5_550 / 8_500)
+    expect(overview.estimatedCostUsd).toBeCloseTo(0.1)
+    expect(overview.cacheShare).toBeCloseTo(6_050 / 10_000)
     expect(overview.bestDay).toMatchObject({
-      day: '2026-05-14',
-      totalTokens: 4_500,
-      claudeTokens: 2_500,
-      codexTokens: 2_000,
-      openCodeTokens: 0,
+      day: '2026-05-15',
+      totalTokens: 4_900,
+      claudeTokens: 0,
+      codexTokens: 1_200,
+      openCodeTokens: 1_600,
+      geminiTokens: 2_100,
       intensity: 4
     })
+
     expect(overview.providers.find((provider) => provider.id === 'codex')).toMatchObject({
       newInputTokens: 1_200,
       cacheTokens: 800,
@@ -188,6 +236,11 @@ describe('usage overview model', () => {
       newInputTokens: 750,
       cacheTokens: 250,
       totalTokens: 1_600
+    })
+    expect(overview.providers.find((provider) => provider.id === 'gemini')).toMatchObject({
+      newInputTokens: 1_000,
+      cacheTokens: 500,
+      totalTokens: 2_100
     })
   })
 
@@ -200,6 +253,7 @@ describe('usage overview model', () => {
           claudeTokens: 2_500,
           codexTokens: 2_000,
           openCodeTokens: 0,
+          geminiTokens: 0,
           intensity: 4
         }
       ],
@@ -214,6 +268,7 @@ describe('usage overview model', () => {
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        geminiTokens: 0,
         intensity: 0
       },
       {
@@ -222,6 +277,7 @@ describe('usage overview model', () => {
         claudeTokens: 2_500,
         codexTokens: 2_000,
         openCodeTokens: 0,
+        geminiTokens: 0,
         intensity: 4
       },
       {
@@ -230,6 +286,7 @@ describe('usage overview model', () => {
         claudeTokens: 0,
         codexTokens: 0,
         openCodeTokens: 0,
+        geminiTokens: 0,
         intensity: 0
       }
     ])
@@ -239,7 +296,8 @@ describe('usage overview model', () => {
     const overview = buildUsageOverview({
       claude: { scanState: null, summary: null, daily: [] },
       codex: { scanState: null, summary: null, daily: [] },
-      opencode: { scanState: null, summary: null, daily: [] }
+      opencode: { scanState: null, summary: null, daily: [] },
+      gemini: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.hasAnyEnabledProvider).toBe(false)
@@ -269,7 +327,8 @@ describe('usage overview model', () => {
         summary: null,
         daily: codexDaily
       },
-      opencode: { scanState: null, summary: null, daily: [] }
+      opencode: { scanState: null, summary: null, daily: [] },
+      gemini: { scanState: null, summary: null, daily: [] }
     })
 
     expect(overview.daily).toHaveLength(130_000)

@@ -6,6 +6,7 @@ import { ClaudeUsagePane } from './ClaudeUsagePane'
 import { CodexUsagePane } from './CodexUsagePane'
 import { GrokUsagePane } from './GrokUsagePane'
 import { OpenCodeUsagePane } from './OpenCodeUsagePane'
+import { GeminiUsagePane } from './GeminiUsagePane'
 import { UsageOverviewPane } from './UsageOverviewPane'
 import { Button } from '../ui/button'
 import {
@@ -52,7 +53,7 @@ function formatTrackingSince(timestamp: number | null): string {
   })
 }
 
-type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'grok'
+type UsageTab = 'overview' | 'claude' | 'codex' | 'opencode' | 'gemini' | 'grok'
 
 const USAGE_ANALYTICS_OPTIONS = [
   {
@@ -77,6 +78,12 @@ const USAGE_ANALYTICS_OPTIONS = [
     id: 'opencode',
     get label() {
       return translate('auto.components.stats.StatsPane.1e696db2f6', 'OpenCode')
+    }
+  },
+  {
+    id: 'gemini',
+    get label() {
+      return translate('auto.components.stats.StatsPane.geminiUsageTab', 'Gemini')
     }
   },
   {
@@ -208,6 +215,8 @@ export function StatsPane(): React.JSX.Element {
             <CodexUsagePane />
           ) : activeUsageTab === 'opencode' ? (
             <OpenCodeUsagePane />
+          ) : activeUsageTab === 'gemini' ? (
+            <GeminiUsagePane />
           ) : (
             <GrokUsagePane />
           )}
