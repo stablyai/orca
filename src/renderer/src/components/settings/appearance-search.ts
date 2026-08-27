@@ -58,6 +58,7 @@ export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry
       '언어', // Korean
       '言語', // Japanese
       'Idioma', // Spanish
+      'язык', // Russian
       ...translateSearchKeyword(
         'auto.components.settings.appearance.search.language.locale',
         'locale'

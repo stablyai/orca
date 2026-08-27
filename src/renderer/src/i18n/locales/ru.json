@@ -1,0 +1,843 @@
+{
+  "menu": {
+    "checkForUpdates": "Проверить обновления…",
+    "settings": "Настройки",
+    "exploreOrca": "Изучить Orca",
+    "gettingStarted": "Начало работы с Orca",
+    "reportCrash": "Сообщить о сбое…",
+    "file": "Файл",
+    "exit": "Выход",
+    "edit": "Правка",
+    "appearance": "Внешний вид",
+    "toggleLeftSidebar": "Скрыть или показать левую боковую панель",
+    "toggleRightSidebar": "Скрыть или показать правую боковую панель",
+    "showStatusBar": "Показать строку состояния",
+    "showTasksButton": "Показать кнопку задач",
+    "showAutomationsButton": "Показать кнопку автоматизаций",
+    "showMobileButton": "Показать кнопку Orca Mobile",
+    "showTitlebarAppName": "Показывать название приложения в заголовке",
+    "view": "Вид",
+    "reload": "Перезагрузить",
+    "forceReload": "Полная перезагрузка",
+    "resetSize": "Сбросить размер",
+    "zoomIn": "Приблизить",
+    "zoomOut": "Отдалить",
+    "openWorktreePalette": "Открыть палитру рабочих веток",
+    "window": "Окно",
+    "help": "Справка",
+    "paste": "Вставить",
+    "copy": "Копировать",
+    "selectAll": "Выделить всё"
+  },
+  "tray": {
+    "openOrca": "Открыть Orca",
+    "quit": "Выход",
+    "minimizeNotice": {
+      "body": "Orca всё ещё работает в системном трее"
+    },
+    "activityWaiting": "Orca — ожидание активности",
+    "activityWaitingSuffix": "ожидание активности"
+  },
+  "app": {
+    "recoverableError": {
+      "rootTitle": "Orca столкнулся с ошибкой рендеринга.",
+      "rootDescription": "Не удалось завершить рендеринг оболочки приложения. Повторите попытку, чтобы переустановить её, или перезапустите Orca, если ошибка сохранится.",
+      "webTitle": "Веб-версия Orca столкнулась с ошибкой рендеринга.",
+      "webDescription": "Повторите попытку в веб-клиенте или переподключитесь к парному рантайму."
+    }
+  },
+  "settings": {
+    "appearance": {
+      "language": {
+        "title": "Язык",
+        "description": "Выберите язык интерфейса Orca.",
+        "system": "Системный",
+        "english": "English",
+        "chinese": "中文（简体）",
+        "korean": "한국어",
+        "japanese": "日本語",
+        "spanish": "Español",
+        "russian": "Русский"
+      },
+      "statusBar": {
+        "claudeToggleDescription": "Показывать использование токенов и стоимости Claude для активной рабочей ветки.",
+        "codexToggleDescription": "Показывать использование токенов и стоимости Codex для активной рабочей ветки.",
+        "geminiToggleDescription": "Показывать использование токенов и стоимости Gemini для активной рабочей ветки.",
+        "opencodeGoToggleDescription": "Показывать использование токенов и стоимости OpenCode Go для активной рабочей ветки.",
+        "kimiToggleDescription": "Показывать использование подписки Kimi для активной рабочей ветки.",
+        "minimaxToggleDescription": "Показывать использование подписки MiniMax для активной рабочей ветки.",
+        "sshToggleDescription": "Показывать настроенные SSH и удалённые хосты Orca, когда они доступны.",
+        "resourceUsageToggleDescription": "Показывать Менеджер ресурсов. Нажмите, чтобы увидеть CPU, память, сессии, управление демоном и сканирование диска рабочих веток.",
+        "portsToggleDescription": "Показывать активные порты рабочей ветки. Нажмите, чтобы увидеть порты, привязанные к рабочей ветке, и внешние слушатели.",
+        "antigravityToggleDescription": "Показывать использование подписки Antigravity для активной рабочей ветки.",
+        "grokToggleDescription": "Показывать кредиты подписки Grok, если вход выполнен через Grok CLI."
+      },
+      "menuBarIcon": {
+        "title": "Показывать значок в строке меню",
+        "description": "Держать ярлык Orca и индикатор активности в строке меню macOS."
+      }
+    },
+    "browser": {
+      "clientHostedRemote": {
+        "title": "Открывать удалённые страницы браузера на этом устройстве",
+        "description": "Отображать страницы удалённых рабочих веток на этом компьютере; сетевой трафик по-прежнему идёт через удалённый хост. Применяется только к новым страницам.",
+        "optionDevice": "Это устройство",
+        "optionDeviceTooltip": "Страницы рендерятся на этом компьютере, поэтому ввод и всплывающие окна работают как в локальном приложении.",
+        "optionServer": "Сервер (потоковая передача)",
+        "optionServerTooltip": "Страницы рендерятся на удалённом сервере и передаются на это устройство.",
+        "rowTitle": "Рабочие ветки удалённого сервера",
+        "rowDescription": "Где рендерятся страницы. Трафик всегда идёт через удалённый сервер. Применяется только к новым страницам."
+      },
+      "sshWorkspaceRouting": {
+        "title": "Открывать страницы через SSH-хосты рабочих веток",
+        "description": "Страницы браузера в SSH-рабочих ветках отправляют свой трафик через SSH-хост рабочей ветки, а DNS резолвится там. «Выкл» означает, что страницы открываются с этой машины.",
+        "disabledHosts": "Хосты, открывающие страницы с этого устройства:",
+        "enableHost": "Снова маршрутизировать",
+        "optionHost": "SSH-хост",
+        "optionHostTooltip": "Трафик и DNS идут через SSH-хост рабочей ветки.",
+        "optionDevice": "Это устройство",
+        "optionDeviceTooltip": "Страницы открываются из сети этой машины.",
+        "rowTitle": "SSH-рабочие ветки",
+        "rowDescription": "Откуда исходит трафик браузера. Страницы всегда рендерятся на этом устройстве.",
+        "useHost": "Использовать SSH-хост",
+        "probeSkippedHosts": "Хосты, маршрутизированные без проверки соединения («Попробовать всё равно»):",
+        "probeAgain": "Проверить ещё раз"
+      },
+      "remoteBrowsing": {
+        "heading": "Удалённый просмотр",
+        "headingDescription": "Где рендерятся страницы удалённых рабочих веток и откуда исходит их сетевой трафик."
+      }
+    }
+  },
+  "browser": {
+    "loadFailure": {
+      "connectionNotSecure": "Соединение не защищено",
+      "cantReachHost": "Не удаётся связаться с {{value0}}",
+      "cantLoadPage": "Не удаётся загрузить эту страницу",
+      "certificateNameMismatch": "Сертификат не соответствует имени {{value0}}.",
+      "certificateDateInvalid": "Сертификат для {{value0}} недействителен на текущую дату и время.",
+      "certificateAuthorityInvalid": "Orca не доверяет центру, выдавшему сертификат для {{value0}}.",
+      "certificateVerificationFailed": "Orca не смог проверить сертификат для {{value0}}.",
+      "trustedCertificateGuidance": "Для локальной разработки по возможности используйте доверенный локальный сертификат.",
+      "retry": "Повторить",
+      "copyAddress": "Копировать адрес",
+      "addressCopied": "Адрес текущей страницы скопирован.",
+      "openExternally": "Открыть во внешнем браузере",
+      "tryHttps": "Попробовать HTTPS",
+      "proceedUnsafe": "Всё равно продолжить (небезопасно)",
+      "connecting": "Подключение…",
+      "certificateChallengeExpired": "Срок действия этого подтверждения сертификата истёк. Повторите загрузку страницы, чтобы запросить новое.",
+      "certificateChallengeChanged": "Запрос сертификата изменился. Повторите загрузку страницы и просмотрите новое предупреждение.",
+      "certificateChallengeUnavailable": "Этот запрос сертификата больше не доступен. Повторите загрузку страницы, чтобы запросить новый.",
+      "certificateProceedFailed": "Orca не смог подтвердить этот запрос сертификата. Повторите загрузку страницы и попробуйте снова.",
+      "sshRoutedHint": "Эта страница открывается через SSH-хост рабочей ветки — возможно, хост отключён или не может связаться с этим сайтом.",
+      "recheckSshRoute": "Выполнить проверку соединения"
+    },
+    "guestRecovery": {
+      "title": "Работа страницы браузера остановлена",
+      "failed": "Страница браузера остановилась неожиданно. Повторите попытку, чтобы восстановить её."
+    },
+    "clientHosted": {
+      "preparationFailed": "Не удалось запустить удалённый браузер на этом компьютере. Проверьте парное соединение и попробуйте снова.",
+      "unavailableTitle": "Браузер на этом устройстве недоступен",
+      "unavailableDescription": "Эта страница привязана к другому компьютеру или больше недоступна.",
+      "download": {
+        "started": "Загрузка {{filename}}…",
+        "completed": "Загружено: {{filename}}",
+        "canceled": "Загрузка отменена.",
+        "failed": "Не удалось завершить загрузку."
+      },
+      "popupBlocked": "Всплывающее окно заблокировано: {{origin}}",
+      "hostPaneOfflineTitle": "Это устройство больше не подключено",
+      "hostPaneNamedTitle": "Отображается на {{device}}",
+      "hostPaneTitle": "Отображается на другом устройстве",
+      "hostPaneOfflineDescription": "Эта страница остаётся в списке, чтобы вы могли закрыть её отсюда. Она вернётся, когда устройство снова подключится.",
+      "hostPaneDescription": "Эта страница рендерится на парном компьютере, который её открыл.",
+      "hostRowClose": "Закрыть размещённую страницу",
+      "hostRowCloseFailed": "Не удалось закрыть эту страницу. Устройство, на котором она размещена, может быть занято — попробуйте ещё раз.",
+      "hostRowOfflineNamed": "Офлайн — размещалась на {{device}}",
+      "hostRowOffline": "Офлайн — устройство, размещавшее страницу, завершило работу",
+      "hostRowNamed": "Размещена на {{device}}",
+      "hostRow": "Размещена на другом устройстве"
+    },
+    "navigation": {
+      "back": "Назад",
+      "forward": "Вперёд",
+      "reload": "Перезагрузить"
+    },
+    "reopenOnServer": {
+      "action": "Открыть заново на сервере",
+      "pending": "Повторное открытие…",
+      "caveat": "Это откроет новую страницу на удалённом хосте по последнему адресу текущей страницы. Авторизованные и другие временные состояния страницы могут отличаться, а страница, открытая из отправки формы, откроется пустой.",
+      "failed": "Не удалось открыть эту страницу на удалённом хосте. Проверьте соединение и попробуйте снова."
+    },
+    "sshRoute": {
+      "preparingTitle": "Подключение через SSH-хост",
+      "errorTitle": "Маршрутизация браузера через SSH недоступна",
+      "errorDescription": "Страницы в этой рабочей ветке открываются через её SSH-хост, и это соединение сейчас недоступно.",
+      "retry": "Повторить",
+      "tryAnyway": "Всё равно попробовать",
+      "browseLocally": "Открывать с этого устройства",
+      "forwardingBlockedTitle": "SSH-сервер блокирует трафик браузера",
+      "sshUnavailableTitle": "SSH-соединение недоступно",
+      "forwardingBlockedDescription": "Этот сервер запрещает TCP-переадресацию (часто «AllowTcpForwarding no» в конфигурации sshd), которая требуется для просмотра через него. Попросите администратора разрешить переадресацию или откройте страницу с этого устройства.",
+      "sshUnavailableDescription": "Страницы в этой рабочей ветке открываются через её SSH-хост, и это соединение сейчас недоступно. Переподключите хост, затем повторите попытку.",
+      "showDetails": "Показать подробности"
+    },
+    "sshEgress": {
+      "routedTooltip": "Открытие через {{value0}}",
+      "localTooltip": "Открытие с этого устройства, не через {{value0}}",
+      "localChip": "Это устройство",
+      "routedDetail": "Сетевой трафик и DNS идут через SSH-хост рабочей ветки.",
+      "localDetail": "Страницы загружаются с этой машины и из её сети.",
+      "settingsLink": "Настройки маршрутизации"
+    },
+    "remoteEgress": {
+      "clientHostedTooltip": "Открытие через {{value0}}",
+      "streamedTooltip": "Открытие на {{value0}}",
+      "clientHostedDetail": "Страница рендерится на этом устройстве. Сетевой трафик и DNS идут через удалённый хост.",
+      "streamedDetail": "Страница выполняется на удалённом хосте и передаётся на это устройство."
+    },
+    "remote": {
+      "findUnavailable": "Поиск по странице недоступен, пока страница передаётся с удалённого хоста."
+    }
+  },
+  "worktreeJumpPalette": {
+    "matchLabel": {
+      "comment": "Комментарий",
+      "issue": "Задача",
+      "mr": "MR",
+      "port": "Порт",
+      "pr": "PR",
+      "task": "Задание",
+      "automation": "Запуск"
+    },
+    "linearIssue": {
+      "createLabel": "Создать рабочую ветку из задачи Linear {{value0}}: {{value1}}",
+      "pendingLabel": "Создать рабочую ветку из задачи Linear {{value0}}",
+      "loadingLabel": "Загрузка задачи Linear {{value0}}",
+      "createHint": "Создать рабочую ветку из задачи Linear",
+      "loadingHint": "Загрузка задачи Linear…"
+    },
+    "renderCapOverflow": "ещё {{value0}}",
+    "seeMore": "Показать ещё",
+    "filter": {
+      "emptyTitle": "Ничего не найдено по активному фильтру",
+      "emptySubtitle": "Очистите фильтр выше или расширьте его, включив больше хостов и проектов.",
+      "tabKey": "Tab",
+      "label": "Фильтр",
+      "activeCount": "активных: {{value0}}",
+      "removeChip": "Убрать фильтр {{value0}}",
+      "chipOverflow": "+{{value0}}",
+      "clearAll": "Очистить всё",
+      "hosts": "Хосты",
+      "projects": "Проекты",
+      "trigger": "Фильтровать результаты",
+      "search": "Фильтр по хосту или проекту...",
+      "searchHosts": "Фильтр по хостам...",
+      "searchProjects": "Фильтр по проектам...",
+      "noOptions": "Нет подходящих хостов или проектов",
+      "noHosts": "Нет подходящих хостов",
+      "noProjects": "Нет подходящих проектов",
+      "moreOptions": "ещё {{value0}} — продолжайте вводить текст, чтобы сузить выбор",
+      "selectAllMatching": "Выбрать все подходящие ({{value0}})",
+      "selectedCollapsed": "выбрано: {{value0}} — уберите через чипы или кнопку «Очистить»",
+      "clearHosts": "Очистить хосты",
+      "clearProjects": "Очистить проекты",
+      "back": "Назад",
+      "ariaActive": "Фильтр: активных — {{value0}}."
+    },
+    "taskUrl": {
+      "loadingHint": "Загрузка {{value0}}…",
+      "createHint": "Создать рабочую ветку из {{value0}}"
+    }
+  },
+  "featureTips": {
+    "voice": {
+      "demoPrompt": "Просмотрите этот дифф на предмет крайних случаев и добавьте тесты для всего, что найдёте.",
+      "startDictation": "Начать диктовку",
+      "agentPromptTitle": "Промпт агента",
+      "listening": "Слушаю...",
+      "focusPaneInstruction": "Сфокусируйте терминал, редактор или промпт агента, затем нажмите",
+      "startInstruction": "чтобы начать голосовую диктовку. Нажмите",
+      "stopInstruction": "снова, чтобы остановить.",
+      "unassignedInstruction": "Назначьте сочетание клавиш для диктовки, прежде чем начинать голосовую диктовку в сфокусированной панели.",
+      "settingsInstruction": "Изменить модель, режим диктовки или сочетание клавиш можно в любой момент в",
+      "settingsLink": "Настройки → Голос"
+    }
+  },
+  "runtimeRpc": {
+    "startupFailure": {
+      "unknownCause": "Дополнительных сведений об ошибке не было.",
+      "continueButton": "Продолжить без CLI",
+      "title": "CLI Orca недоступен",
+      "message": "Orca не смог запустить локальный командный транспорт.",
+      "detail": "Orca продолжит работу, но такие команды, как orca status, orca terminal и оркестрация, недоступны в этой сессии.\n\n{{guidance}}\n\nПричина: {{cause}}",
+      "guidance": {
+        "permissionDenied": "Orca не смог записать свой файл рантайма. Проверьте права на папку данных Orca, затем перезапустите приложение.",
+        "storageUnavailable": "Возможно, ваш диск заполнен или доступен только для чтения. Освободите место, затем перезапустите Orca.",
+        "invalidPath": "Папка данных Orca может быть удалена, перемещена или находиться по слишком длинному пути. Восстановите её или используйте более короткий путь, затем перезапустите Orca.",
+        "addressInUse": "Возможно, порт занят другим процессом. Перезапустите Orca, чтобы попробовать снова.",
+        "unknown": "Перезапустите Orca, чтобы попробовать снова."
+      }
+    }
+  },
+  "githubChecks": {
+    "retrying": "Повтор…"
+  },
+  "dashboard": {
+    "sidebar": {
+      "label": "Панель агентов"
+    }
+  },
+  "quickOpen": {
+    "moreMatchesAvailable": "Возможно, доступно больше совпадений. Уточните поиск, чтобы сузить результаты."
+  },
+  "components": {
+    "native-chat": {
+      "composer": {
+        "imageUnsupported": "Вставка изображений не поддерживается для этого агента.",
+        "send": "Отправить",
+        "noPty": "Нет активного терминала — переключитесь обратно, чтобы переподключиться.",
+        "locked": "Ввод удерживается другим устройством.",
+        "placeholder": "Отправить сообщение…",
+        "mentionHint": "Ссылка на файл:",
+        "attach": "Прикрепить файл",
+        "startDictation": "Начать диктовку",
+        "stopDictation": "Остановить диктовку",
+        "noSkills": "Нет подходящих навыков",
+        "noCommandsOrSkills": "Нет подходящих команд или навыков",
+        "noCommands": "Нет подходящих команд",
+        "commands": "Команды",
+        "skills": "Навыки",
+        "loadingSkills": "Загрузка навыков...",
+        "skillsLoaded": "Навыки загружены",
+        "skillsUnavailableHost": "Навыки недоступны для этого хоста",
+        "skillsLoadFailed": "Не удалось загрузить навыки с этого хоста",
+        "retrySkills": "Повторить",
+        "skillCommandCollision": "Также является именем навыка — решает агент",
+        "skillMultipleSources": "{{sourceCount}} источников — агент разрешает",
+        "skillScopeProject": "Проект",
+        "skillScopePersonal": "Личные",
+        "skillScopeBuiltIn": "Встроенные",
+        "skillScopePlugin": "Плагин",
+        "localAttachmentUnsupported": "Локальные вложения недоступны для удалённых сессий.",
+        "removeAttachment": "Удалить вложение",
+        "pastedImageLabel": "Вставленное изображение",
+        "imagePasteFailed": "Не удалось вставить изображение.",
+        "worktreeNotReady": "Рабочая ветка ещё не готова — попробуйте ещё раз через мгновение.",
+        "uploadingAttachments": "Загрузка {{value0}} файл(ов) на удалённый хост…",
+        "model": "Модель",
+        "effort": "Усилия",
+        "fastMode": "Быстрый режим",
+        "thinking": "Размышление",
+        "options": "Параметры",
+        "sessionOptions": "Параметры сессии",
+        "chooseInAgentPicker": "Выбрать в переключателе агентов…",
+        "toggleOption": "Переключить {{value0}}",
+        "pillAccessibleName": "{{value0}} {{value1}}",
+        "valueUnknown": "Текущее значение неизвестно — выберите Вкл или Выкл",
+        "sentNotConfirmed": "Отправлено агенту — не подтверждено",
+        "setWhenSessionStarts": "Задаётся при запуске сессии.",
+        "availableAfterSessionStarts": "Доступно после запуска сессии.",
+        "optionUpdateFailed": "Не удалось обновить параметр",
+        "optionValue": {
+          "fast": "Быстро",
+          "minimal": "Минимально",
+          "low": "Низко",
+          "medium": "Средне",
+          "high": "Высоко",
+          "xhigh": "Очень высоко",
+          "max": "Максимум",
+          "ultra": "Ультра",
+          "on": "Вкл",
+          "off": "Выкл"
+        }
+      },
+      "tool": {
+        "running": "Выполняется…",
+        "result": "Результат",
+        "countOne": "1 вызов инструмента",
+        "countN": "{{value0}} вызовов инструментов"
+      },
+      "status": {
+        "responding": "Агент отвечает"
+      },
+      "jumpToLatest": "Перейти к последнему",
+      "toggle": {
+        "showTerminal": "Показать терминал",
+        "showChat": "Показать чат"
+      },
+      "state": {
+        "loading": {
+          "title": "Загрузка разговора…",
+          "subtitle": "Чтение транскрипта агента."
+        },
+        "error": {
+          "title": "Не удалось загрузить разговор",
+          "subtitle": "Не удалось прочитать транскрипт. Переключитесь обратно на терминал, чтобы продолжить работу."
+        },
+        "pairHost": "Подключите хост, чтобы просматривать историю чатов агента.",
+        "notAgent": {
+          "title": "Здесь нет разговора",
+          "subtitle": "В этом терминале не запущен распознаваемый кодирующий агент."
+        },
+        "empty": {
+          "title": "Начать чат с {{value0}}",
+          "subtitle": "Попросите {{value0}} изучить код, объяснить вывод или внести изменения."
+        }
+      },
+      "stop": "Остановить агента",
+      "copyMessage": {
+        "copied": "Скопировано",
+        "copy": "Копировать сообщение"
+      },
+      "scrollMessageToTop": "Прокрутить это сообщение наверх",
+      "loadingEarlier": "Загрузка…",
+      "loadEarlier": "Загрузить более ранние сообщения",
+      "question": {
+        "step": "Шаг {{value0}}",
+        "other": "Другое…",
+        "otherPlaceholder": "Введите ответ",
+        "cancel": "Отмена",
+        "send": "Отправить",
+        "next": "Далее",
+        "skip": "Пропустить",
+        "sending": "Отправка…"
+      },
+      "approval": {
+        "title": "Разрешить {{value0}}?",
+        "allow": "Разрешить",
+        "deny": "Запретить"
+      },
+      "launchPromptNotDelivered": "Не доставлено — проверьте терминал"
+    },
+    "tab": {
+      "bar": {
+        "SortableTabContextMenu": {
+          "switchToTerminalView": "Переключиться на вид терминала",
+          "switchToChatView": "Переключиться на вид чата",
+          "closeTabsToLeft": "Закрыть вкладки слева"
+        },
+        "BrowserTab": {
+          "closeOthers": "Закрыть другие",
+          "closeTabsToLeft": "Закрыть вкладки слева"
+        },
+        "EditorFileTabContextMenu": {
+          "closeOthers": "Закрыть другие",
+          "closeTabsToLeft": "Закрыть вкладки слева"
+        }
+      }
+    },
+    "workspace": {
+      "cleanup": {
+        "presentation": {
+          "gitlabMergeRequestNumber": "MR #{{value0}}",
+          "githubPullRequestNumber": "PR #{{value0}}"
+        },
+        "browse": {
+          "noSizes": "Размеры рабочих веток ещё не измерены.",
+          "noSizesDescription": "Размеры появятся после измерения использования диска.",
+          "measureSizes": "Сканировать",
+          "measureSizesTitle": "Сканировать размеры рабочих веток",
+          "measureSizesDescription": "Сканировать использование диска, чтобы сравнивать, сортировать и фильтровать рабочие ветки по размеру.",
+          "sizeOnDisk": "Размер на диске: {{value0}}",
+          "checkingGitRow": "Проверка статуса git",
+          "searchPlaceholder": "Поиск по имени, репозиторию, ветке, пути, хосту",
+          "searchLabel": "Поиск рабочих веток",
+          "filters": "Фильтры",
+          "showingCount": "Показано {{value0}} из {{value1}}",
+          "clearFilters": "Очистить фильтры",
+          "checkingGit": "Проверка статуса git: осталось {{value0}}",
+          "facet": {
+            "git": "Git",
+            "review": "Ревью",
+            "ticket": "Задачи",
+            "location": "Расположение",
+            "safety": "Безопасность",
+            "activity": "Активность",
+            "size": "Размер на диске",
+            "status": "Статус рабочей ветки",
+            "agent": "Агент",
+            "context": "Локальный контекст"
+          },
+          "minAhead": "Коммитов вперёд ≥",
+          "minBehind": "Коммитов позади ≥",
+          "branchQuery": "Ветка содержит",
+          "prunable": "К удалению",
+          "locked": "Заблокировано",
+          "reviewPresence": "PR / MR",
+          "reviewProvider": "Провайдер",
+          "ticketPresence": "Связанная задача",
+          "host": "Хост",
+          "repo": "Репозиторий",
+          "pathPrefix": "Путь начинается с",
+          "tier": {
+            "ready": "Готово",
+            "review": "Нужно ревью",
+            "protected": "Защищено"
+          },
+          "blockerMode": "Совпадение блокировщика",
+          "blockerModeAny": "Есть хотя бы один",
+          "blockerModeNone": "Нет",
+          "blockers": "Блокировщики",
+          "dismissed": "Проигнорировано",
+          "selectableOnly": "Только рабочие ветки, которые я могу удалить сейчас",
+          "idleSignal": {
+            "lastVisited": "Не открывалась",
+            "lastActivity": "Нет активности",
+            "created": "Создана до"
+          },
+          "idleMinDays": "Неактивна не менее",
+          "days": "дней",
+          "neverVisited": "Ни разу не открывалась",
+          "minSize": "Не менее",
+          "maxSize": "Не более",
+          "includeUnsized": "Включить неизмеренные рабочие ветки",
+          "matchStatusless": "Включить рабочие ветки без статуса",
+          "archived": "Архивировано",
+          "pinned": "Закреплено",
+          "unread": "Непрочитано",
+          "comment": "Есть комментарий",
+          "retainedDoneAgents": "Завершённые транскрипты агентов",
+          "contextPresence": "Открытые вкладки, терминалы, комментарии",
+          "completelyEmpty": "Ничем нечего рисковать",
+          "noWorkspaces": "Рабочие ветки не найдены.",
+          "noMatches": "Ни одна рабочая ветка не соответствует этим фильтрам.",
+          "noMatchesDescription": "Каждая рабочая ветка находится в одном списке — расширьте какой-либо фильтр или очистите их.",
+          "selectAll": "Выбрать все подходящие рабочие ветки",
+          "sortBy": "Сортировать по",
+          "sortByField": "Сортировать по {{value0}}",
+          "sort": {
+            "lastActivity": "Последняя активность",
+            "lastVisited": "Последнее открытие",
+            "created": "Создано",
+            "size": "Размер",
+            "name": "Рабочая ветка",
+            "repo": "Репозиторий",
+            "path": "Путь",
+            "host": "Хост",
+            "workspaceStatus": "Статус",
+            "agent": "Агент",
+            "git": "Git",
+            "ahead": "Вперёд",
+            "behind": "Позади",
+            "branch": "Ветка",
+            "review": "Ревью",
+            "ticket": "Задача",
+            "localContext": "Открытый контекст",
+            "tier": "Безопасность",
+            "blockerCount": "Блокировщики"
+          },
+          "git": {
+            "clean": "Чисто",
+            "dirty": "Незакоммиченные изменения",
+            "unpushed": "Незапушенные коммиты",
+            "unknown": "Не проверено"
+          },
+          "agent": {
+            "working": "Работает",
+            "permission": "Ждёт вас",
+            "idle": "Неактивен"
+          },
+          "review": {
+            "open": "Открыт",
+            "draft": "Черновик",
+            "merged": "Слит",
+            "closed": "Закрыт",
+            "unknown": "Неизвестно",
+            "otherProvider": "Другое"
+          },
+          "ticket": {
+            "workItem": "Элемент работы",
+            "linear": "Linear",
+            "issue": "Задача"
+          },
+          "triState": {
+            "any": "Любой",
+            "only": "Только",
+            "exclude": "Исключить"
+          },
+          "presence": {
+            "any": "Любой",
+            "some": "Есть",
+            "none": "Нет"
+          },
+          "tierField": "Уровень очистки",
+          "idleSignalField": "Признак неактивности",
+          "selectionVanishedOne": "1 выбранная рабочая ветка больше не существует.",
+          "selectionVanished": "{{value0}} выбранных рабочих веток больше не существует.",
+          "updatedAgo": "Обновлено {{value0}}",
+          "refreshing": "Обновление…",
+          "refreshingProgress": "Обновление {{value0}}/{{value1}}",
+          "notMeasured": "Не измерено",
+          "openWorkspaceNamed": "Открыть {{value0}}",
+          "openWorkspace": "Открыть рабочую ветку",
+          "workspaceStatus": "Статус рабочей ветки: {{value0}}",
+          "measuringSizesProgress": "Сканирование {{value0}}/{{value1}}",
+          "measuringSizes": "Сканирование размеров",
+          "measureSizesFailed": "Не удалось отсканировать размеры рабочих веток",
+          "selectedCount": "выбрано: {{value0}}",
+          "gitStatusCheckFailed": "Не удалось проверить статус git",
+          "gitStatusUnverified": "Не удалось проверить статус git",
+          "deleteAnyway": "Всё равно удалить",
+          "forceDeleteProjectionOne": "{{count}} рабочая ветка сейчас показывает риск и, возможно, требует принудительного удаления",
+          "forceDeleteProjectionMany": "{{count}} рабочих веток сейчас показывают риск и, возможно, требуют принудительного удаления",
+          "selectionWithheldOne": "1 выбранная рабочая ветка скрыта текущими фильтрами и была снята с выбора.",
+          "selectionWithheld": "{{value0}} выбранных рабочих веток скрыты текущими фильтрами и были сняты с выбора.",
+          "selectAllCountOne": "Выбрать 1 проверенную рабочую ветку",
+          "selectAllCount": "Выбрать все {{value0}} проверенных рабочих веток",
+          "appliedFilters": "Применённые фильтры",
+          "removeFilter": "Убрать фильтр {{value0}}",
+          "chip": {
+            "idleDays": "Неактивна {{value0}} д+",
+            "neverVisited": "Ни разу не открывалась",
+            "minSize": "Не менее {{value0}} МБ",
+            "maxSize": "Не более {{value0}} МБ",
+            "excludesUnsized": "Только измеренные",
+            "excludesStatusless": "Есть статус",
+            "list": "{{value0}}: {{value1}}",
+            "triState": "{{value0}}: {{value1}}",
+            "only": "Только",
+            "exclude": "Исключено",
+            "minAhead": "Вперёд {{value0}}+",
+            "minBehind": "Позади {{value0}}+",
+            "branchQuery": "Ветка: {{value0}}",
+            "pathPrefix": "Путь: {{value0}}",
+            "presence": "{{value0}}: {{value1}}",
+            "has": "Есть",
+            "none": "Нет",
+            "completelyEmpty": "Ничем нечего рисковать",
+            "selectableOnly": "Только удаляемые",
+            "kind": {
+              "status": "Статус",
+              "agent": "Агент",
+              "git": "Git",
+              "review": "Ревью",
+              "reviewState": "Состояние ревью",
+              "reviewProvider": "Провайдер",
+              "ticket": "Задача",
+              "ticketSource": "Источник задачи",
+              "context": "Контекст",
+              "host": "Хост",
+              "repo": "Репозиторий",
+              "blocker": "Блокировщик",
+              "tier": "Безопасность",
+              "dismissed": "Проигнорировано",
+              "archived": "Архивировано",
+              "pinned": "Закреплено",
+              "unread": "Непрочитано",
+              "comment": "Комментарий",
+              "prunable": "К удалению",
+              "locked": "Заблокировано",
+              "retainedAgents": "Завершённые агенты"
+            }
+          }
+        },
+        "scan": {
+          "progress": "Сканирование рабочих веток ({{value0}}/{{value1}})",
+          "singleError": "Не удалось проверить {{value0}}: {{value1}}. Некоторые рабочие ветки могут отсутствовать. Обновите список, чтобы попробовать снова.",
+          "moreErrors": ", ещё {{value0}}",
+          "multipleErrors": "Не удалось проверить {{value0}} репозиториев ({{value1}}{{value2}}). Некоторые рабочие ветки могут отсутствовать. Обновите список, чтобы попробовать снова.",
+          "noWorkspaces": "Рабочие ветки не найдены.",
+          "readyOneOne": "Найдена 1 рабочая ветка, с 1 предложением по очистке.",
+          "readyOneMany": "Найдена 1 рабочая ветка, с {{value0}} предложениями по очистке.",
+          "readyManyOne": "Найдено {{value0}} рабочих веток, с 1 предложением по очистке.",
+          "readyManyMany": "Найдено {{value0}} рабочих веток, с {{value1}} предложениями по очистке.",
+          "fallbackRepository": "репозиторий",
+          "gitListFailed": "Git не смог перечислить рабочие ветки",
+          "readyOne": "Найдена 1 рабочая ветка.",
+          "readyMany": "Найдено {{value0}} рабочих веток."
+        },
+        "relativeTime": {
+          "never": "Никогда",
+          "justNow": "Только что",
+          "minutesAgo": "{{value0}} мин назад",
+          "hoursAgo": "{{value0}} ч назад",
+          "daysAgo": "{{value0}} д назад"
+        },
+        "host": {
+          "label": "Хост: {{value0}}",
+          "unknown": "Неизвестный хост",
+          "candidateName": "{{value0}} на {{value1}}"
+        },
+        "presentationFixtures": {
+          "reviewAlphaCleanup": "Обзор альфа-очистки"
+        }
+      }
+    },
+    "agentSessionContinuation": {
+      "continueInNewSession": "Продолжить в новой сессии…",
+      "dialogTitle": "Продолжить в новой сессии",
+      "dialogDescription": "Начать новую сессию агента с этой точки остановки. Исходная сессия не изменится.",
+      "untitledSession": "Текущая сессия",
+      "originalAgent": "Исходный агент: {{agent}}"
+    },
+    "status": {
+      "bar": {
+        "workspaceSpace": {
+          "otherTopLevelItems": "Прочие элементы верхнего уровня ({{value0}})"
+        }
+      }
+    },
+    "cmd-j": {
+      "paletteSessionAge": {
+        "minutes": "{{value0}} мин",
+        "hours": "{{value0}} ч",
+        "days": "{{value0}} д",
+        "underOneMinute": "<1 мин"
+      }
+    }
+  },
+  "dashboardPopout": {
+    "view": {
+      "label": "Представление панели",
+      "board": "Панель",
+      "map": "Карта агентов"
+    },
+    "map": {
+      "host": {
+        "local": "Локальный",
+        "ssh": "SSH",
+        "wsl": "WSL",
+        "remote": "Удалённый"
+      },
+      "filters": {
+        "showStates": "Состояния агентов",
+        "agentlessWorkspaces": "Рабочие ветки без агентов",
+        "orchestrationLinks": "Связи оркестрации",
+        "orchestrationLinksHidden": "Связи оркестрации скрыты",
+        "workspaceVisibility": "Содержимое карты",
+        "title": "Управление картой",
+        "reset": "Сбросить",
+        "ofTotalAgents": "показано агентов: {{total}}",
+        "quickViews": "Быстрые представления",
+        "agents": "Агенты",
+        "time": "Время",
+        "lifespan": "Продолжительность сессии",
+        "sinceMessage": "С момента последнего сообщения",
+        "timeInState": "Время в текущем состоянии",
+        "timeMinimum": "минимум {{label}}",
+        "timeMaximum": "максимум {{label}}",
+        "timeAny": "любой",
+        "timeRangeCount": "{{count}} интервалов",
+        "resetRanges": "Сбросить интервалы",
+        "summaryAll": "Все",
+        "summaryCount": "{{shown}} из {{total}}",
+        "summarySelected": "выбрано: {{count}}",
+        "workspace": "Рабочая ветка",
+        "stateChip": "Состояние: {{states}}"
+      },
+      "liveContainmentMap": "Живая карта изоляции",
+      "empty": "Ни один агент не соответствует текущим фильтрам.",
+      "canvasLabel": "Вложенная карта проектов, рабочих веток и агентов",
+      "zoomOut": "Отдалить",
+      "zoomIn": "Приблизить",
+      "fit": "Вписать",
+      "openWorktree": "Открыть подробности рабочей ветки {{worktree}}",
+      "openFolderWorkspace": "Открыть подробности папки-рабочей ветки {{workspace}}",
+      "worktreeSummary": "Агентов: {{total}}, активно: {{active}}, завершено: {{done}}",
+      "worktreeSummary_one": "Агент: {{total}}, активно: {{active}}, завершено: {{done}}",
+      "worktreeSummary_other": "Агентов: {{total}}, активно: {{active}}, завершено: {{done}}",
+      "runningAgents": "Агенты",
+      "spawnAgent": "Запустить нового агента",
+      "noLaunchableAgents": "Не обнаружено включённых агентов.",
+      "sleepWorkspace": "Спящий режим",
+      "projectCount": "Агентов: {{agents}}, рабочих веток: {{workspaces}}",
+      "agentCount": "Агентов: {{count}}",
+      "agentCount_one": "Агент: {{count}}",
+      "agentCount_other": "Агентов: {{count}}",
+      "noWorkspaceAgents": "В этой рабочей ветке нет агентов.",
+      "status": {
+        "doneSeen": "Готово, просмотрено"
+      },
+      "quickView": {
+        "everything": "Всё",
+        "attention": "Нуждаются во мне",
+        "stuck": "Застряли",
+        "unread": "Непрочитано",
+        "recent": "Последние 30 мин",
+        "longRunning": "Долгие задачи",
+        "stale": "Устарело > 3 д",
+        "orchestration": "Оркестрация"
+      }
+    },
+    "placeholder": {
+      "title": "Панель агентов",
+      "description": "Здесь все ваши агенты будут видны с первого взгляда. Доска появится в ближайшее время."
+    },
+    "recoverableError": {
+      "title": "Панель Orca столкнулась с ошибкой.",
+      "description": "Не удалось завершить рендеринг панели. Повторите попытку, чтобы переустановить её, или откройте заново."
+    },
+    "bucket": {
+      "attention": "Нуждаются в вас",
+      "working": "Работают",
+      "idle": "Неактивны",
+      "empty": "Нет",
+      "done": "Готово"
+    },
+    "title": "Агенты",
+    "total": "Итого: {{count}}",
+    "close": "Закрыть панель",
+    "settings": {
+      "showIdle": "Показывать неактивных агентов",
+      "showIdleCopy": "Включить агентов, которые замолчали на 30 минут, не сообщив о завершении. По умолчанию скрыты."
+    },
+    "settingsTooltip": "Настройки панели",
+    "card": {
+      "you": "Вы",
+      "time": {
+        "justNow": "только что",
+        "minutes": "{{count}} мин",
+        "hours": "{{count}} ч",
+        "days": "{{count}} д"
+      },
+      "review": {
+        "open": "Открытое ревью",
+        "draft": "Черновик ревью",
+        "merged": "Слитое ревью",
+        "closed": "Закрытое ревью"
+      },
+      "subagents_one": "{{count}} субагент",
+      "subagents_other": "{{count}} субагентов"
+    },
+    "terminal": {
+      "closed": "Нет активного терминала — панель этого агента закрыта.",
+      "focusWorktree": "Открыть рабочую ветку",
+      "close": "Закрыть"
+    },
+    "filters": {
+      "remove": "Убрать фильтр {{label}}",
+      "active": "Фильтры",
+      "clear": "Очистить",
+      "review": {
+        "open": "Открыт",
+        "draft": "Черновик",
+        "merged": "Слит",
+        "closed": "Закрыт",
+        "none": "Нет ревью"
+      },
+      "reviewChip": "Ревью: {{state}}",
+      "label": "Фильтр",
+      "project": "Проект",
+      "workspaceStatus": "Статус рабочей ветки",
+      "reviewStatus": "Статус PR / MR",
+      "clearAll": "Очистить все фильтры",
+      "removeChip": "Убрать {{filter}}"
+    },
+    "search": {
+      "placeholder": "Поиск рабочей ветки, проекта или агента…",
+      "label": "Поиск агентов",
+      "clear": "Очистить поиск",
+      "results": "Показано {{shown}} из {{total}}"
+    },
+    "settingsLabel": "Настройки панели агентов",
+    "host": {
+      "sshNamed": "SSH-хост · {{host}}",
+      "ssh": "SSH-хост",
+      "remoteNamed": "Удалённый хост Orca · {{host}}",
+      "remote": "Удалённый хост Orca"
+    }
+  }
+}
