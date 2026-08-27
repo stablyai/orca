@@ -1,4 +1,7 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
+import { OrchestrationDb } from '../db'
+import { createObservedWorktree, type ObservedWorktreeFixture } from './observed-worktree-fixture'
+import { observeCompletion } from './runtime-observed-completion'
 import {
   validateCompletionReceipt,
   type CompletionClaim,
@@ -120,5 +123,76 @@ describe('RUNTIME_OWNED_COMPLETION_PROOF', () => {
       ok: true,
       finalSha: HEAD
     })
+  })
+})
+
+/** LOCAL_GIT_ANSWERS_FOR_A_REMOTE_TREE — the runtime observation ran git on
+ *  THIS machine against the Dispatch's recorded worktree path. For an SSH or
+ *  WSL worker that path belongs to another host, and an identical path can also
+ *  exist locally, so the observation would answer confidently for the wrong
+ *  repository. docs/reference/ssh-execution-boundary.md forbids exactly that
+ *  substitution: the execution host owns everything that touches execution.
+ */
+describe('LOCAL_GIT_ANSWERS_FOR_A_REMOTE_TREE', () => {
+  let db: OrchestrationDb | undefined
+  let tree: ObservedWorktreeFixture | undefined
+  afterEach(() => {
+    db?.close()
+    db = undefined
+    tree?.cleanup()
+    tree = undefined
+  })
+
+  function dispatchOn(hostScope: Record<string, unknown> | null): string {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: { agent: 'claude' }
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'term_worker:leaf',
+      processIncarnation: 'pty:term_worker',
+      launchTokenHash: 'hash',
+      worktreeId: tree!.worktreeId,
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'created'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id, [])
+    if (hostScope) {
+      db.db
+        .prepare(`UPDATE worker_terminal_resources SET host_scope = ? WHERE owner_dispatch_id = ?`)
+        .run(JSON.stringify(hostScope), started.dispatch.id)
+    }
+    return started.dispatch.id
+  }
+
+  it('declines to answer for an SSH worker even when the path exists locally', () => {
+    tree = createObservedWorktree()
+    const dispatchId = dispatchOn({ kind: 'ssh', targetId: 'prod-box' })
+    const observed = observeCompletion({ db: db!, dispatchId })
+    // The tree IS readable here — that is exactly the trap.
+    expect(observed).toMatchObject({ observable: false, headSha: null })
+    expect(observed.reason).toContain('prod-box')
+  })
+
+  it('declines for a WSL worker for the same reason', () => {
+    tree = createObservedWorktree()
+    const dispatchId = dispatchOn({ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' })
+    const observed = observeCompletion({ db: db!, dispatchId })
+    expect(observed).toMatchObject({ observable: false })
+    expect(observed.reason).toContain('Ubuntu')
+  })
+
+  it('negative control: a local worker in the same tree IS observed', () => {
+    tree = createObservedWorktree()
+    const dispatchId = dispatchOn({ kind: 'local', hostId: 'local' })
+    const observed = observeCompletion({ db: db!, dispatchId })
+    expect(observed).toMatchObject({ observable: true, clean: true, headSha: tree.headSha })
   })
 })

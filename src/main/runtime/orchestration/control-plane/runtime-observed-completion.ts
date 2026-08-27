@@ -1,6 +1,7 @@
 import { statSync } from 'node:fs'
 import { gitExecFileSync } from '../../../git/runner'
 import type { OrchestrationDb } from '../db'
+import { parseWorkerTerminalHostScope } from '../worker-terminal-process-liveness'
 
 /** Blocker 1 — what the RUNTIME sees, as opposed to what a worker says it sees.
  *
@@ -49,12 +50,36 @@ export function worktreePathForDispatch(db: OrchestrationDb, dispatchId: string)
   return worktreeId && separator !== -1 ? worktreeId.slice(separator + 2) : null
 }
 
+/** True when this runtime is NOT the execution host for the Dispatch.
+ *
+ *  Why it gates everything below: the execution host owns everything that
+ *  touches execution, and a remote worktree path can also exist on the client,
+ *  so running git here would answer confidently for the WRONG repository. That
+ *  is the one failure worse than declining to answer.
+ *  See docs/reference/ssh-execution-boundary.md. */
+function executesElsewhere(db: OrchestrationDb, dispatchId: string): string | null {
+  const scope = parseWorkerTerminalHostScope(
+    db.getWorkerTerminalResourceByOwner(dispatchId)?.host_scope ?? null
+  )
+  if (scope?.kind === 'ssh') {
+    return `The Dispatch executes on SSH target ${scope.targetId}, which owns its tree; this client must not answer for it.`
+  }
+  if (scope?.kind === 'wsl') {
+    return `The Dispatch executes inside WSL distro ${scope.distro}, which owns its tree; this client must not answer for it.`
+  }
+  return null
+}
+
 export function observeCompletion(args: {
   db: OrchestrationDb
   dispatchId: string
   /** The commit the Dispatch started from, when the runtime recorded one. */
   baseSha?: string | null
 }): ObservedCompletion {
+  const elsewhere = executesElsewhere(args.db, args.dispatchId)
+  if (elsewhere) {
+    return unobservable(elsewhere, worktreePathForDispatch(args.db, args.dispatchId))
+  }
   const worktreePath = worktreePathForDispatch(args.db, args.dispatchId)
   if (!worktreePath) {
     return unobservable('The Dispatch has no recorded worktree, so nothing can be observed.', null)

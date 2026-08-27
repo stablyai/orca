@@ -1,0 +1,17 @@
+PACKAGE B — FINAL CLOSURE LIVE RECEIPTS
+captured_at:        2026-08-27T22:32:36Z
+branch:             jb-workflow-control-plane-b
+final_sha:          d7405b348bc300db536a1a6b51cc94cb6da8301f
+pinned_origin_main: 249d93bc5d2fd3b04581aae9916afc84bc787c8b
+pin_is_ancestor:    yes
+worktree_clean:     NO
+native_runtime_untouched: 868298d7-29b6-413d-b374-507abfb6e019
+candidate_runtime:        9a4c6d41-12e6-42c4-9029-9ac7834035d8
+candidate_user_data:      /tmp/orca-pkgb-cert-1787869653
+
+-- embedded build provenance in out/main/index.js --
+"{\"schemaVersion\":1,\"sourceSha\":\"d7405b348bc300db536a1a6b51cc94cb6da8301f\",\"dirty\":false,\"appVersion\":\"1.4.178-rc.2\",\"builtAt\":\"2026-08-27T22:27:22.622Z\"}"
+
+-- live certification run on the candidate --
+run: run_f14c2e255999   terminal: term_b864dcbf-99b3-4586-9718-40ac22ca8003
+ task task_b8fa5ffdd881 dispatched
