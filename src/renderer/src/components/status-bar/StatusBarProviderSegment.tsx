@@ -85,6 +85,9 @@ function getProviderLetter(provider: ProviderRateLimits['provider']): string {
       return 'R'
     case 'cursor':
       return 'U'
+    // Why: not 'G' — gemini already claims it in the icon-only roster.
+    case 'glm':
+      return 'Z'
     case 'codex':
       return 'X'
   }

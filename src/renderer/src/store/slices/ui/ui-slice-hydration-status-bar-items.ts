@@ -8,6 +8,7 @@ const DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM: StatusBarItem = 'minimax'
 const DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM: StatusBarItem = 'antigravity'
 const DEFAULT_ON_GROK_STATUS_BAR_ITEM: StatusBarItem = 'grok'
 const DEFAULT_ON_CURSOR_STATUS_BAR_ITEM: StatusBarItem = 'cursor'
+const DEFAULT_ON_GLM_STATUS_BAR_ITEM: StatusBarItem = 'glm'
 
 export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
   let items = migrateStatusBarItems(ui.statusBarItems)
@@ -17,7 +18,8 @@ export function hydrateStatusBarItems(ui: PersistedUIState): StatusBarItem[] {
     ['_minimaxStatusBarDefaultAdded', DEFAULT_ON_MINIMAX_STATUS_BAR_ITEM],
     ['_antigravityStatusBarDefaultAdded', DEFAULT_ON_ANTIGRAVITY_STATUS_BAR_ITEM],
     ['_grokStatusBarDefaultAdded', DEFAULT_ON_GROK_STATUS_BAR_ITEM],
-    ['_cursorStatusBarDefaultAdded', DEFAULT_ON_CURSOR_STATUS_BAR_ITEM]
+    ['_cursorStatusBarDefaultAdded', DEFAULT_ON_CURSOR_STATUS_BAR_ITEM],
+    ['_glmStatusBarDefaultAdded', DEFAULT_ON_GLM_STATUS_BAR_ITEM]
   ] as const
   for (const [flag, item] of defaults) {
     if (!ui[flag] && !items.includes(item)) {
