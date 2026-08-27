@@ -72,6 +72,107 @@ beforeEach(() => {
 })
 
 describe('Kanban client', () => {
+  it('uses the current /api/me, list, and detail envelopes in sequence', async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          user: { user_id: 'user-1', name: 'Ada', platform_role: 'admin' },
+          csrf: 'csrf-secret'
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          schema: 2,
+          version: 1,
+          lanes: ['Backlog'],
+          users: [{ id: 'user-1', name: 'Ada' }],
+          tasks: [
+            {
+              id: 'K-1',
+              t: 'Fix login',
+              lane: 'Backlog',
+              task_version: 1,
+              executors: ['user-1'],
+              hot: 0
+            }
+          ]
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          task: {
+            id: 'K-1',
+            t: 'Fix login',
+            lane: 'Backlog',
+            task_version: 1,
+            executors: ['user-1'],
+            hot: 0
+          }
+        })
+      )
+    const { client } = await loadClient()
+
+    await expect(client.connect('token-secret')).resolves.toMatchObject({ ok: true })
+    await expect(client.listTasks()).resolves.toMatchObject({ tasks: [{ id: 'K-1' }] })
+    await expect(client.getTask('K-1')).resolves.toMatchObject({ id: 'K-1' })
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      `${KANBAN_SERVER_URL}/api/me`,
+      `${KANBAN_SERVER_URL}/api/tasks`,
+      `${KANBAN_SERVER_URL}/api/tasks/K-1`
+    ])
+
+    fetchMock.mockResolvedValueOnce(jsonResponse({ task: { id: 'K-2' } }))
+    await expect(client.getTask('K-2')).rejects.toMatchObject({ code: 'invalid_response' })
+  })
+
+  it('loads list context before a direct getTask and rejects malformed context', async () => {
+    const { client, store } = await loadClient()
+    store.saveKanbanCredential({
+      token: 'token-secret',
+      viewer: { id: 'user-1', name: 'Ada', level: 'admin' }
+    })
+    fetchMock
+      .mockResolvedValueOnce(
+        jsonResponse({
+          lanes: ['Backlog'],
+          users: [{ id: 'user-1', name: 'Ada' }],
+          tasks: []
+        })
+      )
+      .mockResolvedValueOnce(
+        jsonResponse({
+          task: {
+            id: 'K / 1',
+            t: 'Direct detail',
+            lane: 'Backlog',
+            task_version: 1,
+            created_by: 'user-1'
+          }
+        })
+      )
+
+    await expect(client.getTask('K / 1')).resolves.toMatchObject({
+      id: 'K / 1',
+      createdBy: { id: 'user-1', name: 'Ada' }
+    })
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      `${KANBAN_SERVER_URL}/api/tasks`,
+      `${KANBAN_SERVER_URL}/api/tasks/K%20%2F%201`
+    ])
+
+    const malformed = await loadClient()
+    malformed.store.saveKanbanCredential({
+      token: 'token-secret',
+      viewer: { id: 'user-1', name: 'Ada', level: 'admin' }
+    })
+    fetchMock.mockReset().mockResolvedValueOnce(jsonResponse({ lanes: [], users: {}, tasks: [] }))
+    await expect(malformed.client.getTask('K-2')).rejects.toMatchObject({
+      code: 'invalid_response'
+    })
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
   it('connects with a trimmed Bearer token against the fixed origin', async () => {
     fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'user-1', name: 'Ada', level: 'admin' }))
     const { client, store } = await loadClient()
@@ -340,7 +441,9 @@ describe('Kanban client', () => {
       d: 'desc',
       c: []
     }
-    fetchMock.mockResolvedValueOnce(jsonResponse(details))
+    fetchMock
+      .mockResolvedValueOnce(jsonResponse({ tasks: [], lanes: [], users: [] }))
+      .mockResolvedValueOnce(jsonResponse(details))
     const { client, store } = await loadClient()
     store.saveKanbanCredential({
       token: 'token-secret',
@@ -350,7 +453,7 @@ describe('Kanban client', () => {
     const task = await client.getTask('K-1')
     expect(task?.id).toBe('K-1')
     expect(task?.result).toBe('Done')
-    const [url] = fetchMock.mock.calls[0] as [string]
+    const [url] = fetchMock.mock.calls[1] as [string]
     expect(url).toBe(`${KANBAN_SERVER_URL}/api/tasks/K-1`)
 
     fetchMock.mockResolvedValueOnce(new Response('', { status: 404 }))

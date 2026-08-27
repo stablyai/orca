@@ -8,7 +8,12 @@ import {
   type KanbanTaskListResult,
   type KanbanTaskSummary
 } from '../../shared/kanban-types'
-import { mapKanbanTaskDetails, mapKanbanTaskList, mapKanbanViewer } from './task-mapping'
+import {
+  mapKanbanTaskDetails,
+  mapKanbanTaskList,
+  mapKanbanViewer,
+  type KanbanMappingContext
+} from './task-mapping'
 import {
   isKanbanAuthInvalidated,
   invalidateKanbanAuth,
@@ -64,6 +69,7 @@ export type KanbanClientOptions = {
 export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
   const now = options.now ?? Date.now
   const timeoutMs = options.timeoutMs ?? 10_000
+  let mappingContext: KanbanMappingContext | null = null
 
   async function requestJson(
     path: string,
@@ -132,6 +138,7 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
         return { ok: false, code: 'invalid_response', error: ERROR_MESSAGES.invalid_response }
       }
       saveKanbanCredential({ token: trimmed, viewer: mapped.value })
+      mappingContext = null
       resetKanbanAuthInvalidation()
       return { ok: true, viewer: mapped.value }
     } catch (error) {
@@ -143,6 +150,7 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
   }
 
   function disconnect(): void {
+    mappingContext = null
     resetKanbanAuthInvalidation()
     clearStoredKanbanCredential()
   }
@@ -171,6 +179,7 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
     if (!mapped.ok) {
       throw new KanbanRequestError('invalid_response')
     }
+    mappingContext = mapped.value.context
     const viewerId = getStoredKanbanMetadata()?.viewerId ?? ''
     const effectiveFilter = filter ?? { role: 'executor' as const }
     const tasks = sortKanbanTasks(
@@ -185,11 +194,18 @@ export function createKanbanClient(options: KanbanClientOptions): KanbanClient {
 
   async function getTask(id: string): Promise<KanbanTaskDetails | null> {
     const token = requireStoredToken()
+    if (!mappingContext) {
+      const list = mapKanbanTaskList(await requestJson('/api/tasks', token))
+      if (!list.ok) {
+        throw new KanbanRequestError('invalid_response')
+      }
+      mappingContext = list.value.context
+    }
     const raw = await requestJson(`/api/tasks/${encodeURIComponent(id)}`, token, true)
     if (raw === null) {
       return null
     }
-    const mapped = mapKanbanTaskDetails(raw)
+    const mapped = mapKanbanTaskDetails(raw, mappingContext)
     if (!mapped.ok) {
       throw new KanbanRequestError('invalid_response')
     }
