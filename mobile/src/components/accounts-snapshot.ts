@@ -31,16 +31,7 @@ const RateLimitResetCreditsSchema = z
 
 export const ProviderRateLimitsSchema = z
   .object({
-    provider: z.enum([
-      'claude',
-      'codex',
-      'gemini',
-      'opencode-go',
-      'kimi',
-      'minimax',
-      'grok',
-      'antigravity'
-    ]),
+    provider: z.enum(['claude', 'codex', 'opencode-go', 'kimi', 'minimax', 'grok', 'antigravity']),
     session: RateLimitWindowSchema.nullable(),
     weekly: RateLimitWindowSchema.nullable(),
     fableWeekly: RateLimitWindowSchema.nullable().optional(),

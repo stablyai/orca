@@ -6,7 +6,6 @@ export function createRateLimitsApi(): NonNullable<Partial<PreloadApi>['rateLimi
   const empty: RateLimitState = {
     claude: null,
     codex: null,
-    gemini: null,
     opencodeGo: null,
     kimi: null,
     antigravity: null,

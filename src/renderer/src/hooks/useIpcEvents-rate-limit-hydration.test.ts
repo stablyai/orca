@@ -12,7 +12,6 @@ describe('useIpcEvents rate-limit hydration', () => {
     const staleState = {
       claude: null,
       codex: null,
-      gemini: null,
       opencodeGo: null,
       kimi: null,
       claudeTarget: { runtime: 'host', wslDistro: null },

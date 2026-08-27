@@ -48,7 +48,6 @@ function provider(overrides: Partial<ProviderRateLimits> = {}): ProviderRateLimi
 const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'claude',
   'codex',
-  'gemini',
   'antigravity',
   'opencode-go',
   'kimi',
@@ -103,17 +102,17 @@ describe('provider usage error copy', () => {
       error:
         'Your access token could not be refreshed because your refresh token was already used. Please log out and sign in again.'
     })
-    const gemini = provider({
-      provider: 'gemini',
-      error: 'Gemini CLI credentials not found'
+    const antigravity = provider({
+      provider: 'antigravity',
+      error: 'Agy credentials not found'
     })
 
     expect(getProviderUsageStatusLabel(codex)).toBe('Refresh failed')
     expect(getProviderUsageErrorMessage(codex)).toBe(
       'Codex usage could not be refreshed. Agent sessions may still be signed in.'
     )
-    expect(getProviderUsageErrorMessage(gemini)).toBe(
-      'Gemini usage could not be refreshed. Agent sessions may still be signed in.'
+    expect(getProviderUsageErrorMessage(antigravity)).toBe(
+      'Antigravity usage could not be refreshed. Agent sessions may still be signed in.'
     )
   })
 
@@ -293,10 +292,55 @@ describe('provider usage error copy', () => {
 })
 
 describe('getWindowSections', () => {
+  it('returns only Antigravity buckets because its summaries duplicate them', () => {
+    const p: ProviderRateLimits = {
+      provider: 'antigravity',
+      session: { usedPercent: 40, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      weekly: { usedPercent: 80, windowMinutes: 10_080, resetsAt: null, resetDescription: null },
+      buckets: [
+        {
+          name: 'Gemini 5h',
+          usedPercent: 20,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Gemini wk',
+          usedPercent: 80,
+          windowMinutes: 10_080,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Claude/GPT 5h',
+          usedPercent: 40,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        },
+        {
+          name: 'Claude/GPT wk',
+          usedPercent: 10,
+          windowMinutes: 10_080,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ],
+      updatedAt: Date.now(),
+      error: null,
+      status: 'ok'
+    }
+
+    expect(getWindowSections(p)).toEqual(
+      p.buckets?.map((bucket) => ({ label: bucket.name, window: bucket }))
+    )
+  })
+
   it('returns buckets as sections when present', () => {
     const p: ProviderRateLimits = {
-      provider: 'gemini',
-      session: { usedPercent: 80, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      provider: 'antigravity',
+      session: null,
       weekly: null,
       buckets: [
         {
@@ -321,8 +365,7 @@ describe('getWindowSections', () => {
     const sections = getWindowSections(p)
     expect(sections).toEqual([
       { label: 'Pro', window: p.buckets![0] },
-      { label: 'Flash', window: p.buckets![1] },
-      { label: 'Weekly', window: null }
+      { label: 'Flash', window: p.buckets![1] }
     ])
   })
 
@@ -367,7 +410,7 @@ describe('getWindowSections', () => {
 
   it('returns session and weekly for empty buckets array', () => {
     const p: ProviderRateLimits = {
-      provider: 'gemini',
+      provider: 'antigravity',
       session: { usedPercent: 50, windowMinutes: 300, resetsAt: null, resetDescription: null },
       weekly: null,
       buckets: [],
@@ -382,14 +425,10 @@ describe('getWindowSections', () => {
     ])
   })
 
-  it('does not expose bucket names via session window in compact rendering path', () => {
-    // Why: ProviderSegment (compact mode) reads only p.session — never p.buckets.
-    // This test locks the contract: getWindowSections returns buckets for detail
-    // views, while the plain session value remains independently available for
-    // compact rendering without bucket names bleeding through.
+  it('keeps Agy model quota separate from fixed provider windows', () => {
     const p: ProviderRateLimits = {
-      provider: 'gemini',
-      session: { usedPercent: 80, windowMinutes: 300, resetsAt: null, resetDescription: null },
+      provider: 'antigravity',
+      session: null,
       weekly: null,
       buckets: [
         {
@@ -411,9 +450,8 @@ describe('getWindowSections', () => {
       error: null,
       status: 'ok'
     }
-    // Compact path uses p.session directly — independent of getWindowSections.
-    expect(p.session?.usedPercent).toBe(80)
-    // getWindowSections (detail path) returns bucket rows, not session label.
+    expect(p.session).toBeNull()
+    expect(p.weekly).toBeNull()
     const sections = getWindowSections(p)
     const labels = sections.map((s) => s.label)
     expect(labels).toContain('Pro')
@@ -423,7 +461,7 @@ describe('getWindowSections', () => {
 
   it('preserves reset metadata inside bucket windows', () => {
     const p: ProviderRateLimits = {
-      provider: 'gemini',
+      provider: 'antigravity',
       session: null,
       weekly: null,
       buckets: [
@@ -440,7 +478,7 @@ describe('getWindowSections', () => {
       status: 'ok'
     }
     const sections = getWindowSections(p)
-    expect(sections).toHaveLength(2)
+    expect(sections).toHaveLength(1)
     expect(sections[0].label).toBe('Pro')
     expect(sections[0].window!.resetsAt).toBe(18000000)
     expect(sections[0].window!.resetDescription).toBe('5:00 PM')

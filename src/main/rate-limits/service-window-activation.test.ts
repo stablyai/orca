@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import { RateLimitService } from './service'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -29,8 +29,8 @@ vi.mock('./codex-fetcher', () => ({
   fetchCodexRateLimits: vi.fn()
 }))
 
-vi.mock('./gemini-usage-fetcher', () => ({
-  fetchGeminiRateLimits: vi.fn()
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
 }))
 
 vi.mock('./kimi-fetcher', () => ({
@@ -187,7 +187,7 @@ describe('RateLimitService', () => {
 
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
-      expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchMiniMaxRateLimits).toHaveBeenCalledTimes(1)
@@ -545,7 +545,7 @@ describe('RateLimitService', () => {
     try {
       vi.mocked(fetchClaudeRateLimits).mockResolvedValue(unavailableProvider('claude'))
       vi.mocked(fetchCodexRateLimits).mockResolvedValue(unavailableProvider('codex'))
-      vi.mocked(fetchGeminiRateLimits).mockResolvedValue(unavailableProvider('gemini'))
+      vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
       vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(unavailableProvider('opencode-go'))
       vi.mocked(fetchKimiRateLimits).mockResolvedValue(unavailableProvider('kimi'))
 
@@ -562,7 +562,7 @@ describe('RateLimitService', () => {
 
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(1)
-      expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(1)
+      expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(1)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(1)
 
@@ -572,7 +572,7 @@ describe('RateLimitService', () => {
 
       expect(fetchClaudeRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchCodexRateLimits).toHaveBeenCalledTimes(2)
-      expect(fetchGeminiRateLimits).toHaveBeenCalledTimes(2)
+      expect(fetchAntigravityRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchOpenCodeGoRateLimits).toHaveBeenCalledTimes(2)
       expect(fetchKimiRateLimits).toHaveBeenCalledTimes(2)
 

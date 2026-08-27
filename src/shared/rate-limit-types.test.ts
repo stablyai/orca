@@ -10,7 +10,6 @@ describe('RateLimitState', () => {
     const state: RateLimitState = {
       claude: null,
       codex: null,
-      gemini: null,
       opencodeGo: null,
       kimi: null,
       antigravity: null,

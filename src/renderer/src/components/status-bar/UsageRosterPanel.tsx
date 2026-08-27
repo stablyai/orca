@@ -35,13 +35,14 @@ function providerMaxUsed(sections: UsageSection[]): number {
     : 0
 }
 
-// Buckets (Gemini Flash/Pro) keep their model name; windows use their duration.
+// Named model buckets keep their model name; fixed provider windows use their duration.
 function shortLabel(
   p: ProviderRateLimits,
   section: UsageSection,
   useRemainingDuration = false
 ): string {
-  if (p.buckets?.some((b) => b.name === section.label)) {
+  const isNamedBucket = p.buckets?.some((b) => b.name === section.label)
+  if (isNamedBucket && !(p.provider === 'antigravity' && useRemainingDuration)) {
     return section.label
   }
   // fableWeekly shares the 7d window with weekly; label it distinctly so the two

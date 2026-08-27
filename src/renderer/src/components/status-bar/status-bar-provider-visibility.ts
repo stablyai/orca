@@ -3,16 +3,10 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
-  | 'codexManagedAccounts'
-  | 'claudeManagedAccounts'
-  | 'opencodeSessionCookie'
-  | 'geminiCliOAuthEnabled'
+  'codexManagedAccounts' | 'claudeManagedAccounts' | 'opencodeSessionCookie'
 > & {
-  // Why: Antigravity has no separate persisted usage credential in Orca. The
-  // checked status-bar item is the durable user signal; StatusBar only sets
-  // this after PATH detection says the agent is available. Durability further
-  // requires geminiCliOAuthEnabled — the snapshot mirrors the Gemini fetch,
-  // which never yields data while that opt-in is off.
+  // Why: Agy owns its persisted keyring login; the checked status-bar item plus
+  // PATH detection is the renderer's durable signal while main reads that login.
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
@@ -22,7 +16,6 @@ export type UsageProviderSettings = Pick<
 type UsageProviderSnapshots = {
   claude: ProviderRateLimits | null | undefined
   codex: ProviderRateLimits | null | undefined
-  gemini: ProviderRateLimits | null | undefined
   opencodeGo: ProviderRateLimits | null | undefined
   kimi: ProviderRateLimits | null | undefined
   antigravity: ProviderRateLimits | null | undefined
@@ -47,7 +40,7 @@ function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefin
 }
 
 // Why: a provider that returns `unavailable` is explicitly not configured
-// (Gemini OAuth off, OpenCode Go cookie unset, Claude on API-key billing). Its
+// (OpenCode Go cookie unset, Claude on API-key billing). Its
 // fetch object is non-null, so a bare `!== null` check still renders a "--"
 // bar for a provider the user never set up. `error` is kept visible on purpose
 // — that's a *configured* provider failing transiently, and hiding it would
@@ -72,10 +65,8 @@ export function hasUsageProviderSettings(
   return Boolean(
     (settings?.codexManagedAccounts?.length ?? 0) > 0 ||
     (settings?.claudeManagedAccounts?.length ?? 0) > 0 ||
-    settings?.geminiCliOAuthEnabled === true ||
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
-    // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
-    // already covered by the gemini term above.
+    settings?.antigravityUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.grokAuthConfigured === true
   )
@@ -94,17 +85,11 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'codex') {
     return (settings.codexManagedAccounts?.length ?? 0) > 0
   }
-  if (providerId === 'gemini') {
-    return settings.geminiCliOAuthEnabled === true
-  }
   if (providerId === 'opencode-go') {
     return Boolean(settings.opencodeSessionCookie?.trim())
   }
   if (providerId === 'antigravity') {
-    // Why: the Antigravity snapshot mirrors the Gemini fetch, which stays
-    // 'unavailable' until the user opts into Gemini CLI OAuth. Without that
-    // gate the default-on checked item would pin a permanently dead bar.
-    return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
+    return settings.antigravityUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true
@@ -121,7 +106,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
     session: null,
     weekly: null,
     ...(providerId === 'opencode-go' ? { monthly: null } : {}),
-    ...(providerId === 'gemini' ? { buckets: [] } : {}),
+    ...(providerId === 'antigravity' ? { buckets: [] } : {}),
     updatedAt: 0,
     error: null,
     status: 'fetching'
@@ -160,7 +145,6 @@ export function isUsageEmptyState(
   if (
     isProviderSnapshotPending(providers.claude) ||
     isProviderSnapshotPending(providers.codex) ||
-    isProviderSnapshotPending(providers.gemini) ||
     isProviderSnapshotPending(providers.opencodeGo) ||
     isProviderSnapshotPending(providers.kimi) ||
     antigravitySnapshotPending ||
@@ -173,7 +157,6 @@ export function isUsageEmptyState(
     !hasUsageProviderSettings(settings) &&
     !isProviderConfigured(providers.claude) &&
     !isProviderConfigured(providers.codex) &&
-    !isProviderConfigured(providers.gemini) &&
     !isProviderConfigured(providers.opencodeGo) &&
     !isProviderConfigured(providers.kimi) &&
     !isProviderConfigured(providers.antigravity) &&

@@ -19,8 +19,7 @@ import {
   type ClaudeAccountSelectionTarget,
   type NormalizedClaudeAccountSelectionTarget
 } from '../claude-accounts/runtime-selection'
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
-import { deriveAntigravityRateLimits } from './antigravity-usage-mirror'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import type { KimiHomeResolution } from '../kimi/kimi-runtime-home'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -62,7 +61,6 @@ type MiniMaxResolvedConfig = {
   error: string | null
 }
 
-type GeminiCliOAuthEnabledResolver = () => boolean
 type ActiveRateLimitProvider = ProviderRateLimits['provider']
 type ActiveProviderState = {
   provider: ActiveRateLimitProvider
@@ -104,7 +102,6 @@ const DEFERRED_STARTUP_ACTIVE_REFRESH_MS = 1000
 type InternalRateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
@@ -171,7 +168,6 @@ export class RateLimitService {
   private state: InternalRateLimitState = {
     claude: null,
     codex: null,
-    gemini: null,
     opencodeGo: null,
     kimi: null,
     antigravity: null,
@@ -186,7 +182,6 @@ export class RateLimitService {
   private lastActiveFailureRetryAtByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
-    gemini: 0,
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
@@ -197,7 +192,6 @@ export class RateLimitService {
   private activeFailureStreakByProvider: Record<ActiveRateLimitProvider, number> = {
     claude: 0,
     codex: 0,
-    gemini: 0,
     'opencode-go': 0,
     kimi: 0,
     minimax: 0,
@@ -235,7 +229,6 @@ export class RateLimitService {
   }
   private openCodeGoConfigResolver: (() => OpenCodeGoRateLimitConfig) | null = null
   private miniMaxConfigResolver: (() => MiniMaxRateLimitConfig) | null = null
-  private geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   private inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   private inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   private networkProxySettingsResolver: (() => NetworkProxySettings) | null = null
@@ -309,10 +302,6 @@ export class RateLimitService {
 
   setMiniMaxConfigResolver(resolver: () => MiniMaxRateLimitConfig): void {
     this.miniMaxConfigResolver = resolver
-  }
-
-  setGeminiCliOAuthEnabledResolver(resolver: GeminiCliOAuthEnabledResolver): void {
-    this.geminiCliOAuthEnabledResolver = resolver
   }
 
   setNetworkProxySettingsResolver(resolver: () => NetworkProxySettings): void {
@@ -867,7 +856,6 @@ export class RateLimitService {
     const byProvider: Record<ActiveRateLimitProvider, ProviderRateLimits | null> = {
       claude: this.state.claude,
       codex: this.state.codex,
-      gemini: this.state.gemini,
       'opencode-go': this.state.opencodeGo,
       kimi: this.state.kimi,
       minimax: this.state.minimax,
@@ -1570,15 +1558,7 @@ export class RateLimitService {
 
   private withFetchingStatus(
     current: ProviderRateLimits | null,
-    provider:
-      | 'claude'
-      | 'codex'
-      | 'gemini'
-      | 'opencode-go'
-      | 'kimi'
-      | 'minimax'
-      | 'grok'
-      | 'antigravity'
+    provider: 'claude' | 'codex' | 'opencode-go' | 'kimi' | 'minimax' | 'grok' | 'antigravity'
   ): ProviderRateLimits {
     if (!current) {
       return {
@@ -1633,7 +1613,6 @@ export class RateLimitService {
     const miniMaxCookie = miniMaxConfigResult.config.sessionCookie
     const miniMaxGroupId = miniMaxConfigResult.config.groupId
     const miniMaxModels = miniMaxConfigResult.config.models
-    const geminiCliOAuthEnabled = this.geminiCliOAuthEnabledResolver?.() ?? false
     // Why: getState() is hot (renderer pushes + mobile snapshots); keep Grok's sync auth-file probe on fetch cycles instead.
     const grokAuthReadResult = readGrokAuthSession()
     this.grokAuthConfigured = grokAuthReadResult.status === 'ok'
@@ -1663,7 +1642,6 @@ export class RateLimitService {
       codex: codexFetchGated
         ? codexStateBeforeFetch
         : this.withFetchingStatus(previousState.codex, 'codex'),
-      gemini: this.withFetchingStatus(previousState.gemini, 'gemini'),
       opencodeGo: opencodeConfigChanged
         ? this.withFetchingStatus(null, 'opencode-go')
         : this.withFetchingStatus(previousState.opencodeGo, 'opencode-go'),
@@ -1689,40 +1667,46 @@ export class RateLimitService {
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [claudeResult, codexResult, geminiResult, opencodeGoResult, kimiResult, miniMaxResult] =
-      await Promise.allSettled([
-        claudeFetchGated
-          ? Promise.resolve(previousState.claude as ProviderRateLimits)
-          : fetchClaudeRateLimits({
-              authPreparation: claudeAuthPreparation,
-              allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
-              allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
-              networkProxySettings: this.networkProxySettingsResolver?.(),
-              signal
-            }),
-        codexFetchGated
-          ? Promise.resolve(previousState.codex as ProviderRateLimits)
-          : (missingWslCodexHome ??
-            fetchCodexRateLimits({
-              codexHomePath,
-              allowPtyFallback: this.shouldAllowCodexPtyFallback(),
-              signal
-            })),
-        fetchGeminiRateLimits(geminiCliOAuthEnabled),
-        fetchOpenCodeGoRateLimits(
-          cookie,
-          workspaceIdOverride || undefined,
-          this.networkProxySettingsResolver?.()
-        ),
-        this.fetchKimiWithResolvedHome(),
-        miniMaxConfigResult.error
-          ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
-          : fetchMiniMaxRateLimits({
-              cookie: miniMaxCookie,
-              groupId: miniMaxGroupId,
-              models: miniMaxModels
-            })
-      ])
+    const [
+      claudeResult,
+      codexResult,
+      antigravityResult,
+      opencodeGoResult,
+      kimiResult,
+      miniMaxResult
+    ] = await Promise.allSettled([
+      claudeFetchGated
+        ? Promise.resolve(previousState.claude as ProviderRateLimits)
+        : fetchClaudeRateLimits({
+            authPreparation: claudeAuthPreparation,
+            allowPtyFallback: this.shouldAllowClaudePtyFallback(claudeAuthPreparation),
+            allowUsagePanelSupplement: this.shouldAllowClaudeUsagePanelSupplement(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
+            signal
+          }),
+      codexFetchGated
+        ? Promise.resolve(previousState.codex as ProviderRateLimits)
+        : (missingWslCodexHome ??
+          fetchCodexRateLimits({
+            codexHomePath,
+            allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            signal
+          })),
+      fetchAntigravityRateLimits(),
+      fetchOpenCodeGoRateLimits(
+        cookie,
+        workspaceIdOverride || undefined,
+        this.networkProxySettingsResolver?.()
+      ),
+      this.fetchKimiWithResolvedHome(),
+      miniMaxConfigResult.error
+        ? Promise.resolve(this.getMiniMaxCredentialError(miniMaxConfigResult.error))
+        : fetchMiniMaxRateLimits({
+            cookie: miniMaxCookie,
+            groupId: miniMaxGroupId,
+            models: miniMaxModels
+          })
+    ])
 
     if (signal.aborted) {
       return
@@ -1754,21 +1738,20 @@ export class RateLimitService {
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const gemini =
-      geminiResult.status === 'fulfilled'
-        ? geminiResult.value
+    const antigravity =
+      antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
         : ({
-            provider: 'gemini',
+            provider: 'antigravity',
             session: null,
             weekly: null,
             updatedAt: Date.now(),
             error:
-              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
+              antigravityResult.reason instanceof Error
+                ? antigravityResult.reason.message
+                : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
-
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -1843,7 +1826,6 @@ export class RateLimitService {
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
     }
-    this.trackActiveFailureStreak('gemini', gemini)
     this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
@@ -1864,7 +1846,6 @@ export class RateLimitService {
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
           ? opencodeGo

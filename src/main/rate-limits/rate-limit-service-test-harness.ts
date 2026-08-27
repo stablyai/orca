@@ -2,8 +2,8 @@ import { EventEmitter } from 'node:events'
 import { vi, type Mock } from 'vitest'
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 import type { RateLimitService } from './service'
+import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
-import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import { fetchKimiRateLimits } from './kimi-fetcher'
 import { fetchMiniMaxRateLimits } from './minimax-fetcher'
 import { fetchGrokRateLimits } from './grok-fetcher'
@@ -84,7 +84,7 @@ export function unavailableProvider(
 // individual retry lane need healthy providers minted fresh at fetch time.
 export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchCodexRateLimits).mockImplementation(async () => okProvider('codex', 24))
-  vi.mocked(fetchGeminiRateLimits).mockImplementation(async () => okProvider('gemini', 0))
+  vi.mocked(fetchAntigravityRateLimits).mockImplementation(async () => okProvider('antigravity', 0))
   vi.mocked(fetchOpenCodeGoRateLimits).mockImplementation(async () => okProvider('opencode-go', 0))
   vi.mocked(fetchKimiRateLimits).mockImplementation(async () => okProvider('kimi', 0))
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
@@ -94,7 +94,7 @@ export function mockFreshBackgroundProviderFetches(): void {
 /** Shared `beforeEach` body: healthy stubs for every provider the service polls. */
 export function resetRateLimitProviderMocks(): void {
   vi.clearAllMocks()
-  vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 0, Date.now()))
+  vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(okProvider('antigravity', 0, Date.now()))
   vi.mocked(fetchOpenCodeGoRateLimits).mockResolvedValue(okProvider('opencode-go', 0, Date.now()))
   vi.mocked(fetchKimiRateLimits).mockResolvedValue(okProvider('kimi', 0, Date.now()))
   vi.mocked(fetchMiniMaxRateLimits).mockResolvedValue(okProvider('minimax', 0, Date.now()))

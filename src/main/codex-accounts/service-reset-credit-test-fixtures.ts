@@ -29,7 +29,6 @@ export function createResetRateLimitState(
   return {
     claude: null,
     codex,
-    gemini: null,
     opencodeGo: null,
     kimi: null,
     antigravity: null,

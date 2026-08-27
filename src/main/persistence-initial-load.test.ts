@@ -75,6 +75,17 @@ describe('Store', () => {
     expect(store.getRepos()).toEqual([])
   }, 15_000)
 
+  it('removes the deprecated Gemini CLI OAuth usage setting on load', async () => {
+    writeDataFile({ settings: { geminiCliOAuthEnabled: true } })
+
+    const store = await createStore()
+
+    expect(store.getSettings()).not.toHaveProperty('geminiCliOAuthEnabled')
+    store.flush()
+    const persisted = readDataFile() as { settings?: Record<string, unknown> }
+    expect(persisted.settings).not.toHaveProperty('geminiCliOAuthEnabled')
+  })
+
   it('clone-reads and synchronously persists the main-owned Codex reset ledger', async () => {
     const store = await createStore()
     const ledger = {

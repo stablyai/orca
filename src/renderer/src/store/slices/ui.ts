@@ -275,11 +275,16 @@ function presetToQuery(presetId: TaskViewPresetId | null): string {
   }
 }
 
+const DEPRECATED_STATUS_BAR_ITEMS: ReadonlySet<string> = new Set(['gemini'])
+
 // Why: migrate legacy memory+sessions ids → resource-usage; keep unknown ids so downgrade→upgrade can't strip a newer build's ids.
 function migrateStatusBarItems(items: readonly string[] | undefined): StatusBarItem[] {
   const source = items ?? DEFAULT_STATUS_BAR_ITEMS
   const out: string[] = []
   for (const id of source) {
+    if (DEPRECATED_STATUS_BAR_ITEMS.has(id)) {
+      continue
+    }
     const mapped = id === 'memory' || id === 'sessions' ? 'resource-usage' : id
     if (!out.includes(mapped)) {
       out.push(mapped)
@@ -2487,8 +2492,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         ui._grokStatusBarDefaultAdded || statusBarItemsWithAntigravity.includes('grok')
           ? statusBarItemsWithAntigravity
           : [...statusBarItemsWithAntigravity, DEFAULT_ON_GROK_STATUS_BAR_ITEM]
+      const statusBarItemsMigrated =
+        !Array.isArray(ui.statusBarItems) ||
+        ui.statusBarItems.length !== migratedStatusBarItems.length ||
+        ui.statusBarItems.some((item, index) => item !== migratedStatusBarItems[index])
       if (
-        (!ui._portsStatusBarDefaultAdded ||
+        (statusBarItemsMigrated ||
+          !ui._portsStatusBarDefaultAdded ||
           !ui._kimiStatusBarDefaultAdded ||
           !ui._minimaxStatusBarDefaultAdded ||
           !ui._antigravityStatusBarDefaultAdded ||

@@ -179,6 +179,32 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(setUI).not.toHaveBeenCalled()
   })
 
+  it('removes and persists the deprecated Gemini usage item', () => {
+    const setUI = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { ui: { set: setUI } } })
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        statusBarItems: [
+          'claude',
+          'gemini',
+          'antigravity'
+        ] as unknown as PersistedUIState['statusBarItems'],
+        _portsStatusBarDefaultAdded: true,
+        _kimiStatusBarDefaultAdded: true,
+        _minimaxStatusBarDefaultAdded: true,
+        _antigravityStatusBarDefaultAdded: true,
+        _grokStatusBarDefaultAdded: true
+      })
+    )
+
+    expect(store.getState().statusBarItems).toEqual(['claude', 'antigravity'])
+    expect(setUI).toHaveBeenCalledWith(
+      expect.objectContaining({ statusBarItems: ['claude', 'antigravity'] })
+    )
+  })
+
   it('persists and hydrates the usage percentage display preference', () => {
     const setUI = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('window', { api: { ui: { set: setUI } } })

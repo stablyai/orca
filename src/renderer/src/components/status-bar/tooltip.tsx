@@ -4,7 +4,7 @@ import {
   formatResetDuration
 } from '../../../../shared/rate-limit-reset-format'
 import { AgentIcon } from '@/lib/agent-catalog'
-import { ClaudeIcon, GeminiIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
+import { ClaudeIcon, MiniMaxIcon, OpenAIIcon, OpenCodeGoIcon } from './icons'
 import { translate } from '@/i18n/i18n'
 import {
   getProviderDisplayName,
@@ -78,9 +78,6 @@ export function ProviderIcon({ provider }: { provider: string }): React.JSX.Elem
   if (provider === 'codex') {
     return <OpenAIIcon size={13} />
   }
-  if (provider === 'gemini') {
-    return <GeminiIcon size={13} />
-  }
   if (provider === 'opencode-go') {
     return <OpenCodeGoIcon size={13} />
   }
@@ -143,13 +140,18 @@ export function getWindowSections(
 ): { label: string; window: RateLimitWindow | null }[] {
   if (p.buckets?.length) {
     const bucketSections = p.buckets.map((b) => ({ label: b.name, window: b as RateLimitWindow }))
-    return [
-      ...bucketSections,
-      {
-        label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
-        window: p.weekly
-      }
-    ]
+    if (p.provider === 'antigravity') {
+      return bucketSections
+    }
+    return p.weekly
+      ? [
+          ...bucketSections,
+          {
+            label: translate('auto.components.status.bar.tooltip.252c096536', 'Weekly'),
+            window: p.weekly
+          }
+        ]
+      : bucketSections
   }
   const sections: { label: string; window: RateLimitWindow | null }[] = [
     {

@@ -59,6 +59,7 @@ export function readLegacyTerminalScrollbackSettings(
 type RetiredGlobalSettings = {
   terminalScrollbackBytes?: unknown
   enableGitHubAttribution?: unknown
+  geminiCliOAuthEnabled?: unknown
 }
 
 export function stripRetiredGlobalSettings(
@@ -67,10 +68,12 @@ export function stripRetiredGlobalSettings(
   const {
     terminalScrollbackBytes: _legacyScrollbackBytes,
     enableGitHubAttribution: _legacyGitHubAttribution,
+    geminiCliOAuthEnabled: _deprecatedGeminiCliOAuthEnabled,
     ...rest
   } = (settings ?? {}) as Partial<GlobalSettings> & RetiredGlobalSettings
   void _legacyScrollbackBytes
   void _legacyGitHubAttribution
+  void _deprecatedGeminiCliOAuthEnabled
   return rest
 }
 

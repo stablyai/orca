@@ -52,7 +52,6 @@ export type AgentActivityDisplayMode = 'compact' | 'full'
 export type StatusBarItem =
   | 'claude'
   | 'codex'
-  | 'gemini'
   | 'antigravity'
   | 'opencode-go'
   | 'kimi'

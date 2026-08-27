@@ -121,7 +121,6 @@ src/main/pty/posix-pty-foreground-group.ts
 src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
-src/main/rate-limits/gemini-cli-oauth-extractor.ts
 src/main/runtime/orca-runtime-files.ts
 src/main/runtime/tls-certificate.ts
 src/main/runtime/windows-default-route-interfaces.ts
