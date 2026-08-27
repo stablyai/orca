@@ -209,6 +209,17 @@ export async function wslCodexSessionsDirs(
   return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 
+/** Cursor transcripts use the same cached WSL home discovery as Codex. */
+export async function wslCursorProjectsDirs(
+  deps: Pick<HostReadableTranscriptPathDeps, 'platform' | 'listWslHomeDirs'> = {}
+): Promise<string[]> {
+  if ((deps.platform ?? process.platform) !== 'win32') {
+    return []
+  }
+  const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
+  return homeDirs.map((home) => joinUnderWslHome(home, '.cursor', 'projects'))
+}
+
 // Why: node:path.join is posix-flavoured off Windows and would mangle the
 // `\\wsl.localhost\` share prefix these roots must keep.
 function joinUnderWslHome(home: string, ...segments: string[]): string {

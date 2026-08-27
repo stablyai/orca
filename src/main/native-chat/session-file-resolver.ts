@@ -7,6 +7,7 @@ import {
 } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import { AI_VAULT_AGENT_SOURCES } from '../ai-vault/session-scanner-agent-sources'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
 import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
@@ -14,8 +15,13 @@ import {
   findGrokChatHistoryBySessionId,
   resolveGrokSessionsDir
 } from '../../shared/grok-session-paths'
-import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
+import {
+  toHostReadableTranscriptPath,
+  wslCodexSessionsDirs,
+  wslCursorProjectsDirs
+} from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
+import { wslGatedReaddir } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
@@ -65,6 +71,8 @@ export type ResolveSessionFileOptions = {
   codexSessionsDirs?: string[]
   /** Override the Grok sessions root (`~/.grok/sessions`). */
   grokSessionsDir?: string
+  /** Override the Cursor projects root (`~/.cursor/projects`). */
+  cursorProjectsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
@@ -149,6 +157,17 @@ async function resolveSessionFileById(
       // Why: enumerating WSL homes spawns wsl.exe per distro, which boots ones the
       // user left stopped. Only pay that after this host's own Codex roots miss.
       overrideDirs ? undefined : wslCodexSessionsDirs,
+      signal
+    )
+  }
+  if (transcriptAgent === 'cursor') {
+    const overrideDir = options.cursorProjectsDir
+    return resolveCursorSessionFile(
+      trimmedId,
+      [AI_VAULT_AGENT_SOURCES.cursor.rootDirs({ cursorProjectsDir: overrideDir }, [])[0]].filter(
+        (dir): dir is string => Boolean(dir)
+      ),
+      overrideDir ? undefined : wslCursorProjectsDirs,
       signal
     )
   }
@@ -258,6 +277,57 @@ async function resolveGrokSessionFile(
   const history = await findGrokChatHistoryBySessionId(sessionsDir, sessionId)
   signal?.throwIfAborted()
   return history
+}
+
+async function resolveCursorSessionFile(
+  sessionId: string,
+  projectsDirs: string[],
+  loadFallbackDirs?: () => Promise<string[]>,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const hit = await findCursorTranscriptInDirs(sessionId, projectsDirs, signal)
+  if (hit || !loadFallbackDirs) {
+    return hit
+  }
+  signal?.throwIfAborted()
+  const fallbackDirs = (await loadFallbackDirs()).filter((dir) => !projectsDirs.includes(dir))
+  signal?.throwIfAborted()
+  return findCursorTranscriptInDirs(sessionId, fallbackDirs, signal)
+}
+
+async function findCursorTranscriptInDirs(
+  sessionId: string,
+  projectsDirs: string[],
+  signal?: AbortSignal
+): Promise<string | null> {
+  const source = AI_VAULT_AGENT_SOURCES.cursor
+  const targetName = `${sessionId}.jsonl`
+  let unavailable: WslTranscriptFsError | undefined
+  for (const rootDir of projectsDirs) {
+    const isWslRoot = isWslUncPath(rootDir)
+    try {
+      const files = await walkSessionFiles(rootDir, 'cursor', [], {
+        extensions: new Set(source.extensions),
+        directoryPredicate: source.directoryPredicate,
+        filePredicate: (path) =>
+          basename(path) === targetName && (source.filePredicate?.(path) ?? true),
+        ...(isWslRoot
+          ? { readDirectory: (dirPath: string) => wslGatedReaddir(dirPath, 'scan', signal) }
+          : {}),
+        signal
+      })
+      if (files[0]) {
+        return files[0]
+      }
+    } catch (error) {
+      signal?.throwIfAborted()
+      unavailable = wslTranscriptFsRefusal(error)
+    }
+  }
+  if (unavailable) {
+    throw unavailable
+  }
+  return null
 }
 
 // omp keeps one directory per working directory (`-Documents-dog-app`) with the

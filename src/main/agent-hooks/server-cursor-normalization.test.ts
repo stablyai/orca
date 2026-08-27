@@ -30,12 +30,20 @@ describe('Cursor hook normalization', () => {
   it('beforeSubmitPrompt maps to working and captures the prompt', () => {
     const result = _internals.normalizeHookPayload(
       'cursor',
-      buildBody({ hook_event_name: 'beforeSubmitPrompt', prompt: 'add a README' }),
+      buildBody({
+        hook_event_name: 'beforeSubmitPrompt',
+        conversation_id: 'cursor-conversation',
+        prompt: 'add a README'
+      }),
       'production'
     )
     expect(result?.payload.state).toBe('working')
     expect(result?.payload.agentType).toBe('cursor')
     expect(result?.payload.prompt).toBe('add a README')
+    expect(result?.providerSession).toEqual({
+      key: 'conversation_id',
+      id: 'cursor-conversation'
+    })
   })
 
   it('stop maps to done', () => {

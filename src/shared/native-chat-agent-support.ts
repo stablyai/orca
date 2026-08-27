@@ -1,10 +1,11 @@
-export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'grok' | 'omp'
+export type NativeChatTranscriptAgent = 'claude' | 'codex' | 'cursor' | 'grok' | 'omp'
 
 /** Agents whose transcripts the native chat view can parse and render. */
 export const NATIVE_CHAT_SUPPORTED_AGENTS: ReadonlySet<string> = new Set([
   'claude',
   'openclaude',
   'codex',
+  'cursor',
   'grok',
   'omp'
 ])
@@ -19,7 +20,7 @@ export function isNativeChatSupportedAgent(agent: string | null | undefined): bo
  *  so the chat view must stay closed instead of loading forever. */
 export function nativeChatRequiresLocalTranscript(agent: string | null | undefined): boolean {
   const transcriptAgent = resolveNativeChatTranscriptAgent(agent)
-  return transcriptAgent === 'grok' || transcriptAgent === 'omp'
+  return transcriptAgent === 'cursor' || transcriptAgent === 'grok' || transcriptAgent === 'omp'
 }
 
 /** True when the agent renders a digit-commit question selector that ignores
@@ -40,7 +41,7 @@ export function resolveNativeChatTranscriptAgent(
   if (agent === 'claude' || agent === 'openclaude') {
     return 'claude'
   }
-  if (agent === 'codex' || agent === 'grok' || agent === 'omp') {
+  if (agent === 'codex' || agent === 'cursor' || agent === 'grok' || agent === 'omp') {
     return agent
   }
   return null

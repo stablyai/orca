@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeClaudeTurnLifecycle,
   decodeCodexTurnLifecycle,
+  decodeCursorTurnLifecycle,
   nativeChatTurnLifecycleDecoderForAgent
 } from './transcript-turn-lifecycle'
 
@@ -10,7 +11,35 @@ describe('native chat transcript turn lifecycle', () => {
     expect(nativeChatTurnLifecycleDecoderForAgent('claude')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('openclaude')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('codex')).not.toBeNull()
+    expect(nativeChatTurnLifecycleDecoderForAgent('cursor')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('grok')).toBeNull()
+  })
+
+  it('decodes Cursor turn_ended without inventing ids, timestamps or failure messages', () => {
+    expect(
+      decodeCursorTurnLifecycle(
+        JSON.stringify({ type: 'turn_ended', status: 'success' }),
+        'cursor:success'
+      )
+    ).toEqual({ state: 'completed', turnId: 'cursor:success', timestamp: null })
+    expect(
+      decodeCursorTurnLifecycle(
+        JSON.stringify({ type: 'turn_ended', status: 'error', error: 'request failed' }),
+        'cursor:error'
+      )
+    ).toEqual({ state: 'completed', turnId: 'cursor:error', timestamp: null })
+    expect(
+      decodeCursorTurnLifecycle(
+        JSON.stringify({ type: 'turn_ended', status: 'aborted', error: 'cancelled' }),
+        'cursor:aborted'
+      )
+    ).toEqual({ state: 'interrupted', turnId: 'cursor:aborted', timestamp: null })
+    expect(
+      decodeCursorTurnLifecycle(
+        JSON.stringify({ type: 'turn_ended', status: 'unknown' }),
+        'cursor:unknown'
+      )
+    ).toBeNull()
   })
 
   it('decodes Codex task boundaries with the provider turn id', () => {

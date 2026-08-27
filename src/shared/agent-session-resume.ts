@@ -206,6 +206,10 @@ export function extractAgentProviderSession(
       const id = readSessionId(payload, ['conversationId'])
       return id ? { key: 'conversation_id', id } : null
     }
+    case 'cursor': {
+      const id = readSessionId(payload, ['conversation_id'])
+      return id ? { key: 'conversation_id', id } : null
+    }
     case 'opencode':
     case 'mimo-code': {
       const id = readSessionId(payload, ['sessionID'])
@@ -239,7 +243,6 @@ export function extractAgentProviderSession(
       return id ? { key: 'session_id', id } : null
     }
     case 'amp':
-    case 'cursor':
     case 'command-code':
     case 'hermes':
       return null

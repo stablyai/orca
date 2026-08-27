@@ -27,10 +27,31 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   if (transcriptAgent === 'codex') {
     return decodeCodexTurnLifecycle
   }
+  if (transcriptAgent === 'cursor') {
+    return decodeCursorTurnLifecycle
+  }
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
   }
   return null
+}
+
+export function decodeCursorTurnLifecycle(
+  line: string,
+  fallbackId: string
+): NativeChatTurnLifecycle | null {
+  const record = parseJsonObject(line)
+  if (record?.type !== 'turn_ended') {
+    return null
+  }
+  if (record.status !== 'success' && record.status !== 'error' && record.status !== 'aborted') {
+    return null
+  }
+  return {
+    state: record.status === 'aborted' ? 'interrupted' : 'completed',
+    turnId: fallbackId,
+    timestamp: null
+  }
 }
 
 export function decodeCodexTurnLifecycle(

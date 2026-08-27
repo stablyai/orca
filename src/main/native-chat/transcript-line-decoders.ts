@@ -11,5 +11,6 @@
 
 export { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 export { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
+export { decodeCursorTranscriptLine } from './transcript-line-decoders-cursor'
 export { decodeGrokTranscriptLine } from './transcript-line-decoders-grok'
 export { decodeOmpTranscriptLine } from './transcript-line-decoders-omp'

@@ -67,6 +67,19 @@ describe('canToggleNativeChat', () => {
     ).toBe(true)
   })
 
+  it('accepts local Cursor but rejects Model-A SSH Cursor transcripts', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'cursor',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+    expect(forConnection('ssh-target-1')).toBe(false)
+  })
+
   it('accepts runtime-owned Grok because Model B reads the transcript locally', () => {
     expect(
       canToggleNativeChat({

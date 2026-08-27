@@ -69,6 +69,10 @@ function codexLifecycleLine(
   })}\n`
 }
 
+function cursorLine(role: 'user' | 'assistant', text: string): string {
+  return `${JSON.stringify({ role, message: { content: [{ type: 'text', text }] } })}\n`
+}
+
 async function waitFor(predicate: () => boolean, timeoutMs = 2000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
@@ -104,6 +108,42 @@ describe('subscribeNativeChatTranscript', () => {
 
     expect(snapshots).toHaveLength(1)
     expect(appends.flat().map((message) => message.id)).toEqual(['a-1'])
+  })
+
+  it('tails Cursor messages and turn lifecycle through the shared watcher', async () => {
+    const filePath = await tempFile(cursorLine('user', 'first'))
+    const snapshots: NativeChatMessage[][] = []
+    const appends: NativeChatMessage[][] = []
+    const lifecycles: NativeChatTurnLifecycle[] = []
+    const sub = await subscribeNativeChatTranscript({
+      agent: 'cursor',
+      sessionId: 'ignored',
+      filePath,
+      onInitialSnapshot: (messages) => snapshots.push(messages),
+      onAppend: (messages, lifecycle) => {
+        appends.push(messages)
+        if (lifecycle) {
+          lifecycles.push(lifecycle)
+        }
+      },
+      debounceMs: 5
+    })
+
+    await waitFor(() => snapshots.length === 1)
+    await appendFile(
+      filePath,
+      `${cursorLine('assistant', 'done')}${JSON.stringify({
+        type: 'turn_ended',
+        status: 'success'
+      })}\n`
+    )
+    await waitFor(() => appends.flat().some((message) => message.role === 'assistant'))
+    await waitFor(() => lifecycles.length === 1)
+    sub.unsubscribe()
+
+    expect(snapshots[0]?.[0]).toMatchObject({ role: 'user', timestamp: null })
+    expect(appends.flat().at(-1)).toMatchObject({ role: 'assistant', timestamp: null })
+    expect(lifecycles[0]).toMatchObject({ state: 'completed', timestamp: null })
   })
 
   it('delivers an empty initial snapshot so clients do not remain loading', async () => {

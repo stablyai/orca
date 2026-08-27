@@ -8,6 +8,7 @@ import { resolveSessionFilePath, type ResolveSessionFileOptions } from './sessio
 import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
+  decodeCursorTranscriptLine,
   decodeGrokTranscriptLine,
   decodeOmpTranscriptLine
 } from './transcript-line-decoders'
@@ -40,6 +41,9 @@ export function nativeChatLineDecoderForAgent(agent: AgentType): NativeChatLineD
   }
   if (transcriptAgent === 'codex') {
     return decodeCodexTranscriptLine
+  }
+  if (transcriptAgent === 'cursor') {
+    return decodeCursorTranscriptLine
   }
   if (transcriptAgent === 'grok') {
     return decodeGrokTranscriptLine

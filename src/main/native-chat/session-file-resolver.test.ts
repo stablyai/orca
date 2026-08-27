@@ -52,6 +52,21 @@ describe('resolveSessionFilePath', () => {
     ).resolves.toBe(target)
   })
 
+  it('resolves Cursor sessions only from the AI Vault agent-transcripts layout', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-cursor-')
+    const cursorProjectsDir = join(root, 'cursor-projects')
+    const projectDir = join(cursorProjectsDir, 'project')
+    const targetDir = join(projectDir, 'agent-transcripts')
+    await mkdir(targetDir, { recursive: true })
+    await writeFile(join(projectDir, 'cursor-session.jsonl'), '{}\n')
+    const target = join(targetDir, 'cursor-session.jsonl')
+    await writeFile(target, '{}\n')
+
+    await expect(
+      resolveSessionFilePath('cursor', 'cursor-session', { cursorProjectsDir })
+    ).resolves.toBe(target)
+  })
+
   it('resolves Grok chat_history.jsonl under encodeURIComponent(cwd)/sessionId', async () => {
     const root = await makeRoot('orca-native-chat-resolve-grok-')
     const grokSessionsDir = join(root, 'grok-sessions')
