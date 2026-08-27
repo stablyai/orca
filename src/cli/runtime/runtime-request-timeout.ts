@@ -10,6 +10,7 @@ export const LONG_POLL_CLIENT_GRACE_MS = 10_000
 // poll. A client configured below this would otherwise time out before the
 // server resolves, so the default effective client timeout is budget + grace.
 export const COLLABORATION_CHECKPOINT_WAIT_BUDGET_MS = 60_000
+const WORKER_START_READINESS_WAIT_BUDGET_MS = 60_000
 
 export function isWaitingCheck(params: unknown): boolean {
   return (
@@ -45,6 +46,12 @@ export function resolveMethodTimeoutMs(
       COLLABORATION_CHECKPOINT_WAIT_BUDGET_MS + LONG_POLL_CLIENT_GRACE_MS,
       requestTimeoutMs
     )
+  }
+  if (method === 'orchestration.workerStart') {
+    const inner = Number(getTimeoutMsParam(params))
+    const readinessBudget =
+      Number.isFinite(inner) && inner > 0 ? inner : WORKER_START_READINESS_WAIT_BUDGET_MS
+    return Math.max(readinessBudget + LONG_POLL_CLIENT_GRACE_MS, requestTimeoutMs)
   }
   if ((method === 'orchestration.check' && isWaitingCheck(params)) || method === 'terminal.wait') {
     const inner = Number(getTimeoutMsParam(params))

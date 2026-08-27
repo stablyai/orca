@@ -3,7 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { MISSION_METHODS } from './mission'
+import { detectInstalledAgentsWithShellPathHydration } from '../../../ipc/preflight'
 import { generateTextFromPrompt } from '../../../text-generation/commit-message-text-generation'
+
+vi.mock('../../../ipc/preflight', () => ({
+  detectInstalledAgentsWithShellPathHydration: vi.fn()
+}))
 
 vi.mock('../../../text-generation/commit-message-text-generation', () => ({
   generateTextFromPrompt: vi.fn()
@@ -15,6 +20,9 @@ describe('mission.plan', () => {
   let runtime: OrcaRuntimeService
 
   function setup(): void {
+    vi.mocked(generateTextFromPrompt).mockReset()
+    vi.mocked(detectInstalledAgentsWithShellPathHydration).mockReset()
+    vi.mocked(detectInstalledAgentsWithShellPathHydration).mockResolvedValue(['pi', 'codex'])
     runtime = new OrcaRuntimeService()
     vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
       worktreeVisibilityDefaults: { external: 'hide' },
@@ -104,6 +112,41 @@ describe('mission.plan', () => {
     ).resolves.toMatchObject({ agent: 'pi', plan: { mode: 'single-agent' } })
   })
 
+  it('falls back to the next detected agent when the preferred planner is unavailable', async () => {
+    setup()
+    vi.mocked(generateTextFromPrompt)
+      .mockResolvedValueOnce({ success: false, error: 'Pi is not authenticated.' })
+      .mockResolvedValueOnce({
+        success: true,
+        text: '{"mode":"single-agent"}',
+        agentLabel: 'Codex'
+      })
+
+    await expect(
+      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree' })
+    ).resolves.toMatchObject({ agent: 'codex', plan: { mode: 'single-agent' } })
+
+    expect(vi.mocked(generateTextFromPrompt).mock.calls.map(([, params]) => params.agentId)).toEqual([
+      'pi',
+      'codex'
+    ])
+  })
+
+  it('does not fall back when --agent explicitly selects an unavailable planner', async () => {
+    setup()
+    vi.mocked(generateTextFromPrompt).mockResolvedValue({
+      success: false,
+      error: 'Pi is not authenticated.'
+    })
+
+    await expect(
+      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent: 'pi' })
+    ).rejects.toMatchObject({ code: 'mission_planner_failed' })
+
+    expect(generateTextFromPrompt).toHaveBeenCalledTimes(1)
+    expect(vi.mocked(generateTextFromPrompt).mock.calls[0]?.[1].agentId).toBe('pi')
+  })
+
   it('rejects a disabled explicit agent with a stable error code', async () => {
     setup()
     vi.mocked(runtime.getClientSettings).mockReturnValue({
@@ -116,7 +159,31 @@ describe('mission.plan', () => {
     ).rejects.toMatchObject({ code: 'agent_unconfigured' })
   })
 
-  it('surfaces invalid planner output as mission_planner_failed', async () => {
+  it('repairs one invalid planner response before failing the mission', async () => {
+    setup()
+    vi.mocked(generateTextFromPrompt)
+      .mockResolvedValueOnce({
+        success: true,
+        text: '{"mode":"single"}',
+        agentLabel: 'Pi'
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        text: '{"mode":"single-agent"}',
+        agentLabel: 'Pi'
+      })
+
+    await expect(
+      call({ text: 'Inspect this task.', worktree: 'id:repo::worktree', agent: 'pi' })
+    ).resolves.toMatchObject({ agent: 'pi', plan: { mode: 'single-agent' } })
+
+    expect(generateTextFromPrompt).toHaveBeenCalledTimes(2)
+    expect(vi.mocked(generateTextFromPrompt).mock.calls[1]?.[0]).toContain(
+      'Repair the previous Mission Planner output'
+    )
+  })
+
+  it('surfaces invalid planner output as mission_planner_failed after one repair attempt', async () => {
     setup()
     vi.mocked(generateTextFromPrompt).mockResolvedValue({
       success: true,

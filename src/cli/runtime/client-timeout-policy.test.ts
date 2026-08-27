@@ -122,6 +122,18 @@ describe('resolveMethodTimeoutMs', () => {
     }
   })
 
+  it('gives orchestration.workerStart its default readiness budget plus grace', () => {
+    expect(resolveMethodTimeoutMs('orchestration.workerStart', {}, 60_000)).toBe(
+      60_000 + LONG_POLL_CLIENT_GRACE_MS
+    )
+  })
+
+  it('gives orchestration.workerStart an explicit readiness timeout plus grace', () => {
+    expect(
+      resolveMethodTimeoutMs('orchestration.workerStart', { timeoutMs: 5_000 }, 10_000)
+    ).toBe(5_000 + LONG_POLL_CLIENT_GRACE_MS)
+  })
+
   it('leaves orchestration.check wait=true behavior unchanged (no default budget)', () => {
     expect(resolveMethodTimeoutMs('orchestration.check', { wait: true }, 10_000)).toBe(10_000)
     expect(

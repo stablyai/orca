@@ -22,6 +22,7 @@ describe('runtime RPC browser-host admission', () => {
     expect(classifyRuntimeLongPoll(request('browser.clientHost.attach'))).toBe('browser-host')
     expect(classifyRuntimeLongPoll(request('terminal.wait'))).toBe('wait')
     expect(classifyRuntimeLongPoll(request('orchestration.ask'))).toBe('ask')
+    expect(classifyRuntimeLongPoll(request('orchestration.workerStart'))).toBe('wait')
     expect(classifyRuntimeLongPoll(request('orchestration.check', { wait: true }))).toBe('wait')
     expect(classifyRuntimeLongPoll(request('status.get'))).toBeNull()
   })

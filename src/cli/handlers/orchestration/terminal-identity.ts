@@ -17,13 +17,13 @@ export async function resolveOrchestrationTerminalHandle(
   const envHandle = process.env.ORCA_TERMINAL_HANDLE
   if (envHandle && envHandle.length > 0) {
     if (flagName === 'from' && options.validateEnvHandle) {
-      // Why: long-lived shells can retain a stale ORCA_TERMINAL_HANDLE after remint; don't bake it into coordinator preambles.
+      // Why: a live handle can survive a runtime restart without carrying current pane authority; refresh it through the stable pane key when available.
       const live = await isLiveTerminalHandle(envHandle, client)
+      const reminted = await resolveOrchestrationPaneTerminalHandle(client, { optional: live })
+      if (reminted) {
+        return reminted
+      }
       if (!live) {
-        const reminted = await resolveOrchestrationPaneTerminalHandle(client)
-        if (reminted) {
-          return reminted
-        }
         throwNoActiveSenderTerminal()
       }
     }

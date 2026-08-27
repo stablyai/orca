@@ -62,6 +62,23 @@ export function buildMissionPlanningPrompt(mission: string): string {
   ].join('\n')
 }
 
+export function buildMissionPlanRepairPrompt(
+  mission: string,
+  invalidOutput: string,
+  validationError: string
+): string {
+  return [
+    buildMissionPlanningPrompt(mission),
+    '',
+    'Repair the previous Mission Planner output. Preserve the same execution intent; only correct the JSON shape and schema violations.',
+    `Validation error: ${validationError.slice(0, 2_048)}`,
+    'Previous output:',
+    invalidOutput.slice(0, 16_384),
+    '',
+    'Return corrected JSON only.'
+  ].join('\n')
+}
+
 export function parseMissionPlan(raw: string): MissionPlan {
   let decoded: unknown
   try {
