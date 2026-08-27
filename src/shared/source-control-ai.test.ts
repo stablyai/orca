@@ -66,6 +66,29 @@ describe('source-control AI resolution', () => {
     expect(resolve('branchName').params.model).toBe('gpt-5.5')
   })
 
+  it('resolves branchName to the system default agent when the default TUI agent has no spec', () => {
+    // Reproduces the "rename failed" badge: Source Control AI on, no explicit
+    // agent, and the default TUI agent (omp) has no spec. Pre-fix this errored
+    // ("Choose a supported agent"); it must now fall back to the system default.
+    const base = getDefaultSettings('/tmp')
+    const result = resolveSourceControlAiForOperation({
+      settings: {
+        ...base,
+        defaultTuiAgent: 'omp',
+        disabledTuiAgents: [],
+        sourceControlAi: { ...base.sourceControlAi!, enabled: true, agentId: null }
+      },
+      repo: null,
+      operation: 'branchName',
+      discoveryHostKey: 'local'
+    })
+    expect(result.ok).toBe(true)
+    if (!result.ok) {
+      throw new Error(result.error)
+    }
+    expect(result.value.params.agentId).toBe('claude')
+  })
+
   it('resolves generation config and PR defaults when Source Control AI actions are hidden', () => {
     const base = settings()
     base.sourceControlAi = {
