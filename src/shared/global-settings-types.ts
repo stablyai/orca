@@ -203,6 +203,9 @@ export type GlobalSettings = {
   terminalLinkActionPopoverEnabled?: boolean
   /** Opt-in: open new coding-agent tabs in native chat instead of the raw terminal; optional for legacy settings. */
   openAgentTabsInChatByDefault?: boolean
+  /** On unless explicitly disabled: continue agents that stalled on a login or
+   *  network failure, fleet-wide. Optional for legacy settings files. */
+  autoRecoverStalledAgents?: boolean
   /** Experimental native chat surface for Claude/Codex sessions; off by default. */
   experimentalNativeChat?: boolean
   /** Last explicit native-chat model + option selections; live panes need an applied/dispatched record before showing a value. */

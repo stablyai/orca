@@ -15,6 +15,10 @@ import {
 } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
+  getAgentStallRecoveryDescription,
+  getAgentStallRecoveryTitle
+} from './agent-stall-recovery-copy'
+import {
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
   SettingsSwitchRow
@@ -255,6 +259,7 @@ export function AgentsPane({
         wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
+      <AgentStallRecoverySetting settings={settings} updateSettings={updateSettings} />
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (
         <AgentAwakeSetting settings={settings} updateSettings={updateSettings} />
@@ -291,6 +296,21 @@ export function AgentStatusHooksSetting({ settings, updateSettings }: AgentsPane
         checked={enabled}
         onChange={() => updateSettings({ agentStatusHooksEnabled: !enabled })}
         ariaLabel={getAgentStatusHooksTitle()}
+      />
+    </section>
+  )
+}
+
+export function AgentStallRecoverySetting({ settings, updateSettings }: AgentsPaneProps) {
+  const enabled = settings.autoRecoverStalledAgents !== false
+  return (
+    <section className="space-y-3">
+      <SettingsSwitchRow
+        label={getAgentStallRecoveryTitle()}
+        description={getAgentStallRecoveryDescription()}
+        checked={enabled}
+        onChange={() => updateSettings({ autoRecoverStalledAgents: !enabled })}
+        ariaLabel={getAgentStallRecoveryTitle()}
       />
     </section>
   )

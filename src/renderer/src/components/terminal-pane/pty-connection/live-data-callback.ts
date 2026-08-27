@@ -68,6 +68,15 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     if (codexBackfillNotice) {
       session.reportError(codexBackfillNotice)
     }
+    const agentStall = session.agentStallDetector?.observe(data)
+    if (agentStall) {
+      useAppStore.getState().observeAgentStall({
+        paneKey: session.cacheKey,
+        cause: agentStall.cause,
+        signature: agentStall.signature,
+        observedAt: agentStall.at
+      })
+    }
     // Why: split panes have visible-but-inactive panes the user watches; throttle only when the pane or whole document is hidden.
     const foreground =
       shouldWritePtyOutputForeground(session.deps.isVisibleRef.current) && meta?.background !== true

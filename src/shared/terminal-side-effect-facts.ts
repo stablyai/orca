@@ -6,6 +6,7 @@
  */
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { AgentStallCause } from './agent-stall-signature'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
 
 /** Why tagged: stale-clear facts come from main's unthrottled 3s timer, not
@@ -29,6 +30,13 @@ export type TerminalSideEffectFact =
    *  against its live status row before completing the turn. */
   | { kind: 'command-code-working'; prompt: string }
   | { kind: 'command-code-done'; prompt: string }
+  /** An agent CLI printed a login/network failure that ends its turn without
+   *  finishing the work. Produced here and not in the renderer because a hidden
+   *  pane's bytes never reach a renderer, and a stalled fleet is mostly hidden
+   *  panes. Policy (whether and when to continue the agent) stays renderer-side.
+   *  Old clients that do not know this kind ignore it, which degrades to no
+   *  stall recovery rather than misbehaving. */
+  | { kind: 'agent-stall'; cause: AgentStallCause; signature: string }
   /** DECSET 2031 color-scheme subscribe observed in the byte stream. Emitted
    *  so hidden-delivery-gated views (whose bytes never arrive) can still record
    *  the subscription and push later theme flips; subscribing is never answered. */

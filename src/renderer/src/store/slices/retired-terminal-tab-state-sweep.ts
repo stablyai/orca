@@ -10,16 +10,22 @@ import {
   type AgentStatusTabPrefixDropState
 } from './agent-status'
 import { buildPaneForegroundAgentTabPrefixClearPatch } from './pane-foreground-agent'
+import { buildAgentStallTabPrefixClearPatch } from './agent-stall-recovery'
 
 export type RetiredTerminalTabSweepActions = Pick<
   AppState,
-  'dropAgentStatusByTabPrefix' | 'clearPaneForegroundAgentByTabPrefix'
+  | 'dropAgentStatusByTabPrefix'
+  | 'clearPaneForegroundAgentByTabPrefix'
+  | 'clearAgentStallsByTabPrefix'
 >
 
 /** The state the sweep reduces over: the two store maps plus everything the
  *  agent-status drop reads. Narrow so a non-store caller can pass its own view. */
 export type RetiredTerminalTabSweepState = AgentStatusTabPrefixDropState &
-  Pick<AppState, 'paneForegroundAgentByPaneKey'>
+  Pick<AppState, 'paneForegroundAgentByPaneKey'> &
+  // Why optional: the paired-snapshot and parity callers build narrow projections
+  // that never model stall state; the patch builder skips what is absent.
+  Partial<Pick<AppState, 'agentStallByPaneKey' | 'agentStallRecoveryLedgerByPaneKey'>>
 
 /**
  * The suppressor-aware store maps plus three module registries a retired terminal tab strands.
@@ -43,6 +49,9 @@ export function sweepRetiredTerminalTabState(
   actions.dropAgentStatusByTabPrefix(tabId, worktreeId ? { worktreeId } : undefined)
   // Why: retired pane keys never recur, so stranded foreground entries would accumulate for the renderer's whole lifetime.
   actions.clearPaneForegroundAgentByTabPrefix(tabId)
+  // Why: same rationale — a retired pane's stall observation would otherwise keep
+  // the pane counted as stalled until the observation cap or TTL evicted it.
+  actions.clearAgentStallsByTabPrefix(tabId)
   // Why: retirement permanently retires the tab's panes (a reopen mints a fresh leafId), so drop hibernation output epochs to keep the module map from growing forever.
   forgetAgentHibernationTabOutput(tabId)
   // Why: same rationale — retired tab ids never recur, so drop the foreground last-seen and consumed agent-startup delivery guards.
@@ -79,7 +88,8 @@ export function buildRetiredTerminalTabStateSweepPatch(
       swept.paneForegroundAgentByPaneKey,
       [`${tabId}:`]
     )
-    swept = { ...swept, ...patch, ...foreground }
+    const stalls = buildAgentStallTabPrefixClearPatch(swept, [`${tabId}:`])
+    swept = { ...swept, ...patch, ...foreground, ...stalls }
     forgetAgentHibernationTabOutput(tabId)
   }
   forgetForegroundTerminalTabs(tabIds)

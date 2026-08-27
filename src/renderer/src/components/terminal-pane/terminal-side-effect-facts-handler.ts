@@ -15,6 +15,7 @@
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
+import type { AgentStallCause } from '../../../../shared/agent-stall-signature'
 import type {
   TerminalSideEffectBatch,
   TerminalSideEffectFact
@@ -257,7 +258,47 @@ function drainHandoffFactBuffer(ptyId: string, entry: ConsumerEntry): void {
   }
 }
 
+/**
+ * Stall facts are recorded per PANE, not per registered consumer: main observes
+ * them for hidden and unmounted panes too, and those are exactly the panes a
+ * stalled fleet consists of. Routing them through the per-PTY consumer would
+ * reintroduce the visible-pane-only bug this fact exists to fix, so the sink is
+ * registered once by the app and fed straight from the batch's own attribution.
+ */
+export type AgentStallFactSink = (observation: {
+  paneKey: string
+  cause: AgentStallCause
+  signature: string
+  observedAt: number
+}) => void
+
+let agentStallFactSink: AgentStallFactSink | null = null
+
+export function registerAgentStallFactSink(sink: AgentStallFactSink | null): void {
+  agentStallFactSink = sink
+}
+
+function routeAgentStallFacts(batch: TerminalSideEffectBatch): void {
+  // Why never on replay: a (re)attach snapshot replays historical bytes, and a
+  // stall the user already dealt with must not resurface as a live one.
+  if (batch.replay || !batch.paneKey || !agentStallFactSink) {
+    return
+  }
+  const observedAt = Date.now()
+  for (const fact of batch.facts) {
+    if (fact.kind === 'agent-stall') {
+      agentStallFactSink({
+        paneKey: batch.paneKey,
+        cause: fact.cause,
+        signature: fact.signature,
+        observedAt
+      })
+    }
+  }
+}
+
 export function dispatchTerminalSideEffectBatch(batch: TerminalSideEffectBatch): void {
+  routeAgentStallFacts(batch)
   const entry = consumersByPtyId.get(batch.ptyId)
   if (!entry) {
     bufferHandoffFactBatch(batch)

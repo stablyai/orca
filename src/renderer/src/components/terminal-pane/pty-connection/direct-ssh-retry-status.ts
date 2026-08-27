@@ -17,6 +17,8 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { shouldSuppressCodexAutoApprovalStatus } from '../codex-auto-approval-notification-suppression'
 import { createCommandCodeOutputStatusDetector } from '../../../../../shared/command-code-output-status'
+import { createAgentStallDetector } from '../../../../../shared/agent-stall-detector'
+import { isResumableTuiAgent } from '../../../../../shared/agent-session-resume'
 import { readInFlightCommandCodeTurn } from '../parked-terminal-command-status'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
@@ -245,6 +247,16 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
   // mark (a fact can outrun the pty:data task that sets it).
   session.isHiddenDeliveryGateManagedPty = (ptyId: string | null): ptyId is string =>
     session.hiddenDeliveryGateActive && Boolean(ptyId) && !isRemoteRuntimePtyId(ptyId)
+  // Why (byte-parser mode only): under main authority the stall scan runs in
+  // main's per-PTY tracker and arrives as `agent-stall` facts, which is the only
+  // path that sees a HIDDEN pane's bytes — the renderer never receives those,
+  // and a stalled fleet is mostly hidden panes. This instance therefore covers
+  // just the PTYs main does not parse (remote runtimes).
+  const paneLaunchAgent = session.paneStartup?.launchAgent ?? session.tab?.launchAgent ?? null
+  session.agentStallDetector =
+    !session.mainSideEffectAuthority && paneLaunchAgent && isResumableTuiAgent(paneLaunchAgent)
+      ? createAgentStallDetector()
+      : null
   // Why (byte-parser mode only): with main authority the Command Code scrape
   // runs in main's per-PTY tracker and arrives as command-code facts; running
   // the byte detector too would double-drive the seed/settle policy above.

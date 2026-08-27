@@ -387,10 +387,15 @@ import {
 } from '../../shared/execution-host'
 import { preservedBranchCleanupScopeKey } from '../../shared/preserved-branch-cleanup'
 import { getRegisteredSshState } from '../ssh/ssh-target-registry'
+import { isResumableTuiAgent } from '../../shared/agent-session-resume'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
 } from '../../shared/agent-session-resume'
+import {
+  createAgentStallDetector,
+  type AgentStallDetector
+} from '../../shared/agent-stall-detector'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import { applyBrowserSessionTabSelection } from './browser-session-tab-selection-snapshot'
 import type { BrowserSessionTabSelectionOptions } from './browser-tab-create-publication'
@@ -1808,6 +1813,10 @@ type RuntimePtyTitleTrackerEntry = {
   // TUI output. Null when no side-effect consumer exists (headless serve) —
   // the scrape produces facts only.
   commandCodeDetector: { observe: (data: string) => boolean } | null
+  // Why lazily created (see getOrCreateAgentStallDetector): the pane's agent is
+  // often unknown when the tracker is built — a launched agent's record fills in
+  // later, and a hand-typed one only becomes known as foregroundAgent.
+  agentStallDetector: AgentStallDetector | null
 }
 
 // Why: the full OSC 9999 payload flows through emitTerminalAgentStatusEvents and
@@ -11865,6 +11874,20 @@ export class OrcaRuntimeService {
       // detector's bounded recent-text window; the detector strips remaining
       // control sequences itself, exactly like the renderer byte path.
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      // Why here and not in the renderer: this is the only place every byte of a
+      // local/SSH pane is parsed, hidden panes included. A stalled fleet is by
+      // definition mostly hidden panes, so a renderer-side scan saw only the one
+      // pane that happened to be on screen.
+      const agentStall = this.getOrCreateAgentStallDetector(titleTrackerEntry, pty)?.observe(
+        agentStatusChunk.cleanData
+      )
+      if (agentStall) {
+        titleTrackerEntry.pendingFacts.push({
+          kind: 'agent-stall',
+          cause: agentStall.cause,
+          signature: agentStall.signature
+        })
+      }
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {
@@ -12413,7 +12436,8 @@ export class OrcaRuntimeService {
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
+        : null,
+      agentStallDetector: null
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry
@@ -12604,7 +12628,37 @@ export class OrcaRuntimeService {
       entry.commandCodeDetector = nextAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
         : null
+      if (!nextAvailable) {
+        entry.agentStallDetector = null
+      }
     }
+  }
+
+  /**
+   * The pane's stall detector, created on the first chunk where the pane is known
+   * to run a resumable agent.
+   *
+   * Why gated on the agent: the scan is on the byte path of every terminal, and a
+   * pane running a build prints the same connection errors with no conversation to
+   * resume. Why `foregroundAgent` counts too: an agent the user started by hand
+   * has no launchAgent, and its stalls are worth recovering just the same.
+   */
+  private getOrCreateAgentStallDetector(
+    entry: RuntimePtyTitleTrackerEntry,
+    pty: RuntimePtyWorktreeRecord | null
+  ): AgentStallDetector | null {
+    if (entry.agentStallDetector) {
+      return entry.agentStallDetector
+    }
+    if (!this.terminalSideEffectConsumerAvailable) {
+      return null
+    }
+    const agent = pty?.launchAgent ?? pty?.foregroundAgent ?? null
+    if (!agent || !isResumableTuiAgent(agent)) {
+      return null
+    }
+    entry.agentStallDetector = createAgentStallDetector()
+    return entry.agentStallDetector
   }
 
   private createTerminalSideEffectCommandCodeDetector(

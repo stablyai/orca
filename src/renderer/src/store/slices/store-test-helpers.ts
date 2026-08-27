@@ -32,6 +32,7 @@ import { createSshSlice } from './ssh'
 import { createRuntimeEnvironmentSshSlice } from './runtime-environment-ssh'
 import { createAgentStatusSlice } from './agent-status'
 import { createPaneForegroundAgentSlice } from './pane-foreground-agent'
+import { createAgentStallRecoverySlice } from './agent-stall-recovery'
 import { createDiffCommentsSlice } from './diffComments'
 import { createDetectedAgentsSlice } from './detected-agents'
 import { createRuntimeDetectedAgentsSlice } from './runtime-detected-agents'
@@ -87,6 +88,7 @@ export function createTestStore() {
     ...createRuntimeEnvironmentSshSlice(...a),
     ...createAgentStatusSlice(...a),
     ...createPaneForegroundAgentSlice(...a),
+    ...createAgentStallRecoverySlice(...a),
     ...createDiffCommentsSlice(...a),
     ...createDetectedAgentsSlice(...a),
     ...createRuntimeDetectedAgentsSlice(...a),
