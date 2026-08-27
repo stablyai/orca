@@ -118,6 +118,8 @@ describe('orchestration federated setup evidence', () => {
     })
     const task = db.createTask({ spec: 'remote setup', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       runtimeEpoch: runtime.getRuntimeId(),

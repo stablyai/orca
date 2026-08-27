@@ -1,4 +1,3 @@
-import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { IssueInfo } from '../../../../shared/github/pull-request-types'
 import type {
   AutomationWorkspaceProvenance,
@@ -50,7 +49,6 @@ export type WorktreeCardDetailsHoverProps = WorktreeCardMetaBadgesProps & {
   workspaceTitle?: string
   identityOrder?: 'workspace-first' | 'branch-first'
   workspaceTitleRenameDisabled?: boolean
-  automationHostId?: ExecutionHostId
   detailsAfter?: React.ReactNode
   openDelay?: number
   closeDelay?: number

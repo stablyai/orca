@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { appendFile, mkdtemp, mkdir, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { performance as nodePerformance } from 'node:perf_hooks'
+import { updateActiveGitStatusRefBinding } from './worktree-git-status-ref-watch'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { subscribeViaWatcherProcess } from './parcel-watcher-process'
@@ -282,6 +283,61 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     expect(duringOrdinaryTicks).toBeLessThan(backstopSamples * RECONCILIATION_TICKS)
   })
 
+  it('drops the ref poller when the binding moves away, leaving no orphan', async () => {
+    installSubscribeMock()
+    const commonDir = await makeCommonDir(true)
+    await mkdir(join(commonDir, 'refs', 'remotes', 'origin'), { recursive: true })
+    await writeFile(join(commonDir, 'refs', 'remotes', 'origin', 'main'), 'aaa\n')
+    const visibility = createVisibilityHarness()
+    const target = makeTarget(commonDir)
+    const watchTarget = {
+      kind: target.kind,
+      path: target.path,
+      repos: target.repos,
+      gitStatusRefPaths: new Set<string>()
+    }
+    const watch = await startGitCommonWatch(
+      target,
+      () => {},
+      POLL_MS,
+      'darwin',
+      visibility.source,
+      undefined,
+      () => [...watchTarget.gitStatusRefPaths]
+    )
+    cleanups.push(() => watch.unsubscribe())
+    const baseline = visibility.listenerCount()
+
+    const bind = (branch?: string): Promise<void> =>
+      updateActiveGitStatusRefBinding(
+        {
+          worktreeId: `${[...target.repos.keys()][0]}::${commonDir}`,
+          worktreePath: commonDir,
+          executionHostId: 'local',
+          branch,
+          upstreamName: branch ? 'origin/main' : undefined
+        },
+        () => [watchTarget],
+        async () => 'refs/remotes/origin/main'
+      )
+
+    // Bind then unbind repeatedly: each cycle must hand back whatever it took.
+    for (let round = 0; round < 4; round++) {
+      await bind('main')
+      await vi.waitFor(() => {
+        expect(visibility.listenerCount()).toBeGreaterThan(baseline)
+      })
+      await bind(undefined)
+      await vi.waitFor(() => {
+        expect(visibility.listenerCount()).toBe(baseline)
+      })
+    }
+
+    await watch.unsubscribe()
+    cleanups.pop()
+    expect(visibility.listenerCount()).toBe(0)
+  })
+
   it('polls only the accepted upstream ref and rebinds without synthetic events', async () => {
     installSubscribeMock()
     const commonDir = await makeCommonDir(true)
@@ -406,12 +462,13 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       ),
       []
     )
-    // Narrow fallback + selected-ref polling + primary backstop, with the narrow
-    // existence poll retired. Waiting on the exact count is what guarantees the
-    // fallback has baselined before the entry below is created.
+    // Narrow fallback + primary backstop, with the narrow existence poll retired.
+    // No upstream ref is selected here, so no selected-ref poll is scheduled at
+    // all. Waiting on the exact count is what guarantees the fallback has
+    // baselined before the entry below is created.
     await vi.waitFor(() => {
       expect(narrowSubscription().unsubscribe).toHaveBeenCalledOnce()
-      expect(visibility.listenerCount()).toBe(4)
+      expect(visibility.listenerCount()).toBe(3)
     })
 
     const entryPath = join(worktreesDir, 'fallback-entry')
@@ -564,8 +621,8 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
     await mkdir(worktreesDir)
     await vi.waitFor(() => {
       expect(subscribeMock).toHaveBeenCalledTimes(2)
+      expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
     })
-    expect(received.flat()).toContainEqual({ type: 'create', path: worktreesDir })
   })
 
   it('drops both visibility subscriptions on dispose', async () => {
@@ -580,9 +637,9 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
       visibility.source
     )
 
-    // Narrow existence, selected-ref polling, and the primary backstop each park
-    // on window visibility.
-    expect(visibility.listenerCount()).toBe(3)
+    // Narrow existence and the primary backstop park on window visibility. No
+    // upstream ref is selected, so no selected-ref poll exists to park.
+    expect(visibility.listenerCount()).toBe(2)
     await watch.unsubscribe()
     expect(visibility.listenerCount()).toBe(0)
   })
@@ -637,8 +694,15 @@ describe('worktree git-common narrow watch (local native platforms)', () => {
 
       await replaceWorktreesRoot(commonDir, worktreesDir, retainedEntry)
       await vi.advanceTimersByTimeAsync(POLL_MS * RECONCILIATION_TICKS * 4)
-      expect(subscribeMock).toHaveBeenCalledTimes(3)
-      expect(staleSubscription.unsubscribe).toHaveBeenCalledOnce()
+      // Reconciliation's snapshot is real filesystem work, so advancing the fake
+      // clock schedules it but does not guarantee it has settled.
+      await vi.waitFor(
+        () => {
+          expect(subscribeMock).toHaveBeenCalledTimes(3)
+          expect(staleSubscription.unsubscribe).toHaveBeenCalledOnce()
+        },
+        { timeout: 2_000 }
+      )
 
       const beforeStaleEvent = received.length
       staleSubscription.callback(null, [{ type: 'update', path: retainedEntry }])

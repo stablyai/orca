@@ -587,7 +587,9 @@ describe('setupGuestShortcutForwarding', () => {
     })
   })
 
-  it('does not broadcast browser Find without a registered workspace owner', () => {
+  // A client-hosted guest is registered by main's host runtime, whose wire command carries no
+  // workspace. Withholding the chord there suppressed Cmd+F in the guest and delivered nothing.
+  it('forwards browser Find by page alone when no workspace owner is registered', () => {
     setupGuestShortcutForwarding({
       browserTabId,
       guest: makeGuest(),
@@ -597,7 +599,10 @@ describe('setupGuestShortcutForwarding', () => {
     const preventDefault = triggerBeforeInput({ code: 'KeyF', key: 'f' })
 
     expect(preventDefault).toHaveBeenCalledOnce()
-    expect(rendererSendMock).not.toHaveBeenCalled()
+    expect(rendererSendMock).toHaveBeenCalledWith('ui:findInBrowserPage', {
+      browserPageId: browserTabId,
+      browserWorkspaceId: undefined
+    })
   })
 
   it('forwards quick-command menu shortcuts from focused guest pages', () => {

@@ -3,13 +3,10 @@ import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
 import { requestEditorFileClose } from '../editor/editor-autosave'
-import {
-  closeWebRuntimeSessionTab,
-  isWebRuntimeSessionActive
-} from '../../runtime/web-runtime-session'
+import { isWebRuntimeSessionActive } from '../../runtime/web-runtime-session'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
+import { closeBrowserWorkspaceTabOnHosts } from '@/runtime/browser-workspace-tab-close'
 
 export function useTabGroupTabCloseCommands({
   worktreeId,
@@ -61,6 +58,40 @@ export function useTabGroupTabCloseCommands({
     }
   }, [setActiveWorktree, worktreeId])
 
+  const closeBrowserItem = useCallback(
+    (item: Tab, focusedEnvironmentId: string | null | undefined) => {
+      const state = useAppStore.getState()
+      const plan = closeBrowserWorkspaceTabOnHosts({
+        state,
+        worktreeId,
+        workspaceId: item.entityId,
+        visibleTabId: item.id,
+        focusedEnvironmentId
+      })
+      // Why: both teardown sites take the reason. closeBrowserTab usually removes the visible tab
+      // itself, but when it cannot find it the bare call below is the one that runs — and a cleanup
+      // close that lands there without these options hands the user an empty-worktree landing.
+      const cleanupOptions =
+        plan.localCloseReason === 'cleanup'
+          ? { preserveWorktreeSelection: true, recordInteraction: false }
+          : undefined
+      if (plan.closesLocally) {
+        // Why before the teardown: closeBrowserTab announces the MRU page selection, and a guest
+        // torn down first leaves the fallback picking registration order instead (#16306).
+        closeBrowserTab(
+          item.entityId,
+          plan.localCloseReason ? { reason: plan.localCloseReason } : undefined
+        )
+        destroyWorkspaceWebviews(state.browserPagesByWorkspace, item.entityId)
+      }
+      if (plan.removesVisibleTab) {
+        closeUnifiedTab(item.id, cleanupOptions)
+      }
+      return plan
+    },
+    [closeBrowserTab, closeUnifiedTab, worktreeId]
+  )
+
   const closeItem = useCallback(
     (itemId: string, opts?: { skipEmptyCheck?: boolean }) => {
       const item = groupTabs.find((candidate) => candidate.id === itemId)
@@ -84,24 +115,12 @@ export function useTabGroupTabCloseCommands({
         return
       }
       if (item.contentType === 'browser') {
-        const browserState = useAppStore.getState()
-        const hasLocalPages = (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
-        // Why: host-close a remote-owned browser or a pageless host-mirror (else un-closable); local fallbacks have pages so stay local.
-        const shouldCloseOnHost =
-          isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-          (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
-            !hasLocalPages)
-        if (shouldCloseOnHost) {
-          void closeWebRuntimeSessionTab({
-            worktreeId,
-            tabId: item.id,
-            environmentId: runtimeEnvironmentId,
-            reason: 'user'
-          })
+        const plan = closeBrowserItem(item, runtimeEnvironmentId)
+        // Why: the empty check below answers "the user emptied this worktree". Unwinding a create
+        // that never finished is not that — it must leave the selection as the click found it.
+        if (!plan.closesLocally || plan.localCloseReason === 'cleanup') {
+          return
         }
-        closeBrowserTab(item.entityId)
-        destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
-        closeUnifiedTab(item.id)
       } else if (item.contentType === 'simulator') {
         closeUnifiedTab(item.id)
       } else {
@@ -116,7 +135,7 @@ export function useTabGroupTabCloseCommands({
       }
     },
     [
-      closeBrowserTab,
+      closeBrowserItem,
       closeEditorIfUnreferenced,
       closeUnifiedTab,
       groupTabs,
@@ -143,25 +162,7 @@ export function useTabGroupTabCloseCommands({
           continue
         }
         if (item.contentType === 'browser') {
-          // Why: see closeItem — host-close a remote-owned browser or pageless host-mirror; always remove the visible tab.
-          const browserState = useAppStore.getState()
-          const hasLocalPages =
-            (browserState.browserPagesByWorkspace[item.entityId] ?? []).length > 0
-          const shouldCloseOnHost =
-            isWebRuntimeSessionActive(runtimeEnvironmentId) &&
-            (browserWorkspaceHasRemoteOwner(browserState, item.entityId, runtimeEnvironmentId) ||
-              !hasLocalPages)
-          if (shouldCloseOnHost) {
-            void closeWebRuntimeSessionTab({
-              worktreeId,
-              tabId: item.id,
-              environmentId: runtimeEnvironmentId,
-              reason: 'user'
-            })
-          }
-          closeBrowserTab(item.entityId)
-          destroyWorkspaceWebviews(browserState.browserPagesByWorkspace, item.entityId)
-          closeUnifiedTab(item.id)
+          closeBrowserItem(item, runtimeEnvironmentId)
         } else if (item.contentType === 'terminal') {
           closeTab(item.entityId)
         } else if (item.contentType === 'simulator') {
@@ -174,7 +175,7 @@ export function useTabGroupTabCloseCommands({
         }
       }
     },
-    [closeBrowserTab, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs, worktreeId]
+    [closeBrowserItem, closeEditorIfUnreferenced, closeTab, closeUnifiedTab, groupTabs, worktreeId]
   )
 
   return { closeItem, closeMany, leaveWorktreeIfEmpty }

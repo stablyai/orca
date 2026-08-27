@@ -13,6 +13,10 @@ import {
   type TaskSourceContext,
   type WorkspaceRunContext
 } from '../../shared/task-source-context'
+import type {
+  AutomationDestination,
+  AutomationOwnerPrecondition
+} from '../../shared/automation-owner-precondition'
 import type { ProjectHostSetup } from '../../shared/project-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import {
@@ -28,13 +32,15 @@ import {
   formatAutomationRun,
   formatAutomationRuns,
   formatAutomationShow,
-  printResult
+  printResult,
+  type AutomationShowPayload
 } from '../format'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../flags'
+import { resolveAutomationDestination } from '../automation-destination'
 import { RuntimeClientError } from '../runtime-client'
 import { getOptionalWorktreeSelector, resolveCurrentWorktreeSelector } from '../selectors'
 import {
@@ -44,6 +50,7 @@ import {
 } from '../worktree-project-target'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
+  destination?: AutomationDestination
   repo?: string
   timezone?: string
   workspace?: string
@@ -405,6 +412,24 @@ async function getExplicitTarget(
   return { repo, workspace }
 }
 
+/**
+ * Reads the record's current owner so the mutation that follows can name it.
+ *
+ * The CLI cannot project an owner itself — it has no SSH target registry — so it
+ * asks the authority that stores the record. A host too old to answer sends
+ * nothing, and that host has no fence to satisfy either.
+ */
+async function resolveExpectedOwner(
+  client: Parameters<CommandHandler>[0]['client'],
+  id: string
+): Promise<AutomationOwnerPrecondition | undefined> {
+  const result = await client.call<{ automation: Automation; owner?: AutomationOwnerPrecondition }>(
+    'automation.show',
+    { id }
+  )
+  return result.result.owner
+}
+
 function buildAutomationRunContextFromSetup(setup: ProjectHostSetup): WorkspaceRunContext {
   const runContext = buildWorkspaceRunContext({
     projectId: setup.projectId,
@@ -428,7 +453,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, formatAutomationList)
   },
   'automations show': async ({ flags, client, json }) => {
-    const result = await client.call<{ automation: Automation }>('automation.show', {
+    const result = await client.call<AutomationShowPayload>('automation.show', {
       id: getRequiredStringFlag(flags, 'id')
     })
     printResult(result, json, formatAutomationShow)
@@ -442,7 +467,8 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
-    const result = await client.call<{ automation: Automation }>('automation.create', {
+    // Built before the destination read so a contradictory flag still fails without a runtime call.
+    const create = {
       name: getRequiredStringFlag(flags, 'name'),
       prompt: getRequiredStringFlag(flags, 'prompt'),
       precheck: getPrecheckFlag(flags),
@@ -458,43 +484,63 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       enabled: getEnabledFlag(flags),
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
-    } satisfies AutomationCreateParams)
+    } satisfies AutomationCreateParams
+    const destination = await resolveAutomationDestination(client, target)
+    const result = await client.call<{ automation: Automation }>('automation.create', {
+      ...create,
+      ...(destination ? { destination } : {})
+    })
     printResult(result, json, formatAutomationShow)
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const target = await getExplicitTarget(flags, cwd, client)
     const schedule = getScheduleFlag(flags, false)
     const sourceContext = getSourceContextFlag(flags)
+    const id = getRequiredStringFlag(flags, 'id')
+    // Built before the owner read so a contradictory flag still fails without a runtime call.
+    const updates = {
+      name: getOptionalStringFlag(flags, 'name'),
+      prompt: getOptionalStringFlag(flags, 'prompt'),
+      precheck: getPrecheckFlag(flags),
+      agentId: getOptionalProviderFlag(flags),
+      ...(target.runContext ? { runContext: target.runContext } : {}),
+      ...(sourceContext !== undefined ? { sourceContext } : {}),
+      repo: target.repo,
+      workspace: target.workspace,
+      workspaceMode: getWorkspaceModeFlag(flags),
+      baseBranch: getOptionalStringFlag(flags, 'base-branch'),
+      reuseSession: getReuseSessionFlag(flags),
+      timezone: getOptionalStringFlag(flags, 'timezone'),
+      enabled: getEnabledFlag(flags),
+      missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
+      ...schedule
+    } satisfies AutomationUpdateParams
+    const expectedOwner = await resolveExpectedOwner(client, id)
+    // Why: expectedOwner only fences the host the record is leaving; an edit that moves it needs the arrival fenced too.
+    const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.update', {
-      id: getRequiredStringFlag(flags, 'id'),
-      updates: {
-        name: getOptionalStringFlag(flags, 'name'),
-        prompt: getOptionalStringFlag(flags, 'prompt'),
-        precheck: getPrecheckFlag(flags),
-        agentId: getOptionalProviderFlag(flags),
-        ...(target.runContext ? { runContext: target.runContext } : {}),
-        ...(sourceContext !== undefined ? { sourceContext } : {}),
-        repo: target.repo,
-        workspace: target.workspace,
-        workspaceMode: getWorkspaceModeFlag(flags),
-        baseBranch: getOptionalStringFlag(flags, 'base-branch'),
-        reuseSession: getReuseSessionFlag(flags),
-        timezone: getOptionalStringFlag(flags, 'timezone'),
-        enabled: getEnabledFlag(flags),
-        missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
-        ...schedule
-      } satisfies AutomationUpdateParams
+      id,
+      ...(expectedOwner ? { expectedOwner } : {}),
+      ...(destination ? { destination } : {}),
+      updates
     })
     printResult(result, json, formatAutomationShow)
   },
   'automations remove': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')
-    const result = await client.call<{ removed: boolean; id: string }>('automation.delete', { id })
+    const expectedOwner = await resolveExpectedOwner(client, id)
+    const result = await client.call<{ removed: boolean; id: string }>('automation.delete', {
+      id,
+      ...(expectedOwner ? { expectedOwner } : {})
+    })
     printResult(result, json, formatAutomationRemoved)
   },
   'automations run': async ({ flags, client, json }) => {
+    const id = getRequiredStringFlag(flags, 'id')
+    const expectedOwner = await resolveExpectedOwner(client, id)
     const result = await client.call<{ run: AutomationRun }>('automation.runNow', {
-      id: getRequiredStringFlag(flags, 'id')
+      id,
+      ...(expectedOwner ? { expectedOwner } : {})
     })
     printResult(result, json, formatAutomationRun)
   },

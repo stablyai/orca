@@ -488,7 +488,7 @@ describe('renderer startup runtime routing', () => {
   it('checkpoints activeView and all session snapshots through one beforeunload handler (#9002)', () => {
     const source = readSource(SESSION_PERSISTENCE_PATH)
     const checkpointStart = source.indexOf(
-      'const shutdownCheckpoint = createShutdownCheckpointGuard('
+      'const shutdownCheckpointPersist = createShutdownCheckpointPersist({'
     )
     const checkpointEnd = source.indexOf(
       'const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)',
@@ -499,25 +499,33 @@ describe('renderer startup runtime routing', () => {
     const checkpointBlock = source.slice(checkpointStart, checkpointEnd)
 
     expect(checkpointBlock).toContain(
-      'let sessionSnapshots: ReturnType<typeof buildWorkspaceSessionHostSnapshots> = []'
+      'const shutdownCheckpointPersist = createShutdownCheckpointPersist({'
     )
     expect(checkpointBlock).toContain(
-      'buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)'
+      'buildWorkspaceSessionHostSnapshots(\n          buildWorkspaceSessionPayload(freshState),\n          freshState\n        )'
     )
-    expect(checkpointBlock).toContain('window.api.app.stageBeforeUnloadSync({')
-    expect(checkpointBlock).toContain('sessions: sessionSnapshots')
-    expect(checkpointBlock).toContain('ui: buildActiveViewUnloadPatch(freshState)')
-    expect(checkpointBlock).toContain('!isIntentionalAppRestartInProgress()')
-    expect(checkpointBlock).toContain('freshState.openFiles.some((file) => file.isDirty)')
-    expect(checkpointBlock).toContain('sessions: []')
+    expect(checkpointBlock).toContain('buildUiPatch: () => buildActiveViewUnloadPatch(')
+    // Why pin the exact gate: the degrade tiers must arm only for intentional
+    // restarts and app-level closes, never for arbitrary unloads.
     expect(checkpointBlock).toContain(
-      'return\n      }\n      window.api.app.stageBeforeUnloadSync({\n        sessions: sessionSnapshots'
+      'isIntentionalAppRestartInProgress() || isWindowCloseCheckpointInProgress()'
+    )
+    expect(checkpointBlock).toContain(
+      'useAppStore.getState().openFiles.some((file) => file.isDirty)'
+    )
+    expect(checkpointBlock).toContain(
+      'stageBeforeUnloadSync: (args) => window.api.app.stageBeforeUnloadSync(args)'
+    )
+    expect(checkpointBlock).toContain('shutdownCheckpointPersist.run')
+    expect(checkpointBlock).toContain('shutdownCheckpointPersist.abandonAttempt')
+    expect(source).toContain(
+      'window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.abandonAttempt)'
     )
     expect(source).toContain(
-      'window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)'
+      'ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,\n      shutdownCheckpoint.abortAfterCheckpointFailure'
     )
     expect(source).toContain(
-      'window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)'
+      'window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.abandonAttempt)'
     )
     expect(source).toContain("window.addEventListener('beforeunload', persistBeforeUnload)")
     expect(source.match(/window\.addEventListener\('beforeunload'/g) ?? []).toHaveLength(1)

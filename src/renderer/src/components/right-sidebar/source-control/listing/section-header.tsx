@@ -6,6 +6,7 @@ import { translate } from '@/i18n/i18n'
 export function SectionHeader({
   label,
   count,
+  countTitle,
   conflictCount = 0,
   isCollapsed,
   onToggle,
@@ -13,6 +14,8 @@ export function SectionHeader({
 }: {
   label: string
   count: number
+  /** Spells out what the count measures — e.g. files changed against a compare base. */
+  countTitle?: string
   conflictCount?: number
   isCollapsed: boolean
   onToggle: () => void
@@ -31,7 +34,11 @@ export function SectionHeader({
             className={cn('size-3.5 shrink-0 transition-transform', isCollapsed && '-rotate-90')}
           />
           <span>{label}</span>
-          <span className="text-[11px] font-medium tabular-nums">{count}</span>
+          {/* Why: no aria-label here — inside the toggle button it would rewrite the
+              button's accessible name; the explanation stays a hover-only title. */}
+          <span className="text-[11px] font-medium tabular-nums" title={countTitle}>
+            {count}
+          </span>
           {conflictCount > 0 && (
             <span className="text-[11px] font-medium text-destructive/80">
               · {conflictCount}{' '}

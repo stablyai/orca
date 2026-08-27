@@ -244,10 +244,10 @@ describe('WslHookRelayManager', () => {
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
-    // Codex is the one agent whose home Orca redirects for WSL sessions.
     expect(deps.installHooks).toHaveBeenCalledWith(expect.anything(), home, {
+      agents: ['codex'],
       codexHomeDir: `${home}/.local/share/orca/codex-runtime-home/home`,
-      agents: ['codex']
+      deferTrustUntilConfigToml: true
     })
 
     expect(manager.getGuestEndpointFilePath('Ubuntu')).toBe(

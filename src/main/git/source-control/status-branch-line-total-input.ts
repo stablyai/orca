@@ -6,7 +6,7 @@ import {
   type GitBranchLineTotal
 } from '../../../shared/git-branch-line-total'
 import type { GitRuntimeOptions } from '../git-runtime-options'
-import { gitStatusReadOptionsForWorktree } from '../git-runtime-options'
+import { gitReadOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync, gitOptionalLocksDisabledEnv } from '../runner'
 import type { GetStatusOptions } from './get-status-options'
 
@@ -36,7 +36,7 @@ export function createBranchLineTotalInput(
           .map((entry) => entry.path),
         runDiffNumstat: (args, signal) =>
           gitExecFileAsync(args, {
-            ...gitStatusReadOptionsForWorktree(worktreePath, options),
+            ...gitReadOptionsForWorktree(worktreePath, options),
             // Why: after the spread, so the shared lease signal wins over this caller's own.
             signal,
             env: gitOptionalLocksDisabledEnv(),

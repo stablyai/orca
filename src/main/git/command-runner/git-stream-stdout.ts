@@ -11,6 +11,7 @@ import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import type { ResolvedCommand } from './wsl-command-resolution'
 import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
 import {
+  pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
   disableDirectWslGitAfterSuccessfulFallback,
   invalidateMissingDirectWslGit,
@@ -63,6 +64,10 @@ export async function gitStreamStdout(
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
       ...(options.preferWslDirectGit ? { preferWslDirectGit: true } : {}),
       ...(options.signal ? { signal: options.signal } : {})
+    }
+    const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, gitOptions)
+    if (readEnvironmentReady) {
+      await readEnvironmentReady
     }
     let resolved = resolveGitCommand(args, gitOptions)
     const environmentReady = prepareWindowsHostGitEnvironment(

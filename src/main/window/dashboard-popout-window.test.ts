@@ -140,6 +140,7 @@ import {
   isDashboardPopoutRenderer,
   zoomDashboardPopoutIfFocused
 } from './dashboard-popout-window'
+import { readBrowserClientHostIdArgument } from '../../shared/browser-client-host-id-argument'
 
 type FakeWindow = InstanceType<typeof BrowserWindowMock>
 
@@ -201,6 +202,11 @@ describe('createOrFocusDashboardPopout', () => {
     expect(opts.webPreferences?.partition).toBe('orca-dashboard-popout')
     expect(opts.webPreferences?.webviewTag).toBe(false)
     expect(opts.webPreferences?.preload).toMatch(/preload[\\/]index\.js$/)
+    // Why unstamped: no guest of ours can run here, so this renderer hosts no client-placed page
+    // and must keep mirroring what the host publishes for every one of them.
+    expect(
+      readBrowserClientHostIdArgument(opts.webPreferences?.additionalArguments ?? [])
+    ).toBeNull()
     expect(installNavigationPolicyMock).toHaveBeenCalledWith(instances[0].webContents)
     const { session } = instances[0].webContents
     expect(session.setPermissionRequestHandler).toHaveBeenCalledTimes(1)

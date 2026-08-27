@@ -9,6 +9,7 @@ import {
 } from './worktree-manual-order'
 import type { WorktreeMeta } from '../../../../shared/worktree/meta-types'
 import type { WorkspaceStatus, Worktree } from '../../../../shared/worktree/types'
+import type { WorktreeManualOrderCatalog } from './worktree-manual-order-catalog'
 
 type LaneView = { items: readonly Worktree[] }
 
@@ -23,6 +24,7 @@ export function useWorkspaceKanbanWorktreeActions(args: {
   updateWorktreesMeta: ReturnType<typeof useAppStore.getState>['updateWorktreesMeta']
   workspaceStatuses: ReturnType<typeof useAppStore.getState>['workspaceStatuses']
   worktreeById: ReadonlyMap<string, Worktree>
+  manualOrderCatalog: WorktreeManualOrderCatalog
   worktreesByStatus: ReadonlyMap<string, readonly Worktree[]>
 }) {
   const recordInteraction = (): void => {
@@ -88,16 +90,6 @@ export function useWorkspaceKanbanWorktreeActions(args: {
       const updates = new Map<string, Partial<WorktreeMeta>>()
       const writeManualOrder =
         drop.writeManualOrder ?? shouldWriteDropManualOrder(drop.worktreeIds, drop.status)
-      const rankByWorktreeId = writeManualOrder
-        ? new Map(
-            args.boardDragGroups.flatMap((group) =>
-              group.worktreeIds.flatMap((worktreeId) => {
-                const worktree = args.worktreeById.get(worktreeId)
-                return worktree ? [[worktreeId, worktree.manualOrder ?? worktree.sortOrder]] : []
-              })
-            )
-          )
-        : undefined
       const order = writeManualOrder
         ? buildManualOrderUpdatesForGroupDrop({
             groups: args.boardDragGroups,
@@ -105,7 +97,8 @@ export function useWorkspaceKanbanWorktreeActions(args: {
             draggedIds: drop.worktreeIds,
             dropIndex: drop.dropIndex,
             now: Date.now(),
-            rankByWorktreeId
+            rankByWorktreeId: args.manualOrderCatalog.rankByWorktreeId,
+            allWorktreeIds: args.manualOrderCatalog.orderedIds
           })
         : { changed: false, updates: new Map<string, { manualOrder: number }>() }
       for (const worktreeId of drop.worktreeIds) {

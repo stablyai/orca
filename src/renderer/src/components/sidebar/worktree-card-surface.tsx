@@ -82,7 +82,6 @@ export function WorktreeCardSurface({ card }: { card: WorktreeCardController }):
         comment={hoverComment}
         automationProvenance={metaAutomationProvenance}
         cliProvenance={metaCliProvenance}
-        automationHostId={worktree.hostId}
         branchName={hoverBranchName}
         workspaceTitle={hoverWorkspaceTitle}
         workspaceTitleRenameDisabled={isDeleting || affiliateListMode}

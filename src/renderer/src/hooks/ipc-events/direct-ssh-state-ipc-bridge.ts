@@ -9,6 +9,7 @@ import {
   type DirectSshConnectedStateOrigin
 } from '../direct-ssh-state-routing'
 import type { DirectSshBridgeRuntime } from './direct-ssh-bridge-runtime'
+import { hydrateDirectSshInitialState } from './direct-ssh-initial-state-hydration'
 export function registerDirectSshStateIpcBridge(
   unsubs: (() => void)[],
   runtime: DirectSshBridgeRuntime
@@ -54,33 +55,9 @@ export function registerDirectSshStateIpcBridge(
     state: SshConnectionState,
     origin: DirectSshConnectedStateOrigin
   ) => void
-  void (async () => {
-    try {
-      const targets = await window.api.ssh.listTargets()
-      if (runtime.isStopped()) {
-        return
-      }
-      useAppStore.getState().setSshTargetsMetadata(targets)
-      try {
-        const removedLabels = await window.api.ssh.listRemovedTargetLabels()
-        if (runtime.isStopped()) {
-          return
-        }
-        useAppStore.getState().setRemovedSshTargetLabels(removedLabels)
-      } catch {}
-      for (const target of targets) {
-        const hydrationWatermark = sshStateWatermarkByTargetId.get(target.id) ?? 0
-        const state = await window.api.ssh.getState({ targetId: target.id })
-        if (
-          !runtime.isStopped() &&
-          state &&
-          (sshStateWatermarkByTargetId.get(target.id) ?? 0) === hydrationWatermark
-        ) {
-          applySshConnectionStateChange(target.id, state as SshConnectionState, 'initial-hydration')
-        }
-      }
-    } catch {}
-  })()
+  void hydrateDirectSshInitialState(runtime, sshStateWatermarkByTargetId, (targetId, state) =>
+    applySshConnectionStateChange(targetId, state, 'initial-hydration')
+  )
   unsubs.push(
     window.api.ssh.onCredentialRequest((data) => {
       useAppStore.getState().enqueueSshCredentialRequest(data)

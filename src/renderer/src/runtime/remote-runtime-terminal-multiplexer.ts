@@ -240,12 +240,17 @@ export const REMOTE_TERMINAL_SNAPSHOT_TOO_LARGE =
   'Remote terminal snapshot exceeded the 2 MiB replay limit; live output will continue.'
 
 type E2eRemoteTerminalMultiplexAckGateSnapshot = {
+  activeStreams: { environmentId: string; streamId: number; terminal: string }[]
   droppedOutputBytes: number
   droppedOutputFrames: number
   heldTerminalCount: number
   heldStreamCount: number
   heldAckChars: number
   releasedAckChars: number
+  streamSubscribeCount: number
+  streamUnsubscribeCount: number
+  transportSubscribeCount: number
+  transportUnsubscribeCount: number
 }
 
 type E2eRemoteTerminalMultiplexAckGateApi = {
@@ -268,16 +273,22 @@ const e2eDroppedOutputStreams = new Set<RemoteRuntimeMultiplexedTerminalState>()
 let e2eDroppedOutputBytes = 0
 let e2eDroppedOutputFrames = 0
 let e2eReleasedRemoteAckChars = 0
+let e2eStreamSubscribeCount = 0
+let e2eStreamUnsubscribeCount = 0
+let e2eTransportSubscribeCount = 0
+let e2eTransportUnsubscribeCount = 0
 
 function shouldHoldE2eRemoteTerminalAck(terminal: string): boolean {
   return e2eConfig.exposeStore && e2eHeldRemoteAckTerminals.has(terminal)
 }
 
 function getE2eRemoteAckSnapshot(): E2eRemoteTerminalMultiplexAckGateSnapshot {
+  const activeStreams: E2eRemoteTerminalMultiplexAckGateSnapshot['activeStreams'] = []
   let heldStreamCount = 0
   let heldAckChars = 0
-  for (const multiplexer of multiplexers.values()) {
+  for (const [environmentId, multiplexer] of multiplexers) {
     for (const stream of multiplexer.getStreamsForE2e()) {
+      activeStreams.push({ environmentId, streamId: stream.streamId, terminal: stream.terminal })
       if (stream.heldAckBytes > 0) {
         heldStreamCount += 1
         heldAckChars += stream.heldAckBytes
@@ -285,13 +296,27 @@ function getE2eRemoteAckSnapshot(): E2eRemoteTerminalMultiplexAckGateSnapshot {
     }
   }
   return {
+    activeStreams,
     droppedOutputBytes: e2eDroppedOutputBytes,
     droppedOutputFrames: e2eDroppedOutputFrames,
     heldTerminalCount: e2eHeldRemoteAckTerminals.size,
     heldStreamCount,
     heldAckChars,
-    releasedAckChars: e2eReleasedRemoteAckChars
+    releasedAckChars: e2eReleasedRemoteAckChars,
+    streamSubscribeCount: e2eStreamSubscribeCount,
+    streamUnsubscribeCount: e2eStreamUnsubscribeCount,
+    transportSubscribeCount: e2eTransportSubscribeCount,
+    transportUnsubscribeCount: e2eTransportUnsubscribeCount
   }
+}
+
+function unsubscribeRuntimeEnvironmentForE2e(
+  subscription: RuntimeEnvironmentSubscriptionHandle
+): void {
+  if (e2eConfig.exposeStore) {
+    e2eTransportUnsubscribeCount += 1
+  }
+  subscription.unsubscribe()
 }
 
 function releaseE2eRemoteTerminalAcks(): void {
@@ -567,6 +592,9 @@ class RemoteRuntimeTerminalMultiplexer {
     const connectPromise = new Promise<void>((resolve, reject) => {
       this.readyResolver = resolve
       this.readyRejecter = reject
+      if (e2eConfig.exposeStore) {
+        e2eTransportSubscribeCount += 1
+      }
       void window.api.runtimeEnvironments
         .subscribe(
           {
@@ -594,7 +622,7 @@ class RemoteRuntimeTerminalMultiplexer {
             // Why: close/error can arrive before subscribe() resolves because
             // preload listens before ipcMain.handle() returns. The multiplexer
             // may already be released; do not retain the late handle.
-            subscription.unsubscribe()
+            unsubscribeRuntimeEnvironmentForE2e(subscription)
             return
           }
           this.subscription = subscription
@@ -1372,6 +1400,13 @@ class RemoteRuntimeTerminalMultiplexer {
     }
     try {
       this.subscription.sendBinary(encodeTerminalStreamFrame({ opcode, streamId, seq: 0, payload }))
+      if (e2eConfig.exposeStore) {
+        if (opcode === TerminalStreamOpcode.Subscribe) {
+          e2eStreamSubscribeCount += 1
+        } else if (opcode === TerminalStreamOpcode.Unsubscribe) {
+          e2eStreamUnsubscribeCount += 1
+        }
+      }
       return true
     } catch (error) {
       this.handleClose(
@@ -1412,7 +1447,9 @@ class RemoteRuntimeTerminalMultiplexer {
     this.readyResolver = null
     this.readyRejecter = null
     this.subscription = null
-    closingSubscription?.unsubscribe()
+    if (closingSubscription) {
+      unsubscribeRuntimeEnvironmentForE2e(closingSubscription)
+    }
     this.streams.clear()
     // Why: close callbacks may resubscribe synchronously; release first so every replacement shares the new environment multiplexer.
     this.releaseIfCurrent(this.environmentId, this)
@@ -1434,7 +1471,9 @@ class RemoteRuntimeTerminalMultiplexer {
     if (this.streams.size > 0) {
       return
     }
-    this.subscription?.unsubscribe()
+    if (this.subscription) {
+      unsubscribeRuntimeEnvironmentForE2e(this.subscription)
+    }
     this.subscription = null
     this.connectPromise = null
     this.ready = false
@@ -1482,6 +1521,10 @@ export function resetRemoteRuntimeTerminalMultiplexersForTests(): void {
   e2eHeldRemoteAckTerminals.clear()
   resetE2eDroppedRemoteOutput()
   e2eReleasedRemoteAckChars = 0
+  e2eStreamSubscribeCount = 0
+  e2eStreamUnsubscribeCount = 0
+  e2eTransportSubscribeCount = 0
+  e2eTransportUnsubscribeCount = 0
 }
 
 function concatBytes(chunks: Uint8Array<ArrayBufferLike>[]): Uint8Array<ArrayBufferLike> {

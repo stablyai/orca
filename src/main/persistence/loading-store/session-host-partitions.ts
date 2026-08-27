@@ -11,6 +11,7 @@ import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-s
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { readTerminalScrollbackSnapshotSync } from '../../terminal-scrollback-snapshots'
+import { preserveRuntimeAuthoredWorkspaceSessionFields } from '../runtime-authored-workspace-session-fields'
 import { findWorktreeIdForTab } from '../restoring-sessions/pane-identity-migration'
 import {
   removeWorkspaceSessionOwner,
@@ -162,6 +163,12 @@ export function setHostWorkspaceSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): void {
+  // Why here and not at the callers: the before-unload stage path writes the renderer's payload
+  // straight through, so a per-caller guard leaves the quit write erasing runtime-authored rows.
+  session = preserveRuntimeAuthoredWorkspaceSessionFields(
+    session,
+    owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
+  )
   // Why: each partition owns its topology fence; renderer writes omit it and must rebase locally.
   session = sanitizeWorkspaceSessionTerminalRetirements(
     session,

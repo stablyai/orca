@@ -11,10 +11,11 @@
 # is the guard getting honest, not the boundary regressing.
 #
 # Remaining entries need a runner mode that does not exist: a long-lived
-# streaming child (OAuth logins, the hook relay), a synchronous caller, or a
-# host-level flag like --status / --list that the guest-command API cannot
-# express because it always prepends --exec.
+# streaming child (OAuth logins, the hook relay, the browser network relay), a
+# synchronous caller, or a host-level flag like --status / --list that the
+# guest-command API cannot express because it always prepends --exec.
 main/agent-hooks/wsl-hook-relay-launch.ts
+main/browser/wsl-browser-network-relay-launch.ts
 main/claude-accounts/claude-command-process.ts
 main/codex-accounts/runtime-home-service.ts
 main/codex-accounts/service.ts

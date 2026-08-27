@@ -19,6 +19,9 @@ import {
 import { encodedProject } from './project-path-encoding'
 import { withProjectRef } from './merge-request-project-resolution'
 
+// Why: a large or slow job log outlives the runner's 30s default; the renderer bounds the call.
+const JOB_TRACE_EXEC_TIMEOUT_MS = 60_000
+
 function mapRetriedPipelineJob(
   data: {
     id?: number
@@ -64,7 +67,10 @@ export async function getJobTrace(
             ...glabHostnameArgs(projectRef, connectionId),
             `projects/${encodedProject(projectRef.path)}/jobs/${jobId}/trace`
           ],
-          glabRepoExecOptions(repoPath, connectionId, localGitOptions)
+          {
+            ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+            timeout: JOB_TRACE_EXEC_TIMEOUT_MS
+          }
         )
         return { ok: true, trace: stdout }
       } catch (err) {

@@ -20,13 +20,20 @@ import {
   createShutdownCheckpointBeforeUnloadHandler,
   createShutdownCheckpointGuard
 } from '../lib/shutdown-checkpoint-guard'
+import { createShutdownCheckpointPersist } from './shutdown-checkpoint-persist'
 import { shutdownBufferCaptures } from '../components/terminal-pane/shutdown-buffer-captures'
-import { dispatchWindowCloseRequest } from '../components/window-close-request-coordinator'
+import {
+  dispatchWindowCloseRequest,
+  isWindowCloseCheckpointInProgress
+} from '../components/window-close-request-coordinator'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT
 } from '../../../shared/updater-renderer-events'
-import { ORCA_RENDERER_UNLOAD_PREVENTED_EVENT } from '../../../shared/renderer-shutdown-events'
+import {
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
+  ORCA_RENDERER_UNLOAD_PREVENTED_EVENT
+} from '../../../shared/renderer-shutdown-events'
 import type { RemoteWorkspacePatchResult } from '../../../shared/remote-workspace-types'
 
 // Why: bound the resume-record loss window on a hard kill to ~1 min; capture skips unchanged records so per-tick cost is negligible.
@@ -117,9 +124,9 @@ export function useAppSessionPersistence(): void {
     // two firings, PTY exit events can arrive and unmount TerminalPanes,
     // emptying shutdownBufferCaptures. The guard prevents the second call
     // from overwriting the good session data with an empty snapshot.
-    const shutdownCheckpoint = createShutdownCheckpointGuard(() => {
-      const shouldCaptureSession = shouldPersistWorkspaceSession(useAppStore.getState())
-      if (shouldCaptureSession) {
+    const shutdownCheckpointPersist = createShutdownCheckpointPersist({
+      shouldCaptureSession: () => shouldPersistWorkspaceSession(useAppStore.getState()),
+      captureTerminalBuffers: () => {
         for (const capture of shutdownBufferCaptures.values()) {
           try {
             capture({ includeLocalBuffers: false })
@@ -127,54 +134,62 @@ export function useAppSessionPersistence(): void {
             // Don't let one pane's failure block the rest.
           }
         }
-        // Why: agent provider session ids live only in agentStatusByPaneKey,
-        // which is in-memory. Capture them into the persisted sleeping-session
-        // map so a daemon/session death while the app is closed can still
-        // cold-restore via the agent's resume command (#5232).
-        useAppStore.getState().captureAllSleepingAgentSessions('quit')
-      }
+      },
+      // Why: agent provider session ids live only in agentStatusByPaneKey,
+      // which is in-memory. Capture them into the persisted sleeping-session
+      // map so a daemon/session death while the app is closed can still
+      // cold-restore via the agent's resume command (#5232).
+      captureSleepingAgentSessions: () =>
+        useAppStore.getState().captureAllSleepingAgentSessions('quit'),
       // Why: re-read state after capture() calls populated scrollback buffers
-      // into the store via Zustand setters. The earlier read is only for the
-      // gating flags and would miss those updates.
-      const freshState = useAppStore.getState()
-      let sessionSnapshots: ReturnType<typeof buildWorkspaceSessionHostSnapshots> = []
-      try {
-        sessionSnapshots = shouldCaptureSession
-          ? buildWorkspaceSessionHostSnapshots(buildWorkspaceSessionPayload(freshState), freshState)
-          : []
-      } catch (error) {
-        // Why: dirty drafts exist only in the full session snapshot.
-        if (
-          !isIntentionalAppRestartInProgress() ||
-          freshState.openFiles.some((file) => file.isDirty)
-        ) {
-          throw error
-        }
-        console.error('[app] Full renderer session snapshot failed; using durable session', error)
-        window.api.app.stageBeforeUnloadSync({
-          sessions: [],
-          ui: buildActiveViewUnloadPatch(freshState)
-        })
-        return
-      }
-      window.api.app.stageBeforeUnloadSync({
-        sessions: sessionSnapshots,
-        ui: buildActiveViewUnloadPatch(freshState)
-      })
+      // into the store via Zustand setters. The shouldCaptureSession read is
+      // only for the gating flags and would miss those updates.
+      buildSessionSnapshots: () => {
+        const freshState = useAppStore.getState()
+        return buildWorkspaceSessionHostSnapshots(
+          buildWorkspaceSessionPayload(freshState),
+          freshState
+        )
+      },
+      buildUiPatch: () => buildActiveViewUnloadPatch(useAppStore.getState()),
+      hasDirtyOpenFiles: () => useAppStore.getState().openFiles.some((file) => file.isDirty),
+      // Why: an app-level quit degrades too — the pre-fix alternative was a quit
+      // the user could only complete with SIGKILL, which loses strictly more (#15352).
+      isDegradableShutdownInProgress: () =>
+        isIntentionalAppRestartInProgress() || isWindowCloseCheckpointInProgress(),
+      stageBeforeUnloadSync: (args) => window.api.app.stageBeforeUnloadSync(args)
     })
+    const shutdownCheckpoint = createShutdownCheckpointGuard(
+      shutdownCheckpointPersist.run,
+      shutdownCheckpointPersist.abandonAttempt
+    )
     const persistBeforeUnload = createShutdownCheckpointBeforeUnloadHandler(shutdownCheckpoint)
     window.addEventListener('beforeunload', persistBeforeUnload)
-    window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)
-    window.addEventListener(ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT, shutdownCheckpoint.reset)
-    window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)
+    window.addEventListener(
+      ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
+      shutdownCheckpoint.abortAfterCheckpointFailure
+    )
+    window.addEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.abandonAttempt)
+    window.addEventListener(
+      ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
+      shutdownCheckpoint.abandonAttempt
+    )
+    window.addEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.abandonAttempt)
     return () => {
       window.removeEventListener('beforeunload', persistBeforeUnload)
-      window.removeEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.reset)
+      window.removeEventListener(
+        ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
+        shutdownCheckpoint.abortAfterCheckpointFailure
+      )
+      window.removeEventListener(ORCA_APP_RESTART_ABORTED_EVENT, shutdownCheckpoint.abandonAttempt)
       window.removeEventListener(
         ORCA_UPDATER_QUIT_AND_INSTALL_ABORTED_EVENT,
-        shutdownCheckpoint.reset
+        shutdownCheckpoint.abandonAttempt
       )
-      window.removeEventListener(ORCA_RENDERER_UNLOAD_PREVENTED_EVENT, shutdownCheckpoint.reset)
+      window.removeEventListener(
+        ORCA_RENDERER_UNLOAD_PREVENTED_EVENT,
+        shutdownCheckpoint.abandonAttempt
+      )
     }
   }, [])
 

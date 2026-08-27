@@ -20,6 +20,7 @@ import { AutomationRunHistory } from './AutomationRunHistory'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
 import type { FetchExternalAutomationRuns } from './ExternalAutomationRunTable'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
+import type { ExternalAutomationScope } from './external-automation-scope-client'
 import {
   formatExternalDate,
   getExternalProviderLabel,
@@ -33,6 +34,8 @@ import {
   getAutomationRunStatusVariant
 } from './automation-page-parts'
 import { getAutomationRunContent } from './automation-run-content'
+import type { AutomationActionNotice } from './automation-row-action-dispatch'
+import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
@@ -45,6 +48,8 @@ type AutomationsDetailPaneProps = {
   selectedExternalRunPage: SelectedExternalRunPage | null
   selectedAutomationRunPage: AutomationRun | null
   selectedRuns: AutomationRun[]
+  /** Set when the selected automation's history read failed; its runs are unknown. */
+  selectedRunsNotice: AutomationActionNotice | null
   activePaneTab: AutomationPaneTab
   relativeNow: number
   externalActionKey: string | null
@@ -65,14 +70,19 @@ type AutomationsDetailPaneProps = {
   requestExternalAction: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    action: ExternalAutomationAction
+    action: ExternalAutomationAction,
+    scope: ExternalAutomationScope
   ) => void
   openExternalRunPage: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
     run: ExternalAutomationRun
   ) => void
-  openEditExternalDialog: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
+  openEditExternalDialog: (
+    manager: ExternalAutomationManager,
+    job: ExternalAutomationJob,
+    scope: ExternalAutomationScope
+  ) => void
   runNow: (automation: Automation) => void
   openEditDialog: (automation: Automation) => void
   toggleAutomation: (automation: Automation) => void
@@ -81,6 +91,7 @@ type AutomationsDetailPaneProps = {
   openRunWorkspace: (run: AutomationRun) => void
   openAutomationRunPage: (run: AutomationRun) => void
   onBackToList: () => void
+  recoverSelectedRuns: (action: AutomationHostRecoveryAction) => void
 }
 
 export function AutomationsDetailPane({
@@ -89,6 +100,7 @@ export function AutomationsDetailPane({
   selectedExternalRunPage,
   selectedAutomationRunPage,
   selectedRuns,
+  selectedRunsNotice,
   activePaneTab,
   relativeNow,
   externalActionKey,
@@ -116,7 +128,8 @@ export function AutomationsDetailPane({
   rerunAutomationRun,
   openRunWorkspace,
   openAutomationRunPage,
-  onBackToList
+  onBackToList,
+  recoverSelectedRuns
 }: AutomationsDetailPaneProps): React.JSX.Element {
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -150,8 +163,13 @@ export function AutomationsDetailPane({
             <ExternalAutomationManagers
               managers={[
                 {
-                  ...selectedExternal.manager,
-                  jobs: [selectedExternal.job]
+                  // The synthesized single-job manager keeps the entry's scope, so
+                  // every action it dispatches names the host the row came from.
+                  scope: selectedExternal.scope,
+                  manager: {
+                    ...selectedExternal.manager,
+                    jobs: [selectedExternal.job]
+                  }
                 }
               ]}
               now={relativeNow}
@@ -288,6 +306,8 @@ export function AutomationsDetailPane({
                 runs={selectedRuns}
                 automationId={selected.id}
                 worktreeMap={worktreeMap}
+                notice={selectedRunsNotice}
+                onRecoverHistory={recoverSelectedRuns}
                 onOpenRun={openAutomationRunPage}
               />
             ) : (

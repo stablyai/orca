@@ -181,12 +181,13 @@ export function MobileNativeChatView({
   const { data } = useMemo(
     () =>
       buildMobileNativeChatTransientData({
+        messages,
         folded,
         streaming,
         pending,
         imagePreviewsByMessageId
       }),
-    [folded, streaming, pending, imagePreviewsByMessageId]
+    [messages, folded, streaming, pending, imagePreviewsByMessageId]
   )
 
   // Follow the tail as the conversation grows and keep the newest message above

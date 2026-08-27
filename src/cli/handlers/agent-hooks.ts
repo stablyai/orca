@@ -208,7 +208,7 @@ async function setAgentHooksEnabled(
 export const AGENT_HOOK_HANDLERS: Record<string, CommandHandler> = {
   'agent hooks prepare-codex': async ({ client }) => {
     const settings = await readHookSettings(client)
-    prepareManagedCodexHomeBeforeShellLaunch({
+    await prepareManagedCodexHomeBeforeShellLaunch({
       userDataPath: getDefaultUserDataPath(),
       hooksEnabled:
         settings.agentStatusHooksEnabled && !settings.disabledTuiAgents.includes('codex')

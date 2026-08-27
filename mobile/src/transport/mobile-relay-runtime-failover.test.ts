@@ -430,6 +430,49 @@ describe('relay runtime recovery without direct connectivity', () => {
     expect(logical.getActivePath()).toBe('relay')
     supervisor.stop()
   })
+
+  it('restarts Relay promptly after the background grace expires', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    expect(deps.openRelay).not.toHaveBeenCalled()
+
+    supervisor.setForeground(false)
+    expect(logical.getState()).toBe('connected')
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(logical.getState()).toBe('disconnected')
+    expect(logical.getPendingPath()).toBeNull()
+
+    supervisor.setForeground(true)
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
+
+  it('recovers an expired background Relay through the app-resume manual retry nudge', async () => {
+    const logical = new FakeLogicalClient('connected', 'relay')
+    const deps = dependencies({ openDirect: vi.fn(() => new FakeSession('disconnected')) })
+    const supervisor = new MobileEndpointSupervisor(logical, host, deps)
+
+    await supervisor.start()
+    supervisor.setForeground(false)
+    await vi.advanceTimersByTimeAsync(30_000)
+    expect(logical.getState()).toBe('disconnected')
+
+    supervisor.nudge('app-resume')
+    await vi.advanceTimersByTimeAsync(0)
+
+    expect(deps.openRelay).toHaveBeenCalledOnce()
+    expect(logical.getActivePath()).toBe('relay')
+    expect(logical.getState()).toBe('connected')
+    expect(logical.getPendingPath()).toBeNull()
+    supervisor.stop()
+  })
 })
 
 // The field failure's first symptom: a real direct rpc-client dialing an

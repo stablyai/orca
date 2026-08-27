@@ -2,6 +2,15 @@ diff --git a/binding.gyp b/binding.gyp
 index 855bd4b86f0a3c18c7594212c0e42b6e35bc4001..5f15551cb1520af996f216500a83ac68b57f5104 100644
 --- a/binding.gyp
 +++ b/binding.gyp
+@@ -3,7 +3,7 @@
+     {
+       "target_name": "windows_process_tree",
+       "dependencies": [
+-        "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
++        "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
+       ],
+       "conditions": [
+         ['OS=="win"', {
 @@ -16,9 +16,6 @@
            ],
            "include_dirs": [],

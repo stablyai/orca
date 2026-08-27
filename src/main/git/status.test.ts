@@ -15,6 +15,7 @@ const {
   readFileMock,
   statMock,
   rmMock,
+  accessMock,
   existsSyncMock
 } = vi.hoisted(() => ({
   gitExecFileAsyncMock: vi.fn(),
@@ -25,6 +26,7 @@ const {
   readFileMock: vi.fn(),
   statMock: vi.fn(),
   rmMock: vi.fn(),
+  accessMock: vi.fn(),
   existsSyncMock: vi.fn()
 }))
 
@@ -37,9 +39,17 @@ vi.mock('./runner', () =>
 )
 
 vi.mock('fs/promises', () =>
-  createFsPromisesModuleMock({ lstatMock, realpathMock, readFileMock, statMock, rmMock })
+  createFsPromisesModuleMock({
+    lstatMock,
+    realpathMock,
+    readFileMock,
+    statMock,
+    rmMock,
+    accessMock
+  })
 )
 
+// Why still here: unmerged-entry parsing probes the working tree through node:fs directly.
 vi.mock('fs', () => ({
   existsSync: existsSyncMock
 }))
@@ -62,6 +72,8 @@ describe('getStatus', () => {
     lstatMock.mockReset()
     readFileMock.mockReset()
     existsSyncMock.mockReset()
+    accessMock.mockReset()
+    accessMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
     // Why: untracked line counting stats a file before reading it; any
     // under-limit size routes the read to readFileMock.
     statMock.mockReset()
@@ -75,7 +87,12 @@ describe('getStatus', () => {
 
   it('parses unmerged porcelain v2 entries into unresolved conflict rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockImplementation((target: string) => target.endsWith('MERGE_HEAD'))
+    accessMock.mockImplementation(async (target: string) => {
+      if (target.endsWith('MERGE_HEAD')) {
+        return undefined
+      }
+      throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+    })
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         'u UU N... 100644 100644 100644 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/app.ts\n'
@@ -97,7 +114,6 @@ describe('getStatus', () => {
 
   it('maps deleted conflicts to deleted when the working tree file is absent', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         'u UD N... 100644 100644 000000 100644 aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb cccccccccccccccccccccccccccccccccccccccc src/deleted.ts\n'
@@ -132,7 +148,6 @@ describe('getStatus', () => {
 
   it('passes core.quotePath=false and round-trips UTF-8 paths', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         '1 .M N... 100644 100644 100644 ce013625030ba8dba906f756967f9e9ca394464a ce013625030ba8dba906f756967f9e9ca394464a docs/日本語/sample.md\n'
@@ -159,7 +174,6 @@ describe('getStatus', () => {
 
   it('preserves porcelain v2 submodule dirtiness flags on status rows', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         '1 AM S..U 000000 160000 160000 0000000000000000000000000000000000000000 7844cb64e631f17a9ca5b548f3500ef7cecd2f17 nested-repo\n'
@@ -185,7 +199,6 @@ describe('getStatus', () => {
 
   it('omits ignored files by default and parses them when requested', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout: '! dist/\n! generated/file.js\n'
     })
@@ -206,7 +219,6 @@ describe('getStatus', () => {
 
   it('parses branch identity from porcelain v2 branch headers', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n1 .M N... 100644 100644 100644 ce013625030ba8dba906f756967f9e9ca394464a ce013625030ba8dba906f756967f9e9ca394464a src/app.ts\n'
@@ -222,7 +234,6 @@ describe('getStatus', () => {
 
   it('folds upstream ahead/behind from porcelain v2 into the status result', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout:
         '# branch.oid abcdef1234567890\n# branch.head feature/prompts\n# branch.upstream origin/feature/prompts\n# branch.ab +2 -3\n'
@@ -241,7 +252,6 @@ describe('getStatus', () => {
 
   it('reports no upstream from porcelain v2 status when no same-name origin branch exists', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args[0] === '-c' && args.includes('status')) {
         return Promise.resolve({
@@ -274,7 +284,6 @@ describe('getStatus', () => {
 
   it('uses same-name origin branch status for legacy base-tracking worktrees', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock
       .mockResolvedValueOnce({
         stdout:
@@ -297,7 +306,6 @@ describe('getStatus', () => {
 
   it('omits --ignored and ignoredPaths when includeIgnored is not requested', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
 
     const result = await getStatus('/repo')
@@ -315,7 +323,6 @@ describe('getStatus', () => {
 
   it('parses ! porcelain v2 records into ignoredPaths when includeIgnored is true', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout: '! dist/\n! .env\n! coverage/\n'
     })
@@ -337,7 +344,6 @@ describe('getStatus', () => {
 
   it('attaches per-area line counts from staged and unstaged numstat', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         return Promise.resolve({
@@ -364,7 +370,6 @@ describe('getStatus', () => {
 
   it('reuses unchanged line stats only when the safety hint is present', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         return Promise.resolve({
@@ -392,7 +397,6 @@ describe('getStatus', () => {
 
   it('recomputes after a scan whose numstat failed instead of pinning missing counts', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     let failNumstat = true
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
@@ -422,7 +426,6 @@ describe('getStatus', () => {
 
   it('invalidates safety reuse for a new head and for known mutations', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     let head = 'head-1'
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
@@ -450,7 +453,6 @@ describe('getStatus', () => {
 
   it('isolates line-stat reuse between WSL distributions', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         return Promise.resolve({
@@ -474,7 +476,6 @@ describe('getStatus', () => {
 
   it('attaches numstat counts for literal paths containing rename markers', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         return Promise.resolve({
@@ -503,7 +504,6 @@ describe('getStatus', () => {
 
   it('attaches staged rename counts to the new path', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         return Promise.resolve({
@@ -531,7 +531,6 @@ describe('getStatus', () => {
   })
 
   it('counts untracked file contents as additions', async () => {
-    existsSyncMock.mockReturnValue(false)
     lstatMock.mockResolvedValue({
       size: 14,
       mtimeMs: 1,
@@ -555,7 +554,6 @@ describe('getStatus', () => {
 
   it('leaves binary working-tree changes without counts', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockImplementation((args: string[]) => {
       if (args.includes('status')) {
         return Promise.resolve({
@@ -578,7 +576,6 @@ describe('getStatus', () => {
 
   it('skips numstat entirely for a clean working tree', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' })
 
     await getStatus('/repo')
@@ -588,7 +585,6 @@ describe('getStatus', () => {
 
   it('truncates and flags didHitLimit when entries exceed the limit', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     const stdout = `${Array.from({ length: 25 }, (_, i) => `? file${i}.txt`).join('\n')}\n`
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
@@ -651,7 +647,6 @@ describe('getStatus', () => {
 
   it('does not flag didHitLimit for a normal repo under the limit', async () => {
     readFileMock.mockResolvedValue('gitdir: /repo/.git/worktrees/feature\n')
-    existsSyncMock.mockReturnValue(false)
     gitExecFileAsyncMock.mockReset()
     gitExecFileAsyncMock.mockResolvedValue({ stdout: '' })
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '? a.txt\n? b.txt\n' })

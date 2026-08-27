@@ -238,4 +238,26 @@ describe('prepareWorktreePushTargetWithExec rollback', () => {
     expect(callsMatching(exec, ['remote', 'remove'])).toEqual([])
     expect(remotes.existing).toBe(FORK_SSH)
   })
+
+  // Regression: the rollback used to fire on inherited ownership, deleting a
+  // remote a live sibling worktree was still pushing through.
+  it('keeps a reused remote a sibling worktree owns when the fetch fails', async () => {
+    const remotes: Record<string, string> = {
+      origin: 'git@github.com:stablyai/orca.git',
+      'pr-contributor-orca': FORK_HTTPS
+    }
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'fetch') {
+        throw new Error('network unreachable')
+      }
+      return makeRepoExec(remotes)(args, REPO)
+    })
+
+    await expect(
+      prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => true)
+    ).rejects.toThrow('network unreachable')
+
+    expect(callsMatching(exec, ['remote', 'remove'])).toEqual([])
+    expect(remotes['pr-contributor-orca']).toBe(FORK_HTTPS)
+  })
 })

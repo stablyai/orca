@@ -21,6 +21,11 @@ import type {
 } from '../../../shared/agent-session-resume'
 import { BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { agentResumeHostAuthorityCapability } from './agent-resume-host-authority-capability'
+import { expectsBrowserClientHosting } from '../../../shared/browser-client-hosting-eligibility'
+import type {
+  BrowserClientHostPlacementPreference,
+  BrowserPageCreationPlacement
+} from '../../../shared/browser-client-host-placement'
 import type {
   AgentLaunchPreferences,
   AgentPromptDelivery,
@@ -70,6 +75,16 @@ import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
 import {
+  resolveWebRuntimeSessionEnvironmentId,
+  shouldRestoreWebRuntimeSessionWorkspaceSelection,
+  type WebRuntimeSessionWorkspaceSelection
+} from './web-runtime-session-workspace-routing'
+import {
+  forgetWebSessionTerminalPlacement,
+  recordWebSessionTerminalPlacement,
+  webTerminalPlacementParentTabId
+} from './web-session-terminal-placement'
+import {
   claimWebSessionBrowserPlacementGroupCleanup,
   forgetWebSessionBrowserPlacement,
   markWebSessionBrowserPlacementGroupMaterialized,
@@ -79,8 +94,20 @@ import {
 } from './web-session-browser-placement'
 import { assertRuntimeManagedBrowserCreationAvailable } from '../lib/client-creation-action-policy'
 import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
+import { waitForWebRuntimeBrowserPageMaterialization } from './web-runtime-browser-materialization-wait'
+import {
+  discardStagedWebRuntimeBrowserTab,
+  isStagedWebRuntimeBrowserTabLive,
+  rehomeStagedWebRuntimeBrowserTab,
+  resolveStagedWebRuntimeBrowserTabGroupId,
+  restageWebRuntimeBrowserTabHostingIntent,
+  stageWebRuntimeBrowserTab,
+  StagedWebRuntimeBrowserTabCancelledError,
+  type StagedWebRuntimeBrowserTab
+} from './web-runtime-browser-tab-staging'
 import {
   pauseAfterE2eWebRuntimeBrowserCreate,
+  pauseDuringE2eWebRuntimeBrowserClientHostPreparation,
   throwIfE2eWebRuntimeBrowserCapabilityUnavailable,
   throwIfE2eWebRuntimeBrowserReconciliationFails
 } from './web-runtime-browser-creation-e2e-fault'
@@ -250,10 +277,10 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
 async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
-  const environmentId =
-    args.environmentId?.trim() ??
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
-    null
+  const environmentId = resolveWebRuntimeSessionEnvironmentId(
+    args.environmentId,
+    useAppStore.getState().settings?.activeRuntimeEnvironmentId
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return {
       outcome: {
@@ -268,8 +295,17 @@ async function createWebRuntimeSessionTerminalResult(
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
+  let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
   if (args.selectWorktree !== false) {
+    const previous = readActiveWorkspaceSelection()
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
+    workspaceSelectionRollback = {
+      previous,
+      applied: {
+        worktreeId: args.worktreeId,
+        executionHostId: toRuntimeExecutionHostId(environmentId)
+      }
+    }
   }
   let hostCreated = false
   let createdTabId: string | undefined
@@ -427,6 +463,16 @@ async function createWebRuntimeSessionTerminalResult(
       createdTabId = created.tab.id
       createdLeafId = created.tab.leafId
     }
+    if (args.targetGroupId && createdTabId) {
+      // Why: the host drops client-minted group ids, so this client's own record is what
+      // lands the mirrored tab in the requested pane under client-owned placement.
+      recordWebSessionTerminalPlacement({
+        environmentId,
+        worktreeId: args.worktreeId,
+        hostTabId: webTerminalPlacementParentTabId(createdTabId),
+        groupId: args.targetGroupId
+      })
+    }
     if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
       // Why: record focus intent so the reconcile follows the snapshot's active
       // tab to THIS new terminal, instead of sticky-keeping the prior tab.
@@ -434,9 +480,20 @@ async function createWebRuntimeSessionTerminalResult(
     }
     await refreshWebRuntimeSessionTabsSnapshot(environmentId, args.worktreeId, {
       expectedEnvironmentPairingRevision: intentOwner.pairingRevision,
-      // Why: the publication can beat the RPC response; replay it once after caller focus intent exists.
-      acceptCurrentSnapshot: args.activate !== false && Boolean(createdTabId)
+      // Why: the publication can beat the RPC response; replay it once after caller intent exists.
+      acceptCurrentSnapshot:
+        Boolean(createdTabId) && (args.activate !== false || Boolean(args.targetGroupId)),
+      // Why: a placement record needs a post-create list; a deduped in-flight one can predate it.
+      ...(args.targetGroupId && createdTabId ? { afterCurrentInFlight: true } : {})
     })
+    if (args.targetGroupId && createdTabId) {
+      await settleWebRuntimeTerminalPlacement(
+        environmentId,
+        args.worktreeId,
+        webTerminalPlacementParentTabId(createdTabId),
+        { groupId: args.targetGroupId, activate: args.activate !== false }
+      )
+    }
     return {
       outcome: { status: 'created' },
       ...(createdTabId ? { hostTabId: createdTabId } : {})
@@ -449,12 +506,58 @@ async function createWebRuntimeSessionTerminalResult(
         : '[web-runtime-session] failed to create terminal:',
       message
     )
+    if (createdTabId) {
+      // Why: a record that outlives the create flow could yank a user-dragged tab back later.
+      forgetWebSessionTerminalPlacement({
+        environmentId,
+        worktreeId: args.worktreeId,
+        hostTabId: webTerminalPlacementParentTabId(createdTabId)
+      })
+    }
+    if (!hostCreated && workspaceSelectionRollback) {
+      restoreActiveWorkspaceSelection(workspaceSelectionRollback)
+    }
     // Why: once the host accepted creation, reporting failure invites the user
     // to retry with a new operation ID and can duplicate a fresh agent.
     return {
       outcome: hostCreated ? { status: 'created' } : { status: 'failed', message },
       ...(createdTabId ? { hostTabId: createdTabId } : {})
     }
+  }
+}
+
+/** Settle the placement once the mirrored tab exists (bounded poll), then consume the record. */
+async function settleWebRuntimeTerminalPlacement(
+  environmentId: string,
+  worktreeId: string,
+  hostTabId: string,
+  placement: { groupId: string; activate: boolean }
+): Promise<void> {
+  const unifiedTabId = toWebTerminalSurfaceTabId(hostTabId)
+  const findTab = () =>
+    (useAppStore.getState().unifiedTabsByWorktree[worktreeId] ?? []).find(
+      (tab) => tab.id === unifiedTabId
+    )
+  try {
+    const deadline = Date.now() + 10_000
+    while (!findTab() && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    }
+    const tab = findTab()
+    const state = useAppStore.getState()
+    const targetGroupExists = (state.groupsByWorktree[worktreeId] ?? []).some(
+      (group) => group.id === placement.groupId
+    )
+    if (tab && targetGroupExists && tab.groupId !== placement.groupId) {
+      // Why: a snapshot can adopt the tab before the record exists (the publication races the
+      // RPC response); repair through the same client-owned move a user drag takes.
+      state.moveUnifiedTabToGroup(unifiedTabId, placement.groupId, {
+        activate: placement.activate,
+        recordInteraction: false
+      })
+    }
+  } finally {
+    forgetWebSessionTerminalPlacement({ environmentId, worktreeId, hostTabId })
   }
 }
 
@@ -473,6 +576,7 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   stagedTitle?: string
   stagedFocusAddressBar?: boolean
   failureLogMode?: 'details' | 'operation-only'
+  placementPreference?: BrowserClientHostPlacementPreference
 }): Promise<boolean> {
   const environmentId =
     args.environmentId?.trim() ??
@@ -486,14 +590,28 @@ export async function createWebRuntimeSessionBrowserTab(args: {
   const shouldFocusOnCreate = args.focusOnCreate !== false
   const shouldSelectWorktree = args.selectWorktree !== false
   const provisionalPageId = createBrowserUuid()
-  const hostSupportsKnownPageId = useAppStore
-    .getState()
-    .runtimeStatusByEnvironmentId?.get(environmentId)
-    ?.status?.capabilities?.includes(BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY)
+  const advertisedCapabilities =
+    useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status?.capabilities ??
+    []
+  const hostSupportsKnownPageId = advertisedCapabilities.includes(
+    BROWSER_TAB_CREATE_KNOWN_ID_RUNTIME_CAPABILITY
+  )
+  // Why the same predicate the main process uses: this mounts the staged pane one round-trip
+  // before prepareBrowserClientHostPlacement answers, so the two have to reach the same verdict
+  // from the same inputs. A cached status disagreeing with the live one is corrected by
+  // restageWebRuntimeBrowserTabHostingIntent below; it never decides the placement itself.
+  const expectsClientHosting = expectsBrowserClientHosting({
+    enabled: useAppStore.getState().settings?.browserClientHostedRemoteEnabled !== false,
+    preference: args.placementPreference,
+    deviceScope: useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status
+      ?.deviceScope,
+    capabilities: advertisedCapabilities
+  })
   let unsubscribeFocusGuard = (): void => {}
   let guardedPageId = provisionalPageId
   let createdPageId: string | null = null
   let createAttempted = false
+  let staged: StagedWebRuntimeBrowserTab | null = null
   try {
     throwIfE2eWebRuntimeBrowserCapabilityUnavailable()
     assertRuntimeManagedBrowserCreationAvailable(useAppStore.getState(), environmentId)
@@ -509,6 +627,28 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     if (shouldSelectWorktree) {
       selectWebRuntimeSessionBrowserWorktree(args.worktreeId, environmentId)
     }
+    // Why: everything below this point is a host round-trip; stage the tab first so the strip
+    // reacts to the click instead of to the runtime.
+    staged = stageWebRuntimeBrowserTab({
+      environmentId,
+      worktreeId: args.worktreeId,
+      remotePageId: provisionalPageId,
+      activate: shouldFocusOnCreate,
+      ...(args.url !== undefined ? { url: args.url } : {}),
+      ...(args.stagedTitle !== undefined ? { title: args.stagedTitle } : {}),
+      ...(args.profileId !== undefined ? { profileId: args.profileId } : {}),
+      ...((args.clientTargetGroupId ?? args.targetGroupId)
+        ? { targetGroupId: (args.clientTargetGroupId ?? args.targetGroupId) as string }
+        : {}),
+      ...(args.stagedFocusAddressBar !== undefined
+        ? { focusAddressBar: args.stagedFocusAddressBar }
+        : {}),
+      clientHosted: expectsClientHosting
+    })
+    // Why: sample the focus expectation and arm its guard against the state staging just wrote,
+    // before any await. Sampling after the client-host preparation round-trip baked a switch made
+    // during it into the baseline, so the guard read the user's new tab as "hasn't moved" and
+    // adoption stole focus back.
     const initialFocusState = shouldFocusOnCreate ? useAppStore.getState() : null
     const expectedActiveWorktreeId = initialFocusState?.activeWorktreeId
     const expectedActiveWorkspaceExecutionHostId = initialFocusState?.activeWorkspaceExecutionHostId
@@ -551,6 +691,41 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         unsubscribeFocusGuard()
       })
     }
+    const placementPreference = args.placementPreference ?? 'auto'
+    let placement: BrowserPageCreationPlacement = { kind: 'server' }
+    // Why no cached-capability gate here: the renderer's runtime status can hold a pre-upgrade
+    // "cannot client-host" verdict for a whole catalog TTL, and skipping the preparation on it
+    // pinned a capable pair to server placement for that long. The preparation reads live status
+    // and answers `server` for a runtime that truly cannot host, so staleness now costs a round
+    // trip against an incapable host instead of the wrong placement. An unreachable host pays for
+    // that on the failure path too: the probe's 15s ceiling, then the tabCreate behind it and the
+    // cleanup close its non-definitive failure needs, where before the create never started.
+    if (placementPreference !== 'server') {
+      try {
+        await pauseDuringE2eWebRuntimeBrowserClientHostPreparation()
+        placement = await window.api.runtimeEnvironments.prepareBrowserClientHostPlacement({
+          selector: environmentId,
+          expectedPairingRevision: intentOwner.pairingRevision,
+          preference: placementPreference
+        })
+      } catch (error) {
+        console.warn('[web-runtime-session] failed to prepare client browser host:', error)
+        throw new Error(
+          translate(
+            'browser.clientHosted.preparationFailed',
+            "Couldn't start the remote browser on this desktop. Check the paired connection and try again."
+          ),
+          { cause: error }
+        )
+      }
+    }
+    if (staged) {
+      staged = restageWebRuntimeBrowserTabHostingIntent(staged, {
+        environmentId,
+        remotePageId: provisionalPageId,
+        clientHosted: placement.kind === 'client'
+      })
+    }
     createAttempted = true
     const navigateAfterCreate =
       args.waitForRegistration === true && args.url && args.url !== 'about:blank'
@@ -561,8 +736,13 @@ export async function createWebRuntimeSessionBrowserTab(args: {
           worktree: toRuntimeWorktreeSelector(args.worktreeId),
           url: navigateAfterCreate ? undefined : args.url,
           ...(hostSupportsKnownPageId ? { page: provisionalPageId } : {}),
+          ...(placement.kind === 'client' ? { placement } : {}),
           profileId: args.profileId ?? undefined,
           activate: shouldFocusOnCreate,
+          // Why: `activate` alone made every paired device — the host desktop included — jump to a
+          // tab this client created. New hosts read `navigation`; old ones ignore it and keep
+          // today's behavior, which is also what keeps their targetGroupId placement working.
+          navigation: 'caller',
           // Why: place the new browser in the clicked split group so the host snapshot is authoritative for it (no left-snap).
           ...(args.targetGroupId ? { targetGroupId: args.targetGroupId } : {}),
           // Why: web clients need the local tab now; waiting for host webview registration makes the workspace appear to close.
@@ -591,6 +771,15 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         })
     }
     await pauseAfterE2eWebRuntimeBrowserCreate(created.browserPageId)
+    // Why: the strip's X on a staged tab only unwinds this client's rows — it cannot close a host
+    // page whose id did not exist when the user clicked. Hand the cancel to the cleanup path in the
+    // catch below, which already owns retiring an unreconciled host page.
+    // Why (accepted bound): the host page has no name until the create answers, so a cancel during
+    // that round-trip leaves it alive for up to the RPC timeout. That is the same bound the
+    // unreconciled-cleanup path has always accepted, so no sweep is added for it.
+    if (staged && !isStagedWebRuntimeBrowserTabLive(staged, args.worktreeId)) {
+      throw new StagedWebRuntimeBrowserTabCancelledError()
+    }
     if (created.browserPageId !== provisionalPageId) {
       moveWebSessionBrowserPlacement({
         environmentId,
@@ -598,6 +787,13 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         fromRemotePageId: provisionalPageId,
         toRemotePageId: created.browserPageId
       })
+      if (staged) {
+        staged = rehomeStagedWebRuntimeBrowserTab(staged, {
+          environmentId,
+          worktreeId: args.worktreeId,
+          remotePageId: created.browserPageId
+        })
+      }
       const focusIntent = shouldFocusOnCreate
         ? peekWebSessionFocusIntent(intentOwner, args.worktreeId)
         : null
@@ -632,17 +828,55 @@ export async function createWebRuntimeSessionBrowserTab(args: {
         throw error
       }
     }
-    if (
-      !hasMaterializedWebRuntimeBrowserPage(
+    const expectedGroupId =
+      (staged ? resolveStagedWebRuntimeBrowserTabGroupId(staged, args.worktreeId) : undefined) ??
+      args.clientTargetGroupId ??
+      args.targetGroupId
+    let materialized = hasMaterializedWebRuntimeBrowserPage(
+      useAppStore.getState(),
+      environmentId,
+      args.worktreeId,
+      created.browserPageId,
+      expectedGroupId
+    )
+    if (!materialized) {
+      materialized = await waitForWebRuntimeBrowserPageMaterialization({
+        environmentId,
+        worktreeId: args.worktreeId,
+        remotePageId: created.browserPageId,
+        ...(expectedGroupId ? { expectedGroupId } : {})
+      })
+    }
+    if (!materialized && expectedGroupId) {
+      // Why: an older runtime can honor creation but not group targeting; a live tab in
+      // the wrong split beats destroying what the user just made.
+      materialized = hasMaterializedWebRuntimeBrowserPage(
         useAppStore.getState(),
         environmentId,
         args.worktreeId,
-        created.browserPageId,
-        args.clientTargetGroupId ?? args.targetGroupId
+        created.browserPageId
       )
-    ) {
+      if (materialized) {
+        console.warn(
+          '[web-runtime-session] created browser tab landed outside the requested group:',
+          expectedGroupId
+        )
+      }
+    }
+    if (!materialized) {
       throw new Error('The created browser tab did not materialize in the client.')
     }
+    // Why: materialization only proves *some* workspace in this worktree carries the page — when the
+    // host mirrors it under its own id, the predicate goes true even though the staged row the user
+    // X-ed is gone. The whole materialization wait above is a live window for that X, so re-check the
+    // row here before the stage is surrendered, or the create reports success and never retires the
+    // host page.
+    if (staged && !isStagedWebRuntimeBrowserTabLive(staged, args.worktreeId)) {
+      throw new StagedWebRuntimeBrowserTabCancelledError()
+    }
+    // Why: materialization means the snapshot has taken ownership of these rows, so nothing
+    // downstream may still unwind them as an optimistic stage.
+    staged = null
     const remainingFocusIntent = shouldFocusOnCreate
       ? peekWebSessionFocusIntent(intentOwner, args.worktreeId)
       : null
@@ -667,11 +901,18 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     return true
   } catch (error) {
     unsubscribeFocusGuard()
+    // Why: unwind the optimistic tab before the cleanup round-trips below, so a failed create
+    // does not leave a dead tab sitting in the strip for the length of browser.tabClose.
+    if (staged) {
+      discardStagedWebRuntimeBrowserTab(staged)
+    }
     let recoveryError: unknown = null
     const createFailureDefinitive = isDefinitiveBrowserCreateFailure(error)
     const cleanupPageId =
       createdPageId ??
-      (!createFailureDefinitive && hostSupportsKnownPageId ? provisionalPageId : null)
+      (createAttempted && !createFailureDefinitive && hostSupportsKnownPageId
+        ? provisionalPageId
+        : null)
     const createOutcomeUnknown = !cleanupPageId && !createFailureDefinitive
     const ownsClientGroupCleanup = args.clientTargetGroupId
       ? releaseWebSessionBrowserPlacementGroup({
@@ -748,7 +989,9 @@ export async function createWebRuntimeSessionBrowserTab(args: {
     ) {
       useAppStore.getState().closeEmptyGroup(args.worktreeId, args.clientTargetGroupId)
     }
-    if (args.failureLogMode === 'operation-only') {
+    if (error instanceof StagedWebRuntimeBrowserTabCancelledError) {
+      console.warn('[web-runtime-session] browser tab was closed before its create finished')
+    } else if (args.failureLogMode === 'operation-only') {
       console.warn('[web-runtime-session] failed to create browser tab')
     } else {
       console.warn(
@@ -775,6 +1018,35 @@ export async function createWebRuntimeSessionBrowserTab(args: {
 
 function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: string): void {
   useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
+}
+
+type WebRuntimeSessionWorkspaceSelectionRollback = {
+  previous: WebRuntimeSessionWorkspaceSelection
+  applied: WebRuntimeSessionWorkspaceSelection
+}
+
+function readActiveWorkspaceSelection(): WebRuntimeSessionWorkspaceSelection {
+  const state = useAppStore.getState()
+  return {
+    worktreeId: state.activeWorktreeId ?? null,
+    executionHostId: state.activeWorkspaceExecutionHostId ?? null
+  }
+}
+
+function restoreActiveWorkspaceSelection(
+  rollback: WebRuntimeSessionWorkspaceSelectionRollback
+): void {
+  if (
+    !shouldRestoreWebRuntimeSessionWorkspaceSelection({
+      ...rollback,
+      current: readActiveWorkspaceSelection()
+    })
+  ) {
+    return
+  }
+  useAppStore
+    .getState()
+    .setActiveWorktree(rollback.previous.worktreeId, rollback.previous.executionHostId ?? undefined)
 }
 
 function selectWebRuntimeSessionBrowserWorktree(worktreeId: string, environmentId: string): void {
@@ -976,8 +1248,16 @@ export async function activateWebRuntimeSessionTab(args: {
   tabId: string
   environmentId?: string | null
 }): Promise<boolean> {
-  return callWebRuntimeSessionTabMethod('session.tabs.activate', args)
+  return (await callWebRuntimeSessionTabMethod('session.tabs.activate', args)) === 'applied'
 }
+
+/**
+ * Why 'unknown-tab' is its own outcome: it is the host's definitive answer that it has no such
+ * tab, which is the only evidence that lets a client finish a teardown the host cannot. Every
+ * other failure -- a dropped connection, a timeout -- is a "not now", and treating it the same
+ * would tear down tabs a reachable host still holds.
+ */
+export type WebRuntimeSessionTabCloseOutcome = 'applied' | 'unknown-tab' | 'failed'
 
 export async function closeWebRuntimeSessionTab(args: {
   worktreeId: string
@@ -986,7 +1266,7 @@ export async function closeWebRuntimeSessionTab(args: {
   reason: RuntimeSessionTabCloseReason
   publicationEpoch?: string | null
   terminalHandle?: string | null
-}): Promise<boolean> {
+}): Promise<WebRuntimeSessionTabCloseOutcome> {
   return callWebRuntimeSessionTabMethod('session.tabs.close', args)
 }
 
@@ -1107,13 +1387,13 @@ async function callWebRuntimeSessionTabMethod(
     publicationEpoch?: string | null
     terminalHandle?: string | null
   }
-): Promise<boolean> {
+): Promise<WebRuntimeSessionTabCloseOutcome> {
   const environmentId =
     args.environmentId?.trim() ??
     useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
     null
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
-    return false
+    return 'failed'
   }
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
@@ -1131,7 +1411,7 @@ async function callWebRuntimeSessionTabMethod(
     console.warn('[web-runtime-session] suppressed lifecycle close without incarnation evidence', {
       closeReason: args.reason
     })
-    return false
+    return 'failed'
   }
 
   const immediateHostTabId = toHostSessionTabId(args.tabId)
@@ -1203,7 +1483,7 @@ async function callWebRuntimeSessionTabMethod(
         expectedEnvironmentPairingRevision: intentOwner.pairingRevision
       })
     }
-    return true
+    return 'applied'
   } catch (error) {
     if (activationHostTabId) {
       clearWebSessionFocusIntentIfMatches(intentOwner, args.worktreeId, activationHostTabId)
@@ -1222,7 +1502,7 @@ async function callWebRuntimeSessionTabMethod(
       `[web-runtime-session] failed to ${isClose ? 'close' : 'activate'} tab:`,
       error instanceof Error ? error.message : String(error)
     )
-    return false
+    return hasRuntimeRpcErrorCode(error, 'tab_not_found') ? 'unknown-tab' : 'failed'
   }
 }
 

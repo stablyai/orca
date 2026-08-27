@@ -3501,7 +3501,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "Suma del conjunto de trabajo (WS). Las páginas compartidas pueden aparecer en más de un proceso.",
+                "workingSetDescription": "Suma del conjunto de trabajo (WS): las páginas residentes en RAM en este momento. Las páginas compartidas pueden aparecer en más de un proceso, y la memoria que Windows ha paginado a disco no se cuenta aquí.",
+                "privateBytesDescription": "Suma de bytes privados: la memoria que estos procesos han confirmado, contada tanto si está residente como si está paginada a disco. Es lo que el host imputa a su límite de confirmación, así que sigue subiendo mientras el conjunto de trabajo de arriba se reduce por la paginación.",
                 "rssDescription": "Suma del tamaño del conjunto residente (RSS). Las páginas compartidas o con alias pueden aparecer en más de un proceso."
               }
             },
@@ -3872,6 +3873,93 @@
         }
       },
       "skills": {
+        "SkillsPage": {
+          "cb142070b4": "Actualizar",
+          "a68dee6a32": "Buscar skills",
+          "f43ad6edf3": "Skills",
+          "ea72d6185b": "No se pudieron analizar las skills",
+          "dc4c3328ee": "Mostrar archivo",
+          "9963dff6d3": "No se encontró ninguna descripción.",
+          "995fde8337": "No se pudo mostrar el archivo de la skill",
+          "4acd6d68ec": "No se encontraron skills",
+          "6a62a0168c": "Sin coincidencias",
+          "08a321a984": "Ninguna skill coincide con la búsqueda y los filtros actuales.",
+          "cd7893fbc1": "Analizando skills",
+          "35b9a724a0": "Disponible",
+          "c13b82793c": "Gestionar instalaciones",
+          "aee7b99cc6": "Instalar desde un enlace",
+          "filterProvider": "Filtrar por agente",
+          "filterSource": "Filtrar por origen",
+          "allSources": "Todo",
+          "clearFilters": "Borrar filtros",
+          "closeSkills": "Cerrar skills",
+          "closeTooltip": "Cerrar · Esc",
+          "moreActions": "Más acciones",
+          "sharedLinks": "Enlaces compartidos",
+          "emptyCopy": "Las carpetas de skills analizadas están vacías. Instala un paquete compartido o actualiza después de añadir una skill.",
+          "retry": "Reintentar",
+          "remoteShareNotice": "Estas skills están en {{host}}. Abre Skills en esa máquina para compartirlas.",
+          "viewSwitch": "Mostrar",
+          "searchLinks": "Buscar enlaces",
+          "deleteSkills": "Eliminar skills…"
+        },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "Compartir skills"
+        },
+        "SkillRow": {
+          "updatedUnknown": "Sin fecha",
+          "pathCopied": "Ruta copiada",
+          "copyPath": "Copiar ruta",
+          "detailPath": "Ruta",
+          "skillActions": "Acciones para {{value0}}",
+          "viewDetails": "Ver detalles",
+          "deleteSkill": "Eliminar…"
+        },
+        "SkillsList": { "listLabel": "Skills" },
+        "sourceStatus": {
+          "missing": "Carpeta no encontrada",
+          "remoteRepo": "Repositorio remoto — sin analizar",
+          "unavailable": "Sin analizar"
+        },
+        "sources": { "heading": "Carpetas de skills" },
+        "sourceKind": {
+          "home": "Inicio",
+          "workspace": "Espacio de trabajo",
+          "bundled": "Incluida",
+          "plugin": "Plugin"
+        },
+        "count": {
+          "skillOne": "{{count}} skill",
+          "skillOther": "{{count}} skills",
+          "sourceOne": "{{count}} origen",
+          "sourceOther": "{{count}} orígenes",
+          "fileOne": "{{count}} archivo",
+          "fileOther": "{{count}} archivos",
+          "resultOne": "{{count}} resultado",
+          "resultOther": "{{count}} resultados",
+          "selected": "{{count}} seleccionadas",
+          "shareOne": "Compartir {{count}} skill",
+          "shareOther": "Compartir {{count}} skills",
+          "linkOne": "{{count}} enlace",
+          "linkOther": "{{count}} enlaces"
+        },
+        "filter": {
+          "allAgents": "Todos los agentes",
+          "sharedAgent": "Compartido (.agents)"
+        },
+        "SkillsSelectionHeader": {
+          "exit": "Salir de la selección",
+          "exitTooltip": "Salir de la selección · Esc",
+          "title": "Seleccionar skills para compartir",
+          "selectAll": "Seleccionar las {{count}} aptas",
+          "clear": "Borrar",
+          "deleteTitle": "Seleccionar skills para eliminar"
+        },
+        "SkillDetailDialog": {
+          "agents": "Agentes",
+          "updated": "Actualizado",
+          "copy": "Copiar"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "Una skill de Orca instalada está desactualizada",
           "titleMany": "{{value0}} skills de Orca instaladas están desactualizadas",
@@ -10589,6 +10677,8 @@
             "7a09d7f9d2": "base",
             "383cf92c73": "árbol",
             "d7ae61269b": "Commits en la rama",
+            "branchFilesChangedVsBaseOne": "1 archivo cambiado respecto a {{ref}}",
+            "branchFilesChangedVsBaseOther": "{{count}} archivos cambiados respecto a {{ref}}",
             "48a003c1b1": "Cambios preparados",
             "d4ef4bafc5": "Cambios",
             "522f44dce5": "Archivos sin seguimiento",
@@ -10663,10 +10753,10 @@
             "b3c8f1a902": "Filtrar archivos por nombre",
             "d4f8c2a901": "Limpiar y cerrar filtro",
             "e8a1c4b203": "vs",
-            "f9b2441bb6": "1 commit por delante de {{value0}}",
-            "b715ef615b": "{{value0}} commits por delante de {{value1}}",
-            "c1a8f3e204": "1 commit por detrás de {{value0}}",
-            "d2b9g4f315": "{{value0}} commits por detrás de {{value1}}",
+            "compareBaseCommitsAheadOne": "1 commit por delante de {{ref}}",
+            "compareBaseCommitsAheadOther": "{{count}} commits por delante de {{ref}}",
+            "compareBaseCommitsBehindOne": "1 commit por detrás de {{ref}}",
+            "compareBaseCommitsBehindOther": "{{count}} commits por detrás de {{ref}}",
             "4b4a7de138": "Abrir página de revisión en el navegador",
             "createPrIntentCommitBlockedSummary": "Commit bloqueado: {{value0}} Corrige el issue y reintenta crear PR.",
             "pushRecovery": {
@@ -13841,6 +13931,7 @@
           "backToList": "Todas las automatizaciones",
           "tableName": "Nombre",
           "tableProject": "Proyecto",
+          "tableHost": "Host",
           "tableStatus": "Estado",
           "tableActions": "Acciones",
           "newAutomation": "Nueva automatización",

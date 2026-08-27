@@ -142,6 +142,7 @@ export async function useIpcEventsForCloseRouting({
     dispatchEvent: vi.fn(),
     api: {
       repos: { onChanged: () => () => {} },
+      automations: { onChanged: () => () => {} },
       worktrees: {
         onChanged: () => () => {},
         onBaseStatus: () => () => {},
@@ -281,7 +282,9 @@ export async function useIpcEventsForCloseRouting({
         getBrowserDrivers: () => Promise.resolve([]),
         onTerminalFitOverrideChanged: () => () => {},
         onTerminalDriverChanged: () => () => {},
-        onBrowserDriverChanged: () => {}
+        onBrowserDriverChanged: () => {},
+        onClientHostedBrowserRowsChanged: () => {},
+        getClientHostedBrowserRows: async () => []
       },
       agentStatus: { onSet: () => () => {} }
     }

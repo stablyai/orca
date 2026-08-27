@@ -12,6 +12,7 @@ import { isRuntimeOwnedSshTargetId } from '../../shared/execution-host'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import {
   getSshTargetRegistryStore,
+  setSshConnectionManagerResolver,
   setSshTargetRegistryHandlers,
   setSshTargetRegistryStore
 } from '../ssh/ssh-target-registry'
@@ -23,6 +24,7 @@ export {
   connectRegisteredSshTarget,
   getActiveMultiplexer,
   getRegisteredSshState,
+  getSshConnectionManager,
   listRegisteredRemovedSshTargetLabels,
   listRegisteredSshTargets
 } from '../ssh/ssh-target-registry'
@@ -184,6 +186,7 @@ export function registerSshHandlers(
   refreshActiveRelaySessions()
   registerPowerMonitorReconnect()
   registerSshBrowseHandler(() => connectionManager)
+  setSshConnectionManagerResolver(() => connectionManager)
 
   registerSshTargetCrudHandlers()
   registerSshConnectionHandlers()
@@ -193,10 +196,6 @@ export function registerSshHandlers(
     connectionManager: connectionManager!,
     sshStore: getSshTargetRegistryStore() as SshConnectionStore
   }
-}
-
-export function getSshConnectionManager(): SshConnectionManager | null {
-  return connectionManager
 }
 
 export async function resetSshHandlerStateForTests(): Promise<void> {
@@ -231,6 +230,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   await connectionManager?.disconnectAll()
   portForwardManager?.dispose()
   setConnectionManager(null)
+  setSshConnectionManagerResolver(null)
   setPortForwardManager(null)
   setSshTargetRegistryStore(null)
   setPersistedStore(null)

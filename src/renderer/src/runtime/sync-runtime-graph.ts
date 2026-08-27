@@ -1739,7 +1739,9 @@ function buildMobileSessionGroupProjection(
       groupTabs,
       terminalIds,
       editorIds,
-      browserIds
+      browserIds,
+      new Set(),
+      true
     )
     if (visibleOrder.length === 0) {
       continue

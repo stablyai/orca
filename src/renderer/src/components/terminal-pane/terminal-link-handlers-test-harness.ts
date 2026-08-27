@@ -58,6 +58,7 @@ export function installTerminalLinkTestEnvironment(doubles: TerminalLinkTestDoub
     openFilePathMock.mockResolvedValue(true)
     storeState.settings = undefined
     storeState.activeFileIdByWorktree = {}
+    storeState.openFiles = []
     storeState.worktreesByRepo = {}
     registerHttpLinkStoreAccessor(() => storeState)
     vi.stubGlobal('window', {

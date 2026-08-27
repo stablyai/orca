@@ -13,10 +13,6 @@ import {
   type CodexHookTrustGrantRequest
 } from './codex-app-server-client'
 import { killCodexAppServerProcessTree, runCodexAppServerSession } from './codex-app-server-session'
-import {
-  resolveCodexGrantEntryPath,
-  runCodexHookTrustGrantSessionSync
-} from './codex-app-server-grant-bridge'
 
 // Stub codex app-server speaking the same JSONL protocol: initialize →
 // initialized → hooks/list → config/batchWrite → hooks/list. Scenario-driven
@@ -468,108 +464,5 @@ describe('runCodexHookTrustGrantSession', () => {
     const error = await runCodexHookTrustGrantSession(request).catch((caught: unknown) => caught)
     expect(error).toBeInstanceOf(Error)
     expect(isCodexAppServerUnsupportedError(error)).toBe(false)
-  })
-})
-
-describe('runCodexHookTrustGrantSessionSync', () => {
-  function writeEntryFixture(source: string): string {
-    const root = mkdtempSync(join(tmpdir(), 'orca-codex-entry-'))
-    tempRoots.push(root)
-    const entryPath = join(root, 'grant-entry.cjs')
-    writeFileSync(entryPath, source)
-    return entryPath
-  }
-
-  const baseRequest: CodexHookTrustGrantRequest = {
-    invocation: { command: 'codex', cliPath: null, args: ['app-server'], timeoutMs: 1_000 },
-    hooksListCwd: '/tmp',
-    expectedTrustKeys: ['k'],
-    managedCommand: MANAGED_COMMAND
-  }
-
-  it('returns the entry envelope result and passes the request over stdin', () => {
-    const entryPath = writeEntryFixture(`
-      let input = ''
-      process.stdin.setEncoding('utf8')
-      process.stdin.on('data', (chunk) => { input += chunk })
-      process.stdin.on('end', () => {
-        const request = JSON.parse(input)
-        process.stdout.write(JSON.stringify({
-          ok: true,
-          result: {
-            outcome: 'granted',
-            wroteTrust: true,
-            entries: [{ key: request.expectedTrustKeys[0], normalizedKey: request.expectedTrustKeys[0], trustedHash: 'sha256:x' }]
-          }
-        }) + '\\n')
-      })
-    `)
-    const result = runCodexHookTrustGrantSessionSync(baseRequest, { entryPath })
-    expect(result).toMatchObject({ outcome: 'granted', wroteTrust: true })
-  })
-
-  it('rethrows unsupported envelopes as the unsupported error class', () => {
-    const entryPath = writeEntryFixture(`
-      process.stdin.resume()
-      process.stdin.on('end', () => {
-        process.stdout.write(JSON.stringify({ ok: false, errorName: 'CodexAppServerUnsupportedError', message: 'no app-server', unsupported: true }) + '\\n')
-      })
-    `)
-    expect(() => runCodexHookTrustGrantSessionSync(baseRequest, { entryPath })).toThrow(
-      CodexAppServerUnsupportedError
-    )
-  })
-
-  it('fails with a clear error when the entry produces no result', () => {
-    const entryPath = writeEntryFixture(
-      `process.stdin.resume(); process.stdin.on('end', () => process.exit(7))`
-    )
-    expect(() => runCodexHookTrustGrantSessionSync(baseRequest, { entryPath })).toThrow(
-      /produced no result \(exit 7\)/
-    )
-  })
-
-  it('classifies the spawnSync deadline as a typed timeout', () => {
-    const entryPath = writeEntryFixture(`setInterval(() => {}, 1000)`)
-    const request = {
-      ...baseRequest,
-      invocation: { ...baseRequest.invocation, timeoutMs: 20 }
-    }
-    expect(() =>
-      runCodexHookTrustGrantSessionSync(request, { entryPath, timeoutMarginMs: 20 })
-    ).toThrow(CodexAppServerTimeoutError)
-  })
-})
-
-describe('resolveCodexGrantEntryPath', () => {
-  const entryName = 'codex-app-server-grant-entry.js'
-
-  it('finds the sibling entry from emitted main and chunk directories', () => {
-    const mainDir = join('/opt', 'orca', 'out', 'main')
-    expect(
-      resolveCodexGrantEntryPath(
-        (candidate) => candidate === join(mainDir, 'codex', entryName),
-        mainDir
-      )
-    ).toBe(join(mainDir, 'codex', entryName))
-
-    const chunkDir = join(mainDir, 'chunks')
-    expect(
-      resolveCodexGrantEntryPath(
-        (candidate) => candidate === join(mainDir, 'codex', entryName),
-        chunkDir
-      )
-    ).toBe(join(mainDir, 'codex', entryName))
-  })
-
-  it('redirects app.asar to unpacked without double-unpacking an existing path', () => {
-    const resourcesDir = join('/Applications', 'Orca.app', 'Contents', 'Resources')
-    const expected = join(resourcesDir, 'app.asar.unpacked', 'out', 'main', 'codex', entryName)
-    for (const archiveDir of ['app.asar', 'app.asar.unpacked']) {
-      const moduleDir = join(resourcesDir, archiveDir, 'out', 'main', 'chunks')
-      expect(resolveCodexGrantEntryPath((candidate) => candidate === expected, moduleDir)).toBe(
-        expected
-      )
-    }
   })
 })

@@ -18,6 +18,7 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage,
       openModal: vi.fn(),
+      openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -42,6 +43,7 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
+      openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer: vi.fn(),
       dispatchTerminalPaneSplit,
       schedule: vi.fn()
@@ -69,6 +71,7 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
+      openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -96,6 +99,7 @@ describe('performContextualTourStepAction', () => {
       setSidebarOpen: vi.fn(),
       openTaskPage: vi.fn(),
       openModal: vi.fn(),
+      openClientHostedBrowserSettings: vi.fn(),
       openWorkspaceComposer,
       dispatchTerminalPaneSplit: vi.fn(),
       schedule: vi.fn()
@@ -103,5 +107,36 @@ describe('performContextualTourStepAction', () => {
 
     expect(detachContextualTourSource).toHaveBeenCalledTimes(1)
     expect(openWorkspaceComposer).toHaveBeenCalledTimes(1)
+  })
+
+  it('finishes the tour before opening the client-hosted browser settings', () => {
+    const finishTour = vi.fn()
+    const openClientHostedBrowserSettings = vi.fn()
+    const scheduled: (() => void)[] = []
+
+    performContextualTourStepAction({
+      action: { kind: 'open-client-hosted-browser-settings', label: 'Browser settings' },
+      activeTabId: 'tab-1',
+      isLastStep: true,
+      finishTour,
+      advanceContextualTour: vi.fn(),
+      detachContextualTourSource: vi.fn(),
+      setSidebarOpen: vi.fn(),
+      openTaskPage: vi.fn(),
+      openModal: vi.fn(),
+      openClientHostedBrowserSettings,
+      openWorkspaceComposer: vi.fn(),
+      dispatchTerminalPaneSplit: vi.fn(),
+      schedule: (callback) => {
+        scheduled.push(callback)
+      }
+    })
+
+    expect(finishTour).toHaveBeenCalledTimes(1)
+    expect(openClientHostedBrowserSettings).not.toHaveBeenCalled()
+    for (const callback of scheduled) {
+      callback()
+    }
+    expect(openClientHostedBrowserSettings).toHaveBeenCalledTimes(1)
   })
 })

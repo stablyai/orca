@@ -94,7 +94,8 @@ export type {
 export {
   BROWSER_UNAVAILABLE_ERROR_CODE,
   browserUnavailableMessage,
-  HEADLESS_RUNTIME_WINDOW_ID
+  HEADLESS_RUNTIME_WINDOW_ID,
+  UNPUBLISHED_WORKTREE_PUBLICATION_EPOCH
 } from './runtime-session-contracts'
 export type {
   CliRuntimeState,

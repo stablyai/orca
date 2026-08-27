@@ -1,5 +1,8 @@
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { AUTOMATIONS_CHANGED_EVENT } from '@/lib/automations-changed-window-event'
+
+const mockDispatchEvent = vi.fn()
 
 const mockLaunchAgentBackgroundSession = vi.fn()
 const mockLaunchWorktreeBackgroundTerminals = vi.fn()
@@ -134,6 +137,11 @@ vi.mock('@/lib/agent-paste-draft', () => ({
   submitPromptToAgentPty: mockSubmitPromptToAgentPty
 }))
 
+// The reuse path reads run history over the local runtime target, not IPC.
+vi.mock('@/components/automations/automation-host-client', () => ({
+  listAutomationRunsForTarget: vi.fn().mockResolvedValue([])
+}))
+
 vi.mock('@/lib/automation-session-reuse', () => ({
   findReusableAutomationSession: mockFindReusableAutomationSession
 }))
@@ -216,8 +224,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
           onDispatchRequested: mockOnDispatchRequested,
           rendererReady: mockRendererReady,
           markDispatchResult: mockMarkDispatchResult,
-          runPrecheck: vi.fn(),
-          listRuns: vi.fn().mockResolvedValue([])
+          runPrecheck: vi.fn()
         },
         ssh: {
           needsPassphrasePrompt: mockSshNeedsPassphrasePrompt,
@@ -225,8 +232,19 @@ describe('useAutomationDispatchEvents setup launch', () => {
           connect: mockSshConnect
         }
       },
-      dispatchEvent: vi.fn()
+      dispatchEvent: mockDispatchEvent
     })
+  })
+
+  // The scoped event main publishes with the write is the only one; a local emit
+  // here would name no host and re-invalidate every host in the catalog.
+  it('leaves the automationsChanged event to the host that owns the write', async () => {
+    await registerAndDispatch()
+
+    expect(mockMarkDispatchResult).toHaveBeenCalled()
+    expect(
+      mockDispatchEvent.mock.calls.filter(([event]) => event?.type === AUTOMATIONS_CHANGED_EVENT)
+    ).toEqual([])
   })
 
   it('starts setup terminal launch without waiting before launching the automation agent', async () => {

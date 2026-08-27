@@ -7,6 +7,7 @@ import {
 } from '../../runtime/runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '../../runtime/runtime-rpc-client'
 import { createTestStore } from './store-test-helpers'
+import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
 
 const folderWorkspacesUpdate = vi.fn()
 const folderWorkspacesDelete = vi.fn()
@@ -69,6 +70,28 @@ beforeEach(() => {
 })
 
 describe('folder workspace owner-routed mutations', () => {
+  it('persists manual rank through the shared batch metadata boundary', async () => {
+    const folderWorkspace = makeFolderWorkspace()
+    folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, manualOrder: 9000 })
+    const store = createTestStore()
+    store.setState({
+      projectGroups: [{ ...projectGroup, executionHostId: 'local' }],
+      folderWorkspaces: [folderWorkspace]
+    })
+
+    await store
+      .getState()
+      .updateWorktreesMeta(
+        new Map([[folderWorkspaceKey(folderWorkspace.id), { manualOrder: 9000 }]])
+      )
+
+    expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
+      folderWorkspaceId: folderWorkspace.id,
+      updates: { manualOrder: 9000 }
+    })
+    expect(store.getState().folderWorkspaces[0]?.manualOrder).toBe(9000)
+  })
+
   it('updates a local folder locally while another runtime is focused', async () => {
     const folderWorkspace = makeFolderWorkspace()
     folderWorkspacesUpdate.mockResolvedValue({ ...folderWorkspace, comment: 'Ready' })

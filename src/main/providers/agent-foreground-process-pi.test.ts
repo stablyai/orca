@@ -52,14 +52,41 @@ describe('Pi Windows foreground recognition', () => {
     getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
       cb(withSelf(rows))
     })
-    const readWindowsConptyProcessIds = vi.fn(async () => new Set([100, 101]))
+    const readWindowsConsoleAttachedProcessIds = vi.fn(async () => new Set([100, 101]))
 
     await expect(
       resolveAgentForegroundProcessWithAvailability(100, 'node.exe', {
         fresh: true,
-        readWindowsConptyProcessIds
+        readWindowsConsoleAttachedProcessIds
       })
-    ).resolves.toEqual({ available: true, processName: 'pi' })
-    expect(readWindowsConptyProcessIds).toHaveBeenCalledTimes(1)
+    ).resolves.toEqual({ available: true, processName: 'pi', processId: 101 })
+    expect(readWindowsConsoleAttachedProcessIds).toHaveBeenCalledTimes(1)
+  })
+
+  it('anchors a collapsed omp name to the omp pid, not the embedded pi leaf', async () => {
+    // Pi restarts under a live OMP; an anchor on pi's pid would read that as
+    // OMP's exit and fire a false "agent done" when the next snapshot degrades.
+    const rows = [
+      { pid: 100, ppid: 99, name: 'powershell.exe', commandLine: 'powershell.exe' },
+      { pid: 101, ppid: 100, name: 'omp.exe', commandLine: 'omp' },
+      {
+        pid: 102,
+        ppid: 101,
+        name: 'node.exe',
+        commandLine:
+          'node.exe C:\\npm\\node_modules\\@earendil-works\\pi-coding-agent\\dist\\cli.js'
+      }
+    ]
+    getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
+      cb(withSelf(rows))
+    })
+    const readWindowsConsoleAttachedProcessIds = vi.fn(async () => new Set([100, 101, 102]))
+
+    await expect(
+      resolveAgentForegroundProcessWithAvailability(100, 'powershell.exe', {
+        fresh: true,
+        readWindowsConsoleAttachedProcessIds
+      })
+    ).resolves.toEqual({ available: true, processName: 'omp', processId: 101 })
   })
 })

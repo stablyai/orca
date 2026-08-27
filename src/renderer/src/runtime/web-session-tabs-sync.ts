@@ -22,12 +22,19 @@ import type {
   RuntimeMobileSessionTabGroup,
   RuntimeMobileSessionTerminalClientTab
 } from '../../../shared/runtime-types'
+import { hostSnapshotAffirmsClientHostedPages } from './host-session-snapshot-authority'
 import type {
   BrowserCertificateFailure,
   BrowserPage,
   BrowserWorkspace
 } from '../../../shared/browser-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
+import { reconcileClientOwnedTabPlacement } from './web-session-client-owned-tab-placement'
+import {
+  clearWebSessionTerminalPlacementsForEnvironment,
+  clearWebSessionTerminalPlacementsForWorktree,
+  peekWebSessionTerminalPlacementGroup
+} from './web-session-terminal-placement'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../shared/terminal-tab-types'
 import type { OpenFile } from '../store/slices/editor'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -46,6 +53,8 @@ import {
   markHostSessionMirrorHydrated,
   markHostSessionMirrorWorktreeHydrated
 } from './host-session-mirror-hydration'
+import { probeHostLiveTerminals } from './host-live-terminal-probe'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import {
   createWebRuntimeSessionTerminal,
   HOST_TERMINAL_SURFACE_SEPARATOR,
@@ -60,6 +69,7 @@ import {
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
 import { resolveTerminalLayoutRoot } from './remote-terminal-layout-resolution'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
+import { readBrowserClientHostId } from './browser-client-host-identity'
 import {
   clearWebSessionFocusIntent,
   clearWebSessionFocusIntentsForOwner,
@@ -105,6 +115,7 @@ import {
   clearWebSessionBrowserPlacementsForEnvironment,
   clearWebSessionBrowserPlacementsForWorktree,
   isWebSessionBrowserPlacementGroupReserved,
+  markWebSessionBrowserPlacementAdopted,
   peekWebSessionBrowserPlacementGroup,
   resetWebSessionBrowserPlacementsForTests
 } from './web-session-browser-placement'
@@ -114,6 +125,10 @@ import {
   buildWebSessionExistingTabIndex,
   type WebSessionExistingTabIndex
 } from './web-session-existing-tab-index'
+import {
+  sameRuntimeBrowserPlacement,
+  type RuntimeBrowserPlacement
+} from '../../../shared/runtime-browser-placement'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -203,6 +218,7 @@ type MirroredBrowserTab = {
   page: BrowserPage
   certificateFailure: BrowserCertificateFailure | null
   remotePageId: string
+  placement?: RuntimeBrowserPlacement
   unifiedTab: Tab
   hostTabId: string
   clientGroupId?: string
@@ -786,6 +802,7 @@ function clearWebSessionTabsTrackingForWorktree(environmentId: string, worktreeI
   clearWebAgentSessionHandoffsForWorktree(environmentId, worktreeId)
   clearHostSessionTabIdMappings(environmentId, worktreeId)
   clearWebSessionBrowserPlacementsForWorktree(environmentId, worktreeId)
+  clearWebSessionTerminalPlacementsForWorktree(environmentId, worktreeId)
 }
 
 export function clearWebSessionTabsTrackingForEnvironment(environmentId: string): void {
@@ -840,6 +857,7 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   }
   clearWebAgentSessionHandoffsForEnvironment(trimmedEnvironmentId)
   clearWebSessionBrowserPlacementsForEnvironment(trimmedEnvironmentId)
+  clearWebSessionTerminalPlacementsForEnvironment(trimmedEnvironmentId)
   clearHostSessionMirrorHydration(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
 }
@@ -1668,6 +1686,95 @@ function browserWorkspaceHasRemoteEnvironmentPage(
   )
 }
 
+/** A page of this environment whose guest runs on this desktop, so it survives the host process. */
+function browserWorkspaceHasClientHostedEnvironmentPage(
+  state: WebSessionTabsSyncState,
+  workspace: BrowserWorkspace,
+  environmentId: string
+): boolean {
+  return (state.browserPagesByWorkspace[workspace.id] ?? []).some((page) => {
+    const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+    return (
+      handle?.environmentId === environmentId &&
+      (handle.placement?.kind === 'client' ||
+        handle.stagedClientHosted === true ||
+        handle.restoredClientHosted === true)
+    )
+  })
+}
+
+/**
+ * The host publishes `title || url || 'Browser'` (see the runtime's browser tab projection), so a
+ * page that has not produced a real title yet arrives as its own url — or as the bare default.
+ * Neither says anything the local row does not already say better, so while the page still sits at
+ * the url this client gave it, the local title stands and only a real navigation replaces it.
+ *
+ * Scope: the pre-adoption/staged window, every placement the host actually drives, and the mirror
+ * of a page some other client hosts. Rows whose guest is ours never reach here — see
+ * resolveMirroredBrowserPageContent.
+ */
+function resolveMirroredBrowserTitle(
+  tab: RuntimeMobileSessionBrowserTab,
+  existingPage: BrowserPage | undefined
+): string {
+  const published = tab.title.trim()
+  const publishedIsHostFallback =
+    published === '' || published === tab.url.trim() || published === 'Browser'
+  if (existingPage && publishedIsHostFallback && tab.url === existingPage.url) {
+    return existingPage.title
+  }
+  return published || 'Browser'
+}
+
+/**
+ * Whether the guest running this page is one of ours. `placement.kind === 'client'` says only that
+ * *some* client hosts it: a second desktop, or the web client that installs no page renderer at
+ * all, mirrors the same row with nothing of its own to see it with. The placement names the lease
+ * holder, so the comparison is exact, and it holds from the moment the host mints the placement —
+ * before our guest has attached — which is the window the title would otherwise flicker through.
+ */
+function clientHostsMirroredBrowserPage(tab: RuntimeMobileSessionBrowserTab): boolean {
+  if (tab.placement?.kind !== 'client') {
+    return false
+  }
+  const hostClientId = readBrowserClientHostId()
+  return hostClientId !== null && tab.placement.browserHostClientId === hostClientId
+}
+
+/**
+ * A page hosted by this client lives in our own guest webview; the host only ever learns its
+ * content second-hand through a fire-and-forget metadata publish, so its snapshot is a stale echo
+ * at best and the registry's `'Browser'`/create-time defaults at worst. Once a local row exists it
+ * is the truth.
+ *
+ * The url is part of the payload and not just a symptom: rewinding it to the host's create-time
+ * value is what breaks the staged-title hold's url-equality arm on the following snapshot.
+ *
+ * Every other row keeps taking the host values — a client that hosts no guest has no second
+ * opinion to offer, and freezing its mirror would strand it on whatever its first snapshot said.
+ */
+function resolveMirroredBrowserPageContent(
+  tab: RuntimeMobileSessionBrowserTab,
+  existingPage: BrowserPage | undefined
+): Pick<BrowserPage, 'url' | 'title' | 'loading' | 'canGoBack' | 'canGoForward'> {
+  if (clientHostsMirroredBrowserPage(tab) && existingPage) {
+    return {
+      url: existingPage.url,
+      title: existingPage.title,
+      loading: existingPage.loading,
+      canGoBack: existingPage.canGoBack,
+      canGoForward: existingPage.canGoForward
+    }
+  }
+  return {
+    url: tab.url,
+    title: resolveMirroredBrowserTitle(tab, existingPage),
+    loading: tab.loading,
+    canGoBack: tab.canGoBack,
+    canGoForward: tab.canGoForward
+  }
+}
+
 function buildMirroredBrowserTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
@@ -1699,7 +1806,14 @@ function buildMirroredBrowserTabs(
     const hostGroupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
     const existingClientGroupId =
       existing?.unifiedTab?.groupId !== hostGroupId ? existing?.unifiedTab?.groupId : undefined
-    const preferredClientGroupId = recordedClientGroupId ?? existingClientGroupId
+    // Why: a staged row was placed by this client, so wherever it sits now is the user's own
+    // choice — including a split made after the create recorded its intent. Rows the client never
+    // staged carry no such truth: a pre-response snapshot may have parked them in the host group,
+    // and there the record is what repairs them.
+    const preferredClientGroupId =
+      existing && state.remoteBrowserPageHandlesByPageId[existing.page.id]?.staged === true
+        ? (existing.unifiedTab?.groupId ?? recordedClientGroupId)
+        : (recordedClientGroupId ?? existingClientGroupId)
     const clientGroupId =
       preferredClientGroupId &&
       clientGroupIds.has(preferredClientGroupId) &&
@@ -1707,18 +1821,17 @@ function buildMirroredBrowserTabs(
         ? preferredClientGroupId
         : undefined
     const groupId = clientGroupId ?? hostGroupId
-    const title = tab.title.trim() || 'Browser'
+    const content = resolveMirroredBrowserPageContent(tab, existing?.page)
     const nextPage: BrowserPage = {
       id: pageId,
       workspaceId,
       worktreeId: snapshot.worktree,
-      url: tab.url,
-      title,
-      loading: tab.loading,
+      ...content,
       faviconUrl: existing?.page.faviconUrl ?? null,
-      canGoBack: tab.canGoBack,
-      canGoForward: tab.canGoForward,
-      loadError: tab.loadError ?? null,
+      // Why: a client-hosted page's load failure is observed by the local guest webview and the
+      // host publishes no loadError for it, so the host snapshot must not clear the local record.
+      loadError:
+        (tab.placement?.kind === 'client' ? existing?.page.loadError : tab.loadError) ?? null,
       createdAt,
       browserRuntimeEnvironmentId: environmentId,
       viewportPresetId: existing?.page.viewportPresetId ?? null
@@ -1747,6 +1860,7 @@ function buildMirroredBrowserTabs(
       page,
       certificateFailure: tab.certificateFailure ?? null,
       remotePageId: tab.browserPageId,
+      ...(tab.placement ? { placement: tab.placement } : {}),
       unifiedTab: buildBrowserUnifiedTab(
         workspace,
         tab,
@@ -2305,6 +2419,15 @@ function browserPageEqual(a: BrowserPage, b: BrowserPage): boolean {
   )
 }
 
+function optionalRuntimeBrowserPlacementsEqual(
+  left: RuntimeBrowserPlacement | undefined,
+  right: RuntimeBrowserPlacement | undefined
+): boolean {
+  return left === undefined
+    ? right === undefined
+    : right !== undefined && sameRuntimeBrowserPlacement(left, right)
+}
+
 function browserCertificateFailureEqual(
   a: BrowserCertificateFailure | null | undefined,
   b: BrowserCertificateFailure | null | undefined
@@ -2602,27 +2725,30 @@ function applyWebSessionTabsSnapshotWithContext(
     terminalSurfaceTabs.map((tab) => toWebTerminalSurfaceTabId(tab.parentTabId))
   )
   const nextHostTerminalTabIds = new Set(terminalSurfaceTabs.map((tab) => tab.parentTabId))
-  const exactProvisionalHandoffs = new Set(
-    currentTerminalTabs
-      .filter((tab) => !isMirroredTerminalSurfaceId(tab.id))
-      .filter((tab) => {
-        if (nextHostTerminalTabIds.has(tab.id)) {
-          return true
-        }
-        const handoff = {
-          environmentId,
-          worktreeId,
-          provisionalTabId: tab.id
-        }
-        const hostTabId = resolveWebAgentSessionHandoff(handoff)
-        return (
-          hostTabId !== null &&
-          (nextHostTerminalTabIds.has(hostTabId) ||
-            isWebAgentSessionHandoffPostCreateSnapshotConfirmed(handoff))
-        )
-      })
-      .map((tab) => tab.id)
-  )
+  const provisionalHandoffHostTabIds = new Map<string, string>()
+  for (const tab of currentTerminalTabs) {
+    if (isMirroredTerminalSurfaceId(tab.id)) {
+      continue
+    }
+    if (nextHostTerminalTabIds.has(tab.id)) {
+      provisionalHandoffHostTabIds.set(tab.id, tab.id)
+      continue
+    }
+    const handoff = {
+      environmentId,
+      worktreeId,
+      provisionalTabId: tab.id
+    }
+    const hostTabId = resolveWebAgentSessionHandoff(handoff)
+    if (
+      hostTabId !== null &&
+      (nextHostTerminalTabIds.has(hostTabId) ||
+        isWebAgentSessionHandoffPostCreateSnapshotConfirmed(handoff))
+    ) {
+      provisionalHandoffHostTabIds.set(tab.id, hostTabId)
+    }
+  }
+  const exactProvisionalHandoffs = new Set(provisionalHandoffHostTabIds.keys())
   const retainedTerminalTabs = currentTerminalTabs.filter(
     (tab) =>
       !shouldReplaceTerminalTab(
@@ -2691,6 +2817,32 @@ function applyWebSessionTabsSnapshotWithContext(
           return true
         }
         if (!browserWorkspaceHasRemoteEnvironmentPage(state, tab, environmentId)) {
+          return false
+        }
+        // Why: a staged tab holds a handle before its create RPC answers, and a restored tab holds
+        // one rebuilt from disk before the relaunched host has republished the page. Neither
+        // handle is evidence the host ever saw this snapshot's worktree, so absence proves
+        // nothing — culling here would erase an optimistic tab mid-create or a restored tab a
+        // recovering host is still about to hand back.
+        if (
+          (state.browserPagesByWorkspace[tab.id] ?? []).some((page) => {
+            const handle = state.remoteBrowserPageHandlesByPageId[page.id]
+            return handle?.staged === true || handle?.restoredFromSession === true
+          })
+        ) {
+          return false
+        }
+        // Why: a runtime with nothing published for this worktree, or one that has restarted and not
+        // yet taken its client-hosted pages back, answers with a frame that looks exactly like
+        // "everything was closed". A page this desktop is still hosting outlives the runtime
+        // process, so its own guest is the better evidence — hold the row and let adoption publish
+        // it, rather than deleting a tab that is still rendering. The unreconciled flag is
+        // host-bounded; the unpublished-worktree frame is not, and its hold lasts until the runtime
+        // publishes that worktree at all.
+        if (
+          !hostSnapshotAffirmsClientHostedPages(snapshot) &&
+          browserWorkspaceHasClientHostedEnvironmentPage(state, tab, environmentId)
+        ) {
           return false
         }
         return !(state.browserPagesByWorkspace[tab.id] ?? []).some((page) => {
@@ -2972,7 +3124,86 @@ function applyWebSessionTabsSnapshotWithContext(
       entry.clientGroupId ? [[entry.unifiedTab.id, entry.clientGroupId]] : []
     )
   )
+  // Why: once this worktree has client groups, placement is client-owned — snapshots may only
+  // append never-seen tabs, drop vanished ones, and honor explicit focus intent. Host order,
+  // host actives, and host layout apply only on first adoption (no client groups yet).
+  const clientOwnedPlacement = (() => {
+    if (currentGroups.length === 0 || !nextUnifiedTabs) {
+      return null
+    }
+    // Why: an entity-identical replacement (provisional terminal → mirrored surface, local
+    // editor → host editor tab) is a rename — its position and focus must carry over.
+    const rekeyedTabIds = new Map<string, string>()
+    for (const [provisionalTabId, hostTabId] of provisionalHandoffHostTabIds) {
+      const mirroredId = toWebTerminalSurfaceTabId(hostTabId)
+      if (mirroredId !== provisionalTabId) {
+        rekeyedTabIds.set(provisionalTabId, mirroredId)
+      }
+    }
+    for (const entry of mirroredEditorTabs) {
+      const existing = existingTabIndex.getEditorUnifiedTab(entry.file.id, entry.hostTabId)
+      if (existing && existing.id !== entry.unifiedTab.id) {
+        rekeyedTabIds.set(existing.id, entry.unifiedTab.id)
+      }
+    }
+    const knownGroupTabIds = new Set(
+      currentGroups.flatMap((group) =>
+        group.tabOrder.map((tabId) => rekeyedTabIds.get(tabId) ?? tabId)
+      )
+    )
+    // Why: a pending record is this client's own create intent — authoritative even when the
+    // provisional tab was provisionally adopted elsewhere or the target group record lags its leaf.
+    // The entry's own clientGroupId comes first, so a group the user moved the row into after the
+    // create was recorded wins over the group the create asked for.
+    const placementMoves = mirroredBrowserTabs.flatMap((entry) => {
+      const recordedGroupId = peekWebSessionBrowserPlacementGroup({
+        environmentId,
+        worktreeId,
+        remotePageId: entry.remotePageId
+      })
+      if (!recordedGroupId) {
+        return []
+      }
+      return [{ tabId: entry.unifiedTab.id, groupId: entry.clientGroupId ?? recordedGroupId }]
+    })
+    for (const parentTabId of new Set(terminalSurfaceTabs.map((tab) => tab.parentTabId))) {
+      const recordedGroupId = peekWebSessionTerminalPlacementGroup({
+        environmentId,
+        worktreeId,
+        hostTabId: parentTabId
+      })
+      if (recordedGroupId) {
+        placementMoves.push({
+          tabId: toWebTerminalSurfaceTabId(parentTabId),
+          groupId: recordedGroupId
+        })
+      }
+    }
+    const adoptedTabs = mirroredUnifiedTabs
+      .filter((tab) => !knownGroupTabIds.has(tab.id))
+      .map((tab) => ({
+        tabId: tab.id,
+        groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
+      }))
+    return reconcileClientOwnedTabPlacement({
+      currentGroups,
+      worktreeId,
+      validUnifiedTabIds,
+      adoptedTabs,
+      placementMoves,
+      rekeyedTabIds,
+      intentTabId: honorSnapshotActiveFocus ? (intentUnifiedTabId ?? null) : null,
+      reservedEmptyGroupFallbackTabId: reservedEmptyPreviewFallbackTabId,
+      currentActiveGroupId: state.activeGroupIdByWorktree[worktreeId] ?? null,
+      currentLayout: state.layoutByWorktree[worktreeId] ?? null,
+      isGroupReserved: (groupId) =>
+        isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId })
+    })
+  })()
   const nextGroups = (() => {
+    if (clientOwnedPlacement) {
+      return clientOwnedPlacement.groups
+    }
     if (!nextUnifiedTabs || nextUnifiedTabs.length === 0) {
       return null
     }
@@ -3206,7 +3437,7 @@ function applyWebSessionTabsSnapshotWithContext(
       }
     }
   }
-  for (const { page, certificateFailure, remotePageId } of mirroredBrowserTabs) {
+  for (const { page, certificateFailure, remotePageId, placement } of mirroredBrowserTabs) {
     const current = nextBrowserPagesByWorkspace[page.workspaceId] ?? []
     if (!sameBrowserPages(current, [page])) {
       nextBrowserPagesByWorkspace =
@@ -3218,7 +3449,15 @@ function applyWebSessionTabsSnapshotWithContext(
     const currentHandle = nextRemoteBrowserPageHandlesByPageId[page.id]
     if (
       currentHandle?.environmentId !== environmentId ||
-      currentHandle.remotePageId !== remotePageId
+      currentHandle.remotePageId !== remotePageId ||
+      // Why: this snapshot is the host publishing the page, which is exactly what clears a
+      // staged handle — without this the optimistic flag would survive every later snapshot.
+      currentHandle.staged === true ||
+      // Why separately: a host that puts a restored page back on the server publishes no
+      // placement, so the handle is otherwise identical to the seed and the restored markers
+      // would never be spent — leaving the row cull-proof and pinned to the client-hosted pane.
+      currentHandle.restoredFromSession === true ||
+      !optionalRuntimeBrowserPlacementsEqual(currentHandle.placement, placement)
     ) {
       nextRemoteBrowserPageHandlesByPageId =
         nextRemoteBrowserPageHandlesByPageId === state.remoteBrowserPageHandlesByPageId
@@ -3226,10 +3465,21 @@ function applyWebSessionTabsSnapshotWithContext(
           : nextRemoteBrowserPageHandlesByPageId
       nextRemoteBrowserPageHandlesByPageId[page.id] = {
         environmentId,
-        remotePageId
+        remotePageId,
+        ...(placement ? { placement } : {})
       }
     }
+    // Why here and not on the staged flag alone: the flag is cleared by this very block, so every
+    // later snapshot in the create's materialization wait would see an un-spent record and move the
+    // tab back to the group the create asked for. Both peeks (the group precedence and the
+    // placementMoves repair) run earlier in this same pass by design: moving the mark ahead of them
+    // would spend the intent before the pass that adopts the page can place it.
+    markWebSessionBrowserPlacementAdopted({ environmentId, worktreeId, remotePageId })
+    // Why: a client-hosted page's certificate failure is raised by the local guest webview and is
+    // structurally absent from what the host publishes, so host snapshots must not own that record
+    // — reconciling here would delete the local one on the next metadata update.
     if (
+      placement?.kind !== 'client' &&
       !browserCertificateFailureEqual(
         nextBrowserCertificateFailuresByPageId[page.id],
         certificateFailure
@@ -3263,11 +3513,33 @@ function applyWebSessionTabsSnapshotWithContext(
     sameBrowserTabs,
     batchContext
   )
+  // Why: under client-owned placement the reconciled groups are the membership truth;
+  // the unified tabs' groupId field must agree or TabBar filters them out of their strip.
+  const placedUnifiedTabs = (() => {
+    if (!clientOwnedPlacement?.groups || !nextUnifiedTabs) {
+      return nextUnifiedTabs
+    }
+    const groupIdByTabId = new Map(
+      clientOwnedPlacement.groups.flatMap((group) =>
+        group.tabOrder.map((tabId) => [tabId, group.id] as const)
+      )
+    )
+    let changed = false
+    const placed = nextUnifiedTabs.map((tab) => {
+      const groupId = groupIdByTabId.get(tab.id)
+      if (!groupId || groupId === tab.groupId) {
+        return tab
+      }
+      changed = true
+      return { ...tab, groupId }
+    })
+    return changed ? placed : nextUnifiedTabs
+  })()
   const nextUnifiedTabsByWorktree = withWorktreeEntry(
     state,
     'unifiedTabsByWorktree',
     worktreeId,
-    nextUnifiedTabs,
+    placedUnifiedTabs,
     sameUnifiedTabs,
     batchContext
   )
@@ -3279,12 +3551,13 @@ function applyWebSessionTabsSnapshotWithContext(
     sameGroups,
     batchContext
   )
-  const nextActiveGroupId =
-    // Why: status/title snapshots carry the host's last active tab; a client that already switched panes keeps its local group focus.
-    nextGroups?.find((group) => group.activeTabId === nextActiveUnifiedTabId)?.id ??
-    nextGroups?.find((group) => group.id === snapshot.activeGroupId)?.id ??
-    nextGroups?.[0]?.id ??
-    null
+  const nextActiveGroupId = clientOwnedPlacement
+    ? clientOwnedPlacement.activeGroupId
+    : // Why: status/title snapshots carry the host's last active tab; a client that already switched panes keeps its local group focus.
+      (nextGroups?.find((group) => group.activeTabId === nextActiveUnifiedTabId)?.id ??
+      nextGroups?.find((group) => group.id === snapshot.activeGroupId)?.id ??
+      nextGroups?.[0]?.id ??
+      null)
   const nextActiveGroupIdByWorktree =
     nextGroups && state.activeGroupIdByWorktree[worktreeId] !== nextActiveGroupId
       ? withWorktreeEntry(
@@ -3299,6 +3572,22 @@ function applyWebSessionTabsSnapshotWithContext(
   const nextLayoutByWorktree = (() => {
     if (!nextGroups) {
       return state.layoutByWorktree
+    }
+    if (clientOwnedPlacement) {
+      const clientLayout =
+        clientOwnedPlacement.layout ??
+        (nextActiveGroupId ? { type: 'leaf' as const, groupId: nextActiveGroupId } : null)
+      if (!clientLayout || tabGroupLayoutEqual(state.layoutByWorktree[worktreeId], clientLayout)) {
+        return state.layoutByWorktree
+      }
+      return withWorktreeEntry(
+        state,
+        'layoutByWorktree',
+        worktreeId,
+        clientLayout,
+        (current, next) => current === next,
+        batchContext
+      )
     }
     const validGroupIds = new Set(nextGroups.map((group) => group.id))
     const hostLayout = pruneTabGroupLayout(snapshot.tabGroupLayout, validGroupIds)
@@ -3704,6 +3993,32 @@ export type HostSessionMirrorPatchVerdict = {
   fullInventory?: { environmentId: string; publishedSnapshotCount: number }
 }
 
+/**
+ * An inventory that published nothing is the one shape carrying no host
+ * evidence at all: `settles.length === publishedSnapshotCount` is `0 === 0`, so
+ * a live host answering `[]` before its renderer's first publish used to be
+ * upgraded into an environment-wide "the host has spoken" — draining parked
+ * resumes into forking a second agent onto a PTY the host still runs.
+ *
+ * The distinguisher has to be host readiness, not list emptiness: a host with
+ * genuinely zero terminals must still settle or its panes park forever. Only
+ * `none` settles; `live` and `unverifiable` leave waiters for the next
+ * inventory or per-worktree frame.
+ */
+function settleEmptyHostInventoryOnlyIfHostHasNoTerminals(environmentId: string): void {
+  const probedGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
+  void probeHostLiveTerminals(environmentId, undefined, probedGeneration).then((verdict) => {
+    // Why: the probe is a round trip, and a reconnect in between would make its
+    // answer speak for a connection whose PTYs nobody listed.
+    if (
+      verdict === 'none' &&
+      getRuntimeEnvironmentConnectionGeneration(environmentId) === probedGeneration
+    ) {
+      markHostSessionMirrorHydrated(environmentId)
+    }
+  })
+}
+
 function createHostSessionMirrorSettle(
   verdict: HostSessionMirrorPatchVerdict
 ): HostSessionMirrorSettle {
@@ -3711,6 +4026,10 @@ function createHostSessionMirrorSettle(
     const { frames, fullInventory } = verdict
     const settles = frames.filter(({ decision }) => decision.settlesHostMirror)
     if (fullInventory && settles.length === fullInventory.publishedSnapshotCount) {
+      if (fullInventory.publishedSnapshotCount === 0) {
+        settleEmptyHostInventoryOnlyIfHostHasNoTerminals(fullInventory.environmentId)
+        return
+      }
       markHostSessionMirrorHydrated(fullInventory.environmentId)
       return
     }
