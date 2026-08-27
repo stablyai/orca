@@ -4,6 +4,7 @@ import {
   installTerminalImeCompositionTracker,
   TERMINAL_IME_CANDIDATE_GUARD_POST_COMPOSITION_MS,
   TERMINAL_IME_CANDIDATE_GUARD_STALE_COMPOSITION_EXPIRY_MS,
+  TERMINAL_IME_SYLLABLE_BOUNDARY_GUARD_MS,
   type TerminalImeCompositionTracker
 } from './terminal-ime-composition-tracker'
 
@@ -154,10 +155,45 @@ describe('installTerminalImeCompositionTracker', () => {
     })
   })
 
+  describe('syllable boundary guard (#16042)', () => {
+    it('is inactive before any composition has ever committed', () => {
+      const harness = installTracker()
+      expect(harness.tracker.isWithinSyllableBoundaryGuard()).toBe(false)
+    })
+
+    it('activates immediately after an ordinary syllable commits', () => {
+      const harness = installTracker()
+      harness.composition('compositionstart', '')
+      harness.composition('compositionupdate', '한')
+      harness.composition('compositionend', '한')
+      expect(harness.tracker.isWithinSyllableBoundaryGuard()).toBe(true)
+    })
+
+    it('expires after the guard window so a later, unrelated keystroke is unaffected', () => {
+      const harness = installTracker()
+      harness.composition('compositionstart', '')
+      harness.composition('compositionend', '한')
+      harness.advance(TERMINAL_IME_SYLLABLE_BOUNDARY_GUARD_MS)
+      expect(harness.tracker.isWithinSyllableBoundaryGuard()).toBe(true)
+      harness.advance(1)
+      expect(harness.tracker.isWithinSyllableBoundaryGuard()).toBe(false)
+    })
+
+    it('clears on blur, re-arming the first-key-since-focus exemption on refocus', () => {
+      const harness = installTracker()
+      harness.composition('compositionstart', '')
+      harness.composition('compositionend', '한')
+      expect(harness.tracker.isWithinSyllableBoundaryGuard()).toBe(true)
+      harness.blur()
+      expect(harness.tracker.isWithinSyllableBoundaryGuard()).toBe(false)
+    })
+  })
+
   it('handles a missing terminal element', () => {
     const tracker = installTerminalImeCompositionTracker(null)
     expect(tracker.isActive()).toBe(false)
     expect(tracker.isCandidateKeyGuardActive()).toBe(false)
+    expect(tracker.isWithinSyllableBoundaryGuard()).toBe(false)
     expect(() => tracker.dispose()).not.toThrow()
   })
 

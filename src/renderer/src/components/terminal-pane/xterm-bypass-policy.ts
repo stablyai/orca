@@ -55,6 +55,11 @@ export type XtermImeKeyboardOptions = {
    *  claiming it (#15299): ibus-hangul's Hanja lookup table does index by digit,
    *  but only over a live preedit the composition guards already own. */
   hangulPreedit?: boolean
+  /** True for a short window after any compositionend, including an ordinary
+   *  Hangul syllable commit — see TERMINAL_IME_SYLLABLE_BOUNDARY_GUARD_MS
+   *  (#16042). Narrows the standalone-229 exemption below to the first key
+   *  since focus/switch, not every syllable of a multi-syllable word. */
+  syllableBoundaryGuardActive?: boolean
   // Required so no caller silently falls back to non-mac 229 suppression,
   // which re-swallows the first key after a macOS IME input-source switch.
   isMac: boolean
@@ -117,6 +122,7 @@ export function shouldSuppressTerminalImeKeyboardEvent(
     compositionActive,
     candidateKeyGuardActive,
     pendingCandidateKeyReleaseActive,
+    syllableBoundaryGuardActive,
     isMac,
     isLinux
   } = options
@@ -140,7 +146,13 @@ export function shouldSuppressTerminalImeKeyboardEvent(
   // diff (macOS: first key after an input-source switch; Linux: Sogou/fcitx
   // candidate commits outside a composition session). Windows keeps full
   // suppression until verified against its preedit-diff race.
-  const passesStandalone229Keydown = isMac || isLinux
+  // Why gated on !syllableBoundaryGuardActive (#16042): compositionActive alone
+  // can't tell "first key since focus/switch" from "next syllable of the word
+  // being typed" — a syllable's own compositionend also leaves composition
+  // inactive. Without this, every syllable after the first in Hangul (or any
+  // multi-syllable CJK) input got the same exemption and its opening jamo
+  // reached xterm raw instead of the browser's composer.
+  const passesStandalone229Keydown = (isMac || isLinux) && !syllableBoundaryGuardActive
   return (
     event.isComposing === true ||
     (event.keyCode === 229 &&

@@ -207,6 +207,24 @@ describe('shouldSuppressTerminalImeKeyboardEvent — macOS', () => {
     ).toBe(false)
   })
 
+  it('#16042: suppresses a standalone Process key within the post-syllable guard window, so the next syllable of a multi-syllable word is not swallowed', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        { ...idle, syllableBoundaryGuardActive: true }
+      )
+    ).toBe(true)
+  })
+
+  it('#16042: still lets a standalone Process key through once the post-syllable guard window has expired', () => {
+    expect(
+      shouldSuppressTerminalImeKeyboardEvent(
+        event({ key: 'Process', code: 'KeyN', keyCode: 229 }),
+        { ...idle, syllableBoundaryGuardActive: false }
+      )
+    ).toBe(false)
+  })
+
   it('suppresses standalone Process keyups so kitty release reporting cannot leak', () => {
     expect(
       shouldSuppressTerminalImeKeyboardEvent(

@@ -1113,6 +1113,7 @@ export function useTerminalPaneLifecycle({
             linuxOrphanCandidateDigitGuardActive:
               linuxCandidateClassification.candidateDigitGuardActive,
             hangulPreedit: imeCompositionTracker.isHangulPreedit(),
+            syllableBoundaryGuardActive: imeCompositionTracker.isWithinSyllableBoundaryGuard(),
             isMac,
             isLinux
           }
