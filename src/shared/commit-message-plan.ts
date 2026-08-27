@@ -21,6 +21,7 @@ export type CommitMessagePlanInput = {
   backslash?: CommandTemplateBackslash
   model: string
   thinkingLevel?: string
+  useAgentDefaultModel?: boolean
   customAgentCommand?: string
   agentCommandOverride?: string
   agentArgs?: string
@@ -276,11 +277,13 @@ export function planCommitMessageGeneration(
   if (!spec) {
     return { ok: false, error: `Agent "${input.agentId}" does not support AI commit messages.` }
   }
-  const model = getCommitMessageModel(input.agentId, input.model)
-  if (!model) {
+  const model = input.useAgentDefaultModel
+    ? undefined
+    : getCommitMessageModel(input.agentId, input.model)
+  if (!input.useAgentDefaultModel && !model) {
     return { ok: false, error: `Model "${input.model}" is not available for ${spec.label}.` }
   }
-  if (input.thinkingLevel) {
+  if (input.thinkingLevel && model) {
     if (!model.thinkingLevels && spec.modelSource !== 'dynamic') {
       return {
         ok: false,
@@ -296,11 +299,15 @@ export function planCommitMessageGeneration(
   }
 
   const argvPrompt = spec.promptDelivery === 'argv' ? prompt : ''
-  const baseArgs = spec.buildArgs({
+  const builtArgs = spec.buildArgs({
     prompt: argvPrompt,
     model: input.model,
-    thinkingLevel: input.thinkingLevel
+    thinkingLevel: input.useAgentDefaultModel ? undefined : input.thinkingLevel
   })
+  const modelOptionAliases = spec.singletonOptions?.[0] ?? DEFAULT_SINGLETON_OPTIONS[0]
+  const baseArgs = input.useAgentDefaultModel
+    ? removeAllOptionOccurrences(builtArgs, modelOptionAliases)
+    : builtArgs
   const agentArgs = planAdditionalAgentArgs(input.agentArgs, input.backslash)
   if (!agentArgs.ok) {
     return agentArgs

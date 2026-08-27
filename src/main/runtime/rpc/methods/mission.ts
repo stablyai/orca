@@ -54,7 +54,8 @@ export const MISSION_METHODS: RpcMethod[] = [
           agentCommandOverride: settings.agentCmdOverrides?.[agent]
         },
         { kind: 'local', cwd: homedir() },
-        'mission-plan'
+        'mission-plan',
+        { useAgentDefaultModel: true }
       )
       if (!planning.success) {
         throw new OrchestrationError('mission_planner_failed', planning.error)

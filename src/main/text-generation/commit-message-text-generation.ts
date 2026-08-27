@@ -139,13 +139,15 @@ export function generateTextFromPrompt(
   prompt: string,
   params: GenerateCommitMessageParams,
   target: CommitMessageGenerationTarget,
-  operation: TextGenerationOperation = 'mission-plan'
+  operation: TextGenerationOperation = 'mission-plan',
+  options: { useAgentDefaultModel?: boolean } = {}
 ): Promise<GenerateTextResult> {
   return generateText({
     prompt,
     params,
     target,
     operation,
+    useAgentDefaultModel: options.useAgentDefaultModel,
     spawnAgent: spawnSourceControlAgent
   })
 }
