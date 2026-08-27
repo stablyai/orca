@@ -105,6 +105,7 @@ export type AccountsPaneSectionModel = {
   runCodexAccountAction: CodexAccountActionRunner
   recordOpenCodeSettingEdit: (field: 'cookie' | 'workspaceId' | 'apiKey') => void
   miniMaxRateLimits: ProviderRateLimits | null
+  glmRateLimits: ProviderRateLimits | null
   miniMaxApiKeyDraft: string
   setMiniMaxApiKeyDraft: Dispatch<SetStateAction<string>>
   miniMaxApiKeyConfigured: boolean
