@@ -55,11 +55,9 @@ describe('RelayAgentHookServer', () => {
           'Content-Type': 'application/json',
           'X-Orca-Agent-Hook-Token': token,
           'X-Orca-Agent-Hook-Meta-Encoding': 'base64',
-          'X-Orca-Pane-Key': Buffer.from(PANE_KEY).toString('base64'),
-          'X-Orca-Tab-Id': Buffer.from('tab-1').toString('base64'),
-          'X-Orca-Worktree-Id': Buffer.from('wt-1').toString('base64'),
-          'X-Orca-Agent-Hook-Env': Buffer.from('remote').toString('base64'),
-          'X-Orca-Agent-Hook-Version': Buffer.from('1').toString('base64')
+          'X-Orca-Agent-Hook-Meta': Buffer.from(
+            [PANE_KEY, 'tab-1', '', 'wt-1', 'remote', '1'].join('\0')
+          ).toString('base64')
         },
         body: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hi' })
       })
@@ -513,6 +511,7 @@ describe('RelayAgentHookServer', () => {
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
       expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
       expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
+      expect(env.ORCA_AGENT_HOOK_TRANSPORT).toBe('raw-json-v1')
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()

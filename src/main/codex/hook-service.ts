@@ -19,7 +19,7 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
-import { buildPosixAgentHookJsonPostCommand } from '../agent-hooks/hook-post-command'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
@@ -824,6 +824,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
+    '  unset ORCA_AGENT_HOOK_TRANSPORT',
     '  case "$endpoint_path" in',
     '    *.cmd)',
     // Why: Windows passes endpoint.cmd into WSL via WSLENV; parse only Orca's known assignments since cmd.exe `set` lines aren't shell syntax.
@@ -835,6 +836,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '          "set ORCA_AGENT_HOOK_TOKEN="*) ORCA_AGENT_HOOK_TOKEN=${endpoint_line#*=} ;;',
     '          "set ORCA_AGENT_HOOK_ENV="*) ORCA_AGENT_HOOK_ENV=${endpoint_line#*=} ;;',
     '          "set ORCA_AGENT_HOOK_VERSION="*) ORCA_AGENT_HOOK_VERSION=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_TRANSPORT="*) ORCA_AGENT_HOOK_TRANSPORT=${endpoint_line#*=} ;;',
     '        esac',
     '      done < "$endpoint_path"',
     '      ;;',
@@ -855,7 +857,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  connect_timeout="${2:-0.5}"',
     '  max_time="${3:-1.5}"',
     // Why: keep full hook JSON off the command line and avoid URL-encoding paths/commands into IDS-friendly traversal signatures.
-    ...buildPosixAgentHookJsonPostCommand('codex', {
+    ...buildPosixAgentHookPostCommand('codex', {
       curlCommand: '"$curl_bin"',
       indent: '    '
     }).map((line) => `  ${line}`),

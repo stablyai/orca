@@ -275,6 +275,7 @@ describe('Codex WSL runtime hook install', () => {
   it('generates a POSIX hook that bridges WSL loopback failures through Windows curl', async () => {
     const script = _internals.getManagedScript('posix')
     expect(script).toContain('load_hook_endpoint()')
+    expect(script).toContain('unset ORCA_AGENT_HOOK_TRANSPORT')
     expect(script).toContain('"set ORCA_AGENT_HOOK_TOKEN="*)')
     expect(script).toContain('post_codex_hook()')
     expect(script).toContain('is_wsl_runtime()')
@@ -283,7 +284,7 @@ describe('Codex WSL runtime hook install', () => {
     expect(script).toContain('-H "Content-Type: application/json"')
     expect(script).toContain('-H "X-Orca-Agent-Hook-Meta-Encoding: base64"')
     expect(script).toContain('--data-binary @-')
-    expect(script).not.toContain('--data-urlencode "payload@-"')
+    expect(script).toContain('--data-urlencode "payload@-"')
     expect(script).toContain('if post_codex_hook curl >/dev/null 2>&1; then')
     expect(script).toContain('post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true')
   })
@@ -305,6 +306,7 @@ describe('Codex WSL runtime hook install', () => {
           'set ORCA_AGENT_HOOK_TOKEN=fresh-token',
           'set ORCA_AGENT_HOOK_ENV=development',
           'set ORCA_AGENT_HOOK_VERSION=1',
+          'set ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1',
           ''
         ].join('\r\n'),
         'utf-8'
@@ -336,6 +338,7 @@ describe('Codex WSL runtime hook install', () => {
       const posted = readFileSync(capturePath, 'utf-8')
       expect(posted).toContain('http://127.0.0.1:43210/hook/codex')
       expect(posted).toContain('X-Orca-Agent-Hook-Token: fresh-token')
+      expect(posted).toContain('Content-Type: application/json')
       expect(posted).not.toContain('stale-token')
     }
   )

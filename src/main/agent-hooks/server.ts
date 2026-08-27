@@ -8,7 +8,10 @@ import { join } from 'node:path'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -3131,7 +3134,8 @@ export class AgentHookServer {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
       ORCA_AGENT_HOOK_ENV: this.env,
-      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+      ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
     }
     // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
@@ -3158,7 +3162,8 @@ export class AgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     this.endpointFileWritten = ok
   }

@@ -90,6 +90,7 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_AGENT_HOOK_TOKEN/u',
     'ORCA_AGENT_HOOK_ENV/u',
     'ORCA_AGENT_HOOK_VERSION/u',
+    'ORCA_AGENT_HOOK_TRANSPORT/u',
     `ORCA_AGENT_HOOK_ENDPOINT/${endpointFlag}`,
     ...opencodeOverlayEntries,
     'ORCA_WSL_HOOK_RELAY_VERSION/u',

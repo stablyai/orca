@@ -43,6 +43,7 @@ function expectRequestParserListenersReleased(req: FakeIncomingMessage): void {
 describe('shared agent-hook-listener', () => {
   const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
   const b64 = (value: string): string => Buffer.from(value, 'utf8').toString('base64')
+  const packedMetadata = (...values: string[]): string => b64(values.join('\0'))
 
   afterEach(() => {
     clearGrokSessionPathLookupCacheForTests()
@@ -94,11 +95,14 @@ describe('shared agent-hook-listener', () => {
       { hook_event_name: 'UserPromptSubmit', prompt: 'hello' },
       {
         'x-orca-agent-hook-meta-encoding': 'base64',
-        'x-orca-pane-key': b64(paneKey),
-        'x-orca-tab-id': b64('tab-1'),
-        'x-orca-worktree-id': b64(worktreeId),
-        'x-orca-agent-hook-env': b64('production'),
-        'x-orca-agent-hook-version': b64('1')
+        'x-orca-agent-hook-meta': packedMetadata(
+          paneKey,
+          'tab-1',
+          '',
+          worktreeId,
+          'production',
+          '1'
+        )
       }
     )
 
@@ -241,13 +245,15 @@ describe('shared agent-hook-listener', () => {
         port: 12345,
         token: 'abcdef-0123',
         env: 'production',
-        version: '1'
+        version: '1',
+        transport: 'raw-json-v1'
       })
       expect(ok).toBe(true)
       const text = readFileSync(finalPath, 'utf8')
       expect(text).toContain('ORCA_AGENT_HOOK_PORT=12345')
       expect(text).toContain('ORCA_AGENT_HOOK_TOKEN=abcdef-0123')
       expect(text).toContain('ORCA_AGENT_HOOK_VERSION=1')
+      expect(text).toContain('ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1')
       // POSIX 0o600 — owner read/write only.
       if (process.platform !== 'win32') {
         const mode = statSync(finalPath).mode & 0o777

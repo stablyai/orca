@@ -34,23 +34,54 @@ function readHookMetadataHeader(
   return encoding === 'base64' ? decodeBase64HookHeader(value) : value
 }
 
+type HookMetadata = {
+  paneKey: string
+  tabId?: string
+  launchToken?: string
+  worktreeId?: string
+  env?: string
+  version?: string
+}
+
+function readPackedHookMetadata(
+  headers: IncomingHttpHeaders,
+  encoding: 'base64' | undefined
+): HookMetadata | null {
+  const encoded = readHookHeader(headers, 'x-orca-agent-hook-meta')
+  if (encoded === undefined || encoding !== 'base64') {
+    return null
+  }
+  const decoded = decodeBase64HookHeader(encoded)
+  if (decoded === undefined) {
+    return null
+  }
+  const fields = decoded.split('\0')
+  if (fields.length !== 6 || !fields[0]) {
+    return null
+  }
+  const [paneKey, tabId, launchToken, worktreeId, env, version] = fields
+  return { paneKey, tabId, launchToken, worktreeId, env, version }
+}
+
 /** Rebuilds the canonical envelope for POSIX hooks that carry raw JSON bodies. */
 export function mergeAgentHookRequestHeaders(body: unknown, headers: IncomingHttpHeaders): unknown {
   const metadataEncoding =
     readHookHeader(headers, 'x-orca-agent-hook-meta-encoding')?.trim().toLowerCase() === 'base64'
       ? 'base64'
       : undefined
-  const paneKey = readHookMetadataHeader(headers, 'x-orca-pane-key', metadataEncoding)
-  if (!paneKey) {
-    return body
-  }
-  return {
-    paneKey,
+  const metadata = readPackedHookMetadata(headers, metadataEncoding) ?? {
+    paneKey: readHookMetadataHeader(headers, 'x-orca-pane-key', metadataEncoding) ?? '',
     tabId: readHookMetadataHeader(headers, 'x-orca-tab-id', metadataEncoding),
     launchToken: readHookMetadataHeader(headers, 'x-orca-launch-token', metadataEncoding),
     worktreeId: readHookMetadataHeader(headers, 'x-orca-worktree-id', metadataEncoding),
     env: readHookMetadataHeader(headers, 'x-orca-agent-hook-env', metadataEncoding),
-    version: readHookMetadataHeader(headers, 'x-orca-agent-hook-version', metadataEncoding),
+    version: readHookMetadataHeader(headers, 'x-orca-agent-hook-version', metadataEncoding)
+  }
+  if (!metadata.paneKey) {
+    return body
+  }
+  return {
+    ...metadata,
     payload: body
   }
 }

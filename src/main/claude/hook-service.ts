@@ -9,7 +9,7 @@ import {
   writeManagedScript,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
-import { buildPosixAgentHookJsonPostCommand } from '../agent-hooks/hook-post-command'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
@@ -115,6 +115,7 @@ function getManagedScript(
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
+    '  unset ORCA_AGENT_HOOK_TRANSPORT',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
@@ -122,7 +123,7 @@ function getManagedScript(
     '  exit 0',
     'fi',
     // Why: keep full hook JSON off the command line and avoid IDS-friendly URL-encoded paths.
-    ...buildPosixAgentHookJsonPostCommand('claude').map((line, index, lines) =>
+    ...buildPosixAgentHookPostCommand('claude').map((line, index, lines) =>
       index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
     ),
     'exit 0',
