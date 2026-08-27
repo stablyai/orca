@@ -13,8 +13,10 @@ import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
+import { EditorHeaderPathBreadcrumbs } from './EditorHeaderPathBreadcrumbs'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
+import { canNavigateEditorHeaderPath } from './editor-header-path-segments'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -28,18 +30,14 @@ const revealLabel = isMac
 
 type EditorPanelHeaderPathProps = {
   activeFile: OpenFile
-  copiedPathVisible: boolean
   canShowMarkdownPreview: boolean
-  onCopyPath: () => void
   onOpenMarkdownPreview: () => void
   onOpenContainingFolder: () => void
 }
 
 export function EditorPanelHeaderPath({
   activeFile,
-  copiedPathVisible,
   canShowMarkdownPreview,
-  onCopyPath,
   onOpenMarkdownPreview,
   onOpenContainingFolder
 }: EditorPanelHeaderPathProps): React.JSX.Element {
@@ -47,7 +45,7 @@ export function EditorPanelHeaderPath({
   const [pathMenuPoint, setPathMenuPoint] = useState({ x: 0, y: 0 })
   const skipMenuFocusRestoreRef = useRef(false)
   const headerCopyState = getEditorHeaderCopyState(activeFile)
-  const canCopyHeaderPath = headerCopyState.copyText !== null
+  const canNavigatePath = canNavigateEditorHeaderPath(activeFile)
   const isVirtualEditorTab = activeFile.mode === 'check-details'
   const markdownPreviewShortcutLabel = useShortcutLabel('editor.markdownPreview')
   const {
@@ -108,23 +106,22 @@ export function EditorPanelHeaderPath({
             }}
             onBlur={commitRename}
           />
+        ) : canNavigatePath ? (
+          <EditorHeaderPathBreadcrumbs
+            key={activeFile.id}
+            activeFile={activeFile}
+            pathTitle={headerCopyState.pathTitle}
+          />
         ) : (
           <button
             type="button"
-            className={`editor-header-path${canCopyHeaderPath ? '' : ' editor-header-path--static'}`}
-            onClick={canCopyHeaderPath ? onCopyPath : undefined}
-            disabled={!canCopyHeaderPath}
+            className="editor-header-path editor-header-path--static"
+            disabled
             title={headerCopyState.pathTitle}
           >
             {headerCopyState.pathLabel}
           </button>
         )}
-        <span
-          className={`editor-header-copy-toast${copiedPathVisible ? ' is-visible' : ''}`}
-          aria-live="polite"
-        >
-          {headerCopyState.copyToastLabel}
-        </span>
       </div>
       <DropdownMenu open={pathMenuOpen} onOpenChange={setPathMenuOpen} modal={false}>
         <DropdownMenuTrigger asChild>

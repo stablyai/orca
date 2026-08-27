@@ -12814,6 +12814,12 @@
           "2076ecfc9c": "이전 변경",
           "631dab0df3": "다음 변경"
         },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "로드 중…",
+          "5d0a8b17c3": "{{value0}} 찾아보기",
+          "7e2c1a9b04": "이 폴더를 나열할 수 없습니다.",
+          "9b14e6c2d0": "이 폴더는 비어 있습니다."
+        },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "PDF로 내보내기",
           "561251019a": "추가 작업",

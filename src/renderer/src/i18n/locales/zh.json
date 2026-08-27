@@ -12841,6 +12841,13 @@
           "2076ecfc9c": "上一个更改",
           "631dab0df3": "下一个更改"
         },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "正在加载…",
+          "5d0a8b17c3": "浏览 {{value0}}",
+          "7e2c1a9b04": "无法列出此文件夹。",
+          "9b14e6c2d0": "此文件夹为空。"
+        },
+
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "导出为 PDF",
           "561251019a": "更多操作",

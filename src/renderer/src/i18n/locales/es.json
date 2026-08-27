@@ -12867,6 +12867,12 @@
           "2076ecfc9c": "Cambio anterior",
           "631dab0df3": "Cambio siguiente"
         },
+        "EditorPanelHeaderPath": {
+          "3c8f0d21a6": "Cargando…",
+          "5d0a8b17c3": "Explorar {{value0}}",
+          "7e2c1a9b04": "No se pudo listar esta carpeta.",
+          "9b14e6c2d0": "Esta carpeta está vacía."
+        },
         "EditorPanelMarkdownActionsMenu": {
           "3e0ce48c24": "Exportar como PDF",
           "561251019a": "Más acciones",
