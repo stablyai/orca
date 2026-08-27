@@ -1,4 +1,8 @@
-export type IntegrationCredentialService = 'Linear' | 'Jira' | 'Bitbucket'
+// Why: the union and the runtime detection must never drift apart, so the
+// service list is the single source of truth both derive from.
+export const INTEGRATION_CREDENTIAL_SERVICES = ['Linear', 'Jira', 'Bitbucket', 'Kanban'] as const
+
+export type IntegrationCredentialService = (typeof INTEGRATION_CREDENTIAL_SERVICES)[number]
 
 export function credentialDecryptionMessage(service: IntegrationCredentialService): string {
   return `Could not decrypt saved ${service} credential. Approve Keychain access or reconnect ${service}.`
@@ -8,9 +12,7 @@ export function credentialDecryptionMessage(service: IntegrationCredentialServic
 // survives serialization, so detection matches on the canonical message.
 export function isIntegrationCredentialDecryptionError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error)
-  return (
-    message.includes(credentialDecryptionMessage('Linear')) ||
-    message.includes(credentialDecryptionMessage('Jira')) ||
-    message.includes(credentialDecryptionMessage('Bitbucket'))
+  return INTEGRATION_CREDENTIAL_SERVICES.some((service) =>
+    message.includes(credentialDecryptionMessage(service))
   )
 }
