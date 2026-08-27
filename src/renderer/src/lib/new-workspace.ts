@@ -14,6 +14,7 @@ import {
   resolveAgentStartupTabId
 } from '@/lib/agent-startup-delayed-delivery'
 import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
+import type { KanbanTaskSummary } from '../../../shared/kanban-types'
 import type { OrcaHooks } from '../../../shared/orca-yaml-hook-types'
 import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-source-policy'
 import { slugifyForWorkspaceName } from '../../../shared/workspace-name'
@@ -38,6 +39,21 @@ export type LinkedWorkItemSummary = Omit<FolderWorkspaceLinkedTask, 'provider'> 
   linearOrganizationUrlKey?: string
   linearBranchName?: string
   linkedContext?: LinkedWorkItemContext
+}
+
+export function buildKanbanTaskLinkedWorkItem(args: {
+  task: Pick<KanbanTaskSummary, 'id' | 'title' | 'url'>
+  repoId?: string
+}): LinkedWorkItemSummary {
+  return {
+    type: 'issue',
+    provider: 'kanban',
+    number: 0,
+    title: `${args.task.id} ${args.task.title}`,
+    url: args.task.url,
+    kanbanIdentifier: args.task.id,
+    ...(args.repoId ? { repoId: args.repoId } : {})
+  }
 }
 
 export function canUseIssueCommandForLinkedItemProvider(

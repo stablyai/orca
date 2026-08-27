@@ -1,12 +1,15 @@
 import React from 'react'
 import { LoaderCircle } from 'lucide-react'
 
+import { useAppStore } from '@/store'
+import { useRepos } from '@/store/selectors'
 import { translate } from '@/i18n/i18n'
 import type { KanbanTaskSummary } from '../../../../../shared/kanban-types'
 import type {
   KanbanTaskDetailState,
   KanbanTaskListLoadState
 } from '../hooks/use-task-page-kanban-fetch'
+import { useTaskPageKanbanActions } from '../hooks/use-task-page-kanban-actions'
 import type { TaskProvider } from '../../../../../shared/task-providers'
 import { KanbanConnectEmpty } from './kanban-connect-empty'
 import { KanbanErrorBanner } from './kanban-error-banner'
@@ -31,13 +34,16 @@ export function KanbanTaskListHost({
   detailState,
   displayedKanbanTasks,
   onOpenDetail,
-  onStartWorkspace,
   onRetry,
   onReconnect,
   onCloseDetail,
   onConnect,
   onHideSource
 }: KanbanTaskListHostProps): React.JSX.Element {
+  const repos = useRepos()
+  const openModal = useAppStore((s) => s.openModal)
+  const { handleUseKanbanTask } = useTaskPageKanbanActions({ repos, openModal })
+
   if (listLoadState.kind === 'disconnected') {
     return <KanbanConnectEmpty onConnect={onConnect} onHide={onHideSource} />
   }
@@ -125,7 +131,7 @@ export function KanbanTaskListHost({
               tasks={displayedKanbanTasks}
               selectedTaskId={null}
               onOpenDetail={onOpenDetail}
-              onStartWorkspace={onStartWorkspace}
+              onStartWorkspace={handleUseKanbanTask}
             />
           )}
         </div>
