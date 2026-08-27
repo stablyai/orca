@@ -51,7 +51,6 @@ inline src/renderer/src/components/activity/ActivityPrototypePage.tsx
 inline src/renderer/src/components/automations/AutomationsPage.tsx
 inline src/renderer/src/components/editor/CombinedDiffViewer.tsx
 inline src/renderer/src/components/editor/MarkdownPreview.tsx
-inline src/renderer/src/components/feature-wall/EditorAnimatedVisual.tsx
 inline src/renderer/src/components/floating-terminal/FloatingTerminalPanel.tsx
 inline src/renderer/src/components/new-workspace/SmartWorkspaceNameField.tsx
 inline src/renderer/src/components/onboarding/use-onboarding-flow.ts
