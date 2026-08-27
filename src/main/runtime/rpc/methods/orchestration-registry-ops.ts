@@ -10,6 +10,8 @@ import {
 } from '../../orchestration/control-plane/route-registry-discovery'
 import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
 import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
+import { classifyNativeRoute } from '../../../../shared/native-route-contract'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
 import type { RouteIdentity } from '../../orchestration/control-plane/route-registry-types'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -59,6 +61,12 @@ const CertifyParams = z.object({
   dispatch: OptionalString,
   sha: requiredString('Missing --sha'),
   detail: OptionalString
+})
+
+const RouteTruthParams = z.object({
+  agent: requiredString('Missing --agent'),
+  model: OptionalString,
+  reasoning: OptionalString
 })
 
 const RoutesParams = z.object({ sha: OptionalString })
@@ -128,6 +136,36 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
       }
       new RouteRegistryStore(db).recordRouteEvidence(admission.evidence)
       return { evidence: admission.evidence }
+    }
+  }),
+
+  defineMethod({
+    name: 'orchestration.routeTruth',
+    params: RouteTruthParams,
+    handler: (params) => {
+      if (!isTuiAgent(params.agent)) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          `${params.agent} is not an agent this Orca knows how to launch.`
+        )
+      }
+      // Why this exists: every launcher, hook policy and admission check that
+      // keeps its OWN agent/model allowlist eventually disagrees with what Orca
+      // can actually launch. This is the derivable answer they should read
+      // instead, so no hand-maintained table has to be kept in sync by anyone.
+      const classification = classifyNativeRoute({
+        agent: params.agent,
+        model: params.model ?? null,
+        reasoning: params.reasoning ?? null
+      })
+      return {
+        agent: params.agent,
+        model: params.model ?? null,
+        reasoning: params.reasoning ?? null,
+        verdict: classification.verdict,
+        reason: classification.reason,
+        capability: classification.capability
+      }
     }
   }),
 

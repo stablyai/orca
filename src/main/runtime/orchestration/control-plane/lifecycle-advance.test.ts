@@ -207,7 +207,17 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     )
     const receipt = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
     expect(receipt).toMatchObject({ finalSha: HEAD, result: 'PASS', policyVersion: 'gates-v1' })
-    expect(Object.keys(receipt?.inputHashes ?? {})).toEqual(['src/a.ts'])
+    // The worker's worktree is not readable from this test process, so the
+    // receipt is bound to its exact head rather than pretending a path-only
+    // fingerprint proves content. It records the file set and the gate config.
+    expect(Object.keys(receipt?.inputHashes ?? {}).sort()).toEqual([
+      'config:commandIdentity',
+      'config:policyVersion',
+      'files:unreadable'
+    ])
+    // A path-only fingerprint must never read as content-proven, so the file
+    // set is recorded under an explicitly unreadable key rather than as bytes.
+    expect(receipt?.inputHashes['files:unreadable']).toBe('src/a.ts')
   })
 
   it('releases the validation lease the completing Dispatch held', () => {

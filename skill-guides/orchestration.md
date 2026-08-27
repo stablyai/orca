@@ -189,7 +189,7 @@ orca orchestration gates --sha <sha> --gates "unit,lint,typecheck" --files "src/
 orca orchestration gates --sha <sha> --gates "unit" --record unit --result PASS --json
 # Protect a running suite from worktree mutation:
 orca orchestration validation-lease --action acquire --dispatch <dispatch_id> --json
-orca orchestration validation-lease --action release --lease-id <id> --json
+orca orchestration validation-lease --action release --lease-id <id> --dispatch <dispatch_id> --json
 ```
 
 While a lease is active, `worker-start` into that worktree is refused: wait for the lease or use a separate worktree. A completing Dispatch releases its own lease.
@@ -203,7 +203,7 @@ orca orchestration certify --agent <agent> --model <id> --role builder --session
 orca orchestration routes --sha <sha> --json
 ```
 
-Launcher support, agent-hook support, identity proof and reasoning modes are discovered from Orca's own catalogs, not declared. `PASS` requires `--dispatch` naming a Dispatch that really launched — a recorded process incarnation plus a persisted launch receipt whose route matches exactly — and the runtime stamps the observation time and version itself. `FAIL` and `UNSUPPORTED` need no Dispatch. `routes` prints the builder/reviewer × fresh/retained matrix and names the outstanding evidence kinds.
+Launcher support, agent-hook support, identity proof and reasoning modes are discovered from Orca's own catalogs, not declared. `PASS` requires `--dispatch` naming a Dispatch that really launched — a recorded process incarnation plus a persisted launch receipt whose route matches exactly — and the runtime stamps the observation time and build identity itself. It also requires the runtime to have OBSERVED that evidence kind: you request certification, you never declare it, and a kind the runtime cannot observe fails closed as `evidence_not_observed`. `FAIL` and `UNSUPPORTED` need no Dispatch. `routes` prints the builder/reviewer × fresh/retained matrix and names the outstanding evidence kinds.
 
 ## Recovery
 

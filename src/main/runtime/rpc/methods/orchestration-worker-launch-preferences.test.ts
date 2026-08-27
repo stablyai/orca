@@ -110,16 +110,21 @@ describe('orchestration worker launch preferences', () => {
     )
   })
 
-  it('rejects model selection for agents without a launch catalog', () => {
-    expect(() =>
-      resolveWorkerLaunchPreferences({ agent: 'grok', model: 'grok-code-fast-1' })
-    ).toThrow('does not support launch-time model selection')
+  // Both agents below still refuse a worker launch. What changed is the REASON
+  // they carry: the catalog seeds their models and knows how to put one on the
+  // command line, so calling it "does not support launch-time model selection"
+  // reported an Orca policy gap as a provider limitation, and downstream
+  // launchers then encoded that as provider incompatibility.
+  it('refuses grok as typed launch-policy drift, not provider incapability', () => {
+    expect(() => resolveWorkerLaunchPreferences({ agent: 'grok', model: 'grok-4.6' })).toThrow(
+      'BLOCKED_SAFE_LAUNCH_POLICY_DRIFT'
+    )
   })
 
-  it('does not expose deprecated Gemini model selection to worker-start', () => {
+  it('refuses gemini as typed launch-policy drift, and names the models it can pin', () => {
     expect(() =>
       resolveWorkerLaunchPreferences({ agent: 'gemini', model: 'gemini-3-pro-preview' })
-    ).toThrow('does not support launch-time model selection')
+    ).toThrow(/BLOCKED_SAFE_LAUNCH_POLICY_DRIFT.*gemini-3-flash-preview/)
   })
 
   it('rejects preferences when reusing an existing terminal', () => {

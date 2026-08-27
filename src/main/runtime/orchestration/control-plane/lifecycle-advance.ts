@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import type { DispatchContextRow } from '../types'
@@ -6,6 +5,7 @@ import type { CompletionClaim } from './completion-receipt'
 import { resolveAdvanceEligibility } from './advance-eligibility'
 import { ControlPlaneStore } from './control-plane-store'
 import { readDispatchRouteIdentity } from './dispatch-route-identity'
+import { completionGateInputs } from './completion-gate-inputs'
 import { recordGateReceipt } from './gate-receipt-validity'
 import { ModelPerformanceLedger, type FirstPassResult } from './model-performance-ledger'
 import { resolveOutcomeBinding } from './outcome-identity'
@@ -85,15 +85,6 @@ function gateScopeKey(runId: string, outcomeId: string): string {
   return `${runId}:${outcomeId}`
 }
 
-function hashFiles(files: readonly string[]): Record<string, string> {
-  // Why path-only: the runtime cannot read a remote worker's tree, so the
-  // deterministic input it CAN bind is the exact changed-path set the receipt
-  // covered. A different file set invalidates the receipt.
-  return Object.fromEntries(
-    files.map((file) => [file, createHash('sha256').update(file).digest('hex').slice(0, 16)])
-  )
-}
-
 export function advanceAfterValidatedCompletion(request: AdvanceRequest): AdvanceOutcome {
   const { db, dispatch, taskId, claim, nowMs } = request
   const store = new ControlPlaneStore(db)
@@ -115,7 +106,13 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
       inputs: {
         gateId: claim.receipt.commandIdentity,
         finalSha: claim.headSha,
-        inputHashes: hashFiles(request.filesModified),
+        ...completionGateInputs(
+          db,
+          dispatch.id,
+          request.filesModified,
+          claim.receipt.policyVersion,
+          claim.receipt.commandIdentity
+        ),
         policyVersion: claim.receipt.policyVersion,
         commandIdentity: claim.receipt.commandIdentity
       },
@@ -133,7 +130,10 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
     ? releaseValidationLease(store, {
         scopeKey: lease.scope_key,
         leaseId: lease.lease_id,
-        nowMs
+        nowMs,
+        // Named even though the lease was found BY owner: the release path
+        // should not depend on the lookup staying owner-scoped.
+        owner: dispatch.id
       }).released
     : false
 

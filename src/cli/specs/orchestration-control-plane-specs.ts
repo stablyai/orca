@@ -73,7 +73,8 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
       'retry-request'
     ],
     notes: [
-      'A receipt is reusable only when the final SHA, the changed-file set, the policy version and the command identity all still match.',
+      'Each gate declares its own dependencies as --gates "gate=fileA|fileB"; a gate is invalidated only when ITS OWN file bytes or gate configuration change.',
+      'A receipt survives an unrelated commit when its dependency fingerprint is unchanged. Publication and review gates stay bound to their exact head and are never reused across a SHA.',
       'A high-risk outcome policy reruns the full gate set even when nothing changed.'
     ]
   },
@@ -96,7 +97,8 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     notes: [
       'Acquire before running tests or preflight so no worker can mutate the worktree underneath the suite.',
       'While a lease is active, worker-start into that worktree is refused; wait for the lease or use a separate worktree.',
-      'A completing Dispatch releases its own lease automatically.'
+      'A completing Dispatch releases its own lease automatically.',
+      'A manual --action release requires --dispatch: only the Dispatch that holds a lease may release it.'
     ]
   },
   {
@@ -156,6 +158,7 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ],
     notes: [
       'PASS requires --dispatch naming a Dispatch that really launched: it must have a recorded process incarnation and a persisted launch receipt whose route matches exactly.',
+      'PASS additionally requires the runtime to have OBSERVED that evidence kind — an accepted completion, a real recovery transition, a hook tool event. A kind the runtime cannot observe fails closed as evidence_not_observed; you request certification, you do not declare it.',
       'The runtime stamps the observation time and its own version; a caller cannot backdate evidence.',
       'FAIL and UNSUPPORTED need no Dispatch — they only ever restrict routing.'
     ]
