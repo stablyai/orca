@@ -99,7 +99,7 @@ export function KanbanTaskListHost({
         </div>
       ) : (
         <div className="flex min-h-0 flex-1 flex-col">
-          {listLoadState.kind === 'loading' ? (
+          {listLoadState.kind === 'loading' || listLoadState.kind === 'checking' ? (
             <div className="divide-y divide-border/50">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="px-3 py-3">

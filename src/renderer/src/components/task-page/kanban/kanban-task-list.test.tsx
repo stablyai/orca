@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { getIntlLocale } from '@/i18n/i18n'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { KanbanTaskDetails, KanbanTaskSummary } from '../../../../../shared/kanban-types'
 import { KanbanTaskDetail } from './kanban-task-detail'
@@ -21,6 +22,13 @@ const summaryFixture: KanbanTaskSummary = {
   observers: [{ id: 'u2', name: 'User Two' }],
   createdBy: { id: 'u3', name: 'User Three' },
   url: 'https://kanban.fpimi.ru/?task=t1'
+}
+
+const urgentFixture: KanbanTaskSummary = {
+  ...summaryFixture,
+  id: 't2',
+  title: 'Urgent task',
+  urgent: true
 }
 
 const detailsFixture: KanbanTaskDetails = {
@@ -88,7 +96,7 @@ describe('KanbanTaskList', () => {
   it('renders the row id, lane, due, urgent marker and repository', () => {
     const host = render(
       <KanbanTaskList
-        tasks={[summaryFixture]}
+        tasks={[summaryFixture, urgentFixture]}
         selectedTaskId={null}
         onOpenDetail={() => undefined}
         onStartWorkspace={() => undefined}
@@ -96,6 +104,10 @@ describe('KanbanTaskList', () => {
     )
     expect(host.textContent).toContain('t1')
     expect(host.textContent).toContain('Открыто')
+    expect(host.textContent).toContain(
+      new Date('2026-08-28').toLocaleDateString(getIntlLocale())
+    )
+    expect(host.querySelector('[aria-label="Urgent"]')).not.toBeNull()
     expect(host.textContent).toContain('example.com/org/repo')
   })
 

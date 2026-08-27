@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type {
   KanbanConnectionStatus,
   KanbanTaskDetails,
@@ -35,6 +35,26 @@ export function useTaskPageKanbanListState() {
   const [kanbanDetailError, setKanbanDetailError] = useState(false)
   const [kanbanConnectOpen, setKanbanConnectOpen] = useState(false)
 
+  // Why: the stored connection is learned in an effect, so the first frame must
+  // not paint the connect empty state — checking is its own state until the
+  // seed status object is replaced by the resolved one.
+  const initialStatusRef = useRef(kanbanStatus)
+  const kanbanStatusChecking = kanbanStatus === initialStatusRef.current
+
+  // Why: the displayed rows keep the last filter whose fetch succeeded, so a
+  // pending filter change never hides the previously visible list before the
+  // replacement request resolves, and a failed replacement keeps them on screen.
+  // The commit follows the React-sanctioned adjust-state-during-render pattern,
+  // keyed on a fresh server result replacing the previous one.
+  const [kanbanAppliedFilter, setKanbanAppliedFilter] = useState<KanbanTaskFilter>(() =>
+    createDefaultKanbanTaskFilter()
+  )
+  const lastResultRef = useRef<KanbanTaskListResult | null>(null)
+  if (kanbanResult !== null && kanbanResult !== lastResultRef.current) {
+    lastResultRef.current = kanbanResult
+    setKanbanAppliedFilter(kanbanFilter)
+  }
+
   const kanbanViewer = kanbanStatus.connected ? kanbanStatus.viewer : null
 
   const displayedKanbanTasks = useMemo(() => {
@@ -44,12 +64,13 @@ export function useTaskPageKanbanListState() {
     return applyKanbanTaskFilterAndSort({
       tasks: kanbanResult.tasks,
       viewerId: kanbanViewer.id,
-      filter: kanbanFilter
+      filter: kanbanAppliedFilter
     })
-  }, [kanbanFilter, kanbanResult, kanbanViewer])
+  }, [kanbanAppliedFilter, kanbanResult, kanbanViewer])
 
   const kanbanListLoadState = deriveKanbanTaskListLoadState({
     status: kanbanStatus,
+    statusChecking: kanbanStatusChecking,
     loading: kanbanLoading,
     error: kanbanLoadError,
     visibleTaskCount: displayedKanbanTasks.length

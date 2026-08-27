@@ -68,6 +68,7 @@ describe('deriveKanbanTaskListLoadState', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: disconnectedStatus,
+        statusChecking: false,
         loading: false,
         error: null,
         visibleTaskCount: 0
@@ -75,10 +76,23 @@ describe('deriveKanbanTaskListLoadState', () => {
     ).toEqual({ kind: 'disconnected' })
   })
 
+  it('shows the checking state before the stored connection status resolves', () => {
+    expect(
+      deriveKanbanTaskListLoadState({
+        status: disconnectedStatus,
+        statusChecking: true,
+        loading: false,
+        error: null,
+        visibleTaskCount: 0
+      })
+    ).toEqual({ kind: 'checking' })
+  })
+
   it('shows the loading state during the first load', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: connectedStatus,
+        statusChecking: false,
         loading: true,
         error: null,
         visibleTaskCount: 0
@@ -90,6 +104,7 @@ describe('deriveKanbanTaskListLoadState', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: connectedStatus,
+        statusChecking: false,
         loading: false,
         error: { kind: 'network', message: 'Kanban is unreachable. Check your connection.' },
         visibleTaskCount: 3
@@ -101,8 +116,21 @@ describe('deriveKanbanTaskListLoadState', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: connectedStatus,
+        statusChecking: false,
         loading: false,
         error: { kind: 'auth' },
+        visibleTaskCount: 3
+      })
+    ).toEqual({ kind: 'auth' })
+  })
+
+  it('treats an invalid stored connection as reconnect even without a fresh error', () => {
+    expect(
+      deriveKanbanTaskListLoadState({
+        status: { connected: false, reason: 'invalid' },
+        statusChecking: false,
+        loading: false,
+        error: null,
         visibleTaskCount: 3
       })
     ).toEqual({ kind: 'auth' })
@@ -112,6 +140,7 @@ describe('deriveKanbanTaskListLoadState', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: connectedStatus,
+        statusChecking: false,
         loading: false,
         error: null,
         visibleTaskCount: 0
@@ -123,6 +152,7 @@ describe('deriveKanbanTaskListLoadState', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: connectedStatus,
+        statusChecking: false,
         loading: false,
         error: { kind: 'network', message: 'Kanban server error.' },
         visibleTaskCount: 0
@@ -134,6 +164,7 @@ describe('deriveKanbanTaskListLoadState', () => {
     expect(
       deriveKanbanTaskListLoadState({
         status: connectedStatus,
+        statusChecking: false,
         loading: false,
         error: null,
         visibleTaskCount: 2

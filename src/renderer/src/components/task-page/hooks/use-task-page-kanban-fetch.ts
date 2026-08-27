@@ -10,6 +10,7 @@ import type { TaskProvider } from '../../../../../shared/task-providers'
 export type KanbanListLoadError = { kind: 'network'; message: string } | { kind: 'auth' }
 
 export type KanbanTaskListLoadState =
+  | { kind: 'checking' }
   | { kind: 'disconnected' }
   | { kind: 'auth' }
   | { kind: 'loading' }
@@ -39,20 +40,25 @@ export function classifyKanbanListFailure(error: unknown): KanbanListLoadError {
 // retry, while an auth failure replaces the list actions with a reconnect.
 export function deriveKanbanTaskListLoadState({
   status,
+  statusChecking,
   loading,
   error,
   visibleTaskCount
 }: {
   status: KanbanConnectionStatus
+  statusChecking: boolean
   loading: boolean
   error: KanbanListLoadError | null
   visibleTaskCount: number
 }): KanbanTaskListLoadState {
+  if (error?.kind === 'auth' || (status.connected === false && status.reason === 'invalid')) {
+    return { kind: 'auth' }
+  }
+  if (statusChecking) {
+    return { kind: 'checking' }
+  }
   if (!status.connected) {
     return { kind: 'disconnected' }
-  }
-  if (error?.kind === 'auth') {
-    return { kind: 'auth' }
   }
   if (error?.kind === 'network') {
     return visibleTaskCount > 0
@@ -135,7 +141,11 @@ export function useTaskPageKanbanFetch({
           setKanbanStatus(next)
         }
       })
-      .catch(() => undefined)
+      .catch(() => {
+        if (!cancelled) {
+          setKanbanStatus({ connected: false, reason: 'missing' })
+        }
+      })
     return () => {
       cancelled = true
     }
