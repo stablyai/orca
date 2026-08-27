@@ -81,7 +81,14 @@ export function useTaskPageKanbanActions({
         taskId: task.id
       })
       if (existing) {
-        if (activateAndRevealWorkspace(existing.workspaceId) === false) {
+        // Why: activation must resolve the owner by host — a local and an SSH
+        // workspace can share an id, and the bare id alone could open the wrong one.
+        if (
+          activateAndRevealWorkspace(
+            existing.workspaceId,
+            existing.executionHostId ? { executionHostId: existing.executionHostId } : undefined
+          ) === false
+        ) {
           toast.error(
             translate(
               'auto.components.kanban.workspaceOpenFailed',

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { WorkspaceLinkedItem } from '../../../shared/worktree/types'
 import {
   findKanbanTaskWorkspaceLink,
@@ -25,16 +26,24 @@ const legacyGithubLink: WorkspaceLinkedItem = {
   url: 'https://github.com/acme/widgets/issues/7'
 }
 
-function worktree(id: string, linked: WorkspaceLinkedItem | null): KanbanWorktreeCandidate {
-  return { id, isArchived: false, linkedWorkItem: linked }
+function worktree(
+  id: string,
+  linked: WorkspaceLinkedItem | null,
+  hostId?: ExecutionHostId
+): KanbanWorktreeCandidate {
+  return { id, isArchived: false, linkedWorkItem: linked, ...(hostId ? { hostId } : {}) }
 }
 
 function archivedWorktree(id: string, linked: WorkspaceLinkedItem | null): KanbanWorktreeCandidate {
   return { id, isArchived: true, linkedWorkItem: linked }
 }
 
-function folder(id: string, linked: WorkspaceLinkedItem | null): KanbanFolderWorkspaceCandidate {
-  return { id, isArchived: false, linkedTask: linked }
+function folder(
+  id: string,
+  linked: WorkspaceLinkedItem | null,
+  executionHostId?: ExecutionHostId
+): KanbanFolderWorkspaceCandidate {
+  return { id, isArchived: false, linkedTask: linked, ...(executionHostId ? { executionHostId } : {}) }
 }
 
 function archivedFolder(
@@ -54,6 +63,7 @@ describe('findKanbanTaskWorkspaceLink', () => {
     expect(result).toEqual({
       kind: 'worktree',
       workspaceId: 'wt-1',
+      executionHostId: null,
       worktree: { id: 'wt-1', isArchived: false, linkedWorkItem: kanbanLink('t1') }
     })
   })
@@ -67,7 +77,64 @@ describe('findKanbanTaskWorkspaceLink', () => {
     expect(result?.kind).toBe('folder')
     if (result?.kind === 'folder') {
       expect(result.workspaceId).toBe('folder:fw-1')
-      expect(result.folderWorkspace).toEqual({ id: 'fw-1', isArchived: false, linkedTask: kanbanLink('t1') })
+      expect(result.executionHostId).toBeNull()
+      expect(result.folderWorkspace).toEqual({
+        id: 'fw-1',
+        isArchived: false,
+        linkedTask: kanbanLink('t1')
+      })
+    }
+  })
+
+  it('carries the matched worktree host identity so activation can scope to the right host', () => {
+    const result = findKanbanTaskWorkspaceLink({
+      worktrees: [worktree('wt-1', kanbanLink('t1'), 'ssh:host-a')],
+      folderWorkspaces: [],
+      taskId: 't1'
+    })
+    expect(result).toEqual({
+      kind: 'worktree',
+      workspaceId: 'wt-1',
+      executionHostId: 'ssh:host-a',
+      worktree: {
+        id: 'wt-1',
+        isArchived: false,
+        linkedWorkItem: kanbanLink('t1'),
+        hostId: 'ssh:host-a'
+      }
+    })
+  })
+
+  it('carries the matched folder workspace host identity for host-scoped activation', () => {
+    const result = findKanbanTaskWorkspaceLink({
+      worktrees: [],
+      folderWorkspaces: [folder('fw-1', kanbanLink('t1'), 'ssh:host-b')],
+      taskId: 't1'
+    })
+    expect(result?.kind).toBe('folder')
+    if (result?.kind === 'folder') {
+      expect(result.executionHostId).toBe('ssh:host-b')
+      expect(result.folderWorkspace).toEqual({
+        id: 'fw-1',
+        isArchived: false,
+        linkedTask: kanbanLink('t1'),
+        executionHostId: 'ssh:host-b'
+      })
+    }
+  })
+
+  it('keeps the matched host identity when worktree ids collide across hosts', () => {
+    const result = findKanbanTaskWorkspaceLink({
+      worktrees: [
+        worktree('wt-1', kanbanLink('t1'), 'ssh:host-a'),
+        worktree('wt-1', kanbanLink('t1'), 'ssh:host-b')
+      ],
+      folderWorkspaces: [],
+      taskId: 't1'
+    })
+    expect(result?.kind).toBe('worktree')
+    if (result?.kind === 'worktree') {
+      expect(result.executionHostId).toBe('ssh:host-a')
     }
   })
 

@@ -218,13 +218,15 @@ describe('useTaskPageKanbanActions', () => {
     expect(draft).toContain('Карточка: https://kanban.fpimi.ru/?task=t1')
   })
 
-  it('activates the existing workspace instead of opening the composer on a duplicate Start', async () => {
+  it('activates the existing worktree with its execution host instead of opening the composer on a duplicate Start', async () => {
     findLinkMock.mockReturnValue({
       kind: 'worktree',
       workspaceId: 'wt-1',
+      executionHostId: 'ssh:host-a',
       worktree: {
         id: 'wt-1',
         isArchived: false,
+        hostId: 'ssh:host-a',
         linkedWorkItem: {
           provider: 'kanban',
           type: 'issue',
@@ -240,11 +242,66 @@ describe('useTaskPageKanbanActions', () => {
     await flushEffects()
     expect(openModalMock).not.toHaveBeenCalled()
     expect(kanbanApi.getTask).not.toHaveBeenCalled()
-    expect(activateWorkspaceMock).toHaveBeenCalledWith('wt-1')
+    expect(activateWorkspaceMock).toHaveBeenCalledWith('wt-1', { executionHostId: 'ssh:host-a' })
     expect(findLinkMock).toHaveBeenCalledWith({
       worktrees: expect.any(Array),
       folderWorkspaces: expect.any(Array),
       taskId: 't1'
     })
+  })
+
+  it('activates the existing folder workspace with its execution host on a duplicate Start', async () => {
+    findLinkMock.mockReturnValue({
+      kind: 'folder',
+      workspaceId: 'folder:fw-1',
+      executionHostId: 'ssh:host-b',
+      folderWorkspace: {
+        id: 'fw-1',
+        isArchived: false,
+        executionHostId: 'ssh:host-b',
+        linkedTask: {
+          provider: 'kanban',
+          type: 'issue',
+          number: 0,
+          title: 'Task',
+          url: 'https://kanban.fpimi.ru/?task=t1',
+          kanbanIdentifier: 't1'
+        }
+      }
+    })
+    const host = renderActions([])
+    clickStart(host)
+    await flushEffects()
+    expect(openModalMock).not.toHaveBeenCalled()
+    expect(kanbanApi.getTask).not.toHaveBeenCalled()
+    expect(activateWorkspaceMock).toHaveBeenCalledWith('folder:fw-1', {
+      executionHostId: 'ssh:host-b'
+    })
+  })
+
+  it('forwards the matched host so a colliding local id cannot activate the wrong owner', async () => {
+    findLinkMock.mockReturnValue({
+      kind: 'worktree',
+      workspaceId: 'wt-1',
+      executionHostId: 'ssh:host-c',
+      worktree: {
+        id: 'wt-1',
+        isArchived: false,
+        hostId: 'ssh:host-c',
+        linkedWorkItem: {
+          provider: 'kanban',
+          type: 'issue',
+          number: 0,
+          title: 'Task',
+          url: 'https://kanban.fpimi.ru/?task=t1',
+          kanbanIdentifier: 't1'
+        }
+      }
+    })
+    const host = renderActions([])
+    clickStart(host)
+    await flushEffects()
+    expect(activateWorkspaceMock).toHaveBeenCalledWith('wt-1', { executionHostId: 'ssh:host-c' })
+    expect(openModalMock).not.toHaveBeenCalled()
   })
 })
