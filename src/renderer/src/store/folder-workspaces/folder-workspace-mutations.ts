@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import { WORKTREE_KANBAN_LINKED_ITEM_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   assertRuntimeEnvironmentCapability,
@@ -75,6 +76,17 @@ export function createFolderWorkspaceMutationActions(
             'Update the remote runtime to link Jira'
           )
         }
+        if (
+          target.kind === 'environment' &&
+          (args.linkedTask?.provider === 'kanban' ||
+            args.linkedTaskSourceContext?.provider === 'kanban')
+        ) {
+          await assertRuntimeEnvironmentCapability(
+            target.environmentId,
+            WORKTREE_KANBAN_LINKED_ITEM_RUNTIME_CAPABILITY,
+            'Update the remote runtime to link Kanban'
+          )
+        }
         const workspace =
           target.kind === 'local'
             ? await window.api.folderWorkspaces.create(args)
@@ -133,6 +145,17 @@ export function createFolderWorkspaceMutationActions(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
           'Update the remote runtime to link Jira'
+        )
+      }
+      if (
+        target.kind === 'environment' &&
+        (updates.linkedTask?.provider === 'kanban' ||
+          updates.linkedTaskSourceContext?.provider === 'kanban')
+      ) {
+        await assertRuntimeEnvironmentCapability(
+          target.environmentId,
+          WORKTREE_KANBAN_LINKED_ITEM_RUNTIME_CAPABILITY,
+          'Update the remote runtime to link Kanban'
         )
       }
       const updateTicket = folderWorkspaceUpdates.begin(

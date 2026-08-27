@@ -161,6 +161,45 @@ describe('task source context', () => {
     ).toBeNull()
   })
 
+  it('round-trips a Kanban task source context with the fixed server identity', () => {
+    const context = normalizeTaskSourceContext({
+      provider: 'kanban',
+      projectId: 'project-1',
+      hostId: 'runtime:env-1',
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'kanban', serverUrl: 'https://kanban.fpimi.ru' },
+      accountLabel: 'Ada Lovelace'
+    })
+    expect(context).toEqual({
+      kind: 'task-source',
+      provider: 'kanban',
+      projectId: 'project-1',
+      hostId: 'runtime:env-1',
+      projectHostSetupId: null,
+      repoId: 'repo-1',
+      providerIdentity: { provider: 'kanban', serverUrl: 'https://kanban.fpimi.ru' },
+      accountLabel: 'Ada Lovelace'
+    })
+    expect(normalizeStoredTaskSourceContext(context)).toEqual(context)
+    expect(TaskSourceContextSchema.safeParse(context).success).toBe(true)
+    expect(
+      normalizeTaskSourceContext({
+        provider: 'kanban',
+        projectId: 'project-1',
+        providerIdentity: { provider: 'github', owner: 'acme', repo: 'orca' }
+      })?.providerIdentity
+    ).toBeNull()
+    expect(
+      normalizeStoredTaskSourceContext({
+        kind: 'task-source',
+        provider: 'kanban',
+        projectId: 'project-1',
+        hostId: 'local',
+        providerIdentity: { provider: 'kanban', serverUrl: 'https://other.example.com' }
+      })
+    ).toBeNull()
+  })
+
   it('rejects malformed stored scalar and provider-identity fields without throwing', () => {
     const valid = {
       kind: 'task-source',

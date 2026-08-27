@@ -3,6 +3,7 @@ import {
   foldWorkspaceNameWhitespaceToHyphen
 } from './workspace-name-text-scanner'
 import { escapeRegex } from './string-utils'
+import type { TaskProvider } from './task-providers'
 
 function normalizeApostrophes(input: string): string {
   return input.replace(/[‘’]/g, "'")
@@ -47,9 +48,10 @@ export type WorkspaceIntentWorkItem = {
   type: 'issue' | 'pr' | 'mr'
   number: number
   title: string
-  provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+  provider?: TaskProvider
   linearIdentifier?: string
   jiraIdentifier?: string
+  kanbanIdentifier?: string
 }
 
 export type WorkspaceIntentName = {
@@ -137,7 +139,7 @@ function compactWords(input: string, maxWords = 4): string {
 }
 
 function compactWorkItemTitle(title: string, item: WorkspaceIntentWorkItem): string {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.kanbanIdentifier
   let withoutPrefix = title
     .trim()
     .replace(/^(?:issue|pr|pull request|mr|merge request)\s*[#!]?\d+\s*[:-]\s*/i, '')
@@ -162,6 +164,9 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
   if (item.jiraIdentifier) {
     return item.jiraIdentifier.toUpperCase()
   }
+  if (item.kanbanIdentifier) {
+    return item.kanbanIdentifier.toUpperCase()
+  }
   if (item.type === 'pr') {
     return `PR ${item.number}`
   }
@@ -174,7 +179,7 @@ function workItemIdentity(item: WorkspaceIntentWorkItem): string {
 export function getLinkedWorkItemWorkspaceName(
   item: WorkspaceIntentWorkItem
 ): WorkspaceIntentName | null {
-  const identifier = item.linearIdentifier ?? item.jiraIdentifier
+  const identifier = item.linearIdentifier ?? item.jiraIdentifier ?? item.kanbanIdentifier
   let subject = getLinkedWorkItemTitleSubject(item) || item.title.trim()
   if (identifier) {
     subject = subject

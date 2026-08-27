@@ -103,6 +103,52 @@ describe('worktree RPC schemas', () => {
     ).not.toThrow()
   })
 
+  it('normalizes durable Kanban linked-item metadata and rejects provider mismatches', () => {
+    const linkedWorkItem = {
+      provider: 'kanban',
+      type: 'issue',
+      number: 0,
+      title: ' 4123 Fix checkout retry ',
+      url: ' https://kanban.fpimi.ru/?task=4123 ',
+      kanbanIdentifier: ' 4123 '
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source',
+      provider: 'kanban',
+      projectId: ' project-1 ',
+      hostId: 'runtime:env-1',
+      providerIdentity: {
+        provider: 'kanban',
+        serverUrl: 'https://kanban.fpimi.ru'
+      }
+    }
+    const parsed = WorktreeCreate.parse({
+      repo: 'repo-1',
+      name: 'kanban-link',
+      linkedWorkItem,
+      linkedTaskSourceContext
+    })
+
+    expect(parsed.linkedWorkItem).toMatchObject({
+      provider: 'kanban',
+      title: '4123 Fix checkout retry',
+      kanbanIdentifier: '4123'
+    })
+    expect(parsed.linkedTaskSourceContext).toMatchObject({
+      provider: 'kanban',
+      projectId: 'project-1',
+      hostId: 'runtime:env-1'
+    })
+    expect(
+      WorktreeCreate.safeParse({
+        repo: 'repo-1',
+        name: 'mismatch',
+        linkedWorkItem,
+        linkedTaskSourceContext: { ...linkedTaskSourceContext, provider: 'linear' }
+      }).success
+    ).toBe(false)
+  })
+
   it('keeps a blanked display name on remote hosts instead of dropping the clear', () => {
     // Blanking sends displayName:'' meaning "fall back to the branch/folder name".
     // Coercing it to undefined made updateManagedWorktreeMeta's omitUndefinedProperties

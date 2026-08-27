@@ -723,7 +723,7 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+      provider?: 'github' | 'gitlab' | 'linear' | 'jira' | 'kanban'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
@@ -731,6 +731,7 @@ export type UISlice = {
       linearIdentifier?: string
       linearBranchName?: string
       jiraIdentifier?: string
+      kanbanIdentifier?: string
       repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */

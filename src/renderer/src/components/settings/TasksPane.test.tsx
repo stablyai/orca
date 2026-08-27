@@ -137,7 +137,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      kanban: { connected: false, checking: false, unavailable: true, visible: false }
     }
   })
 

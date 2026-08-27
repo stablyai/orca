@@ -137,6 +137,38 @@ describe('Store', () => {
     ).toBeNull()
   })
 
+  it('round-trips Kanban linked-item metadata and source context without migration', async () => {
+    const store = await createStore()
+    const linkedWorkItem = {
+      provider: 'kanban' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: '4123 Fix checkout retry',
+      url: 'https://kanban.fpimi.ru/?task=4123',
+      kanbanIdentifier: '4123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'kanban' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'kanban' as const,
+        serverUrl: 'https://kanban.fpimi.ru' as const
+      },
+      accountLabel: 'Ada Lovelace'
+    }
+
+    store.setWorktreeMeta('wt-kanban', { linkedWorkItem, linkedTaskSourceContext })
+    store.flush()
+    const restored = await createStore()
+
+    expect(restored.getWorktreeMeta('wt-kanban')).toMatchObject({
+      linkedWorkItem,
+      linkedTaskSourceContext
+    })
+  })
+
   it('discards malformed persisted task-source metadata without aborting store load', async () => {
     writeDataFile({
       schemaVersion: 1,

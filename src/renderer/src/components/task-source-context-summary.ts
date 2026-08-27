@@ -64,6 +64,15 @@ export function getTaskSourceContextSummary(args: {
         hostLabelById: args.hostLabelById,
         hostAvailability: args.hostAvailability
       })
+    case 'kanban':
+      // Why: the Kanban source connects from its own card; before that lands it
+      // reads as a neutral account-backed source rather than a repo-backed one.
+      return getAccountBackedTaskSourceSummary(args.providerLabel, {
+        accountLabel: args.jiraSiteName ?? args.linearWorkspaceName,
+        accountHostId: args.accountHostId,
+        hostLabelById: args.hostLabelById,
+        hostAvailability: args.hostAvailability
+      })
   }
 }
 
@@ -198,6 +207,8 @@ function getProviderIdentityLabel(
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
       return identity.siteUrl ?? identity.siteId ?? null
+    case 'kanban':
+      return identity.serverUrl ?? null
   }
 }
 

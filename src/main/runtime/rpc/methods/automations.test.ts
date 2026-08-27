@@ -159,4 +159,37 @@ describe('automation RPC methods', () => {
       { expectedOwner: undefined, destination: undefined }
     )
   })
+
+  it('accepts a Kanban task source context when creating automations', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      createAutomation: vi.fn().mockResolvedValue({ id: 'auto-3', name: 'Kanban review' })
+    } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: AUTOMATION_METHODS })
+
+    const result = await dispatcher.dispatch(
+      makeRequest('automation.create', {
+        name: 'Kanban review',
+        prompt: 'Review changes',
+        agentId: 'codex',
+        repo: 'repo-1',
+        rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+        dtstart: 1,
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'kanban',
+          projectId: 'project-1',
+          hostId: 'local',
+          providerIdentity: { provider: 'kanban', serverUrl: 'https://kanban.fpimi.ru' }
+        }
+      })
+    )
+
+    expect(result.ok).toBe(true)
+    expect(runtime.createAutomation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        sourceContext: expect.objectContaining({ provider: 'kanban' })
+      })
+    )
+  })
 })

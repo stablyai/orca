@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   filterAvailableTaskProviders,
+  isTaskProvider,
   normalizeTaskProviderSettings,
   normalizeVisibleTaskProviders,
   restoreAvailableDefaultTaskProvider,
@@ -16,7 +17,34 @@ describe('task providers', () => {
   })
 
   it('falls back to all providers when none are visible', () => {
-    expect(normalizeVisibleTaskProviders([])).toEqual(['github', 'gitlab', 'linear', 'jira'])
+    expect(normalizeVisibleTaskProviders([])).toEqual([
+      'github',
+      'gitlab',
+      'linear',
+      'jira',
+      'kanban'
+    ])
+  })
+
+  it('accepts Kanban as a valid provider without leaking it into available sources yet', () => {
+    expect(isTaskProvider('kanban')).toBe(true)
+    expect(isTaskProvider('bitbucket')).toBe(false)
+    expect(normalizeVisibleTaskProviders(['kanban'])).toEqual(['kanban'])
+    expect(
+      filterAvailableTaskProviders(['github', 'kanban'], {
+        gitlabInstalled: false,
+        linearConnected: false
+      })
+    ).toEqual(['github'])
+    expect(
+      normalizeTaskProviderSettings({
+        visibleTaskProviders: ['kanban'],
+        defaultTaskSource: 'kanban'
+      })
+    ).toEqual({
+      defaultTaskSource: 'kanban',
+      visibleTaskProviders: ['kanban']
+    })
   })
 
   it('restores a valid saved default when provider settings drifted', () => {

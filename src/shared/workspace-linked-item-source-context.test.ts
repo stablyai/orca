@@ -76,6 +76,28 @@ describe('workspace linked-item source context', () => {
     ).toBe(true)
   })
 
+  it('matches Kanban items to Kanban source contexts by provider', () => {
+    const kanbanItem: WorkspaceLinkedItem = {
+      provider: 'kanban',
+      type: 'issue',
+      number: 0,
+      title: '4123 Fix checkout retry',
+      url: 'https://kanban.fpimi.ru/?task=4123',
+      kanbanIdentifier: '4123'
+    }
+    const context: TaskSourceContext = {
+      kind: 'task-source',
+      provider: 'kanban',
+      projectId: 'project-1',
+      hostId: 'local',
+      providerIdentity: { provider: 'kanban', serverUrl: 'https://kanban.fpimi.ru' }
+    }
+    expect(isWorkspaceLinkedItemSourceContextMatch(kanbanItem, context)).toBe(true)
+    expect(
+      isWorkspaceLinkedItemSourceContextMatch(kanbanItem, { ...context, provider: 'jira' })
+    ).toBe(false)
+  })
+
   it('infers GitHub/GitLab provider when TaskPage seeds omit provider', () => {
     expect(
       isWorkspaceLinkedItemSourceContextMatch(

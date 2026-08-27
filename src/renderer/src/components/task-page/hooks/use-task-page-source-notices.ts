@@ -124,6 +124,13 @@ export function useTaskPageSourceNotices({
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      kanban:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('kanban'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -145,7 +152,7 @@ export function useTaskPageSourceNotices({
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'kanban'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -173,11 +180,11 @@ export function useTaskPageSourceNotices({
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'kanban'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'kanban'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById

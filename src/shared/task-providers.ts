@@ -1,6 +1,12 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira' | 'kanban'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'kanban'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -104,6 +110,12 @@ function isTaskProviderAvailable(
   // when disconnected would remove the entry point for first-time setup.
   if (provider === 'jira') {
     return true
+  }
+  // Why: the Kanban credential flow lands in a later task; until then the
+  // provider stays out of the available source list so a half-built source
+  // never surfaces or captures the default source selection.
+  if (provider === 'kanban') {
+    return false
   }
   return availability.linearConnected
 }

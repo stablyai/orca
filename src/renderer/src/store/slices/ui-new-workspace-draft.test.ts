@@ -148,4 +148,48 @@ describe('createUISlice new workspace draft', () => {
       linkedTaskSourceContext
     })
   })
+
+  it('preserves serializable Kanban identity and bound source context in drafts', () => {
+    const store = createUIStore()
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'kanban' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'kanban' as const,
+        serverUrl: 'https://kanban.fpimi.ru' as const
+      }
+    }
+
+    store.getState().setNewWorkspaceDraft({
+      repoId: 'repo-1',
+      name: '4123-fix-checkout-retry',
+      prompt: '',
+      note: '',
+      attachments: [],
+      linkedWorkItem: {
+        provider: 'kanban',
+        type: 'issue',
+        number: 0,
+        title: '4123 Fix checkout retry',
+        url: 'https://kanban.fpimi.ru/?task=4123',
+        kanbanIdentifier: '4123'
+      },
+      linkedTaskSourceContext,
+      agent: 'claude',
+      linkedIssue: '',
+      linkedPR: null,
+      linkedGitLabIssue: null,
+      linkedGitLabMR: null
+    })
+
+    expect(store.getState().newWorkspaceDraft).toMatchObject({
+      linkedWorkItem: {
+        provider: 'kanban',
+        kanbanIdentifier: '4123'
+      },
+      linkedTaskSourceContext
+    })
+  })
 })

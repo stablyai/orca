@@ -104,6 +104,36 @@ describe('workspace source policy', () => {
     expect(shouldPreserveWorkspaceSourceOnRepoChange(null)).toBe(false)
   })
 
+  it('formats a Kanban linked item identifier without a hash prefix', () => {
+    const kanban = {
+      provider: 'kanban' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: '4123 Fix checkout retry',
+      url: 'https://kanban.fpimi.ru/?task=4123',
+      kanbanIdentifier: '4123',
+      repoId: 'repo-1'
+    }
+    expect(getWorkspaceSourceProvider(kanban)).toBe('kanban')
+    const selection = buildWorkspaceSourceSelection({ linkedWorkItem: kanban })
+    expect(selection).toMatchObject({ kind: 'kanban', label: '4123 Fix checkout retry' })
+    expect(selection?.label).not.toContain('#')
+    expect(shouldPreserveWorkspaceSourceOnRepoChange(kanban)).toBe(true)
+    expect(
+      shouldPreserveWorkspaceSourceOnRepoChange({
+        type: 'issue',
+        number: 0,
+        title: 'Inferred Kanban',
+        url: 'https://kanban.fpimi.ru/?task=9999',
+        kanbanIdentifier: '9999'
+      })
+    ).toBe(true)
+    expect(getWorkspaceSourceName(kanban)).toEqual({
+      seedName: '4123-fix-checkout-retry',
+      displayName: '4123 Fix checkout retry'
+    })
+  })
+
   it('shares provider inference, selection labels, and auto-name gates', () => {
     const legacyGitLab = {
       type: 'issue' as const,

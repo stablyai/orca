@@ -89,6 +89,14 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      kanban: {
+        // Why: the Kanban credential flow lands in a later task; report it as
+        // unavailable and hidden so settings never surface a half-built source.
+        connected: false,
+        checking: false,
+        unavailable: true,
+        visible: visible.has('kanban')
       }
     }
   }, [

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { Github, Gitlab, SquareKanban } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
@@ -89,6 +89,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  kanban: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.kanbanLabel', 'Kanban')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.kanbanDescription',
+        'Connect the Kanban server and show it in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <SquareKanban className={className} />
   }
 }
 

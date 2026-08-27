@@ -203,6 +203,89 @@ describe('worktree remote runtime mutations', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
+  it('requests the Kanban capability before remote worktree linking', async () => {
+    const store = createTestStore()
+    const wt = makeWorktree({
+      id: 'repo1::/path/kanban-link',
+      repoId: 'repo1',
+      path: '/path/kanban-link'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-create',
+      ok: true,
+      result: { worktree: wt },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const linkedWorkItem = {
+      provider: 'kanban' as const,
+      type: 'issue' as const,
+      number: 0,
+      title: '4123 Fix checkout retry',
+      url: 'https://kanban.fpimi.ru/?task=4123',
+      kanbanIdentifier: '4123'
+    }
+    const linkedTaskSourceContext = {
+      kind: 'task-source' as const,
+      provider: 'kanban' as const,
+      projectId: 'project-1',
+      hostId: 'runtime:env-1' as const,
+      providerIdentity: {
+        provider: 'kanban' as const,
+        serverUrl: 'https://kanban.fpimi.ru' as const
+      }
+    }
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'kanban-link']
+    args[25] = { linkedWorkItem, linkedTaskSourceContext }
+
+    await createWorktree(...args)
+
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'worktree.create',
+        params: expect.objectContaining({ linkedWorkItem, linkedTaskSourceContext })
+      })
+    )
+  })
+
+  it('blocks Kanban linking when the paired runtime lacks the kanban capability', async () => {
+    const oldRuntimeStatus = createCompatibleRuntimeStatusResponse('runtime-old')
+    if (oldRuntimeStatus.ok) {
+      oldRuntimeStatus.result.capabilities = oldRuntimeStatus.result.capabilities?.filter(
+        (capability) => capability !== 'worktree.kanban-linked-item.v1'
+      )
+    }
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+      args.method === 'status.get' ? oldRuntimeStatus : runtimeEnvironmentCall(args)
+    )
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      worktreesByRepo: { repo1: [] }
+    } as Partial<AppState>)
+    const createWorktree = store.getState().createWorktree
+    const args: Parameters<typeof createWorktree> = ['repo1', 'kanban-link']
+    args[25] = {
+      linkedWorkItem: {
+        provider: 'kanban',
+        type: 'issue',
+        number: 0,
+        title: '4123 Fix checkout retry',
+        url: 'https://kanban.fpimi.ru/?task=4123',
+        kanbanIdentifier: '4123'
+      }
+    }
+
+    await expect(createWorktree(...args)).rejects.toThrow(
+      'Update the remote runtime to link Kanban'
+    )
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('passes startup commands through remote runtime worktree creation', async () => {
     const store = createTestStore()
     const wt = makeWorktree({

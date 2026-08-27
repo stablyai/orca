@@ -30,5 +30,8 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    case 'kanban':
+      // Why: the Kanban list surface owns its chrome until a detail view lands.
+      return false
   }
 }

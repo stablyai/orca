@@ -44,4 +44,22 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     )
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, repoId: 'repo-2' })).toBe(false)
   })
+
+  it('keeps Kanban items distinct by kanban identifier', () => {
+    const kanban: WorkspaceLinkedItem = {
+      provider: 'kanban',
+      type: 'issue',
+      number: 0,
+      title: '4123 Fix checkout retry',
+      url: 'https://kanban.fpimi.ru/?task=4123',
+      kanbanIdentifier: '4123'
+    }
+    expect(areWorkspaceLinkedItemsEqual(kanban, { ...kanban })).toBe(true)
+    expect(areWorkspaceLinkedItemsEqual(kanban, { ...kanban, kanbanIdentifier: '9999' })).toBe(
+      false
+    )
+    expect(areWorkspaceLinkedItemsEqual(kanban, { ...kanban, kanbanIdentifier: undefined })).toBe(
+      false
+    )
+  })
 })

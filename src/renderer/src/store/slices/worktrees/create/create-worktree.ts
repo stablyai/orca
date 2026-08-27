@@ -12,6 +12,7 @@ import {
   callRuntimeRpc,
   getActiveRuntimeTarget
 } from '../../../../runtime/runtime-rpc-client'
+import { WORKTREE_KANBAN_LINKED_ITEM_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
 import { showLocalBaseRefUpdateSuggestionToast } from '@/components/sidebar/local-base-ref-suggestion-toast'
 import { requestWorktreeBaseFallbackNotice } from '@/components/worktree-base-fallback-notice'
@@ -125,6 +126,17 @@ export function createCreateWorktree(
               target.environmentId,
               WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
               'Update the remote runtime to link Jira'
+            )
+          }
+          if (
+            target.kind === 'environment' &&
+            (linkedWorkItem?.provider === 'kanban' ||
+              linkedTaskSourceContext?.provider === 'kanban')
+          ) {
+            await assertRuntimeEnvironmentCapability(
+              target.environmentId,
+              WORKTREE_KANBAN_LINKED_ITEM_RUNTIME_CAPABILITY,
+              'Update the remote runtime to link Kanban'
             )
           }
           if (provisionedRoot && target.kind !== 'local') {

@@ -80,6 +80,21 @@ describe('getLinkedWorkItemWorkspaceName', () => {
       seedName: 'proj-7-fix-flaky-import'
     })
   })
+
+  it('keeps the Kanban identifier without a hash prefix', () => {
+    expect(
+      getLinkedWorkItemWorkspaceName({
+        type: 'issue',
+        provider: 'kanban',
+        number: 0,
+        title: '4123 Fix checkout retry',
+        kanbanIdentifier: '4123'
+      })
+    ).toEqual({
+      displayName: '4123 Fix checkout retry',
+      seedName: '4123-fix-checkout-retry'
+    })
+  })
 })
 
 describe('getWorkspaceIntentName', () => {
