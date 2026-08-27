@@ -21,8 +21,6 @@ inline src/main/ipc/filesystem-watcher.ts
 inline src/main/ipc/filesystem.ts
 inline src/main/ipc/worktree-remote.ts
 inline src/main/linear/issues.ts
-inline src/main/ports/advertised-url-watcher.ts
-inline src/main/ports/local-workspace-port-scanner.ts
 inline src/main/providers/local-pty-provider.ts
 inline src/main/rate-limits/service.ts
 inline src/main/runtime/orca-runtime-browser.ts
@@ -84,7 +82,6 @@ inline src/renderer/src/store/slices/tabs.ts
 inline src/renderer/src/store/slices/ui.ts
 inline src/shared/keybindings.ts
 inline src/shared/telemetry-events.ts
-inline tests/e2e/helpers/terminal.ts
 mobile-config app/h/*/files/*.tsx
 mobile-config app/h/*/index.tsx
 mobile-config app/h/*/session/*.tsx
