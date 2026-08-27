@@ -15,7 +15,7 @@ export async function submitConnectionDiagnostics(
   submission: ConnectionDiagnosticsSubmission,
   fetchImpl: typeof fetch = fetch
 ): Promise<ConnectionDiagnosticsSubmissionResult> {
-  const report = submission.report.slice(0, MAX_SUBMISSION_BYTES)
+  const report = boundConnectionDiagnosticsReport(submission.report)
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), SUBMISSION_TIMEOUT_MS)
   try {
@@ -47,4 +47,57 @@ export async function submitConnectionDiagnostics(
   } finally {
     clearTimeout(timeout)
   }
+}
+
+export function boundConnectionDiagnosticsReport(
+  report: string,
+  maxBytes: number = MAX_SUBMISSION_BYTES
+): string {
+  if (utf8Bytes(report) <= maxBytes) {
+    return report
+  }
+  const lines = report.split('\n')
+  const historyIndex = lines.findIndex((line) => line.startsWith('Recent connection history ('))
+  if (historyIndex === -1) {
+    return truncateUtf8(report, maxBytes)
+  }
+  const header = lines.slice(0, historyIndex)
+  const events = lines.slice(historyIndex + 1)
+  let kept: string[] = []
+  for (let index = events.length - 1; index >= 0; index--) {
+    const candidateEvents = [events[index]!, ...kept]
+    const candidate = formatBoundedReport(header, candidateEvents, events.length)
+    if (utf8Bytes(candidate) > maxBytes) {
+      break
+    }
+    kept = candidateEvents
+  }
+  return truncateUtf8(formatBoundedReport(header, kept, events.length), maxBytes)
+}
+
+function formatBoundedReport(header: string[], events: string[], totalEvents: number): string {
+  const omitted = totalEvents - events.length
+  return [
+    ...header,
+    `Recent connection history (${events.length} newest events; ${omitted} older omitted):`,
+    ...events
+  ].join('\n')
+}
+
+function truncateUtf8(value: string, maxBytes: number): string {
+  const characters: string[] = []
+  let bytes = 0
+  for (const character of value) {
+    const characterBytes = utf8Bytes(character)
+    if (bytes + characterBytes > maxBytes) {
+      break
+    }
+    characters.push(character)
+    bytes += characterBytes
+  }
+  return characters.join('')
+}
+
+function utf8Bytes(value: string): number {
+  return new TextEncoder().encode(value).byteLength
 }

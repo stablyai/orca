@@ -25,9 +25,8 @@ export function diagnoseConnection(args: {
       reportability: 'none'
     }
   }
-  const evidence = args.entries
-    .map((entry) => `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`)
-    .join('\n')
+  const failure = args.entries.toReversed().find(isDiagnosticFailure)
+  const evidence = failure ? `${failure.code ?? ''} ${failure.message} ${failure.detail ?? ''}` : ''
 
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
     return {
@@ -47,15 +46,8 @@ export function diagnoseConnection(args: {
   }
 
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
-    const path = args.activePath === 'relay' ? 'Relay' : 'The connected host'
-    const relayLiveness =
-      args.activePath === 'relay' ||
-      args.entries.some(
-        (entry) =>
-          entry.path === 'relay' &&
-          (entry.code === 'liveness-timeout' ||
-            /liveness timeout|health check failed/i.test(entry.message))
-      )
+    const relayLiveness = failure?.code === 'liveness-timeout' && failure.path === 'relay'
+    const path = relayLiveness || args.activePath === 'relay' ? 'Relay' : 'The connected host'
     return {
       likelyCause: `${path} stopped answering authenticated health checks.`,
       nextStep: 'Orca closed the stale session and started recovery.',
@@ -67,7 +59,8 @@ export function diagnoseConnection(args: {
     return {
       likelyCause: 'The active Relay session closed unexpectedly.',
       nextStep: 'Orca started Relay recovery; the event history includes the cell close reason.',
-      reportability: 'orca-relay'
+      reportability:
+        failure?.code === 'relay-session-failed' && failure.path === 'relay' ? 'orca-relay' : 'none'
     }
   }
 
@@ -113,6 +106,13 @@ export function diagnoseConnection(args: {
     nextStep: 'Run diagnostics and copy the report again after the next connection attempt.',
     reportability: 'none'
   }
+}
+
+function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {
+  const evidence = `${entry.code ?? ''} ${entry.message} ${entry.detail ?? ''}`
+  return /relay director resolve failed \((?:401|503)\)|liveness-timeout|liveness timeout|connection health check failed|relay-session-failed|active relay session failed|authentication-rejected|unauthorized|pairing may be revoked|connect-timeout|websocket connect timeout|handshake-timeout|handshake timeout/i.test(
+    evidence
+  )
 }
 
 function parseRetryDelayMs(evidence: string): number | null {

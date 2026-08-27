@@ -18,6 +18,10 @@ import {
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
 import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-analysis'
 import { submitConnectionDiagnostics } from '../src/diagnostics/connection-diagnostics-submission'
+import {
+  readHydratedConnectionLog,
+  selectDiagnosticsHostId
+} from '../src/diagnostics/connection-diagnostics-screen-data'
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
@@ -47,7 +51,7 @@ export default function ConnectionLogScreen() {
         return
       }
       setHosts(loaded)
-      setSelectedId((prev) => prev ?? params.hostId ?? loaded[0]?.id ?? null)
+      setSelectedId((prev) => selectDiagnosticsHostId(loaded, params.hostId, prev))
     })
     return () => {
       stale = true
@@ -67,7 +71,7 @@ export default function ConnectionLogScreen() {
 
   useEffect(() => {
     if (selectedId) {
-      void connectionLogStore.hydrate(selectedId)
+      void connectionLogStore.hydrate(selectedId).catch(() => {})
     }
   }, [selectedId])
 
@@ -90,6 +94,7 @@ export default function ConnectionLogScreen() {
       return
     }
     const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
+    const hydratedEntries = await readHydratedConnectionLog(connectionLogStore, selected.id)
     const report = buildConnectionDiagnosticsReport({
       hostName: selected.name,
       endpoint: selected.endpoint,
@@ -99,7 +104,7 @@ export default function ConnectionLogScreen() {
       platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
       appVersion: Constants.expoConfig?.version ?? 'unknown',
       desktopAppVersion,
-      entries,
+      entries: hydratedEntries,
       activePath,
       pendingPath
     })
@@ -111,7 +116,6 @@ export default function ConnectionLogScreen() {
     state,
     reconnectAttempts,
     lastConnectedAt,
-    entries,
     activePath,
     pendingPath,
     liveDesktopAppVersion
@@ -125,6 +129,7 @@ export default function ConnectionLogScreen() {
     const appVersion = Constants.expoConfig?.version ?? 'unknown'
     const platform = `${Platform.OS} ${Platform.Version ?? ''}`.trim()
     const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
+    const hydratedEntries = await readHydratedConnectionLog(connectionLogStore, selected.id)
     const report = buildConnectionDiagnosticsReport({
       hostName: selected.name,
       endpoint: selected.endpoint,
@@ -134,7 +139,7 @@ export default function ConnectionLogScreen() {
       platform,
       appVersion,
       desktopAppVersion,
-      entries,
+      entries: hydratedEntries,
       activePath,
       pendingPath
     })
@@ -146,7 +151,6 @@ export default function ConnectionLogScreen() {
     state,
     reconnectAttempts,
     lastConnectedAt,
-    entries,
     activePath,
     pendingPath,
     liveDesktopAppVersion,
@@ -205,7 +209,8 @@ export default function ConnectionLogScreen() {
               {diagnosis.reportability === 'orca-relay' && (
                 <>
                   <Text style={styles.privacyHint}>
-                    Sends redacted connection events only—never terminal contents or credentials.
+                    Sends a size-limited redacted report including host name, endpoint, versions,
+                    connection state, and events—never terminal contents or credentials.
                   </Text>
                   <Pressable
                     style={styles.sendButton}

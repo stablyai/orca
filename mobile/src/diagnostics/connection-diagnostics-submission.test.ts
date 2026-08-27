@@ -1,5 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
-import { submitConnectionDiagnostics } from './connection-diagnostics-submission'
+import {
+  boundConnectionDiagnosticsReport,
+  submitConnectionDiagnostics
+} from './connection-diagnostics-submission'
 
 describe('submitConnectionDiagnostics', () => {
   it('sends a bounded report through the diagnostics lane', async () => {
@@ -17,7 +20,7 @@ describe('submitConnectionDiagnostics', () => {
     const request = fetchImpl.mock.calls[0]?.[1]
     const body = JSON.parse(String(request?.body)) as { feedback: string; submissionType: string }
     expect(body.submissionType).toBe('connection_diagnostics')
-    expect(body.feedback.length).toBeLessThanOrEqual(64 * 1024)
+    expect(new TextEncoder().encode(body.feedback).byteLength).toBeLessThanOrEqual(64 * 1024)
   })
 
   it('returns a safe failure for a rejected response', async () => {
@@ -28,5 +31,24 @@ describe('submitConnectionDiagnostics', () => {
         fetchImpl
       )
     ).resolves.toEqual({ ok: false, error: 'status 503' })
+  })
+
+  it('preserves the newest complete events when bounding a UTF-8 report', () => {
+    const report = [
+      'Orca Mobile connection diagnostics',
+      'State: reconnecting',
+      '',
+      'Recent connection history (3 events, oldest first):',
+      `oldest ${'😀'.repeat(20)}`,
+      `middle ${'😀'.repeat(20)}`,
+      `newest ${'😀'.repeat(20)}`
+    ].join('\n')
+
+    const bounded = boundConnectionDiagnosticsReport(report, 180)
+
+    expect(new TextEncoder().encode(bounded).byteLength).toBeLessThanOrEqual(180)
+    expect(bounded).toContain('newest')
+    expect(bounded).not.toContain('oldest')
+    expect(bounded).toMatch(/older omitted/)
   })
 })

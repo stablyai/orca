@@ -138,4 +138,29 @@ describe('diagnoseConnection', () => {
       }).reportability
     ).toBe('none')
   })
+
+  it('classifies the newest failure instead of an older persisted 401', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://100.88.90.25:6768',
+        state: 'reconnecting',
+        pendingPath: 'relay',
+        entries: [
+          event('Relay: relay dial failed', 'relay director resolve failed (401)'),
+          { ...event('WebSocket connect timeout'), id: 'newer', ts: 2, code: 'connect-timeout' }
+        ]
+      }).likelyCause
+    ).toBe('The saved Tailscale endpoint did not answer before the connection timeout.')
+  })
+
+  it('requires structured Relay evidence before offering submission', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://192.168.1.2:6768',
+        state: 'reconnecting',
+        activePath: 'relay',
+        entries: [event('active relay session failed')]
+      }).reportability
+    ).toBe('none')
+  })
 })

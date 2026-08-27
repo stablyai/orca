@@ -89,4 +89,31 @@ describe('connection log buffer', () => {
     expect(JSON.stringify(save.mock.calls)).not.toContain('do-not-copy')
     expect(JSON.stringify(save.mock.calls)).not.toContain('also-secret')
   })
+
+  it('does not overwrite persisted history when hydration fails and retries later', async () => {
+    const load = vi
+      .fn<() => Promise<readonly ConnectionLogEntry[]>>()
+      .mockRejectedValueOnce(new Error('storage unavailable'))
+      .mockResolvedValueOnce([entry(1)])
+    const save = vi.fn(async () => {})
+    const store = createConnectionLogStore(3, { load, save })
+
+    store.append('host-a', entry(2))
+    await expect(store.hydrate('host-a')).rejects.toThrow('storage unavailable')
+    expect(save).not.toHaveBeenCalled()
+
+    await store.hydrate('host-a')
+    expect(store.get('host-a').map((value) => value.id)).toEqual(['log-1', 'log-2'])
+  })
+
+  it('preserves legacy entries that reused the same event id', async () => {
+    const store = createConnectionLogStore(3, {
+      load: async () => [entry(1), { ...entry(2), id: 'log-1' }],
+      save: async () => {}
+    })
+
+    await store.hydrate('host-a')
+
+    expect(store.get('host-a').map((value) => value.message)).toEqual(['event 1', 'event 2'])
+  })
 })

@@ -78,19 +78,22 @@ export function createConnectionLogStore(
       .load(hostId)
       .then((stored) => {
         const live = entriesByHost.get(hostId) ?? []
-        const byId = new Map<string, ConnectionLogEntry>()
+        const seen = new Set<string>()
+        const merged: ConnectionLogEntry[] = []
         for (const entry of [...stored, ...live]) {
-          byId.set(entry.id, redactConnectionLogEntry(entry))
+          const redacted = redactConnectionLogEntry(entry)
+          const fingerprint = JSON.stringify(redacted)
+          if (!seen.has(fingerprint)) {
+            seen.add(fingerprint)
+            merged.push(redacted)
+          }
         }
-        const merged = [...byId.values()].sort((a, b) => a.ts - b.ts)
+        merged.sort((a, b) => a.ts - b.ts)
         trim(merged)
         entriesByHost.set(hostId, merged)
         hydratedHosts.add(hostId)
         notify(hostId)
         persist(hostId)
-      })
-      .catch(() => {
-        hydratedHosts.add(hostId)
       })
       .finally(() => hydrationByHost.delete(hostId))
     hydrationByHost.set(hostId, pending)
@@ -107,7 +110,9 @@ export function createConnectionLogStore(
       entries.push(redactConnectionLogEntry(entry))
       trim(entries)
       notify(hostId)
-      void hydrate(hostId).then(() => persist(hostId))
+      void hydrate(hostId)
+        .then(() => persist(hostId))
+        .catch(() => {})
     },
 
     get(hostId) {
