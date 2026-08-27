@@ -12,6 +12,7 @@ import type { EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { EditorPanelMarkdownActionsMenu } from './EditorPanelMarkdownActionsMenu'
+import { EditorPanelMarkdownCopyButton } from './EditorPanelMarkdownCopyButton'
 import { translate } from '@/i18n/i18n'
 import { EditorPanelHeaderPath } from './EditorPanelHeaderPath'
 import { useDiffNavigation } from './diff-navigation-context'
@@ -43,7 +44,9 @@ type EditorPanelHeaderProps = {
   markdownFrontmatterVisible: boolean
   sideBySide: boolean
   openFileState: EditorHeaderOpenFileState
+  canCopyMarkdown: boolean
   onCopyPath: () => void
+  onCopyMarkdown: () => Promise<boolean>
   onOpenDiffTargetFile: (preferredMarkdownViewMode?: 'rich') => void
   onOpenPreviewToSide: () => void
   onOpenMarkdownPreview: () => void
@@ -78,7 +81,9 @@ export function EditorPanelHeader({
   markdownFrontmatterVisible,
   sideBySide,
   openFileState,
+  canCopyMarkdown,
   onCopyPath,
+  onCopyMarkdown,
   onOpenDiffTargetFile,
   onOpenPreviewToSide,
   onOpenMarkdownPreview,
@@ -315,6 +320,9 @@ export function EditorPanelHeader({
             </TooltipContent>
           </Tooltip>
         </TooltipProvider>
+      )}
+      {isMarkdown && !isDiffSurface && (
+        <EditorPanelMarkdownCopyButton canCopy={canCopyMarkdown} onCopy={onCopyMarkdown} />
       )}
       {isMarkdown && !isDiffSurface && createMarkdownArtifactRequest ? (
         <ArtifactPublishButton

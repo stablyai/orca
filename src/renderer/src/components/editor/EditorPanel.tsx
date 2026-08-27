@@ -4,6 +4,7 @@ import { getConnectionId } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { canShowWorkspaceFileBrowserAction, openFilePreviewToSide } from '@/lib/file-preview'
 import { getEditorHeaderCopyState } from './editor-header'
+import { getEditorPanelMarkdownHeaderState } from './editor-panel-markdown-header-state'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { settingsForRuntimeOwner } from '@/runtime/runtime-rpc-client'
 import { exportActiveMarkdownToPdf } from './export-active-markdown'
@@ -17,13 +18,11 @@ import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
 import { useUntitledFileRename } from './useUntitledFileRename'
-import { extractFrontMatter } from './markdown-frontmatter'
 import {
   selectEditorPanelGitBranchEntries,
   selectEditorPanelGitStatusEntries
 } from './editor-panel-git-entry-selector'
 import { createEditorPanelDraftSelector } from './editor-panel-draft-selector'
-import { createCurrentMarkdownArtifactRequest } from './markdown-artifact-upload'
 import { useEditorPanelSave } from './useEditorPanelSave'
 
 function EditorPanelInner({
@@ -318,37 +317,18 @@ function EditorPanelInner({
     )?.activeRuntimeEnvironmentId?.trim() ||
     (renameDialogFile ? getConnectionId(renameDialogFile.worktreeId) : null)
   )
-  const markdownDocumentStateFileId =
-    activeFile.mode === 'markdown-preview'
-      ? (activeFile.markdownPreviewSourceFileId ?? activeFile.filePath)
-      : activeFile.id
-  let activeMarkdownContent: string | null = null
-  if (activeFile.mode === 'markdown-preview') {
-    activeMarkdownContent =
-      editorDrafts[markdownDocumentStateFileId] ?? fileContents[activeFile.id]?.content ?? null
-  } else if (activeFile.mode === 'edit') {
-    activeMarkdownContent =
-      editorDrafts[activeFile.id] ?? fileContents[activeFile.id]?.content ?? null
-  }
-  const canShowMarkdownFrontmatterToggle = Boolean(
-    model.isMarkdown &&
-    (activeFile.mode === 'markdown-preview' || model.mdViewMode !== 'source') &&
-    activeMarkdownContent &&
-    extractFrontMatter(activeMarkdownContent)
-  )
+  const mdHeader = getEditorPanelMarkdownHeaderState({
+    activeFile,
+    isMarkdown: model.isMarkdown,
+    isDiffSurface: model.isDiffSurface,
+    mdViewMode: model.mdViewMode,
+    editorDrafts,
+    fileContents
+  })
+  const mdDocId = mdHeader.markdownDocumentStateFileId
   // Why: front-matter shows by default; the map only carries per-file hide overrides.
-  const isMarkdownFrontmatterVisible =
-    markdownFrontmatterVisible[markdownDocumentStateFileId] ?? true
-  const isMarkdownTableOfContentsVisible =
-    markdownTableOfContentsVisible[markdownDocumentStateFileId] ?? false
-  const createActiveMarkdownArtifactRequest = () =>
-    Promise.resolve(
-      createCurrentMarkdownArtifactRequest(
-        activeFile,
-        markdownDocumentStateFileId,
-        activeMarkdownContent ?? ''
-      )
-    )
+  const isMarkdownFrontmatterVisible = markdownFrontmatterVisible[mdDocId] ?? true
+  const isMarkdownTableOfContentsVisible = markdownTableOfContentsVisible[mdDocId] ?? false
 
   return (
     // Why: each split pane needs an isolated bridge between its diff editor and header controls.
@@ -359,8 +339,9 @@ function EditorPanelInner({
         activeViewStateId={activeViewStateId}
         model={model}
         copiedPathVisible={copiedPathToast?.fileId === activeFile.id}
+        canCopyMarkdown={mdHeader.markdownCopyState.canCopy}
         showMarkdownTableOfContents={isMarkdownTableOfContentsVisible}
-        canShowMarkdownFrontmatterToggle={canShowMarkdownFrontmatterToggle}
+        canShowMarkdownFrontmatterToggle={mdHeader.canShowMarkdownFrontmatterToggle}
         markdownFrontmatterVisible={isMarkdownFrontmatterVisible}
         sideBySide={sideBySide}
         openFiles={openFiles}
@@ -372,6 +353,7 @@ function EditorPanelInner({
         renameError={renameError}
         disableRenameBrowse={disableRenameBrowse}
         onCopyPath={() => void handleCopyPath()}
+        onCopyMarkdown={mdHeader.copyMarkdown}
         onOpenDiffTargetFile={handleOpenDiffTargetFile}
         onOpenPreviewToSide={handleOpenPreviewToSide}
         onOpenMarkdownPreview={handleOpenMarkdownPreview}
@@ -379,19 +361,18 @@ function EditorPanelInner({
         onToggleSideBySide={() => setSideBySide((prev) => !prev)}
         onEditorToggleChange={handleEditorToggleChange}
         onToggleMarkdownTableOfContents={() =>
-          setMarkdownTableOfContentsVisible(
-            markdownDocumentStateFileId,
-            !isMarkdownTableOfContentsVisible
-          )
+          setMarkdownTableOfContentsVisible(mdDocId, !isMarkdownTableOfContentsVisible)
         }
         onToggleMarkdownFrontmatter={() =>
-          setMarkdownFrontmatterVisible(markdownDocumentStateFileId, !isMarkdownFrontmatterVisible)
+          setMarkdownFrontmatterVisible(mdDocId, !isMarkdownFrontmatterVisible)
         }
         onExportMarkdownToPdf={() =>
           void exportActiveMarkdownToPdf({ fileId: activeFile.id, root: panelRef.current })
         }
         createMarkdownArtifactRequest={
-          activeMarkdownContent === null ? undefined : createActiveMarkdownArtifactRequest
+          mdHeader.activeMarkdownContent === null
+            ? undefined
+            : mdHeader.createActiveMarkdownArtifactRequest
         }
         onContentChange={handleContentChange}
         onContentChangeForFile={handleContentChangeForFile}
@@ -399,9 +380,7 @@ function EditorPanelInner({
         onSave={handleSave}
         onSaveForFile={handleSaveForFile}
         onReloadContent={reloadContent}
-        onCloseMarkdownTableOfContents={() =>
-          setMarkdownTableOfContentsVisible(markdownDocumentStateFileId, false)
-        }
+        onCloseMarkdownTableOfContents={() => setMarkdownTableOfContentsVisible(mdDocId, false)}
         onCloseRenameDialog={closeRenameDialog}
         onRenameConfirm={handleRenameConfirm}
         markdownAnnotationsEnabled={markdownAnnotationsEnabled}
