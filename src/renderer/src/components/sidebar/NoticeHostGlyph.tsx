@@ -3,6 +3,10 @@ import React from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { HostRowIcon } from '../host-row-icon'
 import { useAppStore } from '@/store'
+import {
+  isDisconnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
@@ -26,12 +30,15 @@ export default function NoticeHostGlyph({
   keyboardFocusable
 }: NoticeHostGlyphProps): React.JSX.Element | null {
   const host = parseExecutionHostId(hostId)
-  const isDisconnected = useAppStore((s) => {
-    if (host?.kind !== 'runtime') {
-      return false
-    }
-    return !s.runtimeStatusByEnvironmentId.get(host.environmentId)?.status
-  })
+  // Why: only the shared derivation's 'disconnected' verdict earns the destructive glyph — an
+  // unprobed ('checking') or re-attaching ('reconnecting') host is unverifiable, not down.
+  const isDisconnected = useAppStore((s) =>
+    host?.kind === 'runtime'
+      ? isDisconnectedRuntimeHostState(
+          runtimeHostConnectionStateForEntry(s.runtimeStatusByEnvironmentId.get(host.environmentId))
+        )
+      : false
+  )
 
   if (!host) {
     return null

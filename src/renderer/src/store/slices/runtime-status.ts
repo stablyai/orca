@@ -15,7 +15,10 @@ import {
 } from './runtime-environment-disconnect-toast'
 import { reconcileCatalogRows } from './repo-identity-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
-import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
+import {
+  refreshRuntimeEnvironmentStatus,
+  type RuntimeStatusRefreshOutcome
+} from './runtime-status-refresh'
 import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
 import {
   ensureBrowserClientHostForRestartedRuntime,
@@ -70,6 +73,12 @@ export type RuntimeStatusSlice = {
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
   /** Probes one saved runtime and records the latest reachable/unreachable state. */
   refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
+  /** The same probe, reporting whether a re-pair superseded the answer. Only the recovery
+   * loop needs that: a superseded answer must not widen a host's retry budget. */
+  refreshRuntimeEnvironmentStatusOutcome: (
+    environmentId: string,
+    timeoutMs?: number
+  ) => Promise<RuntimeStatusRefreshOutcome>
   /** Best-effort: list saved environments and probe each so the sidebar shows
    * live health at boot, before the settings pane is ever opened. */
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
@@ -312,7 +321,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     })
   },
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: async (environmentId, timeoutMs) =>
+    (await get().refreshRuntimeEnvironmentStatusOutcome(environmentId, timeoutMs)) === 'reachable',
+
+  refreshRuntimeEnvironmentStatusOutcome: (environmentId, timeoutMs = 10_000) =>
     refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (status) => {
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.

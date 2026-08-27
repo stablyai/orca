@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isConnectedRuntimeHostState,
+  isDisconnectedRuntimeHostState,
   runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from './runtime-host-connection-state'
 
@@ -96,5 +98,33 @@ describe('runtime host connection state', () => {
         }
       })
     ).toBe('disconnected')
+  })
+
+  it('reads a store entry without re-assembling the argument at each call site', () => {
+    expect(runtimeHostConnectionStateForEntry(undefined)).toBe('checking')
+    expect(runtimeHostConnectionStateForEntry({ status: null })).toBe('disconnected')
+    expect(runtimeHostConnectionStateForEntry({ status: makeStatus() })).toBe('connected')
+  })
+
+  it('names the disconnected verdict for the glyph and the recovery loop alike', () => {
+    // Why: the sidebar paints red and the recovery probe retries off this one predicate, so a
+    // host that answers requests while its control channel is closed cannot be red-and-forgotten.
+    const closedWithError = runtimeHostConnectionStateForEntry({
+      status: makeStatus({
+        remoteControl: {
+          state: 'closed',
+          pendingRequestCount: 0,
+          subscriptionCount: 0,
+          reconnectAttempt: 0,
+          lastConnectedAt: null,
+          lastClose: null,
+          lastError: 'Connection closed'
+        }
+      })
+    })
+    expect(isDisconnectedRuntimeHostState(closedWithError)).toBe(true)
+    expect(isDisconnectedRuntimeHostState('checking')).toBe(false)
+    expect(isDisconnectedRuntimeHostState('reconnecting')).toBe(false)
+    expect(isDisconnectedRuntimeHostState('workspace-window-closed')).toBe(false)
   })
 })

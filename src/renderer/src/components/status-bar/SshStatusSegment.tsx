@@ -33,7 +33,7 @@ import {
 } from './remote-host-connection-status'
 import {
   isConnectedRuntimeHostState,
-  runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
 
@@ -88,7 +88,7 @@ export function SshStatusSegment({
         syncStatus: remoteWorkspaceSyncStatusByTargetId[id]
       }
     })
-  const runtimeHosts = runtimeEnvironments
+  const runtimeHostRows = runtimeEnvironments
     .filter(isUserManagedRuntimeEnvironment)
     .map((environment) => {
       const statusEntry = runtimeStatusByEnvironmentId.get(environment.id)
@@ -96,16 +96,11 @@ export function SshStatusSegment({
       return {
         id: environment.id,
         label: override || environment.name || environment.id,
-        hasStatusEntry: Boolean(statusEntry),
-        status: statusEntry?.status ?? null,
         active: settings?.activeRuntimeEnvironmentId === environment.id,
-        remoteControl: statusEntry?.status?.remoteControl ?? null
+        remoteControl: statusEntry?.status?.remoteControl ?? null,
+        state: runtimeHostConnectionStateForEntry(statusEntry)
       }
     })
-  const runtimeHostRows = runtimeHosts.map((host) => ({
-    ...host,
-    state: runtimeHostConnectionState(host)
-  }))
   // Available remote servers are online even when they are not the active runtime.
   // Keep host health separate from the advanced active-server selection.
   const connectedRuntimeHosts = runtimeHostRows.filter((host) =>
@@ -163,7 +158,7 @@ export function SshStatusSegment({
     [recordFeatureInteraction, setRuntimeEnvironmentStatus]
   )
 
-  if (targets.length === 0 && runtimeHosts.length === 0) {
+  if (targets.length === 0 && runtimeHostRows.length === 0) {
     return null
   }
 

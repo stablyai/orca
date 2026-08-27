@@ -64,3 +64,17 @@ export function runtimeStatusForOverall(state: RuntimeHostConnectionState): Host
 export function isConnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
   return state === 'connected' || state === 'workspace-window-closed'
 }
+
+// Why: every caller reads the same store map, and re-assembling the argument per surface is
+// how the sidebar drifted into its own `entry.status === null` predicate (#16518 review).
+export function runtimeHostConnectionStateForEntry(
+  entry: { status: RuntimeStatus | null } | undefined
+): RuntimeHostConnectionState {
+  return runtimeHostConnectionState({ hasStatusEntry: Boolean(entry), status: entry?.status })
+}
+
+// Why: the destructive glyph, the dimmed card, and the recovery probe's candidate list must
+// name one verdict — a host painted red the probe never retries can never recover.
+export function isDisconnectedRuntimeHostState(state: RuntimeHostConnectionState): boolean {
+  return state === 'disconnected'
+}

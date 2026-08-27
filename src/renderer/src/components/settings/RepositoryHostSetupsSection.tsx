@@ -28,7 +28,7 @@ import {
 } from '@/store/slices/runtime-environment-ssh'
 import {
   isConnectedRuntimeHostState,
-  runtimeHostConnectionState
+  runtimeHostConnectionStateForEntry
 } from '@/runtime/runtime-host-connection-state'
 
 type RepositoryHostSetupsSectionProps = {
@@ -227,10 +227,7 @@ export function RepositoryHostSetupsSection({
             ? runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
             : undefined
           const runtimeOwnerState = runtimeOwnerEnvironmentId
-            ? runtimeHostConnectionState({
-                hasStatusEntry: Boolean(runtimeOwnerStatusEntry),
-                status: runtimeOwnerStatusEntry?.status
-              })
+            ? runtimeHostConnectionStateForEntry(runtimeOwnerStatusEntry)
             : null
           const runtimeOwnerReachable =
             runtimeOwnerState === null || isConnectedRuntimeHostState(runtimeOwnerState)

@@ -218,18 +218,31 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).not.toContain('Retry SSH connection')
   })
 
-  it('marks a runtime-host worktree disconnected when its environment has no status', () => {
+  function renderRuntimeHostCard(): string {
     runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     const runtimeRepo: Repo = {
       ...makeRepo(),
       connectionId: undefined,
       executionHostId: 'runtime:env-1'
     }
-    // No status entry for env-1 → host is disconnected.
-    const markup = renderToStaticMarkup(
+    return renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
-    expect(markup).toContain('Remote Mac disconnected')
+  }
+
+  it('marks a runtime-host worktree disconnected once a probe reports it unreachable', () => {
+    runtimeStatusByEnvironmentId.set('env-1', { status: null })
+
+    expect(renderRuntimeHostCard()).toContain('Remote Mac disconnected')
+  })
+
+  it('leaves a runtime-host worktree unmarked until its environment has been probed', () => {
+    // Why: no status entry means "never checked", not "down" — and the boot verdict
+    // used to outlive the outage, dimming a live host all session (#16516).
+    const markup = renderRuntimeHostCard()
+
+    expect(markup).not.toContain('Remote Mac disconnected')
+    expect(markup).toContain('Project on Remote Mac')
   })
 
   it('distinguishes connected worktrees on different Orca servers', () => {

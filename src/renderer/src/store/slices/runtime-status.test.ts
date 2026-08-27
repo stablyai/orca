@@ -503,6 +503,7 @@ describe('runtime-status slice', () => {
       store.getState().setRuntimeEnvironments([makeEnvironment({ pairingRevision: 1 })])
 
       const refresh = store.getState().refreshRuntimeEnvironmentStatus('env-a')
+      const refreshOutcome = store.getState().refreshRuntimeEnvironmentStatusOutcome('env-a')
       store.getState().setRuntimeEnvironments([makeEnvironment({ pairingRevision: 2 })])
       if (outcome === 'success') {
         probe.resolve(createCompatibleRuntimeStatusResponse('runtime-old'))
@@ -511,6 +512,9 @@ describe('runtime-status slice', () => {
       }
 
       await expect(refresh).resolves.toBe(false)
+      // Why the outcome form exists: the recovery loop must not charge a superseded answer
+      // against the new pairing's retry budget — false alone cannot say which one this was.
+      await expect(refreshOutcome).resolves.toBe('superseded')
       expect(store.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
     }
   )

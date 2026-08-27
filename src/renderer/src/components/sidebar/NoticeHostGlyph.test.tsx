@@ -83,12 +83,26 @@ describe('NoticeHostGlyph', () => {
     )
   })
 
-  it('marks a paired runtime with no live status as disconnected', async () => {
+  it('marks a paired runtime whose probe came back unreachable as disconnected', async () => {
+    runtimeStatusByEnvironmentId.set('openclaw-env', { status: null })
     const container = await render('runtime:openclaw-env')
 
     expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
       'openclaw disconnected'
     )
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('text-destructive')
+  })
+
+  it('leaves a paired runtime that has not been probed yet unmarked', async () => {
+    // Why: no status entry means "never checked", not "down". Painting it red states a
+    // loss of contact as proof the server exited (docs/reference/ssh-execution-boundary.md),
+    // and the boot-time verdict then outlived the outage for the whole session (#16516).
+    const container = await render('runtime:openclaw-env')
+
+    expect(container.querySelector('[data-testid="tooltip"]')?.textContent).toBe(
+      'Project on openclaw'
+    )
+    expect(container.querySelector('svg')?.getAttribute('class')).toContain('text-muted-foreground')
   })
 
   it('gives the local host the monitor glyph the run-target rows use', async () => {

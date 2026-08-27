@@ -7,6 +7,7 @@ import { createRuntimeRpcAbortError } from './abortable-runtime-environment-call
 import { callRuntimeEnvironmentWithRevision } from './runtime-rpc-environment-call'
 import { RuntimeRpcCallError, unwrapRuntimeRpcResult } from './runtime-rpc-result'
 import { captureRuntimeEnvironmentRequestRevision } from './runtime-environment-revision'
+import { noteRuntimeEnvironmentReachable } from './runtime-status-recovery-probe'
 import type { RuntimeClientTarget } from './runtime-client-target'
 
 export {
@@ -90,7 +91,13 @@ export async function callRuntimeRpc<TResult>(
           signal: options.signal,
           expectedEnvironmentPairingRevision
         })
-  return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  const result = unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
+  if (target.kind === 'environment') {
+    // Why: an answered request is evidence the host is reachable, so a stale
+    // "disconnected" entry gets re-probed instead of outliving the outage.
+    noteRuntimeEnvironmentReachable(target.environmentId)
+  }
+  return result
 }
 
 async function ensureRuntimeEnvironmentCompatible(

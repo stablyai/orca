@@ -9,6 +9,10 @@ import {
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getWorkspacePortsByWorktreeId } from '@/lib/workspace-port-groups'
 import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import {
+  isDisconnectedRuntimeHostState,
+  runtimeHostConnectionStateForEntry
+} from '@/runtime/runtime-host-connection-state'
 import { hydrateRuntimeEnvironmentSshState } from '@/runtime/runtime-environment-ssh-state'
 import { useAppStore } from '@/store'
 import {
@@ -175,13 +179,17 @@ export function useWorktreeCardFoundation({
   const runtimeHostLabel = runtimeHostId
     ? (getHostDisplayLabelOverrides(settings).get(runtimeHostId) ?? runtimeEnvironmentName)
     : null
-  // Why: runtime ("Orca server") hosts get the same disconnected dimming as SSH when their environment has no live status.
-  const isRuntimeDisconnected = useAppStore((s) => {
-    if (!runtimeOwnerEnvironmentId) {
-      return false
-    }
-    return !s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)?.status
-  })
+  // Why: runtime ("Orca server") hosts get the same disconnected dimming as SSH, but only for the
+  // shared derivation's 'disconnected' verdict — unprobed and re-attaching hosts are unverifiable.
+  const isRuntimeDisconnected = useAppStore((s) =>
+    runtimeOwnerEnvironmentId
+      ? isDisconnectedRuntimeHostState(
+          runtimeHostConnectionStateForEntry(
+            s.runtimeStatusByEnvironmentId.get(runtimeOwnerEnvironmentId)
+          )
+        )
+      : false
+  )
   const [titleRenaming, setTitleRenaming] = useState(false)
   const [showRenameErrorDialog, setShowRenameErrorDialog] = useState(false)
   // Why: read the target label from its owning host's store instead of exposing HUB-private SSH metadata as client-local state.
