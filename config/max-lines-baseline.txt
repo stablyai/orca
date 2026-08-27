@@ -19,7 +19,6 @@ inline src/main/index.ts
 inline src/main/ipc/filesystem-watcher.ts
 inline src/main/ipc/filesystem.ts
 inline src/main/ipc/worktree-remote.ts
-inline src/main/linear/issues.ts
 inline src/main/providers/local-pty-provider.ts
 inline src/main/rate-limits/service.ts
 inline src/main/runtime/orca-runtime-browser.ts
