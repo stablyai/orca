@@ -104,6 +104,7 @@ function errorResult(status: ProviderRateLimits['status'], error: string): Provi
 export async function fetchGlmRateLimits(config: {
   platform: 'zai' | 'zhipu'
   apiKey: string
+  signal?: AbortSignal
 }): Promise<ProviderRateLimits> {
   if (!config.apiKey) {
     return errorResult('unavailable', 'No GLM API key configured')
@@ -111,6 +112,9 @@ export async function fetchGlmRateLimits(config: {
 
   const base = config.platform === 'zhipu' ? ZHIPU_BASE : ZAI_BASE
   const url = `${base}/api/monitor/usage/quota/limit`
+  const requestSignal = config.signal
+    ? AbortSignal.any([config.signal, AbortSignal.timeout(API_TIMEOUT_MS)])
+    : AbortSignal.timeout(API_TIMEOUT_MS)
 
   try {
     const res = await net.fetch(url, {
@@ -118,7 +122,7 @@ export async function fetchGlmRateLimits(config: {
         Authorization: `Bearer ${config.apiKey}`,
         Accept: 'application/json'
       },
-      signal: AbortSignal.timeout(API_TIMEOUT_MS)
+      signal: requestSignal
     })
     if (res.status === 401 || res.status === 403) {
       return errorResult('error', `GLM usage request unauthorized (HTTP ${res.status})`)
