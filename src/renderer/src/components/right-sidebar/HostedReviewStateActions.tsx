@@ -64,7 +64,7 @@ export function MergedReviewActions({
   // Why: the main worktree is the project root, not a workspace — deleting it
   // routes to the project-removal dialog, so the label must match that.
   const deleteLabel = isMainWorktree
-    ? translate('auto.components.right.sidebar.HostedReviewActions.b1a767b1ae', 'Remove Project')
+    ? translate('auto.components.right.sidebar.HostedReviewActions.removeProject', 'Remove Project')
     : translate('auto.components.right.sidebar.HostedReviewActions.e4aca40024', 'Delete Workspace')
   return (
     <Button
