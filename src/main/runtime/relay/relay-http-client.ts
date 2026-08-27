@@ -11,6 +11,7 @@ import {
   type RelayAssignRateGate
 } from './relay-assign-rate-gate'
 import type { RelayRegion } from './relay-region-preference'
+import { firstPartyFetch } from '../first-party-fetch'
 
 const RELAY_HTTP_REQUEST_DEADLINE_MS = 15_000
 const RELAY_RETRY_AFTER_MAX_MS = 5 * 60_000
@@ -105,7 +106,7 @@ export async function exchangeRelayAuthorization(input: {
   requestDeadlineMs?: number
 }): Promise<RelayAuthorization> {
   const relayHostId = deriveRelayHostId(input.keypair.publicKey)
-  const response = await (input.fetch ?? globalThis.fetch)(input.endpoint, {
+  const response = await (input.fetch ?? firstPartyFetch)(input.endpoint, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.accessToken}`,
@@ -175,7 +176,7 @@ async function sendRelayAssignment(
   if (input.isCurrent && !input.isCurrent()) {
     throw new RelayAssignAbortedError()
   }
-  const response = await (input.fetch ?? globalThis.fetch)(`${input.directorUrl}/v1/assign`, {
+  const response = await (input.fetch ?? firstPartyFetch)(`${input.directorUrl}/v1/assign`, {
     method: 'POST',
     headers: {
       authorization: `Bearer ${input.relayToken}`,

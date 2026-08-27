@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cancelTrackingResponse } from '../lib/unread-response-body.test-fixtures'
+import { setMainHttpClient } from '../network/http-client'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import {
@@ -11,6 +12,14 @@ import {
 } from './profile-cloud-client'
 
 const fetchMock = vi.fn()
+
+function installGlobalFetchHttpClient(): void {
+  setMainHttpClient({
+    fetch: (input, init) => globalThis.fetch(input, init),
+    fetchWithSystemTrust: (input, init) => globalThis.fetch(input, init),
+    proxySession: () => null
+  })
+}
 
 const config: OrcaCloudAuthConfig = {
   apiBaseUrl: 'https://orca-cloud.example',
@@ -45,6 +54,12 @@ describe('Orca cloud client', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    installGlobalFetchHttpClient()
+  })
+
+  afterEach(() => {
+    setMainHttpClient(null)
+    vi.unstubAllGlobals()
   })
 
   it('normalizes session exchange organizations', async () => {

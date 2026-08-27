@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
-import type { E2EEKeypair } from '../e2ee-keypair'
 import {
   RelayConnectionOpenMessageSchema,
   RelayDrainMessageSchema,
@@ -9,11 +8,10 @@ import {
   RelayHostHelloAckMessageSchema,
   RelayPingMessageSchema,
   parseRelayControlMessage,
-  type RelayConnectionOpenMessage,
-  type RelayDrainMessage,
   type RelayHostHelloAckMessage,
   type RelayInviteCreatedMessage
 } from './relay-control-protocol'
+import type { RelayControlClientOptions } from './relay-control-client-options'
 import { RelayControlRequests } from './relay-control-requests'
 import type { DeviceCredentialInstallAuthorization } from './relay-control-requests'
 import { answerRelayHostChallenge } from './relay-host-proof'
@@ -22,26 +20,9 @@ import {
   RelayControlSilenceWatchdog
 } from './relay-control-silence-watchdog'
 import { controlWebSocketUrl } from './relay-control-url'
+import * as firstPartyRelay from '../first-party-relay-websocket'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
-
-type RelayControlClientOptions = {
-  cellUrl: string
-  relayJwt: string
-  relayHostId: string
-  assignmentEpoch: number
-  identity: { userId: string; profileId: string; organizationId: string }
-  keypair: E2EEKeypair
-  appVersion: string
-  previousGeneration?: number
-  controlResumeSecret?: string
-  onConnectionOpen: (message: RelayConnectionOpenMessage) => void
-  onDrain: (message: RelayDrainMessage) => void
-  onClose: (code: number) => void
-  createSocket?: (url: string, relayJwt: string) => WebSocket
-  connectDeadlineMs?: number
-  silenceLimitMs?: number
-}
 
 const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
@@ -68,13 +49,7 @@ export class RelayControlClient {
       () => this.socket?.terminate()
     )
     this.createSocket =
-      options.createSocket ??
-      ((url, token) =>
-        new WebSocket(url, {
-          headers: { authorization: `Bearer ${token}` },
-          perMessageDeflate: false,
-          maxPayload: 64 * 1024
-        }))
+      options.createSocket ?? firstPartyRelay.createFirstPartyRelayControlWebSocket
   }
 
   connect(): Promise<RelayHostHelloAckMessage> {
@@ -82,6 +57,32 @@ export class RelayControlClient {
       return Promise.reject(new Error('relay_control_already_started'))
     }
     this.state = 'opening'
+    return new Promise((resolve, reject) => {
+      this.connectResolve = resolve
+      this.connectReject = reject
+      this.connectTimer = setTimeout(
+        () => this.expireConnect(),
+        this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
+      )
+      this.connectTimer.unref()
+      void this.openSocket().catch((error: unknown) => {
+        if (this.state !== 'opening' && this.state !== 'proving') {
+          return
+        }
+        this.state = 'closed'
+        this.connectReject?.(error instanceof Error ? error : new Error(String(error)))
+        this.clearConnectPromise()
+      })
+    })
+  }
+
+  private async openSocket(): Promise<void> {
+    if (!this.options.createSocket) {
+      await firstPartyRelay.prepareFirstPartyRelayWebSocketTrust(this.controlUrl)
+    }
+    if (this.state !== 'opening') {
+      return
+    }
     const socket = this.createSocket(this.controlUrl, this.options.relayJwt)
     this.socket = socket
     socket.once('open', () => this.sendHostHello())
@@ -100,16 +101,6 @@ export class RelayControlClient {
       }
     })
     socket.once('close', (code) => this.handleClose(code))
-    // Recovery cannot advance while an upgrade/proof promise remains pending forever.
-    this.connectTimer = setTimeout(
-      () => this.expireConnect(),
-      this.options.connectDeadlineMs ?? RELAY_CONTROL_CONNECT_DEADLINE_MS
-    )
-    this.connectTimer.unref()
-    return new Promise((resolve, reject) => {
-      this.connectResolve = resolve
-      this.connectReject = reject
-    })
   }
 
   get pendingRequestCount(): number {
@@ -308,6 +299,7 @@ export class RelayControlClient {
     if (this.state !== 'opening' && this.state !== 'proving') {
       return
     }
+    this.state = 'closed'
     this.connectReject?.(new Error('relay_control_connect_timeout'))
     this.clearConnectPromise()
     this.socket?.terminate()

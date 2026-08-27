@@ -15786,6 +15786,120 @@
       "demotionRule": "Keep experimental or demote if either signal traps, returns nonzero, retains its listener/Xvfb/run-owned process identity, touches the unrelated canary, or the focused gate flakes without an identified product or harness defect."
     },
     {
+      "id": "cloud-relay.node18-system-tls-trust",
+      "title": "Cloud and Relay transports retain host trust and TLS verification",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "cloud-relay-network",
+      "layer": "host-first-party-network-boundary",
+      "surfaces": [
+        "Cloud session exchange",
+        "Relay token mint and HTTP assignment",
+        "Relay control and data WSS"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "paired-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Real Node 18, 24, and 26 processes drive the production Cloud exchange, Relay mint/assignment, and default control/data clients through one CA-signed HTTPS/WSS fixture. Injected host-store contracts cover Linux bundles, bounded macOS trust verification, and both Windows machine/user ROOT stores minus both Disallowed stores. Physical Windows and managed corporate policy remain uncollected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/issues/13735",
+        "https://linear.app/stably/issue/STA-3864"
+      ],
+      "invariant": "Node-hosted Orca Cloud and Relay HTTPS/WSS accept host-trusted inspection chains without changing global CA state or disabling certificate and hostname verification.",
+      "oracle": "Build the production Cloud/Relay callers, start one local CA-signed HTTPS/WSS fixture, prove raw HTTP and WSS reject it, then prove exact Cloud PKCE exchange, Relay mint/assignment, control authorization/hello, and data authorization/echo through the default clients. Independently prove the trusted CA still rejects HTTPS and WSS hostname mismatches.",
+      "commands": [
+        "node config/scripts/build-first-party-node18-trust-smoke.mjs && ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR=18 npx -y node@18 config/scripts/smoke-first-party-node18-trust.mjs",
+        "ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR=24 node config/scripts/smoke-first-party-node18-trust.mjs",
+        "ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR=26 npx -y node@26 config/scripts/smoke-first-party-node18-trust.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/network/first-party-ca-certificates.test.ts src/main/network/first-party-tls-trust-node18.test.ts src/main/runtime/first-party-relay-websocket.test.ts"
+      ],
+      "testFiles": [
+        "config/scripts/smoke-first-party-node18-trust.mjs",
+        "src/main/network/first-party-ca-certificates.test.ts",
+        "src/main/network/first-party-tls-trust-node18.test.ts",
+        "src/main/runtime/first-party-relay-websocket.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/smoke-first-party-node18-trust.mjs",
+          "assertions": [
+            "raw Node HTTP and WSS reject the fixture CA with UNABLE_TO_VERIFY_LEAF_SIGNATURE",
+            "the real Cloud session exchange sends the exact POST, JSON content type, PKCE handoff, and receives a normalized session",
+            "the real Relay token and assignment callers send exact POST, JSON content type, bearer credentials, and request bodies",
+            "the default Relay control client sends authorization and host hello over trusted WSS",
+            "the default Relay data transport sends its ticket/generation and carries a reply",
+            "the trusted CA still rejects HTTPS and WSS hostname mismatches with ERR_TLS_CERT_ALTNAME_INVALID"
+          ]
+        },
+        {
+          "file": "src/main/network/first-party-ca-certificates.test.ts",
+          "assertions": [
+            "Linux reads its policy-owned CA bundle",
+            "macOS accepts only current self-issued roots that host verification accepts",
+            "Windows retains readable machine/user stores when a sibling store fails and subtracts both Disallowed stores from the final merged trust set",
+            "stalled macOS listing, macOS verification, and Windows enumeration share one bounded 10-second deadline"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-25",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "node config/scripts/build-first-party-node18-trust-smoke.mjs && ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR=18 npx -y node@18 config/scripts/smoke-first-party-node18-trust.mjs",
+          "durationSeconds": 5,
+          "summary": "Candidate 50991cfa05 passed under Node 18: raw HTTP/WSS stayed red with exact TLS cause codes, then real Cloud exchange, Relay mint/assignment, default control/data WSS, exact method/content/auth/body assertions, data echo, and both hostname mismatches passed."
+        },
+        {
+          "date": "2026-08-25",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR=24 node config/scripts/smoke-first-party-node18-trust.mjs",
+          "durationSeconds": 1,
+          "summary": "The same candidate and compiled production boundary passed the byte-identical HTTPS/WSS oracle under Node 24."
+        },
+        {
+          "date": "2026-08-25",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR=26 npx -y node@26 config/scripts/smoke-first-party-node18-trust.mjs",
+          "durationSeconds": 5,
+          "summary": "The same candidate and compiled production boundary passed the byte-identical HTTPS/WSS oracle under Node 26."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 20,
+        "scope": "one local CA generation, three HTTPS requests, two successful WSS handshakes, two raw rejections, two hostname rejections, and cleanup"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The fixture uses bound ports and event-driven socket barriers; CI soak history is not yet available."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "The byte-identical build/entry/smoke files (SHA-256 bfbc12e7ca44, 32e630510ae8, a3433d39b9ff) failed on reported v1.4.178 commit 92a8100f698e and latest origin/main 5a8b4aff7b44 with UNABLE_TO_VERIFY_LEAF_SIGNATURE, passed on candidate 50991cfa0558, and failed at the same boundary after the candidate's complete src/main product tree was restored byte-for-byte to latest main."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Certificate enumeration is lazy, cached once per host process, and adds no polling or per-request subprocess. A local macOS legacy load completed in 12ms. Linux reads one policy bundle only when Node lacks its system API; Windows asynchronously enumerates machine/user ROOT and Disallowed stores independently so one inaccessible store does not erase the other; macOS performs one keychain listing plus eight-way verification of current self-issued CA candidates. macOS and Windows loading share a 10-second aggregate bound, and Relay's existing connection deadline includes trust preparation."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive focused CI passes or 14 days without an unexplained flake.",
+        "Collect one managed macOS corporate-inspection run across sign-in, Relay mint, assignment, and control/data WSS.",
+        "Collect one packaged Windows run that loads the native root-store module and rejects a disallowed test root."
+      ],
+      "knownGaps": [
+        "No reporter has run the reworked build on a managed corporate network.",
+        "Explicit HTTP-proxy tunneling for Relay WSS remains unsupported and is distinct from transparent inspection.",
+        "The local real-Node matrix uses an explicit CA file; platform store policy is covered with deterministic injected sources."
+      ],
+      "demotionRule": "Demote if raw Node unexpectedly trusts the fixture, scoped traffic accepts a hostname mismatch, host-store loading mutates global trust, or any supported Node lane stops exercising both HTTPS and WSS."
+    },
+    {
       "id": "ssh-managed-hooks.node18-runtime-compatibility",
       "title": "SSH managed-hook companions load and install hooks on Node 18",
       "maturity": "experimental",

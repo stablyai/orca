@@ -9,6 +9,8 @@ import type { MainHttpClient } from '../network/http-client'
  * rather than captured at install time.
  */
 export const electronHttpClient: MainHttpClient = {
-  fetch: (url, init) => net.fetch(url, init),
+  fetch: (input, init) => net.fetch(input instanceof URL ? input.toString() : input, init),
+  fetchWithSystemTrust: (input, init) =>
+    net.fetch(input instanceof URL ? input.toString() : input, init),
   proxySession: () => session.defaultSession
 }

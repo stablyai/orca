@@ -1,4 +1,9 @@
 import type { Session } from 'electron'
+import type { Dispatcher } from 'undici'
+import {
+  getProxyBypassRulesFromEnvironment,
+  getProxyUrlFromEnvironment
+} from '../../shared/network-proxy'
 
 /**
  * Outbound HTTP for main-process integrations.
@@ -20,13 +25,60 @@ import type { Session } from 'electron'
  */
 
 export type MainHttpClient = {
-  fetch(url: string, init?: RequestInit): Promise<Response>
+  fetch(input: Parameters<typeof globalThis.fetch>[0], init?: RequestInit): Promise<Response>
+  /** Additive OS trust without weakening certificate or hostname verification. */
+  fetchWithSystemTrust(
+    input: Parameters<typeof globalThis.fetch>[0],
+    init?: RequestInit
+  ): Promise<Response>
   /** The Chromium session whose proxy state applies, or null on a host without one. */
   proxySession(): Session | null
 }
 
+type NodeSystemTrustTransport = {
+  dispatcher: Dispatcher
+  fetch: typeof globalThis.fetch
+}
+
+// Why: dispatchers are private Undici ABI; pair them with the fetch from the same package.
+let nodeSystemTrustTransport: Promise<NodeSystemTrustTransport> | undefined
+
+async function getNodeSystemTrustTransport(): Promise<NodeSystemTrustTransport> {
+  nodeSystemTrustTransport ??= Promise.all([
+    import('undici'),
+    import('./first-party-tls-trust')
+  ]).then(async ([{ Agent, EnvHttpProxyAgent, fetch }, { getFirstPartyCaCertificates }]) => {
+    const ca = await getFirstPartyCaCertificates()
+    const proxy = getProxyUrlFromEnvironment(process.env)
+    const packageFetch = fetch as unknown as typeof globalThis.fetch
+    if (!proxy.ok || !/^https?:/.test(proxy.value)) {
+      return {
+        dispatcher: new Agent({ connect: { ca, rejectUnauthorized: true } }),
+        fetch: packageFetch
+      }
+    }
+    const proxyOptions = {
+      connect: { ca, rejectUnauthorized: true },
+      proxyTls: { ca, rejectUnauthorized: true },
+      requestTls: { ca, rejectUnauthorized: true },
+      httpProxy: proxy.value,
+      httpsProxy: proxy.value,
+      noProxy: getProxyBypassRulesFromEnvironment(process.env).replaceAll(';', ',')
+    }
+    return {
+      dispatcher: new EnvHttpProxyAgent(proxyOptions),
+      fetch: packageFetch
+    }
+  })
+  return nodeSystemTrustTransport
+}
+
 const nodeHttpClient: MainHttpClient = {
   fetch: (url, init) => globalThis.fetch(url, init),
+  fetchWithSystemTrust: async (url, init) => {
+    const transport = await getNodeSystemTrustTransport()
+    return transport.fetch(url, { ...init, dispatcher: transport.dispatcher } as RequestInit)
+  },
   proxySession: () => null
 }
 

@@ -30,6 +30,7 @@ import { electronRuntimeBrowserCommandsFactory } from './host/electron-browser-c
 import { setRuntimeBrowserCommandsFactory } from './runtime/runtime-browser-commands-factory'
 import { electronHttpClient } from './host/electron-http-client'
 import { setMainHttpClient } from './network/http-client'
+export { firstPartyFetch } from './runtime/first-party-fetch'
 import { electronSpeechServiceFactories } from './host/electron-speech-services'
 import { setSpeechServiceFactories } from './speech/speech-runtime-service'
 import { setWorktreeWatcherRemoval } from './ipc/worktree-watcher-removal'

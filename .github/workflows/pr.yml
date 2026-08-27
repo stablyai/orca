@@ -572,6 +572,37 @@ jobs:
       - name: Smoke managed-hook companions
         run: node config/scripts/smoke-managed-hook-runtime-node18.mjs
 
+  first_party_tls:
+    name: first-party TLS on Node ${{ matrix.node }}
+    needs: [code_paths]
+    if: needs.code_paths.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['18', '24', '26']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Build first-party trust smoke
+        run: node config/scripts/build-first-party-node18-trust-smoke.mjs
+
+      - name: Setup smoke runtime
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ matrix.node }}
+
+      - name: Smoke first-party HTTPS and WSS trust
+        env:
+          ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR: ${{ matrix.node }}
+        run: node config/scripts/smoke-first-party-node18-trust.mjs
+
   package:
     name: package
     needs: [code_paths]
@@ -807,6 +838,7 @@ jobs:
       - test
       - orcad_browser
       - managed_hook_node18
+      - first_party_tls
       - package
       - package_windows
     runs-on: ubuntu-latest
@@ -833,6 +865,7 @@ jobs:
           TEST: ${{ needs.test.result }}
           ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
+          FIRST_PARTY_TLS: ${{ needs.first_party_tls.result }}
           PACKAGE: ${{ needs.package.result }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
         run: |
@@ -853,6 +886,7 @@ jobs:
               "$TEST" \
               "$ORCAD_BROWSER" \
               "$MANAGED_HOOK_NODE18" \
+              "$FIRST_PARTY_TLS" \
               "$PACKAGE" \
               "$PACKAGE_WINDOWS"; do
               if [ "$result" != "skipped" ]; then
@@ -873,6 +907,7 @@ jobs:
             "$TEST" \
             "$ORCAD_BROWSER" \
             "$MANAGED_HOOK_NODE18" \
+            "$FIRST_PARTY_TLS" \
             "$PACKAGE" \
             "$PACKAGE_WINDOWS"; do
             if [ "$result" != "success" ]; then

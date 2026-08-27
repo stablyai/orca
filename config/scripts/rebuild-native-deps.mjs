@@ -66,6 +66,8 @@ const NATIVE_MODULES = [
     ? ['windows-native-registry', '@vscode/windows-process-tree']
     : [])
 ]
+const OPTIONAL_NATIVE_MODULES =
+  rebuildPlatform === 'win32' ? ['win-export-certificate-and-key'] : []
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild =
   process.env.ORCA_FORCE_NATIVE_REBUILD === '1' ||
@@ -73,6 +75,7 @@ const forceRebuild =
   rebuildPlatform !== osPlatform() ||
   rebuildArch !== process.arch
 let modulesToRebuild = onlyModules
+let optionalModulesToRebuild = OPTIONAL_NATIVE_MODULES
 
 ensureElectronPackageInstalled()
 restoreNodePtyWindowsConptyRuntime()
@@ -87,8 +90,15 @@ if (patchedNodePtyRebuildReason) {
     moduleName,
     result: probeElectronNativeModules([moduleName])
   }))
+  const optionalProbes = OPTIONAL_NATIVE_MODULES.map((moduleName) => ({
+    moduleName,
+    result: probeElectronNativeModules([moduleName])
+  }))
   modulesToRebuild = probes.filter(({ result }) => !result.ok).map(({ moduleName }) => moduleName)
-  if (modulesToRebuild.length === 0) {
+  optionalModulesToRebuild = optionalProbes
+    .filter(({ result }) => !result.ok)
+    .map(({ moduleName }) => moduleName)
+  if (modulesToRebuild.length === 0 && optionalModulesToRebuild.length === 0) {
     console.log('[rebuild] Native modules already load in Electron; skipping rebuild.')
     process.exit(0)
   }
@@ -133,20 +143,9 @@ if (!ignoreModules.includes('cpu-features')) {
 }
 
 try {
-  await rebuild({
-    buildPath: projectDir,
-    electronVersion,
-    platform: rebuildPlatform,
-    arch: rebuildArch,
-    ignoreModules,
-    onlyModules: modulesToRebuild,
-    // Why: without force, @electron/rebuild skips modules it considers
-    // "already built" — even when they were compiled for the wrong ABI
-    // (e.g., system Node instead of Electron's embedded Node). This is
-    // common after pnpm install, which compiles native modules for system
-    // Node before postinstall runs this script.
-    force: true
-  })
+  if (modulesToRebuild.length > 0) {
+    await rebuildElectronModules(modulesToRebuild)
+  }
   restoreNodePtyWindowsConptyRuntime()
 } catch (/** @type {any} */ err) {
   console.error('[rebuild] Native module rebuild failed:', err?.message ?? err)
@@ -165,6 +164,39 @@ try {
     }
   }
   process.exit(1)
+}
+
+if (optionalModulesToRebuild.length > 0) {
+  try {
+    await rebuildElectronModules(optionalModulesToRebuild)
+    if (rebuildPlatform === osPlatform() && rebuildArch === process.arch) {
+      const verification = probeElectronNativeModules(optionalModulesToRebuild)
+      if (!verification.ok) {
+        throw new Error(verification.stderr.trim() || 'optional native module verification failed')
+      }
+    }
+  } catch (/** @type {any} */ err) {
+    console.warn('[rebuild] Optional native module rebuild failed:', err?.message ?? err)
+    if (!isPostinstall() || process.env.ORCA_STRICT_NATIVE_REBUILD === '1') {
+      process.exit(1)
+    }
+    console.warn(
+      '[rebuild] Continuing postinstall; Orca will use bundled certificate roots if host enumeration is unavailable.'
+    )
+  }
+}
+
+function rebuildElectronModules(moduleNames) {
+  return rebuild({
+    buildPath: projectDir,
+    electronVersion,
+    platform: rebuildPlatform,
+    arch: rebuildArch,
+    ignoreModules,
+    onlyModules: moduleNames,
+    // Why: an ABI-mismatched binary can look installed until Electron loads it.
+    force: true
+  })
 }
 
 function restoreNodePtyWindowsConptyRuntime() {

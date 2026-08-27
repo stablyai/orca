@@ -165,6 +165,7 @@
     "sherpa-onnx": "1.12.37",
     "ssh2": "^1.17.0",
     "tweetnacl": "^1.0.3",
+    "undici": "^6.28.0",
     "ws": "^8.21.0",
     "yaml": "^2.8.4",
     "zod": "~4.4.3"
@@ -278,6 +279,7 @@
     "sherpa-onnx-linux-arm64": "1.12.37",
     "sherpa-onnx-linux-x64": "1.12.37",
     "sherpa-onnx-win-x64": "1.12.37",
+    "win-export-certificate-and-key": "3.0.2",
     "windows-native-registry": "3.2.2"
   },
   "lint-staged": {

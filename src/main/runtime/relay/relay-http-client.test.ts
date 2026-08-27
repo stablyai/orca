@@ -14,6 +14,10 @@ import {
 
 type AssignInput = Parameters<typeof requestRelayAssignment>[0]
 
+const firstPartyFetch = vi.hoisted(() => vi.fn<typeof globalThis.fetch>())
+
+vi.mock('../first-party-fetch', () => ({ firstPartyFetch }))
+
 function assignSuccessResponse(): Response {
   return Response.json({
     v: 1,
@@ -48,9 +52,43 @@ describe('relay HTTP client', () => {
   let gate = new RelayAssignRateGate()
   beforeEach(() => {
     gate = new RelayAssignRateGate()
+    firstPartyFetch.mockReset()
   })
   const assign = (input: Omit<AssignInput, 'assignRateGate'>) =>
     requestRelayAssignment({ ...input, assignRateGate: gate })
+
+  it('routes token mint and assignment through the first-party boundary by default', async () => {
+    const keypair = nacl.box.keyPair()
+    firstPartyFetch
+      .mockResolvedValueOnce(
+        Response.json({ relayToken: 'scoped-relay-token', expiresAt: Date.now() + 300_000 })
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          v: 1,
+          cellUrl: 'https://relay-c1.example',
+          assignmentEpoch: 4,
+          lease: 'signed-assignment'
+        })
+      )
+    await exchangeRelayAuthorization({
+      endpoint: 'https://auth.example/v1/desktop/auth/relay-token',
+      accessToken: 'ordinary-access-token',
+      keypair: {
+        ...keypair,
+        publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+      }
+    })
+    await requestRelayAssignment({
+      directorUrl: 'https://relay.example',
+      relayToken: 'scoped-relay-token',
+      relayHostId: 'AbCdEf0123_-xyZ9'
+    })
+    expect(firstPartyFetch.mock.calls.map(([url]) => url)).toEqual([
+      'https://auth.example/v1/desktop/auth/relay-token',
+      'https://relay.example/v1/assign'
+    ])
+  })
 
   it('exchanges only the ordinary bearer for a host-bound relay token', async () => {
     const keypair = nacl.box.keyPair()

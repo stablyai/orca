@@ -27,12 +27,14 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'qrcode',
   'ssh2',
   'tweetnacl',
+  'undici',
   'ws',
   'yaml',
   'zod'
 ]
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
+  'win-export-certificate-and-key',
   'windows-native-registry'
 ]
 

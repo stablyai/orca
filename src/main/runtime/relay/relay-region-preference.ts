@@ -5,6 +5,7 @@ import { z } from 'zod'
 import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 import { readFetchResponseJsonWithinLimit } from '../../../shared/fetch-response-body'
 import { hardenExistingSecureFile, writeSecureJsonFile } from '../../../shared/secure-file'
+import { firstPartyFetch } from '../first-party-fetch'
 
 export const RELAY_REGIONS = ['us-central1', 'asia-east2'] as const
 export type RelayRegion = (typeof RELAY_REGIONS)[number]
@@ -122,7 +123,7 @@ export class RelayRegionPreferenceResolver {
     previous: RelayRegionCache | null,
     now: number
   ): Promise<RelayRegion | undefined> {
-    const fetch = this.options.fetch ?? globalThis.fetch
+    const fetch = this.options.fetch ?? firstPartyFetch
     const catalog = await fetchRelayRegionCatalog(
       this.options.directorUrl,
       fetch,

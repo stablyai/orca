@@ -4,7 +4,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
 import type { E2EEKeypair } from '../e2ee-keypair'
+import type * as FirstPartyRelayWebSocket from '../first-party-relay-websocket'
 import { RelayControlClient } from './relay-control-client'
+
+const firstPartySockets = vi.hoisted(() => ({
+  prepare: vi.fn<(url: string) => Promise<void>>(),
+  createControl: vi.fn()
+}))
+
+vi.mock('../first-party-relay-websocket', async (importOriginal) => {
+  const original = await importOriginal<typeof FirstPartyRelayWebSocket>()
+  firstPartySockets.prepare.mockImplementation(original.prepareFirstPartyRelayWebSocketTrust)
+  firstPartySockets.createControl.mockImplementation(original.createFirstPartyRelayControlWebSocket)
+  return {
+    ...original,
+    prepareFirstPartyRelayWebSocketTrust: firstPartySockets.prepare,
+    createFirstPartyRelayControlWebSocket: firstPartySockets.createControl
+  }
+})
 
 const encoder = new TextEncoder()
 const HOST_PROOF_DOMAIN = 'orca-relay-host-proof/v1'
@@ -96,6 +113,41 @@ describe('RelayControlClient', () => {
           })
       )
     )
+    firstPartySockets.prepare.mockClear()
+    firstPartySockets.createControl.mockClear()
+  })
+
+  it('includes trust preparation in the connection deadline without opening a late socket', async () => {
+    let finishPreparation!: () => void
+    firstPartySockets.prepare.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishPreparation = resolve))
+    )
+    const keypair = nacl.box.keyPair()
+    const client = new RelayControlClient({
+      cellUrl: 'https://relay.example',
+      relayJwt: 'scoped-token',
+      relayHostId: createHash('sha256').update(keypair.publicKey).digest('base64url').slice(0, 16),
+      assignmentEpoch: 1,
+      identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+      keypair: {
+        ...keypair,
+        publicKeyB64: Buffer.from(keypair.publicKey).toString('base64')
+      },
+      appVersion: '1.2.3',
+      onConnectionOpen: vi.fn(),
+      onDrain: vi.fn(),
+      onClose: vi.fn(),
+      connectDeadlineMs: 20
+    })
+    clients.push(client)
+
+    const connecting = client.connect()
+    await vi.waitFor(() => expect(firstPartySockets.prepare).toHaveBeenCalledOnce())
+    await expect(connecting).rejects.toThrow('relay_control_connect_timeout')
+    finishPreparation()
+    await Promise.resolve()
+
+    expect(firstPartySockets.createControl).not.toHaveBeenCalled()
   })
 
   it('rejects a control handshake that never receives a proof response', async () => {

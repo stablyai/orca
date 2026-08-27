@@ -200,6 +200,26 @@ describe('PR workflow parallelism', () => {
     expect(node18Index).toBeLessThan(smokeIndex)
   })
 
+  it('runs the real first-party trust smoke across supported Node TLS APIs', () => {
+    const job = workflow.jobs.first_party_tls
+    const steps = job.steps
+    const buildIndex = steps.findIndex(
+      (step) => step.run === 'node config/scripts/build-first-party-node18-trust-smoke.mjs'
+    )
+    const runtimeIndex = steps.findIndex(
+      (step) =>
+        step.uses === 'actions/setup-node@v6' && step.with['node-version'] === '${{ matrix.node }}'
+    )
+    const smoke = steps.find(
+      (step) => step.run === 'node config/scripts/smoke-first-party-node18-trust.mjs'
+    )
+
+    expect(job.strategy.matrix.node).toEqual(['18', '24', '26'])
+    expect(buildIndex).toBeLessThan(runtimeIndex)
+    expect(runtimeIndex).toBeLessThan(steps.indexOf(smoke))
+    expect(smoke.env.ORCA_FIRST_PARTY_TRUST_SMOKE_NODE_MAJOR).toBe('${{ matrix.node }}')
+  })
+
   it('restores the pnpm store before dependency installation', () => {
     const steps = dependencyAction.runs.steps
     const pnpmIndex = steps.findIndex((step) => step.name === 'Setup pnpm')
@@ -347,6 +367,7 @@ describe('PR workflow parallelism', () => {
       'test',
       'orcad_browser',
       'managed_hook_node18',
+      'first_party_tls',
       'package',
       'package_windows'
     ])
@@ -355,6 +376,8 @@ describe('PR workflow parallelism', () => {
     )
     expect(verifyStep.env.MANAGED_HOOK_NODE18).toBe('${{ needs.managed_hook_node18.result }}')
     expect(verifyStep.run).toContain('"$MANAGED_HOOK_NODE18"')
+    expect(verifyStep.env.FIRST_PARTY_TLS).toBe('${{ needs.first_party_tls.result }}')
+    expect(verifyStep.run).toContain('"$FIRST_PARTY_TLS"')
     // Why assert this one too: the browser provider test skips itself without
     // ORCA_BROWSER_EXECUTABLE, so it only guards anything if verify actually reads it.
     expect(verifyStep.env.ORCAD_BROWSER).toBe('${{ needs.orcad_browser.result }}')

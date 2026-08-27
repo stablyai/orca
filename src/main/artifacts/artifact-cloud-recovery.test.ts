@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
 }))
 
 import { ArtifactCloudService } from './artifact-cloud-service'
+import { setMainHttpClient } from '../network/http-client'
 
 const createdPaths: string[] = []
 const apiUrl = 'http://localhost:3000'
@@ -21,7 +22,16 @@ const writeRequest = {
   authToken: 'token-a'
 }
 
+beforeEach(() => {
+  setMainHttpClient({
+    fetch: (input, init) => globalThis.fetch(input, init),
+    fetchWithSystemTrust: (input, init) => globalThis.fetch(input, init),
+    proxySession: () => null
+  })
+})
+
 afterEach(async () => {
+  setMainHttpClient(null)
   vi.unstubAllGlobals()
   await Promise.all(
     createdPaths.splice(0).map((path) => rm(path, { recursive: true, force: true }))

@@ -1,7 +1,7 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('electron', () => ({
   app: { isPackaged: false },
@@ -26,6 +26,7 @@ import {
   isArtifactSharingEnabled
 } from '../../shared/artifact-sharing-gate'
 import { getDefaultSettings } from '../../shared/constants'
+import { setMainHttpClient } from '../network/http-client'
 import { ArtifactCloudService } from './artifact-cloud-service'
 
 const createdPaths: string[] = []
@@ -92,7 +93,16 @@ const writeRequest = {
   authToken: 'token-a'
 }
 
+beforeEach(() => {
+  setMainHttpClient({
+    fetch: (input, init) => globalThis.fetch(input, init),
+    fetchWithSystemTrust: (input, init) => globalThis.fetch(input, init),
+    proxySession: () => null
+  })
+})
+
 afterEach(async () => {
+  setMainHttpClient(null)
   vi.useRealTimers()
   vi.unstubAllGlobals()
   vi.unstubAllEnvs()

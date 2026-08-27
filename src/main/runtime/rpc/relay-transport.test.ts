@@ -1,6 +1,14 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import WebSocketClient, { WebSocketServer, type WebSocket } from 'ws'
+import type * as FirstPartyRelayWebSocket from '../first-party-relay-websocket'
 import { CloudRelayTransport } from './relay-transport'
+
+const firstPartyTrust = vi.hoisted(() => ({ prepare: vi.fn<() => Promise<void>>() }))
+
+vi.mock('../first-party-relay-websocket', async (importOriginal) => ({
+  ...(await importOriginal<typeof FirstPartyRelayWebSocket>()),
+  prepareFirstPartyRelayWebSocketTrust: firstPartyTrust.prepare
+}))
 
 function nextMessage(ws: WebSocket): Promise<{ data: Buffer; isBinary: boolean }> {
   return new Promise((resolve) => {
@@ -14,6 +22,7 @@ describe('CloudRelayTransport', () => {
 
   afterEach(async () => {
     await Promise.all(transports.splice(0).map((transport) => transport.stop()))
+    firstPartyTrust.prepare.mockReset()
     await Promise.all(
       servers.splice(0).map(
         (server) =>
@@ -25,6 +34,35 @@ describe('CloudRelayTransport', () => {
           })
       )
     )
+  })
+
+  it('does not restart after stop wins a first-party trust preparation race', async () => {
+    let finishPreparation!: () => void
+    firstPartyTrust.prepare.mockImplementationOnce(
+      () => new Promise<void>((resolve) => (finishPreparation = resolve))
+    )
+    const transport = new CloudRelayTransport({
+      cellUrl: 'https://relay.example',
+      relayHostId: 'AbCdEf0123_-xyZ9',
+      generation: 1
+    })
+    transports.push(transport)
+
+    const starting = transport.start()
+    await vi.waitFor(() => expect(firstPartyTrust.prepare).toHaveBeenCalledOnce())
+    await transport.stop()
+    finishPreparation()
+
+    await expect(starting).rejects.toThrow('relay_transport_stopped')
+    await expect(
+      transport.openConnection({
+        connId: 'conn-after-stop',
+        connTicket: 'ticket-1',
+        kind: 'resume',
+        relayDeviceId: 'device-1',
+        attachDeadlineMs: 1_000
+      })
+    ).rejects.toThrow('relay_transport_stopped')
   })
 
   it('authenticates one query-free host-data socket and forwards messages verbatim', async () => {

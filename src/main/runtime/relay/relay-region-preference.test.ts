@@ -3,6 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cancelTrackingResponse } from '../../lib/unread-response-body.test-fixtures'
+
+const firstPartyFetch = vi.hoisted(() => vi.fn<typeof globalThis.fetch>())
+
+vi.mock('../first-party-fetch', () => ({ firstPartyFetch }))
+
 import { probeRelayOrigin, RelayRegionPreferenceResolver } from './relay-region-preference'
 
 const DIRECTOR = 'https://relay.example.test'
@@ -12,6 +17,7 @@ const ASIA = 'https://asia-c1.relay.example.test'
 const tempPaths: string[] = []
 
 afterEach(() => {
+  firstPartyFetch.mockReset()
   for (const path of tempPaths.splice(0)) {
     rmSync(path, { recursive: true, force: true })
   }
@@ -41,6 +47,32 @@ function cachePath(path: string): string {
 }
 
 describe('Relay region preference', () => {
+  it('routes default catalog and health probes through first-party networking', async () => {
+    firstPartyFetch
+      .mockResolvedValueOnce(
+        Response.json({
+          v: 1,
+          regions: [{ region: 'us-central1', probeOrigins: [US] }]
+        })
+      )
+      .mockResolvedValue(new Response(null, { status: 200 }))
+    let measuredAt = 0
+    const resolver = new RelayRegionPreferenceResolver({
+      directorUrl: DIRECTOR,
+      userDataPath: userDataPath(),
+      measureNow: () => (measuredAt += 10),
+      now: () => 1_000
+    })
+
+    await expect(resolver.resolve()).resolves.toBe('us-central1')
+    expect(firstPartyFetch.mock.calls.map(([url]) => url)).toEqual([
+      `${DIRECTOR}/v1/regions`,
+      `${US}/health`,
+      `${US}/health`,
+      `${US}/health`
+    ])
+  })
+
   it('measures three rounds across one- and two-origin catalogs and caches Asia', async () => {
     const path = userDataPath()
     const fetch = catalogFetch([

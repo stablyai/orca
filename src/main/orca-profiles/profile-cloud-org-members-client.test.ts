@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { setMainHttpClient } from '../network/http-client'
 import type { OrcaCloudAuthConfig } from './profile-cloud-auth-config'
 import type { OrcaCloudSession } from './profile-cloud-session-store'
 import { OrcaCloudRequestError } from './profile-cloud-client'
@@ -11,6 +12,14 @@ import {
 } from './profile-cloud-org-members-client'
 
 const fetchMock = vi.fn()
+
+function installGlobalFetchHttpClient(): void {
+  setMainHttpClient({
+    fetch: (input, init) => globalThis.fetch(input, init),
+    fetchWithSystemTrust: (input, init) => globalThis.fetch(input, init),
+    proxySession: () => null
+  })
+}
 
 const config: OrcaCloudAuthConfig = {
   apiBaseUrl: 'https://orca-cloud.example',
@@ -46,6 +55,12 @@ describe('Orca cloud org members client', () => {
   beforeEach(() => {
     fetchMock.mockReset()
     vi.stubGlobal('fetch', fetchMock)
+    installGlobalFetchHttpClient()
+  })
+
+  afterEach(() => {
+    setMainHttpClient(null)
+    vi.unstubAllGlobals()
   })
 
   it('normalizes the roster, dropping malformed rows and defaulting the viewer role', async () => {
