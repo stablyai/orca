@@ -7,7 +7,7 @@ import type {
 import { isPathInsideOrEqual } from '../shared/cross-platform-path'
 import type { RuntimeClient } from './runtime-client'
 import { RuntimeClientError } from './runtime/types'
-import { getOptionalStringFlag, getRequiredStringFlag } from './flags'
+import { getOptionalPresentStringFlag, getOptionalStringFlag, getRequiredStringFlag } from './flags'
 
 export type BrowserCliTarget = {
   worktree?: string
@@ -142,21 +142,8 @@ export async function getBrowserWorktreeSelector(
   }
 }
 
-function readExplicitTerminalHandle(flags: Map<string, string | boolean>): string | undefined {
-  if (!flags.has('terminal')) {
-    return undefined
-  }
-  const explicit = flags.get('terminal')
-  if (typeof explicit === 'string' && explicit.length > 0) {
-    return explicit
-  }
-  // Why: `--terminal "$HANDLE"` with an empty expansion is not omission. Scripts
-  // that treat a successful read as "this pane" would otherwise hit another tab.
-  throw new RuntimeClientError(
-    'invalid_argument',
-    '--terminal requires a non-empty handle. Omit --terminal to target the active terminal in the current worktree.'
-  )
-}
+const EMPTY_TERMINAL_HANDLE_MESSAGE =
+  '--terminal requires a non-empty handle. Omit --terminal to target the active terminal in the current worktree.'
 
 // Why: mirrors browser's implicit active-tab targeting. When --terminal is
 // omitted, resolve the active terminal in the current worktree so commands
@@ -166,7 +153,7 @@ export async function getTerminalHandle(
   cwd: string,
   client: RuntimeClient
 ): Promise<string> {
-  const explicit = readExplicitTerminalHandle(flags)
+  const explicit = getOptionalPresentStringFlag(flags, 'terminal', EMPTY_TERMINAL_HANDLE_MESSAGE)
   if (explicit) {
     return explicit
   }

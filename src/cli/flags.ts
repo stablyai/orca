@@ -28,6 +28,26 @@ export function getOptionalStringFlag(
   return typeof value === 'string' && value.length > 0 ? value : undefined
 }
 
+// Why: `--flag "$VAR"` with an empty expansion is not omission. Callers that
+// treat success as "this value" would otherwise silently fall through.
+export function getOptionalPresentStringFlag(
+  flags: Map<string, string | boolean>,
+  name: string,
+  emptyErrorMessage?: string
+): string | undefined {
+  if (!flags.has(name)) {
+    return undefined
+  }
+  const value = flags.get(name)
+  if (typeof value === 'string' && value.length > 0) {
+    return value
+  }
+  throw new RuntimeClientError(
+    'invalid_argument',
+    emptyErrorMessage ?? `--${name} requires a non-empty value.`
+  )
+}
+
 export function getRepeatedStringFlag(
   flags: Map<string, string | boolean>,
   name: string

@@ -2,6 +2,7 @@ import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import {
   getOptionalPositiveIntegerFlag,
+  getOptionalPresentStringFlag,
   getOptionalStringFlag,
   getRequiredStringFlag
 } from '../../flags'
@@ -36,7 +37,11 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       count: number
     }>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getOptionalStringFlag(flags, 'terminal')
+      terminal: getOptionalPresentStringFlag(
+        flags,
+        'terminal',
+        '--terminal requires a non-empty handle. Omit --terminal to list the current mailbox.'
+      )
     })
     printResult(result, json, (value) => {
       if (value.count === 0) {

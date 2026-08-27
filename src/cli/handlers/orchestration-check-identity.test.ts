@@ -57,6 +57,19 @@ describe('orchestration check identity', () => {
     )
   })
 
+  it('fails closed on an empty --terminal instead of using the ambient handle', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_stale_env'
+    process.env.ORCA_PANE_KEY = 'tab_coord:leaf_coord'
+
+    await expect(
+      invokeCheck(new Map<string, string | boolean>([['terminal', '']]))
+    ).rejects.toMatchObject({
+      code: 'invalid_argument',
+      message: expect.stringContaining('non-empty handle')
+    })
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('keeps an explicit legacy terminal handle scoped to that handle', async () => {
     process.env.ORCA_TERMINAL_HANDLE = 'term_stale_env'
 
