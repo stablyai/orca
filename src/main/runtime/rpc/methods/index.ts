@@ -13,6 +13,7 @@ import { BROWSER_CLIENT_HOST_METHODS } from './browser-client-host'
 import { BROWSER_CLIENT_FILE_CHANNEL_METHODS } from './browser-client-file-channel'
 import { BROWSER_NETWORK_TUNNEL_METHODS } from './browser-network-tunnel'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import { MISSION_METHODS } from './mission'
 import { COLLABORATION_CONFIGURE_METHODS } from './collaboration-configure'
 import { COLLABORATION_PUBLISH_METHODS } from './collaboration-publish'
 import { COLLABORATION_CHECKPOINT_METHODS } from './collaboration-checkpoint'
@@ -72,6 +73,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...BROWSER_CLIENT_FILE_CHANNEL_METHODS,
   ...BROWSER_NETWORK_TUNNEL_METHODS,
   ...ORCHESTRATION_METHODS,
+  ...MISSION_METHODS,
   ...COLLABORATION_CONFIGURE_METHODS,
   ...COLLABORATION_PUBLISH_METHODS,
   ...COLLABORATION_CHECKPOINT_METHODS,
