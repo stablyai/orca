@@ -21,7 +21,7 @@ describe('terminal clipboard paste', () => {
     })
 
     expect(pasteText).toHaveBeenCalledWith(
-      '/var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/orca-paste-1760000000000-id.png',
+      ' /var/folders/3l/b7w02vh17tg5r5s3nhhdf3kh0000gn/T/orca-paste-1760000000000-id.png',
       { forceBracketedPaste: true, recoverImagePasteWebglAtlas: true }
     )
   })
@@ -49,7 +49,7 @@ describe('terminal clipboard paste', () => {
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+      '\x1b[200~ /tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(observedIgnoreBracketedPasteMode).toEqual([false])
@@ -78,7 +78,7 @@ describe('terminal clipboard paste', () => {
     })
 
     expect(terminal.input).toHaveBeenCalledWith(
-      '\x1b[200~/tmp/orca-paste-1760000000000-id.png\x1b[201~'
+      '\x1b[200~ /tmp/orca-paste-1760000000000-id.png\x1b[201~'
     )
     expect(terminal.paste).not.toHaveBeenCalled()
     expect(observedIgnoreBracketedPasteMode).toEqual([false])
@@ -102,7 +102,7 @@ describe('terminal clipboard paste', () => {
       connectionId: 'ssh-1',
       runtimeEnvironmentId: undefined
     })
-    expect(pasteText).toHaveBeenCalledWith('/var/tmp/orca-paste-1760000000000-id.png', {
+    expect(pasteText).toHaveBeenCalledWith(' /var/tmp/orca-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -125,7 +125,7 @@ describe('terminal clipboard paste', () => {
       connectionId: undefined,
       runtimeEnvironmentId: 'remote-host-1'
     })
-    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-runtime.png', {
+    expect(pasteText).toHaveBeenCalledWith(' /tmp/orca-paste-1760000000000-runtime.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -142,7 +142,7 @@ describe('terminal clipboard paste', () => {
       pasteText
     })
 
-    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+    expect(pasteText).toHaveBeenCalledWith(' /tmp/orca-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })
@@ -164,7 +164,7 @@ describe('terminal clipboard paste', () => {
       connectionId: undefined,
       runtimeEnvironmentId: undefined
     })
-    expect(pasteText).toHaveBeenCalledWith('/tmp/orca-paste-1760000000000-id.png', {
+    expect(pasteText).toHaveBeenCalledWith(' /tmp/orca-paste-1760000000000-id.png', {
       forceBracketedPaste: true,
       recoverImagePasteWebglAtlas: true
     })

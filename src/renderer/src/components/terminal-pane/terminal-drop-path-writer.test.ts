@@ -68,9 +68,10 @@ describe('terminal drop path writer', () => {
 
     expect(result).toEqual({ sentAnyPath: true, targetCurrent: true, pathsWritten: 1 })
     // Why: image attachment detection in terminal TUIs keys off bracketed paste
-    // of the literal path — no shell-escaping, no trailing space.
+    // of the literal path — no shell-escaping. Leading space keeps a token
+    // boundary after typed text; no trailing space (images are self-delimiting).
     expect(sendInputAccepted).toHaveBeenCalledWith(
-      wrapTerminalBracketedPasteText('/repo/My Screenshot.png')
+      wrapTerminalBracketedPasteText(' /repo/My Screenshot.png')
     )
   })
 
@@ -89,6 +90,29 @@ describe('terminal drop path writer', () => {
     })
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(1, '/repo/a.ts ')
+    // Why: escaped paths already trail a space — do not add another before the
+    // raw image paste (`file.txt` + `shot.png` must not produce double spaces).
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(
+      2,
+      wrapTerminalBracketedPasteText('/repo/shot.png')
+    )
+  })
+
+  it('does not double-space when an escaped image path precedes a raw image', async () => {
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    const { manager, pane } = createManager()
+    const transport = createTransport(sendInput, 'pty-1', sendInputAccepted)
+
+    await writeTerminalDropPathsToCapturedTarget({
+      dropTarget: { paneId: pane.id, leafId: pane.leafId, ptyId: 'pty-1', transport } as never,
+      manager: manager as never,
+      paneTransports: new Map([[pane.id, transport]]) as never,
+      paths: ['/repo/a.png; touch /tmp/pwned #.png', '/repo/shot.png'],
+      targetShell: 'posix'
+    })
+
+    expect(sendInputAccepted).toHaveBeenNthCalledWith(1, "'/repo/a.png; touch /tmp/pwned #.png' ")
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
       wrapTerminalBracketedPasteText('/repo/shot.png')
@@ -113,7 +137,7 @@ describe('terminal drop path writer', () => {
     // non-image path would collide with it without an explicit separator.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+      `${wrapTerminalBracketedPasteText(' /repo/shot.png')} `
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(2, '/repo/a.ts ')
   })
@@ -136,11 +160,11 @@ describe('terminal drop path writer', () => {
     // TUI input between the two attachments.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      wrapTerminalBracketedPasteText('/repo/one.png')
+      wrapTerminalBracketedPasteText(' /repo/one.png')
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       2,
-      wrapTerminalBracketedPasteText('/repo/two.png')
+      wrapTerminalBracketedPasteText(' /repo/two.png')
     )
   })
 
@@ -194,7 +218,7 @@ describe('terminal drop path writer', () => {
 
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
-      `${wrapTerminalBracketedPasteText('/repo/shot.png')} `
+      `${wrapTerminalBracketedPasteText(' /repo/shot.png')} `
     )
     expect(sendInputAccepted).toHaveBeenNthCalledWith(2, "'/repo/a.png; touch /tmp/pwned #.png' ")
   })
