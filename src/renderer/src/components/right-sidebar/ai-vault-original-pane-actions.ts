@@ -7,12 +7,27 @@ import { useAppStore } from '@/store'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
-import { findOriginalAiVaultSessionPane } from './ai-vault-original-pane'
+import {
+  findOriginalAiVaultSessionPane,
+  type AiVaultOriginalPaneTarget
+} from './ai-vault-original-pane'
 import {
   createLazyAiVaultOriginalPaneIndex,
   findAiVaultSessionLiveStateInIndex,
   findOriginalAiVaultSessionPaneInIndex
 } from './ai-vault-original-pane-index'
+
+export function focusAiVaultOriginalPaneTarget(target: AiVaultOriginalPaneTarget): boolean {
+  if (!activateAndRevealWorktree(target.worktreeId)) {
+    return false
+  }
+  useAppStore.getState().setActiveTabType('terminal')
+  activateTabAndFocusPane(target.tabId, target.leafId, {
+    flashFocusedPane: true,
+    scrollToBottomIfOutputSinceLastView: true
+  })
+  return true
+}
 
 export function useAiVaultOriginalPaneActions(): {
   getOriginalPaneTarget: (
@@ -62,21 +77,14 @@ export function useAiVaultOriginalPaneActions(): {
       return
     }
 
-    if (!activateAndRevealWorktree(target.worktreeId)) {
+    if (!focusAiVaultOriginalPaneTarget(target)) {
       toast.error(
         translate(
           'auto.components.right.sidebar.AiVaultPanel.worktreeUnavailable',
           'Worktree is no longer available.'
         )
       )
-      return
     }
-    const state = useAppStore.getState()
-    state.setActiveTabType('terminal')
-    activateTabAndFocusPane(target.tabId, target.leafId, {
-      flashFocusedPane: true,
-      scrollToBottomIfOutputSinceLastView: true
-    })
   }, [])
 
   const jumpToWorktree = useCallback((worktreeId: string): void => {
