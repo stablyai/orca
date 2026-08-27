@@ -5,11 +5,12 @@ import {
   UI_LANGUAGE_KOREAN,
   UI_LANGUAGE_SPANISH,
   UI_LANGUAGE_SYSTEM,
+  UI_LANGUAGE_TRADITIONAL_CHINESE,
   isPluginUiLanguage,
   type UiLanguage
 } from './ui-language'
 
-export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'ko', 'ja', 'es'] as const
+export const SUPPORTED_UI_LOCALES = ['en', 'zh', 'zh-TW', 'ko', 'ja', 'es'] as const
 export type SupportedUiLocale = (typeof SUPPORTED_UI_LOCALES)[number]
 
 export const DEFAULT_UI_LOCALE: SupportedUiLocale = 'en'
@@ -18,14 +19,16 @@ function normalizeLocaleTag(locale: string | undefined): string {
   return (locale ?? DEFAULT_UI_LOCALE).trim().toLowerCase().replace(/_/g, '-')
 }
 
+// Traditional-script regions plus the explicit script subtag; everything else under zh is Simplified.
+const TRADITIONAL_CHINESE_TAG_PREFIXES = ['zh-tw', 'zh-hk', 'zh-mo', 'zh-hant']
+
 export function normalizeSupportedUiLocale(locale: string | undefined): SupportedUiLocale {
   const tag = normalizeLocaleTag(locale)
   const primary = tag.split('-')[0]
   if (primary === 'zh') {
-    if (tag.startsWith('zh-tw') || tag.startsWith('zh-hk') || tag.startsWith('zh-hant')) {
-      return DEFAULT_UI_LOCALE
-    }
-    return 'zh'
+    return TRADITIONAL_CHINESE_TAG_PREFIXES.some((prefix) => tag.startsWith(prefix))
+      ? 'zh-TW'
+      : 'zh'
   }
   return SUPPORTED_UI_LOCALES.includes(primary as SupportedUiLocale)
     ? (primary as SupportedUiLocale)
@@ -44,6 +47,9 @@ export function resolveUiLocale(
   }
   if (language === UI_LANGUAGE_CHINESE) {
     return 'zh'
+  }
+  if (language === UI_LANGUAGE_TRADITIONAL_CHINESE) {
+    return 'zh-TW'
   }
   if (language === UI_LANGUAGE_KOREAN) {
     return 'ko'
