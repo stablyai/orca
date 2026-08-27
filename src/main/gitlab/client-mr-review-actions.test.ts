@@ -382,4 +382,69 @@ describe('gitlab client — MR operations', () => {
       )
     })
   })
+  // Why: only `api`/`auth` define --hostname, so the `mr` subcommands must take
+  // the self-hosted host through GITLAB_HOST or glab exits on an unknown flag.
+  describe('mr subcommands against a self-hosted SSH host', () => {
+    const projectRef = { host: 'gitlab.example.internal', path: 'g/p' }
+
+    it('merges without --hostname and passes the host through GITLAB_HOST', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(mergeMR('/repo', 6, 'merge', undefined, 'conn-1', projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('keeps the squash flag while routing the host through the environment', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(mergeMR('/repo', 6, 'squash', undefined, 'conn-1', projectRef)).resolves.toEqual(
+        { ok: true }
+      )
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes', '--squash'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('closes without --hostname and passes the host through GITLAB_HOST', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(closeMR('/repo', 6, undefined, 'conn-1', projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'close', '6', '-R', 'g/p'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('reopens without --hostname and passes the host through GITLAB_HOST', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(reopenMR('/repo', 6, undefined, 'conn-1', projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'reopen', '6', '-R', 'g/p'])
+      expect(options.env?.GITLAB_HOST).toBe('gitlab.example.internal')
+    })
+
+    it('leaves the environment untouched for a local workspace', async () => {
+      glabExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+      await expect(mergeMR('/repo', 6, 'merge', undefined, null, projectRef)).resolves.toEqual({
+        ok: true
+      })
+
+      const [args, options] = glabExecFileAsyncMock.mock.calls[0]
+      expect(args).toEqual(['mr', 'merge', '6', '-R', 'g/p', '--yes'])
+      expect(options.env).toBeUndefined()
+    })
+  })
 })

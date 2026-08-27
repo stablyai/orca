@@ -1,4 +1,5 @@
 import { glabExecFileAsync } from '../git/runner'
+import { addWslEnvKeys } from '../wsl-env'
 import { isTransientGitProbeError, readRemoteUrl } from '../git/remote-url-probe'
 import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
@@ -260,6 +261,22 @@ export function glabHostnameArgs(
   connectionId?: string | null
 ): string[] {
   return connectionId && projectRef?.host ? ['--hostname', projectRef.host] : []
+}
+
+/** Why: only `api`/`auth` define `--hostname`; `mr` and `issue` subcommands reject it (#12193). */
+export function glabHostEnvOptions(
+  projectRef: Pick<ProjectRef, 'host'> | null | undefined,
+  connectionId?: string | null
+): { env?: NodeJS.ProcessEnv } {
+  if (!connectionId || !projectRef?.host) {
+    return {}
+  }
+  const env: NodeJS.ProcessEnv = { ...process.env, GITLAB_HOST: projectRef.host }
+  if (process.platform === 'win32') {
+    // Why: spawn env stops at the wsl.exe boundary unless WSLENV names the var.
+    addWslEnvKeys(env, ['GITLAB_HOST'])
+  }
+  return { env }
 }
 
 async function isGlabConfiguredForRemoteHost(

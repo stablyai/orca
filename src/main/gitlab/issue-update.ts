@@ -5,6 +5,7 @@ import {
   classifyGlabError,
   getGlabKnownHosts,
   glabExecFileAsync,
+  glabHostEnvOptions,
   glabHostnameArgs,
   glabRepoExecOptions,
   release,
@@ -56,17 +57,10 @@ export async function updateIssue(
     await acquire()
     try {
       const cmd = updates.state === 'closed' ? 'close' : 'reopen'
-      await glabExecFileAsync(
-        [
-          'issue',
-          cmd,
-          String(issueNumber),
-          '-R',
-          repoFlag,
-          ...glabHostnameArgs(projectRef, connectionId)
-        ],
-        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-      )
+      await glabExecFileAsync(['issue', cmd, String(issueNumber), '-R', repoFlag], {
+        ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+        ...glabHostEnvOptions(projectRef, connectionId)
+      })
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       // Treat "already closed/reopened" as a no-op (matches gh path).
@@ -102,14 +96,7 @@ export async function updateIssue(
   }
 
   // Field edits via `glab issue update`.
-  const editArgs: string[] = [
-    'issue',
-    'update',
-    String(issueNumber),
-    '-R',
-    repoFlag,
-    ...glabHostnameArgs(projectRef, connectionId)
-  ]
+  const editArgs: string[] = ['issue', 'update', String(issueNumber), '-R', repoFlag]
   let hasEditArgs = false
 
   if (updates.title) {
@@ -136,10 +123,10 @@ export async function updateIssue(
   if (hasEditArgs) {
     await acquire()
     try {
-      await glabExecFileAsync(
-        editArgs,
-        glabRepoExecOptions(repoPath, connectionId, localGitOptions)
-      )
+      await glabExecFileAsync(editArgs, {
+        ...glabRepoExecOptions(repoPath, connectionId, localGitOptions),
+        ...glabHostEnvOptions(projectRef, connectionId)
+      })
     } catch (err) {
       const stderr = err instanceof Error ? err.message : String(err)
       errors.push(classifyGlabError(stderr).message)
