@@ -14,6 +14,11 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
+import { resolveTerminalCursorBlink } from '@/lib/terminal-cursor-blink'
+import {
+  getPrefersReducedMotionSnapshot,
+  usePrefersReducedMotionLive
+} from './use-prefers-reduced-motion'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
 import {
   configureTerminalOutputBacklogCap,
@@ -746,6 +751,8 @@ export function useTerminalPaneLifecycle({
   configureTerminalOutputBacklogCap(settings?.terminalScrollbackRows)
   const systemPrefersDarkRef = useRef(systemPrefersDark)
   systemPrefersDarkRef.current = systemPrefersDark
+  // Why: live OS reduced-motion so cursorBlink re-applies without waiting for settings.
+  const prefersReducedMotion = usePrefersReducedMotionLive()
   const previousVisibleForReconcileRef = useRef<TerminalPaneVisibilitySnapshot | null>(null)
   const mountFollowsTerminalPark = useTerminalParkMountIntent(tabId)
   const linkProviderDisposablesRef = useRef(new Map<number, IDisposable>())
@@ -1650,7 +1657,10 @@ export function useTerminalPaneLifecycle({
           ),
           cursorStyle,
           cursorInactiveStyle: resolveTerminalCursorInactiveStyle(cursorStyle),
-          cursorBlink: currentSettings?.terminalCursorBlink ?? true,
+          cursorBlink: resolveTerminalCursorBlink({
+            settingEnabled: currentSettings?.terminalCursorBlink,
+            prefersReducedMotion: getPrefersReducedMotionSnapshot()
+          }),
           scrollSensitivity: normalizeTerminalScrollSensitivity(
             currentSettings?.terminalScrollSensitivity
           ),
@@ -2099,7 +2109,7 @@ export function useTerminalPaneLifecycle({
     applyAppearance(manager)
     // Why: effectiveMacOptionAsAlt can change mid-session (layout switch or override flip); re-apply macOptionIsMeta live on every pane.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings, systemPrefersDark, effectiveMacOptionAsAlt])
+  }, [settings, systemPrefersDark, prefersReducedMotion, effectiveMacOptionAsAlt])
 
   useEffect(() => {
     managerRef.current?.setTerminalGpuAcceleration(settings?.terminalGpuAcceleration ?? 'auto')

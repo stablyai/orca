@@ -5,6 +5,11 @@ import { Moon, Sun } from 'lucide-react'
 import '@xterm/xterm/css/xterm.css'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
+import { resolveTerminalCursorBlink } from '@/lib/terminal-cursor-blink'
+import {
+  getPrefersReducedMotionSnapshot,
+  usePrefersReducedMotionLive
+} from '@/components/terminal-pane/use-prefers-reduced-motion'
 import { buildFontFamily } from '@/components/terminal-pane/layout-serialization'
 import { composeActiveTerminalTheme } from '@/components/terminal-pane/terminal-appearance'
 import { clampNumber, resolveEffectiveTerminalAppearance } from '@/lib/terminal-theme'
@@ -63,6 +68,8 @@ export function TerminalSettingsPreview({
   const ligaturesAddonRef = useRef<LigaturesAddon | null>(null)
   const skipInitialOptionMutationRef = useRef(false)
   const skipInitialThemeRewriteRef = useRef(false)
+  // Why: re-apply cursorBlink when OS reduced-motion flips without a settings change.
+  const prefersReducedMotion = usePrefersReducedMotionLive()
 
   const effectiveFontFamily = previewFontFamily || settings.terminalFontFamily
   const terminalLineHeight = normalizeTerminalLineHeight(settings.terminalLineHeight)
@@ -131,7 +138,10 @@ export function TerminalSettingsPreview({
       // Why mirror cursorInactiveStyle: preview is never focused, and xterm defaults the unfocused cursor to a hollow outline.
       cursorInactiveStyle: settings.terminalCursorStyle,
       cursorStyle: settings.terminalCursorStyle,
-      cursorBlink: settings.terminalCursorBlink,
+      cursorBlink: resolveTerminalCursorBlink({
+        settingEnabled: settings.terminalCursorBlink,
+        prefersReducedMotion: getPrefersReducedMotionSnapshot()
+      }),
       fontSize: settings.terminalFontSize,
       fontFamily: buildFontFamily(effectiveFontFamily),
       fontWeight: weights.fontWeight,
@@ -186,7 +196,10 @@ export function TerminalSettingsPreview({
     terminal.options.cursorStyle = settings.terminalCursorStyle
     // Why: mirror so the unfocused cursor reflects the chosen shape (xterm defaults inactive to 'outline'; see constructor).
     terminal.options.cursorInactiveStyle = settings.terminalCursorStyle
-    terminal.options.cursorBlink = settings.terminalCursorBlink
+    terminal.options.cursorBlink = resolveTerminalCursorBlink({
+      settingEnabled: settings.terminalCursorBlink,
+      prefersReducedMotion: prefersReducedMotion
+    })
   }, [
     settings.terminalFontSize,
     settings.terminalFontWeightBold,
@@ -194,7 +207,8 @@ export function TerminalSettingsPreview({
     settings.terminalFontWeight,
     terminalLineHeight,
     settings.terminalCursorStyle,
-    settings.terminalCursorBlink
+    settings.terminalCursorBlink,
+    prefersReducedMotion
   ])
 
   useEffect(() => {

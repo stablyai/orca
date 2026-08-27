@@ -20,6 +20,8 @@ import {
   normalizeTerminalScrollSensitivity,
   resolveTerminalCursorInactiveStyle
 } from '@/lib/pane-manager/pane-terminal-options'
+import { resolveTerminalCursorBlink } from '@/lib/terminal-cursor-blink'
+import { getPrefersReducedMotionSnapshot } from './use-prefers-reduced-motion'
 import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
 import type { PtyTransport } from './pty-transport'
 import type { EffectiveMacOptionAsAlt } from '@/lib/keyboard-layout/detect-option-as-alt'
@@ -180,7 +182,13 @@ export function applyTerminalAppearance(
     const cursorStyle = settings.terminalCursorStyle ?? 'block'
     pane.terminal.options.cursorStyle = cursorStyle
     pane.terminal.options.cursorInactiveStyle = resolveTerminalCursorInactiveStyle(cursorStyle)
-    pane.terminal.options.cursorBlink = settings.terminalCursorBlink
+    // Why (#10481): reduced-motion users should not pay continuous cursor-blink
+    // re-rasterization of the full terminal canvas while idle. Snapshot is
+    // live-subscribed at the lifecycle layer so OS preference flips re-apply.
+    pane.terminal.options.cursorBlink = resolveTerminalCursorBlink({
+      settingEnabled: settings.terminalCursorBlink,
+      prefersReducedMotion: getPrefersReducedMotionSnapshot()
+    })
     const paneSize = paneFontSizes.get(pane.id)
     const metricOptions = {
       fontSize: paneSize ?? settings.terminalFontSize,

@@ -400,7 +400,9 @@ function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
-      <div className="flex min-h-0 flex-1 flex-col">
+      {/* Why (#10481): separate paint roots so composer caret blink cannot force
+          a full transcript re-raster every frame. */}
+      <div className="flex min-h-0 flex-1 flex-col [contain:paint]">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />
         ) : viewState.kind === 'error' ? (
