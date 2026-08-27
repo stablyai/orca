@@ -59,6 +59,7 @@ describe('orchestration RPC methods', () => {
         handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
       )
       vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
+      vi.spyOn(runtime, 'refreshTerminalPromptAgentOwner').mockResolvedValue('codex')
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
         handle: 'term_worker',
         accepted: true,
@@ -408,6 +409,29 @@ describe('orchestration RPC methods', () => {
       )
       expect(runtime.createTerminal).not.toHaveBeenCalled()
       expect(createWorktree).not.toHaveBeenCalled()
+    })
+
+    it('refreshes the current foreground owner before dispatching a reused pane', async () => {
+      setup()
+      mockCurrentWorkerStart()
+      // The generic liveness check can trust stale launch metadata. The settled preflight reads
+      // the live foreground owner used by prompt verification and its provider timeout.
+      vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(false)
+      const settled = vi
+        .spyOn(runtime, 'refreshTerminalPromptAgentOwner')
+        .mockResolvedValue('codex')
+      const task = db.createTask({ spec: 'reuse the pane under its current agent owner' })
+
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          terminal: 'term_worker'
+        })
+      ).resolves.toMatchObject({ state: 'ready' })
+
+      expect(settled).toHaveBeenCalledWith('term_worker')
+      expect(runtime.sendTerminalAgentPrompt).toHaveBeenCalledOnce()
     })
 
     it('returns a failed receipt and preserves a created terminal as residual', async () => {

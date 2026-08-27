@@ -1,3 +1,4 @@
+/* eslint-disable max-lines -- Why: this end-to-end suite keeps both runtimes, transport faults, relay state, and authenticated lifecycle settlement on one shared federation harness. */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   ORCHESTRATION_CONTRACT_VERSION,
@@ -22,6 +23,7 @@ describe('orchestration federation lifecycle settlement', () => {
   let workerDispatcher: RpcDispatcher
   let workerCapabilities: string[]
   let failNextAckBeforeDelivery: boolean
+  let failNextAttachAfterDelivery: boolean
   let ackAttempts: number
   let transport: OrchestrationEnvironmentTransport
 
@@ -33,6 +35,7 @@ describe('orchestration federation lifecycle settlement', () => {
     workerDispatcher = new RpcDispatcher({ runtime: workerRuntime, methods: ORCHESTRATION_METHODS })
     workerCapabilities = [...(workerRuntime.getStatus().capabilities ?? [])]
     failNextAckBeforeDelivery = false
+    failNextAttachAfterDelivery = false
     ackAttempts = 0
     transport = {
       resolve: () => ({
@@ -56,7 +59,7 @@ describe('orchestration federation lifecycle settlement', () => {
           failNextAckBeforeDelivery = false
           throw new Error('connection lost before acknowledgment')
         }
-        return (await workerDispatcher.dispatch({
+        const response = (await workerDispatcher.dispatch({
           id: `remote_${method}`,
           authToken: 'run-home-device-token',
           method,
@@ -65,6 +68,11 @@ describe('orchestration federation lifecycle settlement', () => {
           orchestrationRequestId: envelope?.orchestrationRequestId,
           orchestrationCapability: envelope?.orchestrationCapability
         })) as RuntimeRpcResponse<unknown>
+        if (method === 'orchestration.federationAttachStart' && failNextAttachAfterDelivery) {
+          failNextAttachAfterDelivery = false
+          throw new Error('connection lost after remote attachment')
+        }
+        return response
       }
     }
     homeRuntime = new OrcaRuntimeService(null, undefined, {
@@ -245,6 +253,85 @@ describe('orchestration federation lifecycle settlement', () => {
       stage: 'worker_report_settled',
       capability_hash: null
     })
+  })
+
+  it('keeps an unobserved remote Enter fenced and accepts its late worker report', async () => {
+    vi.mocked(workerRuntime.sendTerminalAgentPrompt).mockRejectedValueOnce(
+      new Error('agent_prompt_stalled')
+    )
+    const task = createHomeTask()
+
+    const started = await homeDispatcher.dispatch(startRequest(task.id))
+    homeRuntime.stopOrchestrationFederationRelay()
+    expect(started).toMatchObject({
+      ok: true,
+      result: { state: 'outcome_unknown', failedStage: 'dispatch_input' }
+    })
+    const dispatch = homeDb.getDispatchContext(task.id)!
+    expect(homeDb.getTask(task.id)?.status).toBe('blocked')
+    expect(homeDb.getDispatchContextById(dispatch.id)).toMatchObject({
+      status: 'pending',
+      capability_revoked_at: null
+    })
+    expect(homeDb.getWorkerDispatch(dispatch.id)).toMatchObject({
+      state: 'start_unknown',
+      stage: 'dispatch_input'
+    })
+    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
+      state: 'start_unknown',
+      stage: 'dispatch_input',
+      last_error: 'agent_prompt_stalled',
+      capability_hash: expect.any(String)
+    })
+
+    const sent = dispatchRemoteCompletion(task.id, dispatch.id, 'stalled_remote_late_completion')
+    await vi.waitFor(() =>
+      expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(1)
+    )
+    await homeRuntime.syncOrchestrationFederatedDispatch(dispatch.id)
+
+    await expect(sent).resolves.toMatchObject({
+      ok: true,
+      result: { lifecycle: { action: 'completed', authority: 'run_home' } }
+    })
+    expect(homeDb.getTask(task.id)?.status).toBe('completed')
+    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)).toMatchObject({
+      state: 'succeeded',
+      stage: 'worker_report_settled',
+      capability_hash: null
+    })
+  })
+
+  it('accepts a late report after the remote attachment response is lost', async () => {
+    failNextAttachAfterDelivery = true
+    const task = createHomeTask()
+
+    const started = await homeDispatcher.dispatch(startRequest(task.id))
+    homeRuntime.stopOrchestrationFederationRelay()
+    expect(started).toMatchObject({
+      ok: true,
+      result: { state: 'outcome_unknown', failedStage: 'remote_attach' }
+    })
+    const dispatch = homeDb.getDispatchContext(task.id)!
+    expect(homeDb.getWorkerDispatch(dispatch.id)).toMatchObject({
+      state: 'start_unknown',
+      stage: 'remote_attach'
+    })
+    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.state).toBe('ready')
+
+    const sent = dispatchRemoteCompletion(task.id, dispatch.id, 'lost_attach_late_completion')
+    await vi.waitFor(() =>
+      expect(workerDb.listPendingFederationRelay(dispatch.id, 'to_home')).toHaveLength(1)
+    )
+    await homeRuntime.syncOrchestrationFederatedDispatch(dispatch.id)
+
+    await expect(sent).resolves.toMatchObject({
+      ok: true,
+      result: { lifecycle: { action: 'completed', authority: 'run_home' } }
+    })
+    expect(homeDb.getTask(task.id)?.status).toBe('completed')
+    expect(homeDb.getDispatchContextById(dispatch.id)?.status).toBe('completed')
+    expect(workerDb.getRemoteDispatchAttachment(dispatch.id)?.state).toBe('succeeded')
   })
 
   it('returns a Run-home rejection for a mismatched remote task', async () => {

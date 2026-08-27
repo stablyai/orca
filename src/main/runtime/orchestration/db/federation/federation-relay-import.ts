@@ -95,7 +95,8 @@ export function importFederatedRelayItem(
         taskId: params.lifecycle.taskId,
         dispatchId: params.dispatchId,
         outcome: params.lifecycle.outcome,
-        result: params.lifecycle.result
+        result: params.lifecycle.result,
+        source: 'federation'
       })
       if (lifecycle.action === 'rejected' && !duplicate) {
         message = this.convertLifecycleMessageToRejection(

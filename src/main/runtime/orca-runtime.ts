@@ -20109,10 +20109,6 @@ export class OrcaRuntimeService {
       // stateStartedAt, not updatedAt — same-state tool/prompt pings refresh updatedAt and would
       // otherwise pass off an in-progress turn as a new one.
       explicitWorkingStartedAt: explicit?.status === 'working' ? explicit.stateStartedAt : null,
-      outputSequence: this.getPtyOutputSequence(ptyId),
-      visibleOutputFingerprint:
-        this.headlessTerminals.get(ptyId)?.emulator.getVisibleLines().join('\n') ?? '',
-      outputUpdatedAt: this.ptysById.get(ptyId)?.lastOutputAt ?? null,
       status
     }
   }
@@ -35475,28 +35471,32 @@ export class OrcaRuntimeService {
     }
   }
 
-  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+  async refreshTerminalPromptAgentOwner(handle: string): Promise<TuiAgent | null> {
     try {
       const livePty = this.getLivePtyForHandle(handle)
       const leaf = livePty ? null : this.getLiveLeafForHandle(handle).leaf
       const ptyId = livePty?.pty.ptyId ?? leaf?.ptyId ?? null
       const trackedPty = livePty?.pty ?? (ptyId ? this.ptysById.get(ptyId) : null)
       if (!ptyId || !trackedPty || !this.ptyController) {
-        return false
+        return null
       }
       const recognized = recognizeAgentProcess(await this.ptyController.getForegroundProcess(ptyId))
       const recognizedAgent = recognized?.agent
-      if (!isTerminalSendSettlementAgent(recognizedAgent)) {
-        return false
+      if (!recognizedAgent) {
+        return null
       }
       if (!(await this.isTerminalRunningAgent(handle, { retryForegroundWrappers: false }))) {
-        return false
+        return null
       }
       trackedPty.foregroundAgent = recognizedAgent
-      return true
+      return recognizedAgent
     } catch {
-      return false
+      return null
     }
+  }
+
+  async isTerminalRunningSettledPromptAgent(handle: string): Promise<boolean> {
+    return isTerminalSendSettlementAgent(await this.refreshTerminalPromptAgentOwner(handle))
   }
 
   private async isPtyRunningAgent(

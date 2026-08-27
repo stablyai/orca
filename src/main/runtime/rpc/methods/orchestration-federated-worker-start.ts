@@ -22,6 +22,7 @@ import {
 } from './orchestration-worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from './orchestration-worker-start-validation'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
+import { isFederationPromptStalled } from './orchestration-federation-effects'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -211,7 +212,8 @@ export async function startFederatedWorker(args: {
       const worker = db.markWorkerStartUnknown(
         started.dispatch.id,
         remote.failedStage ?? 'remote_attach',
-        remote.lastError ?? 'The worker server reported an unknown start outcome.'
+        remote.lastError ?? 'The worker server reported an unknown start outcome.',
+        { retainCapability: isFederationPromptStalled(remote.lastError, remote.failedStage) }
       )
       return federatedUnknownReceipt(worker, task.id, server.name, launch)
     }

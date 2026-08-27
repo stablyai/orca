@@ -148,7 +148,7 @@ export const ORCHESTRATION_FEDERATION_ATTACH_METHODS: RpcMethod[] = [
                 `Terminal ${terminalHandle} does not belong to worktree ${worktree.id}.`
               )
             }
-            if (!(await runtime.isTerminalRunningAgent(terminalHandle))) {
+            if (!(await runtime.refreshTerminalPromptAgentOwner(terminalHandle))) {
               throw new OrchestrationError(
                 'agent_unconfigured',
                 `Terminal ${terminalHandle} is not running a recognized agent.`

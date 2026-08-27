@@ -357,7 +357,52 @@ describe('OrchestrationDb worker Dispatch state', () => {
     })
   })
 
-  it('bounds remote attachment lookup across pane remints and malformed suffix collisions', () => {
+  it('keeps a start-unknown remote pane fenced from an overlapping attachment', () => {
+    const d = createDb()
+    const paneKey = 'tab_remote:11111111-1111-4111-8111-111111111111'
+    const createAttachment = (dispatchId: string): void => {
+      d.createRemoteDispatchAttachment({
+        dispatchId,
+        taskId: `task_${dispatchId}`,
+        homePeerFingerprint: 'home_peer',
+        protocolVersion: 3,
+        runtimeEpoch: 'worker_epoch',
+        mutationReceipt: {
+          callerFingerprint: 'home_peer',
+          requestId: `request_${dispatchId}`,
+          method: 'orchestration.federationAttachStart',
+          payloadHash: `payload_${dispatchId}`
+        }
+      })
+    }
+    createAttachment('ctx_remote_first')
+    d.prepareRemoteAttachmentAuthority({
+      dispatchId: 'ctx_remote_first',
+      paneKey,
+      processIncarnation: 'worker_epoch:pty:1',
+      worktreeId: 'repo::worktree',
+      terminalHandle: 'term_remote',
+      setupState: 'not_applicable',
+      effects: []
+    })
+    d.failRemoteAttachment('ctx_remote_first', 'dispatch_input', 'agent_prompt_stalled', true)
+    expect(d.findActiveRemoteAttachmentForPane(paneKey)?.dispatch_id).toBe('ctx_remote_first')
+
+    createAttachment('ctx_remote_overlap')
+    expect(() =>
+      d.prepareRemoteAttachmentAuthority({
+        dispatchId: 'ctx_remote_overlap',
+        paneKey,
+        processIncarnation: 'worker_epoch:pty:1',
+        worktreeId: 'repo::worktree',
+        terminalHandle: 'term_remote',
+        setupState: 'not_applicable',
+        effects: []
+      })
+    ).toThrow('already has an active remote dispatch')
+  })
+
+  it('resolves remote attachment lookup across pane remints and malformed keys', () => {
     const d = createDb()
     const leafId = '11111111-1111-4111-8111-111111111111'
     const attach = (dispatchId: string, paneKey: string): void => {
@@ -386,13 +431,12 @@ describe('OrchestrationDb worker Dispatch state', () => {
     }
 
     attach('ctx_valid_old', `tab_old:${leafId}`)
-    for (let index = 0; index < 64; index += 1) {
-      attach(`ctx_malformed_${index}`, `:${leafId}`)
-    }
+    attach('ctx_malformed', `:${leafId}`)
 
     expect(d.findActiveRemoteAttachmentForPane(`tab_reminted:${leafId}`)?.dispatch_id).toBe(
       'ctx_valid_old'
     )
+    d.failRemoteAttachment('ctx_valid_old', 'dispatch_input', 'known rejection', false)
     attach('ctx_valid_new', `tab_new:${leafId}`)
     expect(d.findActiveRemoteAttachmentForPane(`tab_reminted:${leafId}`)?.dispatch_id).toBe(
       'ctx_valid_new'

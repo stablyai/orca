@@ -40,7 +40,7 @@ export function settleRemoteAttachmentInRelayTransaction(
   if (attachment.state === state) {
     return
   }
-  if (attachment.state !== 'ready') {
+  if (!['ready', 'start_unknown'].includes(attachment.state)) {
     throw new OrchestrationError(
       'request_mismatch',
       `Remote Dispatch ${dispatchId} cannot settle as ${state} from ${attachment.state}.`
@@ -51,7 +51,7 @@ export function settleRemoteAttachmentInRelayTransaction(
       `UPDATE remote_dispatch_attachments
        SET state = ?, stage = ?, capability_hash = NULL,
            updated_at = datetime('now')
-       WHERE dispatch_id = ? AND state = 'ready'`
+       WHERE dispatch_id = ? AND state IN ('ready', 'start_unknown')`
     )
     .run(state, stage, dispatchId)
 }

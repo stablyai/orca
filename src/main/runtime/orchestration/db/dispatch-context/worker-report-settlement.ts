@@ -31,6 +31,7 @@ export function settleWorkerReportInTransaction(
     dispatchId: string
     outcome: WorkerReportOutcome
     result: string
+    source?: 'federation'
   }
 ): WorkerReportSettlement {
   const task = this.getTask(params.taskId)
@@ -72,6 +73,14 @@ export function settleWorkerReportInTransaction(
     reportingWorker.stage === 'dispatch_input' &&
     reportingWorker.last_error === AGENT_PROMPT_STALLED_ERROR &&
     dispatch.capability_revoked_at === null
+  // Federation import has already pinned the authenticated peer, exact Dispatch, and Task. A lost
+  // attach response cannot erase the first-hand report that proves the remote worker did start.
+  const authenticatedFederatedUnknown =
+    params.source === 'federation' &&
+    dispatch.status === 'pending' &&
+    task.status === 'blocked' &&
+    reportingWorker?.state === 'start_unknown' &&
+    this.getFederatedDispatch(params.dispatchId) !== undefined
   if (
     !settledByUnobservedPrompt &&
     dispatch.status === expectedDispatchStatus &&
@@ -79,11 +88,12 @@ export function settleWorkerReportInTransaction(
   ) {
     return { action: 'settled', outcome: params.outcome, duplicate: true }
   }
-  const previous = ambiguousPostSubmit
-    ? { dispatchStatus: 'pending', taskStatus: 'blocked', workerState: 'start_unknown' }
-    : settledByUnobservedPrompt
-      ? { dispatchStatus: 'failed', taskStatus: 'failed', workerState: 'failed' }
-      : { dispatchStatus: 'dispatched', taskStatus: 'dispatched', workerState: 'ready' }
+  const previous =
+    ambiguousPostSubmit || authenticatedFederatedUnknown
+      ? { dispatchStatus: 'pending', taskStatus: 'blocked', workerState: 'start_unknown' }
+      : settledByUnobservedPrompt
+        ? { dispatchStatus: 'failed', taskStatus: 'failed', workerState: 'failed' }
+        : { dispatchStatus: 'dispatched', taskStatus: 'dispatched', workerState: 'ready' }
   if (dispatch.status !== previous.dispatchStatus || task.status !== previous.taskStatus) {
     return {
       action: 'rejected',

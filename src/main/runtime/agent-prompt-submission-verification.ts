@@ -8,7 +8,6 @@ export const AGENT_PROMPT_EFFECT_TIMEOUT_MS = 5_000
 // (30s, src/relay/dispatcher.ts), the budget a paired client's submission runs under.
 export const AGENT_PROMPT_HOOK_EFFECT_TIMEOUT_MS = 15_000
 const AGENT_PROMPT_EFFECT_POLL_MS = 50
-const AGENT_PROMPT_OUTPUT_SETTLE_MS = 50
 
 const HOOK_OBSERVED_TURN_START_AGENTS = new Set<TuiAgent>(['codex', 'kimi'])
 
@@ -22,11 +21,6 @@ export type AgentPromptActivity = Readonly<{
   /** When the hook's current `working` turn began; reaches the runtime with no window and no
    *  title coverage. Pinned across same-state pings, so a refresh alone cannot move it. */
   explicitWorkingStartedAt: number | null
-  /** PTY bytes seen on this pane; delivery evidence when a turn-start edge cannot be observed. */
-  outputSequence: number
-  /** The generic terminal model's visible text, so repainting the same frame is not a receipt. */
-  visibleOutputFingerprint: string
-  outputUpdatedAt: number | null
   status: 'working' | 'permission' | 'idle' | null
 }>
 
@@ -87,8 +81,7 @@ function agentPromptEffectObserved(
 ): boolean {
   return (
     current.workingSequence > baseline.workingSequence ||
-    observedHookWorkingAfterBaseline(baseline, current) ||
-    observedDeliveryEvidence(baseline, current)
+    observedHookWorkingAfterBaseline(baseline, current)
   )
 }
 
@@ -102,22 +95,6 @@ function observedHookWorkingAfterBaseline(
   return (
     current.explicitWorkingStartedAt !== null &&
     current.explicitWorkingStartedAt > (baseline.explicitWorkingStartedAt ?? 0)
-  )
-}
-
-// Why: a `→working` edge is unreachable for an agent that is already working, so the honest proof
-// that the prompt landed is the pane emitting bytes after Enter. An idle agent still owes a real
-// turn start, which keeps a swallowed Enter detectable.
-function observedDeliveryEvidence(
-  baseline: AgentPromptActivity,
-  current: AgentPromptActivity
-): boolean {
-  return (
-    baseline.status === 'working' &&
-    current.outputSequence > baseline.outputSequence &&
-    current.visibleOutputFingerprint !== baseline.visibleOutputFingerprint &&
-    current.outputUpdatedAt !== null &&
-    Date.now() - current.outputUpdatedAt >= AGENT_PROMPT_OUTPUT_SETTLE_MS
   )
 }
 

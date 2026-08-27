@@ -73,7 +73,8 @@ export function findActiveRemoteAttachmentForPane(
     return this.db
       .prepare(
         `SELECT * FROM remote_dispatch_attachments
-         WHERE state IN ('starting', 'ready') AND pane_key = ?
+         WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+           AND pane_key = ?
          ORDER BY rowid DESC LIMIT 1`
       )
       .get(paneKey) as RemoteDispatchAttachmentRow | undefined
@@ -81,7 +82,8 @@ export function findActiveRemoteAttachmentForPane(
   return this.db
     .prepare(
       `SELECT * FROM remote_dispatch_attachments
-       WHERE state IN ('starting', 'ready') AND pane_key IS NOT NULL
+       WHERE state IN ('starting', 'ready', 'start_unknown', 'stopping', 'stop_unknown')
+         AND pane_key IS NOT NULL
          AND instr(pane_key, ':') > 1
          AND ${REMOTE_ATTACHMENT_PANE_KEY_MATCH_SUFFIX_SQL} = ?
        ORDER BY rowid DESC LIMIT 1`
