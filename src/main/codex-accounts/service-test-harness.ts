@@ -87,6 +87,7 @@ export function createSettings(overrides: Partial<GlobalSettings> = {}): GlobalS
     openLinksInAppPreferencePrompted: false,
     rightSidebarOpenByDefault: true,
     sourceControlViewMode: 'list',
+    sourceControlCompactFolders: false,
     sourceControlGroupOrder: 'changes-first',
     sourceControlCompareAgainstUpstream: false,
     showTitlebarAppName: true,

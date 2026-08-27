@@ -37,6 +37,7 @@ export function useSourceControlFileListing({
   remoteActionError,
   rightSidebarTab,
   sourceControlGroupOrder,
+  sourceControlCompactFolders,
   sourceControlRef,
   sourceControlViewMode,
   worktreeMap,
@@ -60,6 +61,7 @@ export function useSourceControlFileListing({
   refreshActiveGitStatusAfterMutation: SourceControlStatusRefresh['refreshActiveGitStatusAfterMutation']
   remoteActionError: SourceControlActionError | null
   rightSidebarTab: SourceControlWorktreeContext['rightSidebarTab']
+  sourceControlCompactFolders: SourceControlPanelViewState['sourceControlCompactFolders']
   sourceControlGroupOrder: SourceControlPanelViewState['sourceControlGroupOrder']
   sourceControlRef: SourceControlPanelViewState['sourceControlRef']
   sourceControlViewMode: SourceControlPanelViewState['sourceControlViewMode']
@@ -98,6 +100,7 @@ export function useSourceControlFileListing({
     expandedSubmoduleKeys,
     submoduleStatusByKey,
     sourceControlViewMode,
+    sourceControlCompactFolders,
     collapsedSections
   })
   const { gitHistoryState, refreshGitHistory, refreshGitHistoryRef } = useSourceControlGitHistory({

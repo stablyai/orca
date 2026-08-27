@@ -37,6 +37,7 @@ export function useSourceControlPanelViewState({
     settings?.sourceControlViewMode
   )
   const sourceControlViewMode = persistedSourceControlViewMode
+  const sourceControlCompactFolders = settings?.sourceControlCompactFolders ?? false
   const sourceControlGroupOrder = resolveSourceControlGroupOrder(settings?.sourceControlGroupOrder)
   const [collapsedTreeDirs, setCollapsedTreeDirs] = useState<Set<string>>(new Set())
   const [baseRefDialogOpen, setBaseRefDialogOpen] = useState(false)
@@ -51,6 +52,13 @@ export function useSourceControlPanelViewState({
       sourceControlViewMode: getNextSourceControlViewMode(sourceControlViewMode)
     })
   }, [settings, sourceControlViewMode, updateSettings])
+
+  const handleToggleSourceControlCompactFolders = useCallback(() => {
+    if (!settings) {
+      return
+    }
+    updateSettings({ sourceControlCompactFolders: !sourceControlCompactFolders })
+  }, [settings, sourceControlCompactFolders, updateSettings])
 
   // Why: reset during render instead of key-remounting on switch (which caused a Windows IPC storm).
   const [viewStateWorktreeId, setViewStateWorktreeId] = useState(activeWorktreeId)
@@ -96,6 +104,7 @@ export function useSourceControlPanelViewState({
     fileListScrollElement,
     filterExpanded,
     filterQuery,
+    handleToggleSourceControlCompactFolders,
     handleToggleSourceControlViewMode,
     isGitHistoryExpanded,
     isMac,
@@ -103,6 +112,7 @@ export function useSourceControlPanelViewState({
     setFileListScrollElement,
     setFilterExpanded,
     setFilterQuery,
+    sourceControlCompactFolders,
     sourceControlGroupOrder,
     sourceControlRef,
     sourceControlViewMode,

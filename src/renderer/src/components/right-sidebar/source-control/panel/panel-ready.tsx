@@ -31,6 +31,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     handleCreatePrHeaderClick,
     handleOpenComment,
     handleSourceControlKeyDown,
+    handleToggleSourceControlCompactFolders,
     handleToggleSourceControlViewMode,
     hostedReview,
     isCreatePrIntentInFlight,
@@ -49,6 +50,7 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     setPendingDiffCommentsClear,
     setSourceControlRoot,
     settings,
+    sourceControlCompactFolders,
     sourceControlViewMode,
     visibleCreatePrHeaderAction
   } = model
@@ -72,6 +74,8 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           onCreatePrHeaderClick={handleCreatePrHeaderClick}
           onOpenHostedReviewInChecks={openHostedReviewInChecks}
           sourceControlViewMode={sourceControlViewMode}
+          sourceControlCompactFolders={sourceControlCompactFolders}
+          onToggleCompactFolders={handleToggleSourceControlCompactFolders}
           viewModeToggleDisabled={settings === null}
           onToggleViewMode={handleToggleSourceControlViewMode}
           onChangeBaseRef={() => setBaseRefDialogOpen(true)}

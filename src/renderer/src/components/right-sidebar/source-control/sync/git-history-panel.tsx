@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils'
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import type { GitHistoryItem, GitHistoryResult } from '../../../../../../shared/git-history'
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
+import type { SourceControlViewMode } from '../../../../../../shared/ui-chrome-types'
 import {
   buildDefaultGitHistoryColorMap,
   buildGitHistoryViewModels
@@ -43,6 +44,8 @@ function clampGitHistoryPanelHeight(height: number): number {
 export function GitHistoryPanel({
   state,
   collapsed,
+  viewMode,
+  compactFolders,
   onToggle,
   onRefresh,
   onOpenCommit,
@@ -52,6 +55,8 @@ export function GitHistoryPanel({
 }: {
   state: GitHistoryPanelState
   collapsed: boolean
+  viewMode: SourceControlViewMode
+  compactFolders: boolean
   onToggle: () => void
   onRefresh: () => void
   onOpenCommit?: (item: GitHistoryItem) => void
@@ -381,6 +386,8 @@ export function GitHistoryPanel({
                 {isExpanded && (
                   <GitHistoryCommitFiles
                     state={filesByCommit[item.id] ?? { status: 'loading' }}
+                    viewMode={viewMode}
+                    compactFolders={compactFolders}
                     author={item.author}
                     timestamp={item.timestamp}
                     onOpenFile={(entry, event) => onOpenCommitFile?.(item, entry, event)}
