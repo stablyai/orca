@@ -229,6 +229,7 @@ export class RateLimitService {
   private minimaxFetchGeneration = 0
   private lastOpencodeConfigHash = ''
   private lastMiniMaxConfigHash = ''
+  private lastGlmConfigHash = ''
   private codexHomePathResolver: CodexHomePathResolver | null = null
   private codexFetchTarget: NormalizedCodexAccountSelectionTarget = {
     runtime: 'host',
@@ -1670,6 +1671,13 @@ export class RateLimitService {
     }
     const miniMaxGeneration = this.minimaxFetchGeneration
 
+    const glmConfig = this.glmConfigResolver?.()
+    const currentGlmConfigHash = `${glmConfig?.platform ?? ''}|${glmConfig?.apiKey ?? ''}`
+    const glmConfigChanged = currentGlmConfigHash !== this.lastGlmConfigHash
+    if (glmConfigChanged) {
+      this.lastGlmConfigHash = currentGlmConfigHash
+    }
+
     // Mark all providers fetching while keeping previous data visible (Codex is cleared separately on account change).
     this.updateState({
       ...previousState,
@@ -1688,7 +1696,9 @@ export class RateLimitService {
         ? this.withFetchingStatus(null, 'minimax')
         : this.withFetchingStatus(previousState.minimax, 'minimax'),
       grok: this.withFetchingStatus(previousState.grok, 'grok'),
-      glm: this.withFetchingStatus(previousState.glm, 'glm')
+      glm: glmConfigChanged
+        ? this.withFetchingStatus(null, 'glm')
+        : this.withFetchingStatus(previousState.glm, 'glm')
     })
 
     const missingWslCodexHome =
@@ -1704,8 +1714,6 @@ export class RateLimitService {
     // Why: skip automated Claude fetches while a Retry-After window is open or a live session feed is fresher than the OAuth poll would be.
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
-
-    const glmConfig = this.glmConfigResolver?.()
 
     const glmUnavailableResult: ProviderRateLimits = {
       provider: 'glm',
@@ -1928,7 +1936,7 @@ export class RateLimitService {
           ? miniMax
           : this.applyStalePolicy(miniMax, previousState.minimax)
         : this.state.minimax,
-      glm: this.applyStalePolicy(glm, previousState.glm)
+      glm: glmConfigChanged ? glm : this.applyStalePolicy(glm, previousState.glm)
     })
 
     const grokResult = await grokResultPromise
