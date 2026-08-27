@@ -1,10 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import {
   canReuseGateReceipt,
   findGateReceipt
 } from '../../orchestration/control-plane/gate-receipt-validity'
 import { admitOutcome } from '../../orchestration/control-plane/outcome-identity'
+import {
+  createObservedWorktree,
+  recordProvenGate,
+  type ObservedWorktreeFixture
+} from '../../orchestration/control-plane/observed-worktree-fixture'
 import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import {
@@ -24,7 +29,9 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
 import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 
-const HEAD = 'a1b2c3d4e5f6'
+// Real tree and real HEAD: the completion gate observes both for itself.
+let worktree: ObservedWorktreeFixture
+let HEAD = ''
 const BUILDER: RouteIdentity = { agent: 'claude', model: 'opus-5', reasoning: 'high' }
 const REVIEWER: RouteIdentity = { agent: 'codex', model: 'gpt-5.6-sol', reasoning: 'high' }
 const COORD_PANE = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
@@ -85,6 +92,15 @@ describe('automatic lifecycle autostart', () => {
   let runId: string
   let prompts: { handle: string; text: string }[]
 
+  beforeAll(() => {
+    worktree = createObservedWorktree()
+    // The reports below claim `src/a.ts`, and a gate receipt can only be
+    // content-proven for a file that exists in the tree it was earned in.
+    worktree.commit('src/a.ts')
+    HEAD = worktree.headSha
+  })
+  afterAll(() => worktree.cleanup())
+
   beforeEach(() => {
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
@@ -106,15 +122,16 @@ describe('automatic lifecycle autostart', () => {
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'showTerminal').mockImplementation(
-      async (handle: string) => ({ handle, worktreeId: 'repo::wt', status: 'running' }) as never
+      async (handle: string) =>
+        ({ handle, worktreeId: worktree.worktreeId, status: 'running' }) as never
     )
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
-      id: 'repo::wt',
+      id: worktree.worktreeId,
       repoId: 'repo'
     } as never)
     vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(runtime, 'createTerminal').mockImplementation(
-      async () => ({ handle: 'term_reviewer', worktreeId: 'repo::wt' }) as never
+      async () => ({ handle: 'term_reviewer', worktreeId: worktree.worktreeId }) as never
     )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation(
       (handle: string) =>
@@ -148,6 +165,8 @@ describe('automatic lifecycle autostart', () => {
   function admit(reviewerCandidates: RouteIdentity[] = [REVIEWER]) {
     const store = new ControlPlaneStore(db)
     admitOutcome(store, { outcomeId: 'out_1', runId, title: 'Ship', fingerprint: 'f1' })
+    // The gate now demands a runtime-run gate process bound to the final SHA.
+    recordProvenGate(store, { scopeKey: `${runId}:out_1`, gateId: 'pnpm test', finalSha: HEAD })
     new OutcomePolicyStore(db).put({
       outcomeId: 'out_1',
       taskClassification: 'bounded_implementation',
@@ -186,7 +205,7 @@ describe('automatic lifecycle autostart', () => {
       paneKey: `tab_${handle}:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
       processIncarnation: `runtime_test:${handle}:1`,
       launchTokenHash: `hash_${handle}`,
-      worktreeId: 'repo::wt',
+      worktreeId: worktree.worktreeId,
       effects: [],
       setupState: 'not_applicable',
       terminalOwnership: 'created'
@@ -390,7 +409,15 @@ describe('automatic lifecycle autostart', () => {
     // The correction lands on a NEW commit. A content gate survives that when
     // nothing it depends on changed, and dies the moment its inputs move — the
     // SHA alone is not what invalidates it.
-    const CORRECTED = 'bbbbbbbbbbbb'
+    // A real commit, because the runtime reads the tree rather than believing
+    // whatever SHA the correction claims.
+    const CORRECTED = worktree.commit('src/corrected.ts')
+    HEAD = CORRECTED
+    recordProvenGate(new ControlPlaneStore(db), {
+      scopeKey: `${runId}:out_1`,
+      gateId: 'pnpm test',
+      finalSha: CORRECTED
+    })
     const beforeCorrection = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
     const contentGate = {
       gateId: 'pnpm test',

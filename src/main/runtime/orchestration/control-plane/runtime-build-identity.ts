@@ -21,10 +21,44 @@ import type { RouteEvidence } from './route-certification-evidence'
 
 const CONTRADICTED = 'contradicted'
 
+/** Where the runtime's source identity came from. `embedded` is the only kind
+ *  that describes the ARTIFACT; `checkout` describes the working tree the
+ *  process happens to sit in and moves when someone checks out another commit. */
+export type BuildProvenanceSource = 'embedded' | 'checkout' | 'unknown'
+
+export type EmbeddedBuildProvenance = {
+  schemaVersion: number
+  sourceSha: string | null
+  dirty: boolean | null
+  appVersion: string
+  builtAt: string
+}
+
+/** The build-time literal, when this bundle carries one. */
+export function readEmbeddedBuildProvenance(): EmbeddedBuildProvenance | null {
+  const raw =
+    typeof ORCA_BUILD_PROVENANCE !== 'undefined'
+      ? ORCA_BUILD_PROVENANCE
+      : ((globalThis as { ORCA_BUILD_PROVENANCE?: string | null }).ORCA_BUILD_PROVENANCE ?? null)
+  if (!raw) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(raw) as EmbeddedBuildProvenance
+    return typeof parsed?.schemaVersion === 'number' ? parsed : null
+  } catch {
+    return null
+  }
+}
+
 export type RuntimeBuildIdentity = {
   version: string
   buildHash: string
-  /** The Git commit this runtime was BUILT FROM, resolved by the runtime itself.
+  /** How `commitSha` was established. Only `embedded` proves the artifact. */
+  provenanceSource: BuildProvenanceSource
+  /** True when the build was made from a dirty tree, so it matches no commit. */
+  dirtyBuild: boolean | null
+  /** The Git commit this runtime was BUILT FROM.
    *  Null when it cannot be established, which makes PASS evidence fail closed:
    *  a caller-supplied SHA is an assertion, never the runtime's own identity. */
   commitSha: string | null
@@ -78,11 +112,30 @@ export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): Runtim
     version = 'unknown'
   }
   const buildHash = computeRuntimeBuildHash(entryPath)
+
+  // Why embedded first: it describes the artifact. Reading the checkout is a
+  // dev-only fallback and is labelled as such, so evidence can never quietly
+  // rest on "whatever commit the tree is on right now".
+  const embedded = readEmbeddedBuildProvenance()
+  if (embedded) {
+    return {
+      version: embedded.appVersion || version,
+      buildHash,
+      commitSha: embedded.dirty === true ? null : embedded.sourceSha,
+      provenanceSource: 'embedded',
+      dirtyBuild: embedded.dirty,
+      id: `${embedded.appVersion || version}+${buildHash}+${
+        embedded.dirty === true ? 'dirty' : (embedded.sourceSha ?? 'nocommit')
+      }`
+    }
+  }
   const commitSha = resolveRuntimeCommitSha(entryPath)
   return {
     version,
     buildHash,
     commitSha,
+    provenanceSource: commitSha ? 'checkout' : 'unknown',
+    dirtyBuild: null,
     id: `${version}+${buildHash}+${commitSha ?? 'nocommit'}`
   }
 }

@@ -31,6 +31,19 @@ export type OutcomeRow = {
   created_at: string
 }
 
+export type GateExecutionRow = {
+  execution_id: string
+  scope_key: string
+  gate_id: string
+  final_sha: string
+  command: string
+  exit_code: number | null
+  log_digest: string
+  build_id: string
+  started_at: string
+  finished_at: string
+}
+
 export type OutcomeRelationRow = {
   left_outcome_id: string
   right_outcome_id: string
@@ -132,6 +145,43 @@ export class ControlPlaneStore {
       .run(row.left_outcome_id, row.right_outcome_id, row.kind, row.decision, row.rationale)
   }
 
+  recordGateExecution(row: GateExecutionRow): void {
+    this.handle.db
+      .prepare(
+        `INSERT OR REPLACE INTO control_plane_gate_executions
+           (execution_id, scope_key, gate_id, final_sha, command, exit_code, log_digest,
+            build_id, started_at, finished_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        row.execution_id,
+        row.scope_key,
+        row.gate_id,
+        row.final_sha,
+        row.command,
+        row.exit_code,
+        row.log_digest,
+        row.build_id,
+        row.started_at,
+        row.finished_at
+      )
+  }
+
+  /** A successful runtime-owned execution of this gate at this exact SHA. */
+  findSuccessfulGateExecution(args: {
+    scopeKey: string
+    gateId: string
+    finalSha: string
+  }): GateExecutionRow | undefined {
+    return this.handle.db
+      .prepare(
+        `SELECT * FROM control_plane_gate_executions
+         WHERE scope_key = ? AND gate_id = ? AND final_sha = ? AND exit_code = 0
+         ORDER BY rowid DESC LIMIT 1`
+      )
+      .get(args.scopeKey, args.gateId, args.finalSha) as GateExecutionRow | undefined
+  }
+
   getIntakeBatch(batchId: string): { batch_id: string; manifest_fingerprint: string } | undefined {
     return this.handle.db
       .prepare('SELECT * FROM control_plane_intake_batches WHERE batch_id = ?')
@@ -231,6 +281,20 @@ export class ControlPlaneStore {
     return this.handle.db
       .prepare('SELECT * FROM control_plane_validation_leases WHERE scope_key = ?')
       .get(scopeKey) as ValidationLeaseRow | undefined
+  }
+
+  /** Whether ANY lease is live right now. The mutation fence asks this first so
+   *  the common no-lease case costs one indexed read instead of resolving a
+   *  worktree selector on every mutating RPC. */
+  hasAnyActiveValidationLease(nowIso?: string): boolean {
+    return (
+      this.handle.db
+        .prepare(
+          `SELECT 1 FROM control_plane_validation_leases
+           WHERE released_at IS NULL AND expires_at > ? LIMIT 1`
+        )
+        .get(nowIso ?? new Date().toISOString()) !== undefined
+    )
   }
 
   /** Any live lease this Dispatch owns, whatever scope it was taken on. */

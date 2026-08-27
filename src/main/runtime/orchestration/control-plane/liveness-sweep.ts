@@ -1,5 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { OrchestrationDb } from '../db'
+import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import type { DispatchContextRow } from '../types'
 import { COORDINATOR_WAKE_REASONS, WAKE_REASON_PAYLOAD_KEY } from './coordinator-wake-events'
 import { ControlPlaneStore } from './control-plane-store'
@@ -56,8 +57,15 @@ export type LivenessSignalSource = {
   /** ISO deadline of an Orca-approved blocking wait the runtime owns, if any. */
   approvedWaitUntil(dispatchId: string): string | null
   /** Epoch ms of the last output the runtime observed on a worker's terminal,
-   *  or null when the execution host cannot report one. */
-  lastTerminalOutputAtMs?(terminalHandle: string | null): number | null
+   *  or null when the execution host cannot report one.
+   *
+   *  Why the incarnation: a terminal handle outlives the process bound to it, so
+   *  reading the handle alone reported output from whatever occupies that pane
+   *  now — a user typing in a reused pane read as a hung agent still working. */
+  lastTerminalOutputAtMs?(
+    terminalHandle: string | null,
+    processIncarnation: string | null
+  ): number | null
 }
 
 export type WakePublisher = {
@@ -106,6 +114,22 @@ function listDispatchesNeedingLivenessFinalization(
   })
 }
 
+/** Output the runtime saw BEFORE this Dispatch began proves nothing about it,
+ *  so a timestamp under its start floor reads as no observed activity. */
+function clampToDispatchStart(
+  dispatch: DispatchContextRow,
+  lastOutputAtMs: number | null
+): number | null {
+  if (lastOutputAtMs === null) {
+    return null
+  }
+  // exposeUtcTimestamp: dispatch rows keep SQLite's timezone-less UTC space
+  // format, which Date.parse reads as LOCAL time and shifts the floor by the
+  // host's offset — enough to discard every real observation west of UTC.
+  const startedAtMs = Date.parse(exposeUtcTimestamp(dispatch.created_at) ?? '')
+  return Number.isFinite(startedAtMs) && lastOutputAtMs < startedAtMs ? null : lastOutputAtMs
+}
+
 async function collectSignals(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
@@ -124,7 +148,11 @@ async function collectSignals(
     processLiveness,
     approvedWaitUntilIso: source.approvedWaitUntil(dispatch.id),
     terminalOwnership: resource?.ownership_state ?? null,
-    lastTerminalOutputAtMs: source.lastTerminalOutputAtMs?.(dispatch.assignee_handle) ?? null,
+    lastTerminalOutputAtMs: clampToDispatchStart(
+      dispatch,
+      source.lastTerminalOutputAtMs?.(dispatch.assignee_handle, dispatch.process_incarnation) ??
+        null
+    ),
     settled: isDispatchSettled(dispatch)
   }
 }

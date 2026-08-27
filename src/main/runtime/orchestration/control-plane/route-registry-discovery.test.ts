@@ -22,9 +22,12 @@ describe('registry discovery consumes the authoritative catalogs', () => {
   it('reads hook support from the managed agent-hook target list', () => {
     expect(isHookSupported('claude')).toBe(true)
     expect(isHookSupported('grok')).toBe(true)
-    // Discovered truth at this SHA: OpenCode launches but is not a managed
-    // agent-hook target, so any GLM route through it is a drift fault.
-    expect(isHookSupported('opencode')).toBe(false)
+    // opencode is not a managed hook target but ships its own plugin, so Orca
+    // can still ingest its hooks. Reading only the managed list is what wrongly
+    // classified GLM/OpenCode as having no native route.
+    expect(isHookSupported('opencode')).toBe(true)
+    // aider has neither mechanism, so it really is unobservable.
+    expect(isHookSupported('aider')).toBe(false)
   })
 
   it('treats a family alias as alias, an exact versioned id as exact, and an unknown id as UNKNOWN', () => {
@@ -59,12 +62,20 @@ describe('registry discovery consumes the authoritative catalogs', () => {
 
 describe('CORRECTION 1 launcher/hook drift gate', () => {
   it('fails a route that the launcher supports but the hook layer rejects', () => {
-    const row = buildRouteRow({ identity: { agent: 'opencode', model: null, reasoning: null } })
+    // aider launches but has no hook ingestion by either mechanism, so PreTool
+    // policy would reject it mid-run.
+    const row = buildRouteRow({ identity: { agent: 'aider', model: null, reasoning: null } })
     expect(row.launcherSupported).toBe(true)
     expect(row.hookSupported).toBe(false)
     expect(findRegistryDrift([row])).toEqual([
       expect.objectContaining({ code: 'launcher_supported_hook_rejected' })
     ])
+  })
+
+  it('does not fault a plugin-hook agent the managed target list omits', () => {
+    const row = buildRouteRow({ identity: { agent: 'opencode', model: null, reasoning: null } })
+    expect(row).toMatchObject({ launcherSupported: true, hookSupported: true })
+    expect(findRegistryDrift([row])).toEqual([])
   })
 
   it('fails a route whose model is absent from the authoritative catalog', () => {

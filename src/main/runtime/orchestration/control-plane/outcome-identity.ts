@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import type { ControlPlaneStore, OutcomeRelationRow, OutcomeRow } from './control-plane-store'
+import { findSerializationDeadlock } from './outcome-relation-deadlock'
 
 /** B2 — one business outcome, one durable Run.
  *
@@ -43,6 +44,8 @@ export type OutcomeAdmissionCode =
   | 'batch_manifest_conflict'
   | 'relation_decision_conflict'
   | 'undecided_relation'
+  | 'self_serialized_outcome'
+  | 'serialized_with_merged_outcome'
 
 export type OutcomeAdmissionError = {
   code: OutcomeAdmissionCode
@@ -190,6 +193,7 @@ export function admitOutcomeIntake(
     }
   }
   const runIds = new Set<string>()
+  const ids = new Set<string>()
   for (const outcome of request.outcomes) {
     if (runIds.has(outcome.runId)) {
       return {
@@ -203,20 +207,6 @@ export function admitOutcomeIntake(
       }
     }
     runIds.add(outcome.runId)
-    if (request.runExists && !request.runExists(outcome.runId)) {
-      return {
-        ok: false,
-        error: {
-          code: 'unknown_run',
-          outcomeId: outcome.outcomeId,
-          runId: outcome.runId,
-          reason: `Run ${outcome.runId} does not exist, so an outcome cannot be bound to it.`
-        }
-      }
-    }
-  }
-  const ids = new Set<string>()
-  for (const outcome of request.outcomes) {
     if (ids.has(outcome.outcomeId)) {
       return {
         ok: false,
@@ -229,8 +219,18 @@ export function admitOutcomeIntake(
       }
     }
     ids.add(outcome.outcomeId)
+    if (request.runExists && !request.runExists(outcome.runId)) {
+      return {
+        ok: false,
+        error: {
+          code: 'unknown_run',
+          outcomeId: outcome.outcomeId,
+          runId: outcome.runId,
+          reason: `Run ${outcome.runId} does not exist, so an outcome cannot be bound to it.`
+        }
+      }
+    }
   }
-
   const decided = new Set(
     (request.relations ?? []).map((relation) =>
       relationKey(relation.leftOutcomeId, relation.rightOutcomeId, relation.kind)
@@ -248,6 +248,11 @@ export function admitOutcomeIntake(
         }
       }
     }
+  }
+
+  const deadlock = findSerializationDeadlock(store, request)
+  if (deadlock) {
+    return { ok: false, error: deadlock }
   }
 
   // Why a manifest fingerprint: `batchId` alone identified nothing, so the same

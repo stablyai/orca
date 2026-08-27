@@ -1,3 +1,4 @@
+import type { RuntimeCompletionObservation } from './completion-receipt'
 import { describe, expect, it } from 'vitest'
 import {
   COMPLETION_PLACEMENTS,
@@ -8,6 +9,21 @@ import {
 } from './completion-receipt'
 
 const HEAD = 'a1b2c3d4e5f6'
+
+/** What an honest runtime reading of the worktree looks like. The gate now
+ *  requires one: the worker's own description of the tree is not evidence. */
+function observed(
+  overrides: Partial<RuntimeCompletionObservation> = {}
+): RuntimeCompletionObservation {
+  return {
+    observable: true,
+    headSha: HEAD,
+    clean: true,
+    changedFiles: ['src/a.ts'],
+    reason: null,
+    ...overrides
+  }
+}
 const OLDER = '0f0f0f0f0f0f'
 
 function claim(overrides: Partial<CompletionClaim> = {}): CompletionClaim {
@@ -35,7 +51,10 @@ const expected: CompletionExpectation = {
 
 describe('B6 completion receipt validation', () => {
   it('accepts a clean tree whose receipt is bound to the final HEAD', () => {
-    expect(validateCompletionReceipt(claim(), expected)).toEqual({ ok: true, finalSha: HEAD })
+    expect(validateCompletionReceipt(claim(), expected, observed())).toEqual({
+      ok: true,
+      finalSha: HEAD
+    })
   })
 
   it('rejects a PASS receipt produced against an older SHA and names the gate', () => {
@@ -44,7 +63,8 @@ describe('B6 completion receipt validation', () => {
         claim({
           receipt: { sha: OLDER, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
         }),
-        expected
+        expected,
+        observed()
       )
     ).toMatchObject({ ok: false, code: 'stale_receipt_sha', gate: 'receipt_sha' })
   })
@@ -55,29 +75,41 @@ describe('B6 completion receipt validation', () => {
         claim({
           receipt: { sha: HEAD, result: 'FAIL', policyVersion: 'v1', commandIdentity: 'pnpm test' }
         }),
-        expected
+        expected,
+        observed()
       )
     ).toMatchObject({ ok: false, code: 'receipt_failed', gate: 'receipt_result' })
   })
 
   it('rejects a missing receipt when the gate is required', () => {
-    expect(validateCompletionReceipt(claim({ receipt: null }), expected)).toMatchObject({
-      ok: false,
-      code: 'missing_receipt',
-      gate: 'receipt'
-    })
+    expect(validateCompletionReceipt(claim({ receipt: null }), expected, observed())).toMatchObject(
+      {
+        ok: false,
+        code: 'missing_receipt',
+        gate: 'receipt'
+      }
+    )
   })
 
-  it('rejects a dirty worktree', () => {
-    expect(validateCompletionReceipt(claim({ worktreeClean: false }), expected)).toMatchObject({
+  it('rejects a dirty worktree the RUNTIME observed, whatever the worker claimed', () => {
+    // The worker says the tree is clean; the runtime looked and it is not.
+    expect(
+      validateCompletionReceipt(
+        claim({ worktreeClean: true }),
+        expected,
+        observed({ clean: false })
+      )
+    ).toMatchObject({
       ok: false,
       code: 'worktree_dirty',
-      gate: 'worktree_clean'
+      gate: 'runtime_observation'
     })
   })
 
   it('rejects a claimed commit that is not the final HEAD', () => {
-    expect(validateCompletionReceipt(claim({ claimedSha: OLDER }), expected)).toMatchObject({
+    expect(
+      validateCompletionReceipt(claim({ claimedSha: OLDER }), expected, observed())
+    ).toMatchObject({
       ok: false,
       code: 'claimed_sha_mismatch',
       gate: 'claimed_sha'
@@ -86,31 +118,43 @@ describe('B6 completion receipt validation', () => {
 
   it('rejects a missing or malformed final HEAD', () => {
     expect(
-      validateCompletionReceipt(claim({ headSha: '', claimedSha: '' }), expected)
+      validateCompletionReceipt(claim({ headSha: '', claimedSha: '' }), expected, observed())
     ).toMatchObject({
       ok: false,
       code: 'missing_head_sha'
     })
     expect(
-      validateCompletionReceipt(claim({ headSha: 'not-a-sha', claimedSha: 'not-a-sha' }), expected)
+      validateCompletionReceipt(
+        claim({ headSha: 'not-a-sha', claimedSha: 'not-a-sha' }),
+        expected,
+        observed()
+      )
     ).toMatchObject({ ok: false, code: 'missing_head_sha' })
   })
 
   it('rejects the wrong Task, Dispatch, Run or outcome', () => {
-    expect(validateCompletionReceipt(claim({ taskId: 'task_2' }), expected)).toMatchObject({
+    expect(
+      validateCompletionReceipt(claim({ taskId: 'task_2' }), expected, observed())
+    ).toMatchObject({
       ok: false,
       code: 'task_mismatch',
       gate: 'identity'
     })
-    expect(validateCompletionReceipt(claim({ dispatchId: 'ctx_2' }), expected)).toMatchObject({
+    expect(
+      validateCompletionReceipt(claim({ dispatchId: 'ctx_2' }), expected, observed())
+    ).toMatchObject({
       ok: false,
       code: 'dispatch_mismatch'
     })
-    expect(validateCompletionReceipt(claim({ runId: 'run_2' }), expected)).toMatchObject({
+    expect(
+      validateCompletionReceipt(claim({ runId: 'run_2' }), expected, observed())
+    ).toMatchObject({
       ok: false,
       code: 'run_mismatch'
     })
-    expect(validateCompletionReceipt(claim({ outcomeId: 'out_2' }), expected)).toMatchObject({
+    expect(
+      validateCompletionReceipt(claim({ outcomeId: 'out_2' }), expected, observed())
+    ).toMatchObject({
       ok: false,
       code: 'outcome_mismatch'
     })
@@ -118,26 +162,31 @@ describe('B6 completion receipt validation', () => {
 
   it('accepts every supported execution placement and refuses an unknown one', () => {
     for (const placement of COMPLETION_PLACEMENTS) {
-      expect(validateCompletionReceipt(claim({ placement }), expected).ok).toBe(true)
+      expect(validateCompletionReceipt(claim({ placement }), expected, observed()).ok).toBe(true)
     }
     expect(
       validateCompletionReceipt(
         claim({ placement: 'remote-shell' as unknown as CompletionClaim['placement'] }),
-        expected
+        expected,
+        observed()
       )
     ).toMatchObject({ ok: false, code: 'unknown_placement', gate: 'placement' })
   })
 
   it('skips the receipt gate only when the expectation does not require it', () => {
     expect(
-      validateCompletionReceipt(claim({ receipt: null }), { ...expected, requireReceipt: false })
+      validateCompletionReceipt(
+        claim({ receipt: null }),
+        { ...expected, requireReceipt: false },
+        observed()
+      )
     ).toEqual({ ok: true, finalSha: HEAD })
   })
 
   it('is idempotent: replaying the identical claim produces the identical verdict', () => {
     const input = claim()
-    expect(validateCompletionReceipt(input, expected)).toEqual(
-      validateCompletionReceipt(input, expected)
+    expect(validateCompletionReceipt(input, expected, observed())).toEqual(
+      validateCompletionReceipt(input, expected, observed())
     )
   })
 })

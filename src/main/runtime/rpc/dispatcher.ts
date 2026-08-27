@@ -26,6 +26,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { assertNotFencedByValidationLease } from './validation-lease-fence'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -104,6 +105,7 @@ export class RpcDispatcher {
         return successResponse(request.id, meta, compatibility.result)
       }
       const effectiveParams = compatibility.params ?? parsedParams.value
+      await assertNotFencedByValidationLease(this.runtime, request.method, effectiveParams)
       const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
         request,
         compatibility.legacyCoordinatorAuthority
@@ -213,6 +215,7 @@ export class RpcDispatcher {
           return
         }
         const effectiveParams = compatibility.params ?? parsedParams.value
+        await assertNotFencedByValidationLease(this.runtime, request.method, effectiveParams)
         const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
           request,
           compatibility.legacyCoordinatorAuthority

@@ -1,0 +1,274 @@
+# Package B final-head receipts
+# Orca HEAD 8ede73cf6df44c5bb3628673d316947e155ef051
+# candidate f6b1a602-f4d5-4156-8489-e1d86df2fc9d (Electron --serve, /tmp/orca-cand-k)
+# exported before teardown
+
+=== control_plane_routes ===
+           route_key = codex|gpt-5.5|xhigh
+               agent = codex
+               model = gpt-5.5
+           reasoning = xhigh
+            provider = UNKNOWN
+             harness = UNKNOWN
+               roles = ["builder"]
+   task_capabilities = ["bounded_implementation"]
+       session_modes = ["fresh","retained"]
+     reasoning_modes = ["minimal","low","medium","high","xhigh"]
+context_limit_tokens = UNKNOWN
+          cost_class = UNKNOWN
+      identity_proof = exact
+  launcher_supported = 1
+      hook_supported = 1
+           readiness = {"availability":"UNKNOWN","authenticated":"UNKNOWN","providerStatus":"UNKNOWN","quota":{"state":"UNKNOWN","resetAt":"UNKNOWN","remainingFraction":"UNKNOWN"}}
+    constraints_json = []
+               notes = 
+          updated_at = 2026-08-27 20:31:35
+
+=== control_plane_route_evidence ===
+      route_key = codex|gpt-5.5|xhigh
+           kind = fresh_launch
+           role = builder
+   session_mode = fresh
+        outcome = PASS
+    observed_at = 2026-08-27T20:32:11.732Z
+runtime_version = 43.1.0+890ce4f878008444+8ede73cf6df44c5bb3628673d316947e155ef051
+     commit_sha = 8ede73cf6df44c5bb3628673d316947e155ef051
+         detail = 
+
+=== control_plane_outcomes ===
+  outcome_id = sol_a
+      run_id = run_54cc34a78962
+       title = Invoice export
+ fingerprint = f1
+intake_batch = sol_batch
+      status = admitted
+ gate_policy = standard
+  created_at = 2026-08-27 20:32:46
+
+  outcome_id = sol_b
+      run_id = run_95317f21d08b
+       title = Billing retry
+ fingerprint = f2
+intake_batch = sol_batch
+      status = admitted
+ gate_policy = standard
+  created_at = 2026-08-27 20:32:46
+
+  outcome_id = sol_c
+      run_id = run_781e2a36a09c
+       title = Login latency
+ fingerprint = f3
+intake_batch = sol_batch
+      status = admitted
+ gate_policy = standard
+  created_at = 2026-08-27 20:32:46
+
+  outcome_id = ser_a
+      run_id = run_d11aac497d33
+       title = SerA
+ fingerprint = d5b1f9812650bec105bee06bf2e2bcdf
+intake_batch = 
+      status = admitted
+ gate_policy = standard
+  created_at = 2026-08-27 20:34:05
+
+  outcome_id = ser_b
+      run_id = run_30efbac4ebe3
+       title = SerB
+ fingerprint = 05562ee3b376343d4269bd9d8326ead0
+intake_batch = 
+      status = admitted
+ gate_policy = standard
+  created_at = 2026-08-27 20:34:06
+
+  outcome_id = out_final
+      run_id = run_e3c39eba49f9
+       title = Final proof
+ fingerprint = 0ac89cc2ffb20466e1ab1724475f2bc6
+intake_batch = 
+      status = admitted
+ gate_policy = standard
+  created_at = 2026-08-27 20:35:26
+
+=== control_plane_outcome_policy ===
+         outcome_id = ser_a
+task_classification = bounded_implementation
+ builder_candidates = [{"agent":"codex","model":"gpt-5.5","reasoning":"xhigh"}]
+reviewer_candidates = []
+review_capabilities = []
+allow_unknown_quota = 1
+         updated_at = 2026-08-27 20:34:05
+
+         outcome_id = ser_b
+task_classification = bounded_implementation
+ builder_candidates = [{"agent":"codex","model":"gpt-5.5","reasoning":"xhigh"}]
+reviewer_candidates = []
+review_capabilities = []
+allow_unknown_quota = 1
+         updated_at = 2026-08-27 20:34:06
+
+         outcome_id = out_final
+task_classification = bounded_implementation
+ builder_candidates = [{"agent":"codex","model":"gpt-5.5","reasoning":"xhigh"}]
+reviewer_candidates = [{"agent":"codex","model":"gpt-5.6-sol","reasoning":"xhigh"}]
+review_capabilities = ["adversarial_review"]
+allow_unknown_quota = 1
+         updated_at = 2026-08-27 20:35:26
+
+=== control_plane_outcome_relations ===
+ left_outcome_id = sol_a
+right_outcome_id = sol_b
+            kind = resource_collision
+        decision = serialize
+       rationale = Both write the billing ledger.
+      created_at = 2026-08-27 20:32:47
+
+ left_outcome_id = ser_a
+right_outcome_id = ser_b
+            kind = resource_collision
+        decision = serialize
+       rationale = Same ledger.
+      created_at = 2026-08-27 20:34:06
+
+=== control_plane_intake_batches ===
+            batch_id = sol_batch
+manifest_fingerprint = 8dc5c3fd190b18809264e112e5a721d5
+          created_at = 2026-08-27 20:32:46
+
+            batch_id = ser_batch
+manifest_fingerprint = d3665aeb785ca38c78a19c453e1d054b
+          created_at = 2026-08-27 20:34:06
+
+=== control_plane_phase_launches ===
+
+=== control_plane_gate_receipts ===
+      receipt_id = gate-x#content#v1#gate-x#config:commandIdentity=gate-x,config:policyVersion=v1,file:x.ts=f5603a6435f46cecb5040b2afb318027
+       scope_key = run_e3c39eba49f9:unbound
+         gate_id = gate-x
+       final_sha = dfe7344fb293a56d6eedf62b36d2be1e6ec0b01d
+    input_hashes = {"file:x.ts":"f5603a6435f46cecb5040b2afb318027","config:policyVersion":"v1","config:commandIdentity":"gate-x"}
+  policy_version = v1
+command_identity = gate-x
+          result = PASS
+     recorded_at = 2026-08-27T20:32:26.007Z
+
+      receipt_id = gate-y#content#v1#gate-y#config:commandIdentity=gate-y,config:policyVersion=v1,file:y.ts=568935c3310ab44cd42478c89aebcc85
+       scope_key = run_e3c39eba49f9:unbound
+         gate_id = gate-y
+       final_sha = dfe7344fb293a56d6eedf62b36d2be1e6ec0b01d
+    input_hashes = {"file:y.ts":"568935c3310ab44cd42478c89aebcc85","config:policyVersion":"v1","config:commandIdentity":"gate-y"}
+  policy_version = v1
+command_identity = gate-y
+          result = PASS
+     recorded_at = 2026-08-27T20:32:26.462Z
+
+      receipt_id = review-gate#dfe7344fb293a56d6eedf62b36d2be1e6ec0b01d#v1#review-gate#config:commandIdentity=review-gate,config:policyVersion=v1,file:y.ts=568935c3310ab44cd42478c89aebcc85
+       scope_key = run_e3c39eba49f9:unbound
+         gate_id = review-gate
+       final_sha = dfe7344fb293a56d6eedf62b36d2be1e6ec0b01d
+    input_hashes = {"file:y.ts":"568935c3310ab44cd42478c89aebcc85","config:policyVersion":"v1","config:commandIdentity":"review-gate"}
+  policy_version = v1
+command_identity = review-gate
+          result = PASS
+     recorded_at = 2026-08-27T20:32:26.789Z
+
+      receipt_id = git-rev-parse-head-and-git-status-porcelain#content#dispatch-failure-preflight-v1#git-rev-parse-head-and-git-status-porcelain#config:commandIdentity=git-rev-parse-head-and-git-status-porcelain,config:policyVersion=dispatch-failure-preflight-v1
+       scope_key = run_e3c39eba49f9:out_final
+         gate_id = git-rev-parse-head-and-git-status-porcelain
+       final_sha = 81f0ada9fa655d0b3cc4207c069e59eb71e66ec6
+    input_hashes = {"config:policyVersion":"dispatch-failure-preflight-v1","config:commandIdentity":"git-rev-parse-head-and-git-status-porcelain"}
+  policy_version = dispatch-failure-preflight-v1
+command_identity = git-rev-parse-head-and-git-status-porcelain
+          result = PASS
+     recorded_at = 2026-08-27T20:38:56.943Z
+
+=== control_plane_dispatch_liveness ===
+dispatch_id = ctx_60be8d84a7f8
+    verdict = exited
+   activity = settled
+     reason = Dispatch reached a settled lifecycle state.
+observed_at = 2026-08-27T20:35:26.881Z
+ expires_at = 2026-08-27T20:40:26.881Z
+      epoch = c74730a1-94cf-443f-8fc5-37f82182efcf::/Users/prometheus/orca/workspaces/synthrepo/cand-k@@2804780c:9fd5f8ee-d8c5-4eb8-951b-23935df3fb60
+   woke_for = 
+   terminal = 1
+
+dispatch_id = ctx_d68b6fe7d0e0
+    verdict = live
+   activity = stalled
+     reason = No worker activity for 643s with no active tool call or approved wait.
+observed_at = 2026-08-27T20:47:41.385Z
+ expires_at = 2026-08-27T20:52:41.385Z
+      epoch = c74730a1-94cf-443f-8fc5-37f82182efcf::/Users/prometheus/orca/workspaces/synthrepo/cand-k@@4fdccbe8:7bc22fc7-fb76-4791-a4f6-0f3a5fbaccb0
+   woke_for = stalled
+   terminal = 0
+
+dispatch_id = ctx_b803e1a6c082
+    verdict = exited
+   activity = settled
+     reason = Dispatch reached a settled lifecycle state.
+observed_at = 2026-08-27T20:39:22.588Z
+ expires_at = 2026-08-27T20:44:22.588Z
+      epoch = c74730a1-94cf-443f-8fc5-37f82182efcf::/Users/prometheus/orca/workspaces/synthrepo/cand-k@@15cd927d:e4d08d25-0375-4046-a131-9d06fd485cb5
+   woke_for = 
+   terminal = 1
+
+=== control_plane_validation_leases ===
+      scope_key = wt:c74730a1-94cf-443f-8fc5-37f82182efcf::/Users/prometheus/orca/workspaces/synthrepo/cand-k
+       lease_id = lease_ctx_60be8d84a7f8
+          owner = ctx_60be8d84a7f8
+idempotency_key = ctx_60be8d84a7f8:default
+    acquired_at = 2026-08-27T20:34:42.084Z
+     expires_at = 2026-08-27T21:04:42.084Z
+    released_at = 2026-08-27T20:34:43.777Z
+
+=== control_plane_model_performance ===
+                  entry_id = d8815ba0444f71d150b5e12461ab3430
+               recorded_at = 2026-08-27T20:38:56.943Z
+                 route_key = codex|gpt-5.5|xhigh
+                     agent = codex
+                     model = gpt-5.5
+             model_version = gpt-5.5
+                      role = builder
+       task_classification = bounded_implementation
+         first_pass_result = failed
+         correction_rounds = 0
+          reviewer_defects = 0
+           escaped_defects = 0
+             wall_clock_ms = 216943
+                tool_calls = 
+       context_tokens_used = 
+provider_limit_interrupted = 0
+          rescue_route_key = 
+                provenance = observed_runtime
+
+=== escalations and rejections ===
+     id = msg_ac68da7ba918
+ run_id = run_e3c39eba49f9
+   type = worker_done
+subject = Rejected worker_done: task_c92be6d4b204 succeeded
+payload = {"taskId":"task_c92be6d4b204","dispatchId":"ctx_60be8d84a7f8","outcome":"succeeded","filesModified":["a.txt"],"_orcaLifecycleRejection":{"code":"dispatch_capability_invalid","reason":"The Dispatch capability is missing."}}
+
+     id = msg_62914917d804
+ run_id = run_e3c39eba49f9
+   type = worker_done
+subject = Rejected worker_done: Failed: upstream service missing
+payload = {"taskId":"task_5d727b9a55ec","dispatchId":"ctx_b803e1a6c082","outcome":"failed","_orcaLifecycleRejection":{"code":"completion_receipt_invalid","reason":"worker_done failed the receipt gate (missing_receipt): Run run_e3c39eba49f9 is outcome-admitted; worker_done must carry a completion block."}}
+
+     id = msg_184ecaacd252
+ run_id = run_e3c39eba49f9
+   type = escalation
+subject = Protected blocker: completion_not_accepted
+payload = {"wakeReason":"escalation","protectedBlocker":true,"code":"completion_not_accepted","dispatchId":"ctx_b803e1a6c082","taskId":"task_5d727b9a55ec"}
+
+     id = msg_3a5fee73b814
+ run_id = run_e3c39eba49f9
+   type = escalation
+subject = Worker stalled: dispatch ctx_d68b6fe7d0e0
+payload = {"wakeReason":"stalled","dispatchId":"ctx_d68b6fe7d0e0","taskId":"task_fc34bc99e634","source":"runtime_liveness_sweep"}
+
+=== entity counts ===
+runs = 7
+tasks = 8
+dispatch_contexts = 3
+worker_dispatches = 3

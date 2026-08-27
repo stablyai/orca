@@ -103,6 +103,23 @@ CREATE INDEX IF NOT EXISTS idx_control_plane_outcomes_batch
 -- two outcomes admitted in the same intake batch. An undecided pair is refused.
 -- Correction: binds a batch id to the manifest it was admitted with, so a
 -- replay carrying different outcomes is a conflict rather than an enlargement.
+-- Blocker 1: a gate result is only evidence when the RUNTIME ran the process.
+-- A caller-declared PASS has no row here, and the completion gate refuses it.
+CREATE TABLE IF NOT EXISTS control_plane_gate_executions (
+  execution_id  TEXT PRIMARY KEY,
+  scope_key     TEXT NOT NULL,
+  gate_id       TEXT NOT NULL,
+  final_sha     TEXT NOT NULL,
+  command       TEXT NOT NULL,
+  exit_code     INTEGER,
+  log_digest    TEXT NOT NULL,
+  build_id      TEXT NOT NULL,
+  started_at    TEXT NOT NULL,
+  finished_at   TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_control_plane_gate_executions_lookup
+  ON control_plane_gate_executions(scope_key, gate_id, final_sha);
+
 CREATE TABLE IF NOT EXISTS control_plane_intake_batches (
   batch_id             TEXT PRIMARY KEY,
   manifest_fingerprint TEXT NOT NULL,

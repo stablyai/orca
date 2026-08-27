@@ -56,8 +56,18 @@ export type CompletionGate =
   | 'receipt'
   | 'receipt_sha'
   | 'receipt_result'
+  | 'runtime_observation'
   | 'worktree_clean'
   | 'placement'
+
+/** What the RUNTIME observed, which outranks anything the worker claimed. */
+export type RuntimeCompletionObservation = {
+  observable: boolean
+  headSha: string | null
+  clean: boolean | null
+  changedFiles: readonly string[]
+  reason: string | null
+}
 
 export type CompletionRejectionCode =
   | 'task_mismatch'
@@ -71,6 +81,10 @@ export type CompletionRejectionCode =
   | 'receipt_failed'
   | 'worktree_dirty'
   | 'unknown_placement'
+  | 'evidence_unobservable'
+  | 'sha_not_observed'
+  | 'changed_files_mismatch'
+  | 'gate_not_executed'
 
 export type CompletionRejection = {
   ok: false
@@ -85,7 +99,13 @@ const SHA_PATTERN = /^[0-9a-f]{7,64}$/
 
 export function validateCompletionReceipt(
   claim: CompletionClaim,
-  expected: CompletionExpectation
+  expected: CompletionExpectation,
+  /** What the runtime itself saw. Required for any Run that needs a receipt;
+   *  omitting it fails closed rather than falling back to the worker's word. */
+  observed?: RuntimeCompletionObservation,
+  /** Whether the runtime itself observed this gate succeed at this commit.
+   *  Undefined keeps older callers working; false is a hard refusal. */
+  gateProven?: boolean
 ): CompletionValidation {
   const reject = (
     code: CompletionRejectionCode,
@@ -133,6 +153,32 @@ export function validateCompletionReceipt(
   if (!SHA_PATTERN.test(claim.headSha)) {
     return reject('missing_head_sha', 'head_sha', 'Completion is missing a valid final Git HEAD.')
   }
+  // Why the observation gates everything below: `claimedSha`, `headSha` and
+  // `worktreeClean` all arrive in the WORKER's payload, so comparing them to
+  // each other proved only that the worker was internally consistent. A worker
+  // that sent two equal SHAs and `worktreeClean: true` passed a gate that had
+  // looked at nothing. The runtime's own reading of the tree decides now.
+  if (!observed) {
+    return reject(
+      'evidence_unobservable',
+      'runtime_observation',
+      'No runtime observation was supplied for this completion, so nothing about it is proven.'
+    )
+  }
+  if (!observed.observable) {
+    return reject(
+      'evidence_unobservable',
+      'runtime_observation',
+      observed.reason ?? 'The runtime could not observe the worktree for this completion.'
+    )
+  }
+  if (observed.headSha !== claim.headSha) {
+    return reject(
+      'sha_not_observed',
+      'runtime_observation',
+      `Completion claims ${claim.headSha}; the runtime observed ${observed.headSha ?? '<none>'} in the worktree.`
+    )
+  }
   if (claim.claimedSha !== claim.headSha) {
     return reject(
       'claimed_sha_mismatch',
@@ -140,11 +186,11 @@ export function validateCompletionReceipt(
       `Claimed commit ${claim.claimedSha} is not the final HEAD ${claim.headSha}.`
     )
   }
-  if (!claim.worktreeClean) {
+  if (observed.clean !== true) {
     return reject(
       'worktree_dirty',
-      'worktree_clean',
-      'Worktree is dirty at completion; the delivered SHA does not describe the tree.'
+      'runtime_observation',
+      'The runtime observed a dirty worktree at completion; the delivered SHA does not describe the tree.'
     )
   }
   if (!expected.requireReceipt) {
@@ -164,6 +210,16 @@ export function validateCompletionReceipt(
   }
   if (claim.receipt.result !== 'PASS') {
     return reject('receipt_failed', 'receipt_result', 'Test/preflight receipt is FAIL.')
+  }
+  // Why the runtime's own execution: a worker declaring `result: 'PASS'` is a
+  // claim about a process nobody watched. The gate is satisfied by a row the
+  // runtime wrote after running the command itself at this exact commit.
+  if (gateProven !== undefined && !gateProven) {
+    return reject(
+      'gate_not_executed',
+      'receipt_result',
+      `No runtime-owned execution of ${claim.receipt.commandIdentity} succeeded at ${claim.headSha}; a declared PASS is not a receipt.`
+    )
   }
   return { ok: true, finalSha: claim.headSha }
 }

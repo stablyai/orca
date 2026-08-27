@@ -44,7 +44,8 @@ describe('correction 2: bounded control-plane operations', () => {
     const state = harness.setup()
     const result = (await harness.call(
       'orchestration.routeUpsert',
-      { agent: 'opencode', roles: 'builder', sessionModes: 'fresh' },
+      // aider launches but has no hook ingestion by either mechanism.
+      { agent: 'aider', roles: 'builder', sessionModes: 'fresh' },
       state.ctx
     )) as {
       route: { launcherSupported: boolean; hookSupported: boolean }

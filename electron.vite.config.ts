@@ -6,6 +6,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { createBootstrapFatalExitBanner } from './config/build-plugins/bootstrap-fatal-exit-banner'
 import { createPlainNodeEntryGuardPlugin } from './config/build-plugins/plain-node-entry-guard'
 import packageJson from './package.json' with { type: 'json' }
+import { buildProvenanceLiteral } from './config/scripts/build-provenance.mjs'
 
 const BUNDLED_MAIN_DEPENDENCIES = new Set([
   '@xterm/headless',
@@ -42,6 +43,7 @@ function isExternalMainModule(source: string): boolean {
 // every other build path resolves these env vars to undefined, which the
 // JSON.stringify below folds to the literal `null`. Ambient declarations
 // for the two constants live in `src/types/build-constants.d.ts`.
+const ORCA_BUILD_PROVENANCE_LITERAL = buildProvenanceLiteral()
 const orcaBuildIdentity = process.env.ORCA_BUILD_IDENTITY
 const ORCA_BUILD_IDENTITY_LITERAL =
   orcaBuildIdentity === 'stable' || orcaBuildIdentity === 'rc'
@@ -262,6 +264,10 @@ export const electronViteConfig: UserConfig = {
     // above for the full rationale.
     define: {
       ORCA_BUILD_IDENTITY: ORCA_BUILD_IDENTITY_LITERAL,
+      // Why a literal: provenance must describe the ARTIFACT, so it is folded
+      // in at build time. A runtime that read the checkout would start claiming
+      // whatever commit the tree moved to after it was built.
+      ORCA_BUILD_PROVENANCE: ORCA_BUILD_PROVENANCE_LITERAL,
       ORCA_POSTHOG_WRITE_KEY: ORCA_POSTHOG_WRITE_KEY_LITERAL,
       ORCA_DIAGNOSTICS_TOKEN_URL: ORCA_DIAGNOSTICS_TOKEN_URL_LITERAL
     },

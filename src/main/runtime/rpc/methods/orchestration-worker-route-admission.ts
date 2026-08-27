@@ -221,18 +221,7 @@ export function assertWorkerStartAdmitted(args: {
 }): void {
   // Why before the route check: an outcome an operator serialized against a
   // live one must not start work at all, whatever route it would have used.
-  const serialization = assertOutcomeSerializationAllowed({
-    db: args.handle as unknown as OrchestrationDb,
-    store: new ControlPlaneStore(args.handle),
-    runId: args.runId
-  })
-  if (!serialization.allowed) {
-    throw new OrchestrationError('serialized_with_active_outcome', serialization.reason, {
-      blockingOutcomeId: serialization.blockingOutcomeId,
-      blockingRunId: serialization.blockingRunId,
-      blockingDispatchId: serialization.blockingDispatchId
-    })
-  }
+  assertOutcomeNotSerialized(args.handle, args.runId)
   const planned = resolveWorkerStartRole(args.handle, args.taskId)
   assertWorkerStartRouteAdmitted({
     ...args,
@@ -272,19 +261,48 @@ function resolveTerminalWorktreeId(
   return row?.worktreeId
 }
 
+/** Serialization is a property of the OUTCOME, not of where work executes, so
+ *  it is asserted identically on the local and federated branches. */
+function assertOutcomeNotSerialized(handle: ControlPlaneDatabaseHandle, runId: string): void {
+  const serialization = assertOutcomeSerializationAllowed({
+    db: handle as unknown as OrchestrationDb,
+    store: new ControlPlaneStore(handle),
+    runId
+  })
+  if (!serialization.allowed) {
+    throw new OrchestrationError('serialized_with_active_outcome', serialization.reason, {
+      blockingOutcomeId: serialization.blockingOutcomeId,
+      blockingRunId: serialization.blockingRunId,
+      blockingDispatchId: serialization.blockingDispatchId
+    })
+  }
+}
+
 /** The federated branch resolves its agent from the raw parameter, because the
- *  remote host owns the launch. */
+ *  remote host owns the launch.
+ *
+ *  Why the same two guards as the local branch: `--on <host>` used to check the
+ *  route only, so a serialized outcome or a worktree under a live validation
+ *  lease was fenced locally and wide open federated. Where the work executes
+ *  does not change whether it is allowed to start. */
 export function assertFederatedWorkerStartAdmitted(args: {
   handle: ControlPlaneDatabaseHandle
   runId: string
   agent?: string
   model?: string
   effort?: string
+  /** Set when the federated start re-engages an existing worker session. */
+  terminalHandle?: string
 }): void {
+  assertOutcomeNotSerialized(args.handle, args.runId)
   assertWorkerStartRouteAdmitted({
     ...args,
     agent: isTuiAgent(args.agent) ? args.agent : undefined
   })
+  const worktreeId = resolveTerminalWorktreeId(args.handle, args.terminalHandle)
+  if (worktreeId) {
+    assertWorktreeMutationAllowed({ handle: args.handle, worktreeId })
+  }
 }
 
 /** The outcome id bound to a Run, for the runtime-generated worker context. */

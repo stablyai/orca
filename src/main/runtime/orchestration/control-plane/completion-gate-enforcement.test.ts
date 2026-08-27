@@ -1,28 +1,64 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
-import { createRootDispatch } from '../db/root-dispatch-test-fixture'
 import { reconcileLifecycleMessage } from '../lifecycle-reconciliation'
 import { ControlPlaneStore } from './control-plane-store'
+import {
+  createObservedWorktree,
+  recordProvenGate,
+  type ObservedWorktreeFixture
+} from './observed-worktree-fixture'
 import { admitOutcome } from './outcome-identity'
 
-const HEAD = 'a1b2c3d4e5f6'
-const OLDER = '0f0f0f0f0f0f'
+// A real tree, because the gate reads HEAD itself rather than believing the claim.
+let worktree: ObservedWorktreeFixture
+let HEAD = ''
+const OLDER = '0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f'
 
 describe('B6 gate on the real worker_done path', () => {
   let db: OrchestrationDb
+  beforeAll(() => {
+    worktree = createObservedWorktree()
+    HEAD = worktree.headSha
+  })
+  afterAll(() => worktree.cleanup())
   afterEach(() => db?.close())
 
-  function setup(options: { admit: boolean }) {
+  function setup(options: { admit: boolean; tree?: ObservedWorktreeFixture }) {
+    const tree = options.tree ?? worktree
     db = new OrchestrationDb(':memory:')
     const store = new ControlPlaneStore(db)
     const task = db.createTask({ spec: 'ship it' })
-    const dispatch = createRootDispatch(db, task.id, 'term_worker')
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: { agent: 'claude' }
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'term_worker:leaf',
+      processIncarnation: 'pty:term_worker',
+      launchTokenHash: 'hash',
+      worktreeId: tree.worktreeId,
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'created'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id, [])
+    const dispatch = db.getDispatchContextById(started.dispatch.id)!
     if (options.admit) {
       admitOutcome(store, {
         outcomeId: 'out_1',
         runId: task.run_id,
         title: 'Ship it',
         fingerprint: 'f1'
+      })
+      // The gate now also demands a runtime-run gate process, not a claimed PASS.
+      recordProvenGate(store, {
+        scopeKey: `${task.run_id}:out_1`,
+        gateId: 'pnpm test',
+        finalSha: tree.headSha
       })
     }
     return { task, dispatch }
@@ -50,6 +86,7 @@ describe('B6 gate on the real worker_done path', () => {
       to: 'term_coordinator',
       subject: 'Done',
       type: 'worker_done',
+      senderPaneKey: 'term_worker:leaf',
       payload: JSON.stringify({
         taskId: args.task.id,
         dispatchId: args.dispatch.id,
@@ -98,14 +135,23 @@ describe('B6 gate on the real worker_done path', () => {
     expect(logs.some((line) => line.includes('receipt_sha'))).toBe(true)
   })
 
-  it('rejects a dirty worktree', () => {
-    const { task, dispatch } = setup({ admit: true })
+  it('rejects a worktree the runtime reads as dirty even when the worker claims it clean', () => {
+    const tree = createObservedWorktree('repo_dirty')
+    tree.dirty()
+    const { task, dispatch } = setup({ admit: true, tree })
     const message = report({
       task,
       dispatch,
       completionBlock: {
-        worktreeClean: false,
-        receipt: { sha: HEAD, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
+        headSha: tree.headSha,
+        claimedSha: tree.headSha,
+        worktreeClean: true,
+        receipt: {
+          sha: tree.headSha,
+          result: 'PASS',
+          policyVersion: 'v1',
+          commandIdentity: 'pnpm test'
+        }
       }
     })
     expect(reconcileLifecycleMessage(db, message)).toMatchObject({
@@ -113,6 +159,7 @@ describe('B6 gate on the real worker_done path', () => {
       code: 'completion_receipt_invalid'
     })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
+    tree.cleanup()
   })
 
   it('rejects a completion claiming the wrong outcome', () => {

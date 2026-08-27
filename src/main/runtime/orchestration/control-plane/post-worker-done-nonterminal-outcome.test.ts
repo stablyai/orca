@@ -1,14 +1,21 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { reconcileLifecycleMessage } from '../lifecycle-reconciliation'
 import { ControlPlaneStore } from './control-plane-store'
 import { classifyWakeReason } from './coordinator-wake-events'
 import { admitOutcome } from './outcome-identity'
+import {
+  createObservedWorktree,
+  recordProvenGate,
+  type ObservedWorktreeFixture
+} from './observed-worktree-fixture'
 import { OutcomePolicyStore } from './outcome-policy'
 import { PhaseLaunchStore } from './phase-launch-store'
 import type { RouteIdentity } from './route-registry-types'
 
-const HEAD = 'a1b2c3d4e5f6'
+// Real tree and real HEAD: the completion gate observes both for itself.
+let worktree: ObservedWorktreeFixture
+let HEAD = ''
 const BUILDER: RouteIdentity = { agent: 'codex', model: 'gpt-5.5', reasoning: 'xhigh' }
 const REVIEWER: RouteIdentity = { agent: 'codex', model: 'gpt-5.6-sol', reasoning: 'xhigh' }
 
@@ -28,6 +35,11 @@ const REVIEWER: RouteIdentity = { agent: 'codex', model: 'gpt-5.6-sol', reasonin
  */
 describe('POST_WORKER_DONE_NONTERMINAL_OUTCOME_STALL', () => {
   let db: OrchestrationDb
+  beforeAll(() => {
+    worktree = createObservedWorktree()
+    HEAD = worktree.headSha
+  })
+  afterAll(() => worktree.cleanup())
   afterEach(() => db?.close())
 
   function world(reviewerCandidates: RouteIdentity[]) {
@@ -66,12 +78,17 @@ describe('POST_WORKER_DONE_NONTERMINAL_OUTCOME_STALL', () => {
       paneKey: 'term_builder:leaf',
       processIncarnation: 'pty:term_builder',
       launchTokenHash: 'hash',
-      worktreeId: 'wt_1',
+      worktreeId: worktree.worktreeId,
       effects: [],
       setupState: 'not_applicable',
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id, [])
+    recordProvenGate(store, {
+      scopeKey: `${task.run_id}:out_1`,
+      gateId: 'synthetic-gate',
+      finalSha: HEAD
+    })
     return { task, dispatch: db.getDispatchContextById(started.dispatch.id)!, runId: task.run_id }
   }
 

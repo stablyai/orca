@@ -62,13 +62,15 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
 
       if (params.on) {
         // Why here too: a federated worker is still a worker route, and an
-        // outcome-admitted Run must not reach a remote host on an uncertified one.
+        // outcome-admitted Run must not reach a remote host on an uncertified
+        // route, a serialized outcome, or a leased worktree.
         assertFederatedWorkerStartAdmitted({
           handle: db,
           runId: run.id,
           agent: params.agent,
           model: params.model,
-          effort: params.effort
+          effort: params.effort,
+          terminalHandle: params.terminal
         })
         return startFederatedWorker({
           params,

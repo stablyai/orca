@@ -35987,20 +35987,34 @@ export class OrcaRuntimeService {
         this.hasOrchestrationMessageWaiter(`dispatch:${dispatchId}`)
           ? new Date(Date.now() + APPROVED_WAIT_HORIZON_MS).toISOString()
           : null,
-      lastTerminalOutputAtMs: (terminalHandle) => this.getTerminalLastOutputAtMs(terminalHandle)
+      lastTerminalOutputAtMs: (terminalHandle, processIncarnation) =>
+        this.getTerminalLastOutputAtMs(terminalHandle, processIncarnation)
     }
   }
 
   /** Epoch ms of the last output this runtime saw on a terminal's own PTY
    *  stream, or null when it owns no such record. This is Orca's observation of
-   *  the stream, never anything the model reported about itself. */
-  getTerminalLastOutputAtMs(terminalHandle: string | null): number | null {
+   *  the stream, never anything the model reported about itself.
+   *
+   *  Scoped to the caller's process incarnation (`<ptyId>:<incarnationId>`): a
+   *  handle outlives the process bound to it, so answering for whatever pty the
+   *  handle points at now reported a different process's output as the
+   *  dispatched worker's own. */
+  getTerminalLastOutputAtMs(
+    terminalHandle: string | null,
+    processIncarnation?: string | null
+  ): number | null {
     if (!terminalHandle) {
       return null
     }
     const record = this.handles.get(terminalHandle)
-    const pty = record?.ptyId ? this.ptysById.get(record.ptyId) : null
-    return pty?.lastOutputAt ?? null
+    if (!record?.ptyId) {
+      return null
+    }
+    if (processIncarnation && processIncarnation.split(':')[0] !== record.ptyId) {
+      return null
+    }
+    return this.ptysById.get(record.ptyId)?.lastOutputAt ?? null
   }
 
   cancelMessageWaiters(handle: string): void {

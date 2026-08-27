@@ -1,4 +1,4 @@
-import { AGENT_HOOK_TARGETS } from '../../../../shared/agent-hook-types'
+import { hasAgentHookIngestion } from '../../../../shared/agent-hook-types'
 import {
   findCatalogModel,
   findCatalogOption,
@@ -26,8 +26,13 @@ export function isLauncherSupported(agent: string): agent is TuiAgent {
   return isTuiAgent(agent) && Boolean(TUI_AGENT_CONFIG[agent])
 }
 
+/** Why not `AGENT_HOOK_TARGETS` alone: that list is only the agents Orca
+ *  installs managed hook scripts for. An agent shipping its own plugin
+ *  (opencode) ingests hooks too, and reading only the managed list made drift
+ *  detection report it as `launcher_supported_hook_rejected` while the route
+ *  contract said its hook path was fine. */
 export function isHookSupported(agent: string): boolean {
-  return (AGENT_HOOK_TARGETS as readonly string[]).includes(agent)
+  return hasAgentHookIngestion(agent)
 }
 
 /** `exact` only when the catalog names this exact model id. A generic family

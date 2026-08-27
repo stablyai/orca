@@ -7,6 +7,7 @@ import {
   mapEmulatorError,
   mapRuntimeError
 } from './errors'
+import { ValidationLeaseFenced } from './validation-lease-fence'
 
 export function invalidArgumentResponse(
   request: RpcRequest,
@@ -32,6 +33,11 @@ export function mapDispatcherError(
   }
   if (error instanceof InvalidArgumentError) {
     return invalidArgumentResponse(request, meta, error.message)
+  }
+  // Why before the per-namespace mappers: the fence applies to git/files/
+  // terminal alike, and its typed code must survive whichever one would run.
+  if (error instanceof ValidationLeaseFenced) {
+    return errorResponse(request.id, meta, error.code, error.message, error.data)
   }
   if (request.method.startsWith('browser.')) {
     return mapBrowserError(request.id, meta, error)

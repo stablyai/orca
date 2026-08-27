@@ -1,10 +1,15 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { reconcileLifecycleMessage } from '../lifecycle-reconciliation'
 import { ControlPlaneStore } from './control-plane-store'
 import { classifyWakeReason } from './coordinator-wake-events'
 import { findGateReceipt } from './gate-receipt-validity'
 import { ModelPerformanceLedger } from './model-performance-ledger'
+import {
+  createObservedWorktree,
+  recordProvenGate,
+  type ObservedWorktreeFixture
+} from './observed-worktree-fixture'
 import { admitOutcome } from './outcome-identity'
 import { OutcomePolicyStore } from './outcome-policy'
 import { requiredEvidenceKinds, type RouteEvidence } from './route-certification-evidence'
@@ -13,7 +18,9 @@ import { routeKey, UNKNOWN, type RouteIdentity, type RouteRow } from './route-re
 import { acquireValidationLease } from './validation-lease'
 import { advanceAfterValidatedCompletion } from './lifecycle-advance'
 
-const HEAD = 'a1b2c3d4e5f6'
+// Real tree and real HEAD: the completion gate observes both for itself.
+let worktree: ObservedWorktreeFixture
+let HEAD = ''
 const BUILDER: RouteIdentity = { agent: 'claude', model: 'opus-5', reasoning: 'high' }
 const REVIEWER: RouteIdentity = { agent: 'codex', model: 'gpt-5.6-sol', reasoning: 'high' }
 
@@ -62,6 +69,11 @@ function evidenceFor(
 
 describe('correction 2: automatic builder to reviewer lifecycle', () => {
   let db: OrchestrationDb
+  beforeAll(() => {
+    worktree = createObservedWorktree()
+    HEAD = worktree.headSha
+  })
+  afterAll(() => worktree.cleanup())
   afterEach(() => db?.close())
 
   function world(options: { reviewerCandidates?: RouteIdentity[] } = {}) {
@@ -91,6 +103,12 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       reviewCapabilities: [],
       allowUnknownQuota: false
     })
+    // The gate now demands a runtime-run gate process bound to the final SHA.
+    recordProvenGate(store, {
+      scopeKey: `${task.run_id}:out_1`,
+      gateId: 'pnpm test',
+      finalSha: HEAD
+    })
     return { store, task, runId: task.run_id }
   }
 
@@ -113,7 +131,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       paneKey: `${handle}:leaf`,
       processIncarnation: `pty:${handle}`,
       launchTokenHash: `hash_${handle}`,
-      worktreeId: 'wt_1',
+      worktreeId: worktree.worktreeId,
       effects: [],
       setupState: 'not_applicable',
       terminalOwnership: 'created'
@@ -207,17 +225,16 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     )
     const receipt = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
     expect(receipt).toMatchObject({ finalSha: HEAD, result: 'PASS', policyVersion: 'gates-v1' })
-    // The worker's worktree is not readable from this test process, so the
-    // receipt is bound to its exact head rather than pretending a path-only
-    // fingerprint proves content. It records the file set and the gate config.
+    // The worktree IS readable now, so each claimed file gets its own key and
+    // is fingerprinted individually rather than lumped into one opaque string.
     expect(Object.keys(receipt?.inputHashes ?? {}).sort()).toEqual([
       'config:commandIdentity',
       'config:policyVersion',
-      'files:unreadable'
+      'file:src/a.ts'
     ])
-    // A path-only fingerprint must never read as content-proven, so the file
-    // set is recorded under an explicitly unreadable key rather than as bytes.
-    expect(receipt?.inputHashes['files:unreadable']).toBe('src/a.ts')
+    // The file does not exist in that tree, and an absent dependency must read
+    // as unprovable rather than as a content hash nobody could produce.
+    expect(receipt?.inputHashes['file:src/a.ts']).toBe('absent')
   })
 
   it('releases the validation lease the completing Dispatch held', () => {

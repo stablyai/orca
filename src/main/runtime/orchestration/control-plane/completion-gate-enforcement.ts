@@ -9,6 +9,8 @@ import {
 } from './completion-receipt'
 import { resolveOutcomeBinding } from './outcome-identity'
 import type { ControlPlaneDatabaseHandle } from './control-plane-store'
+import { observeCompletion } from './runtime-observed-completion'
+import { hasRuntimeProvenGate } from './runtime-gate-execution'
 
 /** B6 — where the completion gate actually bites, on the `worker_done` path.
  *
@@ -69,7 +71,21 @@ export function evaluateCompletionGate(args: {
       // Why always required once admitted: an outcome-admitted Run is exactly
       // the case where a PASS bound to the delivered SHA is the whole point.
       requireReceipt: true
-    }
+    },
+    // Why observed here: this is the one production path a worker_done travels,
+    // so it is where the runtime must look at the tree for itself rather than
+    // read the worker's description of it.
+    observeCompletion({
+      db: args.handle as unknown as OrchestrationDb,
+      dispatchId: args.dispatchId
+    }),
+    parsed.claim.receipt
+      ? hasRuntimeProvenGate(new ControlPlaneStore(args.handle), {
+          scopeKey: `${args.runId}:${binding.outcome.outcome_id}`,
+          gateId: parsed.claim.receipt.commandIdentity,
+          finalSha: parsed.claim.headSha
+        })
+      : undefined
   )
   return validation.ok
     ? { applies: true, ok: true, finalSha: validation.finalSha }
