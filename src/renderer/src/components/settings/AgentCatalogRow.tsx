@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Check, ChevronDown, ExternalLink } from 'lucide-react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentCommandProfile } from '../../../../shared/agent-command-profile'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -14,6 +15,7 @@ import {
   AgentDefaultArgsInput,
   AgentDefaultEnvInput
 } from './AgentLaunchDefaultsEditor'
+import { AgentCommandProfilesEditor } from './AgentCommandProfilesEditor'
 
 type AgentAvailability = 'enabled' | 'disabled'
 
@@ -74,6 +76,8 @@ export type AgentCatalogRowProps = {
   onSaveArgs: (value: string) => void
   onSaveEnv: (value: Record<string, string>) => void
   sessionSourceHome?: AgentSessionSourceHomeControl
+  commandProfiles: AgentCommandProfile[]
+  onSaveCommandProfiles: (value: AgentCommandProfile[]) => void
 }
 
 export function AgentCatalogRow({
@@ -94,7 +98,9 @@ export function AgentCatalogRow({
   onSaveOverride,
   onSaveArgs,
   onSaveEnv,
-  sessionSourceHome
+  sessionSourceHome,
+  commandProfiles,
+  onSaveCommandProfiles
 }: AgentCatalogRowProps): React.JSX.Element {
   const envSummary = stringifyAgentDefaultEnvDraft(envOverride)
   const defaultEnvSummary = stringifyAgentDefaultEnvDraft(defaultEnv)
@@ -226,6 +232,12 @@ export function AgentCatalogRow({
               />
             </div>
           )}
+          <div className="mt-2">
+            <AgentCommandProfilesEditor
+              profiles={commandProfiles}
+              onSaveProfiles={onSaveCommandProfiles}
+            />
+          </div>
           {sessionSourceHome && (
             <div className="mt-2">
               <AgentSessionSourceHomeInput

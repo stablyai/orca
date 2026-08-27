@@ -342,6 +342,7 @@ export function getDefaultSettings(homedir: string): GlobalSettings {
     minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
     agentCmdOverrides: {},
+    agentCommandProfiles: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,

@@ -178,14 +178,22 @@ function QuickTabBody({
     setQuickAgentOverride(resolvedQuickAgentSelection.quickAgentOverride)
   }
   const quickAgent = resolvedQuickAgentSelection.quickAgent
+  // Why: extra named command profiles (see agentCommandProfiles) are scoped to
+  // one agent — switching agents must not carry a stale profile id along.
+  const [quickAgentProfileId, setQuickAgentProfileId] = useState<string | null>(null)
+  const quickAgentCommandProfiles = useMemo(
+    () => (quickAgent ? (settings?.agentCommandProfiles?.[quickAgent] ?? []) : []),
+    [quickAgent, settings?.agentCommandProfiles]
+  )
 
   const handleQuickAgentChange = useCallback((agent: TuiAgent | null) => {
     setQuickAgentOverride(agent)
+    setQuickAgentProfileId(null)
   }, [])
 
   const handleCreate = useCallback(async (): Promise<void> => {
-    await submitQuick(quickAgent)
-  }, [quickAgent, submitQuick])
+    await submitQuick(quickAgent, quickAgentProfileId)
+  }, [quickAgent, quickAgentProfileId, submitQuick])
   // Why: Add Project layers over the composer as a nested dialog instead of
   // replacing it in the activeModal slot — closing the composer mid-flow (and
   // losing the typed name/prompt) was the old, abrupt behavior. Once opened it
@@ -301,6 +309,9 @@ function QuickTabBody({
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        quickAgentProfileId={quickAgentProfileId}
+        onQuickAgentProfileChange={setQuickAgentProfileId}
+        quickAgentCommandProfiles={quickAgentCommandProfiles}
         {...cardProps}
         primaryActionLabel={primaryActionLabel}
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}

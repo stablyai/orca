@@ -18,6 +18,7 @@ import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentCommandProfile } from '../../../../shared/agent-command-profile'
 
 export type RepoOption = React.ComponentProps<typeof RepoCombobox>['repos'][number]
 export type EphemeralVmRecipeOption = NonNullable<OrcaHooks['environmentRecipes']>[number]
@@ -34,6 +35,9 @@ export type NewWorkspaceComposerCardProps = {
   nameInputRef?: React.RefObject<HTMLInputElement | null>
   quickAgent: TuiAgent | null
   onQuickAgentChange: (agent: TuiAgent | null) => void
+  quickAgentProfileId?: string | null
+  onQuickAgentProfileChange?: (profileId: string | null) => void
+  quickAgentCommandProfiles?: readonly AgentCommandProfile[]
   eligibleRepos: readonly RepoOption[]
   repoId: string
   projectOptions?: NewWorkspaceProjectOption[]
