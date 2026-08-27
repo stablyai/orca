@@ -167,17 +167,15 @@ describe('authoritative session tab inventory publication', () => {
     await expect(allHosts).resolves.toEqual({ snapshots: [], authoritative: true })
   })
 
-  it('keeps a published empty graph unverifiable when PTY census is unavailable', async () => {
+  it('serves an unlabeled scan when the PTY census is unavailable', async () => {
     const runtime = new OrcaRuntimeService()
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    await expect(runtime.listAllMobileSessionTabsInventory()).rejects.toThrow(
-      'terminal_liveness_unavailable'
-    )
+    await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({ snapshots: [] })
   })
 
-  it('keeps a published empty graph unverifiable when an execution host is omitted', async () => {
+  it('serves an unlabeled scan when an execution host is omitted from the census', async () => {
     const runtime = createInventoryRuntime()
     vi.spyOn(
       runtime as unknown as {
@@ -188,9 +186,7 @@ describe('authoritative session tab inventory publication', () => {
     runtime.attachWindow(1)
     runtime.syncWindowGraph(1, { tabs: [], leaves: [], mobileSessionTabs: [] })
 
-    await expect(runtime.listAllMobileSessionTabsInventory()).rejects.toThrow(
-      'terminal_liveness_unavailable'
-    )
+    await expect(runtime.listAllMobileSessionTabsInventory()).resolves.toEqual({ snapshots: [] })
   })
 
   it('restores a renderer-owned PTY discovered by the authoritative inventory refresh', async () => {

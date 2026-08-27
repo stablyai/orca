@@ -7286,7 +7286,7 @@ export class OrcaRuntimeService {
   async listAllMobileSessionTabsInventory(
     clientNavigationId?: string,
     signal?: AbortSignal
-  ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; authoritative: true }> {
+  ): Promise<{ snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: true }> {
     this.assertSessionTabsInventoryRequestActive(signal)
     const primedPublicationEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
     const primed = await this.collectAllMobileSessionTabs(clientNavigationId)
@@ -7295,8 +7295,7 @@ export class OrcaRuntimeService {
       primedPublicationEpoch !== null &&
       this.getAuthoritativeSessionTabsInventoryEpoch() === primedPublicationEpoch
     ) {
-      this.assertAuthoritativeSessionTabsPtyInventory(primed.ptyInventory)
-      return { snapshots: primed.snapshots, authoritative: true }
+      return this.settleSessionTabsInventory(primed)
     }
     while (true) {
       const publicationEpoch = this.getAuthoritativeSessionTabsInventoryEpoch()
@@ -7307,10 +7306,20 @@ export class OrcaRuntimeService {
       const inventory = await this.collectAllMobileSessionTabs(clientNavigationId)
       this.assertSessionTabsInventoryRequestActive(signal)
       if (this.getAuthoritativeSessionTabsInventoryEpoch() === publicationEpoch) {
-        this.assertAuthoritativeSessionTabsPtyInventory(inventory.ptyInventory)
-        return { snapshots: inventory.snapshots, authoritative: true }
+        return this.settleSessionTabsInventory(inventory)
       }
     }
+  }
+
+  // Why: a failed census only invalidates the emptiness verdict, never the
+  // list — serve the scan already collected, unlabeled, instead of rescanning.
+  private settleSessionTabsInventory(inventory: {
+    snapshots: RuntimeMobileSessionTabsResult[]
+    ptyInventory: PtyControllerInventory | null
+  }): { snapshots: RuntimeMobileSessionTabsResult[]; authoritative?: true } {
+    return this.isCompleteSessionTabsPtyCensus(inventory.ptyInventory)
+      ? { snapshots: inventory.snapshots, authoritative: true }
+      : { snapshots: inventory.snapshots }
   }
 
   supportsAuthoritativeSessionTabsInventory(): boolean {
@@ -7323,20 +7332,15 @@ export class OrcaRuntimeService {
     }
   }
 
-  private assertAuthoritativeSessionTabsPtyInventory(
-    inventory: PtyControllerInventory | null
-  ): void {
+  private isCompleteSessionTabsPtyCensus(inventory: PtyControllerInventory | null): boolean {
     if (!inventory) {
-      throw new Error('terminal_liveness_unavailable')
+      return false
     }
     const knownHostIds = this.listKnownExecutionHostIds(inventory.queriedHostIds)
-    const hasOmittedOwner = [...knownHostIds].some((hostId) => {
+    return ![...knownHostIds].some((hostId) => {
       const parsed = parseExecutionHostId(hostId)
       return parsed?.kind !== 'runtime' && !inventory.queriedHostIds.has(hostId)
     })
-    if (hasOmittedOwner) {
-      throw new Error('terminal_liveness_unavailable')
-    }
   }
 
   private waitForSessionTabsInventoryPublication(signal?: AbortSignal): Promise<void> {

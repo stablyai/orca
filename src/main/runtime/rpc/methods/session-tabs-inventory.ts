@@ -44,27 +44,12 @@ function projectInventory(
 
 export async function listSessionTabsInventory(context: RpcContext): Promise<SessionTabsInventory> {
   const { runtime, pairedDeviceId, signal } = context
-  const collectInventory = async (): Promise<SessionTabsInventory> =>
-    runtime.supportsAuthoritativeSessionTabsInventory()
-      ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
-      : { snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId) }
-  try {
-    return projectInventory(await collectInventory(), context)
-  } catch (error) {
-    // Why: a census failure only invalidates the emptiness verdict, so every
-    // client gets the best-effort list unlabeled — capable clients then gate
-    // empty results behind their liveness probe instead of losing the list.
-    if (!(error instanceof Error && error.message === 'terminal_liveness_unavailable')) {
-      throw error
-    }
-    if (signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
-    return projectInventory(
-      { snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId) },
-      context
-    )
-  }
+  // Why: a failed census degrades inside the runtime to the same scan without
+  // the authoritative label, so no client ever pays a second full collection.
+  const inventory = runtime.supportsAuthoritativeSessionTabsInventory()
+    ? await runtime.listAllMobileSessionTabsInventory(pairedDeviceId, signal)
+    : { snapshots: await runtime.listAllMobileSessionTabs(pairedDeviceId) }
+  return projectInventory(inventory, context)
 }
 
 export async function subscribeSessionTabsInventory(

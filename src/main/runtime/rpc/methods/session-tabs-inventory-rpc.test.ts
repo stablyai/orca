@@ -43,29 +43,27 @@ describe('session tabs inventory RPC methods', () => {
     expect(JSON.parse(messages[0]!).result).toEqual({ snapshots: [] })
   })
 
-  // Why: a census failure only invalidates the emptiness verdict — a hard error
-  // here would blank the whole list for exactly the clients that negotiated the
-  // capability (e.g. one configured-but-disconnected SSH host). The unlabeled
-  // list keeps empty results behind the client probe, which stays unverifiable
-  // for the same omitted-host condition.
-  it('serves a capable client an unlabeled best-effort list when the census fails', async () => {
-    const legacyListAll = vi.fn(async () => [
-      {
-        worktree: 'wt-local',
-        publicationEpoch: 'epoch-local',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: null,
-        activeTabType: null,
-        tabs: []
-      }
-    ])
+  // Why: a census failure only invalidates the emptiness verdict — the runtime
+  // degrades to the same scan unlabeled, so a capable client keeps the list
+  // (e.g. one configured-but-disconnected SSH host) without a second collect.
+  it('serves a capable client an unlabeled list when the census fails', async () => {
+    const legacyListAll = vi.fn()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-      listAllMobileSessionTabsInventory: vi.fn(async () => {
-        throw new Error('terminal_liveness_unavailable')
-      }),
+      listAllMobileSessionTabsInventory: vi.fn(async () => ({
+        snapshots: [
+          {
+            worktree: 'wt-local',
+            publicationEpoch: 'epoch-local',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: null,
+            activeTabType: null,
+            tabs: []
+          }
+        ]
+      })),
       listAllMobileSessionTabs: legacyListAll
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -80,13 +78,13 @@ describe('session tabs inventory RPC methods', () => {
       }
     )
 
-    expect(legacyListAll).toHaveBeenCalledTimes(1)
+    expect(legacyListAll).not.toHaveBeenCalled()
     const result = JSON.parse(messages[0]!).result
     expect(result.snapshots).toEqual([expect.objectContaining({ worktree: 'wt-local' })])
     expect(result.authoritative).toBeUndefined()
   })
 
-  it('propagates disconnect errors to legacy clients instead of falling back', async () => {
+  it('propagates disconnect errors to legacy clients', async () => {
     const legacyListAll = vi.fn()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
@@ -136,24 +134,24 @@ describe('session tabs inventory RPC methods', () => {
     expect(JSON.parse(messages[0]!).result).toEqual({ snapshots: [], authoritative: true })
   })
 
-  it('serves an old client a best-effort list when terminal liveness cannot be proven', async () => {
-    const legacyListAll = vi.fn(async () => [
-      {
-        worktree: 'wt-local',
-        publicationEpoch: 'epoch-local',
-        snapshotVersion: 1,
-        activeGroupId: null,
-        activeTabId: null,
-        activeTabType: null,
-        tabs: []
-      }
-    ])
+  it('serves an old client the degraded scan when terminal liveness cannot be proven', async () => {
+    const legacyListAll = vi.fn()
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-      listAllMobileSessionTabsInventory: vi.fn(async () => {
-        throw new Error('terminal_liveness_unavailable')
-      }),
+      listAllMobileSessionTabsInventory: vi.fn(async () => ({
+        snapshots: [
+          {
+            worktree: 'wt-local',
+            publicationEpoch: 'epoch-local',
+            snapshotVersion: 1,
+            activeGroupId: null,
+            activeTabId: null,
+            activeTabType: null,
+            tabs: []
+          }
+        ]
+      })),
       listAllMobileSessionTabs: legacyListAll
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -165,21 +163,23 @@ describe('session tabs inventory RPC methods', () => {
       { clientKind: 'runtime' }
     )
 
-    expect(legacyListAll).toHaveBeenCalledTimes(1)
+    expect(legacyListAll).not.toHaveBeenCalled()
     expect(JSON.parse(messages[0]!).result).toEqual({
       snapshots: [expect.objectContaining({ worktree: 'wt-local' })]
     })
   })
 
-  it('does not start the legacy fallback after the caller disconnects', async () => {
-    const legacyListAll = vi.fn()
+  it('forwards the caller signal so a disconnected request never scans', async () => {
+    const inventory = vi.fn(async (_navigationId?: string, signal?: AbortSignal) => {
+      if (signal?.aborted) {
+        throw new Error('client_disconnected')
+      }
+      return { snapshots: [] }
+    })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => true),
-      listAllMobileSessionTabsInventory: vi.fn(async () => {
-        throw new Error('terminal_liveness_unavailable')
-      }),
-      listAllMobileSessionTabs: legacyListAll
+      listAllMobileSessionTabsInventory: inventory
     } as unknown as OrcaRuntimeService
     const controller = new AbortController()
     controller.abort()
@@ -187,7 +187,7 @@ describe('session tabs inventory RPC methods', () => {
     await expect(listSessionTabsInventory({ runtime, signal: controller.signal })).rejects.toThrow(
       'client_disconnected'
     )
-    expect(legacyListAll).not.toHaveBeenCalled()
+    expect(inventory).toHaveBeenCalledWith(undefined, controller.signal)
   })
 
   it('lets the final authoritative inventory subsume prior-epoch updates', async () => {
