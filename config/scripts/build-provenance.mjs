@@ -53,6 +53,20 @@ export function readBuildProvenance(repoRoot = process.cwd()) {
   }
 }
 
+/** Prefers provenance the build wrapper already computed, because by the time a
+ *  bundler config is evaluated the bundler has usually written scratch files
+ *  into the tree it would be measuring. */
 export function buildProvenanceLiteral(repoRoot = process.cwd()) {
+  const handed = process.env.ORCA_BUILD_PROVENANCE_JSON
+  if (handed) {
+    try {
+      const parsed = JSON.parse(handed)
+      if (parsed && parsed.schemaVersion === PROVENANCE_SCHEMA_VERSION) {
+        return JSON.stringify(handed)
+      }
+    } catch {
+      // Fall through and measure it here rather than embed something unparseable.
+    }
+  }
   return JSON.stringify(JSON.stringify(readBuildProvenance(repoRoot)))
 }
