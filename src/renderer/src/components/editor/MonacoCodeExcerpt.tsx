@@ -4,6 +4,7 @@ import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-fon
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
 import { useDocumentDarkTheme } from './use-document-dark-theme'
+import { useMonacoDarkThemeName } from '@/lib/monaco-editor-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 
@@ -32,13 +33,14 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
 
 /** Monaco token HTML per line; loads lazy tokenizers (e.g. Python) before colorizing. */
 export function useMonacoColorizedLines(lines: string[], language: string): string[] {
+  const monacoDarkTheme = useMonacoDarkThemeName()
   const isDark = useDocumentDarkTheme()
   const code = useMemo(() => lines.join('\n'), [lines])
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(isDark ? monacoDarkTheme : 'vs')
+  }, [isDark, monacoDarkTheme])
 
   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
   useEffect(() => {

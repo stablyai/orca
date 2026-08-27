@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { i18n } from '@/i18n/i18n'
 import { resetRendererAppPlatformCacheForTests } from '@/lib/renderer-app-platform'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { resetSystemPrefersDarkSubscriptionForTests } from '../terminal-pane/use-system-prefers-dark'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { StatusBarItem } from '../../../../shared/ui-chrome-types'
 
@@ -134,6 +135,58 @@ function createWarpThemesStub() {
   }
 }
 
+let originalMatchMedia: unknown
+let matchMediaStubbed = false
+let darkSchemeListeners: ((event: { matches: boolean }) => void)[] = []
+let stubbedPrefersDark = false
+
+/** The hook caches its MediaQueryList module-wide, so the reset must precede the stub. */
+function stubSystemPrefersDark(prefersDark: boolean): void {
+  resetSystemPrefersDarkSubscriptionForTests()
+  if (!matchMediaStubbed) {
+    originalMatchMedia = (window as unknown as { matchMedia?: unknown }).matchMedia
+    matchMediaStubbed = true
+  }
+  stubbedPrefersDark = prefersDark
+  darkSchemeListeners = []
+  ;(window as unknown as { matchMedia: unknown }).matchMedia = (query: string) => {
+    const isDarkQuery = query.includes('prefers-color-scheme: dark')
+    return {
+      get matches() {
+        return isDarkQuery ? stubbedPrefersDark : false
+      },
+      media: query,
+      addEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => {
+        if (isDarkQuery) {
+          darkSchemeListeners.push(listener)
+        }
+      },
+      removeEventListener: (_type: string, listener: (event: { matches: boolean }) => void) => {
+        darkSchemeListeners = darkSchemeListeners.filter((entry) => entry !== listener)
+      }
+    }
+  }
+}
+
+/** Fire a real OS color-scheme change at whatever subscribed, with no re-render. */
+function emitSystemPrefersDarkChange(prefersDark: boolean): void {
+  stubbedPrefersDark = prefersDark
+  for (const listener of darkSchemeListeners) {
+    listener({ matches: prefersDark })
+  }
+}
+
+/** Restore before clearing the cache, so the next read re-reads the real matchMedia. */
+function restoreSystemPrefersDark(): void {
+  if (matchMediaStubbed) {
+    ;(window as unknown as { matchMedia: unknown }).matchMedia = originalMatchMedia
+    originalMatchMedia = undefined
+    matchMediaStubbed = false
+  }
+  darkSchemeListeners = []
+  resetSystemPrefersDarkSubscriptionForTests()
+}
+
 async function renderAppearancePane(
   settings: GlobalSettings,
   updateSettings: (updates: Partial<GlobalSettings>) => void = vi.fn(),
@@ -239,7 +292,107 @@ describe('AppearancePane', () => {
   })
 
   afterEach(() => {
+    restoreSystemPrefersDark()
     delete (window as unknown as { api?: unknown }).api
+  })
+
+  it('reacts to a live OS color-scheme change without a re-render', async () => {
+    // Guards the non-reactive matchMedia read: the pane must follow the OS on
+    // the media event alone, with no new render pass to refresh a stale value.
+    mocks.state.settingsSearchQuery = ''
+    stubSystemPrefersDark(false)
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      theme: 'system'
+    })
+    expect(container.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')).toBeNull()
+
+    await act(async () => {
+      emitSystemPrefersDarkChange(true)
+    })
+
+    expect(
+      container.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')
+    ).not.toBeNull()
+  })
+
+  it('offers the Dark Appearance choice while the dark theme is active', async () => {
+    mocks.state.settingsSearchQuery = ''
+    stubSystemPrefersDark(false)
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      theme: 'dark'
+    })
+
+    expect(
+      container.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')
+    ).not.toBeNull()
+  })
+
+  it('hides the inert Dark Appearance choice in light mode', async () => {
+    mocks.state.settingsSearchQuery = ''
+    stubSystemPrefersDark(true)
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      theme: 'light'
+    })
+
+    expect(container.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')).toBeNull()
+  })
+
+  it('follows the OS color scheme while the theme is System', async () => {
+    mocks.state.settingsSearchQuery = ''
+    stubSystemPrefersDark(false)
+    const lightContainer = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      theme: 'system'
+    })
+    expect(
+      lightContainer.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')
+    ).toBeNull()
+
+    stubSystemPrefersDark(true)
+    const darkContainer = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      theme: 'system'
+    })
+    expect(
+      darkContainer.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')
+    ).not.toBeNull()
+  })
+
+  it('keeps Dark Appearance reachable from search while light mode hides it', async () => {
+    mocks.state.settingsSearchQuery = 'oled'
+    stubSystemPrefersDark(false)
+    const container = await renderAppearancePane({
+      ...getDefaultSettings('/tmp'),
+      theme: 'light'
+    })
+
+    expect(
+      container.querySelector('[role="radiogroup"][aria-label="Dark Appearance"]')
+    ).not.toBeNull()
+  })
+
+  it('writes the pure-black variant when the choice is picked', async () => {
+    mocks.state.settingsSearchQuery = ''
+    stubSystemPrefersDark(true)
+    const updateSettings = vi.fn()
+    const container = await renderAppearancePane(
+      { ...getDefaultSettings('/tmp'), theme: 'dark' },
+      updateSettings
+    )
+    const pureBlack = Array.from(
+      container.querySelectorAll<HTMLButtonElement>(
+        '[role="radiogroup"][aria-label="Dark Appearance"] button[role="radio"]'
+      )
+    ).find((button) => button.textContent === 'Pure Black')
+
+    await act(async () => {
+      pureBlack?.click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ darkAppearanceVariant: 'pure-black' })
   })
 
   it('shows language as a primary interface control without opening Advanced', async () => {
