@@ -1,18 +1,19 @@
 /**
  * Cold-park verdict telemetry and a safe-side circuit breaker.
  * Field breadcrumbs prove render-cadence flips, but not which eligibility input
- * oscillates; burst damping keeps the pane mounted before React reaches #185.
+ * oscillates. Damping pins the verdict mounted on:
+ *   - **burst** — flips inside 1s (React #185 risk), and
+ *   - **window** — notice-limit flips inside 60s (field #12596: measure-lease
+ *     churn at ~2.5s/flip never hit the burst window).
  *
- * Scope: flips are counted on the rendered verdict, but the pin can only
- * subtract from the cold-park candidate set. Churn driven by the other parked
- * inputs (forced parking, portal ownership, deferred activation mounts) is
- * observed and breadcrumbed, not damped — read a repeating `burst` crumb for
- * one tab as "damping did not reach the oscillating input".
+ * Scope: the pin only subtracts from the cold-park candidate set. Forced
+ * parking / portal ownership / deferred activation can still flip; read a
+ * repeating crumb after pin as "damping did not reach that input".
  */
 import { recordRendererCrashBreadcrumb } from '@/lib/crash-breadcrumb-recorder'
 
 export const TERMINAL_TAB_PARK_FLIP_WINDOW_MS = 60_000
-/** Flips per window that no sane park policy should reach. Breadcrumb only. */
+/** Flips per 60s window that engage slow-churn pin + breadcrumb (#12596). */
 export const TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT = 12
 
 /** react-dom 19.2.x nested commit limit. */
@@ -38,7 +39,7 @@ export type ParkVerdictFlipRecord = {
   notified: boolean
   burstStartMs: number
   burstFlips: number
-  /** Set when a flip burst engaged damping; the verdict stays unparked until then. */
+  /** Set when burst or notice-limit damping engages; verdict stays unparked until then. */
   pinnedUntilMs?: number | null
 }
 
@@ -158,6 +159,10 @@ export function recordParkVerdictFlips(args: {
     // exists to keep down.
     if (!isParkVerdictPinLive(record, nowMs) && !record.notified && record.flips >= noticeLimit) {
       record.notified = true
+      // Why: field #12596 saw 12 flips / ~30s from the ~3s measure lease — too
+      // slow for the burst window, but long enough to thrash remounts/reloads.
+      // Pin for the remaining notice window so cold-park withholds unparking.
+      record.pinnedUntilMs = nowMs + flipWindowMs
       // Why: flips is always exactly noticeLimit here, so elapsedMs is the only
       // field that separates slow churn from a burst the damping already caught.
       recordRendererCrashBreadcrumb('terminal_park_verdict_churn', {
@@ -165,7 +170,8 @@ export function recordParkVerdictFlips(args: {
         trigger: 'window',
         flips: record.flips,
         elapsedMs: nowMs - record.windowStartMs,
-        windowMs: flipWindowMs
+        windowMs: flipWindowMs,
+        pinnedForMs: flipWindowMs
       })
     }
   }

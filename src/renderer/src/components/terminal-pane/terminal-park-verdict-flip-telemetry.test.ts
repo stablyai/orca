@@ -77,7 +77,7 @@ describe('recordParkVerdictFlips', () => {
   })
 
   // Why: the two triggers answer different questions — 'burst' means damping
-  // engaged before React could bail, 'window' means churn too slow to loop.
+  // engaged before React could bail, 'window' means field-rate churn (#12596).
   it('separates a damped burst from slow churn', () => {
     const tightRecords = new Map<string, ParkVerdictFlipRecord>()
     for (let i = 0; i < 40; i += 1) {
@@ -106,20 +106,23 @@ describe('recordParkVerdictFlips', () => {
         trigger: 'window',
         flips: TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT,
         elapsedMs: TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT * SLOW_CHURN_STEP_MS,
-        windowMs: TERMINAL_TAB_PARK_FLIP_WINDOW_MS
+        windowMs: TERMINAL_TAB_PARK_FLIP_WINDOW_MS,
+        pinnedForMs: TERMINAL_TAB_PARK_FLIP_WINDOW_MS
       })
     )
   })
 
-  // Why: slow churn must not be damped — parking it out for a minute would cost
-  // a mounted pane's memory for a verdict that was never near React's bail.
-  it('does not pin churn spread past the burst window', () => {
+  // Why: field #12596 measure-lease churn is ~2.5s/flip — never hits the 1s
+  // burst window, so the notice limit must pin too.
+  it('pins slow notice-limit churn from the measure-lease period', () => {
     const records = new Map<string, ParkVerdictFlipRecord>()
+    let lastNow = 1_000
     for (let i = 0; i < TERMINAL_TAB_PARK_FLIP_NOTICE_LIMIT + 1; i += 1) {
-      observe({ records, parked: i % 2 === 0, nowMs: 1_000 + i * SLOW_CHURN_STEP_MS })
+      lastNow = 1_000 + i * SLOW_CHURN_STEP_MS
+      observe({ records, parked: i % 2 === 0, nowMs: lastNow })
     }
 
-    expect(records.get(TAB)?.pinnedUntilMs ?? null).toBeNull()
+    expect(records.get(TAB)?.pinnedUntilMs).toBe(lastNow + TERMINAL_TAB_PARK_FLIP_WINDOW_MS)
   })
 
   it('re-arms after the window elapses', () => {
