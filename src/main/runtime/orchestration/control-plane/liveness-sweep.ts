@@ -6,7 +6,7 @@ import {
   observeProviderSessionIdentity,
   persistObservedLaunchReceipt
 } from './provider-session-identity'
-import { readDispatchLaunchEffort } from './route-runtime-events'
+import { readDispatchLaunchEffort, readDispatchLaunchRoutes } from './route-runtime-events'
 import type { DispatchContextRow } from '../types'
 import { COORDINATOR_WAKE_REASONS, WAKE_REASON_PAYLOAD_KEY } from './coordinator-wake-events'
 import { ControlPlaneStore } from './control-plane-store'
@@ -149,9 +149,11 @@ function recordObservedProviderIdentity(
       return
     }
     const worker = db.getWorkerDispatch(dispatch.id)
+    const launched = readDispatchLaunchRoutes(worker?.start_options)
     const verdict = observeProviderSessionIdentity({
       dispatch,
       snapshot,
+      agent: launched.effective?.agent ?? launched.requested?.agent,
       reasoning: readDispatchLaunchEffort(worker?.start_options)
     })
     if (!verdict.ok) {

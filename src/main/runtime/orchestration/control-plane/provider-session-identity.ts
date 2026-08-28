@@ -81,7 +81,16 @@ export function readProviderModelFromTranscript(
   return newest
 }
 
-/** True when this status report belongs to the Dispatch's own live session. */
+/** True when this status report belongs to the Dispatch's own live session.
+ *
+ *  The pane key is the anchor: Orca mints it and the provider's hook echoes it
+ *  back, so a report carrying it came from the pane this Dispatch occupies.
+ *
+ *  Terminal and launch token are checked WHEN THE REPORT CARRIES THEM. Claude's
+ *  hook does not populate either, and demanding a field the provider never sends
+ *  would mean no identity is ever observed — the failure this writer exists to
+ *  end. A report carrying a DIFFERENT terminal or token is still refused, which
+ *  is the case that actually distinguishes sessions. */
 function isThisDispatchsSession(
   dispatch: DispatchContextRow,
   entry: AgentStatusIpcPayload
@@ -96,17 +105,10 @@ function isThisDispatchsSession(
   ) {
     return false
   }
-  // The launch token is the session's identity: a report carrying another one
-  // came from a different launch in the same pane.
-  if (dispatch.launch_token_hash) {
-    if (!entry.launchToken) {
-      return false
-    }
-    if (
-      createHash('sha256').update(entry.launchToken).digest('hex') !== dispatch.launch_token_hash
-    ) {
-      return false
-    }
+  if (dispatch.launch_token_hash && entry.launchToken) {
+    return (
+      createHash('sha256').update(entry.launchToken).digest('hex') === dispatch.launch_token_hash
+    )
   }
   return true
 }
@@ -114,7 +116,9 @@ function isThisDispatchsSession(
 export function observeProviderSessionIdentity(args: {
   dispatch: DispatchContextRow
   snapshot: readonly AgentStatusIpcPayload[]
-  /** Effort is Orca's own launch parameter, read back rather than invented. */
+  /** Agent and effort are Orca's own launch parameters, read back from the
+   *  worker record rather than taken from the provider's report. */
+  agent: string | undefined
   reasoning: string | null
 }): ProviderSessionVerdict {
   const { dispatch, snapshot } = args
@@ -134,12 +138,15 @@ export function observeProviderSessionIdentity(args: {
       reason: `Dispatch ${dispatch.id} has no provider session id reported by its hook.`
     }
   }
-  const agent = entry.agentType
+  // The AGENT is Orca's own launch record, not the provider's word for it: Orca
+  // chose which launcher to run. Only the MODEL has to come from the provider,
+  // because only the provider knows what it actually loaded.
+  const agent = args.agent
   if (!isTuiAgent(agent)) {
     return {
       ok: false,
       code: 'session_not_this_dispatch',
-      reason: `Dispatch ${dispatch.id} reported no agent Orca can launch.`
+      reason: `Dispatch ${dispatch.id} has no agent on its own launch record.`
     }
   }
   // A hook-reported model is preferred where a harness supplies one; otherwise

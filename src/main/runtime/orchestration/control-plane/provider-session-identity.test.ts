@@ -110,6 +110,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
           providerSession: { key: 'session_id' as const, id: 'sess_1', transcriptPath: path }
         })
       ],
+      agent: 'claude',
       reasoning: 'high'
     })
     expect(verdict).toMatchObject({
@@ -133,6 +134,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
           providerSession: { key: 'session_id' as const, id: 'sess_1', transcriptPath: path }
         })
       ],
+      agent: 'claude',
       reasoning: 'high'
     })
     expect(verdict.ok).toBe(true)
@@ -160,6 +162,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
             providerSession: { key: 'session_id' as const, id: 'sess_other', transcriptPath: path }
           })
         ],
+        agent: 'claude',
         reasoning: 'high'
       })
     ).toMatchObject({ ok: false, code: 'no_status_for_dispatch' })
@@ -173,6 +176,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
       observeProviderSessionIdentity({
         dispatch,
         snapshot: [status({ paneKey: 'tab_other:leaf', providerSession: session })],
+        agent: 'claude',
         reasoning: 'high'
       })
     ).toMatchObject({ ok: false, code: 'no_status_for_dispatch' })
@@ -180,6 +184,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
       observeProviderSessionIdentity({
         dispatch,
         snapshot: [status({ terminalHandle: 'term_other', providerSession: session })],
+        agent: 'claude',
         reasoning: 'high'
       })
     ).toMatchObject({ ok: false, code: 'no_status_for_dispatch' })
@@ -196,6 +201,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
             providerSession: { key: 'session_id' as const, id: 'sess_1', transcriptPath: path }
           })
         ],
+        agent: 'claude',
         reasoning: 'high'
       })
     ).toMatchObject({ ok: false, code: 'stale_transcript' })
@@ -212,6 +218,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
             providerSession: { key: 'session_id' as const, id: 'sess_1', transcriptPath: path }
           })
         ],
+        agent: 'claude',
         reasoning: 'high'
       })
     ).toMatchObject({ ok: false, code: 'no_provider_model' })
@@ -222,6 +229,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
     const verdict = observeProviderSessionIdentity({
       dispatch,
       snapshot: [status({ model: 'claude-opus-5-from-hook' })],
+      agent: 'claude',
       reasoning: 'high'
     })
     expect(verdict).toMatchObject({
@@ -236,6 +244,51 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
       assistant('newest', '2026-08-28T00:09:00.000Z')
     ])
     expect(readProviderModelFromTranscript(path)).toMatchObject({ model: 'newest' })
+  })
+
+  it('binds on the pane when the provider sends no token, but refuses a DIFFERENT one', () => {
+    const dispatch = world()
+    const path = transcript([assistant('claude-opus-5', '2026-08-28T00:05:00.000Z')])
+    const session = { key: 'session_id' as const, id: 'sess_1', transcriptPath: path }
+    // Claude's hook populates neither launchToken nor agentType. Demanding a
+    // field the provider never sends would mean nothing is ever observed.
+    const noToken = status({ providerSession: session })
+    delete (noToken as { launchToken?: string }).launchToken
+    expect(
+      observeProviderSessionIdentity({
+        dispatch,
+        snapshot: [noToken],
+        agent: 'claude',
+        reasoning: 'high'
+      })
+    ).toMatchObject({ ok: true, observation: { identity: { model: 'claude-opus-5' } } })
+    // A report carrying a DIFFERENT token is still another session.
+    expect(
+      observeProviderSessionIdentity({
+        dispatch,
+        snapshot: [status({ launchToken: 'other-launch', providerSession: session })],
+        agent: 'claude',
+        reasoning: 'high'
+      })
+    ).toMatchObject({ ok: false, code: 'no_status_for_dispatch' })
+  })
+
+  it('takes the AGENT from Orca own launch record, never from the provider', () => {
+    const dispatch = world()
+    const path = transcript([assistant('claude-opus-5', '2026-08-28T00:05:00.000Z')])
+    const verdict = observeProviderSessionIdentity({
+      dispatch,
+      // The provider reports no agentType at all; Orca chose the launcher.
+      snapshot: [
+        status({
+          agentType: undefined,
+          providerSession: { key: 'session_id', id: 's', transcriptPath: path }
+        })
+      ],
+      agent: 'claude',
+      reasoning: 'high'
+    })
+    expect(verdict).toMatchObject({ ok: true, observation: { identity: { agent: 'claude' } } })
   })
 
   it('returns nothing for a transcript that does not exist', () => {
