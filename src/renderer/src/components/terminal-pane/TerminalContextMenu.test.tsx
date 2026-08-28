@@ -94,6 +94,8 @@ function renderMenu(overrides: Record<string, unknown> = {}): string {
     onClearPaneTitle: vi.fn(),
     canClearPaneTitle: false,
     onCopyTerminalId: vi.fn(),
+    canCopyAgentSessionId: false,
+    onCopyAgentSessionId: vi.fn(),
     onCopyPaneId: vi.fn(),
     ...overrides
   }
@@ -125,6 +127,24 @@ describe('TerminalContextMenu', () => {
     expect(onCopyAgentSessionContext).toHaveBeenCalledTimes(1)
     // Why: copying context must not go through the fork dialog path.
     expect(onForkAgentSession).not.toHaveBeenCalled()
+  })
+
+  it('shows Copy Session ID only for panes whose agent reported one (issue #16261)', () => {
+    renderMenu()
+    expect(
+      items.list.find((item) => childrenText(item.children) === 'Copy Session ID')
+    ).toBeUndefined()
+
+    items.list = []
+    const onCopyAgentSessionId = vi.fn()
+    renderMenu({ canCopyAgentSessionId: true, onCopyAgentSessionId })
+    const sessionIdItem = items.list.find(
+      (item) => childrenText(item.children) === 'Copy Session ID'
+    )
+    expect(sessionIdItem).toBeDefined()
+
+    sessionIdItem?.onSelect?.()
+    expect(onCopyAgentSessionId).toHaveBeenCalledTimes(1)
   })
 
   it('shows new-session continuation only for eligible agent panes', () => {

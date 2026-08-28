@@ -200,6 +200,7 @@ import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeRec
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
 import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
 import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
+import { readPaneAgentSessionId } from './terminal-agent-session-id-copy'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
   updateTerminalRemoteRuntimeRecoveryUiState,
@@ -2973,6 +2974,18 @@ function TerminalPane(
     ? (paneTransportsRef.current.get(chatPane.id)?.getPtyId() ?? null)
     : null
   const chatPaneResolvedAgent = chatPane ? resolveTitleAgentForLeaf(chatPane.leafId) : null
+  // Why: only an agent that reported a provider session has an id to copy; a plain
+  // shell pane would otherwise show an item that can only fail (issue #16261).
+  const contextMenuHasAgentSessionId = useAppStore((store) =>
+    contextMenu.open && contextMenuLeafId
+      ? Boolean(readPaneAgentSessionId(store.agentStatusByPaneKey, tabId, contextMenuLeafId))
+      : false
+  )
+  const chatPaneHasAgentSessionId = useAppStore((store) =>
+    chatPane
+      ? Boolean(readPaneAgentSessionId(store.agentStatusByPaneKey, tabId, chatPane.leafId))
+      : false
+  )
   const chatPaneLaunchAgent = nativeChatLaunchAgentForLeaf({
     launchAgent: terminalTab?.launchAgent,
     launchAgentLeafId: getTabWideAgentHintLeafId(),
@@ -3170,6 +3183,9 @@ function TerminalPane(
                   onSetTitle: () => contextMenu.runForPane(chatPane.id, contextMenu.onSetTitle),
                   onCopyTerminalId: () =>
                     void contextMenu.runForPane(chatPane.id, contextMenu.onCopyTerminalId),
+                  canCopyAgentSessionId: chatPaneHasAgentSessionId,
+                  onCopyAgentSessionId: () =>
+                    void contextMenu.runForPane(chatPane.id, contextMenu.onCopyAgentSessionId),
                   onCopyPaneId: () =>
                     void contextMenu.runForPane(chatPane.id, contextMenu.onCopyPaneId),
                   canClosePane: managedPanes.length > 1,
@@ -3223,6 +3239,8 @@ function TerminalPane(
         onClearPaneTitle={contextMenu.onClearPaneTitle}
         canClearPaneTitle={menuPaneHasCustomTitle}
         onCopyTerminalId={() => void contextMenu.onCopyTerminalId()}
+        canCopyAgentSessionId={contextMenuHasAgentSessionId}
+        onCopyAgentSessionId={() => void contextMenu.onCopyAgentSessionId()}
         onCopyPaneId={contextMenu.onCopyPaneId}
       />
       <TerminalLinkActionPopover

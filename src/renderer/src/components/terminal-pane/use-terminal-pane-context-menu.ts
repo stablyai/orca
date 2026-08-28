@@ -11,6 +11,7 @@ import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { pasteTerminalPaneMenuClipboard } from './terminal-pane-menu-paste'
 import {
+  copyTerminalPaneMenuAgentSessionId,
   copyTerminalPaneMenuPaneId,
   copyTerminalPaneMenuSelection,
   copyTerminalPaneMenuTerminalId
@@ -56,6 +57,7 @@ type TerminalMenuState = {
   onCopy: () => Promise<void>
   onSelectAll: () => void
   onCopyTerminalId: () => Promise<void>
+  onCopyAgentSessionId: () => Promise<void>
   onCopyPaneId: () => Promise<void>
   onPaste: () => Promise<void>
   onSplitRight: () => void
@@ -169,6 +171,9 @@ export function useTerminalPaneContextMenu({
   const onCopyTerminalId = async (): Promise<void> =>
     copyTerminalPaneMenuTerminalId(resolveMenuPane(), tabId)
 
+  const onCopyAgentSessionId = async (): Promise<void> =>
+    copyTerminalPaneMenuAgentSessionId(resolveMenuPane(), tabId)
+
   const onPaste = async (): Promise<void> => pasteResolvedPane('context-menu')
 
   const onEqualizePaneSizes = (): void => {
@@ -273,6 +278,7 @@ export function useTerminalPaneContextMenu({
     onCopy,
     onSelectAll,
     onCopyTerminalId,
+    onCopyAgentSessionId,
     onCopyPaneId,
     onPaste,
     onSplitRight,
