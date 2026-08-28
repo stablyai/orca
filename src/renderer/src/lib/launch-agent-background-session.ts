@@ -20,19 +20,17 @@ import {
   type EagerPtyHandle
 } from '@/components/terminal-pane/pty-dispatcher'
 import { subscribeToPtyData } from '@/components/terminal-pane/pty-data-sidecar-subscriptions'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { getSettingsForWorktreeRuntimeOwner } from '@/lib/worktree-runtime-owner'
 import { retireProvider } from '@/lib/retire-unowned-background-terminal'
 import { createRuntimeAgentBackgroundTerminal } from '@/lib/runtime-agent-background-create'
-import {
-  subscribeToRuntimeTerminalData,
-  toRemoteRuntimePtyId
-} from '@/runtime/runtime-terminal-stream'
+import { toRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { createSshBackgroundStartupDelivery } from '@/lib/ssh-background-startup-delivery'
 import { shouldUseShellReadyStartupDelivery } from '../../../shared/codex-startup-delivery'
 import { isMainTerminalSideEffectAuthorityForPty } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { runBestEffortAgentBackgroundCleanups } from '@/lib/agent-background-session-cleanup'
+import { createAgentBackgroundRunObservation } from '@/lib/agent-background-run-observation'
 import type { bindAutomationTerminal } from '@/lib/automation-terminal-ownership'
 import {
   adoptAgentBackgroundSessionTab,
@@ -132,15 +130,13 @@ export async function launchAgentBackgroundSession(
   let exitHandled = false,
     eagerPtyBuffer: EagerPtyHandle | null = null
   let terminalOwnership: ReturnType<typeof bindAutomationTerminal> = null
-  let unsubscribeExit = (): void => {},
-    unsubscribeData = (): void => {}
+  const runObservation = createAgentBackgroundRunObservation()
   const handleExit = (exitPtyId: string, code: number): void => {
     if (exitHandled) {
       return
     }
     exitHandled = true
-    unsubscribeExit()
-    unsubscribeData()
+    runObservation.dispose()
     sshStartupDelivery.clear()
     if (tab) {
       useAppStore.getState().clearTabPtyId(tab.id, exitPtyId)
@@ -265,27 +261,24 @@ export async function launchAgentBackgroundSession(
       if (!runtimeTerminalHandle) {
         throw new Error('Runtime terminal id is invalid.')
       }
-      unsubscribeData = await subscribeToRuntimeTerminalData(
-        store.settings,
+      await runObservation.startRemote({
+        settings: store.settings,
         ptyId,
-        `desktop:background:${tab.id}`,
-        handleData
-      )
-      void callRuntimeRpc<{ wait: { exitCode?: number | null } }>(
+        clientId: `desktop:background:${tab.id}`,
         runtimeTarget,
-        'terminal.wait',
-        { terminal: runtimeTerminalHandle, for: 'exit' },
-        { timeoutMs: 24 * 60 * 60 * 1000 }
-      )
-        .then((result) => handleExit(ptyId, result.wait.exitCode ?? 0))
-        .catch(() => {})
+        terminal: runtimeTerminalHandle,
+        onData: handleData,
+        onExit: (code) => handleExit(ptyId, code)
+      })
     } else {
       eagerPtyBuffer = registerEagerPtyBuffer(ptyId, handleExit)
-      unsubscribeData = subscribeToPtyData(ptyId, handleData)
+      runObservation.setDataUnsubscribe(subscribeToPtyData(ptyId, handleData))
       // Why: opening the workspace attaches a real terminal transport and disposes
       // the eager exit handler. This sidecar keeps automation completion tracking
       // alive regardless of whether the tab is hidden or mounted.
-      unsubscribeExit = subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
+      runObservation.setExitUnsubscribe(
+        subscribeToPtyExit(ptyId, (code) => handleExit(ptyId, code))
+      )
     }
     sshStartupDelivery.armFallback(ptyId)
 
@@ -297,14 +290,21 @@ export async function launchAgentBackgroundSession(
       scheduleAgentBackgroundDraft(tab.id, pasteDraftAfterLaunch, agent)
     }
 
-    return { tabId: tab.id, paneKey, ptyId, startupPlan, terminalOwnership }
+    return {
+      tabId: tab.id,
+      paneKey,
+      ptyId,
+      startupPlan,
+      terminalOwnership,
+      disposeRunObservation: runObservation.dispose
+    }
   } catch (error) {
     // Why: terminal creation and stream subscription are separate remote calls.
     // A failure between them must not strand an invisible runtime terminal.
     exitHandled = true
     terminalOwnership?.release()
     const createdTab = tab
-    runBestEffortAgentBackgroundCleanups(unsubscribeExit, unsubscribeData)
+    runObservation.dispose()
     runBestEffortAgentBackgroundCleanups(() => eagerPtyBuffer?.dispose())
     runBestEffortAgentBackgroundCleanups(() => sshStartupDelivery.clear())
     if (createdTab) {

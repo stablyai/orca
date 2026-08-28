@@ -153,6 +153,39 @@ describe('observeExistingAutomationSession', () => {
     expect(onAgentStatus).toHaveBeenCalledTimes(1)
   })
 
+  it('releases all 16 remote long-poll slots when completed run observers dispose', async () => {
+    const closeStreams = Array.from({ length: 16 }, () => vi.fn())
+    mockSubscribeTerminal.mockImplementation(async () => ({
+      close: closeStreams[mockSubscribeTerminal.mock.calls.length - 1]
+    }))
+    const { observeExistingAutomationSession } = await import('./automation-session-observer')
+
+    const disposers = await Promise.all(
+      Array.from({ length: 16 }, (_, index) =>
+        observeExistingAutomationSession({
+          ptyId: `remote:env-1@@terminal-${index}`,
+          paneKey: PANE_KEY,
+          runId: `run-${index}`,
+          onData: vi.fn(),
+          onAgentStatus: vi.fn(),
+          onExit: vi.fn()
+        })
+      )
+    )
+    const waitSignals = mockCallRuntimeRpc.mock.calls.map(
+      (call) => (call[3] as { signal: AbortSignal }).signal
+    )
+    expect(waitSignals).toHaveLength(16)
+    expect(waitSignals.every((signal) => !signal.aborted)).toBe(true)
+
+    for (const dispose of disposers) {
+      dispose()
+    }
+
+    expect(waitSignals.every((signal) => signal.aborted)).toBe(true)
+    expect(closeStreams.every((close) => close.mock.calls.length === 1)).toBe(true)
+  })
+
   it('stamps the exact SSH PTY in the legacy renderer fallback', async () => {
     state.settings.terminalMainSideEffectAuthority = false
     const ptyId = toAppSshPtyId('ssh-a', 'pty-1')

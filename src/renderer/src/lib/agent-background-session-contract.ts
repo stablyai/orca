@@ -21,4 +21,5 @@ export type LaunchAgentBackgroundSessionResult = {
   ptyId: string
   startupPlan: AgentStartupPlan
   terminalOwnership: AutomationTerminalOwnership | null
+  disposeRunObservation: () => void
 }

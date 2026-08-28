@@ -408,6 +408,42 @@ describe('launchAgentBackgroundSession remote runtime and SSH startup delivery',
     })
   })
 
+  it('closes the remote stream and exit wait when run observation ends', async () => {
+    useRemoteAgentBackgroundRuntime(state)
+    const streamSend = vi.fn()
+    const waitUnsubscribe = vi.fn()
+    mockRuntimeEnvironmentSubscribe.mockImplementation(async (request, callbacks) => {
+      if (request.method === 'terminal.multiplex') {
+        queueMicrotask(() => callbacks.onResponse({ ok: true, result: { type: 'ready' } }))
+        return { unsubscribe: vi.fn(), sendBinary: streamSend }
+      }
+      if (request.method === 'terminal.wait') {
+        return { unsubscribe: waitUnsubscribe, sendBinary: vi.fn() }
+      }
+      throw new Error(`Unexpected runtime subscription: ${request.method}`)
+    })
+    const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+
+    const result = await launchAgentBackgroundSession({
+      agent: 'claude',
+      worktreeId: 'wt-1',
+      prompt: 'run the automation'
+    })
+    await vi.waitFor(() =>
+      expect(mockRuntimeEnvironmentSubscribe).toHaveBeenCalledWith(
+        expect.objectContaining({ method: 'terminal.wait' }),
+        expect.any(Object)
+      )
+    )
+    const sendsBeforeDispose = streamSend.mock.calls.length
+
+    result?.disposeRunObservation()
+    result?.disposeRunObservation()
+
+    await vi.waitFor(() => expect(waitUnsubscribe).toHaveBeenCalledOnce())
+    expect(streamSend.mock.calls.length).toBe(sendsBeforeDispose + 1)
+  })
+
   it('preserves the legacy background spawn on an old remote host', async () => {
     useRemoteAgentBackgroundRuntime(state)
     mockRuntimeEnvironmentTransportCall.mockImplementation((request: { method: string }) => {

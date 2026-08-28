@@ -67,6 +67,7 @@ export async function observeExistingAutomationSession(args: {
 
   if (isRemoteRuntimePtyId(ptyId)) {
     let disposed = false
+    const waitController = new AbortController()
     const ownerEnvironmentId = getRemoteRuntimePtyEnvironmentId(ptyId)
     const runtimeTarget = ownerEnvironmentId
       ? ({ kind: 'environment', environmentId: ownerEnvironmentId } as const)
@@ -89,7 +90,7 @@ export async function observeExistingAutomationSession(args: {
       runtimeTarget,
       'terminal.wait',
       { terminal, for: 'exit' },
-      { timeoutMs: 24 * 60 * 60 * 1000 }
+      { timeoutMs: 24 * 60 * 60 * 1000, signal: waitController.signal }
     )
       .then((result) => {
         if (!disposed) {
@@ -99,6 +100,7 @@ export async function observeExistingAutomationSession(args: {
       .catch(() => {})
     return () => {
       disposed = true
+      waitController.abort()
       stream.close()
     }
   }
