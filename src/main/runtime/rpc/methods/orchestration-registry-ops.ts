@@ -286,9 +286,11 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           db,
           nowMs: Date.now(),
           currentCommitSha: params.sha,
-          // resolveRuntimeBuildIdentity, not getAppEnvironment: a host with no
-          // installed environment must still get a matrix, not an exception.
-          currentRuntimeVersion: resolveRuntimeBuildIdentity().version
+          // .id, not .version: certify stamps evidence with the full build
+          // identity (version+buildHash+commit). Comparing against the bare
+          // version means no evidence ever matches the runtime that recorded it,
+          // so a fully certified route reads STALE forever.
+          currentRuntimeVersion: resolveRuntimeBuildIdentity().id
         })
       }
     }
