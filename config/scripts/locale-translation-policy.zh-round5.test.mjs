@@ -132,23 +132,25 @@ describe('locale-translation-policy zh round 5', () => {
   })
 
   // Why: #12113 — brand names stay Latin, but generic workflow nouns keep their Chinese.
+  // Why: 智能体 is the canonical zh agent rendering (#12192) — a repair run must never
+  // rewrite it to 代理 (proxy semantics) or back to Latin "Agent".
   it('keeps brand names English and generic workflow terms translated', () => {
     expect(
       repairTranslatedValue({
         key: 'auto.components.sidebar.SidebarNav.9c95e1ce91',
         enValue: 'Agents',
-        localeValue: '代理',
+        localeValue: '智能体',
         locale: 'zh'
       })
-    ).toBe('代理')
+    ).toBe('智能体')
     expect(
       repairTranslatedValue({
         key: 'auto.components.GitHubItemDialog.28986b3747',
         enValue: 'Started an AI agent for the broken checks.',
-        localeValue: '已启动 AI 代理处理失败的检查。',
+        localeValue: '已启动 AI 智能体处理失败的检查。',
         locale: 'zh'
       })
-    ).toBe('已启动 AI 代理处理失败的检查。')
+    ).toBe('已启动 AI 智能体处理失败的检查。')
     expect(
       repairTranslatedValue({
         key: 'auto.components.LinearIssueMarkdownDescriptionEditor.d9c47069ef',

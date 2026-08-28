@@ -65,10 +65,9 @@ export const BRAND_MISTRANSLATIONS = {
     Linear: ['线性', '线形'],
     Jira: ['吉拉'],
     Tailscale: ['尾鳞', '尾鱗'],
-    Agent: ['代理', '智能体'],
-    Agents: ['代理', '智能体'],
-    agent: ['代理', '智能体'],
-    agents: ['代理', '智能体'],
+    // Why: Agent/Agents/agent/agents are not listed — 智能体 is the canonical zh rendering
+    // (see locale-generic-ui-terms.mjs) and 代理 is reserved for proxy/user-agent semantics,
+    // so neither form is a mistranslation to revert.
     Commit: ['提交'],
     Commits: ['提交'],
     commit: ['提交'],

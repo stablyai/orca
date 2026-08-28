@@ -131,15 +131,16 @@ export const LOCALE_PHRASE_FIXES = {
     ...KO_PHRASE_FIXES_ROUND4
   ],
   zh: [
-    { pattern: /客服人员/g, replacement: '代理', whenEnIncludes: 'agent' },
+    { pattern: /客服人员/g, replacement: '智能体', whenEnIncludes: 'agent' },
     { pattern: /会议/g, replacement: '会话', whenEnIncludes: 'session' },
     { pattern: /港口/g, replacement: '端口', whenEnIncludes: 'ort' },
     { pattern: /公关/g, replacement: 'PR', whenEnIncludes: 'PR' },
     { pattern: /虎鲸:\/\//g, replacement: 'orca://', whenEnIncludes: 'orca://' },
-    { pattern: /代理商/g, replacement: '代理', whenEnIncludes: 'agent' },
-    { pattern: /智能体/g, replacement: '代理', whenEnIncludes: 'agent' },
+    { pattern: /代理商/g, replacement: '智能体', whenEnIncludes: 'agent' },
+    // Why: 智能体 is the canonical zh rendering of agent (see locale-generic-ui-terms.mjs);
+    // 代理 stays reserved for proxy/user-agent semantics.
+    { pattern: /座席/g, replacement: '智能体', whenEnIncludes: 'agent' },
     { pattern: /分支机构/g, replacement: '分支', whenEnIncludes: 'ranch' },
-    { pattern: /座席/g, replacement: '代理', whenEnIncludes: 'agent' },
     { pattern: /汽车/g, replacement: '自动', whenEnIncludes: 'Auto' },
     { pattern: /清爽/g, replacement: '刷新中', whenEnIncludes: 'Refreshing' },
     { pattern: /瓦斯尔/g, replacement: 'WSL', whenEnIncludes: 'wsl' },
@@ -157,7 +158,7 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /电脑使用/g, replacement: '计算机控制', whenEnIncludes: 'Computer Use' },
     { pattern: /快捷方式/g, replacement: '快捷键', whenEnIncludes: 'Shortcuts' },
     { pattern: /入职清单/g, replacement: '入门清单', whenEnIncludes: 'Onboarding checklist' },
-    { pattern: /发射代理/g, replacement: '启动代理', whenEnIncludes: 'Launch agent' },
+    { pattern: /发射代理/g, replacement: '启动智能体', whenEnIncludes: 'Launch agent' },
     { pattern: /地位/g, replacement: '状态', whenEnIncludes: 'Status' },
     { pattern: /受让人/g, replacement: '负责人', whenEnIncludes: 'assignee' },
     { pattern: /开放工作区/g, replacement: '打开工作区', whenEnIncludes: 'Open workspace' },
