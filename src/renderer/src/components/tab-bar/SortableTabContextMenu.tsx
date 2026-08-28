@@ -1,4 +1,5 @@
 import {
+  Copy,
   MessageSquare,
   PanelLeftClose,
   PanelRightClose,
@@ -23,6 +24,8 @@ import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortc
 import { translate } from '@/i18n/i18n'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { copyTabAgentSessionId, copyTabTerminalId } from './tab-identifier-clipboard'
+import { resolveTabAgentSessionId } from './tab-terminal-identifiers'
 
 const TAB_COLORS = [
   {
@@ -144,6 +147,18 @@ export function SortableTabContextMenu({
   const keybindings = useAppStore((state) => state.keybindings)
   const splitRightShortcut = formatShortcutLabel('terminal.splitRight', keybindings)
   const splitDownShortcut = formatShortcutLabel('terminal.splitDown', keybindings)
+  // Why: every tab keeps this menu mounted, so only the open one pays for the lookup.
+  const agentSessionId = useAppStore((state) =>
+    open
+      ? resolveTabAgentSessionId({
+          tabId: tab.id,
+          layout: state.terminalLayoutsByTabId[tab.id],
+          agentStatusByPaneKey: state.agentStatusByPaneKey,
+          retainedAgentsByPaneKey: state.retainedAgentsByPaneKey,
+          sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey
+        })
+      : null
+  )
 
   const closeShortcut = useOptionalShortcutLabel('tab.close')
   const renameShortcut = useOptionalShortcutLabel('tab.rename')
@@ -230,6 +245,22 @@ export function SortableTabContextMenu({
           {translate('auto.components.tab.bar.SortableTabContextMenu.2f697b3c31', 'Change Title')}
           {renameShortcut ? <DropdownMenuShortcut>{renameShortcut}</DropdownMenuShortcut> : null}
         </DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => void copyTabTerminalId(tab.id)}>
+          <Copy className="size-3.5 shrink-0" />
+          {translate(
+            'auto.components.terminal.pane.TerminalContextMenu.copyTerminalId',
+            'Copy Terminal ID'
+          )}
+        </DropdownMenuItem>
+        {agentSessionId ? (
+          <DropdownMenuItem onSelect={() => void copyTabAgentSessionId(agentSessionId)}>
+            <Copy className="size-3.5 shrink-0" />
+            {translate(
+              'auto.components.right.sidebar.AiVaultSessionRow.copySessionId',
+              'Copy Session ID'
+            )}
+          </DropdownMenuItem>
+        ) : null}
         <div className="px-2 pt-1.5 pb-1">
           <div className="text-xs font-medium text-muted-foreground mb-1.5">
             {translate('auto.components.tab.bar.SortableTabContextMenu.35e8892fd0', 'Tab Color')}

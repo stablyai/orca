@@ -55,6 +55,7 @@ vi.mock('lucide-react', () => ({
   ArrowRight: () => null,
   ArrowUp: () => null,
   Columns2: () => null,
+  Copy: () => null,
   ListX: () => null,
   MessageSquare: () => null,
   PanelBottomClose: () => null,
@@ -68,8 +69,11 @@ vi.mock('lucide-react', () => ({
 }))
 
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
+  translate: (_key: string, fallback: string, vars?: Record<string, string>) =>
+    vars ? fallback.replaceAll(/\{\{(\w+)\}\}/g, (_match, name) => vars[name] ?? '') : fallback
 }))
+
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
 vi.mock('../../store', () => ({
   useAppStore: Object.assign(
@@ -79,6 +83,11 @@ vi.mock('../../store', () => ({
     }
   )
 }))
+
+const LEAF_ID = '11111111-1111-4111-8111-111111111111'
+
+const callRuntime = vi.fn()
+const writeClipboardText = vi.fn()
 
 const mounted: { container: HTMLDivElement; root: Root }[] = []
 
@@ -150,9 +159,21 @@ function getLastSplitEvent(spy: ReturnType<typeof vi.spyOn>): CustomEvent {
 
 beforeEach(() => {
   storeMock.dropUnifiedTab.mockReset()
+  callRuntime.mockReset().mockResolvedValue({
+    ok: true,
+    result: { terminal: { handle: 'term_worker' } }
+  })
+  writeClipboardText.mockReset().mockResolvedValue(undefined)
+  Object.assign(window, {
+    api: { runtime: { call: callRuntime }, ui: { writeClipboardText } }
+  })
   storeMock.state = {
     keybindings: {},
     dropUnifiedTab: storeMock.dropUnifiedTab,
+    terminalLayoutsByTabId: {},
+    agentStatusByPaneKey: {},
+    retainedAgentsByPaneKey: {},
+    sleepingAgentSessionsByPaneKey: {},
     groupsByWorktree: {
       'wt-1': [
         {
@@ -261,6 +282,41 @@ describe('SortableTabContextMenu', () => {
 
     expect(getButton(container, 'Close Tabs To The Left').disabled).toBe(true)
     expect(getButton(container, 'Close Tabs To The Right').disabled).toBe(true)
+  })
+
+  it('copies the focused pane terminal handle from the tab menu', async () => {
+    storeMock.state = {
+      ...storeMock.state,
+      terminalLayoutsByTabId: {
+        'term-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID }
+      }
+    }
+    const { container } = renderMenu()
+
+    act(() => getButton(container, 'Copy Terminal ID').click())
+    await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith('term_worker'))
+    expect(callRuntime).toHaveBeenCalledWith({
+      method: 'terminal.resolvePane',
+      params: { paneKey: `term-1:${LEAF_ID}` }
+    })
+  })
+
+  it('offers the agent session id only when the tab has one', async () => {
+    expect(renderMenu().container.textContent).not.toContain('Copy Session ID')
+
+    storeMock.state = {
+      ...storeMock.state,
+      terminalLayoutsByTabId: {
+        'term-1': { root: { type: 'leaf', leafId: LEAF_ID }, activeLeafId: LEAF_ID }
+      },
+      agentStatusByPaneKey: {
+        [`term-1:${LEAF_ID}`]: { providerSession: { key: 'session_id', id: 'session-9' } }
+      }
+    }
+    const { container } = renderMenu()
+
+    act(() => getButton(container, 'Copy Session ID').click())
+    await vi.waitFor(() => expect(writeClipboardText).toHaveBeenCalledWith('session-9'))
   })
 
   it('hides move-tab split actions for a single-tab group', () => {
