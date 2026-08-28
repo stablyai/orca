@@ -4,6 +4,7 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
 import { runGateWithBarrier } from '../../orchestration/control-plane/runtime-gate-execution'
 import { observeCompletion } from '../../orchestration/control-plane/runtime-observed-completion'
+import { resolveCommandOnLocalPathSync } from '../../../ipc/command-path-resolver'
 import { fingerprintGateDependencies } from '../../orchestration/control-plane/gate-dependency-fingerprint'
 import { hasUnprovableDependency } from '../../orchestration/control-plane/gate-dependency-fingerprint'
 import { requiredGateDefinition } from '../../orchestration/control-plane/required-gate-spec'
@@ -164,13 +165,21 @@ export async function runGateForDispatch(args: {
       `Dispatch ${args.dispatchId} worktree must be clean before a required gate starts.`
     )
   }
+  // Resolve ONCE and execute exactly what was fingerprinted. Fingerprinting a
+  // bare name and then spawning the same bare name is two independent PATH
+  // lookups: a reordered PATH or a new earlier shim between them makes the
+  // receipt describe a different binary than the one that ran.
+  const resolvedProgram = resolveCommandOnLocalPathSync(gate.program, {
+    cwd: observed.worktreePath ?? process.cwd()
+  })
+  const gateProgram = resolvedProgram ?? gate.program
   const inputHashes = fingerprintGateDependencies({
     spec: { gateId: gate.gateId, files: gate.dependencies },
     fallbackFiles: [],
     cwd: observed.worktreePath,
     policyVersion: gate.policyVersion,
     commandIdentity: gate.commandIdentity,
-    program: gate.program
+    program: gateProgram
   })
   const unprovable = hasUnprovableDependency(inputHashes)
   if (unprovable) {
@@ -183,7 +192,7 @@ export async function runGateForDispatch(args: {
     scopeKey: `${args.runId}:${binding.kind === 'admitted' ? binding.outcome.outcome_id : 'unbound'}`,
     gateId: args.gateId,
     finalSha: observed.headSha,
-    program: gate.program,
+    program: gateProgram,
     args: gate.args,
     cwd: observed.worktreePath,
     buildId: args.buildIdentity.id,
@@ -213,7 +222,7 @@ export async function runGateForDispatch(args: {
         cwd: after.worktreePath,
         policyVersion: gate.policyVersion,
         commandIdentity: gate.commandIdentity,
-        program: gate.program
+        program: gateProgram
       })
       return JSON.stringify(afterHashes) === JSON.stringify(inputHashes)
         ? null

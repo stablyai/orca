@@ -80,6 +80,14 @@ export function evaluateCompletionGate(args: {
   if (binding.kind === 'legacy_unbound') {
     return { applies: false }
   }
+  // A FAILED report is settled as failed; it never satisfies a gate and never
+  // advances the lifecycle. Running the gate against it rejected the report
+  // instead, so the Dispatch could neither pass nor settle — failed work was
+  // stranded rather than contained. `reportedOutcome` was declared for exactly
+  // this and was never read.
+  if (args.reportedOutcome !== undefined && args.reportedOutcome !== 'succeeded') {
+    return { applies: false }
+  }
   // The worker's block is ADVISORY. Identity, SHA, cleanliness and gate proof
   // all come from the runtime; a fabricated outcome id or a missing block
   // changes nothing, because nothing the worker writes is read as evidence.

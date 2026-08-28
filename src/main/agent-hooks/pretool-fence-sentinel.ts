@@ -43,7 +43,17 @@ export function fenceDirFor(endpointFilePath: string): string {
  *  identity: one file per LEASE keeps colliding workspaces from overwriting each
  *  other, and the exact worktree id inside each file decides which one applies. */
 export function fenceKeyFor(worktreeId: string): string {
-  return worktreeId.slice(-64).replace(/[^A-Za-z0-9._-]/g, '_')
+  // BYTES, not code units. The shell reader is `tail -c 64 | tr -c ... '_'`,
+  // which counts bytes and substitutes one `_` per non-matching BYTE. Slicing
+  // UTF-16 here made a non-ASCII path produce a shorter key than the reader
+  // derives, so the glob missed the sentinel and the offline fence failed open.
+  const tail = Buffer.from(worktreeId, 'utf8').subarray(-64)
+  let key = ''
+  for (const byte of tail) {
+    const ascii = String.fromCharCode(byte)
+    key += /[A-Za-z0-9._-]/.test(ascii) && byte < 0x80 ? ascii : '_'
+  }
+  return key
 }
 
 /** The collision-resistant half of the filename, derived by the RUNTIME from the

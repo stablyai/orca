@@ -106,11 +106,19 @@ export function observeCompletion(args: {
   } catch (error) {
     return unobservable(`git status failed in ${worktreePath}: ${String(error)}`, worktreePath)
   }
+  const changedFiles = deriveChangedFiles(worktreePath, args.baseSha ?? null, headSha)
+  if (changedFiles === null) {
+    // "Could not read the diff" must never read as "nothing changed".
+    return unobservable(
+      `git diff ${args.baseSha}..${headSha} failed in ${worktreePath}, so the changed-file set cannot be proven.`,
+      worktreePath
+    )
+  }
   return {
     worktreePath,
     headSha,
     clean,
-    changedFiles: deriveChangedFiles(worktreePath, args.baseSha ?? null, headSha),
+    changedFiles,
     observable: true,
     reason: null,
     observedAt: new Date().toISOString()
@@ -123,7 +131,7 @@ function deriveChangedFiles(
   worktreePath: string,
   baseSha: string | null,
   headSha: string
-): readonly string[] {
+): readonly string[] | null {
   // An explicit base is authoritative even when it equals HEAD: that is a real
   // no-change Dispatch and its changed-file set is empty. Falling back to the
   // HEAD commit's own diff in that case attributed pre-existing work to this
@@ -135,7 +143,13 @@ function deriveChangedFiles(
       .map((line) => line.trim())
       .filter(Boolean)
   } catch {
-    // A root commit has no parent; that is not an error, it is an empty range.
+    // A root commit has no parent; that is an empty range, not an error — but
+    // ONLY on the no-base fallback. With a base recorded, a diff failure means
+    // an unreachable base or an unreadable tree, and reporting that as "nothing
+    // changed" let a completion settle claiming it delivered no files.
+    if (baseSha) {
+      return null
+    }
     return []
   }
 }

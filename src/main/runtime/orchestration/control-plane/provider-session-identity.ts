@@ -116,7 +116,7 @@ export type ProviderSessionVerdict =
  *  wrote it. A hook-reported model wins when a harness supplies one. */
 export function readProviderModelFromTranscript(
   transcriptPath: string
-): { model: string; atMs: number } | null {
+): { model: string; atMs: number | null } | null {
   let raw: string
   try {
     if (!statSync(transcriptPath).isFile()) {
@@ -126,7 +126,7 @@ export function readProviderModelFromTranscript(
   } catch {
     return null
   }
-  let newest: { model: string; atMs: number } | null = null
+  let newest: { model: string; atMs: number | null } | null = null
   for (const line of raw.split('\n')) {
     const trimmed = line.trim()
     if (!trimmed.startsWith('{')) {
@@ -141,9 +141,12 @@ export function readProviderModelFromTranscript(
     if (record.type !== 'assistant' || typeof record.message?.model !== 'string') {
       continue
     }
+    // An unstamped record cannot be placed in time. Collapsing it to 0 let it
+    // win as "newest" and then skip the staleness comparison entirely, so a
+    // previous session's model in the same file was accepted as this one's.
     const atMs = typeof record.timestamp === 'string' ? Date.parse(record.timestamp) : Number.NaN
-    const stamped = Number.isFinite(atMs) ? atMs : 0
-    if (!newest || stamped >= newest.atMs) {
+    const stamped = Number.isFinite(atMs) ? atMs : null
+    if (!newest || stamped === null || newest.atMs === null || stamped >= newest.atMs) {
       newest = { model: record.message.model, atMs: stamped }
     }
   }
@@ -232,7 +235,16 @@ export function observeProviderSessionIdentity(args: {
     }
   }
   const dispatchedAtMs = Date.parse(exposeUtcTimestamp(dispatch.dispatched_at) ?? '')
-  const observedAtMs = hookModel ? entry.receivedAt : (fromTranscript?.atMs ?? 0)
+  const observedAtMs = hookModel ? entry.receivedAt : (fromTranscript?.atMs ?? null)
+  // Transcript evidence the runtime cannot place in time proves nothing about
+  // WHICH run wrote it, so it can never establish this Dispatch's identity.
+  if (observedAtMs === null) {
+    return {
+      ok: false,
+      code: 'stale_transcript',
+      reason: `The newest model in session ${session.id} carries no usable timestamp, so it cannot be shown to belong to Dispatch ${dispatch.id}.`
+    }
+  }
   // A model written before this Dispatch began describes an earlier session in
   // the same file, not this one.
   if (Number.isFinite(dispatchedAtMs) && observedAtMs > 0 && observedAtMs < dispatchedAtMs) {

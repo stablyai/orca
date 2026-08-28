@@ -58,19 +58,48 @@ function findContradiction(
 }
 
 /** Every relation this intake would leave in place: the ones it declares, plus
- *  the ones already recorded for the outcomes it touches. */
+ *  every recorded relation reachable from the outcomes it touches.
+ *
+ *  Reachable, not adjacent. A merge chain is built one batch at a time, so the
+ *  outcomes joining two ends of it are usually NOT in the batch being admitted.
+ *  A one-hop lookup saw `{A,C}` and `{D,B}` as separate groups and let
+ *  `A serialize B` through even though `A merge C merge D merge B` had already
+ *  made them one outcome. */
 export function findSerializationDeadlock(
   store: ControlPlaneStore,
   request: OutcomeIntakeRequest
 ): OutcomeAdmissionError | undefined {
-  return findContradiction([
-    ...(request.relations ?? []),
-    ...request.outcomes.flatMap((outcome) =>
-      store.listOutcomeRelations(outcome.outcomeId).map((row) => ({
+  const seen = new Set<string>()
+  const queue = [
+    ...request.outcomes.map((outcome) => outcome.outcomeId),
+    ...(request.relations ?? []).flatMap((relation) => [
+      relation.leftOutcomeId,
+      relation.rightOutcomeId
+    ])
+  ]
+  const recorded: {
+    leftOutcomeId: string
+    rightOutcomeId: string
+    decision: OutcomeRelationRow['decision']
+  }[] = []
+  while (queue.length > 0) {
+    const outcomeId = queue.shift() as string
+    if (seen.has(outcomeId)) {
+      continue
+    }
+    seen.add(outcomeId)
+    for (const row of store.listOutcomeRelations(outcomeId)) {
+      recorded.push({
         leftOutcomeId: row.left_outcome_id,
         rightOutcomeId: row.right_outcome_id,
         decision: row.decision
-      }))
-    )
-  ])
+      })
+      // Only a MERGE makes two outcomes one thing, so only a merge edge extends
+      // the group a later serialization could contradict.
+      if (row.decision === 'merge') {
+        queue.push(row.left_outcome_id, row.right_outcome_id)
+      }
+    }
+  }
+  return findContradiction([...(request.relations ?? []), ...recorded])
 }

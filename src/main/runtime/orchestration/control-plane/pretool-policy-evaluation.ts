@@ -121,6 +121,7 @@ export function evaluateCommittedPretoolPolicy(args: {
       program: '/usr/bin/python3',
       args: [policyPath],
       cwd: root,
+      env,
       input: payloadBytes.toString('utf8'),
       timeoutMs: 5_000,
       maxOutputBytes: MAX_POLICY_PAYLOAD_BYTES

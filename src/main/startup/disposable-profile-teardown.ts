@@ -58,7 +58,9 @@ export type DaemonExitProof = {
 function readRecordedDaemonPid(pidRecordPath: string): number | null {
   try {
     const parsed = JSON.parse(readFileSync(pidRecordPath, 'utf8')) as { pid?: unknown }
-    return typeof parsed.pid === 'number' && Number.isInteger(parsed.pid) ? parsed.pid : null
+    return typeof parsed.pid === 'number' && Number.isInteger(parsed.pid) && parsed.pid > 1
+      ? parsed.pid
+      : null
   } catch {
     return null
   }

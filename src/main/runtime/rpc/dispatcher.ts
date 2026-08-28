@@ -93,6 +93,13 @@ export class RpcDispatcher {
         )
         return successResponse(request.id, meta, clientHostedBrowser.result)
       }
+      // Admission runs BEFORE the legacy handler: `tryHandle` commits real
+      // lifecycle writes for orchestration.send/reply/ask and returns, so
+      // admitting afterwards left those exact mutations unbound to the runtime
+      // they were aimed at. The lease fence is unaffected by the ordering —
+      // it covers only git/files/terminal/worktree/repo verbs, and the legacy
+      // rewrite only ever touches orchestration params.
+      await assertRequestAdmissible(this.runtime, request, parsedParams.value, options)
       const compatibility = await this.legacyOrchestration.tryHandle(
         request,
         parsedParams.value,
@@ -102,7 +109,6 @@ export class RpcDispatcher {
         return successResponse(request.id, meta, compatibility.result)
       }
       const effectiveParams = compatibility.params ?? parsedParams.value
-      await assertRequestAdmissible(this.runtime, request, effectiveParams, options)
       const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
         request,
         compatibility.legacyCoordinatorAuthority
@@ -202,6 +208,7 @@ export class RpcDispatcher {
           reply(JSON.stringify(successResponse(request.id, meta, clientHostedBrowser.result)))
           return
         }
+        await assertRequestAdmissible(this.runtime, request, parsedParams.value, options)
         const compatibility = await this.legacyOrchestration.tryHandle(
           request,
           parsedParams.value,
@@ -212,7 +219,6 @@ export class RpcDispatcher {
           return
         }
         const effectiveParams = compatibility.params ?? parsedParams.value
-        await assertRequestAdmissible(this.runtime, request, effectiveParams, options)
         const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
           request,
           compatibility.legacyCoordinatorAuthority

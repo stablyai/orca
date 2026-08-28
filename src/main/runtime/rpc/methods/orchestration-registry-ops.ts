@@ -299,7 +299,9 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           runId: params.run,
           taskId: params.task,
           outcomeId: outcome.outcome_id,
-          worktreeId: params.worktree,
+          // The RESOLVED id, not the caller's selector: admission compares against
+          // what the runtime resolved, so storing 'current' guaranteed a mismatch.
+          worktreeId: namedWorkspace.id,
           identity: {
             agent: assertTuiAgent(params.agent),
             model: params.model ?? null,

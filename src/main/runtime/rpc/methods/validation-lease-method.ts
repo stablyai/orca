@@ -153,6 +153,18 @@ export const VALIDATION_LEASE_METHOD: RpcMethod = defineMethod({
         `Validation lease ${leaseId} was created by a different process or runtime build.`
       )
     }
+    // A lease is a promise that no worker will mutate this workspace while it
+    // is held, and on Windows the managed hook keeps neither half of it: the
+    // batch script discards Orca's deny reply and never reads the offline
+    // sentinel, so the only enforcement left is the RPC surface — which is the
+    // channel Orca talks to the worker ON, not the worker's own Bash and Edit.
+    // Granting it there would report PASS for a fence that does not exist.
+    if (params.action === 'acquire' && process.platform === 'win32') {
+      throw new OrchestrationError(
+        'validation_fence_unsupported_host',
+        'This Orca host cannot enforce a validation lease: the Windows managed hook does not block a tool call before it mutates. Use an isolated worktree for the suite, or wait for the workspace to be idle.'
+      )
+    }
     let acquisition
     try {
       acquisition = acquireValidationLease(store, {

@@ -29,11 +29,6 @@ export function buildClaudePosixHookScript(
           'fi'
         ]
       : []),
-    // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-    // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
-    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
-    '  exit 0',
-    'fi',
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -70,6 +65,15 @@ export function buildClaudePosixHookScript(
     '    exit 2',
     '  done',
     '}',
+    // Why below the fence and not above it: a backgrounded session runs in a
+    // daemon worker that inherited the dispatching pane's env, so ORCA_PANE_KEY
+    // names a pane this session does not run in (#9236) and it cannot report
+    // status. It is still the same Claude session holding the same workspace,
+    // so it must still be refused while a validation lease is active.
+    'if [ -n "$CLAUDE_JOB_DIR" ]; then',
+    '  orca_fence_denies',
+    '  exit 0',
+    'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
     '  spool_hook_event',
     '  orca_fence_denies',

@@ -48,11 +48,28 @@ describe('exit is proven, never assumed', () => {
   })
 
   it('reports another user’s process as live, never as exited', () => {
-    const path = pidRecord('eperm.pid', JSON.stringify({ pid: 1 }))
+    // Any real pid we cannot signal; 1 would now be refused as an implausible
+    // daemon record before the probe ever runs.
+    const path = pidRecord('eperm.pid', JSON.stringify({ pid: 2 }))
     const proof = proveDaemonExited(path, () => {
       throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
     })
     expect(proof.verdict).toBe('live')
+  })
+
+  // A record naming pid 0, 1 or a negative value describes no daemon this
+  // runtime could have started. A NEGATIVE pid is worse than useless: POSIX
+  // reads it as a process GROUP, so `kill(-5, 0)` throwing ESRCH was taken as
+  // proof that a daemon had exited.
+  it('refuses an implausible recorded pid instead of proving exit from it', () => {
+    for (const pid of [-5, 0, 1]) {
+      const path = pidRecord(`implausible-${pid}.pid`, JSON.stringify({ pid }))
+      const proof = proveDaemonExited(path, () => {
+        throw Object.assign(new Error('no such process'), { code: 'ESRCH' })
+      })
+      expect(proof.verdict).toBe('unverifiable')
+      expect(stateDeletionIsSafe(proof)).toBe(false)
+    }
   })
 
   it('reports a missing or unreadable pid record as unverifiable, not as exited', () => {

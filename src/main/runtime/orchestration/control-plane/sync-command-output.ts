@@ -14,11 +14,16 @@ export function runCommandForStdout(args: {
   input?: string
   timeoutMs?: number
   maxOutputBytes?: number
+  /** Replaces the inherited environment. A caller that scrubs secrets before
+   *  spawning has to be able to hand the scrubbed set over, or the child keeps
+   *  inheriting the full parent env and the scrub does nothing. */
+  env?: NodeJS.ProcessEnv
 }): string {
   const result = runProcessSync({
     program: args.program,
     args: [...args.args],
     ...(args.cwd === undefined ? {} : { cwd: args.cwd }),
+    ...(args.env === undefined ? {} : { env: args.env }),
     ...(args.input === undefined ? {} : { input: args.input }),
     ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs }),
     ...(args.maxOutputBytes === undefined ? {} : { maxOutputBytes: args.maxOutputBytes })
