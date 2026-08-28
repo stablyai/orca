@@ -598,11 +598,8 @@ import {
   resolveTuiAgentLaunchEnv
 } from '../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
-import {
-  getTuiAgentLaunchCommand,
-  isTuiAgent,
-  TUI_AGENT_CONFIG
-} from '../../shared/tui-agent-config'
+import { isTuiAgent, TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
+import { getTuiAgentLaunchCommand } from '../../shared/tui-agent-launch-command'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
 import {

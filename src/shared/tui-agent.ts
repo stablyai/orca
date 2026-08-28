@@ -21,6 +21,7 @@ export type TuiAgent =
   | 'aug' // Augment/Auggie
   | 'cline' // Cline
   | 'codebuff' // Codebuff
+  | 'freebuff' // Freebuff
   | 'command-code' // Command Code
   | 'continue' // Continue
   | 'cursor' // Cursor
