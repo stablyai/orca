@@ -45,7 +45,7 @@ describe('MobileNativeChatMessage', () => {
 
   function render(
     message: NativeChatMessage,
-    props: { toolsExpanded?: boolean } = {}
+    props: { toolsExpanded?: boolean; fontScale?: number } = {}
   ): ReactTestRenderer {
     act(() => {
       renderer = create(createElement(MobileNativeChatMessage, { message, ...props }))
@@ -151,5 +151,61 @@ describe('MobileNativeChatMessage', () => {
     expect(textIn(tree.root).filter((text) => text === input)).toHaveLength(1)
     expect(tree.root.findAllByType('ChevronDown' as never)).toHaveLength(1)
     expect(tree.root.findAllByType('SquareChevronRight' as never)).toHaveLength(1)
+  })
+
+  it('renders a system notice as a banner, not an agent bubble with copy controls', () => {
+    const tree = render({
+      id: 'notice-1',
+      role: 'system',
+      blocks: [{ type: 'text', text: 'Please run /login in Claude Code.' }],
+      timestamp: null,
+      source: 'transcript',
+      notice: { level: 'warning' }
+    })
+    expect(textIn(tree.root)).toContain('Please run /login in Claude Code.')
+    expect(tree.root.findAllByType('Pressable' as never)).toHaveLength(0)
+    const banner = tree.root
+      .findAllByType('View' as never)
+      .find((node) => node.props.accessibilityRole === 'alert')
+    expect(banner).toBeTruthy()
+  })
+  it('makes agent notice text selectable and respects font scaling', () => {
+    const tree = render(
+      {
+        id: 'notice-1',
+        role: 'system',
+        blocks: [{ type: 'text', text: 'Please run /login to enroll this device.' }],
+        timestamp: null,
+        source: 'transcript',
+        notice: { level: 'warning' }
+      },
+      { fontScale: 1.5 }
+    )
+    const notice = tree.root
+      .findAllByType('Text' as never)
+      .find((node) => String(node.children.join('')).includes('/login'))
+    expect(notice, 'notice text node').toBeDefined()
+    expect(notice!.props.selectable).toBe(true)
+    expect(notice!.props.style).toContainEqual({ fontSize: 25.5, lineHeight: 34.5 })
+  })
+
+  it('renders a metadata-absent system row through the ordinary message fallback', () => {
+    const tree = render({
+      id: 'legacy-system-1',
+      role: 'system',
+      blocks: [{ type: 'text', text: 'Provider status from an older host.' }],
+      timestamp: null,
+      source: 'transcript'
+    })
+
+    expect(tree.root.findByType('MobileMarkdown' as never).props.content).toBe(
+      'Provider status from an older host.'
+    )
+    expect(tree.root.findAllByType('Pressable' as never)).not.toHaveLength(0)
+    expect(
+      tree.root
+        .findAllByType('View' as never)
+        .some((node) => node.props.accessibilityRole === 'alert')
+    ).toBe(false)
   })
 })

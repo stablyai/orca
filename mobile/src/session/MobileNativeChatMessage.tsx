@@ -11,7 +11,11 @@ import {
   summarizeToolRun,
   truncateToolDetail
 } from '../../../src/shared/native-chat-tool-summary'
-import { isImageRefBlock, isTextBlock } from '../../../src/shared/native-chat-types'
+import {
+  isAgentNoticeMessage,
+  isImageRefBlock,
+  isTextBlock
+} from '../../../src/shared/native-chat-types'
 import type { NativeChatBlock, NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { MobileMarkdown } from '../components/MobileMarkdown'
 import { colors } from '../theme/mobile-theme'
@@ -294,7 +298,8 @@ function MobileNativeChatMessageImpl({
 }): React.JSX.Element {
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
-  const isAgent = !isUser
+  const isNotice = isAgentNoticeMessage(message)
+  const isAgent = !isUser && !isNotice
   // Briefly tint the bubble to confirm a copy landed.
   const [copied, setCopied] = useState(false)
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -310,6 +315,28 @@ function MobileNativeChatMessageImpl({
   // tool calls fold into a collapsible run beneath. The user's own messages get
   // an inverted (filled accent) bubble so they stand apart from agent prose.
   const { prose, tools } = splitNativeChatBlocks(message.blocks)
+
+  if (isNotice) {
+    const text = nativeChatMessageText(message.blocks)
+    const level = message.notice?.level ?? 'info'
+    const needsAttention = level === 'warning' || level === 'error'
+    return (
+      <View style={styles.row}>
+        <View accessibilityRole={needsAttention ? 'alert' : 'summary'} style={styles.notice}>
+          {/* Why: provider diagnostics must remain selectable for support reports. */}
+          <Text
+            selectable
+            style={[
+              styles.noticeText,
+              { fontSize: TEXT_SIZE * fontScale, lineHeight: (TEXT_SIZE + 6) * fontScale }
+            ]}
+          >
+            {text}
+          </Text>
+        </View>
+      </View>
+    )
+  }
 
   const handleCopy = (): void => {
     const text = nativeChatMessageText(message.blocks)

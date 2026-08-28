@@ -49,6 +49,19 @@ export const styles = StyleSheet.create({
   reasoning: {
     opacity: 0.7
   },
+  notice: {
+    borderWidth: 1,
+    borderColor: colors.borderSubtle,
+    backgroundColor: colors.bgPanel,
+    borderRadius: radii.card,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  noticeText: {
+    color: colors.textPrimary,
+    fontSize: TEXT_SIZE,
+    lineHeight: TEXT_SIZE + 6
+  },
   toolRun: {
     marginTop: spacing.xs
   },

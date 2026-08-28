@@ -3,7 +3,8 @@
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
-  type NativeChatMessage
+  type NativeChatMessage,
+  type NativeChatNoticeLevel
 } from '../../shared/native-chat-types'
 import {
   asRecord,
@@ -23,6 +24,9 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const role = record.type
+  if (role === 'system') {
+    return decodeClaudeSystemNotice(record, fallbackId)
+  }
   if (role !== 'user' && role !== 'assistant') {
     return null
   }
@@ -81,4 +85,50 @@ function claudeMessageRole(
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+const CLAUDE_SYSTEM_NOISE_SUBTYPES = new Set([
+  'stop_hook_summary',
+  'turn_duration',
+  'away_summary',
+  'local_command',
+  'hook_callback',
+  'init',
+  'compact_boundary'
+])
+
+const CLAUDE_API_RETRY_SOURCES = new Set(['request_retry', 'connection_retry'])
+
+function decodeClaudeSystemNotice(
+  record: Record<string, unknown>,
+  fallbackId: string
+): NativeChatMessage | null {
+  const subtype = extractString(record.subtype)
+  if (!subtype || CLAUDE_SYSTEM_NOISE_SUBTYPES.has(subtype)) {
+    return null
+  }
+  if (subtype === 'api_error' && CLAUDE_API_RETRY_SOURCES.has(extractString(record.source) ?? '')) {
+    return null
+  }
+  const error = asRecord(record.error)
+  const text =
+    extractString(record.content) ??
+    extractString(record.error) ??
+    extractString(error?.formatted) ??
+    extractString(error?.message)
+  if (!text) {
+    return null
+  }
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'system',
+    blocks: [{ type: 'text', text }],
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript',
+    notice: { level: claudeSystemNoticeLevel(record.level) }
+  }
+}
+
+function claudeSystemNoticeLevel(value: unknown): NativeChatNoticeLevel {
+  return value === 'warning' || value === 'error' ? value : 'info'
 }
