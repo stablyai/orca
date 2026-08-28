@@ -129,7 +129,7 @@ export function observeCompletion(args: {
   if (changedFiles === null) {
     // "Could not read the diff" must never read as "nothing changed".
     return unobservable(
-      `git diff ${args.baseSha}..${headSha} failed in ${worktreePath}, so the changed-file set cannot be proven.`,
+      `The changed-file set for ${headSha} could not be read in ${worktreePath}, so this completion cannot be proven.`,
       worktreePath
     )
   }
@@ -155,20 +155,21 @@ function deriveChangedFiles(
   // no-change Dispatch and its changed-file set is empty. Falling back to the
   // HEAD commit's own diff in that case attributed pre-existing work to this
   // worker and could send unrelated files into review/gate invalidation.
-  const range = baseSha ? `${baseSha}..${headSha}` : `${headSha}^..${headSha}`
+  // `diff-tree --root` rather than `HEAD^..HEAD` for the no-base fallback: the
+  // range form THROWS on a root commit, so the catch had to treat every failure
+  // as an empty diff to let a root commit through. That swallowed real failures
+  // too — an unreadable tree reported "nothing changed" and settled. diff-tree
+  // handles a parentless commit natively, so the catch can now fail closed for
+  // everything, and a root commit reports the files it actually added.
+  const args = baseSha
+    ? ['diff', '--name-only', `${baseSha}..${headSha}`]
+    : ['diff-tree', '--no-commit-id', '--root', '-r', '--name-only', headSha]
   try {
-    return gitExecFileSync(['diff', '--name-only', range], { cwd: worktreePath })
+    return gitExecFileSync(args, { cwd: worktreePath })
       .split('\n')
       .map((line) => line.trim())
       .filter(Boolean)
   } catch {
-    // A root commit has no parent; that is an empty range, not an error — but
-    // ONLY on the no-base fallback. With a base recorded, a diff failure means
-    // an unreachable base or an unreadable tree, and reporting that as "nothing
-    // changed" let a completion settle claiming it delivered no files.
-    if (baseSha) {
-      return null
-    }
-    return []
+    return null
   }
 }

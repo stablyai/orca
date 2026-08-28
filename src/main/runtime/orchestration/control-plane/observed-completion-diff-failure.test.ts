@@ -50,7 +50,7 @@ describe('an unreadable diff is not the same as no changes', () => {
     const result = observeCompletion({ db: db!, dispatchId, baseSha: '0'.repeat(40) })
 
     expect(result.observable).toBe(false)
-    expect(result.reason).toContain('changed-file set cannot be proven')
+    expect(result.reason).toContain('could not be read')
   })
 
   it('still reports an empty changed set for a real no-change dispatch', () => {
@@ -61,6 +61,20 @@ describe('an unreadable diff is not the same as no changes', () => {
 
     expect(result.observable).toBe(true)
     expect(result.changedFiles).toEqual([])
+  })
+
+  // The no-base fallback used to swallow EVERY failure to [] because the
+  // `HEAD^..HEAD` range form throws on a parentless commit. It now uses
+  // `diff-tree --root`, which handles that natively, so the catch fails closed
+  // for everything and a root commit reports what it actually added.
+  it("reports a root commit's own files when no base was recorded", () => {
+    tree = createObservedWorktree()
+    const dispatchId = dispatchIn(tree.worktreeId)
+
+    const result = observeCompletion({ db: db!, dispatchId, baseSha: null })
+
+    expect(result.observable).toBe(true)
+    expect(result.changedFiles).toEqual(['a.txt'])
   })
 
   it('still reports the real changed set for a delivered commit', () => {
