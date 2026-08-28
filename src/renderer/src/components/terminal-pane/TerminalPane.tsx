@@ -3137,7 +3137,14 @@ function TerminalPane(
       />
       {effectiveChatViewMode && chatPane?.container
         ? createPortal(
-            <div className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background">
+            <div
+              className="absolute inset-0 z-10 flex min-h-0 min-w-0 bg-background"
+              // Why: chat is portaled into the pane container, so the pane's own
+              // pointerdown would focus the hidden xterm helper textarea and wipe
+              // any transcript text selection before the browser can extend it
+              // (shift-click / shift-drag). The pane still becomes active.
+              data-pane-prevent-terminal-focus=""
+            >
               <NativeChatView
                 terminalTabId={tabId}
                 isVisible={isRendererVisible}
