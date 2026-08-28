@@ -16,7 +16,7 @@
 // mirrors converge; no client may restore a stale sibling field.
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { act, createElement } from 'react'
+import { StrictMode, act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { StoreApi } from 'zustand/vanilla'
@@ -208,8 +208,10 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
       usePersistedUIWriter()
       return null
     }
+    // StrictMode, like the real renderer (main.tsx): the writer effect must
+    // stay correct under double-invoked mount/cleanup cycles.
     act(() => {
-      root.render(createElement(Probe))
+      root.render(createElement(StrictMode, null, createElement(Probe)))
     })
   }
 
@@ -287,6 +289,22 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     // And the desktop mirror must not be reverted by the echoed broadcast.
     deliverBroadcasts()
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('persists the desktop sleeping-workspaces toggle in the durable hide form', async () => {
+    // Pins the mirror->wire inversion end-to-end: showSleepingWorkspaces false
+    // must land as hideSleepingWorkspaces true at the authority.
+    act(() => {
+      store.getState().setShowSleepingWorkspaces(false)
+    })
+    await flushDesktopDebounce()
+    expect(authority.get().hideSleepingWorkspaces).toBe(true)
+
+    act(() => {
+      store.getState().setShowSleepingWorkspaces(true)
+    })
+    await flushDesktopDebounce()
+    expect(authority.get().hideSleepingWorkspaces).toBe(false)
   })
 
   it('the desktop debounced writer must not revert a concurrent mobile change', async () => {

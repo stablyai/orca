@@ -2684,6 +2684,9 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // writer's debounce window can't silently revert what the user just toggled (STA-5781).
       // Order matters: capture the baseline BEFORE overlaying pending edits, or the baseline
       // would equal the pending value, the diff would go empty, and the toggle would be dropped.
+      // Note the width sanitizers above fall back to the CURRENT store value on out-of-range
+      // input; that stays baseline-safe only because main's getPersistedUI clamps before
+      // broadcasting, so an in-range incoming width is always captured as sent.
       const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
       const previousBaseline = s.persistedUIWriteBaseline
       if (previousBaseline) {
