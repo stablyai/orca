@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getDragEdgeScrollTarget } from './useFileExplorerDragDrop'
+import { getDragEdgeScrollTarget } from './file-explorer-drag-edge-scroll'
 
 describe('getDragEdgeScrollTarget', () => {
   it('returns null away from the drag edge zones', () => {

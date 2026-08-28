@@ -4,11 +4,11 @@
 // renderer are meaningless on SSH targets, so the relay performs the remote
 // filesystem work itself.
 //
-// Plugin source strings ship over the JSON-RPC channel at session-ready
-// (commit #7) — they are NOT bundled with the relay binary because the
-// relay is versioned independently from Orca and the plugin source changes
-// frequently as new agent events get added (see docs/design/agent-status-
-// over-ssh.md §4 "Why ship the plugin source over the wire").
+// Plugin source strings ship over the JSON-RPC channel at session-ready —
+// they are NOT bundled with the relay binary because the relay is versioned
+// independently from Orca and the plugin source changes frequently as new
+// agent events get added; bundling would make every such change a relay
+// redeploy, and an old relay would silently serve stale plugin code.
 //
 // We deliberately do not reuse OpenCodeHookService / PiTitlebarExtensionService
 // directly: those modules import `electron` and ride on Orca's userData
@@ -32,9 +32,11 @@ import { join } from 'node:path'
 import { mirrorEntry, safeRemoveOverlay } from '../main/pty/overlay-mirror'
 import type { PiAgentKind } from '../shared/pi-agent-kind'
 
+type LegacyOverlayAgentKind = Exclude<PiAgentKind, 'prime-agent'>
+
 const RELAY_HOOKS_DIR = '.orca-relay'
 const OPENCODE_OVERLAY_SUBDIR = 'opencode-overlays'
-const PI_OVERLAY_SUBDIR_BY_KIND: Record<PiAgentKind, string> = {
+const PI_OVERLAY_SUBDIR_BY_KIND: Record<LegacyOverlayAgentKind, string> = {
   pi: 'pi-overlays',
   omp: 'omp-overlays'
 }
@@ -59,7 +61,8 @@ function withOrcaManagedPiExtensionMarker(source: string): string {
 // are installed).
 const PI_AGENT_HOME_DIR_NAME: Record<PiAgentKind, string> = {
   pi: '.pi',
-  omp: '.omp'
+  omp: '.omp',
+  'prime-agent': '.prime'
 }
 
 function safeDirName(input: string): string {
@@ -80,9 +83,11 @@ export type PluginSources = {
   piExtensionSource?: string
   /** Source body of OMP's `orca-agent-status.ts` to drop into <overlay>/extensions/. */
   ompExtensionSource?: string
+  /** Source body of Prime Agent's `orca-agent-status.ts` to install in its real agent dir. */
+  primeAgentExtensionSource?: string
 }
 
-/** Result of installing Pi/OMP status into a real agent home or OMP fallback path. */
+/** Result of installing Pi-compatible status into a real agent home or OMP fallback path. */
 export type MaterializePiResult = {
   /** Real agent dir when extensions were installed there. Absent for OMP status-only fallback. */
   sourceAgentDir?: string
@@ -100,11 +105,12 @@ export class PluginOverlayManager {
   private opencodePluginSource: string | null = null
   private piExtensionSources: Record<PiAgentKind, string | null> = {
     pi: null,
-    omp: null
+    omp: null,
+    'prime-agent': null
   }
   private homeDir: string
   private opencodeRoot: string
-  private piRoots: Record<PiAgentKind, string>
+  private piRoots: Record<LegacyOverlayAgentKind, string>
 
   constructor(opts?: { homeDir?: string }) {
     const home = opts?.homeDir ?? homedir()
@@ -133,6 +139,11 @@ export class PluginOverlayManager {
     if (typeof sources.ompExtensionSource === 'string') {
       this.piExtensionSources.omp = withOrcaManagedPiExtensionMarker(sources.ompExtensionSource)
     }
+    if (typeof sources.primeAgentExtensionSource === 'string') {
+      this.piExtensionSources['prime-agent'] = withOrcaManagedPiExtensionMarker(
+        sources.primeAgentExtensionSource
+      )
+    }
   }
 
   hasOpenCodeSource(): boolean {
@@ -143,11 +154,12 @@ export class PluginOverlayManager {
     if (kind) {
       return this.getPiExtensionSource(kind) !== null
     }
-    return this.piExtensionSources.pi !== null || this.piExtensionSources.omp !== null
+    return Object.values(this.piExtensionSources).some((source) => source !== null)
   }
 
   private getPiExtensionSource(kind: PiAgentKind): string | null {
-    return this.piExtensionSources[kind] ?? this.piExtensionSources.pi
+    const source = this.piExtensionSources[kind]
+    return source ?? (kind === 'omp' ? this.piExtensionSources.pi : null)
   }
 
   private mirrorOpenCodeConfig(sourceDir: string, overlayDir: string): void {

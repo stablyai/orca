@@ -8,15 +8,21 @@ import { DashboardAgentChildDisclosure } from './DashboardAgentChildDisclosure'
 import { DashboardAgentRowMessage } from './DashboardAgentRowMessage'
 import { DashboardAgentRowTrailingControls } from './DashboardAgentRowTrailingControls'
 import { DashboardAgentRowToolStep } from './DashboardAgentRowToolStep'
+import { showsAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import type { AgentStatusState } from '../../../../shared/agent-status-types'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 import { useAgentRowConversationName } from './use-agent-row-conversation-name'
+import { lastEnteredDoneAt } from './agent-finished-timestamp'
 
 // Why: narrow the dashboard's rollup states to shared dot states, defaulting unknowns to 'idle' so a row never crashes.
-function asDotState(state: AgentStatusState | 'idle'): AgentDotState {
+function asDotState(
+  state: AgentStatusState | 'idle',
+  workingMode?: DashboardAgentRowData['entry']['workingMode']
+): AgentDotState {
   switch (state) {
     case 'working':
+      return workingMode === 'monitoring' ? 'monitoring' : 'working'
     case 'blocked':
     case 'waiting':
     case 'done':
@@ -41,24 +47,6 @@ function formatTimeAgo(ts: number, now: number): string {
   }
   const days = Math.floor(hours / 24)
   return `${days}d ago`
-}
-
-// Why: use stateStartedAt (not updatedAt, which drifts on within-state pings) for the true done-transition time.
-function lastEnteredDoneAt(agent: DashboardAgentRowData): number | null {
-  // Why: idle subagents are alive-but-idle (persist between turns); don't label them as done.
-  if (agent.rowSource === 'subagent' && agent.state === 'idle') {
-    return null
-  }
-  const entry = agent.entry
-  if (entry.state === 'done') {
-    return entry.stateStartedAt
-  }
-  for (let i = entry.stateHistory.length - 1; i >= 0; i--) {
-    if (entry.stateHistory[i].state === 'done') {
-      return entry.stateHistory[i].startedAt
-    }
-  }
-  return null
 }
 
 function stateDotTooltipLabel(agent: DashboardAgentRowData, dotState: AgentDotState): string {
@@ -159,12 +147,16 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
   const conversationName = useAgentRowConversationName(agent)
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
   // Why: prompt is '' when unknown, so fall back to the state label to keep the row labeled.
-  const displayLabel = prompt || agentStateLabel(asDotState(agent.state))
+  const displayLabel = prompt || agentStateLabel(asDotState(agent.state, agent.entry.workingMode))
   const model = agent.entry.model?.trim() ?? ''
-  // Why: gate tool fields on 'working' — a stale tool line on a done row reads as still-running.
-  const isWorking = agent.state === 'working'
-  const toolName = isWorking ? (agent.entry.toolName?.trim() ?? '') : ''
-  const toolInput = isWorking ? (agent.entry.toolInput?.trim() ?? '') : ''
+  const isMonitoring = agent.state === 'working' && agent.entry.workingMode === 'monitoring'
+  const isWorking = agent.state === 'working' && !isMonitoring
+  // Why: 'working' names the running tool and 'waiting' names what an approval is blocked on;
+  // anywhere else a leftover tool line reads as still-running. See showsAgentToolPreview.
+  // Monitoring is excluded too: the lead turn is over, so its last tool line is stale.
+  const showsTool = showsAgentToolPreview(agent.state) && !isMonitoring
+  const toolName = showsTool ? (agent.entry.toolName?.trim() ?? '') : ''
+  const toolInput = showsTool ? (agent.entry.toolInput?.trim() ?? '') : ''
   const lastAssistantMessage = agent.entry.lastAssistantMessage?.trim() ?? ''
   const isInterrupted = agent.entry.interrupted === true
   const lineage = agent.lineage
@@ -178,7 +170,9 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
         }`
       : [formatAgentTypeLabel(agent.agentType), model].filter(Boolean).join(' · ')
   // Why: interrupted is a terminal outcome, so surface it in the leading state dot.
-  const dotState: AgentDotState = isInterrupted ? 'interrupted' : asDotState(agent.state)
+  const dotState: AgentDotState = isInterrupted
+    ? 'interrupted'
+    : asDotState(agent.state, agent.entry.workingMode)
   const dotTooltipLabel = stateDotTooltipLabel(agent, dotState)
 
   // Why: always show the chevron so the row's right edge doesn't flicker as content grows/shrinks.
@@ -317,7 +311,8 @@ const DashboardAgentRow = React.memo(function DashboardAgentRow({
       </div>
       <DashboardAgentRowToolStep
         expanded={expanded}
-        isWorking={isWorking}
+        showsTool={showsTool}
+        reservesHeight={isWorking}
         toolName={toolName}
         toolInput={toolInput}
       />

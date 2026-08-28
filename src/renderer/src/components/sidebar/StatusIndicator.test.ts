@@ -17,27 +17,35 @@ function renderDotClassNames(status: Status): string[] {
 }
 
 describe('StatusIndicator', () => {
-  it('renders working as a clock-driven yellow spinner ring', () => {
+  it('renders working as a yellow spinner ring', () => {
     const markup = renderMarkup('working')
 
     expect(markup).toContain('border-yellow-500')
     expect(markup).toContain('border-t-transparent')
-    // Why: rotation comes from the shared agent-spinner clock, not a
-    // per-element CSS animation that would keep the compositor awake.
+    // Why: rotation must come from the compositor-driven CSS animation, not a
+    // JS clock writing per-element styles on the input thread (STA-3328).
+    expect(markup).toContain('agent-working-spinner')
     expect(markup).toContain('data-agent-spinner')
     // Why: under reduced motion the top border is filled so the static ring
     // reads as a complete marker, not a broken partial spinner (#9515).
     expect(markup).toContain('motion-reduce:border-t-yellow-500')
-    expect(markup).not.toContain('animate-spin')
-    expect(markup).not.toContain('animation:spin')
   })
 
-  it('renders permission as an amber question glyph', () => {
+  it('renders monitoring as a static radio glyph', () => {
+    const markup = renderMarkup('monitoring')
+
+    expect(markup).toContain('title="Monitoring background tasks"')
+    expect(markup).toContain('lucide-radio')
+    expect(markup).toContain('text-yellow-500')
+    expect(markup).not.toContain('data-agent-spinner')
+  })
+
+  it('renders permission as the shared question glyph', () => {
     const markup = renderMarkup('permission')
 
     expect(markup).toContain('lucide-message-circle-question-mark')
-    expect(markup).toContain('text-amber-500')
-    expect(markup).not.toContain('bg-amber-500')
+    expect(markup).toContain('text-agent-question')
+    expect(markup).not.toContain('text-amber-500')
     expect(markup).not.toContain('data-agent-spinner')
   })
 
@@ -51,5 +59,12 @@ describe('StatusIndicator', () => {
     const classNames = renderDotClassNames('done')
 
     expect(classNames).toContain('bg-emerald-500')
+  })
+
+  it('renders interrupted distinctly from done', () => {
+    const classNames = renderDotClassNames('interrupted')
+
+    expect(classNames).toContain('bg-red-500')
+    expect(classNames).not.toContain('bg-emerald-500')
   })
 })

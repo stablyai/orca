@@ -5,7 +5,7 @@ import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { Project } from '../../../../shared/types'
+import type { Project } from '../../../../shared/project-types'
 import { ProjectWindowsRuntimeSetting } from './ProjectWindowsRuntimeSetting'
 
 const project: Project = {

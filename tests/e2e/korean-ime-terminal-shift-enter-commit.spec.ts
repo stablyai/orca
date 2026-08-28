@@ -339,7 +339,7 @@ async function dispatchPlainEnter(session: CDPSession): Promise<void> {
 async function readPromptLine(page: Page): Promise<string> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const promptIndex = content.lastIndexOf(PROMPT)
-  if (promptIndex < 0) {
+  if (promptIndex === -1) {
     return ''
   }
   return (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '').trimEnd()
@@ -380,23 +380,33 @@ async function assertShiftOutcome(page: Page): Promise<void> {
 }
 
 async function assertCtrlOutcome(page: Page): Promise<void> {
+  if (process.platform !== 'win32') {
+    await expect
+      .poll(() => readReceived(page), {
+        timeout: 10_000,
+        message: 'PTY bytes must contain committed Hangul before exactly one Ctrl+Enter chord'
+      })
+      .toBe('하 하 하\u001b[13;5u')
+    expect(await readSubmitted(page), 'CSI-u must not submit the line').toEqual([])
+    return
+  }
+
   await expect
     .poll(() => readReceived(page), {
       timeout: 10_000,
       message: 'PTY bytes must contain committed Hangul before exactly one Ctrl+Enter chord'
     })
-    .toBe('하 하 하\u001b[13;5u')
+    .toBe('하 하 하\r')
   await expect
     .poll(() => readPromptLine(page), {
       timeout: 10_000,
-      message: 'prompt must show the committed syllables followed by exactly one CSI-u chord'
+      message: 'prompt must be empty — no literal escape bytes may survive the chord'
     })
-    .toBe('하 하 하<ESC>[13;5u')
+    .toBe('')
   await page.waitForTimeout(500)
-  expect(await readPromptLine(page), 'Ctrl+Enter must produce exactly one CSI-u chord').toBe(
-    '하 하 하<ESC>[13;5u'
-  )
-  expect(await readSubmitted(page), 'CSI-u must not submit the line').toEqual([])
+  expect(await readSubmitted(page), 'Ctrl+Enter must produce exactly one newline').toEqual([
+    '하 하 하'
+  ])
 }
 
 const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
@@ -416,8 +426,8 @@ const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
     modifiers: 2,
     assertOutcome: assertCtrlOutcome,
     expectedAfterPlainEnter: {
-      received: '하 하 하\u001b[13;5u\r',
-      submitted: ['하 하 하\u001b[13;5u']
+      received: process.platform === 'win32' ? '하 하 하\r\r' : '하 하 하\u001b[13;5u\r',
+      submitted: process.platform === 'win32' ? ['하 하 하', ''] : ['하 하 하\u001b[13;5u']
     }
   },
   {
@@ -455,8 +465,8 @@ const COMMITTING_ENTER_CHORDS: CommittingEnterChordCase[] = [
     windowsOnly: true,
     assertOutcome: assertCtrlOutcome,
     expectedAfterPlainEnter: {
-      received: '하 하 하\u001b[13;5u\r',
-      submitted: ['하 하 하\u001b[13;5u']
+      received: '하 하 하\r\r',
+      submitted: ['하 하 하', '']
     }
   }
 ]

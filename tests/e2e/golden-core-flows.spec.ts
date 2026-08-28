@@ -16,7 +16,6 @@ import {
 
 const tempRoots: string[] = []
 const SORTABLE_TAB = '[data-testid="sortable-tab"]'
-const REPO_STEP_HEADING = /Point Orca at some code/i
 const TASK_SOURCES_HEADING = /Set up GitHub tasks|Connect your task sources/i
 const WINDOWS_TERMINAL_HEADING = /Set Windows terminal defaults/i
 const ONBOARDING_ADVANCE_LABEL = /^Continue\b|^Add your first project\b/
@@ -161,7 +160,7 @@ async function continueThroughOptionalSetupToNotifications(page: Page): Promise<
   await expect(page.getByRole('heading', { name: /Set up notifications/i })).toBeVisible()
 }
 
-async function continueFromNotificationsToRepo(page: Page): Promise<void> {
+async function continueFromNotificationsToAddProject(page: Page): Promise<void> {
   await continueOnboarding(page)
   const taskSourcesVisible = await page
     .getByRole('heading', { name: TASK_SOURCES_HEADING })
@@ -179,22 +178,9 @@ async function continueFromNotificationsToRepo(page: Page): Promise<void> {
   if (windowsTerminalVisible) {
     await continueOnboarding(page)
   }
-  const repoHeading = page.getByRole('heading', { name: REPO_STEP_HEADING })
-  const addProjectDialog = page.getByRole('dialog', { name: /Add a project/i })
-  await expect
-    .poll(
-      async () => {
-        if (await repoHeading.isVisible().catch(() => false)) {
-          return 'repo-step'
-        }
-        if (await addProjectDialog.isVisible().catch(() => false)) {
-          return 'add-project-dialog'
-        }
-        return 'waiting'
-      },
-      { timeout: 15_000 }
-    )
-    .not.toBe('waiting')
+  await expect(page.getByRole('dialog', { name: /Add a project/i })).toBeVisible({
+    timeout: 15_000
+  })
 }
 
 async function waitForRepoLoaded(page: Page, repoPath: string): Promise<void> {
@@ -457,16 +443,13 @@ test.describe('New-user golden core flow', () => {
     await continueThroughOptionalSetupToNotifications(orcaPage)
     await expect(orcaPage.getByRole('button', { name: /Send Test Notification/i })).toBeVisible()
     await chooseNotificationSound(orcaPage)
-    await continueFromNotificationsToRepo(orcaPage)
+    await continueFromNotificationsToAddProject(orcaPage)
 
     const repoPath = await createGitRepo('orca-e2e-golden-new-', 'golden-new-project')
     await chooseFolderInNativeDialog(electronApp, repoPath)
     await orcaPage
       .getByRole('button', { name: /Browse for a folder|Open a folder|Browse folder/i })
       .click()
-    await expect(orcaPage.getByRole('heading', { name: REPO_STEP_HEADING })).toHaveCount(0, {
-      timeout: 30_000
-    })
     await waitForRepoLoaded(orcaPage, repoPath)
     await expectProjectVisible(orcaPage, repoPath)
     await waitForActiveWorktree(orcaPage)

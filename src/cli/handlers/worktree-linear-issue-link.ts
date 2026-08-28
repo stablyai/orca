@@ -1,17 +1,15 @@
-import { parseLinearIssueInput } from '../../shared/linear-links'
+import {
+  buildLinearIssueLinkUpdates,
+  LINEAR_ISSUE_LINK_CLEARED,
+  type LinearIssueLinkUpdates
+} from '../../shared/linear/links'
 import { RuntimeClientError } from '../runtime-client'
-
-type LinearIssueLinkParams = {
-  linkedLinearIssue: string | null
-  linkedLinearIssueWorkspaceId: string | null
-  linkedLinearIssueOrganizationUrlKey: string | null
-}
 
 export function getOptionalLinearIssueLinkFlag(
   flags: Map<string, string | boolean>,
   name: string,
   options: { allowNull?: boolean } = {}
-): LinearIssueLinkParams | undefined {
+): LinearIssueLinkUpdates | undefined {
   const value = getPresentStringFlag(flags, name)
   if (value === undefined) {
     return undefined
@@ -24,28 +22,22 @@ export function getOptionalLinearIssueLinkFlag(
         'Omit --linear-issue on create, or pass a Linear issue identifier or URL.'
       )
     }
-    return {
-      linkedLinearIssue: null,
-      linkedLinearIssueWorkspaceId: null,
-      linkedLinearIssueOrganizationUrlKey: null
-    }
+    return { ...LINEAR_ISSUE_LINK_CLEARED }
   }
 
-  const parsed = parseLinearIssueInput(value)
-  if (!parsed) {
+  // Why: the shared builder treats empty input as "clear", which is right for a
+  // text field the user can blank but wrong for a flag — `--linear-issue "  "`
+  // is a mistyped argument, not a request to unlink. Only the literal `null`
+  // clears, and that is handled above.
+  const updates = value.trim() === '' ? null : buildLinearIssueLinkUpdates(value)
+  if (!updates) {
     throw new RuntimeClientError(
       'invalid_argument',
       'Pass a Linear issue identifier like STA-335, a Linear issue URL, or null to clear.'
     )
   }
 
-  return {
-    linkedLinearIssue: parsed.identifier,
-    // Why: changing a link must not keep a workspace id from a previous issue.
-    // The org key from URLs is enough for current-resolution to safely rehydrate it.
-    linkedLinearIssueWorkspaceId: null,
-    linkedLinearIssueOrganizationUrlKey: parsed.organizationUrlKey ?? null
-  }
+  return updates
 }
 
 function getPresentStringFlag(

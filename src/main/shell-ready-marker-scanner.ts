@@ -1,5 +1,4 @@
 export const SHELL_READY_MARKER_PREFIX = '\x1b]777;orca-shell-ready'
-export const SHELL_READY_MARKER = `${SHELL_READY_MARKER_PREFIX}\x07`
 
 export type ShellReadyScanState = {
   matchPos: number
@@ -10,6 +9,10 @@ export type ShellReadyScanResult = {
   output: string
   matched: boolean
   postMarkerBytesObserved: boolean
+}
+
+type ShellReadyBoundaryScanResult = ShellReadyScanResult & {
+  postMarkerOutputIndex: number | null
 }
 
 export function createShellReadyScanState(): ShellReadyScanState {
@@ -23,7 +26,10 @@ export function drainShellReadyHeldBytes(state: ShellReadyScanState): string {
   return heldBytes
 }
 
-export function scanForShellReady(state: ShellReadyScanState, data: string): ShellReadyScanResult {
+export function scanForShellReadyBoundary(
+  state: ShellReadyScanState,
+  data: string
+): ShellReadyBoundaryScanResult {
   let output = ''
 
   for (let i = 0; i < data.length; i += 1) {
@@ -50,7 +56,8 @@ export function scanForShellReady(state: ShellReadyScanState, data: string): She
       return {
         output: output + remaining,
         matched: true,
-        postMarkerBytesObserved: remaining.length > 0
+        postMarkerBytesObserved: remaining.length > 0,
+        postMarkerOutputIndex: output.length
       }
     } else {
       output += state.heldBytes
@@ -65,5 +72,15 @@ export function scanForShellReady(state: ShellReadyScanState, data: string): She
     }
   }
 
-  return { output, matched: false, postMarkerBytesObserved: false }
+  return {
+    output,
+    matched: false,
+    postMarkerBytesObserved: false,
+    postMarkerOutputIndex: null
+  }
+}
+
+export function scanForShellReady(state: ShellReadyScanState, data: string): ShellReadyScanResult {
+  const { postMarkerOutputIndex: _, ...result } = scanForShellReadyBoundary(state, data)
+  return result
 }

@@ -2,6 +2,7 @@ import { z } from 'zod'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
 import { normalizeGitLabIssueListArgs } from '../../../gitlab/gitlab-preload-args'
+import { toGitLabJobLogExcerptResult } from '../../../../shared/gitlab-job-log-excerpt'
 
 const RepoSelector = z.object({
   repo: requiredString('Missing repo selector')
@@ -16,12 +17,14 @@ const GitLabRateLimit = z
   .optional()
   .default({})
 
+// nullish, not optional: renderer callers normalise a missing ref to `null`
+// (`item.projectRef ?? null`), which a bare `.optional()` would reject outright.
 const GitLabProjectRef = z
   .object({
     host: requiredString('Missing GitLab host'),
     path: requiredString('Missing GitLab project path')
   })
-  .optional()
+  .nullish()
 
 const WorkItemsList = RepoSelector.extend({
   state: z.enum(['opened', 'merged', 'closed', 'all']).optional(),
@@ -33,7 +36,8 @@ const WorkItemsList = RepoSelector.extend({
 const IssuesList = RepoSelector.extend({
   state: z.unknown().optional(),
   assignee: OptionalString,
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  page: OptionalFiniteNumber
 })
 
 const CreateIssue = RepoSelector.extend({
@@ -121,7 +125,10 @@ const ResolveMRDiscussion = RepoSelector.extend({
 
 const JobTrace = RepoSelector.extend({
   jobId: z.number().int().positive(),
-  projectRef: GitLabProjectRef
+  projectRef: GitLabProjectRef,
+  // Why: raw CI traces routinely exceed the 1 MB transport frame cap, so callers
+  // that only render an excerpt ask main to bound it before it crosses the wire.
+  logExcerpt: z.boolean().optional()
 })
 
 const RetryJob = RepoSelector.extend({
@@ -176,7 +183,8 @@ export const GITLAB_METHODS: RpcMethod[] = [
         params.repo,
         normalized.state,
         normalized.assignee,
-        normalized.limit
+        normalized.limit,
+        normalized.page
       )
     }
   }),
@@ -245,8 +253,14 @@ export const GITLAB_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'gitlab.jobTrace',
     params: JobTrace,
-    handler: async (params, { runtime }) =>
-      runtime.getGitLabRepoJobTrace(params.repo, params.jobId, params.projectRef)
+    handler: async (params, { runtime }) => {
+      const result = await runtime.getGitLabRepoJobTrace(
+        params.repo,
+        params.jobId,
+        params.projectRef
+      )
+      return params.logExcerpt ? toGitLabJobLogExcerptResult(result) : result
+    }
   }),
   defineMethod({
     name: 'gitlab.retryJob',

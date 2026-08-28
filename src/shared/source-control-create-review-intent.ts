@@ -2,7 +2,6 @@ import { isBehindOnlyUpstream, shouldForcePushWithLeaseForUpstream } from './git
 import type { HostedReviewCreationEligibility } from './hosted-review'
 import { supportsHostedReviewCreation } from './hosted-review-creation-providers'
 import type { GitUpstreamStatus } from './git-status-types'
-import type { SourceControlPrimaryActionDecision } from './source-control-primary-action-decision-types'
 
 export type CreateReviewIntentKind =
   | 'dirty'
@@ -90,14 +89,4 @@ export function resolveCreateReviewIntentEligibility({
   }
 
   return { eligible: false, kind: null }
-}
-
-export function resolveVisibleCreateReviewHeaderAction({
-  createPrHeaderAction
-}: {
-  createPrHeaderAction: SourceControlPrimaryActionDecision | null
-}): SourceControlPrimaryActionDecision | null {
-  // Why: keep a stable header anchor; disable Create Review when the branch is
-  // not ready instead of hiding it and shifting toolbar layout.
-  return createPrHeaderAction
 }

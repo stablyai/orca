@@ -153,6 +153,7 @@ function prepareRelayTree(runDir, nodePtyDir) {
   for (const filename of [
     'relay.js',
     'relay-watcher.js',
+    'relay-ai-vault-service.js',
     'managed-hook-runtime.js',
     NODE_PTY_PATCH_FILENAME,
     '.version'

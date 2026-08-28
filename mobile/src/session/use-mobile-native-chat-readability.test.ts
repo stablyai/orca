@@ -10,7 +10,6 @@ describe('useMobileNativeChatReadability', () => {
   let readable = false
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     readable = false
   })
 
@@ -34,21 +33,10 @@ describe('useMobileNativeChatReadability', () => {
       readable = useMobileNativeChatReadability(client, worktreeId)
       return null
     }
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness))
+      await Promise.resolve()
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness))
-        await Promise.resolve()
-      })
-    } finally {
-      consoleSpy.mockRestore()
-    }
     return sendRequest
   }
 
@@ -89,32 +77,21 @@ describe('useMobileNativeChatReadability', () => {
       readable = useMobileNativeChatReadability(client, worktreeId)
       return null
     }
-    const original = console.error
-    const consoleSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-      if (typeof args[0] === 'string' && args[0].includes('react-test-renderer is deprecated')) {
-        return
-      }
-      original(...args)
+    await act(async () => {
+      renderer = create(createElement(Harness, { worktreeId: 'local-repo::/one' }))
+      await Promise.resolve()
     })
-    try {
-      await act(async () => {
-        renderer = create(createElement(Harness, { worktreeId: 'local-repo::/one' }))
-        await Promise.resolve()
-      })
-      expect(readable).toBe(true)
+    expect(readable).toBe(true)
 
-      act(() => renderer?.update(createElement(Harness, { worktreeId: 'ssh-repo::/two' })))
-      expect(readable).toBe(false)
-      await act(async () => {
-        resolveNext({
-          ok: true,
-          result: { repos: [{ id: 'ssh-repo', connectionId: 'model-a-ssh' }] }
-        })
-        await Promise.resolve()
+    act(() => renderer?.update(createElement(Harness, { worktreeId: 'ssh-repo::/two' })))
+    expect(readable).toBe(false)
+    await act(async () => {
+      resolveNext({
+        ok: true,
+        result: { repos: [{ id: 'ssh-repo', connectionId: 'model-a-ssh' }] }
       })
-      expect(readable).toBe(false)
-    } finally {
-      consoleSpy.mockRestore()
-    }
+      await Promise.resolve()
+    })
+    expect(readable).toBe(false)
   })
 })

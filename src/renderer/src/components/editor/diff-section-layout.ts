@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { countLinesLikeSplit, type DiffLineCounts } from './large-diff-render-limit'
 
 const DIFF_LINE_HEIGHT = 19

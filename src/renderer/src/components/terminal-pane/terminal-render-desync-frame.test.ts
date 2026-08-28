@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   measureDivergence,
+  reachRenderInternals,
   releaseRenderDesyncReadback,
   type BufferLike,
   type SentinelRenderInternals
@@ -71,5 +72,28 @@ describe('measureDivergence', () => {
     pixels[center + 2] = ink[2]
     expect(measureDivergence(internals, buffer)?.missing).toBe(0)
     expect(createElement).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('reachRenderInternals', () => {
+  it('reads the generation name emitted by the packaged WebGL bundle', () => {
+    const terminal = {
+      rows: 2,
+      cols: 3,
+      _core: {
+        _renderService: {
+          _renderer: {
+            value: {
+              _canvas: {} as HTMLCanvasElement,
+              _charAtlas: { _clearModelGeneration: 7, pages: [] },
+              _themeService: { colors: { background: { rgba: 0 } } },
+              dimensions: { device: { cell: { width: 8, height: 16 } } }
+            }
+          }
+        }
+      }
+    }
+
+    expect(reachRenderInternals(terminal)?.rendererState.atlasClearModelGeneration).toBe(7)
   })
 })

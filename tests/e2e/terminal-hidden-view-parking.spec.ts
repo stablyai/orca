@@ -18,6 +18,7 @@ import {
   waitForPaneIdentitySnapshot
 } from './helpers/terminal'
 import { parkHiddenTabBehindDecoy, waitForTabParked } from './helpers/terminal-hidden-parking'
+import { TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS } from '../../src/renderer/src/components/terminal-pane/terminal-park-verdict-flip-telemetry'
 
 // Why: the parking wiring registers this handle (dev/exposeStore builds only)
 // so tests can detect that hidden-view parking is compiled in and which delay
@@ -40,6 +41,7 @@ test.use({
 
 const PARKED_FRAME_SCRIPT_DELAY_MS = 750
 const PARKED_FRAME_COUNT = 25
+const PARK_VERDICT_BURST_SETTLE_MS = TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS * 4
 
 function parkedTuiFrame(runId: string, frame: number): string {
   const progress = `${'█'.repeat((frame % 8) + 1)}${'░'.repeat(8 - ((frame % 8) + 1))}`
@@ -531,6 +533,9 @@ test.describe('Terminal hidden view parking', () => {
       const CYCLES = 25
       const mismatches: string[] = []
       for (let cycle = 1; cycle < CYCLES; cycle++) {
+        // Why: each cycle intentionally flips this tab's rendered verdict twice.
+        // Let the production anti-churn burst window lapse before the next one.
+        await orcaPage.waitForTimeout(PARK_VERDICT_BURST_SETTLE_MS)
         const rows = await runOneParkRevealCycle(cycle)
         if (JSON.stringify(rows) !== JSON.stringify(referenceRows)) {
           mismatches.push(

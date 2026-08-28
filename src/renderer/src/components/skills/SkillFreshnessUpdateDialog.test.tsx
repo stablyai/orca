@@ -73,8 +73,10 @@ vi.mock('@/components/ui/collapsible', () => ({
   CollapsibleTrigger: ({ children }: { children?: ReactNode }) => <div>{children}</div>,
   // Tagged so tests can prove WHERE content sits: this mock renders it whether
   // or not the disclosure is open, so presence in the DOM alone proves nothing.
-  CollapsibleContent: ({ children }: { children?: ReactNode }) => (
-    <div data-collapsible-content>{children}</div>
+  CollapsibleContent: ({ className, children }: { className?: string; children?: ReactNode }) => (
+    <div className={className} data-collapsible-content>
+      {children}
+    </div>
   )
 }))
 
@@ -386,6 +388,34 @@ describe('SkillFreshnessUpdateDialog', () => {
     )
   })
 
+  it('contains unbroken failure output inside the dialog grid', async () => {
+    const unbrokenOutput = 'A'.repeat(1000)
+    const unbrokenMessage = 'B'.repeat(1000)
+    await renderDialog()
+    await openViaRequest()
+    await emitRun({
+      state: 'error',
+      names: ['orca-cli'],
+      failedNames: ['orca-cli'],
+      finishedAt: 3,
+      output: unbrokenOutput,
+      message: unbrokenMessage
+    })
+
+    const output = container?.querySelector('pre')
+    expect(output?.textContent).toContain(unbrokenOutput)
+    expect(output?.className).toContain('[overflow-wrap:anywhere]')
+    expect(output?.className).not.toContain('break-words')
+    expect(output?.parentElement?.className).toContain('min-w-0')
+    expect(output?.closest('[data-collapsible-open]')?.className).toContain('min-w-0')
+
+    const message = Array.from(container?.querySelectorAll('p') ?? []).find(
+      (candidate) => candidate.textContent === unbrokenMessage
+    )
+    expect(message?.className).toContain('[overflow-wrap:anywhere]')
+    expect(message?.parentElement?.className).toContain('min-w-0')
+  })
+
   it('shows the up-to-date state once every installation is current', async () => {
     mocks.inventory = {
       schemaVersion: 1,
@@ -673,6 +703,21 @@ describe('SkillFreshnessUpdateDialog', () => {
     expect(container?.querySelector('[data-skill-row="orca-cli"]')).toBeNull()
     expect(findButton('Update 1 skill')).toBeUndefined()
   })
+
+  it('wraps an unbroken scan error inside the dialog grid', async () => {
+    const unbrokenError = 'C'.repeat(1000)
+    mocks.inventory = null
+    mocks.error = unbrokenError
+    await renderDialog()
+    await openViaRequest()
+
+    const error = Array.from(container?.querySelectorAll('p') ?? []).find(
+      (candidate) => candidate.textContent === unbrokenError
+    )
+    expect(error?.className).toContain('min-w-0')
+    expect(error?.className).toContain('[overflow-wrap:anywhere]')
+  })
+
   it('shows incomplete plugin coverage without presenting a fabricated skill copy', async () => {
     mocks.inventory = {
       schemaVersion: 1,

@@ -1,5 +1,8 @@
 import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
+// Why: the CLI reads the same flattened tokens, so the matcher lives in shared and both clients use one copy.
+export { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
+
 export class RuntimeRpcCallError extends Error {
   readonly code: string
   readonly response: RuntimeRpcFailure

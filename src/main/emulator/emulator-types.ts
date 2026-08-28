@@ -14,9 +14,3 @@ export type EmulatorSessionInfo = {
   streamCodec?: EmulatorStreamCodec
   backend?: EmulatorBackendKind
 }
-
-export type EmulatorCliTarget = {
-  worktreeId?: string
-  deviceUdid?: string
-  emulatorId?: string // Orca-generated id from list (for stability, like browserPageId)
-}

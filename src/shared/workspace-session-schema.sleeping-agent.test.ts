@@ -41,6 +41,42 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('hydrates a persisted Kimi sleeping agent record', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'kimi',
+          providerSession: {
+            key: 'session_id',
+            id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201'
+          },
+          prompt: 'continue',
+          state: 'working',
+          capturedAt: 10,
+          updatedAt: 9,
+          terminalTitle: 'Kimi',
+          origin: 'live'
+        }
+      }
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: the record must survive the resumable-agent refine, or restore silently drops it.
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']).toMatchObject({
+        agent: 'kimi',
+        providerSession: { key: 'session_id', id: 'session_431324d7-2165-42f0-9ecd-9f93437b3201' }
+      })
+    }
+  })
+
   it('preserves the authoritative Pi session file through hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
@@ -219,12 +255,9 @@ describe('parseWorkspaceSession sleeping agents', () => {
 
     expect(result.ok).toBe(true)
     if (result.ok) {
-      expect(
-        Object.prototype.hasOwnProperty.call(
-          result.value.sleepingAgentSessionsByPaneKey ?? {},
-          '__proto__'
-        )
-      ).toBe(false)
+      expect(Object.hasOwn(result.value.sleepingAgentSessionsByPaneKey ?? {}, '__proto__')).toBe(
+        false
+      )
       const record = result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']
       expect(record?.agent).toBe('codex')
       expect(record?.launchConfig).toBeUndefined()
@@ -326,6 +359,39 @@ describe('parseWorkspaceSession sleeping agents', () => {
     expect(result.ok).toBe(true)
     if (result.ok) {
       expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.origin).toBe('quit')
+    }
+  })
+
+  it('preserves the tab-open-only restore flag across hydration', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'claude',
+          providerSession: { key: 'session_id', id: 'claude-session' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 10,
+          origin: 'worktree-sleep',
+          restoreOnTabOpenOnly: true
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: dropping it on restart resurrects the mobile-wake fan-out this flag exists to stop.
+      expect(
+        result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.restoreOnTabOpenOnly
+      ).toBe(true)
     }
   })
 

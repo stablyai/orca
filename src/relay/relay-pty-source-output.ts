@@ -58,7 +58,10 @@ export function projectPtySourceOutputToLegacy(
   interactive: boolean
 ): boolean {
   return dispatcher.projectPtyDataToMatchingClients(
-    (clientId) => session.deliveryMode(clientId) !== 'source-owner',
+    (clientId) => {
+      const mode = session.deliveryMode(clientId)
+      return mode === 'legacy-owner' || mode === 'subscriber'
+    },
     {
       id,
       data: output.data,

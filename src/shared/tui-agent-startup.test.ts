@@ -28,6 +28,26 @@ function unwrapPowerShellScript(command: string | undefined): string {
   return Buffer.from(encoded!, 'base64').toString('utf16le')
 }
 
+describe('draft prefill teardown ordering (#14975)', () => {
+  // Why pinned: the teardown mutates the calling shell, so it must reference
+  // $fish_pid, which aborts the line under `set -u`. That is survivable ONLY
+  // because it runs AFTER the agent — the agent is already up. Moving it before
+  // the command would make an aborted line a blocked launch, which is exactly
+  // what reverted #14863.
+  it('runs the clear after the agent command, never before it', () => {
+    const plan = buildAgentDraftLaunchPlan({
+      agent: 'pi',
+      draft: 'hello',
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+
+    const command = plan?.launchCommand ?? ''
+    expect(command.indexOf('pi')).toBeLessThan(command.indexOf('fish_pid'))
+    expect(command).toMatch(/^pi;/)
+  })
+})
+
 describe('tui agent startup plans', () => {
   it.each(['powershell', 'cmd'] as const)(
     'keeps the established invalid-quote error on %s',
@@ -47,7 +67,7 @@ describe('tui agent startup plans', () => {
       platform: 'linux'
     })
 
-    expect(plan?.launchCommand).toBe("claude 'fix Bob'\\''s branch'")
+    expect(plan?.launchCommand).toBe("claude 'fix Bob'\"'\"'s branch'")
   })
 
   it('uses PowerShell quoting by default when the target shell is Windows', () => {
@@ -184,9 +204,12 @@ describe('tui agent startup plans', () => {
     })
 
     expect(plan?.launchCommand).toMatch(/^sh -c /)
-    expect(plan?.launchCommand).toMatch(/\\0[0-7]{3}/)
     expect(plan?.launchCommand).not.toContain("'sh' '-c'")
-    expect(plan?.launchCommand).not.toContain("'\\''")
+    // Why parse rather than string-match: the octal escapes must survive the
+    // OUTER quoting to reach the inner sh, and portable quoting emits a
+    // backslash as `"\\"` rather than leaving it inside a single-quoted run.
+    const tokens = tokenizeStartupCommand(plan?.launchCommand ?? '', 'posix')
+    expect(tokens.ok && tokens.tokens.at(-1)).toMatch(/\\0[0-7]{3}/)
   })
 
   it('moves Hermes command override flags after the chat subcommand', () => {
@@ -593,6 +616,40 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("codex 'resume' 's1'")
   })
 
+  it('quotes Windows resume argv for cmd.exe when shell is cmd', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'grok',
+      providerSession: { key: 'session_id', id: '019fc272-80fa-7a91-80a2-9c461ef1a9da' },
+      cmdOverrides: {},
+      agentArgs: '--permission-mode bypassPermissions',
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    // Why: cmd.exe treats single quotes as literal characters. Resume must use
+    // double quotes (or unquoted tokens) so the CLI receives clean argv.
+    expect(plan?.launchCommand).toBe(
+      'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
+    )
+  })
+
+  it('keeps cmd-quoted agentCommand aligned with cmd resume suffix', () => {
+    const plan = buildAgentResumeStartupPlan({
+      agent: 'grok',
+      providerSession: { key: 'session_id', id: '019fc272-80fa-7a91-80a2-9c461ef1a9da' },
+      cmdOverrides: {},
+      agentCommand: 'grok "--permission-mode" "bypassPermissions"',
+      platform: 'win32',
+      shell: 'cmd'
+    })
+
+    // Regression: agentCommand from a prior cmd launch + PowerShell-default resume
+    // suffix produced mixed quoting and broke reboot restore on cmd.exe tabs.
+    expect(plan?.launchCommand).toBe(
+      'grok "--permission-mode" "bypassPermissions" "--resume" "019fc272-80fa-7a91-80a2-9c461ef1a9da"'
+    )
+  })
+
   it('honors command overrides when building POSIX resume plans', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
@@ -744,6 +801,23 @@ describe('tui agent startup plans', () => {
     ).toBeNull()
   })
 
+  it('keeps grok on the composer-glyph paste draft route', () => {
+    // Why: grok has no --prefill-style flag, so every launch draft goes through
+    // paste-after-ready — and its shimmering startup logo never settles the
+    // quiet window, which is what made the paste take the full hard timeout.
+    expect(TUI_AGENT_CONFIG.grok.draftPasteReadySignal).toBe('grok-composer-prompt')
+    expect(TUI_AGENT_CONFIG.grok.draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG.grok.draftPromptEnvVar).toBeUndefined()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'grok',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
   it('appends Kiro trust defaults to the chat subcommand that accepts them', () => {
     const plan = buildAgentStartupPlan({
       agent: 'kiro',
@@ -805,7 +879,9 @@ describe('tui agent startup plans', () => {
     expect(plan).not.toBeNull()
     expect(plan?.env).toEqual({ ORCA_OMP_PREFILL: 'fix the omp regression' })
     expect(plan?.expectedProcess).toBe('omp')
-    expect(plan?.launchCommand).toBe('omp; unset ORCA_OMP_PREFILL')
+    expect(plan?.launchCommand).toBe(
+      `omp; command test -n "$fish_pid" && set --erase -g ORCA_OMP_PREFILL; command test -z "$fish_pid" && unset ORCA_OMP_PREFILL; true`
+    )
   })
 
   it('returns null for oversized Windows flag drafts so callers paste after ready', () => {

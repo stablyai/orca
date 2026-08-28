@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
+import {
+  resolveAdvertisedPairingEndpoint,
+  resolveAdvertisedPairingHostname
+} from './pairing-endpoint'
 import { PAIRING_OFFER_VERSION, PairingOfferSchema } from '../../shared/mobile-relay-pairing-offer'
 import { PAIRING_ENDPOINT_MAX_CHARACTERS } from '../../shared/mobile-pairing-protocol-limits'
 import { parseManualNetworkAddress } from '../../shared/network/manual-address'
@@ -99,4 +102,32 @@ describe('resolveAdvertisedPairingEndpoint', () => {
     expect(resolveAdvertisedPairingEndpoint(bound, aboveLimit).ok).toBe(false)
     expect(PairingOfferSchema.safeParse(offer(aboveLimit)).success).toBe(false)
   })
+})
+
+describe('resolveAdvertisedPairingHostname', () => {
+  // Why: the loopback/off-host decision must read the host a link will advertise, not the raw string the
+  // user typed — `127.0.0.1:8443` and `ws://127.0.0.1:6768` both publish a loopback host.
+  it.each([
+    ['127.0.0.1', '127.0.0.1'],
+    ['127.0.0.1:8443', '127.0.0.1'],
+    ['localhost', 'localhost'],
+    ['localhost:8443', 'localhost'],
+    ['::1', '::1'],
+    ['[::1]:6768', '::1'],
+    ['ws://127.0.0.1:6768', '127.0.0.1'],
+    ['http://localhost:6768/web-index.html', 'localhost'],
+    ['100.64.1.20', '100.64.1.20'],
+    ['192.168.1.5:6768', '192.168.1.5'],
+    ['desktop', 'desktop'],
+    ['wss://proxy.example.test:8443/orca', 'proxy.example.test']
+  ])('reads the advertised host of %s', (input, hostname) => {
+    expect(resolveAdvertisedPairingHostname(input)).toBe(hostname)
+  })
+
+  it.each([null, undefined, '', '   ', 'host.example.test:', 'ftp://proxy.example.test'])(
+    'returns null for the unusable address %j',
+    (input) => {
+      expect(resolveAdvertisedPairingHostname(input)).toBeNull()
+    }
+  )
 })

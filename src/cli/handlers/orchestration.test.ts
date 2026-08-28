@@ -50,7 +50,7 @@ afterEach(() => {
 
 describe('orchestration send structured payload flags', () => {
   beforeEach(() => {
-    callMock.mockReset().mockResolvedValue({ result: { message: { id: 'msg_1' } } })
+    callMock.mockReset().mockResolvedValue({ result: { lifecycle: { action: 'completed' } } })
     getTerminalHandleMock.mockReset()
     delete process.env.ORCA_TERMINAL_HANDLE
     delete process.env.ORCA_PANE_KEY
@@ -94,6 +94,7 @@ describe('orchestration send structured payload flags', () => {
         filesModified: ['src/a.ts', 'src/b.ts'],
         reportPath: 'reports/done.md'
       }),
+      waitForLifecycleSettlement: true,
       devMode: false
     })
   })
@@ -207,6 +208,7 @@ describe('orchestration send structured payload flags', () => {
       priority: undefined,
       threadId: undefined,
       payload: JSON.stringify({ outcome: 'succeeded' }),
+      waitForLifecycleSettlement: true,
       devMode: false
     })
   })
@@ -233,6 +235,7 @@ describe('orchestration send structured payload flags', () => {
       priority: undefined,
       threadId: undefined,
       payload: JSON.stringify({ outcome: 'succeeded' }),
+      waitForLifecycleSettlement: true,
       devMode: false
     })
   })

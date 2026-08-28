@@ -1,4 +1,4 @@
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree-id'
+import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
 import { parsePtySessionId } from './pty-session-id'

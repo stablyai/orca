@@ -7,9 +7,24 @@ import {
 } from './terminal-stream-byte-length'
 import { TERMINAL_OUTPUT_BATCH_MAX_BYTES } from '../../../shared/terminal-multiplex-flow-control'
 
-// Byte-for-byte copy of the pre-change implementation (shared/clipboard-text.ts
+// Copy of the pre-change implementation (shared/clipboard-text.ts
 // measureClipboardTextByteLength), kept here so equivalence is checked against the
-// ACTUAL old code path rather than a paraphrase of it.
+// ACTUAL old code path rather than a paraphrase of it. The one deliberate deviation is
+// `legacyCodePointAt`: raw `String.prototype.codePointAt` reads one code unit past the end
+// of a sliced string once V8 optimizes its caller, so the naive copy is not a stable
+// reference. See src/shared/utf8-byte-limits.ts (readUtf8CodePointAt).
+function legacyCodePointAt(text: string, index: number): number {
+  const leadUnit = text.charCodeAt(index)
+  if (leadUnit < 0xd800 || leadUnit > 0xdbff || index + 1 >= text.length) {
+    return leadUnit
+  }
+  const trailUnit = text.charCodeAt(index + 1)
+  if (trailUnit < 0xdc00 || trailUnit > 0xdfff) {
+    return leadUnit
+  }
+  return (leadUnit - 0xd800) * 0x400 + (trailUnit - 0xdc00) + 0x10000
+}
+
 function legacyUtf8ByteLengthForCodePoint(codePoint: number): number {
   if (codePoint <= 0x7f) {
     return 1
@@ -30,7 +45,7 @@ function legacyMeasure(
   const stopAfterBytes = options.stopAfterBytes
   let byteLength = 0
   for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
+    const codePoint = legacyCodePointAt(text, index)
     byteLength += legacyUtf8ByteLengthForCodePoint(codePoint)
     if (Number.isFinite(stopAfterBytes) && byteLength > (stopAfterBytes ?? 0)) {
       return { byteLength, exceededLimit: true }
@@ -127,6 +142,39 @@ const EDGE_STRINGS = [
   '\u{1f600}'.repeat(300),
   `${'é'.repeat(500)}\ud800`
 ]
+
+// Regression for the intermittent "measurement diverged at 13 units" failure: the fuzzers
+// build a rope and cut it at a fixed code-unit count, which can split a surrogate pair and
+// leave the low half in the parent just past the slice. Optimized `codePointAt` pairs across
+// that boundary, so the scan measured one byte too many, but only after the enclosing function
+// tiered up, which made the failure look load-dependent. 13 code units is V8's minimum length
+// for a sliced string, which is why the divergence started exactly there.
+describe('measuring a prefix slice that cuts a surrogate pair in half', () => {
+  // Kept first in the file so the scan is still specializing on this shape when it tiers up.
+  it('measures the slice like the encoder does in every JIT tier', () => {
+    const sliced = 'abcdefghijkl\u{1f600}'.slice(0, 13)
+    expect(sliced.length).toBe(13)
+    expect(sliced.charCodeAt(12)).toBe(0xd83d)
+    // 12 ASCII bytes plus U+FFFD for the orphaned high surrogate.
+    expect(Buffer.byteLength(sliced, 'utf8')).toBe(15)
+
+    const observedByteLengths = new Set<number>()
+    const observedExceeded = new Set<boolean>()
+    const observedMeasurements = new Set<string>()
+    for (let iteration = 0; iteration < 200_000; iteration += 1) {
+      observedByteLengths.add(terminalStreamByteLength(sliced))
+      observedExceeded.add(terminalStreamByteLengthExceeds(sliced, 15))
+      observedMeasurements.add(
+        JSON.stringify(measureTerminalStreamByteLength(sliced, { stopAfterBytes: 15 }))
+      )
+    }
+    expect([...observedByteLengths]).toEqual([15])
+    expect([...observedExceeded]).toEqual([false])
+    expect([...observedMeasurements]).toEqual([
+      JSON.stringify({ byteLength: 15, exceededLimit: false })
+    ])
+  })
+})
 
 describe('terminal stream byte length equivalence with the legacy code-point scan', () => {
   it('matches the legacy total byte length on edge strings', () => {

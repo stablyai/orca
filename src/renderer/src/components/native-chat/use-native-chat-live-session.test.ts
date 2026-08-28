@@ -401,6 +401,32 @@ describe('useNativeChatLiveSession — transport routing', () => {
     expect(latest?.status).toBe('ready')
   })
 
+  it('stops foreground working UI when Claude enters monitoring', async () => {
+    useAppStore.setState({
+      agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }
+    })
+    const transport = getMockTransport('env-1')
+    await render({ paneKey: PANE, agent: AGENT, sessionId: SESSION, runtimeEnvironmentId: 'env-1' })
+    await act(async () =>
+      transport.emit({
+        type: 'snapshot',
+        messages: [user('u-1', 'run it')],
+        hasMore: false
+      })
+    )
+    expect(latest?.status).toBe('working')
+
+    await act(async () => {
+      useAppStore.setState({
+        agentStatusByPaneKey: {
+          [PANE]: { state: 'working', workingMode: 'monitoring', stateStartedAt: 1 } as never
+        }
+      })
+    })
+
+    expect(latest?.status).toBe('ready')
+  })
+
   it('applies a lifecycle-only append after the final message frame', async () => {
     useAppStore.setState({
       agentStatusByPaneKey: { [PANE]: { state: 'working', stateStartedAt: 1 } as never }

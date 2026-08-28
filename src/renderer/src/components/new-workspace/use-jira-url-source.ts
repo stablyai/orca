@@ -15,7 +15,7 @@ import {
 } from '../../../../shared/task-source-context'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
-import type { JiraIssue, JiraSite } from '../../../../shared/types'
+import type { JiraIssue, JiraSite } from '../../../../shared/jira-types'
 import { canReuseLoadedJiraStatus, type JiraSourceConnection } from './use-jira-source-connection'
 
 const LOOKUP_DEBOUNCE_MS = 200
@@ -54,7 +54,7 @@ function getPreferredSite(
   matches: JiraSite[],
   selectedAccount: AccountSelection | null,
   requestKey: string,
-  selectedSiteId: string | 'all' | null | undefined,
+  selectedSiteId: (string & {}) | 'all' | null | undefined,
   activeSiteId: string | null | undefined
 ): JiraSite | null {
   const explicitId = selectedAccount?.requestKey === requestKey ? selectedAccount.siteId : null

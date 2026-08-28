@@ -90,6 +90,21 @@ describe('canToggleNativeChat', () => {
     ).toBe(false)
   })
 
+  // Why: omp discloses no hook transcript path either, so its session file is
+  // only reachable when this process can read the agent's disk.
+  it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'omp',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+  })
+
   it('lets an existing Model-A SSH Grok chat toggle back to terminal', () => {
     expect(
       canToggleNativeChat({
@@ -102,16 +117,19 @@ describe('canToggleNativeChat', () => {
     ).toBe(true)
   })
 
-  it('rejects an unsupported agent detected live (Gemini)', () => {
-    expect(
-      canToggleNativeChat({
-        experimentalNativeChatEnabled: true,
-        contentType: 'terminal',
-        launchAgent: null,
-        detectedAgent: 'gemini'
-      })
-    ).toBe(false)
-  })
+  it.each(['gemini', 'opencode'] as const)(
+    'rejects unsupported agent %s detected live',
+    (agent) => {
+      expect(
+        canToggleNativeChat({
+          experimentalNativeChatEnabled: true,
+          contentType: 'terminal',
+          launchAgent: null,
+          detectedAgent: agent
+        })
+      ).toBe(false)
+    }
+  )
 
   it('accepts Grok when resolved from the title', () => {
     expect(

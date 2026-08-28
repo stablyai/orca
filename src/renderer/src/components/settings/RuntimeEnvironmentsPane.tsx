@@ -15,7 +15,7 @@ import {
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   isUserManagedRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
@@ -592,10 +592,14 @@ export function RuntimeEnvironmentsPane({
       await window.api.runtimeEnvironments.disconnect({ selector: environment.id })
       // Why: disconnect is non-destructive; keep the saved server but show the
       // user that this live client is no longer attached to it.
-      useAppStore.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: null,
-        checkedAt: Date.now()
-      })
+      useAppStore.getState().setRuntimeEnvironmentStatus(
+        environment.id,
+        {
+          status: null,
+          checkedAt: Date.now()
+        },
+        { suppressDisconnectToast: true }
+      )
       if (mountedRef.current) {
         setDetailsByEnvironmentId((current) => ({
           ...current,
@@ -1119,7 +1123,7 @@ export function RuntimeEnvironmentsPane({
 
       <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
         <CloudVmSetupGuide />
-        <EphemeralVmRuntimesSection />
+        <EphemeralVmRuntimesSection active={visibleWorkflow === 'cloud-vm'} />
       </div>
 
       <div

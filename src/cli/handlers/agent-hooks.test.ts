@@ -3,14 +3,15 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultPersistedState } from '../../shared/constants'
-import type { PersistedState } from '../../shared/types'
+import type { PersistedState } from '../../shared/persisted-state-types'
 
 const {
   applyAgentStatusHooksEnabledMock,
   callMock,
   getCliStatusMock,
   getDefaultUserDataPathMock,
-  getManagedAgentHookStatusesMock
+  getManagedAgentHookStatusesMock,
+  prepareManagedCodexHomeBeforeShellLaunchMock
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(),
   callMock: vi.fn(),
@@ -27,7 +28,8 @@ const {
     })
   ),
   getDefaultUserDataPathMock: vi.fn(),
-  getManagedAgentHookStatusesMock: vi.fn()
+  getManagedAgentHookStatusesMock: vi.fn(),
+  prepareManagedCodexHomeBeforeShellLaunchMock: vi.fn()
 }))
 
 vi.mock('../runtime-client', () => {
@@ -54,7 +56,8 @@ vi.mock('../runtime-client', () => {
 
 vi.mock('../../main/agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: applyAgentStatusHooksEnabledMock,
-  getManagedAgentHookStatuses: getManagedAgentHookStatusesMock
+  getManagedAgentHookStatuses: getManagedAgentHookStatusesMock,
+  prepareManagedCodexHomeBeforeShellLaunch: prepareManagedCodexHomeBeforeShellLaunchMock
 }))
 
 import { main } from '../index'
@@ -82,12 +85,14 @@ describe('agent hooks CLI handler', () => {
     callMock.mockReset()
     getCliStatusMock.mockClear()
     getManagedAgentHookStatusesMock.mockReturnValue([])
+    prepareManagedCodexHomeBeforeShellLaunchMock.mockReset()
     process.exitCode = undefined
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
 
   afterEach(() => {
+    vi.unstubAllEnvs()
     vi.restoreAllMocks()
     rmSync(userDataPath, { recursive: true, force: true })
   })
@@ -119,5 +124,108 @@ describe('agent hooks CLI handler', () => {
     await runAgentHooksOff(userDataPath)
 
     expect(readDataFile(userDataPath).settings.experimentalNewWorktreeCardStyle).toBe(true)
+  })
+
+  it('prepares managed Codex trust with the current hooks setting', async () => {
+    const state = getDefaultPersistedState(userDataPath)
+    state.settings.agentStatusHooksEnabled = false
+    writeDataFile(userDataPath, state)
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+
+    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
+
+    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
+      userDataPath,
+      hooksEnabled: false
+    })
+  })
+
+  it('forwards WSL pane routing to the runtime exactly once without using the host installer', async () => {
+    const home = '/home/jin/.local/share/orca/codex-runtime-home/home'
+    vi.stubEnv('CODEX_HOME', home)
+    vi.stubEnv('ORCA_CODEX_HOME', home)
+    vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu-24.04')
+    callMock.mockResolvedValue({ result: { state: 'installed' } })
+
+    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
+
+    expect(callMock).toHaveBeenCalledExactlyOnceWith(
+      'agentHooks.prepareCodexForWslPane',
+      { codexHome: home, orcaCodexHome: home, wslDistro: 'Ubuntu-24.04' },
+      { timeoutMs: 50_000 }
+    )
+    expect(prepareManagedCodexHomeBeforeShellLaunchMock).not.toHaveBeenCalled()
+  })
+
+  it('fails open when WSL runtime preparation is unavailable', async () => {
+    vi.stubEnv('CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
+    vi.stubEnv('ORCA_CODEX_HOME', '/home/jin/.local/share/orca/codex-runtime-home/home')
+    vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
+    callMock.mockRejectedValue(new Error('method_not_found'))
+
+    await expect(main(['agent', 'hooks', 'prepare-codex'], userDataPath)).resolves.toBeUndefined()
+    expect(prepareManagedCodexHomeBeforeShellLaunchMock).not.toHaveBeenCalled()
+  })
+
+  it('honors Codex-specific disablement when the runtime is unavailable', async () => {
+    const state = getDefaultPersistedState(userDataPath)
+    state.settings.disabledTuiAgents = ['codex']
+    writeDataFile(userDataPath, state)
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+
+    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
+
+    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
+      userDataPath,
+      hooksEnabled: false
+    })
+  })
+
+  it('uses the active profile settings instead of stale legacy settings', async () => {
+    const profileId = 'work-profile'
+    const legacy = getDefaultPersistedState(userDataPath)
+    legacy.settings.agentStatusHooksEnabled = true
+    writeDataFile(userDataPath, legacy)
+    const profile = getDefaultPersistedState(userDataPath)
+    profile.settings.agentStatusHooksEnabled = false
+    writeDataFile(join(userDataPath, 'profiles', profileId), profile)
+    writeFileSync(
+      join(userDataPath, 'orca-profile-index.json'),
+      JSON.stringify({
+        activeProfileId: profileId,
+        profiles: [{ id: profileId }]
+      }),
+      'utf-8'
+    )
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+
+    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
+
+    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
+      userDataPath,
+      hooksEnabled: false
+    })
+  })
+
+  it('honors live hook and Codex-specific disablement before persistence settles', async () => {
+    const state = getDefaultPersistedState(userDataPath)
+    state.settings.agentStatusHooksEnabled = true
+    writeDataFile(userDataPath, state)
+    getDefaultUserDataPathMock.mockReturnValue(userDataPath)
+    callMock.mockResolvedValue({
+      result: {
+        settings: { agentStatusHooksEnabled: true, disabledTuiAgents: ['codex'] }
+      }
+    })
+
+    await main(['agent', 'hooks', 'prepare-codex'], userDataPath)
+
+    expect(prepareManagedCodexHomeBeforeShellLaunchMock).toHaveBeenCalledWith({
+      userDataPath,
+      hooksEnabled: false
+    })
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('settings.get', undefined, {
+      timeoutMs: 1_000
+    })
   })
 })

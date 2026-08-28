@@ -5,6 +5,7 @@ import { readdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import type { RuntimeMetadata, RuntimeTransportMetadata } from '../../shared/runtime-bootstrap'
 import type { OrcaRuntimeService } from './orca-runtime'
+import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from './network-exposure-guidance'
 import { writeRuntimeMetadata } from './runtime-metadata'
 import {
   RUNTIME_METADATA_OWNERSHIP_POLL_MS,
@@ -12,8 +13,9 @@ import {
   type RuntimeMetadataOwnershipWatch
 } from './runtime-metadata-ownership-watch'
 import { RpcDispatcher } from './rpc/dispatcher'
-import type { RpcRequest, RpcResponse } from './rpc/core'
+import type { RpcAnyMethod, RpcRequest, RpcResponse } from './rpc/core'
 import { errorResponse } from './rpc/errors'
+import { fingerprintAuthenticatedPairingCredential } from './rpc/orchestration-mutation-executor'
 import type { RpcMessageContext, RpcTransport } from './rpc/transport'
 import { UnixSocketTransport } from './rpc/unix-socket-transport'
 import { WebSocketTransport } from './rpc/ws-transport'
@@ -29,6 +31,7 @@ import {
 } from './rpc/mobile-socket-wiring'
 import type { PairingRelay } from '../../shared/mobile-relay-pairing-offer'
 import type { MobilePairingConnectionMode } from '../../shared/mobile-pairing-connection-mode'
+import type { RuntimePairingReach } from '../../shared/runtime-pairing-reach'
 import {
   mobileRelayMintFailureFromUnknown,
   type MobileRelayMintFailure
@@ -46,12 +49,21 @@ import type {
 } from '../../shared/mobile-relay-credential-contract'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 import { resolveAdvertisedPairingEndpoint } from './pairing-endpoint'
-import {
-  decodeTerminalStreamFrame,
-  type TerminalStreamFrame
-} from '../../shared/terminal-stream-protocol'
+import type { TerminalStreamFrame } from '../../shared/terminal-stream-protocol'
+import { RuntimeBinaryMessageRouter } from './runtime-binary-message-router'
 
 const DEFAULT_WS_PORT = 6768
+
+// Why: STA-2370 — the WS listener defaults to loopback so a desktop with no paired device is not
+// reachable from the LAN; it widens to all interfaces only on explicit pairing (or `orca serve`).
+const WS_BIND_HOST_LOOPBACK = '127.0.0.1'
+const WS_BIND_HOST_ALL_INTERFACES = '0.0.0.0'
+
+// Why brackets: `ws://::1:6768` is not a URL, and every consumer of this endpoint parses it
+// with `new URL`. An IPv6 bind address would otherwise publish an unparseable endpoint.
+function formatWsEndpoint(host: string, port: number): string {
+  return `ws://${host.includes(':') ? `[${host}]` : host}:${port}`
+}
 
 type OrcaRuntimeRpcServerOptions = {
   runtime: OrcaRuntimeService
@@ -62,12 +74,27 @@ type OrcaRuntimeRpcServerOptions = {
   wsPort?: number
   // Why: true when the caller pinned a port (`orca serve --port`) so bind order prefers it over a stale STA-1511 fallback (#8535).
   preferPinnedWsPort?: boolean
+  // Why: STA-2370 — bind the WS listener to all interfaces at startup instead of loopback-until-paired.
+  // Only `orca serve` (explicit remote opt-in) and E2E set this; the desktop app widens lazily on pairing.
+  exposeNetworkByDefault?: boolean
+  /**
+   * Pin the WS listener to exactly this address for the process's whole life.
+   *
+   * Why a pin and not another default: the two paths below both widen on their own —
+   * `exposeNetworkByDefault` at startup, and a device that has connected once at every
+   * later startup. An unattended host (orcad) whose operator asked for loopback must
+   * still be on loopback after a client pairs and the service restarts, so the answer
+   * has to outrank both, and `ensureNetworkExposure()` has to refuse rather than widen.
+   */
+  pinnedBindHost?: string
   webClientRoot?: string
   // Why: test-only overrides for the two constants below; production must not pass these (defaults set by §3.1).
   keepaliveIntervalMs?: number
   longPollCap?: number
   // Why: test-only override for the ownership reclaim cadence.
   metadataOwnershipPollMs?: number
+  // Why: tests may inject inert protocol stages before production authorization registers them.
+  methods?: readonly RpcAnyMethod[]
 }
 
 export type PairingOfferUnavailableReason =
@@ -76,6 +103,7 @@ export type PairingOfferUnavailableReason =
   | 'e2ee_key_unavailable'
   | 'invalid_advertised_endpoint'
   | 'relay_mint_failed'
+  | 'network_exposure_failed'
 
 export type PairingOfferUnavailable = {
   available: false
@@ -146,6 +174,10 @@ const LONG_POLL_CAP = 16
 // workers would otherwise hold every slot and starve the mobile/web/CLI/relay
 // clients sharing this runtime. Reserve half the budget for the other classes.
 const ASK_LONG_POLL_SHARE = 0.5
+// Why: eight host slots preserve four-host overlap for two independently paired desktops.
+const BROWSER_HOST_LONG_POLL_SHARE = 0.5
+// Why: asks and permanent hosts together retain the prior quarter-budget reservation for waits.
+const SPECIALIZED_LONG_POLL_SHARE = 0.75
 
 function createWebClientUrl(endpoint: string, pairingUrl: string): string {
   const url = new URL(endpoint)
@@ -173,6 +205,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'accounts.subscribe',
   'accounts.unsubscribe',
   'aiVault.listSessions',
+  'aiVault.resolveSessionTitles',
   'aiVault.prepareSessionResume',
   'browser.back',
   'browser.dialogAccept',
@@ -203,6 +236,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readDocPreview',
   'files.readChunk',
   'files.readDir',
   'files.readPreview',
@@ -304,6 +338,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'host.wsl.isAvailable',
   'host.wsl.listDistros',
   'hostedReview.create',
+  'hostedReview.createStacked',
   'hostedReview.forBranch',
   'hostedReview.getCreationEligibility',
   'linear.getCustomView',
@@ -416,6 +451,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'worktree.activate',
   'worktree.create',
   'worktree.forceDeleteBranch',
+  'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',
   'worktree.ps',
   'worktree.show',
@@ -427,11 +463,30 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
 ])
 
 // Why: 'ask' is metered separately from 'wait' — same keepalive/abort wiring, its own sub-cap.
-type LongPollClass = 'ask' | 'wait'
+export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
-function longPollClassOf(request: RpcRequest): LongPollClass | null {
+export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
+  // Worker start waits for readiness and then verifies the submitted prompt;
+  // the complete operation can run for 90–110s. Keep every local transport
+  // (Unix sockets and Windows named pipes) alive for that long poll.
+  if (request.method === 'orchestration.workerStart') {
+    return 'wait'
+  }
+  if (request.method === 'browser.clientHost.attach') {
+    return 'browser-host'
+  }
   if (request.method === 'terminal.wait') {
+    return 'wait'
+  }
+  // Agent-prompt submission waits for the PTY's lifecycle transition (up to
+  // the verification budget); keep the local socket alive for that wait.
+  if (
+    request.method === 'terminal.send' &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    (request.params as { agentPrompt?: unknown }).agentPrompt === true
+  ) {
     return 'wait'
   }
   // Why: orchestration.ask blocks unconditionally (default 600 s) holding the
@@ -472,12 +527,24 @@ export class OrcaRuntimeRpcServer {
   private readonly enableWebSocket: boolean
   private readonly wsPort: number
   private readonly preferPinnedWsPort: boolean
+  private readonly exposeNetworkByDefault: boolean
+  private readonly pinnedBindHost: string | null
   private readonly webClientRoot: string | undefined
+  // Why: STA-2370 — the host the WS listener is currently bound to, so pairing can widen loopback→all-interfaces once.
+  private wsBoundHost: string | null = null
+  // Why: STA-2370 — in-flight widen so concurrent pairing requests share a single rebind.
+  private networkExposurePromise: Promise<void> | null = null
+  // Why: STA-2370 — set by stop() so a racing pairing widen can't recreate a live wide listener into the
+  // cleared transport arrays after shutdown; stop() also awaits any in-flight widen before snapshotting.
+  private stopping = false
   private readonly authToken = randomBytes(24).toString('hex')
   private readonly keepaliveIntervalMs: number
   private readonly longPollCap: number
   private readonly metadataOwnershipPollMs: number
   private readonly askLongPollCap: number
+  private readonly browserHostLongPollCap: number
+  private readonly browserHostLongPollCapPerDevice: number
+  private readonly specializedLongPollCap: number
   private readonly relayRevokeOutbox: RelayRevokeOutbox
   private deviceRegistry: DeviceRegistry | null = null
   private e2eeKeypair: E2EEKeypair | null = null
@@ -487,6 +554,9 @@ export class OrcaRuntimeRpcServer {
   private transports: RuntimeTransportMetadata[] = []
   private metadataOwnershipWatch: RuntimeMetadataOwnershipWatch | null = null
   private mobileSocketWiring: MobileSocketWiring | null = null
+  // Why: detaches the current WebSocketTransport from the session wiring so a pairing rebind can swap
+  // transports under the SAME wiring (see ensureMobileSocketWiring) instead of orphaning relay sockets.
+  private detachWebSocketWiring: (() => void) | null = null
   private mobileRelayPairingProvider: MobileRelayPairingProvider | null = null
   private mobileRelayPairingOfferQueue: Promise<void> = Promise.resolve()
   private mobileRelayPairingOfferInFlight: {
@@ -498,10 +568,7 @@ export class OrcaRuntimeRpcServer {
   private mobilePairingOfferGeneration = 0
   private onUnpairedDeviceAuthFailure: (() => void) | null = null
   private unpairedDeviceAuthThrottle: UnpairedDeviceAuthThrottle | null = null
-  private readonly binaryStreamHandlers = new Map<
-    string,
-    Map<number, (frame: TerminalStreamFrame) => void>
-  >()
+  private readonly binaryMessageRouter = new RuntimeBinaryMessageRouter()
   private readonly wsDispatchAbortStates = new Map<
     WebSocket,
     { controllers: Set<AbortController>; abortOnClose: () => void }
@@ -510,6 +577,8 @@ export class OrcaRuntimeRpcServer {
   private activeLongPolls = 0
   // Why: subset of activeLongPolls held by orchestration.ask, fenced by askLongPollCap.
   private activeAskLongPolls = 0
+  private activeBrowserHostLongPolls = 0
+  private readonly activeBrowserHostLongPollsByDevice = new Map<string, number>()
 
   constructor({
     runtime,
@@ -519,25 +588,36 @@ export class OrcaRuntimeRpcServer {
     enableWebSocket = false,
     wsPort = DEFAULT_WS_PORT,
     preferPinnedWsPort = false,
+    exposeNetworkByDefault = false,
+    pinnedBindHost,
     webClientRoot,
     keepaliveIntervalMs = KEEPALIVE_INTERVAL_MS,
     longPollCap = LONG_POLL_CAP,
-    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS
+    metadataOwnershipPollMs = RUNTIME_METADATA_OWNERSHIP_POLL_MS,
+    methods
   }: OrcaRuntimeRpcServerOptions) {
     this.runtime = runtime
-    this.dispatcher = new RpcDispatcher({ runtime })
+    this.dispatcher = new RpcDispatcher({ runtime, methods })
     this.userDataPath = userDataPath
     this.pid = pid
     this.platform = platform
     this.enableWebSocket = enableWebSocket
     this.wsPort = wsPort
     this.preferPinnedWsPort = preferPinnedWsPort
+    this.exposeNetworkByDefault = exposeNetworkByDefault
+    this.pinnedBindHost = pinnedBindHost ?? null
     this.webClientRoot = webClientRoot
     this.keepaliveIntervalMs = keepaliveIntervalMs
     this.longPollCap = longPollCap
     this.metadataOwnershipPollMs = metadataOwnershipPollMs
     // Why: derived, not configurable — the reservation must hold for whatever cap a caller picks.
     this.askLongPollCap = Math.max(1, Math.floor(longPollCap * ASK_LONG_POLL_SHARE))
+    this.browserHostLongPollCap = Math.max(
+      1,
+      Math.floor(longPollCap * BROWSER_HOST_LONG_POLL_SHARE)
+    )
+    this.browserHostLongPollCapPerDevice = Math.max(1, Math.floor(this.browserHostLongPollCap / 2))
+    this.specializedLongPollCap = Math.max(1, Math.floor(longPollCap * SPECIALIZED_LONG_POLL_SHARE))
     this.relayRevokeOutbox = new RelayRevokeOutbox(userDataPath)
   }
 
@@ -638,6 +718,9 @@ export class OrcaRuntimeRpcServer {
     name?: string
     rotate?: boolean
     scope?: DeviceScope
+    // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
+    // next launch bind every interface. Defaults to network reach, which is what every other caller means.
+    reach?: RuntimePairingReach
   }):
     | PairingOfferUnavailable
     | {
@@ -674,9 +757,10 @@ export class OrcaRuntimeRpcServer {
     const scope = args.scope ?? 'runtime'
     let device: DeviceEntry
     try {
+      const reach = args.reach ?? 'network'
       device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope)
+        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
+        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)
@@ -686,6 +770,7 @@ export class OrcaRuntimeRpcServer {
       endpoint,
       deviceToken: device.token,
       publicKeyB64,
+      pairedDeviceId: device.deviceId,
       scope
     })
     return {
@@ -704,6 +789,18 @@ export class OrcaRuntimeRpcServer {
     name?: string
     rotate?: boolean
   }): Promise<MobilePairingOffer> {
+    // Why: STA-2370 — creating a mobile pairing offer is the user's explicit opt-in to LAN reach, so
+    // widen the loopback listener before advertising its LAN endpoint in the QR. If the widen fails the
+    // listener stays on loopback, so report unavailable rather than advertise a dead LAN endpoint.
+    try {
+      await this.ensureNetworkExposure()
+    } catch (error) {
+      console.error(
+        '[runtime] Network exposure failed while creating a mobile pairing offer:',
+        error
+      )
+      return pairingUnavailable('network_exposure_failed', NETWORK_EXPOSURE_FAILED_GUIDANCE)
+    }
     if (args.connectionMode === 'local-only') {
       this.mobilePairingOfferGeneration += 1
       return this.createMobilePairingOfferSerial(args, this.mobilePairingOfferGeneration)
@@ -886,6 +983,7 @@ export class OrcaRuntimeRpcServer {
         endpoint: direct.endpoint,
         deviceToken: device.token,
         publicKeyB64,
+        pairedDeviceId: device.deviceId,
         scope: 'mobile',
         relay: relayPairing.relay
       })
@@ -959,37 +1057,18 @@ export class OrcaRuntimeRpcServer {
     streamId: number,
     handler: (frame: TerminalStreamFrame) => void
   ): () => void {
-    if (!connectionId || !Number.isInteger(streamId) || streamId < 0) {
-      return () => {}
-    }
-    let handlers = this.binaryStreamHandlers.get(connectionId)
-    if (!handlers) {
-      handlers = new Map()
-      this.binaryStreamHandlers.set(connectionId, handlers)
-    }
-    handlers.set(streamId, handler)
-    return () => {
-      const current = this.binaryStreamHandlers.get(connectionId)
-      if (!current || current.get(streamId) !== handler) {
-        return
-      }
-      current.delete(streamId)
-      if (current.size === 0) {
-        this.binaryStreamHandlers.delete(connectionId)
-      }
-    }
+    return this.binaryMessageRouter.registerTerminalStream(connectionId, streamId, handler)
+  }
+
+  private registerBinaryMessageHandler(
+    connectionId: string | undefined,
+    handler: (bytes: Uint8Array<ArrayBufferLike>) => void
+  ): () => void {
+    return this.binaryMessageRouter.registerRawMessage(connectionId, handler)
   }
 
   private handleWebSocketBinaryMessage(bytes: Uint8Array<ArrayBufferLike>, ws: WebSocket): void {
-    const connectionId = this.mobileSocketWiring?.getConnectionId(ws)
-    if (!connectionId) {
-      return
-    }
-    const frame = decodeTerminalStreamFrame(bytes)
-    if (!frame) {
-      return
-    }
-    this.binaryStreamHandlers.get(connectionId)?.get(frame.streamId)?.(frame)
+    this.binaryMessageRouter.dispatch(this.mobileSocketWiring?.getConnectionId(ws), bytes)
   }
 
   private registerWebSocketDispatchAbort(ws: WebSocket): {
@@ -1126,6 +1205,8 @@ export class OrcaRuntimeRpcServer {
 
     // Why: WebSocket uses per-device tokens + E2EE (tweetnacl) instead of TLS since React Native can't pin self-signed certs.
     if (this.enableWebSocket) {
+      // Why: land any deferred lastSeen write before a replacement registry reads the same file.
+      this.deviceRegistry?.flushPendingLastSeen()
       const pairingIdentity = this.initializePairingIdentity()
       if (!pairingIdentity.ok) {
         this.deviceRegistry = null
@@ -1136,74 +1217,19 @@ export class OrcaRuntimeRpcServer {
         this.e2eeKeypair = pairingIdentity.e2eeKeypair
         this.pairingInitializationFailure = null
         try {
-          const wsTransport = new WebSocketTransport({
-            host: '0.0.0.0',
+          const host = this.resolveInitialWebSocketBindHost()
+          const { transport, endpoint } = await this.startWebSocketTransport({
+            host,
             port: this.wsPort,
-            staticRoot: this.webClientRoot,
+            preferPinnedPort: this.preferPinnedWsPort,
             // Why: stable fallback port across restarts keeps paired devices' endpoints valid (STA-1511); wsPort 0 = random (E2E).
-            ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {}),
-            ...(this.preferPinnedWsPort ? { preferPinnedPort: true } : {})
+            ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
-          // Why: session-scoped (recreated per start) so each desktop launch may notify once.
-          this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
-            onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
-          })
-          const mobileSocketWiring = new MobileSocketWiring({
-            deviceRegistry: pairingIdentity.deviceRegistry,
-            e2eeKeypair: pairingIdentity.e2eeKeypair,
-            onText: (socket, plaintext, reply, sendBinary) => {
-              void this.handleWebSocketMessage(
-                plaintext,
-                reply,
-                sendBinary,
-                undefined,
-                socket.ws,
-                socket.device.deviceToken,
-                socket
-              )
-            },
-            onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
-            onReady: () => {
-              // Why: first authenticated mobile/remote client (direct WS and
-              // cloud relay both attach here) starts path-candidate tracking.
-              // Activation is a local-host concern: candidate buffers live on the
-              // buffer-owning host's runtime, so a remote runtime proxy may
-              // legitimately lack this method (its own server activates it).
-              this.runtime.activateRecentPtyPathCandidateTracking?.()
-              this.mobileRelayPairingProvider?.onDemandStateChanged?.()
-            },
-            onClose: (socket, hasOtherConnections) => {
-              if (!socket) {
-                return
-              }
-              this.abortWebSocketDispatches(socket.ws)
-              // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
-              this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
-              this.runtime.cancelMobileDictationForConnection(socket.connectionId)
-              this.binaryStreamHandlers.delete(socket.connectionId)
-              if (!hasOtherConnections) {
-                this.runtime.onClientDisconnected(socket.device.deviceToken)
-              }
-            },
-            // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
-            onUnpairedDeviceAuthFailure: (metadata) => {
-              if (metadata.transport === 'direct') {
-                this.unpairedDeviceAuthThrottle?.recordFailure()
-              }
-            }
-          })
-          mobileSocketWiring.attachTransport(wsTransport)
-          this.mobileSocketWiring = mobileSocketWiring
-
-          await wsTransport.start()
-          if (this.wsPort !== 0 && wsTransport.resolvedPort !== this.wsPort) {
-            writeWsFallbackPort(this.userDataPath, wsTransport.resolvedPort)
+          if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
+            writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
           }
-          activeTransports.push(wsTransport)
-          transportsMeta.push({
-            kind: 'websocket',
-            endpoint: `ws://0.0.0.0:${wsTransport.resolvedPort}`
-          })
+          activeTransports.push(transport)
+          transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
           // Why: WebSocket transport is supplementary; on failure (e.g. port in use) continue with Unix socket only.
           console.error('[runtime] Failed to start WebSocket transport:', error)
@@ -1246,22 +1272,292 @@ export class OrcaRuntimeRpcServer {
     })
   }
 
+  // Why: STA-2370 — a desktop with no previously-connected device stays on loopback until the user
+  // explicitly pairs; `orca serve`/E2E (exposeNetworkByDefault) and a reconnecting paired device bind wide.
+  // A grant minted for "This computer only" is excluded: its client is a browser on this machine, so
+  // counting it would republish the runtime on every interface one restart after the user declined that.
+  private resolveInitialWebSocketBindHost(): string {
+    if (this.pinnedBindHost) {
+      return this.pinnedBindHost
+    }
+    if (this.exposeNetworkByDefault) {
+      return WS_BIND_HOST_ALL_INTERFACES
+    }
+    const hasConnectedNetworkDevice =
+      this.deviceRegistry
+        ?.listDevices()
+        .some((device) => device.lastSeenAt > 0 && device.pairingReach !== 'this-computer') ?? false
+    return hasConnectedNetworkDevice ? WS_BIND_HOST_ALL_INTERFACES : WS_BIND_HOST_LOOPBACK
+  }
+
+  // Why: builds and starts a WS transport bound to `host`, wiring the session-scoped mobile socket
+  // handlers. Shared by initial start() and the pairing-time widen so both paths stay identical.
+  private async startWebSocketTransport(options: {
+    host: string
+    port: number
+    preferPinnedPort: boolean
+    fallbackPort?: number
+  }): Promise<{ transport: WebSocketTransport; endpoint: string }> {
+    const deviceRegistry = this.deviceRegistry
+    const e2eeKeypair = this.e2eeKeypair
+    if (!deviceRegistry || !e2eeKeypair) {
+      throw new Error('WebSocket transport requires an initialized pairing identity')
+    }
+    const wsTransport = new WebSocketTransport({
+      host: options.host,
+      port: options.port,
+      staticRoot: this.webClientRoot,
+      ...(options.fallbackPort !== undefined ? { fallbackPort: options.fallbackPort } : {}),
+      ...(options.preferPinnedPort ? { preferPinnedPort: true } : {})
+    })
+    const mobileSocketWiring = this.ensureMobileSocketWiring(deviceRegistry, e2eeKeypair)
+    this.detachWebSocketWiring = mobileSocketWiring.attachTransport(wsTransport)
+
+    try {
+      await wsTransport.start()
+    } catch (error) {
+      // Why: a listener that never bound must not stay attached to the session wiring (it would leak into
+      // terminateDeviceConnections); detach before propagating so the wiring only tracks live transports.
+      this.detachWebSocketWiring?.()
+      this.detachWebSocketWiring = null
+      throw error
+    }
+    this.wsBoundHost = options.host
+    return {
+      transport: wsTransport,
+      endpoint: formatWsEndpoint(options.host, wsTransport.resolvedPort)
+    }
+  }
+
+  // Why: one MobileSocketWiring per server session. Direct WS and cloud relay both attach to it, and
+  // DesktopRelayService captures it once at construction, so a loopback→wide pairing rebind must swap the
+  // transport under the SAME wiring — replacing the wiring would strand relay sockets (lost connection IDs,
+  // binary handling, and revocation targeting) on a dead object.
+  private ensureMobileSocketWiring(
+    deviceRegistry: DeviceRegistry,
+    e2eeKeypair: E2EEKeypair
+  ): MobileSocketWiring {
+    if (this.mobileSocketWiring) {
+      return this.mobileSocketWiring
+    }
+    // Why: session-scoped so each desktop launch may notify once (a mid-session rebind must not reset it).
+    this.unpairedDeviceAuthThrottle = new UnpairedDeviceAuthThrottle({
+      onTrigger: () => this.onUnpairedDeviceAuthFailure?.()
+    })
+    const mobileSocketWiring = new MobileSocketWiring({
+      deviceRegistry,
+      e2eeKeypair,
+      onText: (socket, plaintext, reply, sendBinary) => {
+        void this.handleWebSocketMessage(
+          plaintext,
+          reply,
+          sendBinary,
+          undefined,
+          socket.ws,
+          socket.device.deviceToken,
+          socket
+        )
+      },
+      onBinary: (socket, bytes) => this.handleWebSocketBinaryMessage(bytes, socket.ws),
+      onReady: () => {
+        // Why: first authenticated mobile/remote client (direct WS and
+        // cloud relay both attach here) starts path-candidate tracking.
+        // Activation is a local-host concern: candidate buffers live on the
+        // buffer-owning host's runtime, so a remote runtime proxy may
+        // legitimately lack this method (its own server activates it).
+        this.runtime.activateRecentPtyPathCandidateTracking?.()
+        this.mobileRelayPairingProvider?.onDemandStateChanged?.()
+      },
+      onClose: (socket, hasOtherConnections) => {
+        if (!socket) {
+          return
+        }
+        this.abortWebSocketDispatches(socket.ws)
+        // Why: subscriptions and binary streams are socket-scoped, but disconnect state is device-scoped across transports.
+        this.runtime.cleanupSubscriptionsForConnection(socket.connectionId)
+        this.runtime.cancelMobileDictationForConnection(socket.connectionId)
+        this.binaryMessageRouter.deleteConnection(socket.connectionId)
+        if (!hasOtherConnections) {
+          this.runtime.onClientDisconnected(socket.device.deviceToken)
+        }
+      },
+      // Why: relay attempts are authorized upstream; only direct failures should prompt local re-pairing.
+      onUnpairedDeviceAuthFailure: (metadata) => {
+        if (metadata.transport === 'direct') {
+          this.unpairedDeviceAuthThrottle?.recordFailure()
+        }
+      }
+    })
+    this.mobileSocketWiring = mobileSocketWiring
+    return mobileSocketWiring
+  }
+
+  // Why: STA-2370 — widen the loopback listener to all interfaces so a freshly generated pairing
+  // offer's advertised LAN endpoint is reachable. Idempotent, but it is no longer confined to the first
+  // pairing action: a "This computer only" link never widens, so live loopback clients can already be
+  // connected when a later LAN/QR offer opts in. Rebinding terminates them (ws cannot move a listener),
+  // so the resolved port is reused — already-issued endpoints stay valid and clients reconnect in place.
+  async ensureNetworkExposure(): Promise<void> {
+    if (this.pinnedBindHost && this.pinnedBindHost !== WS_BIND_HOST_ALL_INTERFACES) {
+      // Why throw and not return: callers widen so they can ADVERTISE a LAN endpoint. Returning
+      // quietly would let them publish one that nothing can reach; the throw lands in their
+      // existing network_exposure_failed branch, which reports the offer unavailable instead.
+      throw new Error(
+        `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`
+      )
+    }
+    if (
+      !this.enableWebSocket ||
+      this.stopping ||
+      this.wsBoundHost === WS_BIND_HOST_ALL_INTERFACES
+    ) {
+      return
+    }
+    // Why: concurrent pairing requests must share one rebind — two simultaneous stop/start races would
+    // fight for the port and strand the listener on a random one.
+    if (!this.networkExposurePromise) {
+      this.networkExposurePromise = this.widenWebSocketBind().finally(() => {
+        this.networkExposurePromise = null
+      })
+    }
+    return this.networkExposurePromise
+  }
+
+  private async widenWebSocketBind(): Promise<void> {
+    const current = this.activeTransports.find(
+      (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
+    )
+    if (!current) {
+      return
+    }
+    const index = this.activeTransports.indexOf(current)
+    const previousPort = current.resolvedPort
+    let widened: { transport: WebSocketTransport; endpoint: string }
+    try {
+      // Why: detach the loopback listener from the session wiring before stopping it so terminateDevice-
+      // Connections never iterates a dead transport; the new listener re-attaches to the SAME wiring.
+      this.detachWebSocketWiring?.()
+      await current.stop()
+      widened = await this.startWebSocketTransport({
+        host: WS_BIND_HOST_ALL_INTERFACES,
+        port: previousPort,
+        preferPinnedPort: true
+      })
+    } catch (error) {
+      // Why: the wide bind failed after the loopback listener was already stopped. Restore a serving
+      // loopback listener on the same port (wsBoundHost stays loopback so a later offer retries), then
+      // propagate — the caller must not advertise a LAN endpoint with no LAN listener behind it (STA-2370).
+      console.error('[runtime] Failed to widen WebSocket transport for pairing:', error)
+      await this.recoverWebSocketBindAfterFailedWiden(index, previousPort)
+      throw error
+    }
+    // Why: register the live wide transport BEFORE persisting metadata so a metadata-write failure can
+    // never orphan a running 0.0.0.0 listener outside activeTransports (and thus outside stop()).
+    this.activeTransports[index] = widened.transport
+    const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
+    if (metaIndex !== -1) {
+      this.transports[metaIndex] = { kind: 'websocket', endpoint: widened.endpoint }
+    }
+    try {
+      // Why: a rebind that lands on a different port (same-port bind refused) must be persisted so a
+      // later reconnect from a device paired to this port matches on the next launch (STA-1511).
+      if (this.wsPort !== 0 && widened.transport.resolvedPort !== this.wsPort) {
+        writeWsFallbackPort(this.userDataPath, widened.transport.resolvedPort)
+      }
+      this.writeMetadata()
+    } catch (persistError) {
+      // Why: the wide listener is live and tracked; a persistence failure must not tear it down. Keep
+      // serving — the in-memory endpoint is already correct.
+      console.error(
+        '[runtime] Widened WebSocket listener but failed to persist pairing metadata:',
+        persistError
+      )
+    }
+  }
+
+  // Why: a failed widen already tore down the loopback listener; bring one back on the same host/port so the
+  // runtime keeps serving locally (wsBoundHost stays loopback, so the next pairing offer retries the widen).
+  private async recoverWebSocketBindAfterFailedWiden(
+    index: number,
+    previousPort: number
+  ): Promise<void> {
+    let restored: { transport: WebSocketTransport; endpoint: string }
+    try {
+      restored = await this.startWebSocketTransport({
+        host: WS_BIND_HOST_LOOPBACK,
+        port: previousPort,
+        preferPinnedPort: true
+      })
+    } catch (recoveryError) {
+      // Why: even the loopback restore failed — drop the dead WebSocket transport so we never advertise an
+      // endpoint with no listener. The Unix socket keeps serving and a restart re-establishes the listener.
+      console.error(
+        '[runtime] Failed to restore WebSocket transport after widen failure:',
+        recoveryError
+      )
+      this.activeTransports.splice(index, 1)
+      const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
+      if (metaIndex !== -1) {
+        this.transports.splice(metaIndex, 1)
+      }
+      this.wsBoundHost = null
+      try {
+        this.writeMetadata()
+      } catch {
+        // Why: metadata already reflects the torn-down listener; nothing else to recover here.
+      }
+      return
+    }
+    // Why: register the restored loopback listener BEFORE persisting metadata so a write failure can never
+    // orphan a live transport outside activeTransports (and thus outside stop()).
+    this.activeTransports[index] = restored.transport
+    const metaIndex = this.transports.findIndex((meta) => meta.kind === 'websocket')
+    if (metaIndex !== -1) {
+      this.transports[metaIndex] = { kind: 'websocket', endpoint: restored.endpoint }
+    }
+    try {
+      this.writeMetadata()
+    } catch (persistError) {
+      // Why: the loopback listener is live and tracked; a persistence failure must not tear it down.
+      console.error(
+        '[runtime] Restored loopback WebSocket listener but failed to persist metadata:',
+        persistError
+      )
+    }
+  }
+
   /** Why: test-only seam — runs one ownership check instead of waiting out the poll interval. */
   checkRuntimeMetadataOwnership(): void {
     this.metadataOwnershipWatch?.check()
   }
 
   async stop(): Promise<void> {
+    // Why: STA-2370 — refuse new widens, then let any in-flight pairing widen settle into the live
+    // transport arrays before snapshotting them, so a racing rebind can't strand a wide 0.0.0.0 listener
+    // by writing it back into a cleared array after shutdown (see widenWebSocketBind).
+    this.stopping = true
+    const pendingExposure = this.networkExposurePromise
+    if (pendingExposure) {
+      await pendingExposure.catch(() => {
+        // Why: a failed widen already recovered/logged; we only need it to finish mutating the arrays.
+      })
+    }
     const transports = this.activeTransports
     this.activeTransports = []
     this.transports = []
     this.metadataOwnershipWatch?.stop()
     this.metadataOwnershipWatch = null
     this.mobileSocketWiring = null
-    if (transports.length === 0) {
-      return
+    this.detachWebSocketWiring = null
+    const stopResults = await Promise.allSettled(
+      transports.map(async (transport) => transport.stop())
+    )
+    // Why: before-quit fences relay input; direct auth can still refresh lastSeen while these transports close.
+    this.deviceRegistry?.flushPendingLastSeen()
+    const failedStop = stopResults.find((result) => result.status === 'rejected')
+    if (failedStop?.status === 'rejected') {
+      throw failedStop.reason
     }
-    await Promise.all(transports.map((t) => t.stop()))
     // Why: leave the metadata file on shutdown — shared userData may host another live runtime whose bootstrap file we'd erase.
   }
 
@@ -1282,7 +1578,7 @@ export class OrcaRuntimeRpcServer {
     const request = parsed.request
 
     // Why: long-poll admission fence; short RPCs bypass the counter. See §7 risk #2.
-    const longPoll = longPollClassOf(request)
+    const longPoll = classifyRuntimeLongPoll(request)
     const rejection = this.admitLongPoll(longPoll)
     if (rejection) {
       return this.buildError(request.id, 'runtime_busy', rejection)
@@ -1304,30 +1600,68 @@ export class OrcaRuntimeRpcServer {
   // Why: one fence for both transports — the total cap protects short RPCs, the ask
   // sub-cap protects terminal.wait / check --wait from slow reply-blocked asks.
   // Returns the rejection message, or null once the slot is reserved.
-  private admitLongPoll(longPoll: LongPollClass | null): string | null {
+  private admitLongPoll(
+    longPoll: RuntimeLongPollClass | null,
+    pairedDeviceId?: string
+  ): string | null {
     if (!longPoll) {
       return null
     }
     if (this.activeLongPolls >= this.longPollCap) {
       return 'long-poll capacity reached; retry with backoff'
     }
+    if (
+      (longPoll === 'ask' || longPoll === 'browser-host') &&
+      this.activeAskLongPolls + this.activeBrowserHostLongPolls >= this.specializedLongPollCap
+    ) {
+      return longPoll === 'ask'
+        ? 'orchestration.ask capacity reached; retry with backoff'
+        : 'browser-host capacity reached; retry with backoff'
+    }
     if (longPoll === 'ask' && this.activeAskLongPolls >= this.askLongPollCap) {
       return 'orchestration.ask capacity reached; retry with backoff'
+    }
+    if (
+      longPoll === 'browser-host' &&
+      (this.activeBrowserHostLongPolls >= this.browserHostLongPollCap ||
+        (pairedDeviceId !== undefined &&
+          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) >=
+            this.browserHostLongPollCapPerDevice))
+    ) {
+      return 'browser-host capacity reached; retry with backoff'
     }
     this.activeLongPolls += 1
     if (longPoll === 'ask') {
       this.activeAskLongPolls += 1
+    } else if (longPoll === 'browser-host') {
+      this.activeBrowserHostLongPolls += 1
+      if (pairedDeviceId !== undefined) {
+        this.activeBrowserHostLongPollsByDevice.set(
+          pairedDeviceId,
+          (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 0) + 1
+        )
+      }
     }
     return null
   }
 
-  private releaseLongPoll(longPoll: LongPollClass | null): void {
+  private releaseLongPoll(longPoll: RuntimeLongPollClass | null, pairedDeviceId?: string): void {
     if (!longPoll) {
       return
     }
     this.activeLongPolls = Math.max(0, this.activeLongPolls - 1)
     if (longPoll === 'ask') {
       this.activeAskLongPolls = Math.max(0, this.activeAskLongPolls - 1)
+    } else if (longPoll === 'browser-host') {
+      this.activeBrowserHostLongPolls = Math.max(0, this.activeBrowserHostLongPolls - 1)
+      if (pairedDeviceId !== undefined) {
+        const remaining = (this.activeBrowserHostLongPollsByDevice.get(pairedDeviceId) ?? 1) - 1
+        if (remaining > 0) {
+          this.activeBrowserHostLongPollsByDevice.set(pairedDeviceId, remaining)
+        } else {
+          this.activeBrowserHostLongPollsByDevice.delete(pairedDeviceId)
+        }
+      }
     }
   }
 
@@ -1419,8 +1753,8 @@ export class OrcaRuntimeRpcServer {
       wsTransport.setClientId(ws, token)
     }
 
-    const longPoll = longPollClassOf(request)
-    const rejection = this.admitLongPoll(longPoll)
+    const longPoll = classifyRuntimeLongPoll(request)
+    const rejection = this.admitLongPoll(longPoll, device.deviceId)
     if (rejection) {
       reply(JSON.stringify(this.buildError(request.id, 'runtime_busy', rejection)))
       return
@@ -1461,6 +1795,8 @@ export class OrcaRuntimeRpcServer {
         : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
+        // Why: the validated credential preserves existing federation ownership without trusting request fields.
+        authenticatedCallerFingerprint: fingerprintAuthenticatedPairingCredential(token),
         connectionId,
         clientId: token,
         pairedDeviceId: device.deviceId,
@@ -1471,11 +1807,13 @@ export class OrcaRuntimeRpcServer {
         signal: abortRegistration?.signal,
         sendBinary,
         registerBinaryStreamHandler: (streamId, handler) =>
-          this.registerBinaryStreamHandler(connectionId, streamId, handler)
+          this.registerBinaryStreamHandler(connectionId, streamId, handler),
+        registerBinaryMessageHandler: (handler) =>
+          this.registerBinaryMessageHandler(connectionId, handler)
       })
     } finally {
       abortRegistration?.dispose()
-      this.releaseLongPoll(longPoll)
+      this.releaseLongPoll(longPoll, device.deviceId)
     }
   }
 

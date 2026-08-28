@@ -309,7 +309,7 @@ export function ShortcutCommandBlock({
       {helperMessage ? (
         <span
           className={cn(
-            'block truncate px-2 text-[11px] leading-4',
+            'block whitespace-normal px-2 text-[11px] leading-4',
             helperTone === 'error' ? 'text-destructive' : 'text-muted-foreground'
           )}
           aria-live="polite"

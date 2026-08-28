@@ -75,7 +75,7 @@ describe('NativeChatQuestionCard', () => {
     render(tabsOrSpaces, onAnswer)
 
     clickOption('Spaces')
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
@@ -97,7 +97,7 @@ describe('NativeChatQuestionCard', () => {
 
     clickOption('Cherry')
     clickOption('Apple')
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [0, 2], other: '' }])
   })
@@ -118,7 +118,7 @@ describe('NativeChatQuestionCard', () => {
     )
 
     clickOptionAt(1)
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
@@ -133,7 +133,7 @@ describe('NativeChatQuestionCard', () => {
       setter.call(input, 'four spaces')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
   })

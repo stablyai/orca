@@ -15,6 +15,9 @@ import {
 export type WorktreeAgentActivitySummary = {
   hasPermission: boolean
   hasLiveWorking: boolean
+  hasLiveMonitoring: boolean
+  /** Fresh interrupted completion, kept separate from clean done outcomes. */
+  hasInterrupted: boolean
   hasLiveDone: boolean
   hasRetainedDone: boolean
   agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
@@ -25,6 +28,8 @@ const EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID: Record<string, ReadonlySet<string>>
 const EMPTY_SUMMARY: WorktreeAgentActivitySummary = {
   hasPermission: false,
   hasLiveWorking: false,
+  hasLiveMonitoring: false,
+  hasInterrupted: false,
   hasLiveDone: false,
   hasRetainedDone: false,
   agentStatusPaneIdsByTabId: EMPTY_AGENT_STATUS_PANE_IDS_BY_TAB_ID
@@ -107,10 +112,17 @@ function getWorktreeAgentActivitySummaries(
       runtimeAgentOrchestrationByPaneKey?.[paneKey]
     )
     const worktreeId = resolveAgentStatusWorktreeId(entry, tabIdToWorktreeId, orchestration)
-    if (!worktreeId || !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+    if (!worktreeId) {
       continue
     }
     const summary = summaryForWorktree(worktreeId)
+    if (entry.restoredUnconfirmed) {
+      addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
+      continue
+    }
+    if (!isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)) {
+      continue
+    }
     addAgentStatusPaneId(summary, paneIdentity.tabId, paneIdentity.paneId)
     if (entry.state === 'done') {
       addParentPaneId(summary, orchestration, worktreeId, tabIdToWorktreeId)
@@ -170,6 +182,8 @@ function summariesEqual(
   return (
     previous.hasPermission === next.hasPermission &&
     previous.hasLiveWorking === next.hasLiveWorking &&
+    previous.hasLiveMonitoring === next.hasLiveMonitoring &&
+    previous.hasInterrupted === next.hasInterrupted &&
     previous.hasLiveDone === next.hasLiveDone &&
     previous.hasRetainedDone === next.hasRetainedDone &&
     agentStatusPaneIdsByTabIdEqual(
@@ -207,12 +221,19 @@ function agentStatusPaneIdsByTabIdEqual(
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
-  entry: Pick<AgentStatusEntry, 'state'>
+  entry: Pick<AgentStatusEntry, 'state' | 'workingMode' | 'interrupted'>
 ): void {
   if (entry.state === 'blocked' || entry.state === 'waiting') {
     summary.hasPermission = true
+  } else if (entry.interrupted === true) {
+    // Interrupted is encoded as done, so it must be checked first.
+    summary.hasInterrupted = true
   } else if (entry.state === 'working') {
-    summary.hasLiveWorking = true
+    if (entry.workingMode === 'monitoring') {
+      summary.hasLiveMonitoring = true
+    } else {
+      summary.hasLiveWorking = true
+    }
   } else if (entry.state === 'done') {
     summary.hasLiveDone = true
   }

@@ -6,6 +6,7 @@ import {
   getAzureDevOpsPullRequestForBranchOrThrow,
   normalizeAzureDevOpsApiBaseUrl
 } from './client'
+import { _resetAzureDevOpsPreviewApiVersionCache } from './azure-devops-api-request'
 import { _resetAzureDevOpsRepoRefCache } from './repository-ref'
 import { __resetRepoDefaultBranchCacheForTests } from '../source-control/repo-default-branch'
 
@@ -39,6 +40,7 @@ describe('Azure DevOps client', () => {
     process.env = { ...OLD_ENV, ORCA_AZURE_DEVOPS_TOKEN: 'pat-token' }
     gitExecFileAsyncMock.mockReset()
     _resetAzureDevOpsRepoRefCache()
+    _resetAzureDevOpsPreviewApiVersionCache()
     __resetRepoDefaultBranchCacheForTests()
   })
 
@@ -63,6 +65,35 @@ describe('Azure DevOps client', () => {
       baseUrl: null,
       tokenConfigured: true
     })
+  })
+
+  it('authenticates against an on-prem Server that requires -preview api-versions (STA-3494)', async () => {
+    process.env.ORCA_AZURE_DEVOPS_API_BASE_URL = 'https://ado.example.com:8443/tfs/MyCollection'
+    const versions: (string | null)[] = []
+    globalThis.fetch = vi.fn(async (input: string | URL | Request) => {
+      const url = new URL(String(input))
+      expect(url.pathname).toBe('/tfs/MyCollection/_apis/connectionData')
+      versions.push(url.searchParams.get('api-version'))
+      if (!url.searchParams.get('api-version')?.endsWith('-preview')) {
+        return new Response(
+          JSON.stringify({
+            message: 'The requested version "7.1" of the resource is under preview.',
+            typeKey: 'VssInvalidPreviewVersionException'
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      return Response.json({ authenticatedUser: { providerDisplayName: 'Server User' } })
+    }) as never
+
+    await expect(getAzureDevOpsAuthStatus()).resolves.toEqual({
+      configured: true,
+      authenticated: true,
+      account: 'Server User',
+      baseUrl: 'https://ado.example.com:8443/tfs/MyCollection',
+      tokenConfigured: true
+    })
+    expect(versions).toEqual(['7.1', '7.1-preview'])
   })
 
   it('resolves a PR for a branch through repository, PR, and status REST calls', async () => {

@@ -1,5 +1,6 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
-import type { TerminalQuickCommand, TuiAgent } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
@@ -17,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
+import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
 
 const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
 
@@ -26,6 +28,7 @@ type TerminalQuickCommandContentSectionProps = {
   selectedAgent: TuiAgent
   draftMemoryRef: MutableRefObject<TerminalQuickCommandDialogDraftMemory>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
+  toggleAppendEnter: () => void
 }
 
 export function TerminalQuickCommandContentSection({
@@ -33,10 +36,23 @@ export function TerminalQuickCommandContentSection({
   isAgentAction,
   selectedAgent,
   draftMemoryRef,
-  setDraft
+  setDraft,
+  toggleAppendEnter
 }: TerminalQuickCommandContentSectionProps): React.JSX.Element {
+  const commandText = isTerminalAgentQuickCommand(draft) ? draft.prompt : draft.command
+  // Why: the frame header is a plain span, so the textarea carries the accessible name itself.
+  const commandFieldLabel = isAgentAction
+    ? translate(
+        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.dc921c17ee',
+        'Prompt'
+      )
+    : translate(
+        'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.command_label',
+        'Command'
+      )
+
   return (
-    <div>
+    <div className="space-y-3">
       {/* Why: action changes add/remove agent-only fields; animating rows here
           keeps the fixed dialog from snapping between content heights. */}
       <div
@@ -49,7 +65,7 @@ export function TerminalQuickCommandContentSection({
         <div className="min-h-0">
           <div
             className={cn(
-              'space-y-2 px-1 pt-1 pb-4 transition-[opacity,transform] duration-150 ease-out',
+              'space-y-2 px-1 pt-1 pb-1 transition-[opacity,transform] duration-150 ease-out',
               isAgentAction
                 ? 'translate-y-0 opacity-100 delay-200'
                 : '-translate-y-1 opacity-0 delay-0'
@@ -117,20 +133,25 @@ export function TerminalQuickCommandContentSection({
         </div>
       </div>
 
-      <div className="space-y-2">
-        <Label>
-          {isAgentAction
-            ? translate(
-                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.dc921c17ee',
-                'Prompt'
-              )
-            : translate(
-                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.ca414324ee',
-                'Command Text'
+      {/* Why: the textarea drops its own ring, so the frame carries the focus state. */}
+      <div className="overflow-hidden rounded-md border border-border bg-[var(--editor-surface)] transition-[color,box-shadow] focus-within:border-ring focus-within:ring-[3px] focus-within:ring-ring/50">
+        <div className="flex items-center justify-between gap-3 border-b border-border bg-muted/70 px-3 py-2">
+          <span className="text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+            {commandFieldLabel}
+          </span>
+          {isAgentAction ? (
+            <span className="shrink-0 text-[11px] text-muted-foreground">
+              {translate(
+                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_toolbar_hint',
+                'Supports /goal, skills, paths'
               )}
-        </Label>
+            </span>
+          ) : null}
+        </div>
+
         <textarea
-          value={isTerminalAgentQuickCommand(draft) ? draft.prompt : draft.command}
+          value={commandText}
+          aria-label={commandFieldLabel}
           onChange={(event) => {
             const text = event.target.value
             draftMemoryRef.current = isAgentAction
@@ -159,42 +180,35 @@ export function TerminalQuickCommandContentSection({
                   'npm run dev'
                 )
           }
-          rows={4}
+          spellCheck={isAgentAction}
+          rows={14}
           className={cn(
-            'min-h-24 w-full resize-y rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-            !isAgentAction && 'font-mono'
+            'min-h-[21rem] w-full resize-y border-0 bg-transparent px-3.5 py-3 text-sm outline-none focus-visible:ring-0',
+            !isAgentAction && 'font-mono text-[13px]'
           )}
         />
-      </div>
 
-      <div
-        className={cn(
-          'grid overflow-hidden transition-[grid-template-rows] duration-200 ease-out',
-          isAgentAction ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
-        )}
-        aria-hidden={!isAgentAction}
-      >
-        <div className="min-h-0">
-          <p
-            className={cn(
-              'px-1 pt-2 text-xs text-muted-foreground transition-[opacity,transform] duration-150 ease-out',
-              isAgentAction
-                ? 'translate-y-0 opacity-100 delay-200'
-                : '-translate-y-1 opacity-0 delay-0'
-            )}
-          >
-            {translate(
-              'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.e604bd40d6',
-              'Supports skills, file paths, and built-in commands like'
-            )}{' '}
-            <code className="rounded bg-muted px-1 font-mono text-[11px]">
+        <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/50 px-3 py-2">
+          {!isTerminalAgentQuickCommand(draft) ? (
+            <TerminalQuickCommandAppendEnterSwitch
+              appendEnter={draft.appendEnter}
+              onToggle={toggleAppendEnter}
+              compact
+            />
+          ) : (
+            <span className="text-[11px] text-muted-foreground">
               {translate(
-                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.97e96cc027',
-                '/goal'
+                'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.agent_footer_hint',
+                'Multi-line prompts are fine — keep them focused.'
               )}
-            </code>
-            .
-          </p>
+            </span>
+          )}
+          <span className="shrink-0 text-[11px] text-muted-foreground">
+            {translate(
+              'auto.components.terminal.quick.commands.TerminalQuickCommandDialog.resize_hint',
+              'Drag corner to resize'
+            )}
+          </span>
         </div>
       </div>
     </div>

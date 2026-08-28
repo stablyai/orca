@@ -118,6 +118,8 @@ describe('orchestration federated setup evidence', () => {
     })
     const task = db.createTask({ spec: 'remote setup', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       runtimeEpoch: runtime.getRuntimeId(),
@@ -181,6 +183,7 @@ describe('orchestration federated setup evidence', () => {
     await expect(
       workerShow.handler(workerShow.params!.parse({ dispatch: started.dispatch.id }), { runtime })
     ).resolves.toMatchObject({
+      observation: { status: 'live', exactWorker: true },
       worker: {
         state: 'ready',
         stage: 'input_accepted',

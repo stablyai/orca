@@ -8,6 +8,7 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { printResult } from '../format'
+import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 describe('orchestration worker-start CLI contract', () => {
   beforeEach(() => {
@@ -84,6 +85,63 @@ describe('orchestration worker-start CLI contract', () => {
     expect(process.exitCode).toBeUndefined()
   })
 
+  it('capability-gates and forwards per-invocation launch preferences', async () => {
+    callMock
+      .mockResolvedValueOnce({
+        result: {
+          capabilities: [ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY]
+        }
+      })
+      .mockResolvedValueOnce({
+        result: {
+          runId: 'run_1',
+          taskId: 'task_1',
+          dispatchId: 'ctx_1',
+          state: 'ready',
+          effects: [],
+          residualResources: []
+        }
+      })
+
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'claude'],
+        ['model', 'aws-bedrock-opus-5'],
+        ['effort', 'high'],
+        ['from', 'term_coord']
+      ])
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'status.get')
+    expect(callMock).toHaveBeenNthCalledWith(
+      2,
+      'orchestration.workerStart',
+      expect.objectContaining({
+        agent: 'claude',
+        model: 'aws-bedrock-opus-5',
+        effort: 'high'
+      })
+    )
+  })
+
+  it('fails before worker-start when the runtime would strip launch preferences', async () => {
+    callMock.mockResolvedValueOnce({ result: { capabilities: [] } })
+
+    await expect(
+      invokeWorkerStart(
+        new Map<string, string | boolean>([
+          ['task', 'task_1'],
+          ['agent', 'codex'],
+          ['model', 'gpt-5.6-sol'],
+          ['from', 'term_coord']
+        ])
+      )
+    ).rejects.toMatchObject({ code: 'incompatible_runtime' })
+
+    expect(callMock).toHaveBeenCalledTimes(1)
+  })
+
   it('sets an unsuccessful exit code for failed and unknown receipts', async () => {
     callMock.mockResolvedValue({
       result: {
@@ -145,6 +203,43 @@ describe('orchestration worker-start CLI contract', () => {
         warning: 'Terminal term_worker is running but could not be revealed.'
       })
     ).toContain('Warning: Terminal term_worker is running but could not be revealed.')
+  })
+
+  it('prints the retained-process warning for a manual worker-stop', async () => {
+    callMock.mockResolvedValue({
+      result: {
+        dispatchId: 'ctx_manual',
+        state: 'stopped',
+        processAction: 'none',
+        warning: 'The assignment was stopped without closing its unsupervised terminal process.'
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration worker-stop']({
+      flags: new Map<string, string | boolean>([['dispatch', 'ctx_manual']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    const formatter = vi.mocked(printResult).mock.calls[0]?.[2] as
+      | ((result: {
+          dispatchId: string
+          state: string
+          processAction: string
+          warning?: string
+        }) => string)
+      | undefined
+    expect(
+      formatter?.({
+        dispatchId: 'ctx_manual',
+        state: 'stopped',
+        processAction: 'none',
+        warning: 'The assignment was stopped without closing its unsupervised terminal process.'
+      })
+    ).toContain(
+      'Warning: The assignment was stopped without closing its unsupervised terminal process.'
+    )
   })
 
   it('allows the initial zero cursor when paging worker output', async () => {

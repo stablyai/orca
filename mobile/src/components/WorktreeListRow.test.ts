@@ -127,7 +127,6 @@ describe('memoized worktree rows', () => {
   let renderer: ReactTestRenderer | null = null
 
   beforeEach(() => {
-    ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
     agentSpinnerRender.mockClear()
     agentStateDotRender.mockClear()
   })
@@ -200,7 +199,7 @@ describe('memoized worktree rows', () => {
     await act(async () => {
       renderer!.update(
         createElement(WorktreeAgentRow, {
-          agent: agent({ state: 'done', updatedAt: 2_000 }),
+          agent: agent({ state: 'working', workingMode: 'monitoring', updatedAt: 2_000 }),
           depth: 0,
           now: 2_000,
           unvisited: false
@@ -208,5 +207,22 @@ describe('memoized worktree rows', () => {
       )
     })
     expect(agentStateDotRender).toHaveBeenCalledTimes(2)
+    expect(agentStateDotRender).toHaveBeenLastCalledWith({ state: 'monitoring' })
+  })
+
+  it('passes workspace monitoring mode to the status indicator', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(ListRowHarness, {
+          item: { ...baseItem, status: 'working', workingMode: 'monitoring' },
+          now: 2_000
+        })
+      )
+    })
+
+    expect(agentSpinnerRender).toHaveBeenLastCalledWith({
+      status: 'working',
+      workingMode: 'monitoring'
+    })
   })
 })

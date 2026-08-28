@@ -6,18 +6,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type * as RepoWorktrees from '../repo-worktrees'
 import { listRepoWorktrees } from '../repo-worktrees'
-import type { FolderWorkspace, GitWorktreeInfo, ProjectGroup, Repo } from '../../shared/types'
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../shared/project-group-types'
+import type { Repo } from '../../shared/repo-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import {
   AUTHORIZED_EXTERNAL_PATHS_MAX,
   authorizeExternalPath,
-  invalidateAuthorizedRootsCache,
-  isDescendantOrEqual,
   isPathAllowed,
-  rebuildAuthorizedRootsCache,
-  resolveAuthorizedPath,
-  resolveRegisteredWorktreePath,
-  validateGitRelativeFilePath
+  resolveAuthorizedPath
 } from './filesystem-auth'
+import { isDescendantOrEqual, validateGitRelativeFilePath } from './filesystem-path-containment'
+import {
+  invalidateAuthorizedRootsCache,
+  rebuildAuthorizedRootsCache,
+  resolveRegisteredWorktreePath
+} from './registered-worktree-roots-cache'
 
 vi.mock('../repo-worktrees', async () => {
   const actual = await vi.importActual<typeof RepoWorktrees>('../repo-worktrees')
@@ -324,7 +328,7 @@ describe('filesystem-auth path containment', () => {
 
     try {
       const { isDescendantOrEqual: isDescendantOrEqualWithWinPath } =
-        await import('./filesystem-auth')
+        await import('./filesystem-path-containment')
 
       expect(
         isDescendantOrEqualWithWinPath(String.raw`c:\repo\src\app.ts`, String.raw`C:\Repo`)

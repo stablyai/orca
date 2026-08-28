@@ -24,7 +24,6 @@ vi.mock('child_process', () => ({
 
 import {
   buildSshArgs,
-  findSystemSsh,
   downloadFileViaSystemSsh,
   spawnSystemSsh,
   spawnSystemSshCommand,
@@ -152,22 +151,6 @@ function createMockChildProcess(): EventEmitter & {
   return child
 }
 
-describe('findSystemSsh', () => {
-  beforeEach(() => {
-    existsSyncMock.mockReset()
-  })
-
-  it('returns the first existing ssh path', () => {
-    mockSystemSshExists()
-    expect(findSystemSsh()).toBe(SYSTEM_SSH_PATH)
-  })
-
-  it('returns null when no ssh binary is found', () => {
-    existsSyncMock.mockReturnValue(false)
-    expect(findSystemSsh()).toBeNull()
-  })
-})
-
 describe('spawnSystemSsh', () => {
   let mockProc: {
     stdin: {
@@ -283,6 +266,15 @@ describe('spawnSystemSsh', () => {
     expect(args).not.toContain('-i')
     expect(args).not.toContain('IdentityAgent=/tmp/agent.sock')
     expect(args).not.toContain('ProxyCommand=ignored')
+  })
+
+  it('passes an explicit main-owned OpenSSH config as one argument', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'isolated-host', source: 'ssh-config' }), {
+      configFile: '/tmp/orca isolated/ssh_config'
+    })
+
+    expect(args.slice(0, 2)).toEqual(['-F', '/tmp/orca isolated/ssh_config'])
+    expect(args).toContain('isolated-host')
   })
 
   it('passes explicit options for manual targets with implicit configHost', () => {
@@ -827,6 +819,7 @@ describe('spawnSystemSsh', () => {
 
   it('throws when no system ssh is found', () => {
     existsSyncMock.mockReturnValue(false)
+    vi.stubEnv('PATH', '')
     expect(() => spawnSystemSsh(createTarget())).toThrow('No system ssh binary found')
   })
 

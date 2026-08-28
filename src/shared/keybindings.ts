@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: keep the shortcut registry, parser, formatter, and conflict detector in one shared module so main/renderer/browser/Settings can't drift. */
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { ALL_TUI_AGENTS, TUI_AGENT_DISPLAY_NAMES } from './tui-agent-display-names'
 
 export type KeybindingScope =
@@ -40,6 +40,7 @@ export type KeybindingActionId =
   | 'workspace.selectByIndex'
   | 'voice.dictation'
   | 'view.tasks'
+  | 'dashboard.toggle'
   | 'sidebar.left.toggle'
   | 'sidebar.right.toggle'
   | 'sidebar.explorer.toggle'
@@ -101,6 +102,7 @@ export type KeybindingActionId =
   | 'fileExplorer.delete'
   | 'settings.search'
   | 'terminal.copySelection'
+  | 'terminal.selectAll'
   | 'terminal.paste'
   | 'terminal.search'
   | 'terminal.clear'
@@ -291,17 +293,49 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
       'remove',
       'trash'
     ],
-    // Why: ship now without a default chord; user overrides still win when a future default is assigned.
-    defaultBindings: platformBindings([]),
+    // Why: Backspace avoids the terminal pane's D-based split shortcuts on every platform.
+    defaultBindings: platformBindings(['Mod+Shift+Backspace']),
     allowInTerminal: true
   },
   {
     id: 'workspace.openBoard',
-    title: 'Open Workspace Board',
+    title: 'Toggle Workspace Board',
     group: 'Global',
     scope: 'global',
-    searchKeywords: ['shortcut', 'global', 'workspace', 'board', 'kanban', 'worktree'],
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'workspace',
+      'board',
+      'kanban',
+      'worktree',
+      'toggle',
+      'open',
+      'close'
+    ],
     // Why: configurable but unbound by default, to not take a global chord from terminal/browser/editor users.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'dashboard.toggle',
+    title: 'Toggle Agent Dashboard',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'agent',
+      'agents',
+      'dashboard',
+      'kanban',
+      'board',
+      'toggle',
+      'open',
+      'close'
+    ],
+    // Why: configurable but unbound by default, matching workspace.openBoard — an
+    // experimental surface must not claim a global chord from terminal users.
     defaultBindings: platformBindings([]),
     allowInTerminal: true
   },
@@ -939,7 +973,23 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     group: 'Terminal Panes',
     scope: 'terminal',
     searchKeywords: ['shortcut', 'terminal', 'copy', 'selection'],
-    defaultBindings: platformBindings(['Mod+Shift+C'])
+    defaultBindings: {
+      darwin: ['Mod+C'],
+      linux: ['Ctrl+Shift+C', 'Ctrl+C'],
+      win32: ['Ctrl+Shift+C', 'Ctrl+C']
+    }
+  },
+  {
+    id: 'terminal.selectAll',
+    title: 'Select all terminal text',
+    group: 'Terminal Panes',
+    scope: 'terminal',
+    searchKeywords: ['shortcut', 'terminal', 'select', 'all'],
+    defaultBindings: {
+      darwin: ['Mod+A'],
+      linux: ['Ctrl+Shift+A'],
+      win32: ['Ctrl+Shift+A']
+    }
   },
   {
     id: 'terminal.paste',
@@ -2231,7 +2281,7 @@ export function formatKeybinding(binding: string, platform: NodeJS.Platform): st
   if (parsed.shift) {
     parts.push(isMac ? '⇧' : 'Shift')
   }
-  parts.push(formatKeyToken(parsed.key))
+  parts.push(formatKeyToken(parsed.key, isMac))
   return parts
 }
 
@@ -2267,7 +2317,7 @@ export function findKeybindingActionsForBinding(
   ).map((definition) => definition.id)
 }
 
-function formatKeyToken(token: string): string {
+function formatKeyToken(token: string, isMac: boolean): string {
   const labels: Record<string, string> = {
     BracketLeft: '[',
     BracketRight: ']',
@@ -2291,7 +2341,7 @@ function formatKeyToken(token: string): string {
     Quote: "'",
     Backquote: '`',
     Enter: 'Enter',
-    Backspace: 'Backspace',
+    Backspace: isMac ? '⌫' : 'Backspace',
     Delete: 'Delete',
     Insert: 'Insert',
     Tab: 'Tab',

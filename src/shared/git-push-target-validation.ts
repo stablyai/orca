@@ -1,4 +1,4 @@
-import type { GitPushTarget } from './types'
+import type { GitPushTarget } from './worktree/types'
 
 const SAFE_REMOTE_NAME_SEGMENT = /^[A-Za-z0-9][A-Za-z0-9._-]*$/
 const GITHUB_CLONE_URL = /^https:\/\/github\.com\/[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+\.git$/
@@ -10,7 +10,7 @@ function assertString(value: unknown, name: string): asserts value is string {
   }
 }
 
-function isSafeRemoteName(remoteName: string): boolean {
+export function isSafeGitRemoteName(remoteName: string): boolean {
   if (remoteName.length === 0 || remoteName.length > 100) {
     return false
   }
@@ -26,6 +26,12 @@ function isSafeRemoteName(remoteName: string): boolean {
   })
 }
 
+// Why: the relay allows a fork remote to be added via git.exec, so the exec
+// validator needs the same URL rule the pushTarget-carrying RPCs already apply.
+export function isSafePushTargetRemoteUrl(remoteUrl: string): boolean {
+  return GITHUB_CLONE_URL.test(remoteUrl) || GITHUB_SSH_URL.test(remoteUrl)
+}
+
 export function assertGitPushTargetShape(target: unknown): asserts target is GitPushTarget {
   if (typeof target !== 'object' || target === null) {
     throw new Error('Invalid PR push target.')
@@ -33,7 +39,7 @@ export function assertGitPushTargetShape(target: unknown): asserts target is Git
   const candidate = target as Record<string, unknown>
   assertString(candidate.remoteName, 'remote name')
   assertString(candidate.branchName, 'branch name')
-  if (!isSafeRemoteName(candidate.remoteName)) {
+  if (!isSafeGitRemoteName(candidate.remoteName)) {
     throw new Error(`Invalid git remote name: ${candidate.remoteName}`)
   }
   if (!candidate.branchName || candidate.branchName.startsWith('-')) {
@@ -41,7 +47,7 @@ export function assertGitPushTargetShape(target: unknown): asserts target is Git
   }
   if (candidate.remoteUrl !== undefined) {
     assertString(candidate.remoteUrl, 'remote URL')
-    if (!(GITHUB_CLONE_URL.test(candidate.remoteUrl) || GITHUB_SSH_URL.test(candidate.remoteUrl))) {
+    if (!isSafePushTargetRemoteUrl(candidate.remoteUrl)) {
       throw new Error('Invalid PR push target remote URL.')
     }
   }

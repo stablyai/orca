@@ -11,6 +11,7 @@ function ingestClaudeStatus(
     hookEventName: 'PermissionRequest' | 'PreToolUse'
     toolName: string
     toolUseId: string
+    interactivePrompt?: string
   }
 ): void {
   server.ingestRemote(
@@ -23,7 +24,8 @@ function ingestClaudeStatus(
       payload: {
         state: event.state,
         agentType: 'claude',
-        toolName: event.toolName
+        toolName: event.toolName,
+        ...(event.interactivePrompt ? { interactivePrompt: event.interactivePrompt } : {})
       }
     },
     'connection-1'
@@ -126,6 +128,72 @@ function answeredRequestFromSnapshot(
     baselineAgentType: entry.agentType
   }
 }
+
+function escapeRequestFromSnapshot(
+  server: AgentHookServer
+): Parameters<AgentHookServer['inferInterrupt']>[0] {
+  return {
+    ...answeredRequestFromSnapshot(server),
+    intent: 'plain-escape'
+  }
+}
+
+describe('inferInterrupt for Claude interactive questions', () => {
+  it.each(['PreToolUse', 'PermissionRequest'] as const)(
+    'clears a %s AskUserQuestion wait after Escape',
+    (hookEventName) => {
+      const server = new AgentHookServer()
+      ingestClaudeStatus(server, {
+        state: 'waiting',
+        hookEventName,
+        toolName: 'AskUserQuestion',
+        toolUseId: 'tool-question',
+        interactivePrompt: '{"questions":[{"question":"Pick one"}]}'
+      })
+
+      expect(server.inferInterrupt(escapeRequestFromSnapshot(server))).toBe(true)
+      const [entry] = server.getStatusSnapshot()
+      expect(entry).toMatchObject({ paneKey: PANE_KEY, state: 'working', agentType: 'claude' })
+      expect(entry.toolName).toBeUndefined()
+      expect(entry.interactivePrompt).toBeUndefined()
+      expect(entry.interrupted).toBeUndefined()
+    }
+  )
+
+  it('rejects Escape when the question baseline is stale', () => {
+    const server = new AgentHookServer()
+    ingestClaudeStatus(server, {
+      state: 'waiting',
+      hookEventName: 'PreToolUse',
+      toolName: 'AskUserQuestion',
+      toolUseId: 'tool-question'
+    })
+    const request = { ...escapeRequestFromSnapshot(server), baselineUpdatedAt: 1 }
+
+    expect(server.inferInterrupt(request)).toBe(false)
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ state: 'waiting', toolName: 'AskUserQuestion' })
+    ])
+  })
+
+  it.each([
+    ['plain-escape', 'Bash'],
+    ['ctrl-c', 'AskUserQuestion']
+  ] as const)('does not clear a Claude wait from %s on %s', (intent, toolName) => {
+    const server = new AgentHookServer()
+    ingestClaudeStatus(server, {
+      state: 'waiting',
+      hookEventName: 'PermissionRequest',
+      toolName,
+      toolUseId: 'tool-wait'
+    })
+
+    expect(server.inferInterrupt({ ...escapeRequestFromSnapshot(server), intent })).toBe(false)
+    expect(server.getStatusSnapshot()).toEqual([
+      expect.objectContaining({ state: 'waiting', toolName })
+    ])
+  })
+})
 
 describe('inferQuestionAnswered', () => {
   it('clears an AskUserQuestion wait when the submit keystroke is reported', () => {

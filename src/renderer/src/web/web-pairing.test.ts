@@ -32,6 +32,15 @@ describe('web pairing input', () => {
     })
   })
 
+  it('preserves optional paired device identity', () => {
+    expect(
+      parseWebPairingInput(`orca://pair?code=${encodeOffer({ pairedDeviceId: 'paired-device-a' })}`)
+    ).toEqual({
+      ...offer,
+      pairedDeviceId: 'paired-device-a'
+    })
+  })
+
   it.each([
     ['wss://proxy.example:443/orca/runtime', 'wss://proxy.example:443/orca/runtime'],
     ['https://proxy.example/orca/runtime', 'wss://proxy.example/orca/runtime'],

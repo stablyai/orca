@@ -8,11 +8,12 @@ import {
   getCreatePrIntentCommitFailureNoticeMessage,
   getCreatePrIntentStagePaths,
   resolveCreatePrIntentReviewBase,
+  resolveCreatePrIntentGeneratedReviewFields,
   resolveCreatePrIntentRemoteStep,
   shouldAttemptCreateHostedReviewForIntent,
   shouldGenerateHostedReviewDetailsForIntent
-} from './source-control-create-pr-intent-flow'
-import type { GitStatusEntry } from '../../../../shared/types'
+} from './source-control/review/create-pr-intent-flow'
+import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 describe('source-control Create PR intent flow helpers', () => {
   it('matches async completions only to the original repo, worktree, path, branch, and base', () => {
@@ -289,7 +290,7 @@ describe('source-control Create PR intent flow helpers', () => {
     ).toBe('blocked')
   })
 
-  it('uses main preflight as the final lookup authority after preparation', () => {
+  it('generates details while main preflight remains the final lookup authority', () => {
     const unavailable = {
       provider: 'github' as const,
       review: null,
@@ -304,7 +305,10 @@ describe('source-control Create PR intent flow helpers', () => {
     expect(shouldAttemptCreateHostedReviewForIntent({ ...unavailable, head: undefined })).toBe(
       false
     )
-    expect(shouldGenerateHostedReviewDetailsForIntent(unavailable)).toBe(false)
+    expect(shouldGenerateHostedReviewDetailsForIntent(unavailable)).toBe(true)
+    expect(shouldGenerateHostedReviewDetailsForIntent({ ...unavailable, head: undefined })).toBe(
+      false
+    )
     expect(
       shouldGenerateHostedReviewDetailsForIntent({
         ...unavailable,
@@ -322,6 +326,68 @@ describe('source-control Create PR intent flow helpers', () => {
         reviewLookupOutcome: 'unavailable'
       })
     ).toBe(false)
+  })
+
+  it('keeps generated review fields fail-closed', () => {
+    const current = {
+      base: 'main',
+      title: 'Feature branch',
+      body: '',
+      draft: false
+    }
+
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: false,
+        error: 'Agent timed out.'
+      })
+    ).toEqual({ ok: false, error: 'Agent timed out.' })
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(current, {
+        success: true,
+        fields: {
+          base: 'other-base',
+          title: 'Generated title',
+          body: '## Problem\n\nDetails',
+          draft: true
+        }
+      })
+    ).toEqual({
+      ok: true,
+      fields: {
+        base: 'main',
+        title: 'Generated title',
+        body: '## Problem\n\nDetails',
+        draft: true
+      }
+    })
+  })
+
+  it('accepts generated review fields with an empty description', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: false },
+        {
+          success: true,
+          fields: { base: 'main', title: 'chore: add new app config', body: '', draft: false }
+        }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'chore: add new app config', body: '', draft: false }
+    })
+  })
+
+  it('falls back to the current title when the generated title is blank and the body is empty', () => {
+    expect(
+      resolveCreatePrIntentGeneratedReviewFields(
+        { base: 'main', title: 'Feature branch', body: '', draft: false },
+        { success: true, fields: { base: 'main', title: '  ', body: '   ', draft: true } }
+      )
+    ).toEqual({
+      ok: true,
+      fields: { base: 'main', title: 'Feature branch', body: '   ', draft: true }
+    })
   })
 
   it('surfaces the commit failure summary in the Create PR intent notice', () => {

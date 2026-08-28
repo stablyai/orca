@@ -1,12 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Session } from './session'
 import {
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS,
-  SESSION_FORCE_KILL_RETRY_MS,
-  Session,
-  type SubprocessHandle
-} from './session'
+  SESSION_FORCE_KILL_RETRY_MS
+} from './session-termination-controller'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { TerminalHost } from './terminal-host'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 const killWithDescendantSweepMock = vi.hoisted(() => vi.fn())
 vi.mock('../pty-descendant-termination', () => ({
@@ -30,6 +30,7 @@ function createMockSubprocess(
     kill: vi.fn(() => {
       setTimeout(() => onExitCb?.(0), 5)
     }),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExitCb?.(137)),
     signal: vi.fn(),
     onData(cb) {

@@ -277,7 +277,7 @@ describe('cold activation tab deferral', () => {
     expect(restrictions.get('wt-1')).toEqual(new Set(['tab-1', 'tab-2', 'tab-5', 'tab-9']))
   })
 
-  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', () => {
+  it('mounts legacy PTYs eagerly while deferring snapshot-capable siblings', async () => {
     const worktreeId = 'wt-1'
     const allTabIds = tabIds(7)
     const ptyIdByTabId = new Map(
@@ -285,7 +285,7 @@ describe('cold activation tab deferral', () => {
     )
     const legacyPtyId = ptyIdByTabId.get('tab-2')!
     clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], (ids) =>
+    await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], async (ids) =>
       ids.map((id) => ({ id, authoritative: id !== legacyPtyId }))
     )
     const restrictions = new Map<string, ReadonlySet<string>>()
@@ -315,17 +315,17 @@ describe('cold activation tab deferral', () => {
     )
   })
 
-  it('preserves cold-activation deferral for an all-current daemon worktree', () => {
+  it('preserves cold-activation deferral for an all-current daemon worktree', async () => {
     const worktreeId = 'wt-current'
     const allTabIds = tabIds(7)
     const ptyIdByTabId = new Map(
       allTabIds.map((tabId) => [tabId, `${worktreeId}@@${tabId}-session`])
     )
-    const resolve = vi.fn((ids: string[]) =>
+    const resolve = vi.fn(async (ids: string[]) =>
       ids.map((id) => ({ id, authoritative: true as boolean | null }))
     )
     clearTerminalProviderSnapshotCapabilities()
-    synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
+    await synchronizeTerminalProviderSnapshotCapabilities([...ptyIdByTabId.values()], resolve)
     const restrictions = new Map<string, ReadonlySet<string>>()
     const deferredMountTabIdsByWorktree = new Map<string, ReadonlySet<string>>()
 

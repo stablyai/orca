@@ -199,6 +199,71 @@ async function startBrowserLinkServer(): Promise<{
   }
 }
 
+async function startBrowserWindowCloseServer(): Promise<{
+  url: string
+  sourceUrl: string
+  close: () => Promise<void>
+}> {
+  const server = createServer((request, response) => {
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`
+    const pathname = new URL(request.url ?? '/', origin).pathname
+    response.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
+    if (pathname === '/source') {
+      response.end(`
+        <!doctype html>
+        <html>
+          <head><title>Close link source</title></head>
+          <body><a id="window-close-link" href="${origin}/window-close" target="_blank">Open close page</a></body>
+        </html>
+      `)
+      return
+    }
+    response.end(`
+      <!doctype html>
+      <html>
+        <head><title>Window close repro</title></head>
+        <body>
+          <p id="s">Attempting close…</p>
+          <script>
+            window.close()
+            setTimeout(() => {
+              document.getElementById('s').textContent =
+                'window.close() was blocked (expected).'
+            }, 200)
+          </script>
+        </body>
+      </html>
+    `)
+  })
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+  const port = (server.address() as AddressInfo).port
+  return {
+    url: `http://127.0.0.1:${port}/window-close`,
+    sourceUrl: `http://127.0.0.1:${port}/source`,
+    close: () => closeServer(server)
+  }
+}
+
+async function readBrowserWindowCloseStatus(
+  page: Parameters<typeof getActiveWorktreeId>[0],
+  browserTabId: string
+): Promise<string> {
+  return page.evaluate(async (targetBrowserTabId) => {
+    const slot = document.querySelector(`[data-browser-overlay-tab-id="${targetBrowserTabId}"]`)
+    const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+    if (!webview) {
+      return 'webview missing'
+    }
+    try {
+      return (await webview.executeJavaScript(
+        'document.querySelector("#s")?.textContent ?? "status missing"'
+      )) as string
+    } catch {
+      return 'guest lost'
+    }
+  }, browserTabId)
+}
+
 async function closeServer(server: Server): Promise<void> {
   await new Promise<void>((resolve, reject) =>
     server.close((error) => {
@@ -615,7 +680,7 @@ test.describe('Browser Tab', () => {
     }
   })
 
-  test('plain links stay current while explicit new-tab gestures activate Orca tabs', async ({
+  test('every new-tab link gesture activates an Orca tab and never a native window', async ({
     electronApp,
     orcaPage
   }) => {
@@ -633,23 +698,20 @@ test.describe('Browser Tab', () => {
       const baseWindowCount = await electronApp.evaluate(
         ({ BaseWindow }) => BaseWindow.getAllWindows().length
       )
-      const baseTabCount = await orcaPage.locator('[data-tab-id]').count()
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
-
+      // A plain target=_blank click is a new-tab request, in the main frame and in an iframe;
+      // the source tab must stay put rather than navigate away under it.
       const sourceTabLocator = orcaPage.locator(`[data-tab-id="${sourceTab!.id}"]`)
-      await expect(sourceTabLocator).toContainText('Linked destination', { timeout: 10_000 })
-      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(baseTabCount)
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#external-link')
+      await expectBrowserTabActive(orcaPage, 'Linked destination')
+      await expect(sourceTabLocator).toContainText('Source page')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#return-link')
-      await expect(sourceTabLocator).toContainText('Source page', { timeout: 10_000 })
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-link', {
         frameSelector: '#link-frame'
       })
-      await expect(sourceTabLocator).toContainText('Frame destination', { timeout: 10_000 })
-      await expect(orcaPage.locator('[data-tab-id]')).toHaveCount(baseTabCount)
-
-      await clickBrowserLink(orcaPage, sourceTab!.id, '#return-link')
-      await expect(sourceTabLocator).toContainText('Source page', { timeout: 10_000 })
+      await expectBrowserTabActive(orcaPage, 'Frame destination')
+      await expect(sourceTabLocator).toContainText('Source page')
+      await switchToBrowserTab(orcaPage, worktreeId, sourceTab!.id)
 
       await clickBrowserLink(orcaPage, sourceTab!.id, '#frame-modifier-link', {
         frameSelector: '#link-frame',
@@ -686,6 +748,93 @@ test.describe('Browser Tab', () => {
         .toBe(baseWindowCount)
     } finally {
       await linkServer.close()
+    }
+  })
+
+  test('blocked window.close in a link-created tab does not break tab switching', async ({
+    orcaPage
+  }) => {
+    const closeServer = await startBrowserWindowCloseServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const neighboringTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        'about:blank',
+        'Neighboring tab'
+      )
+      const sourceTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        closeServer.sourceUrl,
+        'Close link source'
+      )
+      expect(neighboringTab?.id).toBeTruthy()
+      expect(sourceTab?.id).toBeTruthy()
+
+      await clickBrowserLink(orcaPage, sourceTab!.id, '#window-close-link')
+      let closeTabId: string | null = null
+      await expect
+        .poll(async () => {
+          const tabs = await getBrowserTabs(orcaPage, worktreeId)
+          closeTabId = tabs.find((tab) => tab.url === closeServer.url)?.id ?? null
+          return closeTabId
+        })
+        .not.toBeNull()
+
+      await orcaPage.locator(`[data-tab-id="${neighboringTab!.id}"]`).click()
+      await expect.poll(async () => getActiveTabType(orcaPage), { timeout: 5_000 }).toBe('browser')
+      await expect
+        .poll(() => readBrowserWindowCloseStatus(orcaPage, closeTabId!), { timeout: 5_000 })
+        .toContain('window.close() was blocked')
+    } finally {
+      await closeServer.close()
+    }
+  })
+
+  test('directly created browser tabs block window.close and remain usable', async ({
+    orcaPage
+  }) => {
+    const closeServer = await startBrowserWindowCloseServer()
+    try {
+      const worktreeId = (await getActiveWorktreeId(orcaPage))!
+      const directTab = await createBrowserTab(
+        orcaPage,
+        worktreeId,
+        closeServer.url,
+        'Direct close tab'
+      )
+      expect(directTab?.id).toBeTruthy()
+
+      await expect
+        .poll(() => readBrowserWindowCloseStatus(orcaPage, directTab!.id), { timeout: 5_000 })
+        .toContain('window.close() was blocked')
+
+      await expect
+        .poll(
+          () =>
+            orcaPage.evaluate(async (targetBrowserTabId) => {
+              const slot = document.querySelector(
+                `[data-browser-overlay-tab-id="${targetBrowserTabId}"]`
+              )
+              const webview = slot?.querySelector('webview') as Electron.WebviewTag | null
+              if (!webview) {
+                return 'webview missing'
+              }
+              try {
+                return (await webview.executeJavaScript(`(() => {
+                  window.close = () => 'replacement-called'
+                  return window.close() === 'replacement-called' ? 'replacement-called' : 'blocked'
+                })()`)) as string
+              } catch {
+                return 'guest unavailable'
+              }
+            }, directTab!.id),
+          { timeout: 5_000 }
+        )
+        .toBe('blocked')
+    } finally {
+      await closeServer.close()
     }
   })
 

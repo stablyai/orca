@@ -7,10 +7,15 @@ import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it } from 'vitest'
 import {
+  DEV_BUNDLE_ID,
+  DEV_HELPER_BUNDLE_ID,
+  getDevHelperPlistPatches
+} from './dev-electron-bundle-identity.mjs'
+import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
   BOOTSTRAP_FATAL_LOG_FILE_NAME,
   createBootstrapFatalExitBanner
-} from '../../build-plugins/bootstrap-fatal-exit-banner'
+} from '../build-plugins/bootstrap-fatal-exit-banner'
 import { electronViteConfig } from '../../electron.vite.config'
 import { BOOTSTRAP_FATAL_EXIT_GUARD_KEY } from '../../src/main/startup/bootstrap-fatal-exit-guard'
 
@@ -79,7 +84,7 @@ describe('Electron Vite output contract', () => {
     expect(output.chunkFileNames).toBe('chunks/[name]-[hash].js')
   })
 
-  it('externalizes packaged dependencies but bundles the daemon xterm graph', () => {
+  it('externalizes packaged dependencies but bundles self-contained main dependencies', () => {
     const external = electronViteConfig.main?.build?.rollupOptions?.external
     if (typeof external !== 'function') {
       throw new Error('Expected main-process external predicate')
@@ -91,8 +96,14 @@ describe('Electron Vite output contract', () => {
     expect(external('node:fs', undefined, false)).toBe(true)
     expect(external('@xterm/headless', undefined, false)).toBe(false)
     expect(external('@xterm/addon-serialize', undefined, false)).toBe(false)
+    expect(external('psl', undefined, false)).toBe(false)
     expect(external('zod', undefined, false)).toBe(false)
+    expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('psl')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
+  })
+
+  it('bundles validation dependencies used by the sandboxed preload', () => {
+    expect(electronViteConfig.preload?.build?.externalizeDeps?.exclude).toContain('zod')
   })
 
   it('exits when a static import fails before source error guards load', () => {
@@ -194,14 +205,18 @@ describe('Electron Vite output contract', () => {
   })
 
   it('rejects prototype properties as build targets', () => {
-    expect(targetConfig).toContain('Object.prototype.hasOwnProperty.call(configByTarget, target)')
+    // Own-property check only: an inherited key like `constructor` must not select a build target.
+    expect(targetConfig).toContain('Object.hasOwn(configByTarget, target)')
   })
 
   it('gives the dev terminal daemon helper the TCC identity watched by Orca', () => {
-    expect(devRunner).toContain('const helperBundleId = `${bundleId}.helper`')
+    // Asserted on the values rather than the source text: the ids moved into
+    // dev-electron-bundle-identity.mjs so every dev bundle signs to one cdhash.
+    expect(DEV_HELPER_BUNDLE_ID).toBe(`${DEV_BUNDLE_ID}.helper`)
+    expect(getDevHelperPlistPatches()).toEqual([
+      { key: 'CFBundleIdentifier', value: DEV_HELPER_BUNDLE_ID }
+    ])
     expect(devRunner).toContain("'Electron Helper.app',")
-    expect(devRunner).toContain(
-      "setPlistValue(helperPlistPath, 'CFBundleIdentifier', helperBundleId)"
-    )
+    expect(devRunner).toContain('setPlistValue(helperPlistPath, key, value)')
   })
 })

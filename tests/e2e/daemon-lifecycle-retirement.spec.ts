@@ -1,6 +1,7 @@
 import { fork, type ChildProcess } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { connect } from 'node:net'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { build } from 'esbuild'
@@ -13,6 +14,20 @@ import {
   getDaemonTokenPath
 } from '../../src/main/daemon/daemon-spawner'
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
+
+// Why a connect and not existsSync: a departing daemon leaves its endpoint entry on disk by
+// design, so presence no longer distinguishes a live daemon from a dead one.
+function connectsTo(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ path: socketPath })
+    const settle = (reachable: boolean): void => {
+      socket.destroy()
+      resolve(reachable)
+    }
+    socket.once('connect', () => settle(true))
+    socket.once('error', () => settle(false))
+  })
+}
 
 type FixtureDaemon = {
   child: ChildProcess
@@ -213,7 +228,11 @@ test('v22 stays reattachable while v24 retires after its last empty client disco
     expect(existsSync(current.tokenPath)).toBe(false)
     expect(existsSync(current.pidPath)).toBe(false)
     if (process.platform !== 'win32') {
-      expect(existsSync(current.socketPath)).toBe(false)
+      // Why reachability and not absence: a departing daemon deliberately leaves its endpoint
+      // entry behind for the next publisher to replace in one rename. Removing it would mean
+      // fencing that removal against a replacement, which is the defect class this design
+      // retired. What must be true is that nothing answers there any more.
+      await expect(connectsTo(current.socketPath)).resolves.toBe(false)
     }
     expect(legacy.child.exitCode).toBeNull()
   } catch (error) {

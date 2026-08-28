@@ -32,6 +32,7 @@ const {
   getRateLimitMock,
   rateLimitGuardMock,
   noteRateLimitSpendMock,
+  noteRepositoryRateLimitSpendMock,
   ghRepoExecOptionsMock,
   githubRepoContextMock,
   getSshGitProviderMock,
@@ -52,6 +53,7 @@ const {
     blocked: false
   })),
   noteRateLimitSpendMock: vi.fn(),
+  noteRepositoryRateLimitSpendMock: vi.fn(),
   ghRepoExecOptionsMock: vi.fn((context) =>
     context.connectionId
       ? {}
@@ -116,7 +118,8 @@ vi.mock('./local-git-config-signature', () => ({
 vi.mock('./rate-limit', () => ({
   getRateLimit: getRateLimitMock,
   rateLimitGuard: rateLimitGuardMock,
-  noteRateLimitSpend: noteRateLimitSpendMock
+  noteRateLimitSpend: noteRateLimitSpendMock,
+  noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock
 }))
 
 import {

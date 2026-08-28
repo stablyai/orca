@@ -68,8 +68,6 @@ export const BrowserTarget = z.object({
   page: OptionalString
 })
 
-export type BrowserTargetInput = z.infer<typeof BrowserTarget>
-
 export function requiredString(message: string) {
   return z
     .unknown()

@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import type { Tab } from '../../../shared/tab-types'
 import {
   decideInitialAgentTabViewMode,
   initialAgentTabViewModeProps
@@ -46,15 +47,18 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBeUndefined()
   })
 
-  it('returns undefined for unsupported agents', () => {
-    expect(
-      decideInitialAgentTabViewMode({
-        experimentalNativeChat: true,
-        openAgentTabsInChatByDefault: true,
-        agent: 'gemini'
-      })
-    ).toBeUndefined()
-  })
+  it.each(['gemini', 'opencode'] as const)(
+    'keeps unsupported agent %s in terminal view',
+    (agent) => {
+      expect(
+        decideInitialAgentTabViewMode({
+          experimentalNativeChat: true,
+          openAgentTabsInChatByDefault: true,
+          agent
+        })
+      ).toBeUndefined()
+    }
+  )
 
   it.each([
     ['local', null],
@@ -68,6 +72,18 @@ describe('decideInitialAgentTabViewMode', () => {
         nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
       })
     ).toBe('chat')
+  })
+
+  it('keeps Model-A SSH omp in the terminal view but opens it locally', () => {
+    const forConnection = (connectionId: string | null): Tab['viewMode'] =>
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'omp',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBeUndefined()
+    expect(forConnection(null)).toBe('chat')
   })
 
   it('keeps Model-A SSH Grok in the terminal view', () => {

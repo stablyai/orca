@@ -472,29 +472,31 @@ describe('getHostedReviewCreationEligibility', () => {
       blockedReason: null,
       nextAction: null,
       defaultBaseRef: 'origin/main',
-      head: 'feature/create-pr'
+      head: 'feature/create-pr',
+      stackedCreationSupported: true
     })
   })
 
   it('detects a GitHub Enterprise Server branch as the GitHub provider (#8312)', async () => {
     mockGitHubEnterpriseProvider()
 
-    await expect(
-      getHostedReviewCreationEligibility({
-        repoPath: '/repo',
-        branch: 'feature/create-pr',
-        base: 'origin/main',
-        hasUncommittedChanges: false,
-        hasUpstream: true,
-        ahead: 0,
-        behind: 0
-      })
-    ).resolves.toMatchObject({
+    const result = await getHostedReviewCreationEligibility({
+      repoPath: '/repo',
+      branch: 'feature/create-pr',
+      base: 'origin/main',
+      hasUncommittedChanges: false,
+      hasUpstream: true,
+      ahead: 0,
+      behind: 0
+    })
+
+    expect(result).toMatchObject({
       provider: 'github',
       canCreate: true,
       blockedReason: null,
       nextAction: null
     })
+    expect(result).not.toHaveProperty('stackedCreationSupported')
 
     // Enterprise auth was already confirmed during detection; the gate must not
     // fire a redundant gh probe.

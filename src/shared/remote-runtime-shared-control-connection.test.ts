@@ -17,13 +17,12 @@ import {
   serializeRemoteRuntimeRpcRequest
 } from './remote-runtime-memory-limits'
 import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime-prepared-request-admission'
+import { remoteRuntimeClientCapabilities } from './remote-runtime-client-capabilities'
 import { RemoteRuntimeSharedControlConnection } from './remote-runtime-shared-control-connection'
 import * as sharedControlProtocol from './remote-runtime-shared-control-protocol'
 import { isRuntimeSubscriptionReplayResponse } from './runtime-subscription-replay'
-import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from './protocol-version'
 
 const TEST_PROJECT_PATH = path.join('tmp', 'project')
-
 type TestServer = {
   pairing: PairingOffer
   requests: { id: string; method: string; params?: unknown }[]
@@ -62,13 +61,44 @@ describe('RemoteRuntimeSharedControlConnection', () => {
     expect(server.auths).toContainEqual({
       type: 'e2ee_auth',
       deviceToken: 'device-token',
-      clientCapabilities: [SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY]
+      clientCapabilities: remoteRuntimeClientCapabilities()
     })
     expect(server.requests.map((request) => request.method)).toEqual([
       'worktree.ps',
       'session.tabs.listAll'
     ])
 
+    connection.close()
+  })
+
+  it('preserves orchestration authority fields on shared-control requests', async () => {
+    const server = await createServer()
+    const connection = new RemoteRuntimeSharedControlConnection(server.pairing)
+    const envelope = {
+      orchestrationCapability: 'capability',
+      orchestrationContractVersion: 1,
+      orchestrationRequestId: 'request-1',
+      compatibilityInvocationId: 'compatibility-1',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term-1',
+        paneKey: 'pane-1',
+        launchToken: 'launch-1'
+      },
+      id: 'forged-id',
+      deviceToken: 'forged-token',
+      method: 'orchestration.federationAck',
+      params: { dispatchId: 'forged-dispatch' }
+    }
+
+    await connection.request('orchestration.federationPull', {}, 1000, envelope)
+
+    expect(server.requests).toContainEqual({
+      ...envelope,
+      id: expect.any(String),
+      deviceToken: 'device-token',
+      method: 'orchestration.federationPull',
+      params: {}
+    })
     connection.close()
   })
 

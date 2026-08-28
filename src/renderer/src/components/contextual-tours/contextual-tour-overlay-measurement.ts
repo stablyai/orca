@@ -28,6 +28,48 @@ export type ContextualTourOverlayMeasurementResult =
       telemetryTotalSteps: number
     }
 
+// Why: keyed by the step's stable id, not its position — inserting a step must
+// not shift localized copy onto a neighbour. Thunks keep translate() out of
+// module scope so the lookup resolves in the language active at render time.
+const LOCALIZED_STEP_COPY: Record<string, { title: () => string; body: () => string }> = {
+  'automations-intro': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.title',
+        'What is an automation?'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.intro.body',
+        'Automations run agent work on a schedule. Add an automation by clicking this button.'
+      )
+  },
+  'client-hosted-browser-intro': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.title',
+        'This page renders on your desktop'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.client.hosted.browser.intro.body',
+        'Remote browser tabs now render on this device. Network traffic still goes through the remote host.'
+      )
+  },
+  'automations-results': {
+    title: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.title',
+        'Find the results'
+      ),
+    body: () =>
+      translate(
+        'auto.components.contextual.tours.contextual.tour.overlay.measurement.automations.results.body',
+        'Runs show when automations ran, what happened, and where to inspect their output.'
+      )
+  }
+}
+
 export function getContextualTourDisplayProgress(args: {
   tour: ContextualTour
   visibleStepIndexes: readonly number[]
@@ -89,6 +131,13 @@ export function measureContextualTourOverlayRenderState(args: {
   )
   const activeStep = args.tour.steps[args.activeStepIndex]
   const target = activeStep ? getMeasurableContextualTourTarget(activeStep.targetSelector) : null
+  const localizedCopy = activeStep?.id ? LOCALIZED_STEP_COPY[activeStep.id] : undefined
+  const localizedTitle = localizedCopy ? localizedCopy.title() : activeStep?.title
+  const localizedBody = localizedCopy
+    ? localizedCopy.body()
+    : activeStep
+      ? getContextualTourStepCopy(activeStep)
+      : undefined
   const progress = getContextualTourDisplayProgress({
     tour: args.tour,
     visibleStepIndexes,
@@ -135,8 +184,11 @@ export function measureContextualTourOverlayRenderState(args: {
       rect: target.rect,
       targetElement: target.element,
       progress,
-      title: activeStep.title,
-      body: formatContextualTourStepCopy(getContextualTourStepCopy(activeStep), args.keybindings),
+      title: localizedTitle ?? activeStep.title,
+      body: formatContextualTourStepCopy(
+        localizedBody ?? getContextualTourStepCopy(activeStep),
+        args.keybindings
+      ),
       control: activeStep.control,
       primaryAction,
       secondaryAction,
@@ -152,6 +204,67 @@ export function measureContextualTourOverlayRenderState(args: {
       panelHost: getContextualTourPanelHost(target.element)
     }
   }
+}
+
+export type MeasuredContextualTourTarget = { element: Element; rect: DOMRect }
+
+// Why: a scroll anywhere in the app reaches the overlay's capture-phase
+// listener. One rect read decides whether the full step scan is worth running.
+export function hasContextualTourTargetMoved(
+  measured: MeasuredContextualTourTarget | null
+): boolean {
+  if (!measured) {
+    return true
+  }
+  const rect = measured.element.getBoundingClientRect()
+  return (
+    rect.left !== measured.rect.left ||
+    rect.top !== measured.rect.top ||
+    rect.width !== measured.rect.width ||
+    rect.height !== measured.rect.height
+  )
+}
+
+// Why: re-measures fire on scroll, resize and the liveness poll, but the
+// measured state almost never changes. Bail out so an unchanged pass costs no
+// React commit and no floating-position resubscribe.
+export function areContextualTourRenderStatesEqual(
+  a: ActiveTourRenderState | null,
+  b: ActiveTourRenderState | null
+): boolean {
+  if (a === null || b === null) {
+    return a === b
+  }
+  return (
+    a.targetElement === b.targetElement &&
+    a.panelHost === b.panelHost &&
+    a.rect.left === b.rect.left &&
+    a.rect.top === b.rect.top &&
+    a.rect.width === b.rect.width &&
+    a.rect.height === b.rect.height &&
+    a.progress.current === b.progress.current &&
+    a.progress.total === b.progress.total &&
+    a.title === b.title &&
+    a.body === b.body &&
+    a.control === b.control &&
+    a.preferredPlacement === b.preferredPlacement &&
+    a.targetPulse === b.targetPulse &&
+    a.hidePrimaryAction === b.hidePrimaryAction &&
+    a.isLastStep === b.isLastStep &&
+    a.isFirstStep === b.isFirstStep &&
+    areStepActionsEqual(a.primaryAction, b.primaryAction) &&
+    areStepActionsEqual(a.secondaryAction, b.secondaryAction)
+  )
+}
+
+function areStepActionsEqual(
+  a: ActiveTourRenderState['primaryAction'],
+  b: ActiveTourRenderState['primaryAction']
+): boolean {
+  if (a === undefined || b === undefined) {
+    return a === b
+  }
+  return a.kind === b.kind && a.label === b.label
 }
 
 export function getContextualTourCleanupOutcome(

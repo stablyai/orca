@@ -1,6 +1,6 @@
 import type { RuntimeMobileTerminalTheme } from '../../../src/shared/runtime-types'
+import type { TerminalOscLinkRange } from '../../../src/shared/terminal-osc-link-ranges'
 import type { StyleProp, ViewStyle } from 'react-native'
-import type { TerminalOscLinkRange } from './terminal-osc-link-ranges'
 
 type TerminalMouseTrackingMode = 'none' | 'x10' | 'vt200' | 'drag' | 'any'
 
@@ -14,8 +14,32 @@ export type TerminalModes = {
 
 export type TerminalKeyboardAvoidanceMetrics = {
   cursorY: number
+  // Main-buffer TUIs can render footer rows below the caret.
+  contentBottomRow: number
   rows: number
   altScreen: boolean
+}
+
+export function parseTerminalKeyboardAvoidanceMetrics(
+  msg: Record<string, unknown>
+): TerminalKeyboardAvoidanceMetrics {
+  const rows = toNonNegativeInteger(msg.rows)
+  const maxRow = Math.max(0, rows - 1)
+  const cursorY = Math.min(toNonNegativeInteger(msg.cursorY), maxRow)
+  const contentBottomRow =
+    msg.contentBottomRow === undefined
+      ? cursorY
+      : Math.min(toNonNegativeInteger(msg.contentBottomRow), maxRow)
+  return {
+    cursorY,
+    contentBottomRow,
+    rows,
+    altScreen: msg.altScreen === true
+  }
+}
+
+function toNonNegativeInteger(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : 0
 }
 
 export type MobileTerminalTheme = RuntimeMobileTerminalTheme

@@ -23,7 +23,12 @@ function context(clientId: number, signal?: AbortSignal): RequestContext {
 describe('RelayFilesystemWatchRegistry pending setup waiters', () => {
   it('removes ten thousand aborted callers queued behind one teardown anchor', async () => {
     const pool = new PendingSetupPool()
-    const dispatcher = { notify: vi.fn(), onClientDetached: vi.fn() }
+    const dispatcher = {
+      notify: vi.fn(),
+      onClientDetached: vi.fn(),
+      broadcastProducerFrameCapacity: vi.fn(() => Number.MAX_SAFE_INTEGER),
+      notificationFrameBytes: vi.fn(() => 64)
+    }
     const registry = new RelayFilesystemWatchRegistry(
       dispatcher as unknown as RelayDispatcher,
       pool

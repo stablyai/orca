@@ -163,7 +163,7 @@ export const TERMINAL_TAP_DISPATCH_JS = `
         selMode !== 'select' &&
         Date.now() - tapCandidate.t <= TAP_MAX_MS
       ) {
-        notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y);
+        notifyTerminalSurfaceTap(tapCandidate.x, tapCandidate.y, true);
       }
       clearLongPress();
       tapCandidate = null;

@@ -6,6 +6,8 @@ const HostedReviewForBranch = z.object({
   repo: requiredString('Missing repo selector'),
   branch: requiredString('Missing branch'),
   currentHeadOid: z.string().nullable().optional(),
+  // Only the caller's selected worktree; the host caps how many earn the fast tier.
+  active: z.boolean().optional(),
   linkedGitHubPR: z.number().int().positive().nullable().optional(),
   fallbackGitHubPR: z.number().int().positive().nullable().optional(),
   linkedGitLabMR: z.number().int().positive().nullable().optional(),
@@ -54,6 +56,7 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
         repoSelector: params.repo,
         branch: params.branch,
         currentHeadOid: params.currentHeadOid ?? null,
+        ...(params.active === true ? { active: true } : {}),
         linkedGitHubPR: params.linkedGitHubPR ?? null,
         ...(fallbackGitHubPR !== null ? { fallbackGitHubPR } : {}),
         linkedGitLabMR: params.linkedGitLabMR ?? null,
@@ -92,6 +95,22 @@ export const HOSTED_REVIEW_METHODS: RpcMethod[] = [
     params: HostedReviewCreate,
     handler: async (params, { runtime }) =>
       runtime.createHostedReview({
+        repoSelector: params.repo,
+        worktreeSelector: params.worktree,
+        provider: params.provider,
+        base: params.base,
+        head: params.head,
+        title: params.title,
+        body: params.body,
+        draft: params.draft,
+        useTemplate: params.useTemplate
+      })
+  }),
+  defineMethod({
+    name: 'hostedReview.createStacked',
+    params: HostedReviewCreate,
+    handler: async (params, { runtime }) =>
+      runtime.createStackedHostedReview({
         repoSelector: params.repo,
         worktreeSelector: params.worktree,
         provider: params.provider,

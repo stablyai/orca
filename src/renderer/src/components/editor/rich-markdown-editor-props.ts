@@ -1,5 +1,5 @@
 import type React from 'react'
-import type { MarkdownDocument } from '../../../../shared/types'
+import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 
 export type RichMarkdownEditorProps = {
   fileId: string

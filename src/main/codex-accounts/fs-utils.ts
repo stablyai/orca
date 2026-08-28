@@ -1,7 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import { copyFileSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, linkSync, renameSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname } from 'node:path'
 import { grantDirAcl, isPermissionError } from '../win32-utils'
+import { nodeFileContentsEqualSync } from '../../shared/node-file-content-equality'
 
 export function writeFileAtomically(
   targetPath: string,
@@ -33,6 +34,158 @@ export function writeFileAtomically(
         }
       } catch {
         // icacls failure is not actionable; re-throw the original EPERM
+      }
+    }
+    throw error
+  }
+}
+
+export function writeFileAtomicallyIfUnchanged(
+  targetPath: string,
+  expectedContents: string | null,
+  contents: string,
+  options?: { mode?: number }
+): boolean {
+  try {
+    return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+  } catch (error) {
+    if (!isPermissionError(error) || process.platform !== 'win32') {
+      throw error
+    }
+    grantDirAcl(dirname(targetPath))
+    return attemptGuardedAtomicWrite(targetPath, expectedContents, contents, options)
+  }
+}
+
+export function removeFileAtomicallyIfUnchanged(
+  targetPath: string,
+  expectedContents: string
+): boolean {
+  const heldPath = getGuardedOperationHeldPath(targetPath)
+  recoverInterruptedGuardedOperation(heldPath, targetPath)
+  try {
+    assertHardLinkPublicationSupported(targetPath, targetPath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+  try {
+    renameFileWithWindowsRetry(targetPath, heldPath)
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return false
+    }
+    throw error
+  }
+  try {
+    if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+      return false
+    }
+    rmSync(heldPath, { force: true })
+    return !existsSync(targetPath)
+  } catch (error) {
+    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    throw error
+  }
+}
+
+export function recoverInterruptedGuardedFileOperation(targetPath: string): void {
+  recoverInterruptedGuardedOperation(getGuardedOperationHeldPath(targetPath), targetPath)
+}
+
+function restoreMovedFileWithoutOverwrite(sourcePath: string, targetPath: string): void {
+  if (!existsSync(sourcePath)) {
+    return
+  }
+  publishFileWithoutOverwrite(sourcePath, targetPath)
+  rmSync(sourcePath, { force: true })
+}
+
+function getGuardedOperationHeldPath(targetPath: string): string {
+  return `${targetPath}.orca-guarded`
+}
+
+function recoverInterruptedGuardedOperation(heldPath: string, targetPath: string): void {
+  if (!existsSync(heldPath)) {
+    return
+  }
+  publishFileWithoutOverwrite(heldPath, targetPath)
+  rmSync(heldPath, { force: true })
+}
+
+function attemptGuardedAtomicWrite(
+  targetPath: string,
+  expectedContents: string | null,
+  contents: string,
+  options?: { mode?: number }
+): boolean {
+  const tmpPath = `${targetPath}.${process.pid}.${randomUUID()}.tmp`
+  const heldPath = getGuardedOperationHeldPath(targetPath)
+  recoverInterruptedGuardedOperation(heldPath, targetPath)
+  try {
+    writeFileSync(tmpPath, contents, { encoding: 'utf-8', mode: options?.mode })
+    if (expectedContents === null) {
+      return publishFileWithoutOverwrite(tmpPath, targetPath)
+    }
+    assertHardLinkPublicationSupported(tmpPath, targetPath)
+    try {
+      renameFileWithWindowsRetry(targetPath, heldPath)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return false
+      }
+      throw error
+    }
+    if (!nodeFileContentsEqualSync(heldPath, expectedContents)) {
+      restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+      return false
+    }
+    if (!publishFileWithoutOverwrite(tmpPath, targetPath)) {
+      rmSync(heldPath, { force: true })
+      return false
+    }
+    rmSync(heldPath, { force: true })
+    return true
+  } catch (error) {
+    restoreMovedFileWithoutOverwrite(heldPath, targetPath)
+    throw error
+  } finally {
+    rmSync(tmpPath, { force: true })
+  }
+}
+
+function assertHardLinkPublicationSupported(sourcePath: string, targetPath: string): void {
+  const probePath = `${targetPath}.${process.pid}.${randomUUID()}.link-probe`
+  try {
+    if (!publishFileWithoutOverwrite(sourcePath, probePath)) {
+      throw new Error(`Guarded file publication probe already exists: ${probePath}`)
+    }
+  } finally {
+    rmSync(probePath, { force: true })
+  }
+}
+
+function publishFileWithoutOverwrite(sourcePath: string, targetPath: string): boolean {
+  try {
+    linkSync(sourcePath, targetPath)
+    return true
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
+      return false
+    }
+    if (isPermissionError(error) && process.platform === 'win32') {
+      grantDirAcl(dirname(targetPath))
+      try {
+        linkSync(sourcePath, targetPath)
+        return true
+      } catch (retryError) {
+        if ((retryError as NodeJS.ErrnoException).code === 'EEXIST') {
+          return false
+        }
+        throw retryError
       }
     }
     throw error

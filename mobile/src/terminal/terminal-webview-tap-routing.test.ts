@@ -19,12 +19,12 @@ function bodyMarkup(): string {
 }
 
 // Minimal xterm stub: one scrollback line containing a URL, fixed 8x15 cells.
-function makeTerminal(lineRef: { current: string }) {
+function makeTerminal(lineRef: { current: string }, mouseTrackingMode = 'none') {
   return {
     cols: 80,
     rows: 24,
     options: { fontSize: 13 },
-    modes: {},
+    modes: { mouseTrackingMode },
     element: { scrollWidth: 800, scrollHeight: 360 },
     _core: { _renderService: { dimensions: { css: { cell: { width: 8, height: 15 } } } } },
     buffer: {
@@ -76,13 +76,14 @@ type OscLinkRange = { row: number; startCol: number; endCol: number; uri: string
 
 function boot(
   line: string,
-  oscLinks?: OscLinkRange[]
+  oscLinks?: OscLinkRange[],
+  mouseTrackingMode = 'none'
 ): { posted: Posted; setLine: (line: string) => void } {
   const posted: Posted = []
   const lineRef = { current: line }
   const w = window as unknown as { Terminal: unknown; ReactNativeWebView: unknown }
   w.Terminal = function () {
-    return makeTerminal(lineRef)
+    return makeTerminal(lineRef, mouseTrackingMode)
   }
   w.ReactNativeWebView = {
     postMessage(s: string) {
@@ -148,6 +149,31 @@ describe('terminal WebView tap routing', () => {
     fireTouch('touchmove', [{ x: tapX + 11, y: tapY + 4 }])
     fireTouch('touchend', [])
     expect(posted.find((m) => m.type === 'open-url')?.url).toBe('https://example.com/foo')
+  })
+
+  it('focuses native input after reporting a touch tap to a mouse-tracking TUI', async () => {
+    const { posted } = boot('interactive prompt', undefined, 'drag')
+    await settle()
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(
+      posted
+        .filter((message) => message.type === 'terminal-input' || message.type === 'terminal-tap')
+        .map((message) => message.type)
+    ).toEqual(['terminal-input', 'terminal-tap'])
+  })
+
+  it('reports a non-mouse touch tap without terminal mouse bytes', async () => {
+    const { posted } = boot('plain prompt')
+    await settle()
+
+    fireTouch('touchstart', [{ x: 20, y: tapY }])
+    fireTouch('touchend', [])
+
+    expect(posted.find((message) => message.type === 'terminal-input')).toBeUndefined()
+    expect(posted.filter((message) => message.type === 'terminal-tap')).toHaveLength(1)
   })
 
   it('opens the URL even right after a width-change reflow', async () => {

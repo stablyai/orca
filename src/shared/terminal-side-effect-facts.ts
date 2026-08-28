@@ -30,9 +30,8 @@ export type TerminalSideEffectFact =
   | { kind: 'command-code-working'; prompt: string }
   | { kind: 'command-code-done'; prompt: string }
   /** DECSET 2031 color-scheme subscribe observed in the byte stream. Emitted
-   *  so hidden-delivery-gated views (whose bytes never arrive) can still send
-   *  the theme reply — the reply stays renderer-side because query authority
-   *  belongs to the view (model/view contract invariant 6). */
+   *  so hidden-delivery-gated views (whose bytes never arrive) can still record
+   *  the subscription and push later theme flips; subscribing is never answered. */
   | { kind: '2031-subscribe' }
   /** DECSET 2031 withdrawal observed in the byte stream. Gated views never see
    *  these bytes, so without this fact their subscription registry goes stale

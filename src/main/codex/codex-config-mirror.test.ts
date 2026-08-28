@@ -26,6 +26,7 @@ vi.mock('node:os', async () => {
 import {
   prepareSystemConfigForFreshRuntimeMirror,
   resolveCodexConfigMirrorSourceDirectory,
+  syncSystemConfigIntoLegacySharedCodexHome,
   syncSystemConfigIntoManagedCodexHome
 } from './codex-config-mirror'
 
@@ -749,7 +750,33 @@ describe('syncSystemConfigIntoManagedCodexHome', () => {
   })
 })
 
+describe('syncSystemConfigIntoLegacySharedCodexHome', () => {
+  it('recovers an interrupted runtime config when the system source is missing', () => {
+    const runtimeConfigPath = getRuntimeConfigPath()
+    const heldConfigPath = `${runtimeConfigPath}.orca-guarded`
+    mkdirSync(join(userDataDir, 'codex-runtime-home', 'home'), { recursive: true })
+    writeFileSync(heldConfigPath, 'model = "retained"\n', 'utf-8')
+
+    syncSystemConfigIntoLegacySharedCodexHome({
+      runtimeHomePath: join(userDataDir, 'codex-runtime-home', 'home'),
+      systemHomePath: getSystemCodexHomePath()
+    })
+
+    expect(readFileSync(runtimeConfigPath, 'utf-8')).toBe('model = "retained"\n')
+    expect(existsSync(heldConfigPath)).toBe(false)
+  })
+})
+
 describe('prepareSystemConfigForFreshRuntimeMirror', () => {
+  it('allows WSL callers to retain Linux semantics for mounted-drive homes', () => {
+    expect(
+      resolveCodexConfigMirrorSourceDirectory(
+        'C:\\Users\\alice\\.codex',
+        '/mnt/c/Users/alice/.codex'
+      )
+    ).toBe('/mnt/c/Users/alice/.codex')
+  })
+
   it('uses the Linux-side directory for WSL UNC source homes', () => {
     const sourceDir = resolveCodexConfigMirrorSourceDirectory(
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'

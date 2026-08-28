@@ -53,8 +53,7 @@ function createHeadlessLaunchIsolation(userDataDir: string): ElectronHomeIsolati
       ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1'
     },
     extraEnv: {},
-    userDataDir,
-    codexRealHomeEnabled: false
+    userDataDir
   })
 }
 

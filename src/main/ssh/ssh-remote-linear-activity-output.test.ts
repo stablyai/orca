@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { LinearIssueContextResult } from '../../shared/linear-agent-access'
+import type { LinearIssueContextResult } from '../../shared/linear/agent-access'
 import { formatRemoteLinearCli } from './ssh-remote-linear-output'
 
 describe('SSH Linear activity output', () => {

@@ -15,6 +15,7 @@ export type RelayAuthContext = {
 
 export type CoordinatedRelayBroker = {
   closeNow(): void
+  isLive?(): boolean
 }
 
 type RelayAuthCoordinatorOptions = {
@@ -87,20 +88,44 @@ export class RelayAuthCoordinator {
     this.options.onStatus('offline')
   }
 
+  // Raw ownership handle for identity matching (revoke routing); control work uses getLiveBroker.
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
   }
 
-  async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
+  // Why: ownership stays valid across a control death, so control work must
+  // apply the same liveness gate reconcile does; unprovable liveness stays usable.
+  getLiveBroker(): CoordinatedRelayBroker | null {
+    const broker = this.getActiveBroker()
+    return broker && (broker.isLive?.() ?? true) ? broker : null
+  }
+
+  // Why: some broker deaths end with no retry timer — an auth refresh that
+  // fails past token expiry (laptop sleep), or a transient context read that
+  // returned null at open. Periodic/power-resume callers use this as a
+  // dead-man's switch; it never disturbs a live broker, a scheduled retry,
+  // or an open already in flight.
+  ensureLive(): void {
+    if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
+      return
+    }
+    const ownership = this.ownership
+    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+      return
+    }
+    this.beginReconcile(false)
+  }
+
+  async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
-      const broker = this.getActiveBroker()
+      const broker = this.getLiveBroker()
       if (broker) {
         return broker
       }
       const pending = this.latestReconcile
       await pending
       if (pending === this.latestReconcile) {
-        return this.getActiveBroker()
+        return this.getLiveBroker()
       }
     }
     return null
@@ -143,7 +168,13 @@ export class RelayAuthCoordinator {
         return
       }
       this.cancelLinger()
-      if (this.ownership?.valid && this.ownership.identityKey === nextIdentityKey) {
+      if (
+        this.ownership?.valid &&
+        this.ownership.identityKey === nextIdentityKey &&
+        // Why: registered must be provable; a broker whose control died without
+        // recovering falls through and is replaced instead of republished.
+        (this.ownership.broker?.isLive?.() ?? true)
+      ) {
         this.retryAttempt = 0
         this.options.onStatus('registered')
         return
@@ -181,6 +212,12 @@ export class RelayAuthCoordinator {
       this.options.onStatus('registered')
     } catch (error) {
       if (this.isEpochCurrent(epoch)) {
+        // Why: silent broker-open failures made a dead relay look like standby
+        // during incident diagnosis; the message carries operation + status.
+        console.warn(
+          '[relay] broker reconcile failed:',
+          error instanceof Error ? error.message : String(error)
+        )
         this.options.onStatus('offline')
         if (shouldRetryRelayConnectionError(error)) {
           const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0

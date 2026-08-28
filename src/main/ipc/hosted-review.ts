@@ -2,18 +2,20 @@ import { ipcMain } from 'electron'
 import { posix, resolve } from 'node:path'
 import type {
   CreateHostedReviewArgs,
+  CreateStackedHostedReviewArgs,
   HostedReviewCreationEligibilityArgs,
   HostedReviewForBranchArgs
 } from '../../shared/hosted-review'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { Store } from '../persistence'
 import type { StatsCollector } from '../stats/collector'
 import {
   createHostedReview,
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
+import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
 import { getHostedReviewForBranch } from '../source-control/hosted-review'
-import { resolveRegisteredWorktreePath } from './filesystem-auth'
+import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktrees } from '../repo-worktrees'
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
@@ -91,6 +93,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       currentHeadOid: args.currentHeadOid ?? null,
+      ...(args.active === true ? { active: true } : {}),
       ...(Object.keys(localGitOptions).length > 0 ? { localGitExecOptions: localGitOptions } : {})
     })
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
@@ -159,4 +162,44 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
     }
     return result
   })
+
+  ipcMain.handle(
+    'hostedReview:createStacked',
+    async (_event, args: CreateStackedHostedReviewArgs) => {
+      const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
+      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+      const localGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+      const sharedLinkPaths = repo.connectionId ? [] : getWorktreeSharedLinkPaths(repo)
+      const executionOptions = {
+        ...(Object.keys(localGitOptions).length > 0
+          ? { localGitExecOptions: localGitOptions }
+          : {}),
+        ...(sharedLinkPaths.length > 0 ? { sharedLinkPaths } : {})
+      }
+      const input = {
+        provider: args.provider,
+        base: args.base,
+        head: args.head,
+        title: args.title,
+        body: args.body,
+        draft: args.draft,
+        ...(args.useTemplate !== undefined ? { useTemplate: args.useTemplate } : {})
+      }
+      const result = await createStackedHostedReview(
+        worktreePath,
+        input,
+        repo.connectionId ?? null,
+        executionOptions
+      )
+      if (result.ok && !stats.hasCountedPR(result.url)) {
+        stats.record({
+          type: 'pr_created',
+          at: Date.now(),
+          repoId: repo.id,
+          meta: { prNumber: result.number, prUrl: result.url }
+        })
+      }
+      return result
+    }
+  )
 }

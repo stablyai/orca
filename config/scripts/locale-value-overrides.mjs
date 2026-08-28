@@ -8,7 +8,7 @@ export const LOCALE_VALUE_OVERRIDES = {
     'OpenCode Go': 'OpenCode Go',
     'Open in Cursor': 'Abrir en Cursor',
     'Local project, Git repo, or folder with many repos':
-      'Proyecto local, repo de Git o carpeta con muchos repos'
+      'Proyecto local, repositorio de Git o carpeta con muchos repositorios'
   },
   ko: {
     Save: '저장',
@@ -201,6 +201,12 @@ export const LOCALE_VALUE_OVERRIDES = {
     'Codex Usage': 'Codex 使用情况',
     'Claude Usage': 'Claude 使用情况',
     'Gemini Usage': 'Gemini 使用情况',
+    'Antigravity Usage': 'Antigravity 使用情况',
+    'OpenCode Go Usage': 'OpenCode Go 使用情况',
+    'Kimi Usage': 'Kimi 使用情况',
+    'MiniMax Usage': 'MiniMax 使用情况',
+    'Grok Usage': 'Grok 使用情况',
+    'Grok (xAI) Usage': 'Grok (xAI) 使用情况',
     'Force Delete Branch': '强制删除分支',
     'Time agents worked': '代理工作时间',
     PR: 'PR',
@@ -305,7 +311,8 @@ export const LOCALE_VALUE_OVERRIDES = {
     teams: '团队',
     passing: '通过',
     'opened this issue': '创建了此议题',
-    Open: '进行中',
+    // No blanket "Open" override: it is a verb on buttons (打开) and a state next to 已关闭 (开放),
+    // so a single value-wide mapping is wrong for half the call sites. Per-key catalog values decide.
     'Join Discord': '加入 Discord',
     'Pull request merged': '拉取请求已合并',
     'Agent Skills': '代理技能',

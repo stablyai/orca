@@ -29,7 +29,7 @@ export function createRedactedPasteExecutionDiagnostic({
   chunksWritten: number
   durationMs: number
   plan: TerminalPastePlan
-  reason?: TerminalPasteExecutionReason | string
+  reason?: TerminalPasteExecutionReason | (string & {})
   status: TerminalPasteExecutionResult['status']
 }): string {
   return [

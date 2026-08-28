@@ -3,7 +3,7 @@ export type WindowVisibilityIntervalTimer = ReturnType<typeof setInterval>
 export function isWindowVisible(): boolean {
   return (
     typeof document === 'undefined' ||
-    typeof document.visibilityState === 'undefined' ||
+    document.visibilityState === undefined ||
     document.visibilityState === 'visible'
   )
 }

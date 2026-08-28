@@ -31,7 +31,18 @@ describe('resolveSmartWorkspaceCommandValue', () => {
     ).toBe('use-name')
   })
 
-  it('freezes the current arm while the query is ahead of debounced search', () => {
+  it('keeps arbitrary text armed when Linear search results are present', () => {
+    expect(
+      resolveSmartWorkspaceCommandValue({
+        currentValue: '',
+        rows: [row('use-name', 'use-name'), row('linear', 'linear-STA-4084')],
+        isQueryStale: false,
+        sourceIntent: null
+      })
+    ).toBe('use-name')
+  })
+
+  it('keeps typed text armed while the query is ahead of debounced search', () => {
     expect(
       resolveSmartWorkspaceCommandValue({
         currentValue: 'github-12',
@@ -39,7 +50,7 @@ describe('resolveSmartWorkspaceCommandValue', () => {
         isQueryStale: true,
         sourceIntent: null
       })
-    ).toBe('github-12')
+    ).toBe('use-name')
   })
 
   it('falls back to typed-text when a frozen arm is no longer rendered', () => {
@@ -48,6 +59,25 @@ describe('resolveSmartWorkspaceCommandValue', () => {
         currentValue: 'github-12',
         rows: [row('use-name', 'use-name'), row('github', 'github-99')],
         isQueryStale: true,
+        sourceIntent: null
+      })
+    ).toBe('use-name')
+  })
+
+  it('does not resurrect a provider arm when the stale query settles', () => {
+    const rows = [row('use-name', 'use-name'), row('github', 'github-12')]
+    const typedTextArm = resolveSmartWorkspaceCommandValue({
+      currentValue: 'github-12',
+      rows,
+      isQueryStale: true,
+      sourceIntent: null
+    })
+
+    expect(
+      resolveSmartWorkspaceCommandValue({
+        currentValue: typedTextArm,
+        rows,
+        isQueryStale: false,
         sourceIntent: null
       })
     ).toBe('use-name')

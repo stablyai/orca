@@ -1,5 +1,5 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { remoteSessionContentLines } from './remote-session-content-lines'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type {
@@ -33,19 +33,24 @@ export async function parseGeminiSessionFile(
     return parseGeminiJsonlSessionFile(file, platform)
   }
 
-  return parseGeminiJsonSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+  return parseGeminiJsonSessionContent(
+    file,
+    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    platform
+  )
 }
 
 export async function parseGeminiSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ResumableParseFinalizeOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   if (file.path.endsWith('.jsonl')) {
     return parseGeminiJsonlSessionLines({
       file,
-      lines: content.split(/\r?\n/),
+      lines: remoteSessionContentLines(content, signal),
       platform,
       options
     })
@@ -81,7 +86,7 @@ export async function parseGeminiJsonlSessionFile(
   platform: NodeJS.Platform
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
   return parseGeminiJsonlSessionLines({ file, lines, platform })

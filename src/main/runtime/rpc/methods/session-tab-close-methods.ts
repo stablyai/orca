@@ -2,12 +2,27 @@ import { withSpan } from '../../../observability/tracer'
 import { SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import { defineMethod, type RpcAnyMethod } from '../core'
 import { CloseLifecycleTab, CloseTab } from './session-tabs-schemas'
+import {
+  assertProjectedSessionTabVisible,
+  clientCanObserveClientHostedBrowserPages,
+  projectSessionTabBrowserPlacements
+} from './session-tab-browser-placement-projection'
 
 export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
   defineMethod({
     name: 'session.tabs.close',
     params: CloseTab,
     handler: async (params, context) => {
+      if (
+        context.clientKind &&
+        !clientCanObserveClientHostedBrowserPages(context.clientCapabilities)
+      ) {
+        const visible = projectSessionTabBrowserPlacements(
+          await context.runtime.listMobileSessionTabs(params.worktree, context.pairedDeviceId),
+          context.clientCapabilities
+        )
+        assertProjectedSessionTabVisible(visible, params.tabId)
+      }
       const requiresIntent =
         context.clientKind === undefined ||
         (context.clientKind === 'runtime' &&
@@ -28,7 +43,10 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           const result = await context.runtime.closeMobileSessionTab(
             params.worktree,
             params.tabId,
-            { reason: 'user' }
+            {
+              reason: 'user',
+              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
+            }
           )
           span.setAttribute(
             'decision',
@@ -40,7 +58,11 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           kind: 'client',
           attributes: {
             attribution: 'session-tab-close',
+            runtimeId: context.runtime.getRuntimeId(),
             origin: context.clientKind ?? 'in-process',
+            deviceId: context.pairedDeviceId ?? 'in-process',
+            worktree: params.worktree,
+            tabId: params.tabId,
             closeReason:
               params.reason ??
               (requiresIntent
@@ -68,7 +90,8 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
             {
               reason: params.reason,
               expectedPublicationEpoch: params.publicationEpoch,
-              expectedTerminalHandle: params.terminal
+              expectedTerminalHandle: params.terminal,
+              ...(context.pairedDeviceId ? { clientNavigationId: context.pairedDeviceId } : {})
             }
           )
           span.setAttribute(
@@ -81,7 +104,12 @@ export const SESSION_TAB_CLOSE_METHODS: RpcAnyMethod[] = [
           kind: 'client',
           attributes: {
             attribution: 'session-tab-lifecycle-close',
+            runtimeId: context.runtime.getRuntimeId(),
             origin: context.clientKind ?? 'in-process',
+            deviceId: context.pairedDeviceId ?? 'in-process',
+            worktree: params.worktree,
+            tabId: params.tabId,
+            terminal: params.terminal,
             closeReason: params.reason,
             connectionGeneration: context.connectionId ?? 'in-process',
             requestId: context.requestId ?? 'in-process',

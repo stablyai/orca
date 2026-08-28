@@ -209,7 +209,7 @@ export function NativeChatQuestionCard({
                 disabled={isSubmitting}
                 onClick={() => confirm()}
                 className={cn(
-                  'w-24 shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
+                  'shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
                   currentAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
@@ -219,7 +219,7 @@ export function NativeChatQuestionCard({
                   ? translate('components.native-chat.question.sending', 'Sending…')
                   : currentAnswered
                     ? isLast
-                      ? translate('components.native-chat.question.send', 'Send answer')
+                      ? translate('components.native-chat.question.send', 'Submit')
                       : translate('components.native-chat.question.next', 'Next')
                     : translate('components.native-chat.question.skip', 'Skip')}
               </button>

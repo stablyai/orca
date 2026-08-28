@@ -5,7 +5,7 @@ import {
   type FeatureInteractionState
 } from '../../shared/feature-interactions'
 import { FEATURE_TIP_IDS } from '../../shared/feature-tips'
-import type { PersistedUIState } from '../../shared/types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
 import type { Store } from '../persistence'
 
 export const DEV_SHOW_FIRST_RUN_EDUCATION_ENV = 'ORCA_DEV_SHOW_FIRST_RUN_EDUCATION'

@@ -46,29 +46,12 @@ vi.mock('./transport/client-context', () => ({
   usePrimeHosts: () => dependencies.primeHosts
 }))
 
-function suppressReactTestRendererDeprecationWarning(): () => void {
-  const originalConsoleError = console.error
-  const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation((...args) => {
-    const firstArg = args[0]
-    if (typeof firstArg === 'string' && firstArg.includes('react-test-renderer is deprecated')) {
-      return
-    }
-    originalConsoleError(...args)
-  })
-  return () => consoleErrorSpy.mockRestore()
-}
-
 async function renderEditHostRoute(): Promise<ReactTestRenderer> {
   let renderer: ReactTestRenderer | null = null
-  const restoreConsoleError = suppressReactTestRendererDeprecationWarning()
-  try {
-    await act(async () => {
-      renderer = create(createElement(EditHostScreen))
-      await Promise.resolve()
-    })
-  } finally {
-    restoreConsoleError()
-  }
+  await act(async () => {
+    renderer = create(createElement(EditHostScreen))
+    await Promise.resolve()
+  })
   if (!renderer) {
     throw new Error('Edit host route did not render')
   }
@@ -77,7 +60,6 @@ async function renderEditHostRoute(): Promise<ReactTestRenderer> {
 
 describe('edit host route accessibility', () => {
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     dependencies.loadHosts.mockReset().mockResolvedValue([
       {
         id: 'host-1',

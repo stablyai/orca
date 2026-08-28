@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { toSshExecutionHostId } from '../../shared/execution-host'
 
 const ORIGINAL_PLATFORM = process.platform
@@ -353,7 +353,7 @@ describe('GitLab IPC handlers', () => {
     ]
     listMergeRequestsMock.mockResolvedValue({ items: [] })
     listWorkItemsMock.mockResolvedValue({ items: [] })
-    listIssuesMock.mockResolvedValue({ items: [] })
+    listIssuesMock.mockResolvedValue({ items: [], totalPages: 3 })
     getIssueMock.mockResolvedValue(null)
     createIssueMock.mockResolvedValue({ ok: true, number: 1, url: 'https://gitlab.example/1' })
     updateIssueMock.mockResolvedValue({ ok: true })
@@ -385,10 +385,11 @@ describe('GitLab IPC handlers', () => {
       page: 1,
       perPage: 20
     })
-    await ipcHandlers.get('gitlab:listIssues')?.(null, {
+    const issueListResult = await ipcHandlers.get('gitlab:listIssues')?.(null, {
       repoPath: '/local/orca',
       state: 'opened',
-      limit: 20
+      limit: 20,
+      page: 3
     })
     await ipcHandlers.get('gitlab:issue')?.(null, { repoPath: '/local/orca', number: 7 })
     await ipcHandlers.get('gitlab:createIssue')?.(null, {
@@ -430,6 +431,7 @@ describe('GitLab IPC handlers', () => {
       null,
       localGitOptions
     )
+    expect(issueListResult).toMatchObject({ totalPages: 3 })
     expect(listWorkItemsMock).toHaveBeenCalledWith(
       '/local/orca',
       'opened',
@@ -447,7 +449,8 @@ describe('GitLab IPC handlers', () => {
       'opened',
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      3
     )
     expect(getIssueMock).toHaveBeenCalledWith('/local/orca', 7, null, localGitOptions)
     expect(createIssueMock).toHaveBeenCalledWith(
@@ -674,5 +677,33 @@ describe('GitLab IPC handlers', () => {
       null,
       localGitOptions
     )
+  })
+
+  // Regression for #7732: raw CI traces routinely exceed the 1 MB runtime transport
+  // frame cap, so the Checks panel opts into a main-side excerpt.
+  it('bounds the job trace in main when the caller asks for a log excerpt', async () => {
+    const noisyTrace = [
+      'section_start:1699000000:build\r\u001b[0K$ pnpm build',
+      ...Array.from({ length: 400 }, (_, index) => `line ${index}`),
+      '\u001b[0;31mERROR: Job failed: exit code 1\u001b[0m'
+    ].join('\n')
+    getJobTraceMock.mockResolvedValue({ ok: true, trace: noisyTrace })
+    registerGitLabHandlers(storeWithRepos([repo()]) as Store)
+
+    const raw = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
+      repoPath: '/local/orca',
+      jobId: 99
+    })) as { ok: true; trace: string }
+    const excerpt = (await ipcHandlers.get('gitlab:jobTrace')?.(null, {
+      repoPath: '/local/orca',
+      jobId: 99,
+      logExcerpt: true
+    })) as { ok: true; trace: string }
+
+    expect(raw.trace).toBe(noisyTrace)
+    expect(excerpt.trace).toContain('ERROR: Job failed: exit code 1')
+    expect(excerpt.trace).not.toContain('section_start')
+    expect(excerpt.trace).not.toContain('line 0\n')
+    expect(excerpt.trace.length).toBeLessThan(noisyTrace.length)
   })
 })

@@ -1,12 +1,17 @@
-import type { PRCheckDetail, Repo, Worktree } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { getWorktreeCardPrDisplay } from '@/components/sidebar/worktree-card-pr-display'
 import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
 import { getGitHubRepoCacheKey } from '@/store/slices/github-cache-key'
-import { getHostedReviewCacheKey, linkedReviewHintKey } from '@/store/slices/hosted-review'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import {
+  getHostedReviewCacheKey,
+  linkedReviewHintKey
+} from '@/store/slices/hosted-review-cache-identity'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   PARENT_PR_CHECKS_GROUP_LABELS,
   PARENT_PR_CHECKS_GROUP_ORDER,
@@ -30,15 +35,6 @@ import {
 import { canUseParentPrChecksHostedReviewCacheEntry } from './parent-pr-checks-hosted-review-cache'
 
 type ParentPrChecksRowSourceArgs = Omit<BuildParentPrChecksRowsArgs, 'repos'>
-
-export type {
-  ParentPrChecksGroupKey,
-  ParentPrChecksProjection,
-  ParentPrChecksRefreshOutcome,
-  ParentPrChecksRow,
-  ParentPrChecksRowStatus,
-  ParentPrChecksSummary
-} from './parent-pr-checks-row-types'
 
 export function buildParentPrChecksProjection(
   args: BuildParentPrChecksRowsArgs
@@ -147,6 +143,7 @@ function buildParentPrChecksRow(
     reviewState: review?.state ?? fallbackDisplay?.state ?? null,
     reviewStatus: review?.status ?? fallbackDisplay?.status ?? null,
     provider: review?.provider ?? fallbackDisplay?.provider ?? null,
+    githubRepository: review?.provider === 'github' ? (review.githubRepository ?? null) : null,
     summary: getRowSummary(status, review, detailNames),
     detailNames,
     checks: checkDetails,
@@ -251,7 +248,7 @@ function getGitHubChecksEntry(
   args: ParentPrChecksRowSourceArgs & { repo: Repo },
   review: HostedReviewInfo
 ): ParentPrChecksCacheEntry<PRCheckDetail[]> | undefined {
-  const prRepo = null
+  const prRepo = review.githubRepository ?? null
   const withHead = getGitHubRepoCacheKey(
     args.repo.path,
     args.repo.id,

@@ -1,5 +1,6 @@
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
-import { commandLineMatchesDaemon, startTimesWithinTolerance } from './daemon-health'
+import { commandLineMatchesDaemon } from './daemon-pid-identity'
+import { startTimesWithinTolerance } from './daemon-process-start-time'
 import {
   WINDOWS_CREATION_TIME_TOLERANCE_MS,
   type DaemonEvidenceSources,
@@ -237,7 +238,7 @@ async function probeWindowsProcess(
 
 export function parseLinuxProcessState(statLine: string): string | null {
   const commandEnd = statLine.lastIndexOf(')')
-  if (commandEnd < 0) {
+  if (commandEnd === -1) {
     return null
   }
   return (

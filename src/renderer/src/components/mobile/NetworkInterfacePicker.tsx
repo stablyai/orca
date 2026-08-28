@@ -4,12 +4,22 @@ import { AddressPicker, type AddressOption } from '../network/AddressPicker'
 import { parseManualNetworkAddress } from '../../../../shared/network/manual-address'
 import type { MobileNetworkInterface } from '../settings/mobile-network-interface-selection'
 
-// Why: both pairing entry points must expose every endpoint form supported by the main process.
+function formatCustomAddressLabel(address: string): string {
+  return translate(
+    'auto.components.mobile.NetworkInterfacePicker.custom-option',
+    '{{address}} (custom)',
+    { address }
+  )
+}
 
 export type NetworkInterfacePickerProps = {
   networkInterfaces: readonly MobileNetworkInterface[]
+  customAddresses: readonly string[]
   selectedAddress: string | undefined
+  selectedAddressIsCustom: boolean
   onSelectedAddressChange: (address: string) => void
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
   beforeCustomAddressChange?: (address: string) => boolean | Promise<boolean>
   disabled?: boolean
   className?: string
@@ -18,8 +28,12 @@ export type NetworkInterfacePickerProps = {
 
 export function NetworkInterfacePicker({
   networkInterfaces,
+  customAddresses,
   selectedAddress,
+  selectedAddressIsCustom,
   onSelectedAddressChange,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
   beforeCustomAddressChange,
   disabled = false,
   className,
@@ -33,20 +47,49 @@ export function NetworkInterfacePicker({
       })),
     [networkInterfaces]
   )
+  const customOptions = useMemo<AddressOption[]>(
+    () =>
+      customAddresses.map((address) => ({
+        value: address,
+        label: formatCustomAddressLabel(address)
+      })),
+    [customAddresses]
+  )
+  // Why: a host whose only interfaces are container bridges advertises no address by default, but the
+  // bridges are still listed here — "No interfaces found" would contradict the options right below it.
+  const placeholder =
+    options.length > 0 || customOptions.length > 0
+      ? translate(
+          'auto.components.mobile.NetworkInterfacePicker.no-address-selected',
+          'No address selected'
+        )
+      : translate(
+          'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
+          'No interfaces found'
+        )
 
   return (
     <AddressPicker
       options={options}
+      customOptions={customOptions}
       value={selectedAddress}
+      valueIsCustom={selectedAddressIsCustom}
       onValueChange={onSelectedAddressChange}
+      onCustomValueChange={onCustomAddressSelect}
+      onCustomRemove={onCustomAddressRemove}
       beforeCustomConfirm={beforeCustomAddressChange}
       disabled={disabled}
       className={className}
       id={id}
-      formatCustomLabel={(address) =>
+      formatCustomLabel={formatCustomAddressLabel}
+      customSectionLabel={translate(
+        'auto.components.mobile.NetworkInterfacePicker.custom-section',
+        'Custom'
+      )}
+      removeCustomLabel={(address) =>
         translate(
-          'auto.components.mobile.NetworkInterfacePicker.custom-option',
-          '{{address}} (custom)',
+          'auto.components.mobile.NetworkInterfacePicker.remove-custom',
+          'Remove {{address}}',
           { address }
         )
       }
@@ -54,10 +97,7 @@ export function NetworkInterfacePicker({
         'auto.components.mobile.NetworkInterfacePicker.add-custom',
         'Add custom address…'
       )}
-      placeholder={translate(
-        'auto.components.settings.MobileNetworkInterfaceSection.b2c384cfd6',
-        'No interfaces found'
-      )}
+      placeholder={placeholder}
       triggerAriaLabel={translate(
         'auto.components.mobile.NetworkInterfacePicker.trigger-label',
         'Network address to advertise'

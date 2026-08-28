@@ -23,9 +23,31 @@ export type StartupCommandSubmissionOptions = {
    *  byte on `command` is preserved as-is. */
   submit: string
   /** Whether the target line editor has bracketed-paste mode active (Orca's
-   *  wrapped bash/zsh). Only wrap multiline payloads when true — a shell without
-   *  bracketed paste would echo the ESC[200~ markers as literal garbage. */
+   *  wrapped bash/zsh/fish). Only wrap multiline payloads when true — a shell
+   *  without bracketed paste would echo the ESC[200~ markers as literal garbage. */
   bracketedPasteSafe: boolean
+}
+
+/**
+ * Whether a spawned POSIX shell will read a bracketed-paste payload as one
+ * multiline command.
+ *
+ * Why fish needs the ready barrier: bash readline and zsh zle interpret the
+ * ESC[200~ wrapper out of their buffered input, but fish consumes bytes during
+ * its startup terminal-query handshake, so a payload written before its reader
+ * is up lands as literal `200~` text and the command never runs (verified
+ * against fish 4.7). Waiting for the shell-ready barrier is what makes fish
+ * paste-safe, and it is what the daemon and relay backends already require.
+ */
+export function isBracketedPasteSafeShell(args: {
+  shellName: string
+  waitsForShellReady: boolean
+}): boolean {
+  const name = args.shellName.toLowerCase()
+  if (name === 'bash' || name === 'zsh') {
+    return true
+  }
+  return name === 'fish' && args.waitsForShellReady
 }
 
 export function buildStartupCommandSubmission(

@@ -2,10 +2,12 @@
 
 import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { i18n } from '../../i18n/i18n'
 import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 
@@ -15,12 +17,14 @@ const mocks = vi.hoisted(() => ({
   openAutomationsPage: vi.fn(),
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
+  openArtifactsPage: vi.fn(),
   openModal: vi.fn(),
   updateSettings: vi.fn(),
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   hasPairedMobileDevice: false,
   agentBucketCounts: { attention: 0, working: 0, done: 0, idle: 0 },
+  getAgentBucketCounts: vi.fn(),
   dismissMobileOnboardingBadge: vi.fn(),
   setSetupGuideSidebarDismissed: vi.fn()
 }))
@@ -41,7 +45,10 @@ vi.mock('@/components/activity/useActivityUnreadCount', () => ({
 }))
 
 vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
-  useAgentBucketCounts: () => mocks.agentBucketCounts
+  useAgentBucketCounts: () => {
+    mocks.getAgentBucketCounts()
+    return mocks.agentBucketCounts
+  }
 }))
 
 vi.mock('@/hooks/useShortcutLabel', () => ({
@@ -85,6 +92,7 @@ import SidebarNav, {
   shouldShowAgentDashboardButton,
   shouldShowAgentsButton,
   shouldShowAutomationsButton,
+  shouldShowArtifactsButton,
   shouldShowMobileButton,
   shouldShowSetupGuideEntry
 } from './SidebarNav'
@@ -126,6 +134,7 @@ function setSidebarState({
     openAutomationsPage: mocks.openAutomationsPage,
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
+    openArtifactsPage: mocks.openArtifactsPage,
     openModal: mocks.openModal,
     updateSettings: mocks.updateSettings,
     preflightStatus: { glab: { installed: false } },
@@ -243,6 +252,7 @@ describe('SidebarNav', () => {
     const container = await renderSidebarNav()
 
     expect(queryButtonByText(container, 'Agent Dashboard')).toBeNull()
+    expect(mocks.getAgentBucketCounts).not.toHaveBeenCalled()
   })
 
   it('mounts the Agent Dashboard row after opt-in', async () => {
@@ -254,7 +264,8 @@ describe('SidebarNav', () => {
     })
     const container = await renderSidebarNav()
 
-    expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull()
+    await waitFor(() => expect(queryButtonByText(container, 'Agent Dashboard')).not.toBeNull())
+    expect(mocks.getAgentBucketCounts).toHaveBeenCalledTimes(1)
   })
 
   it('uses a question glyph only for the Needs You count', async () => {
@@ -268,6 +279,9 @@ describe('SidebarNav', () => {
     })
     const container = await renderSidebarNav()
 
+    await waitFor(() =>
+      expect(container.querySelector('[aria-label="Needs You: 2"]')).not.toBeNull()
+    )
     const attention = container.querySelector('[aria-label="Needs You: 2"]')
     const working = container.querySelector('[aria-label="Working: 3"]')
     const done = container.querySelector('[aria-label="Done: 1"]')
@@ -284,6 +298,37 @@ describe('SidebarNav', () => {
   it('shows the Mobile entry by default for older settings', () => {
     expect(shouldShowMobileButton(null)).toBe(true)
     expect(shouldShowMobileButton({})).toBe(true)
+  })
+
+  it('hides the Artifacts entry by default for older settings', () => {
+    expect(shouldShowArtifactsButton(null)).toBe(false)
+    expect(shouldShowArtifactsButton({})).toBe(false)
+    expect(shouldShowArtifactsButton({ showArtifactsButton: true })).toBe(true)
+    expect(shouldShowArtifactsButton({ showArtifactsButton: false })).toBe(false)
+  })
+
+  it('opens Artifacts from the sidebar', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+    })
+    const container = await renderSidebarNav()
+
+    await clickButton(getButtonByText(container, 'Artifacts'))
+
+    expect(mocks.openArtifactsPage).toHaveBeenCalledOnce()
+  })
+
+  it('hides Artifacts from its context menu', async () => {
+    setSidebarState({
+      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+    })
+    const container = await renderSidebarNav()
+    const row = getButtonByText(container, 'Artifacts')
+    const menu = row.closest('[data-testid="context-menu"]')
+
+    await clickButton(getHideButton(menu as Element))
+
+    expect(mocks.updateSettings).toHaveBeenCalledWith({ showArtifactsButton: false })
   })
 
   it('hides the Mobile entry when the sidebar setting is off', () => {
@@ -384,6 +429,23 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showMobileButton: false })
   })
 
+  it('places the worktree palette search above the sidebar nav rows', async () => {
+    const container = await renderSidebarNav()
+    const nav = container.querySelector('[data-contextual-tour-target="sidebar-navigation"]')
+    const searchButton = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Search worktrees and browser tabs"]'
+    )
+    const tasksButton = getButtonByText(container, 'Tasks')
+
+    expect(nav?.firstElementChild).toBe(searchButton)
+    if (!searchButton) {
+      throw new Error('worktree palette search button not rendered')
+    }
+    expect(
+      searchButton.compareDocumentPosition(tasksButton) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+  })
+
   it('hides the worktree palette shortcut until the search field is hovered or focused', async () => {
     const container = await renderSidebarNav()
 
@@ -391,32 +453,38 @@ describe('SidebarNav', () => {
       'button[aria-label="Search worktrees and browser tabs"]'
     )
     expect(searchButton).not.toBeNull()
+    expect(searchButton?.className).toContain('bg-worktree-sidebar-foreground/5')
 
     const shortcuts = searchButton?.querySelector('span.hidden')
     expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:inline-flex')
-    expect(shortcuts?.className).toContain('group-focus-within:inline-flex')
+    expect(shortcuts?.className).toContain('group-hover:flex')
+    expect(shortcuts?.className).toContain('group-focus-within:flex')
     expect(shortcuts?.textContent).toContain('⌘')
     expect(shortcuts?.textContent).toContain('J')
     expect(searchButton?.querySelector('kbd')).toBeNull()
   })
 
-  it('hides task source shortcuts until the Tasks row is hovered or focused', async () => {
+  it('keeps task source shortcuts keyboard-reachable and revealed on Tasks row hover or focus', async () => {
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
-    const shortcuts = tasksButton.querySelector('[aria-label="Open GitHub tasks"]')?.parentElement
+    const githubShortcut = tasksButton.parentElement?.querySelector<HTMLButtonElement>(
+      'button[aria-label="Open GitHub tasks"]'
+    )
+    expect(githubShortcut).not.toBeNull()
+    expect(githubShortcut?.tabIndex).toBe(0)
+    expect(tasksButton.contains(githubShortcut ?? null)).toBe(false)
 
-    expect(shortcuts?.className).toContain('hidden')
-    expect(shortcuts?.className).toContain('group-hover:flex')
-    expect(shortcuts?.className).toContain('group-focus-within:flex')
+    const shortcuts = githubShortcut?.parentElement
+    expect(shortcuts?.className).toContain('can-hover:opacity-0')
+    expect(shortcuts?.className).toContain('can-hover:group-hover:opacity-100')
+    expect(shortcuts?.className).toContain('can-hover:group-focus-within:opacity-100')
   })
 
   it('hides available Tasks from its sidebar context menu', async () => {
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
-    expect(tasksButton.getAttribute('aria-disabled')).toBe('false')
 
     const tasksMenu = tasksButton.closest('[data-testid="context-menu"]')
     expect(tasksMenu).not.toBeNull()
@@ -425,18 +493,20 @@ describe('SidebarNav', () => {
     expect(mocks.updateSettings).toHaveBeenCalledWith({ showTasksButton: false })
   })
 
-  it('keeps unavailable Tasks context-menu-capable while left click remains inert', async () => {
+  it('keeps Tasks enabled with no git repos so the page can explain the empty state', async () => {
     setSidebarState({ repos: [folderRepo()] })
     const container = await renderSidebarNav()
 
     const tasksButton = getButtonByText(container, 'Tasks')
-    expect(tasksButton.getAttribute('aria-disabled')).toBe('true')
+    expect(tasksButton.getAttribute('aria-disabled')).toBeNull()
     expect(tasksButton.disabled).toBe(false)
-    expect(tasksButton.querySelectorAll('[role="button"]')).toHaveLength(0)
-    expect(tasksButton.querySelector('[aria-label="Open GitHub tasks"]')).toBeNull()
+    expect(tasksButton.className).not.toContain('opacity-50')
+    expect(
+      tasksButton.parentElement?.querySelector('button[aria-label="Open GitHub tasks"]')
+    ).not.toBeNull()
 
     await clickButton(tasksButton)
-    expect(mocks.openTaskPage).not.toHaveBeenCalled()
+    expect(mocks.openTaskPage).toHaveBeenCalled()
 
     const tasksMenu = tasksButton.closest('[data-testid="context-menu"]')
     expect(tasksMenu).not.toBeNull()

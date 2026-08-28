@@ -1,5 +1,4 @@
 /* oxlint-disable max-lines -- Why: output ordering, foreground settle, queue state, and e2e diagnostics form one state machine; splitting it would make backlog/resume guarantees harder to audit. */
-import { e2eConfig } from '@/lib/e2e-config'
 import {
   discardForegroundRenderSettle,
   writeForegroundTerminalChunk,
@@ -23,12 +22,26 @@ import {
   TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS,
   terminalOutputBacklogCapChars
 } from '../../../../shared/terminal-scrollback-policy'
+import {
+  coalescedQueuedDataNeedsCursorRestore,
+  containsDrainableCursorRestore,
+  removeTransientCursorShowSequences,
+  SYNC_FOREGROUND_FLUSH_CHARS
+} from './pane-terminal-cursor-sequencing'
+import {
+  exposeTerminalOutputSchedulerDebugApi as exposeDebugApi,
+  recordTerminalOutputQueueDebugPressure as recordQueueDebugPressure,
+  setTerminalOutputDebugQueueReader,
+  terminalOutputSchedulerDebugEnabled as debugEnabled,
+  terminalOutputSchedulerDebugState as debugState
+} from './pane-terminal-output-scheduler-debug'
+import { enqueueChunk, takeQueuedChunk } from './pane-terminal-output-queue-chunks'
 
 type TerminalOutputTarget = ForegroundTerminalOutputTarget
 
-type TerminalOutputBeforeWrite = (data: string) => void
+export type TerminalOutputBeforeWrite = (data: string) => void
 type TerminalBacklogRecoveryRequest = () => boolean
-type TerminalOutputParsedCallback = () => void
+export type TerminalOutputParsedCallback = () => void
 type ForegroundRefreshSyncResolver = () => boolean
 
 type WriteTerminalOutputOptions = {
@@ -49,6 +62,8 @@ type WriteTerminalOutputOptions = {
 
 type QueueChunk = {
   data: string
+  // Tracks the backing data still reachable through this queue slot.
+  retainedChars: number
   foreground: boolean
   forceForegroundRefresh: boolean
   followupForegroundRefresh: boolean
@@ -59,7 +74,7 @@ type QueueChunk = {
   ackCredit?: () => void
 }
 
-type QueuedWrite = {
+export type QueuedWrite = {
   data: string
   foreground: boolean
   forceForegroundRefresh: boolean
@@ -71,7 +86,7 @@ type QueuedWrite = {
   ackCredits: (() => void)[]
 }
 
-type QueueEntry = {
+export type QueueEntry = {
   terminal: TerminalOutputTarget
   chunks: QueueChunk[]
   chunkIndex: number
@@ -85,6 +100,10 @@ type QueueEntry = {
   foregroundCoalesceDelayMs: number
   foregroundHoldSafetyTimer: ReturnType<typeof setTimeout> | null
   foregroundCoalesceTimer: ReturnType<typeof setTimeout> | null
+  // Why: hold and coalesce cancel each other's fallback timer, so an alternating DEC 2026 stream could re-arm both forever and freeze a visible pane (#8754). This caps one non-drainable episode.
+  foregroundReleaseDeadlineAt: number | null
+  // Why: an open frame's own hold chunks may still push the deadline out, but once coalesce has taken the entry over the deadline stops moving so the two mechanisms can't re-arm each other.
+  foregroundReleaseDeadlineFixed: boolean
 }
 
 const BACKGROUND_FLUSH_DELAY_MS = 50
@@ -96,7 +115,6 @@ const MAX_WRITES_PER_DRAIN = 2
 const HIGH_PRIORITY_MAX_WRITES_PER_DRAIN = 8
 const DRAIN_TIME_BUDGET_MS = 8
 const LARGE_BACKLOG_CHARS = 512 * 1024
-const SYNC_FOREGROUND_FLUSH_CHARS = 256 * 1024
 // Why mutable: the cap scales with the user's scrollback setting (terminalOutputBacklogCapChars), configured when settings apply; the chunk-count cap stays fixed.
 let maxQueueChars = TERMINAL_OUTPUT_BACKLOG_MIN_CAP_CHARS
 const MAX_BACKGROUND_QUEUE_CHUNKS = 4096
@@ -110,9 +128,6 @@ const FOREGROUND_HOLD_SAFETY_DELAY_MS = 250
 // Why: key repeat can tick every 30-50ms; one frame catches split restores without batching multiple typed-character redraws behind the fallback.
 const LATENCY_SENSITIVE_FOREGROUND_COALESCE_DELAY_MS = 16
 const LATENCY_SENSITIVE_FOREGROUND_HOLD_SAFETY_DELAY_MS = 32
-const CURSOR_SHOW_SEQUENCE = '\x1b[?25h'
-const CURSOR_HIDE_SEQUENCE = '\x1b[?25l'
-const SYNCHRONIZED_OUTPUT_END_SEQUENCE = '\x1b[?2026l'
 // Why: leading CAN aborts any partial escape sequence before the style reset so the backlog warning renders cleanly.
 const BACKGROUND_BACKLOG_WARNING =
   '\x18\x1b[0m\r\n[Orca skipped hidden terminal output because the backlog grew too large.]\r\n'
@@ -122,6 +137,7 @@ const FOREGROUND_BACKLOG_WARNING =
 const ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY = (): boolean => true
 
 const queuedByTerminal = new Map<TerminalOutputTarget, QueueEntry>()
+setTerminalOutputDebugQueueReader(() => queuedByTerminal.values())
 const backlogRecoveryByTerminal = new WeakMap<
   TerminalOutputTarget,
   TerminalBacklogRecoveryRequest
@@ -161,121 +177,6 @@ function cancelImmediateDrain(): void {
 export function setUseMessageChannelDrainForTesting(value: boolean | null): void {
   cancelImmediateDrain()
   useMessageChannelDrain = value ?? (typeof MessageChannel !== 'undefined' && !isVitestEnv())
-}
-const debugEnabled = e2eConfig.exposeStore
-
-// Why the cap is lossy: a backgrounded Chromium document throttles timers while PTYs keep writing, so unbounded hidden scrollback would grow renderer memory until the app crashes.
-
-type TerminalOutputSchedulerDebugSnapshot = {
-  backgroundEnqueueCount: number
-  deferredForegroundEnqueueCount: number
-  foregroundWriteCount: number
-  backgroundWriteCount: number
-  deferredForegroundWriteCount: number
-  flushWriteCount: number
-  scheduledDrainCount: number
-  queuedTerminalCount: number
-  queuedChars: number
-  peakQueuedTerminalCount: number
-  peakQueuedChars: number
-  peakQueuedCharsByTerminal: number
-  droppedBacklogCount: number
-  drainWrites: number[]
-}
-
-type TerminalOutputSchedulerDebugApi = {
-  reset: () => void
-  snapshot: () => TerminalOutputSchedulerDebugSnapshot
-}
-
-const debugState: TerminalOutputSchedulerDebugSnapshot = {
-  backgroundEnqueueCount: 0,
-  deferredForegroundEnqueueCount: 0,
-  foregroundWriteCount: 0,
-  backgroundWriteCount: 0,
-  deferredForegroundWriteCount: 0,
-  flushWriteCount: 0,
-  scheduledDrainCount: 0,
-  queuedTerminalCount: 0,
-  queuedChars: 0,
-  peakQueuedTerminalCount: 0,
-  peakQueuedChars: 0,
-  peakQueuedCharsByTerminal: 0,
-  droppedBacklogCount: 0,
-  drainWrites: []
-}
-
-function resetDebugState(): void {
-  debugState.backgroundEnqueueCount = 0
-  debugState.deferredForegroundEnqueueCount = 0
-  debugState.foregroundWriteCount = 0
-  debugState.backgroundWriteCount = 0
-  debugState.deferredForegroundWriteCount = 0
-  debugState.flushWriteCount = 0
-  debugState.scheduledDrainCount = 0
-  debugState.queuedTerminalCount = 0
-  debugState.queuedChars = 0
-  debugState.peakQueuedTerminalCount = 0
-  debugState.peakQueuedChars = 0
-  debugState.peakQueuedCharsByTerminal = 0
-  debugState.droppedBacklogCount = 0
-  debugState.drainWrites = []
-}
-
-function readQueueDebugSnapshot(): {
-  queuedTerminalCount: number
-  queuedChars: number
-  queuedCharsByTerminal: number
-} {
-  let queuedChars = 0
-  let queuedCharsByTerminal = 0
-  for (const entry of queuedByTerminal.values()) {
-    queuedChars += entry.queuedChars
-    queuedCharsByTerminal = Math.max(queuedCharsByTerminal, entry.queuedChars)
-  }
-  return {
-    queuedTerminalCount: queuedByTerminal.size,
-    queuedChars,
-    queuedCharsByTerminal
-  }
-}
-
-function recordQueueDebugPressure(): void {
-  if (!debugEnabled) {
-    return
-  }
-  const current = readQueueDebugSnapshot()
-  debugState.queuedTerminalCount = current.queuedTerminalCount
-  debugState.queuedChars = current.queuedChars
-  debugState.peakQueuedTerminalCount = Math.max(
-    debugState.peakQueuedTerminalCount,
-    current.queuedTerminalCount
-  )
-  debugState.peakQueuedChars = Math.max(debugState.peakQueuedChars, current.queuedChars)
-  debugState.peakQueuedCharsByTerminal = Math.max(
-    debugState.peakQueuedCharsByTerminal,
-    current.queuedCharsByTerminal
-  )
-}
-
-function exposeDebugApi(): void {
-  if (!debugEnabled || typeof window === 'undefined') {
-    return
-  }
-  // Why: the e2e repro must prove background output used the shared drain, but production must not accumulate diagnostic counters indefinitely.
-  const target = window as unknown as {
-    __terminalOutputSchedulerDebug?: TerminalOutputSchedulerDebugApi
-  }
-  target.__terminalOutputSchedulerDebug ??= {
-    reset: resetDebugState,
-    snapshot: () => {
-      recordQueueDebugPressure()
-      return {
-        ...debugState,
-        drainWrites: [...debugState.drainWrites]
-      }
-    }
-  }
 }
 
 function scheduleDrain(delayMs: number): void {
@@ -323,8 +224,38 @@ function createQueueEntry(
     foregroundCoalesce: false,
     foregroundCoalesceDelayMs: FOREGROUND_COALESCE_DELAY_MS,
     foregroundHoldSafetyTimer: null,
-    foregroundCoalesceTimer: null
+    foregroundCoalesceTimer: null,
+    foregroundReleaseDeadlineAt: null,
+    foregroundReleaseDeadlineFixed: false
   }
+}
+
+// Returns the delay the caller's timer must use so it never outlives the episode deadline.
+function armForegroundReleaseDeadline(
+  entry: QueueEntry,
+  delayMs: number,
+  mayExtend: boolean
+): number {
+  const now = getDrainNow()
+  const requested = now + delayMs
+  entry.foregroundReleaseDeadlineAt =
+    entry.foregroundReleaseDeadlineAt === null ||
+    (mayExtend && !entry.foregroundReleaseDeadlineFixed)
+      ? requested
+      : Math.min(entry.foregroundReleaseDeadlineAt, requested)
+  return Math.max(0, entry.foregroundReleaseDeadlineAt - now)
+}
+
+// Why: reopen the gate only once the entry is drainable again, so the next synchronized frame gets a full budget.
+function resetForegroundReleaseGate(entry: QueueEntry): void {
+  entry.foregroundReleaseDeadlineAt = null
+  entry.foregroundReleaseDeadlineFixed = false
+}
+
+function clearForegroundRelease(entry: QueueEntry): void {
+  clearForegroundHoldSafety(entry)
+  clearForegroundCoalesce(entry)
+  resetForegroundReleaseGate(entry)
 }
 
 function clearForegroundHoldSafety(entry: QueueEntry): void {
@@ -347,14 +278,16 @@ function clearForegroundCoalesce(entry: QueueEntry): void {
 
 function scheduleForegroundHoldSafety(entry: QueueEntry): void {
   clearForegroundHoldSafety(entry)
+  const delayMs = armForegroundReleaseDeadline(entry, entry.foregroundHoldSafetyDelayMs, true)
   entry.foregroundHoldSafetyTimer = setTimeout(() => {
     entry.foregroundHoldSafetyTimer = null
     entry.foregroundHold = false
     clearForegroundCoalesce(entry)
+    resetForegroundReleaseGate(entry)
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
-  }, entry.foregroundHoldSafetyDelayMs)
+  }, delayMs)
 }
 
 function scheduleForegroundCoalesceRelease(
@@ -370,329 +303,21 @@ function scheduleForegroundCoalesceRelease(
     entry.foregroundCoalesceTimer = null
   }
   entry.foregroundCoalesce = true
+  // Why fixed from here: a later hold chunk must clamp to this deadline instead of restarting the pair's mutual re-arm (#8754).
+  entry.foregroundReleaseDeadlineFixed = true
+  const delayMs = armForegroundReleaseDeadline(entry, entry.foregroundCoalesceDelayMs, false)
   entry.foregroundCoalesceTimer = setTimeout(() => {
     entry.foregroundCoalesceTimer = null
     entry.foregroundCoalesce = false
+    resetForegroundReleaseGate(entry)
     if (queuedByTerminal.has(entry.terminal)) {
       scheduleDrain(0)
     }
-  }, entry.foregroundCoalesceDelayMs)
+  }, delayMs)
 }
 
 function isEntryDrainable(entry: QueueEntry): boolean {
   return !entry.foregroundHold && !entry.foregroundCoalesce
-}
-
-function findCursorPositionSequenceEnd(
-  data: string,
-  fromIndex: number,
-  toIndex = data.length
-): number {
-  let offset = data.indexOf('\x1b[', fromIndex)
-  while (offset !== -1 && offset < toIndex) {
-    let index = offset + 2
-    while (index < toIndex) {
-      const char = data[index]
-      if (char === 'G' || char === 'H' || char === 'f') {
-        return index + 1
-      }
-      if ((char < '0' || char > '9') && char !== ';') {
-        break
-      }
-      index += 1
-    }
-    offset = data.indexOf('\x1b[', offset + 2)
-  }
-  return -1
-}
-
-function removeTransientCursorShowSequences(data: string): string {
-  let result = ''
-  let offset = 0
-  let showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE)
-  while (showIndex !== -1) {
-    const nextHideIndex = data.indexOf(
-      CURSOR_HIDE_SEQUENCE,
-      showIndex + CURSOR_SHOW_SEQUENCE.length
-    )
-    const nextPositionEnd = findCursorPositionSequenceEnd(
-      data,
-      showIndex + CURSOR_SHOW_SEQUENCE.length,
-      nextHideIndex === -1 ? data.length : nextHideIndex
-    )
-    if (nextHideIndex === -1) {
-      if (nextPositionEnd === -1) {
-        const synchronizedEndIndex = data.indexOf(
-          SYNCHRONIZED_OUTPUT_END_SEQUENCE,
-          showIndex + CURSOR_SHOW_SEQUENCE.length
-        )
-        if (synchronizedEndIndex === -1) {
-          break
-        }
-        // Why: keep the cursor hidden through the synchronized repaint, restoring it after the frame ends so Windows never paints it in the transient draw position.
-        result += data.slice(offset, showIndex)
-        result += data.slice(
-          showIndex + CURSOR_SHOW_SEQUENCE.length,
-          synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
-        )
-        result += CURSOR_SHOW_SEQUENCE
-        offset = synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
-        showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
-        continue
-      }
-      // Why: Codex can show the cursor before its final synchronized-frame placement. Place first so xterm cannot rasterize the stale cell.
-      result += data.slice(offset, showIndex)
-      result += data.slice(showIndex + CURSOR_SHOW_SEQUENCE.length, nextPositionEnd)
-      result += CURSOR_SHOW_SEQUENCE
-      offset = nextPositionEnd
-      showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
-      continue
-    }
-    result += data.slice(offset, showIndex)
-    offset = showIndex + CURSOR_SHOW_SEQUENCE.length
-    showIndex = data.indexOf(CURSOR_SHOW_SEQUENCE, offset)
-  }
-  return offset === 0 ? data : result + data.slice(offset)
-}
-
-function containsCursorPositionSequence(data: string): boolean {
-  let offset = data.indexOf('\x1b[')
-  while (offset !== -1) {
-    let index = offset + 2
-    while (index < data.length) {
-      const char = data[index]
-      if (char === 'G' || char === 'H' || char === 'f') {
-        return true
-      }
-      if ((char < '0' || char > '9') && char !== ';') {
-        break
-      }
-      index += 1
-    }
-    offset = data.indexOf('\x1b[', offset + 2)
-  }
-  return false
-}
-
-function containsCursorRestore(data: string): boolean {
-  const hideIndex = data.indexOf(CURSOR_HIDE_SEQUENCE)
-  const showIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE)
-  return hideIndex !== -1 && showIndex > hideIndex && containsCursorPositionSequence(data)
-}
-
-function containsDrainableCursorRestore(data: string): boolean {
-  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
-  if (synchronizedEndIndex === -1) {
-    return containsCursorRestore(data)
-  }
-  return containsCursorRestore(
-    data.slice(synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length)
-  )
-}
-
-function containsFinalCursorPlacementBeforeSynchronizedEnd(data: string): boolean {
-  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
-  if (synchronizedEndIndex === -1) {
-    return false
-  }
-  const lastShowIndex = data.lastIndexOf(CURSOR_SHOW_SEQUENCE, synchronizedEndIndex)
-  if (lastShowIndex === -1) {
-    return false
-  }
-  const lastHideIndex = data.lastIndexOf(CURSOR_HIDE_SEQUENCE, synchronizedEndIndex)
-  if (lastHideIndex > lastShowIndex) {
-    return false
-  }
-  return (
-    findCursorPositionSequenceEnd(
-      data,
-      lastShowIndex + CURSOR_SHOW_SEQUENCE.length,
-      synchronizedEndIndex
-    ) !== -1
-  )
-}
-
-function previewQueuedData(entry: QueueEntry, limit: number): string {
-  let data = ''
-  for (let index = entry.chunkIndex; index < entry.chunks.length; index += 1) {
-    const chunk = entry.chunks[index]
-    const remaining = limit - data.length
-    if (remaining <= 0) {
-      break
-    }
-    data += chunk.data.slice(0, remaining)
-  }
-  return data
-}
-
-function coalescedQueuedDataNeedsCursorRestore(entry: QueueEntry): boolean {
-  const data = previewQueuedData(entry, SYNC_FOREGROUND_FLUSH_CHARS)
-  const synchronizedEndIndex = data.lastIndexOf(SYNCHRONIZED_OUTPUT_END_SEQUENCE)
-  if (synchronizedEndIndex === -1) {
-    return false
-  }
-  const synchronizedFrame = data.slice(
-    0,
-    synchronizedEndIndex + SYNCHRONIZED_OUTPUT_END_SEQUENCE.length
-  )
-  return (
-    containsCursorRestore(synchronizedFrame) &&
-    !containsFinalCursorPlacementBeforeSynchronizedEnd(synchronizedFrame) &&
-    !containsDrainableCursorRestore(data)
-  )
-}
-
-function takeQueuedChunk(entry: QueueEntry, limit: number): QueuedWrite | null {
-  let remaining = limit
-  let data = ''
-  let foreground: boolean | null = null
-  let forceForegroundRefresh = false
-  let followupForegroundRefresh = false
-  let shouldRefreshForegroundSynchronously: ForegroundRefreshSyncResolver | null = null
-  let additionalRefreshSyncResolvers: ForegroundRefreshSyncResolver[] | null = null
-  let stripTransientCursorShows = false
-  let beforeWrite: TerminalOutputBeforeWrite | undefined
-  let additionalBeforeWriteCallbacks: TerminalOutputBeforeWrite[] | null = null
-  const parsedCallbacks: TerminalOutputParsedCallback[] = []
-  const ackCredits: (() => void)[] = []
-
-  while (remaining > 0 && entry.chunkIndex < entry.chunks.length) {
-    const chunk = entry.chunks[entry.chunkIndex]
-    if (foreground !== null && chunk.foreground !== foreground) {
-      break
-    }
-    foreground ??= chunk.foreground
-    forceForegroundRefresh ||= chunk.forceForegroundRefresh
-    followupForegroundRefresh ||= chunk.followupForegroundRefresh
-    // Why: one drained write can combine chunks from different renderer states or producers; preserve every forced policy and prep hook.
-    if (chunk.forceForegroundRefresh) {
-      if (shouldRefreshForegroundSynchronously === null) {
-        shouldRefreshForegroundSynchronously = chunk.shouldRefreshForegroundSynchronously
-      } else if (
-        chunk.shouldRefreshForegroundSynchronously !== shouldRefreshForegroundSynchronously &&
-        !additionalRefreshSyncResolvers?.includes(chunk.shouldRefreshForegroundSynchronously)
-      ) {
-        additionalRefreshSyncResolvers ??= []
-        additionalRefreshSyncResolvers.push(chunk.shouldRefreshForegroundSynchronously)
-      }
-    }
-    stripTransientCursorShows ||= chunk.stripTransientCursorShows
-    if (!beforeWrite) {
-      beforeWrite = chunk.beforeWrite
-    } else if (
-      chunk.beforeWrite &&
-      chunk.beforeWrite !== beforeWrite &&
-      !additionalBeforeWriteCallbacks?.includes(chunk.beforeWrite)
-    ) {
-      additionalBeforeWriteCallbacks ??= []
-      additionalBeforeWriteCallbacks.push(chunk.beforeWrite)
-    }
-    if (chunk.data.length <= remaining) {
-      data += chunk.data
-      remaining -= chunk.data.length
-      entry.queuedChars -= chunk.data.length
-      entry.chunkIndex += 1
-      if (chunk.onParsed) {
-        parsedCallbacks.push(chunk.onParsed)
-      }
-      if (chunk.ackCredit) {
-        ackCredits.push(chunk.ackCredit)
-      }
-      continue
-    }
-
-    data += chunk.data.slice(0, remaining)
-    entry.chunks[entry.chunkIndex] = {
-      ...chunk,
-      data: chunk.data.slice(remaining)
-    }
-    entry.queuedChars -= remaining
-    remaining = 0
-  }
-
-  compactConsumedChunks(entry)
-  if (entry.queuedChars < 0) {
-    entry.queuedChars = 0
-  }
-  recordQueueDebugPressure()
-  return data
-    ? {
-        data,
-        foreground: foreground === true,
-        forceForegroundRefresh,
-        followupForegroundRefresh,
-        shouldRefreshForegroundSynchronously:
-          additionalRefreshSyncResolvers && shouldRefreshForegroundSynchronously
-            ? () =>
-                shouldRefreshForegroundSynchronously() ||
-                additionalRefreshSyncResolvers.some((resolve) => resolve())
-            : (shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY),
-        stripTransientCursorShows,
-        beforeWrite:
-          additionalBeforeWriteCallbacks && beforeWrite
-            ? (queuedData) => {
-                beforeWrite(queuedData)
-                for (const callback of additionalBeforeWriteCallbacks) {
-                  callback(queuedData)
-                }
-              }
-            : beforeWrite,
-        onParsed:
-          parsedCallbacks.length > 0
-            ? () => {
-                for (const callback of parsedCallbacks) {
-                  callback()
-                }
-              }
-            : undefined,
-        ackCredits
-      }
-    : null
-}
-
-function compactConsumedChunks(entry: QueueEntry): void {
-  if (entry.chunkIndex === 0) {
-    return
-  }
-  if (entry.chunkIndex === entry.chunks.length) {
-    entry.chunks.length = 0
-    entry.chunkIndex = 0
-    return
-  }
-  if (entry.chunkIndex >= 64) {
-    entry.chunks.splice(0, entry.chunkIndex)
-    entry.chunkIndex = 0
-  }
-}
-
-function enqueueChunk(
-  entry: QueueEntry,
-  data: string,
-  options?: {
-    foreground?: boolean
-    forceForegroundRefresh?: boolean
-    followupForegroundRefresh?: boolean
-    shouldRefreshForegroundSynchronously?: ForegroundRefreshSyncResolver
-    stripTransientCursorShows?: boolean
-    beforeWrite?: TerminalOutputBeforeWrite
-    onParsed?: TerminalOutputParsedCallback
-    ackCredit?: () => void
-  }
-): void {
-  entry.chunks.push({
-    data,
-    foreground: options?.foreground === true,
-    forceForegroundRefresh: options?.forceForegroundRefresh === true,
-    followupForegroundRefresh: options?.followupForegroundRefresh === true,
-    shouldRefreshForegroundSynchronously:
-      options?.shouldRefreshForegroundSynchronously ?? ALWAYS_REFRESH_FOREGROUND_SYNCHRONOUSLY,
-    stripTransientCursorShows: options?.stripTransientCursorShows === true,
-    beforeWrite: options?.beforeWrite,
-    onParsed: options?.onParsed,
-    ackCredit: options?.ackCredit
-  })
-  entry.queuedChars += data.length
-  recordQueueDebugPressure()
 }
 
 // Why: every discard path MUST fire these before clearing/replacing the queue — a dropped chunk still counts as consumed, or main's in-flight window shrinks permanently and the PTY wedges.
@@ -708,8 +333,7 @@ function discardDetachedQueueEntry(entry: QueueEntry): void {
   entry.chunkIndex = 0
   entry.queuedChars = 0
   entry.highPriority = false
-  clearForegroundHoldSafety(entry)
-  clearForegroundCoalesce(entry)
+  clearForegroundRelease(entry)
 }
 
 function queueCapExceeded(entry: QueueEntry): boolean {
@@ -744,6 +368,7 @@ function replaceBacklogWithWarning(
   entry.chunks = [
     {
       data: warning,
+      retainedChars: warning.length,
       foreground: false,
       forceForegroundRefresh: false,
       followupForegroundRefresh: false,
@@ -760,7 +385,7 @@ function replaceBacklogWithWarning(
   if (debugEnabled && shouldNotify) {
     debugState.droppedBacklogCount++
   }
-  clearForegroundCoalesce(entry)
+  clearForegroundRelease(entry)
   recordQueueDebugPressure()
   if (shouldNotify) {
     entry.onBackgroundBacklogDropped?.()
@@ -945,8 +570,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
       entry.chunks.length = 0
       entry.chunkIndex = 0
       entry.queuedChars = 0
-      clearForegroundHoldSafety(entry)
-      clearForegroundCoalesce(entry)
+      clearForegroundRelease(entry)
       recordQueueDebugPressure()
       return null
     }
@@ -958,8 +582,7 @@ function writeQueuedChunk(entry: QueueEntry): 'foreground' | 'background' | null
     entry.chunks.length = 0
     entry.chunkIndex = 0
     entry.queuedChars = 0
-    clearForegroundHoldSafety(entry)
-    clearForegroundCoalesce(entry)
+    clearForegroundRelease(entry)
     recordQueueDebugPressure()
     return null
   }
@@ -978,9 +601,8 @@ function drainQueuedOutput(): void {
   drainTimerDelayMs = null
   let writes = 0
   const startedAt = getDrainNow()
-  const maxWrites = hasHighPriorityBacklog()
-    ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN
-    : MAX_WRITES_PER_DRAIN
+  const highPriority = hasHighPriorityBacklog()
+  const maxWrites = highPriority ? HIGH_PRIORITY_MAX_WRITES_PER_DRAIN : MAX_WRITES_PER_DRAIN
 
   while (queuedByTerminal.size > 0 && writes < maxWrites) {
     const entry = takeNextDrainableEntry()
@@ -1003,8 +625,7 @@ function drainQueuedOutput(): void {
       queuedByTerminal.set(entry.terminal, entry)
     } else {
       entry.highPriority = false
-      clearForegroundCoalesce(entry)
-      clearForegroundHoldSafety(entry)
+      clearForegroundRelease(entry)
     }
     // Why: xterm parsing and DOM work share the renderer thread with input; keep draining cooperative so WSL/agent output can't pin the UI.
     if (writes > 0 && getDrainNow() - startedAt >= DRAIN_TIME_BUDGET_MS) {
@@ -1014,6 +635,7 @@ function drainQueuedOutput(): void {
 
   if (debugEnabled && writes > 0) {
     debugState.drainWrites.push(writes)
+    debugState.drainHighPriority.push(highPriority)
   }
   recordQueueDebugPressure()
   if (queuedByTerminal.size > 0 && hasDrainableBacklog()) {
@@ -1103,7 +725,7 @@ export function writeTerminalOutput(
           shouldShortenCoalesceForLatencySensitiveForeground &&
           !coalescedQueuedDataNeedsCursorRestore(queued)
         if (containsDrainableCursorRestore(data) || shouldDrainForLatencySensitiveForeground) {
-          clearForegroundCoalesce(queued)
+          clearForegroundRelease(queued)
           scheduleDrain(0)
           return
         }
@@ -1114,8 +736,7 @@ export function writeTerminalOutput(
         return
       }
       queued.foregroundHold = false
-      clearForegroundCoalesce(queued)
-      clearForegroundHoldSafety(queued)
+      clearForegroundRelease(queued)
       scheduleDrain(0)
       return
     }
@@ -1256,8 +877,7 @@ export function flushTerminalOutput(
     entry.chunkIndex = 0
     entry.queuedChars = 0
     entry.highPriority = false
-    clearForegroundHoldSafety(entry)
-    clearForegroundCoalesce(entry)
+    clearForegroundRelease(entry)
     recordQueueDebugPressure()
     return
   }
@@ -1302,8 +922,7 @@ export function flushTerminalOutput(
           )
       if (!writeAccepted) {
         fireQueuedAckCredits(entry)
-        clearForegroundHoldSafety(entry)
-        clearForegroundCoalesce(entry)
+        clearForegroundRelease(entry)
         recordQueueDebugPressure()
         return
       }
@@ -1312,8 +931,7 @@ export function flushTerminalOutput(
       cancelTerminalWriteStallWatch(terminal)
       ackCreditsParsed?.()
       fireQueuedAckCredits(entry)
-      clearForegroundHoldSafety(entry)
-      clearForegroundCoalesce(entry)
+      clearForegroundRelease(entry)
       recordQueueDebugPressure()
       return
     }
@@ -1328,8 +946,7 @@ export function flushTerminalOutput(
     scheduleDrain(0)
   } else {
     entry.highPriority = false
-    clearForegroundCoalesce(entry)
-    clearForegroundHoldSafety(entry)
+    clearForegroundRelease(entry)
   }
   recordQueueDebugPressure()
 }

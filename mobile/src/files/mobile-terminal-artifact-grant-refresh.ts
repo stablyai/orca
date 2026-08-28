@@ -1,3 +1,4 @@
+import type { RuntimeNativeChatFileContext } from '../../../src/shared/runtime-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcResponse, RpcSuccess } from '../transport/types'
 import { isTerminalArtifactGrantError } from './terminal-artifact-grant-error'
@@ -12,6 +13,8 @@ export type MobileTerminalArtifactPreviewSource = {
   terminalHandle?: string
   pathText?: string
   cwd?: string
+  nativeChatContext?: RuntimeNativeChatFileContext
+  readOnly?: true
 }
 
 export type TerminalArtifactRetryOptions = {
@@ -32,7 +35,8 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
     worktree: `id:${source.worktreeId}`,
     pathText: source.pathText ?? source.absolutePath,
     ...(source.cwd ? { cwd: source.cwd } : {}),
-    ...(source.terminalHandle ? { terminal: source.terminalHandle } : {})
+    ...(source.terminalHandle ? { terminal: source.terminalHandle } : {}),
+    ...(source.nativeChatContext ? { nativeChatContext: source.nativeChatContext } : {})
   })
   if (!refreshed.ok) {
     return null
@@ -51,7 +55,9 @@ export async function refreshTerminalArtifactSourceAfterGrantFailure(
     grantId: result.openTarget.grantId,
     ...(source.terminalHandle ? { terminalHandle: source.terminalHandle } : {}),
     ...(source.pathText ? { pathText: source.pathText } : {}),
-    ...(source.cwd ? { cwd: source.cwd } : {})
+    ...(source.cwd ? { cwd: source.cwd } : {}),
+    ...(source.nativeChatContext ? { nativeChatContext: source.nativeChatContext } : {}),
+    ...(source.readOnly || result.openTarget.readOnly === true ? { readOnly: true as const } : {})
   }
 }
 
@@ -68,7 +74,7 @@ function isTerminalArtifactGrantFailure(
 function isTerminalArtifactResolution(result: unknown): result is {
   exists: true
   isDirectory: false
-  openTarget: { kind: 'absolute-file'; absolutePath: string; grantId: string }
+  openTarget: { kind: 'absolute-file'; absolutePath: string; grantId: string; readOnly?: true }
 } {
   if (!result || typeof result !== 'object') {
     return false

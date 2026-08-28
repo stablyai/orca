@@ -3,6 +3,7 @@ import {
   isClipboardTextByteLengthOverLimitWithYield,
   measureClipboardTextByteLength
 } from './clipboard-text'
+import { getUtf8ChunkEndIndex } from './utf8-byte-limits'
 
 export const TERMINAL_INPUT_CHUNK_MAX_BYTES = 16 * 1024
 export const TERMINAL_INPUT_MAX_BYTES = 16 * 1024 * 1024
@@ -11,19 +12,6 @@ export const TERMINAL_INPUT_TOO_LARGE_ERROR =
 
 export function getTerminalInputByteLength(text: string): number {
   return measureClipboardTextByteLength(text).byteLength
-}
-
-function getUtf8ByteLengthForCodePoint(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
 }
 
 export function assertTerminalInputWithinLimit(
@@ -87,23 +75,10 @@ export function* iterateTerminalInputChunks(
     return
   }
 
-  let currentStart = 0
-  let currentBytes = 0
-  let index = 0
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextIndex = index + codeUnitLength
-    const characterBytes = getUtf8ByteLengthForCodePoint(codePoint)
-    if (currentBytes > 0 && currentBytes + characterBytes > normalizedMax) {
-      yield text.slice(currentStart, index)
-      currentStart = index
-      currentBytes = 0
-    }
-    currentBytes += characterBytes
-    index = nextIndex
-  }
-  if (currentStart < text.length) {
-    yield text.slice(currentStart)
+  let startIndex = 0
+  while (startIndex < text.length) {
+    const endIndex = getUtf8ChunkEndIndex(text, startIndex, normalizedMax)
+    yield text.slice(startIndex, endIndex)
+    startIndex = endIndex
   }
 }

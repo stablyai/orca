@@ -1,20 +1,53 @@
 import type { Editor } from '@tiptap/react'
-import type {
-  RichMarkdownContextMenuCommand,
-  RichMarkdownContextMenuCommandPayload
-} from '../../../../shared/rich-markdown-context-menu'
+import { TextSelection } from '@tiptap/pm/state'
+import type { RichMarkdownContextMenuCommandPayload } from '../../../../shared/rich-markdown-context-menu'
+import {
+  runRichMarkdownTableAction,
+  type RichMarkdownTableAction
+} from './rich-markdown-table-actions'
+
+export function isRichMarkdownTableContextCommand(
+  command: RichMarkdownContextMenuCommandPayload['command']
+): command is RichMarkdownTableAction {
+  return (
+    command === 'insert-row-above' ||
+    command === 'insert-row-below' ||
+    command === 'delete-row' ||
+    command === 'insert-column-left' ||
+    command === 'insert-column-right' ||
+    command === 'delete-column' ||
+    command === 'delete-table'
+  )
+}
 
 export function runRichMarkdownContextCommand({
-  command,
+  payload,
   editor,
   toggleLink,
   pickImage
 }: {
-  command: RichMarkdownContextMenuCommand
+  payload: RichMarkdownContextMenuCommandPayload
   editor: Editor
   toggleLink: () => void
   pickImage: () => void
 }): void {
+  const { command } = payload
+  if (!command.startsWith('insert-') && !command.startsWith('delete-')) {
+    try {
+      const clickPosition = editor.view.posAtCoords({ left: payload.x, top: payload.y })?.pos
+      const selection = editor.state.selection
+      if (
+        clickPosition !== undefined &&
+        (selection.empty || clickPosition < selection.from || clickPosition > selection.to)
+      ) {
+        editor.view.dispatch(
+          editor.state.tr.setSelection(TextSelection.near(editor.state.doc.resolve(clickPosition)))
+        )
+      }
+    } catch {
+      return
+    }
+  }
   switch (command) {
     case 'add-link':
       toggleLink()
@@ -69,6 +102,15 @@ export function runRichMarkdownContextCommand({
       return
     case 'divider':
       editor.chain().focus().setHorizontalRule().run()
+      return
+    case 'insert-row-above':
+    case 'insert-row-below':
+    case 'delete-row':
+    case 'insert-column-left':
+    case 'insert-column-right':
+    case 'delete-column':
+    case 'delete-table':
+      runRichMarkdownTableAction(editor, command, { clientX: payload.x, clientY: payload.y })
   }
 }
 

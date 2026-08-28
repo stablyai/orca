@@ -1,11 +1,17 @@
 import { useEffect, useRef } from 'react'
 import * as monaco from 'monaco-editor'
 import type { OpenFile } from '@/store/slices/editor'
-import { cursorPositionCache, diffViewStateCache, scrollTopCache } from '@/lib/scroll-cache'
+import {
+  editorSelectionCache,
+  diffViewStateCache,
+  pdfViewPositionCache,
+  scrollTopCache
+} from '@/lib/scroll-cache'
 import {
   disposeUnattachedMonacoModelsByPathPrefix,
   getDiffViewerMonacoModelPathPrefixes
 } from './diff-monaco-model-disposal'
+import { sweepClosedPdfViewPositions } from './closed-editor-tab-cache-sweep'
 
 function deleteCacheEntriesByPrefix<T>(cache: Map<string, T>, prefix: string): void {
   for (const key of cache.keys()) {
@@ -41,8 +47,10 @@ function disposeClosedEditorTab(prevId: string, prevFile: OpenFile): void {
       scrollTopCache.delete(`${prevFile.filePath}:rich`)
       scrollTopCache.delete(`${prevFile.filePath}:preview`)
       scrollTopCache.delete(`${prevFile.filePath}:mermaid-diagram`)
-      cursorPositionCache.delete(prevFile.filePath)
-      deleteCacheEntriesByPrefix(cursorPositionCache, `${prevFile.filePath}::`)
+      editorSelectionCache.delete(prevFile.filePath)
+      deleteCacheEntriesByPrefix(editorSelectionCache, `${prevFile.filePath}::`)
+      // Why: only 'edit' tabs ever get a PDF scroll key (see EditorContent).
+      sweepClosedPdfViewPositions(pdfViewPositionCache, prevFile.filePath)
       break
     case 'markdown-preview':
       // Why: preview tabs own pane-scoped preview scroll cache entries even

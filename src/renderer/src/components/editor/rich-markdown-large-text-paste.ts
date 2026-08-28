@@ -2,6 +2,10 @@ import type { Editor } from '@tiptap/react'
 import { toast } from 'sonner'
 import { yieldToEventLoop } from '../../../../shared/event-loop-yield'
 import {
+  getUtf8ChunkEndIndex,
+  isUtf8ByteLengthWithinLimit
+} from '../../../../shared/utf8-byte-limits'
+import {
   measureTextControlPasteByteLength,
   measureTextControlPasteByteLengthWithYield
 } from '@/lib/text-control-paste'
@@ -32,61 +36,6 @@ export type RichMarkdownLargeTextPasteResult =
       byteLength: number
       chunksWritten: number
     }
-
-function getCodePointUtf8ByteLength(codePoint: number): number {
-  if (codePoint <= 0x7f) {
-    return 1
-  }
-  if (codePoint <= 0x7ff) {
-    return 2
-  }
-  if (codePoint <= 0xffff) {
-    return 3
-  }
-  return 4
-}
-
-function isTextByteLengthOverLimit(text: string, maxBytes: number): boolean {
-  if (text.length === 0) {
-    return false
-  }
-  if (text.length > maxBytes) {
-    return true
-  }
-
-  let byteLength = 0
-  for (let index = 0; index < text.length; index += 1) {
-    const codePoint = text.codePointAt(index) ?? 0
-    byteLength += getCodePointUtf8ByteLength(codePoint)
-    if (byteLength > maxBytes) {
-      return true
-    }
-    if (codePoint > 0xffff) {
-      index += 1
-    }
-  }
-  return false
-}
-
-function getNextChunkBoundary(text: string, startIndex: number, maxBytes: number): number {
-  let byteLength = 0
-  let index = startIndex
-
-  while (index < text.length) {
-    const codePoint = text.codePointAt(index) ?? 0
-    const codeUnitLength = codePoint > 0xffff ? 2 : 1
-    const nextByteLength = getCodePointUtf8ByteLength(codePoint)
-
-    if (byteLength > 0 && byteLength + nextByteLength > maxBytes) {
-      break
-    }
-
-    byteLength += nextByteLength
-    index += codeUnitLength
-  }
-
-  return index
-}
 
 function isEditorAvailable(
   editor: Editor,
@@ -126,7 +75,7 @@ function shouldHandleLargeRichMarkdownPaste({
   if (plainTextExceededLimit || plainTextByteLength > maxDirect) {
     return true
   }
-  return isTextByteLengthOverLimit(htmlText, maxDirect)
+  return !isUtf8ByteLengthWithinLimit(htmlText, maxDirect)
 }
 
 async function insertRichMarkdownTextInChunks(
@@ -144,7 +93,7 @@ async function insertRichMarkdownTextInChunks(
       return { status: 'cancelled', reason: 'target-unavailable', byteLength, chunksWritten }
     }
 
-    const nextIndex = getNextChunkBoundary(text, textIndex, chunkMaxBytes)
+    const nextIndex = getUtf8ChunkEndIndex(text, textIndex, chunkMaxBytes)
     const chunk = text.slice(textIndex, nextIndex)
     editor.view.dispatch(editor.state.tr.insertText(chunk))
     textIndex = nextIndex

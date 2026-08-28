@@ -3,6 +3,7 @@ import {
   stringifyJsonWithinByteLimit
 } from './node-bounded-json-stringify'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import type { RuntimeOrchestrationEnvelope } from './runtime-rpc-envelope'
 
 export const REMOTE_RUNTIME_MAX_OUTBOUND_JSON_BYTES = 4 * 1024 * 1024
 export const REMOTE_RUNTIME_MAX_WEBSOCKET_FRAME_BYTES = 8 * 1024 * 1024 + 64
@@ -17,7 +18,6 @@ export const REMOTE_RUNTIME_MAX_PROCESS_PENDING_RPC_BYTES = REMOTE_RUNTIME_MAX_P
 export const REMOTE_RUNTIME_MAX_READY_WAITERS =
   REMOTE_RUNTIME_MAX_PENDING_REQUESTS + REMOTE_RUNTIME_MAX_SUBSCRIPTIONS
 export const REMOTE_RUNTIME_MAX_OUTBOUND_BINARY_FRAME_BYTES = 8 * 1024 * 1024
-export const REMOTE_RUNTIME_MAX_SUBSCRIPTION_ID_BYTES = 4 * 1024
 
 export function serializeRemoteRuntimePayload(value: unknown): string {
   try {
@@ -64,12 +64,18 @@ export function serializeRemoteRuntimeRpcRequest(args: {
   deviceToken: string
   method: string
   params: unknown
+  envelope?: RuntimeOrchestrationEnvelope
 }): string {
   return serializeRemoteRuntimePayload({
     id: args.requestId,
     deviceToken: args.deviceToken,
     method: args.method,
-    params: args.params
+    params: args.params,
+    orchestrationCapability: args.envelope?.orchestrationCapability,
+    orchestrationContractVersion: args.envelope?.orchestrationContractVersion,
+    orchestrationRequestId: args.envelope?.orchestrationRequestId,
+    compatibilityInvocationId: args.envelope?.compatibilityInvocationId,
+    orchestrationCompatibilityEvidence: args.envelope?.orchestrationCompatibilityEvidence
   })
 }
 

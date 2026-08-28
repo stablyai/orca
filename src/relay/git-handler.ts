@@ -1,4 +1,5 @@
 /* eslint-disable max-lines -- Why: centralizes the git RPC protocol surface so local and SSH git behavior stay in one dispatch table. */
+import { randomUUID } from 'node:crypto'
 import { execFile, spawn, type ExecFileOptions } from 'node:child_process'
 import { promisify } from 'node:util'
 import * as path from 'node:path'
@@ -18,6 +19,11 @@ import {
   validateGitExecArgs,
   type GitExec
 } from './git-handler-ops'
+import {
+  branchDiffEntryAtPinnedOids,
+  isFullGitObjectId,
+  parseOptionalBranchDiffHeadOid
+} from './git-handler-branch-diff-ops'
 import {
   buildSubmoduleInnerCommitRangeDiff,
   computeSubmodulePointerDiff,
@@ -55,8 +61,15 @@ import {
 import { upstreamOnlyCommitsArePatchEquivalent } from '../shared/git-upstream-status'
 import { assertGitPushTargetShape } from '../shared/git-push-target-validation'
 import { getPublishTargetStatus, type GitCommandRunner } from '../shared/git-publish-target-status'
-import { resolveGitRemoteRebaseSource } from '../shared/git-rebase-source'
-import type { GitPushTarget } from '../shared/types'
+import { isNoWriteFetchHeadUnsupportedError } from '../shared/git-fetch-head-capability'
+import { runWithGitWorktreeOperationLock } from '../shared/git-worktree-operation-lock'
+import { resolveGitFetchHeadCommand, runWithGitFetchHeadLock } from '../shared/git-fetch-head-lock'
+import {
+  REBASE_FROM_BASE_OPERATION_TIMEOUT_MS,
+  REBASE_SOURCE_FETCH_TIMEOUT_MS,
+  resolveGitRemoteRebaseSource
+} from '../shared/git-rebase-source'
+import type { GitPushTarget } from '../shared/worktree/types'
 import {
   getEffectiveGitUpstreamStatus,
   resolveEffectiveGitUpstream
@@ -89,11 +102,14 @@ import { GitResponseStreamRegistry } from './git-response-stream'
 import { GIT_RESPONSE_STREAM_THRESHOLD } from './protocol'
 import { endSubprocessStdin } from '../shared/subprocess-stdin-write'
 import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-cache'
+import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { streamRelayGitStdout } from './git-stdout-stream'
+import { runProcess } from '../shared/child-process/run-process'
 
 const execFileAsync = promisify(execFile)
 const MAX_GIT_BUFFER = 10 * 1024 * 1024
 const BULK_CHUNK_SIZE = 100
+const GIT_REBASE_PROCESS_FALLBACK_TIMEOUT_MS = 2_147_000_000
 
 function resolveSubmoduleStatusArea(
   params: Record<string, unknown>
@@ -112,7 +128,7 @@ function resolveRelayPath(repoPath: string, value: string): string {
   if (path.posix.isAbsolute(value) || path.win32.isAbsolute(value)) {
     return value
   }
-  // Old git ignores `--path-format=absolute`; resolve relative toplevel/git-dir against repoPath, picking the win32/posix resolver by its shape.
+  // Old Git ignores `--path-format=absolute`; resolve relative paths against repoPath by path shape.
   return isWindowsAbsolutePath(repoPath)
     ? path.win32.resolve(repoPath, value)
     : path.posix.resolve(repoPath, value)
@@ -172,14 +188,55 @@ function execFileWithStdin(
   })
 }
 
+async function runGitToTermination(
+  args: string[],
+  options: ExecFileOptions,
+  stdin: string | undefined
+): Promise<{ stdout: string; stderr: string }> {
+  const result = await runProcess({
+    program: 'git',
+    args,
+    cwd: typeof options.cwd === 'string' ? options.cwd : undefined,
+    env: options.env,
+    timeoutMs:
+      typeof options.timeout === 'number'
+        ? options.timeout
+        : GIT_REBASE_PROCESS_FALLBACK_TIMEOUT_MS,
+    maxOutputBytes: typeof options.maxBuffer === 'number' ? options.maxBuffer : MAX_GIT_BUFFER,
+    signal: options.signal,
+    terminationBarrier: true,
+    ...(stdin === undefined ? {} : { input: stdin })
+  })
+  if (result.code === 0 && !result.timedOut && !options.signal?.aborted) {
+    return { stdout: result.stdout, stderr: result.stderr }
+  }
+  const error = new Error(
+    result.timedOut
+      ? `git ${args[0] ?? 'command'} timed out.`
+      : options.signal?.aborted
+        ? 'The operation was aborted.'
+        : result.stderr.trim() || `git ${args[0] ?? 'command'} failed.`
+  )
+  if (options.signal?.aborted) {
+    error.name = 'AbortError'
+  }
+  throw Object.assign(error, {
+    code: result.code,
+    killed: result.timedOut || result.signal !== null || options.signal?.aborted === true,
+    signal: result.signal,
+    stdout: result.stdout,
+    stderr: result.stderr
+  })
+}
+
 export class GitHandler {
   private dispatcher: RelayDispatcher
   private readonly gitDiffReadDedupe = new InFlightPromiseDedupe<unknown>()
   private readonly gitCapabilities = new GitCapabilityCache()
-  // Why: large diff/exec responses go on the bulk lane so they don't head-of-line-block interactive pty.data echo on the shared SSH channel.
+  // Why: use the bulk lane so large responses do not block interactive PTY echo.
   private readonly responseStreams = new GitResponseStreamRegistry()
 
-  // Why: instance-level TTL cache avoids re-reading `.gitmodules` per diff click over SSH; per-instance so it can't leak across tests.
+  // Why: cache .gitmodules per instance to avoid SSH reads and test leakage.
   private submodulePathsCache: SubmodulePathsCache = createSubmodulePathsCache()
 
   // Why: RelayContext accepted for protocol back-compat (docs/relay-fs-allowlist-removal.md) but no longer consulted on git ops.
@@ -240,9 +297,9 @@ export class GitHandler {
       this.fetchGitLabMergeRequestHead(p)
     )
     this.dispatcher.onRequest('git.push', (p) => this.push(p))
-    this.dispatcher.onRequest('git.pull', (p) => this.pull(p))
-    this.dispatcher.onRequest('git.fastForward', (p) => this.fastForward(p))
-    this.dispatcher.onRequest('git.rebaseFromBase', (p) => this.rebaseFromBase(p))
+    this.dispatcher.onRequest('git.pull', (p, context) => this.pull(p, context))
+    this.dispatcher.onRequest('git.fastForward', (p, context) => this.fastForward(p, context))
+    this.dispatcher.onRequest('git.rebaseFromBase', (p, context) => this.rebaseFromBase(p, context))
     this.dispatcher.onRequest('git.branchDiff', (p, context) => this.branchDiff(p, context))
     this.dispatcher.onRequest('git.commitDiff', (p, context) => this.commitDiff(p, context))
     this.dispatcher.onRequest('git.listWorktrees', (p, context) => this.listWorktrees(p, context))
@@ -298,6 +355,7 @@ export class GitHandler {
 
   private clearGitMutationReadCaches(): void {
     this.gitDiffReadDedupe.clear()
+    invalidateGitBranchLineTotalInFlight()
     clearGitStatusLineStatsCache()
     clearSubmodulePathsCache(this.submodulePathsCache)
   }
@@ -322,25 +380,36 @@ export class GitHandler {
       nonInteractive?: boolean
       stdin?: string
       timeout?: number
+      terminationBarrier?: boolean
     }
   ): Promise<{ stdout: string; stderr: string }> {
-    const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
-    if (opts?.disableOptionalLocks) {
-      env.GIT_OPTIONAL_LOCKS = '0'
+    const expandedCwd = expandTilde(cwd)
+    const run = async (): Promise<{ stdout: string; stderr: string }> => {
+      const env = opts?.nonInteractive ? buildRelayUnattendedGitEnv() : buildRelayGitEnv()
+      if (opts?.disableOptionalLocks) {
+        env.GIT_OPTIONAL_LOCKS = '0'
+      }
+      const execOptions = {
+        cwd: expandedCwd,
+        env,
+        encoding: 'utf-8',
+        maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
+        timeout: opts?.timeout,
+        signal: opts?.signal
+      } satisfies ExecFileOptions
+      if (opts?.terminationBarrier) {
+        return runGitToTermination(args, execOptions, opts.stdin)
+      }
+      if (opts?.stdin !== undefined) {
+        return execFileWithStdin('git', args, execOptions, opts.stdin)
+      }
+      const { stdout, stderr } = await execFileAsync('git', args, execOptions)
+      return { stdout: String(stdout), stderr: String(stderr) }
     }
-    const execOptions = {
-      cwd: expandTilde(cwd),
-      env,
-      encoding: 'utf-8',
-      maxBuffer: opts?.maxBuffer ?? MAX_GIT_BUFFER,
-      timeout: opts?.timeout,
-      signal: opts?.signal
-    } satisfies ExecFileOptions
-    if (opts?.stdin !== undefined) {
-      return execFileWithStdin('git', args, execOptions, opts.stdin)
-    }
-    const { stdout, stderr } = await execFileAsync('git', args, execOptions)
-    return { stdout: String(stdout), stderr: String(stderr) }
+    const command = resolveGitFetchHeadCommand(args, expandedCwd)
+    return command.needsLock
+      ? runWithGitFetchHeadLock(command.cwd, opts?.signal, run, command.gitDir)
+      : run()
   }
 
   private async gitBuffer(args: string[], cwd: string): Promise<Buffer> {
@@ -360,7 +429,7 @@ export class GitHandler {
     })
   }
 
-  // Why: parent status lists one gitlink row per submodule; fetch inner per-file changes by running status inside the submodule's own worktree.
+  // Why: fetch per-file submodule changes from the submodule worktree.
   private async getSubmoduleStatus(params: Record<string, unknown>, context: RequestContext) {
     const worktreePath = params.worktreePath as string
     const submodulePath = params.submodulePath as string
@@ -383,7 +452,7 @@ export class GitHandler {
     // Why: pointer/range probes are part of the same SSH request and must not outlive its cancellation.
     const requestGit: GitExec = (args, cwd, options) =>
       this.git(args, cwd, { ...options, signal: context.signal })
-    // Why: a moved gitlink (clean worktree) has no uncommitted rows; surface files changed between recorded and checked-out commits so it isn't empty.
+    // Why: moved clean gitlinks need committed changes surfaced.
     const { fromOid, toOid } = await resolveSubmoduleCommitRange(
       requestGit,
       worktreePath,
@@ -426,7 +495,7 @@ export class GitHandler {
   private async getDiff(params: Record<string, unknown>, context?: RequestContext) {
     const worktreePath = params.worktreePath as string
     const filePath = params.filePath as string
-    // Why: filePath is relative and joined for readWorkingFile; validate or `../../etc/passwd` traverses outside the worktree.
+    // Why: validate relative paths to prevent traversal outside the worktree.
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
     if (rel === '..' || rel.startsWith(`..${path.sep}`) || path.isAbsolute(rel)) {
@@ -434,11 +503,11 @@ export class GitHandler {
     }
     const staged = params.staged as boolean
     const compareAgainstHead = params.compareAgainstHead as boolean | undefined
-    // Why: register the in-flight dedupe synchronously (before any await) so concurrent identical reads coalesce; submodule routing happens inside.
+    // Why: register dedupe before awaiting so identical reads coalesce.
     const result = await this.gitDiffReadDedupe.run(
       stableInFlightKey(['diff', worktreePath, filePath, staged, compareAgainstHead]),
       async () => {
-        // Why: gitlinks can't be read as blobs, so route the gitlink root to a pointer diff and inner files into the submodule's own worktree.
+        // Why: route gitlink roots to pointer diffs and inner files to their submodule worktree.
         const submodulePaths = await listSubmodulePathsCached(
           this.git.bind(this),
           worktreePath,
@@ -775,13 +844,13 @@ export class GitHandler {
   private async branchCompare(params: Record<string, unknown>) {
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
-    // Why: a baseRef starting with '-' would be read as a git rev-parse flag, potentially leaking environment variables or config.
+    // Why: reject flag-like base refs to prevent rev-parse option injection.
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
     const gitBound = this.git.bind(this)
     return branchCompareOp(gitBound, worktreePath, baseRef, async (mergeBase, headOid) => {
-      // Why: -c core.quotePath=false keeps non-ASCII filenames as raw UTF-8; without it parseBranchDiff would get C-style octal-escaped paths.
+      // Why: preserve non-ASCII filenames as UTF-8 for parseBranchDiff.
       const [{ stdout }, { stdout: numstat }] = await Promise.all([
         gitBound(
           ['-c', 'core.quotePath=false', 'diff', '--name-status', '-M', '-C', mergeBase, headOid],
@@ -821,7 +890,7 @@ export class GitHandler {
         (upstreamName) => this.getBehindCommitsArePatchEquivalent(worktreePath, upstreamName)
       )
     } catch (error) {
-      // Why: swallow only 'no upstream configured' (an expected state); other errors (auth, corruption, network) must surface to the user.
+      // Why: suppress only the expected no-upstream error; surface all others.
       if (isNoUpstreamError(error)) {
         return { hasUpstream: false, ahead: 0, behind: 0 }
       }
@@ -1074,7 +1143,21 @@ export class GitHandler {
     }
   }
 
-  private async pullWithArgs(params: Record<string, unknown>, pullArgs: string[]) {
+  private async pullWithArgs(
+    params: Record<string, unknown>,
+    pullArgs: string[],
+    signal?: AbortSignal
+  ) {
+    const worktreePath = params.worktreePath as string
+    return runWithGitWorktreeOperationLock(worktreePath, signal, () =>
+      this.runPullWithArgsUnlocked(params, pullArgs)
+    )
+  }
+
+  private async runPullWithArgsUnlocked(
+    params: Record<string, unknown>,
+    pullArgs: string[]
+  ): Promise<void> {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const runPull = async (effectiveArgs: string[]): Promise<void> => {
@@ -1112,30 +1195,109 @@ export class GitHandler {
     }
   }
 
-  private async pull(params: Record<string, unknown>) {
-    // Why: plain `git pull` honors the user's merge/rebase/ff policy; with none, Git's policy error is normalized with setup guidance.
-    await this.pullWithArgs(params, [])
+  private async pull(params: Record<string, unknown>, context?: RequestContext) {
+    // Why: plain `git pull` honors user merge/rebase/ff policy.
+    await this.pullWithArgs(params, [], context?.signal)
   }
 
-  private async fastForward(params: Record<string, unknown>) {
-    await this.pullWithArgs(params, ['--ff-only'])
+  private async fastForward(params: Record<string, unknown>, context?: RequestContext) {
+    await this.pullWithArgs(params, ['--ff-only'], context?.signal)
   }
 
-  private async rebaseFromBase(params: Record<string, unknown>) {
+  private async rebaseFromBase(params: Record<string, unknown>, context?: RequestContext) {
+    return runWithGitWorktreeOperationLock(params.worktreePath as string, context?.signal, () =>
+      this.runRebaseFromBase(params, context)
+    )
+  }
+
+  private async runRebaseFromBase(params: Record<string, unknown>, context?: RequestContext) {
     this.clearGitMutationReadCaches()
     const worktreePath = params.worktreePath as string
     const baseRef = params.baseRef as string
+    let rebaseRef: string | null = null
+    const controller = new AbortController()
+    const abortFromContext = () => controller.abort()
+    if (context?.signal?.aborted) {
+      controller.abort()
+    } else {
+      context?.signal?.addEventListener('abort', abortFromContext, { once: true })
+    }
+    const timeout = setTimeout(() => controller.abort(), REBASE_FROM_BASE_OPERATION_TIMEOUT_MS)
     try {
       try {
         const source = await resolveGitRemoteRebaseSource(
-          ((args) => this.git(args, worktreePath)) as GitCommandRunner,
+          ((args) =>
+            this.git(args, worktreePath, {
+              signal: controller.signal,
+              terminationBarrier: true
+            })) as GitCommandRunner,
           baseRef
         )
-        await this.git(['pull', '--rebase', source.remoteName, source.branchName], worktreePath)
+        let forkPoint: string | null = null
+        let hasHead = true
+        try {
+          const { stdout } = await this.git(
+            ['merge-base', '--fork-point', `refs/remotes/${source.displayName}`, 'HEAD'],
+            worktreePath,
+            { signal: controller.signal, terminationBarrier: true }
+          )
+          forkPoint = stdout.trim() || null
+        } catch {
+          // A first fetch or an unhelpful reflog falls back to Git's merge-base behavior.
+          try {
+            await this.git(['rev-parse', '--verify', 'HEAD'], worktreePath, {
+              signal: controller.signal,
+              terminationBarrier: true
+            })
+          } catch {
+            hasHead = false
+          }
+        }
+        // Why: concurrent fetches can replace FETCH_HEAD and remote-tracking refs between fetch and rebase.
+        rebaseRef = `refs/orca/rebase/${randomUUID()}`
+        const fetchArgs = [
+          source.remoteName,
+          `+refs/heads/${source.branchName}:${rebaseRef}`,
+          `+refs/heads/${source.branchName}:refs/remotes/${source.displayName}`
+        ]
+        await this.gitCapabilities.runWithFallback(
+          'fetch-no-write-fetch-head',
+          () =>
+            this.git(['fetch', '--no-write-fetch-head', ...fetchArgs], worktreePath, {
+              timeout: REBASE_SOURCE_FETCH_TIMEOUT_MS,
+              signal: controller.signal,
+              terminationBarrier: true
+            }),
+          () =>
+            this.git(['fetch', ...fetchArgs], worktreePath, {
+              timeout: REBASE_SOURCE_FETCH_TIMEOUT_MS,
+              signal: controller.signal,
+              terminationBarrier: true
+            }),
+          isNoWriteFetchHeadUnsupportedError
+        )
+        await this.git(
+          hasHead
+            ? forkPoint
+              ? ['rebase', '--onto', rebaseRef, forkPoint]
+              : ['rebase', rebaseRef]
+            : ['merge', '--ff-only', rebaseRef],
+          worktreePath,
+          { signal: controller.signal, terminationBarrier: true }
+        )
       } catch (error) {
         throw new Error(normalizeGitErrorMessage(error, 'pull'))
       }
     } finally {
+      if (rebaseRef) {
+        try {
+          await this.git(['update-ref', '-d', rebaseRef], worktreePath)
+        } catch {
+          // Cleanup must not hide the fetch or rebase result.
+        }
+      }
+      clearTimeout(timeout)
+      context?.signal?.removeEventListener('abort', abortFromContext)
       this.clearGitMutationReadCaches()
     }
   }
@@ -1146,6 +1308,7 @@ export class GitHandler {
     if (baseRef.startsWith('-')) {
       throw new Error('Base ref must not start with "-"')
     }
+    const headOid = parseOptionalBranchDiffHeadOid(params)
     const options = {
       includePatch: params.includePatch as boolean | undefined,
       filePath: params.filePath as string | undefined,
@@ -1156,18 +1319,36 @@ export class GitHandler {
         'branchDiff',
         worktreePath,
         baseRef,
+        headOid ?? null,
         options.includePatch ?? null,
         options.filePath ?? null,
         options.oldPath ?? null
       ]),
-      () =>
-        branchDiffEntries(
+      () => {
+        if (
+          headOid &&
+          isFullGitObjectId(baseRef) &&
+          options.includePatch === true &&
+          typeof options.filePath === 'string' &&
+          options.filePath.length > 0
+        ) {
+          return branchDiffEntryAtPinnedOids(
+            this.gitBuffer.bind(this),
+            worktreePath,
+            baseRef,
+            headOid,
+            options.filePath,
+            options.oldPath
+          )
+        }
+        return branchDiffEntries(
           this.git.bind(this),
           this.gitBuffer.bind(this),
           worktreePath,
           baseRef,
           options
         )
+      }
     )
     return this.maybeStreamResponse(result, params, context)
   }

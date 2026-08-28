@@ -18,6 +18,42 @@ let currentTargets: ActivityTerminalPortalTarget[] = []
 const emptyTargets: ActivityTerminalPortalTarget[] = []
 const subscribers = new Set<() => void>()
 
+type ActivityTerminalPortalFieldEquals = (
+  left: ActivityTerminalPortalTarget,
+  right: ActivityTerminalPortalTarget
+) => boolean
+
+// Why the keyed record: a dropped field here silently suppresses a publish and
+// strands Terminal on stale routing — the wrong-terminal flash this file exists
+// to prevent. `satisfies` turns a new descriptor field into a build error.
+const ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS: readonly ActivityTerminalPortalFieldEquals[] =
+  Object.values({
+    slotId: (left, right) => left.slotId === right.slotId,
+    requestToken: (left, right) => left.requestToken === right.requestToken,
+    target: (left, right) => left.target === right.target,
+    worktreeId: (left, right) => left.worktreeId === right.worktreeId,
+    tabId: (left, right) => left.tabId === right.tabId,
+    paneKey: (left, right) => left.paneKey === right.paneKey,
+    forceUnavailable: (left, right) => left.forceUnavailable === right.forceUnavailable,
+    active: (left, right) => left.active === right.active
+  } satisfies Record<keyof ActivityTerminalPortalTarget, ActivityTerminalPortalFieldEquals>)
+
+function haveSameActivityTerminalPortals(
+  left: readonly ActivityTerminalPortalTarget[],
+  right: readonly ActivityTerminalPortalTarget[]
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((target, index) => {
+      const candidate = right[index]
+      return (
+        candidate !== undefined &&
+        ACTIVITY_TERMINAL_PORTAL_FIELD_EQUALS.every((isEqual) => isEqual(target, candidate))
+      )
+    })
+  )
+}
+
 // Why: the portal target is published with its {worktreeId, tabId} already
 // attached so consumers don't have to derive routing from the global
 // activeTabId/activeWorktreeId. The activity page knows which agent pane it
@@ -26,7 +62,8 @@ const subscribers = new Set<() => void>()
 // portaling a different terminal into the activity slot ("flash" of the wrong
 // terminal for a few ms).
 export function setActivityTerminalPortals(targets: ActivityTerminalPortalTarget[]): void {
-  if (currentTargets === targets) {
+  // Why: semantic no-ops must not synchronously bounce through Terminal and back into Activity.
+  if (currentTargets === targets || haveSameActivityTerminalPortals(currentTargets, targets)) {
     return
   }
   currentTargets = targets

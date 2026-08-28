@@ -1,6 +1,11 @@
-import type { GlobalSettings, Tab, TuiAgent } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { Tab } from '../../../shared/tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
-import { isNativeChatSupportedAgent } from '@/lib/native-chat-supported-agent'
+import {
+  isNativeChatSupportedAgent,
+  nativeChatRequiresLocalTranscript
+} from '@/lib/native-chat-supported-agent'
 
 export type NativeChatLaunchPromptDelivery = 'auto-submit' | 'draft' | 'submit-after-ready'
 
@@ -28,7 +33,10 @@ export function decideInitialAgentTabViewMode(args: {
   if (!isNativeChatSupportedAgent(args.agent)) {
     return undefined
   }
-  if (args.agent === 'grok' && args.nativeChatTranscriptIsLocalReadable !== true) {
+  if (
+    nativeChatRequiresLocalTranscript(args.agent) &&
+    args.nativeChatTranscriptIsLocalReadable !== true
+  ) {
     return undefined
   }
   if (

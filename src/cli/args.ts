@@ -28,6 +28,7 @@ export const BOOLEAN_FLAGS = new Set([
   'help',
   'inject',
   'include-archived',
+  'include-visual-layouts',
   'interrupt',
   'json',
   'local',
@@ -36,6 +37,7 @@ export const BOOLEAN_FLAGS = new Set([
   'mobile',
   'mobile-pairing',
   'no-pairing',
+  'screen',
   'parent-current',
   'provision',
   'ready',
@@ -153,6 +155,7 @@ export function supportsBrowserPageFlag(commandPath: string[]): boolean {
   if (
     [
       'account',
+      'artifacts',
       'automations',
       'project',
       'repo',
@@ -200,8 +203,10 @@ export function isCommandGroup(commandPath: string[]): boolean {
     (commandPath.length === 1 &&
       [
         'account',
+        'artifacts',
         'automations',
         'project',
+        'host',
         'repo',
         'worktree',
         'terminal',

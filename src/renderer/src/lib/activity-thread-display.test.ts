@@ -200,6 +200,44 @@ describe('getActivityThreadStatusPreview', () => {
       })
     ).toBe('Interrupted by user')
   })
+
+  it('names what a blocked approval is waiting on', () => {
+    // Why: a permission request parks the row on 'waiting', and the tool fields are the
+    // only thing that says what the user is being asked to approve (STA-3160).
+    expect(
+      getActivityThreadStatusPreview({
+        state: 'waiting',
+        toolName: 'bash',
+        toolInput: 'rm -rf build/',
+        prompt: 'Clean the build'
+      })
+    ).toBe('bash: rm -rf build/')
+  })
+
+  it('keeps a resolved tool off a finished row', () => {
+    // Why: tool fields outlive the turn that set them; showing them once the agent is done
+    // or idle reads as work still in flight.
+    for (const state of ['done', 'blocked'] as const) {
+      expect(
+        getActivityThreadStatusPreview({
+          state,
+          toolName: 'bash',
+          toolInput: 'rm -rf build/',
+          prompt: 'Clean the build'
+        })
+      ).toBe('')
+    }
+  })
+
+  it('shows nothing on a wait that carries no tool', () => {
+    // Why: not every wait is an approval — a question-style wait must not borrow tool text.
+    expect(
+      getActivityThreadStatusPreview({
+        state: 'waiting',
+        prompt: 'Pick a branch'
+      })
+    ).toBe('')
+  })
 })
 
 describe('resolveActivityThreadStatusPreview', () => {

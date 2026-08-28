@@ -25,24 +25,12 @@ export function setDragDocumentStyles(enabled: boolean): void {
   document.documentElement.toggleAttribute(POINTER_DRAGGING_ATTR, enabled)
 }
 
-export function getDraggedCards(
-  board: HTMLElement,
-  worktreeIds: readonly string[],
-  fallbackCard: HTMLElement
-): HTMLElement[] {
-  const ids = new Set(worktreeIds)
-  const cards = Array.from(board.querySelectorAll<HTMLElement>(CARD_SELECTOR)).filter((card) =>
-    ids.has(card.dataset.workspaceBoardCardId ?? '')
-  )
-  return cards.length > 0 ? cards : [fallbackCard]
-}
-
 export function setDraggedCardsDragging(args: {
   board: HTMLElement | null
-  worktreeIds: readonly string[]
+  worktreeIdentities: readonly string[]
   enabled: boolean
 }): void {
-  const { board, worktreeIds, enabled } = args
+  const { board, worktreeIdentities, enabled } = args
   if (!board) {
     return
   }
@@ -54,7 +42,7 @@ export function setDraggedCardsDragging(args: {
     })
     return
   }
-  const ids = new Set(worktreeIds)
+  const ids = new Set(worktreeIdentities)
   for (const card of board.querySelectorAll<HTMLElement>(CARD_SELECTOR)) {
     if (ids.has(card.dataset.workspaceBoardCardId ?? '')) {
       card.setAttribute(POINTER_CARD_DRAGGING_ATTR, 'true')

@@ -24,6 +24,10 @@ type MobilePageContentProps = {
   generatePairing: (rotate: boolean) => void
   canGeneratePairing: boolean
   handleAddressChange: (address: string) => void
+  customAddresses: readonly string[]
+  selectedAddressIsCustom: boolean
+  onCustomAddressSelect: (address: string) => void
+  onCustomAddressRemove: (address: string) => void
   beforeCustomAddressChange: (address: string) => Promise<boolean>
   handleBack: () => void
   handleContinue: () => void
@@ -32,12 +36,14 @@ type MobilePageContentProps = {
   setIosChannel: (channel: IosChannel) => void
   loadNetworkInterfaces: () => void
   networkInterfaces: MobileNetworkInterface[]
+  openAndroidInstallGuide: () => void
   openInstallUrl: () => void
   pairAnotherDevice: () => void
   pairLoading: boolean
   connectionMode: MobilePairingConnectionMode
   handleConnectionModeChange: (mode: MobilePairingConnectionMode) => void
   pairQrDataUrl: string | null
+  pairQrSize: number | null
   pairingUrl: string | null
   pairingQrError: boolean
   relayMintFailure: MobileRelayMintFailure | null
@@ -66,6 +72,10 @@ export function MobilePageContent({
   generatePairing,
   canGeneratePairing,
   handleAddressChange,
+  customAddresses,
+  selectedAddressIsCustom,
+  onCustomAddressSelect,
+  onCustomAddressRemove,
   beforeCustomAddressChange,
   handleBack,
   handleContinue,
@@ -74,12 +84,14 @@ export function MobilePageContent({
   setIosChannel,
   loadNetworkInterfaces,
   networkInterfaces,
+  openAndroidInstallGuide,
   openInstallUrl,
   pairAnotherDevice,
   pairLoading,
   connectionMode,
   handleConnectionModeChange,
   pairQrDataUrl,
+  pairQrSize,
   pairingUrl,
   pairingQrError,
   relayMintFailure,
@@ -125,9 +137,11 @@ export function MobilePageContent({
               installCopy={getInstallCopy(platform, iosChannel)}
               iosChannel={iosChannel}
               onIosChannelChange={setIosChannel}
+              onOpenAndroidInstallGuide={openAndroidInstallGuide}
               onOpenInstallUrl={openInstallUrl}
               onCopyInstallUrl={copyInstallUrl}
               pairQrDataUrl={pairQrDataUrl}
+              pairQrSize={pairQrSize}
               pairingUrl={pairingUrl}
               pairingQrError={pairingQrError}
               relayMintFailure={relayMintFailure}
@@ -141,8 +155,12 @@ export function MobilePageContent({
               canGeneratePairing={canGeneratePairing}
               onCopyPairingCode={copyPairingCode}
               networkInterfaces={networkInterfaces}
+              customAddresses={customAddresses}
               selectedAddress={selectedAddress}
+              selectedAddressIsCustom={selectedAddressIsCustom}
               onSelectedAddressChange={handleAddressChange}
+              onCustomAddressSelect={onCustomAddressSelect}
+              onCustomAddressRemove={onCustomAddressRemove}
               beforeCustomAddressChange={beforeCustomAddressChange}
               onRefreshNetworkInterfaces={loadNetworkInterfaces}
               refreshingNetworkInterfaces={refreshingNetworkInterfaces}
