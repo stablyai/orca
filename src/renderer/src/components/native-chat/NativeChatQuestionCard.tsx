@@ -298,14 +298,17 @@ function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
       data-slot="question-preview"
       // Stacked, the left inset lands on the option label's text column (row
       // border + padding + badge + gap), past the number badge.
-      className="min-w-0 self-stretch pr-3.5 pb-2.5 pl-13 @2xl/question:h-full @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5 @2xl/question:pl-3.5"
+      className="min-w-0 self-stretch pr-3.5 pb-2.5 pl-13 @2xl/question:relative @2xl/question:h-full @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5 @2xl/question:pl-3.5"
     >
-      <div className="min-w-0 overflow-hidden bg-muted/40 @2xl/question:rounded-md @2xl/question:border @2xl/question:border-border/60">
+      {/* Beside the list the well is lifted out of flow, so which preview is
+          showing cannot feed back into the grid's track sizing — swapping
+          previews must not resize the card. */}
+      <div className="min-w-0 overflow-hidden bg-muted/40 @2xl/question:absolute @2xl/question:inset-x-3.5 @2xl/question:inset-y-2.5 @2xl/question:rounded-md @2xl/question:border @2xl/question:border-border/60">
         {preview ? (
           <CommentMarkdown
             content={preview}
             className={cn(
-              'max-h-[40vh] overflow-auto p-2.5 font-mono text-xs text-foreground scrollbar-sleek',
+              'max-h-[40vh] overflow-auto p-2.5 font-mono text-xs text-foreground scrollbar-sleek @2xl/question:max-h-full',
               // The compact variant emits paragraphs as inline spans and caps its
               // own code blocks; blocking the spans keeps line structure, and
               // releasing the cap lets this frame's height tier govern scrolling.

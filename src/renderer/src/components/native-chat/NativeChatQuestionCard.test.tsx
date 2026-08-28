@@ -51,6 +51,15 @@ function clickOptionAt(index: number): void {
   click(container.querySelectorAll('button[aria-pressed]')[index], `option index ${index}`)
 }
 
+function typeAnswer(text: string): void {
+  const input = container.querySelector('input')!
+  act(() => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!
+    setter.call(input, text)
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+}
+
 function previewPanel(): Element | null {
   return container.querySelector('[data-slot="question-preview"]')
 }
@@ -350,6 +359,20 @@ describe('NativeChatQuestionCard', () => {
     expect(well.className).toContain('bg-muted/40')
   })
 
+  it('lifts the split-layout well out of flow so preview length cannot resize the grid', () => {
+    // Class-string level. In flow, a taller preview grows its track and the card
+    // resizes as the highlight moves between options of differing lengths.
+    render(previewPrompt, vi.fn())
+
+    const panel = previewPanel()!
+    const well = panel.firstElementChild!
+    expect(panel.className).toContain('@2xl/question:relative')
+    expect(well.className).toContain('@2xl/question:absolute')
+    expect(well.className).toContain('@2xl/question:inset-y-2.5')
+    // Stacked, the well stays in flow so it can push the rows below it down.
+    expect(well.className).not.toMatch(/(^|\s)absolute(\s|$)/)
+  })
+
   it('indents the stacked preview to the option label column and resets it when split', () => {
     // Class-string level. pl-13 is the row's border + padding + badge + gap, so
     // the well lines up with the label rather than the number badge.
@@ -419,5 +442,61 @@ describe('NativeChatQuestionCard', () => {
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
+  })
+
+  it('submits typed text after hovering a preview option, with no option selected', () => {
+    const onAnswer = vi.fn()
+    render(previewPrompt, onAnswer)
+
+    hoverOption('Spaces')
+    typeAnswer('my typed answer')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'my typed answer' }])
+  })
+
+  it('keeps typed text when focus moves from an option row to the free-form input', () => {
+    const onAnswer = vi.fn()
+    render(previewPrompt, onAnswer)
+
+    focusOption('Spaces')
+    const input = container.querySelector('input')!
+    act(() => input.dispatchEvent(new FocusEvent('focusin', { bubbles: true })))
+    typeAnswer('typed after focus')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'typed after focus' }])
+  })
+
+  it('submits typed text per question in a multi-question preview prompt', () => {
+    const onAnswer = vi.fn()
+    render(
+      {
+        questions: [
+          {
+            question: 'First?',
+            multiSelect: false,
+            options: [{ label: 'A', hasPreview: true, preview: 'a' }]
+          },
+          {
+            question: 'Second?',
+            multiSelect: false,
+            options: [{ label: 'B', hasPreview: true, preview: 'b' }]
+          }
+        ]
+      },
+      onAnswer
+    )
+
+    hoverOption('A')
+    typeAnswer('first answer')
+    clickAction('Next')
+    typeAnswer('second answer')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([
+      { indices: [], other: 'first answer' },
+      { indices: [], other: 'second answer' }
+    ])
   })
 })
