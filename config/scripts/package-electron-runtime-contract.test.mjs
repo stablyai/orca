@@ -467,10 +467,11 @@ describe('Electron runtime package contract', () => {
     expect(copyStep.run).toContain('git add "$CASK_PATH"')
   })
 
-  it('installs the Electron package binary in PR checks without changing native module ABI', () => {
-    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
-    const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.test.steps.find(
+  it('installs the Electron package binary in the shared unit-test workflow', () => {
+    const unitTestWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/unit-tests.yml'), 'utf8')
+    )
+    const installStep = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 
