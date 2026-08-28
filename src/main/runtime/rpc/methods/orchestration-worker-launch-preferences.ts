@@ -8,6 +8,7 @@ import { resolveAgentSessionOptionLaunch } from '../../../../shared/agent-sessio
 import { ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { classifyNativeRoute } from '../../../../shared/native-route-contract'
 
 export type OrchestrationWorkerLaunchSelection = {
   agent: TuiAgent | null
@@ -68,9 +69,27 @@ export function resolveWorkerLaunchPreferences(args: {
 
   const catalog = getAgentSessionOptionCatalog(args.agent)
   if (!catalog?.supportsWorkerLaunchPreferences || !catalog.modelApply.launchArgs) {
+    // Why classify rather than say "does not support": for several agents the
+    // catalog already seeds the model AND knows how to put it on the command
+    // line, and only the unattended-launch opt-in is missing. Reporting that as
+    // provider incapability is what produced route drift downstream, so the
+    // typed verdict travels with the rejection.
+    const classification = classifyNativeRoute({
+      agent: args.agent,
+      model: args.model,
+      reasoning: args.effort ?? null
+    })
     throw new OrchestrationError(
       'invalid_argument',
-      `Agent ${args.agent} does not support launch-time model selection.`
+      `${classification.verdict}: ${classification.reason}`,
+      {
+        verdict: classification.verdict,
+        agent: args.agent,
+        model: args.model,
+        canApplyModelAtLaunch: classification.capability.canApplyModelAtLaunch,
+        optedIntoWorkerLaunch: classification.capability.optedIntoWorkerLaunch,
+        nativeModels: classification.capability.models
+      }
     )
   }
 

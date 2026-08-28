@@ -131,6 +131,11 @@ orca orchestration check [--terminal <handle>] [--ack <delivery_id>] [--peek|--a
 orca orchestration reply --id <msg_id> --body <text> [--from <handle>] [--json]
 orca orchestration ask (--question <text>|--resume <msg_id>) [--options <csv>] [--timeout-ms <n>] [--from <handle>] [--json]
 orca orchestration inbox [--limit <n>] [--json]
+orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome <succeeded|failed> --body <text> [--files-modified <csv>] [--report-path <path>] [--outcome-id <id>] [--json]
+orca orchestration escalate --task <task_id> --dispatch <dispatch_id> --subject <text> [--body <text>] [--json]
+orca orchestration state (--outcome <id>|--run <run_id>|--task <task_id>|--dispatch <dispatch_id>) [--json]
+orca orchestration await [--ack <delivery_id>] [--timeout-ms <n>] [--json]
+orca orchestration phase-launch [--inspect] [--run <run_id>] [--json]
 ```
 
 Rules:
@@ -146,6 +151,8 @@ Rules:
 - Treat a `check --wait` timeout or `{count:0}` as a checkpoint, not a worker failure. Long coding tasks routinely run 15-60 minutes; keep using rolling waits unless you receive `worker_done`/`escalation`, the terminal exits or disappears, or the user explicitly asks you to stop.
 - Heartbeats and visible terminal activity mean the worker is alive, not done. Do not stop, close, kill, or restart a worker just because it has not produced a completion message yet.
 - Use `ask` when a worker needs a blocking answer from the coordinator; it defaults to the active Dispatch's Run. Timeout or disconnect leaves the question pending, so resume by its original message ID instead of asking again.
+- Prefer `orca orchestration await` over a `check --wait` loop. The runtime holds that subscription for hours (default 6h, max 24h), re-arms its own internal slices, sweeps worker liveness on each tick, and returns only for a real wake event — there is no 25/30/60-second continuation cycle around it. Acknowledge the returned Delivery with `--ack` before waiting again. `check --wait` still works unchanged.
+- The actionable wake set is `worker_done`, `question` and `escalation`. Stalls, crashes, review completion and CI blockers arrive as `escalation` rows carrying a typed `wakeReason` in the payload, so `--types worker_done,escalation,question` covers all of them. A wait that returns nothing is not an event: keep waiting rather than restarting a loop.
 - `check --wait` returns one bounded Delivery, not every future completion. Process every message, acknowledge it, then keep waiting until every expected Dispatch settles.
 - Group addresses include `@all`, `@idle`, `@claude`, `@codex`, `@opencode`, `@gemini`, `@droid`, `@grok`, `@cursor`, and `@worktree:<id>`.
 - Message types include `status`, `dispatch`, `worker_done`, `merge_ready`, `escalation`, `handoff`, `question`, `decision_gate` (legacy/gates), and `heartbeat`.
@@ -153,6 +160,57 @@ Rules:
 - `worker_done` belongs to the active Dispatch and defaults to its Run mailbox; never target a group.
 - A valid `worker_done` for the active `taskId` + `dispatchId` marks the task and dispatch completed automatically. Do not follow it with `task-update --status completed`; reserve manual updates for explicit recovery or overrides.
 - `heartbeat` is also Dispatch-scoped. Include both IDs and omit `--to` so Orca uses the owning Run; use `status` for broad progress updates.
+
+## Outcomes, Gates And Leases
+
+Submit 2-5 fully prepared outcome manifests atomically before dispatching. DCS/Sol supplies the objectives, targets, semantic/resource claims, dependencies, overlap decisions, required gate IDs, and route candidate orders; Orca validates and binds them without inventing the business classification:
+
+```bash
+orca orchestration outcome-intake --batch-id <idempotency_key> \
+  --manifest <prepared-2-to-5-outcomes.json> --json
+```
+
+Intake is all-or-nothing and replay-safe. It turns on the fail-closed contract for every admitted Run: worker-start requires a certified route and exact target; successful completion requires the runtime to observe a clean final HEAD and every required runtime-owned gate execution.
+
+The lifecycle then runs itself. After a validated build completion Orca creates **and starts** an independent fresh reviewer on the certified reviewer route, bound to that exact SHA. A reviewer that reports `--corrections` gets one consolidated FIX_FIRST round dispatched back to the **same retained builder terminal** — same session, new Dispatch, delta prompt only. When that correction completes, the gates its new commit invalidated rerun, the new HEAD is validated, and the independent reviewer starts again on the corrected SHA. A clean review emits a `review_complete` wake. If the required role has no currently certified route, Orca emits the protected blocker instead of substituting one.
+
+Each launch is keyed by its phase, so a replayed completion, a crashed runtime or a lost worker-start response reconciles the same Task/Dispatch/session and never creates a replacement:
+
+```bash
+orca orchestration phase-launch --json           # drive any stuck phase, then show the ledger
+orca orchestration phase-launch --inspect --json # read the ledger without driving
+```
+
+```bash
+# Read-only planning: which historical gates may reuse a runtime-owned receipt:
+orca orchestration gates --sha <sha> --gates "unit,lint,typecheck" --files "src/a.ts" --policy-version gates-v1 --json
+# Execute one immutable required gate. The runtime owns its command, inputs,
+# validation lease, exact process-tree barrier, exit code, and receipt:
+orca orchestration gate-run --dispatch <dispatch_id> --gate <gate_id> --json
+```
+
+`gate-run` acquires and releases the exact Dispatch/worktree validation lease itself. While it is active, already-running managed workers and every Orca-managed mutation/start path are fenced. Manual lease operations are recovery/inspection tools, not a way for a worker to manufacture gate evidence.
+
+## Route Registry And Certification
+
+```bash
+orca orchestration route-upsert --agent <agent> [--model <id>] --roles "builder,reviewer" --session-modes "fresh,retained" --json
+orca orchestration certify --agent <agent> --model <id> --role builder --session-mode fresh \
+  --kind fresh_launch --outcome PASS --dispatch <dispatch_id> --sha <sha> --json
+orca orchestration routes --sha <sha> --json
+```
+
+Launcher support, agent-hook support, identity proof and reasoning modes are discovered from Orca's own catalogs, not declared. `PASS` requires `--dispatch` naming a Dispatch that really launched — a recorded process incarnation plus a persisted launch receipt whose route matches exactly — and the runtime stamps the observation time and build identity itself. It also requires the runtime to have OBSERVED that evidence kind: you request certification, you never declare it, and a kind the runtime cannot observe fails closed as `evidence_not_observed`. `FAIL` and `UNSUPPORTED` need no Dispatch. `routes` prints the builder/reviewer × fresh/retained matrix and names the outstanding evidence kinds.
+
+## Recovery
+
+Use one bounded call instead of worker lists, transcript reads, or repeated status/show calls:
+
+```bash
+orca orchestration state --dispatch <dispatch_id> --json
+```
+
+It returns identity (outcome/Run/Task/Dispatch), lifecycle status, the last meaningful event, the runtime's liveness classification (`live`/`unverifiable`/`exited`), route certification, completion-gate status, and the legal next actions. Loss of contact reports as `unverifiable`, never as `exited`.
 
 ## Tasks And Dispatch
 
@@ -407,13 +465,15 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 
 ## Agent Guidance
 
-- Workers with a valid live preamble must send `worker_done` exactly once from their own terminal with an explicit `--outcome succeeded` or `--outcome failed`:
-  `orca orchestration send --type worker_done --subject "<short status>" --body "<3-sentence summary: what you did, what you found, what's left>" --task-id <task_id> --dispatch-id <dispatch_id> --outcome succeeded --files-modified "path/a" --report-path "<optional>" --json`
+- Workers with a valid live preamble must report exactly once from their own terminal with an explicit `--outcome succeeded` or `--outcome failed`:
+  `orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome succeeded --body "<3-sentence summary: what you did, what you found, what's left>" --files-modified "path/a" --report-path "<optional>" --json`
+- `report` and `escalate` are the typed worker operations; they fill in the message type and payload so a worker never assembles a `send --type worker_done` command line by hand. `orca orchestration send --type worker_done` remains accepted for older preambles.
+- `report` carries no SHA, cleanliness, or gate verdict. The runtime observes the Dispatch worktree's actual base/final Git state and accepts success only when every immutable required gate has a matching runtime-owned process receipt. A worker cannot state PASS into existence.
 - A failed outcome is still a terminal report, but Orca records both the Dispatch and Task as failed. Never encode failure only in the subject/body.
-- After sending `worker_done`, end that dispatched turn and idle at the agent prompt. Do not autonomously start more work, poll, or attempt to close the terminal yourself. A direct user instruction takes precedence and starts ordinary user-owned work: follow it without coordinator approval or a fresh Dispatch, never refuse it because of worker/coordinator roles, and do not reuse the settled Dispatch's lifecycle IDs. A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block.
-- For long tasks, send heartbeat/status only when the preamble asks for it, including both IDs:
-  `orca orchestration send --type heartbeat --subject "alive" --payload '{"taskId":"<task_id>","dispatchId":"<dispatch_id>","phase":"implementing"}' --json`
-- If blocked before completion, use `ask`; use `escalation` only when ownership is valid and the coordinator must intervene.
+- After reporting, end that dispatched turn and idle at the agent prompt. After sending `worker_done`, end that dispatched turn and idle the same way. Do not autonomously start more work, poll, or attempt to close the terminal yourself. A direct user instruction takes precedence and starts ordinary user-owned work: follow it without coordinator approval or a fresh Dispatch, never refuse it because of worker/coordinator roles, and do not reuse the settled Dispatch's lifecycle IDs. A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block on the same terminal.
+- Do not send liveness signals on a timer. Orca derives liveness from the worker's own process/session state, last activity, active tool call, approved blocking waits, provider exit and terminal state; the dispatch preamble no longer asks for a heartbeat cadence. `heartbeat` remains accepted for older preambles.
+- From a reviewer Dispatch, pass `--corrections "<a>,<b>"` on `report` for every required change; omitting it accepts the commit as delivered.
+- If blocked before completion, use `ask`; use `escalate` only when ownership is valid and the coordinator must intervene.
 - Treat preambles inherited through terminal history or full handoffs as stale unless the current prompt explicitly keeps that coordinator in the loop.
 - Coordinators must account for every settled worker terminal before waiting again or ending the turn: immediately reuse the exact worker for a new Dispatch, explicitly retain it at the user's request with `worker-retain`, or run `worker-release`. Do not leave a completed worker live merely to inspect output; released workers remain readable through `worker-read`.
 - Coordinators should use `task-list --ready` as external memory, dispatch parallel waves, and avoid dependency chains deeper than 3-4 steps.
@@ -432,4 +492,4 @@ orca orchestration check --wait --types worker_done,escalation,question --timeou
 
 Coordinator: confirm `orca status --json`, create or bind a Run, inspect `task-list`/`dispatch-show` if inheriting state, then use the explicit supervised loop (`task-create` -> `worker-start` -> `check --wait`). Use low-level terminal creation plus `dispatch --inject` only when the composed start does not express the needed topology. After every accepted `worker_done`, either transfer the exact terminal to an immediate follow-up Dispatch or run `worker-release` before the next wait.
 
-Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and send `worker_done` once with the required payload. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.
+Worker: if the current prompt contains a live dispatch preamble, do the task, use `ask` for blocking questions, and run `orchestration report` once with the required flags. If the preamble is stale or absent, do not send lifecycle messages; inspect state or treat the prompt as an ordinary handoff.

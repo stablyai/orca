@@ -3,6 +3,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { FederationAttachStartInput } from './orchestration-federation-start-schema'
+import type { WorkerEffect, WorkerSetupReceipt } from './orchestration-worker-topology'
 import {
   assertWorkerLaunchPreferencesCreateTerminal,
   createWorkerLaunchReceipt,
@@ -161,4 +162,64 @@ function resolveWorkerStartAgent(args: {
       receipt: createWorkerLaunchReceipt({ agent: null })
     }
   }
+}
+
+/** The persisted launch record for one worker-start. Kept beside the other
+ *  worker-start validation so the method body stays about control flow. */
+export function buildWorkerStartOptions(args: {
+  params: WorkerStartInput
+  createsWorktree: boolean
+  agent: TuiAgent | undefined
+  launchReceipt: WorkerStartLaunch['receipt']
+  resolvedWorktreeId: string | null
+  creationRepoId: string | null
+  /** Derived readiness timeout, not the raw param. See upstream #16300. */
+  readinessTimeoutMs: number
+  /** Runtime-observed HEAD before this Dispatch was accepted. Completion uses
+   * this immutable floor instead of looking only at the final commit's parent. */
+  baseSha: string | null
+}): Record<string, unknown> {
+  const { params, createsWorktree } = args
+  return {
+    worktree: params.worktree ?? 'current',
+    resolvedWorktreeId: args.resolvedWorktreeId,
+    name: params.name ?? null,
+    repo: params.repo ?? args.creationRepoId,
+    baseBranch: params.baseBranch ?? null,
+    terminal: params.terminal ?? null,
+    retryOf: params.retryOf ?? null,
+    baseSha: args.baseSha,
+    agent: args.agent ?? null,
+    launch: args.launchReceipt,
+    timeoutMs: args.readinessTimeoutMs,
+    setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
+    setupSource: createsWorktree
+      ? params.setup
+        ? 'explicit_request'
+        : 'orchestration_default'
+      : 'existing_worktree'
+  }
+}
+
+/** A reused worktree runs no setup, so its receipt is the not-applicable one. */
+export function reusedWorktreeSetupReceipt(): WorkerSetupReceipt {
+  return {
+    requested: 'not_applicable',
+    effective: 'not_applicable',
+    source: 'existing_worktree',
+    hookFound: false,
+    startupPolicy: 'start-immediately',
+    state: 'not_applicable'
+  }
+}
+
+/** The effects a start begins with: a reused worktree is already an effect, a
+ *  worktree still to be created records its own later. */
+export function initialWorkerEffects(reusedWorktreeId: string | null): WorkerEffect[] {
+  return reusedWorktreeId
+    ? [
+        { kind: 'worktree', action: 'reused', id: reusedWorktreeId },
+        { kind: 'setup', action: 'not_applicable', state: 'not_applicable' }
+      ]
+    : []
 }

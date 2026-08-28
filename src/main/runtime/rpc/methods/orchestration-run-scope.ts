@@ -1,7 +1,8 @@
 import type { OrchestrationCompatibilityEvidence } from '../../../../shared/orchestration-compatibility-evidence'
 import { orchestrationSkillRecoveryData } from '../../../../shared/orchestration-rpc-contract'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
-import type { RunRow } from '../../orchestration/types'
+import type { OrchestrationDb } from '../../orchestration/db'
+import type { RunRow, TaskRow } from '../../orchestration/types'
 import type {
   OrcaRuntimeService,
   OrchestrationCompatibilityCallerAuthority
@@ -129,4 +130,45 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
     )
   }
   return current
+}
+
+/** The Run the caller's OWN pane is currently bound to, plus the Task inside it.
+ *
+ *  Naming a Run is not authority over it: a declared `--from` could otherwise
+ *  point at someone else's pane. Both worker-start and the certification-intent
+ *  mint need exactly this ownership, so they share it rather than each keeping
+ *  their own copy of the rule.
+ */
+export function requireCallerOwnedRunTask(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  params: {
+    from?: string
+    run?: string
+    task: string
+    callerEvidence?: OrchestrationCompatibilityEvidence
+    verb: string
+  }
+): { run: RunRow; task: TaskRow } {
+  const callerPane = params.from
+    ? resolveOrchestrationCaller(runtime, {
+        callerTerminalHandle: params.from,
+        callerEvidence: params.callerEvidence
+      })
+    : null
+  const run = callerPane ? db.getCurrentRunForPane(callerPane) : undefined
+  if (!run || (params.run && params.run !== run.id)) {
+    throw new OrchestrationError(
+      'consumer_fenced',
+      `${params.verb} requires the coordinator terminal currently bound to the Task Run.`
+    )
+  }
+  const task = db.getTask(params.task)
+  if (!task || task.run_id !== run.id) {
+    throw new OrchestrationError(
+      'task_not_found',
+      `Task ${params.task} was not found in Run ${run.id}.`
+    )
+  }
+  return { run, task }
 }

@@ -207,7 +207,8 @@ describe('orchestration federation', () => {
     expect([create.activate, create.runHooks]).toEqual([false, false])
     expect(workerRuntime.sendTerminalAgentPrompt).toHaveBeenCalledWith(
       'term_windows_worker',
-      expect.stringContaining(`Your task ID is: ${task.id}`)
+      // The preamble now states identity as `Task: <id>` (worker-protocol-context).
+      expect.stringContaining(`Task: ${task.id}`)
     )
   })
 
@@ -637,7 +638,9 @@ describe('orchestration federation', () => {
       id: 'rpc_restart_show',
       authToken: 'coordinator-token',
       method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
+      params: { dispatch: dispatch.id },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'rpc_restart_show'
     })
 
     await vi.waitFor(() =>
@@ -660,7 +663,9 @@ describe('orchestration federation', () => {
       id: 'rpc_worker_restart_show',
       authToken: 'coordinator-token',
       method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
+      params: { dispatch: dispatch.id },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'rpc_worker_restart_show'
     })
 
     expect(shown).toMatchObject({
@@ -705,7 +710,9 @@ describe('orchestration federation', () => {
       id: 'rpc_remote_show_after_stop',
       authToken: 'coordinator-token',
       method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
+      params: { dispatch: dispatch.id },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'rpc_remote_show_after_stop'
     })
     expect(shown).toMatchObject({
       ok: true,
@@ -723,7 +730,9 @@ describe('orchestration federation', () => {
       id: 'rpc_changed_peer_show',
       authToken: 'coordinator-token',
       method: 'orchestration.workerShow',
-      params: { dispatch: dispatch.id }
+      params: { dispatch: dispatch.id },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'rpc_changed_peer_show'
     })
     const stopped = await homeDispatcher.dispatch({
       id: 'rpc_changed_peer_stop',

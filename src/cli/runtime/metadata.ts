@@ -47,8 +47,22 @@ export function getDefaultUserDataPath(
   // runtime metadata to a separate userData directory (e.g. `orca-dev`) to avoid
   // clobbering the production app's metadata. The CLI needs to find the same
   // metadata file, so this env var lets the CLI target a specific instance.
-  if (process.env.ORCA_USER_DATA_PATH) {
-    return process.env.ORCA_USER_DATA_PATH
+  // Correction — a candidate-scoped invocation must never silently become a
+  // native one. `ORCA_DEV_USER_DATA_PATH` is what the dev/candidate launcher
+  // exports; reading only `ORCA_USER_DATA_PATH` meant an invocation that set the
+  // dev var alone fell through to the packaged app's directory and mutated the
+  // NATIVE runtime. Either variable now targets the candidate, and a
+  // disagreement between them is refused rather than resolved by precedence.
+  const declared = process.env.ORCA_USER_DATA_PATH
+  const candidate = process.env.ORCA_DEV_USER_DATA_PATH
+  if (declared && candidate && declared !== candidate) {
+    throw new RuntimeClientError(
+      'runtime_target_ambiguous',
+      `ORCA_USER_DATA_PATH (${declared}) and ORCA_DEV_USER_DATA_PATH (${candidate}) name different runtimes; refusing to guess which one this command targets.`
+    )
+  }
+  if (declared || candidate) {
+    return (declared ?? candidate) as string
   }
   if (platform === 'darwin') {
     return join(homeDir, 'Library', 'Application Support', 'orca')

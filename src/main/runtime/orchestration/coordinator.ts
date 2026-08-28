@@ -200,7 +200,14 @@ export class Coordinator {
   }
 
   private handleLifecycleMessage(msg: MessageRow): void {
-    const result = reconcileLifecycleMessage(this.db, msg, this.opts.onLog)
+    const identity = this.runtime.getBuildIdentity?.()
+    const result = reconcileLifecycleMessage(this.db, msg, this.opts.onLog, {
+      currentCommitSha: identity?.commitSha ?? undefined,
+      currentRuntimeVersion: identity?.id,
+      notify: this.runtime.notifyMessageArrived
+        ? (handle, type) => this.runtime.notifyMessageArrived?.(handle, type)
+        : undefined
+    })
     if (result.action === 'completed') {
       if (!this.state.completedTasks.includes(result.taskId)) {
         this.state.completedTasks.push(result.taskId)

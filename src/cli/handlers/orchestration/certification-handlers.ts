@@ -1,0 +1,74 @@
+import type { CommandHandler } from '../../dispatch'
+import { printResult } from '../../format'
+import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
+import { callOrchestrationMutation } from './mutation-request'
+import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
+import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+
+/** The two verbs that make certification reachable at all: one has the runtime
+ *  execute a gate so a receipt has something real behind it, the other mints the
+ *  single-use intent that permits a never-certified route's first launch. */
+export const ORCHESTRATION_CERTIFICATION_HANDLERS: Record<string, CommandHandler> = {
+  'orchestration mutation-verdict': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{
+      verdict: { decision: 'allow' | 'deny'; code?: string; reason: string }
+    }>(client, flags, 'orchestration.mutationVerdict', {
+      tool: getOptionalStringFlag(flags, 'tool'),
+      from: await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    })
+    printResult(
+      result,
+      json,
+      (value) =>
+        `${value.verdict.decision}${value.verdict.code ? ` (${value.verdict.code})` : ''}: ${value.verdict.reason}`
+    )
+  },
+
+  'orchestration gate-run': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{
+      gate: string
+      sha: string
+      passed: boolean
+      exitCode: number | null
+      command: string
+      logDigest: string
+    }>(client, flags, 'orchestration.gateRun', {
+      dispatch: getRequiredStringFlag(flags, 'dispatch'),
+      gate: getRequiredStringFlag(flags, 'gate'),
+      // The runtime owns the canonical command. These compatibility assertions
+      // are optional and can only prove that an old caller agrees with it.
+      program: getOptionalStringFlag(flags, 'program'),
+      args: getOptionalStringFlag(flags, 'args'),
+      timeoutMs: getOptionalPositiveIntegerValueFlag(flags, 'timeout-ms'),
+      run: getOptionalStringFlag(flags, 'run'),
+      from: await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    })
+    printResult(
+      result,
+      json,
+      (value) =>
+        `${value.passed ? 'PASS' : 'FAIL'} ${value.gate} at ${value.sha} (exit ${value.exitCode}) :: ${value.command}`
+    )
+  },
+
+  'orchestration certification-intent': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{
+      intent: { intent_id: string; run_id: string; task_id: string; worktree_id: string }
+    }>(client, flags, 'orchestration.certificationIntent', {
+      run: getOptionalStringFlag(flags, 'run'),
+      task: getRequiredStringFlag(flags, 'task'),
+      worktree: getRequiredStringFlag(flags, 'worktree'),
+      agent: getRequiredStringFlag(flags, 'agent'),
+      model: getOptionalStringFlag(flags, 'model'),
+      reasoning: getOptionalStringFlag(flags, 'reasoning'),
+      retryOf: getOptionalStringFlag(flags, 'retry-of'),
+      from: await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    })
+    printResult(
+      result,
+      json,
+      (value) =>
+        `Minted ${value.intent.intent_id} for task ${value.intent.task_id} in ${value.intent.worktree_id}`
+    )
+  }
+}

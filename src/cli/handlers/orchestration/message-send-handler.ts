@@ -10,6 +10,7 @@ import {
   resolveOrchestrationTerminalHandle,
   throwNoActiveSenderTerminal
 } from './terminal-identity'
+import { lifecycleRejectionRecovery } from '../../orchestration-lifecycle-rejection-recovery'
 
 type LifecycleSendResult =
   | {
@@ -108,7 +109,11 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     )
     await requireWorkerDoneSettlement(client, type, sendParams.payload, result.result)
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
-      throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
+      throw new RuntimeClientError(
+        result.result.lifecycle.code,
+        result.result.lifecycle.reason,
+        lifecycleRejectionRecovery(result.result.lifecycle.code)
+      )
     }
     printResult(result, json, (value) => {
       const warnings = 'warnings' in value ? (value.warnings ?? []) : []

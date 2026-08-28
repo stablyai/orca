@@ -69,6 +69,11 @@ export type ProcessResult = {
   stderr: string
   /** True when the process was killed by `timeoutMs` rather than exiting. */
   timedOut: boolean
+  /** Only meaningful under a termination barrier: true when the runtime PROVED
+   *  the whole process tree reached terminal exit. A gate cannot record a PASS
+   *  without it, because a surviving descendant can still touch the worktree
+   *  after the root exits zero. */
+  terminationVerified?: boolean
 }
 
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30_000
@@ -231,7 +236,14 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
 
     const resolveFromClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       settle(() =>
-        resolve({ code, signal, stdout: stdout.text(), stderr: stderr.text(), timedOut })
+        resolve({
+          code,
+          signal,
+          stdout: stdout.text(),
+          stderr: stderr.text(),
+          timedOut,
+          ...(spec.terminationBarrier ? { terminationVerified: barrierTerminationVerified } : {})
+        })
       )
 
     const settleBarrierOutcome = (): void => {
@@ -374,6 +386,16 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
       if (barrierStopping) {
         deferredClose = { code, signal }
         resolveBarrierIfSafe()
+        return
+      }
+      if (spec.terminationBarrier) {
+        // The root exited on its own, but the barrier promises that NO
+        // descendant outlived it. A clean exit code proves nothing about the
+        // tree, so prove quiescence before the caller may act on the result.
+        void forceBarrierTree().then((verified) => {
+          barrierTerminationVerified = verified
+          resolveFromClose(code, signal)
+        })
         return
       }
       resolveFromClose(code, signal)

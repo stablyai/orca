@@ -179,7 +179,9 @@ describe('orchestration federated worker output', () => {
       id: 'rpc_remote_show',
       authToken: 'coordinator-token',
       method: 'orchestration.workerShow',
-      params: { dispatch: dispatchId }
+      params: { dispatch: dispatchId },
+      orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
+      orchestrationRequestId: 'rpc_remote_show'
     })
     const read = await homeDispatcher.dispatch({
       id: 'rpc_remote_read',

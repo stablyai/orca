@@ -86,9 +86,10 @@ describe('runProcess termination failure', () => {
     await expect(pending).resolves.toMatchObject({ code: null, timedOut: true })
   })
 
-  it('retains a root exit observed before barrier shutdown', async () => {
+  it('retains a root exit only after its process tree is verified', async () => {
     const controller = new AbortController()
     const child = mockChild()
+    forceTerminateProcessTreeMock.mockResolvedValue(true)
     spawnMock.mockReturnValue(child)
     const pending = runProcess({
       program: 'git',
@@ -101,7 +102,11 @@ describe('runProcess termination failure', () => {
     controller.abort()
     await vi.advanceTimersByTimeAsync(2_000)
 
-    await expect(pending).resolves.toMatchObject({ code: 0, timedOut: false })
+    await expect(pending).resolves.toMatchObject({
+      code: 0,
+      timedOut: false,
+      terminationVerified: true
+    })
   })
 
   it('defers a shutdown error until root exit is confirmed', async () => {

@@ -130,7 +130,7 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_worker_start',
           authToken: metadata!.authToken,
           method: 'orchestration.workerStart',
-          params: { task: 'task_1', timeoutMs: 60_000 }
+          params: { expectUserDataPath: userDataPath, task: 'task_1', timeoutMs: 60_000 }
         })
         await session.done
 
@@ -164,6 +164,7 @@ describe('OrcaRuntimeRpcServer', () => {
           authToken: metadata!.authToken,
           method: 'orchestration.check',
           params: {
+            expectUserDataPath: userDataPath,
             terminal: 'term_nobody',
             wait: true,
             timeoutMs: 300
@@ -217,6 +218,7 @@ describe('OrcaRuntimeRpcServer', () => {
           authToken: metadata!.authToken,
           method: 'orchestration.ask',
           params: {
+            expectUserDataPath: userDataPath,
             to: 'term_nobody',
             from: 'term_asker',
             question: 'ping?',
@@ -447,13 +449,23 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_a',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_a', wait: true, timeoutMs: 10_000 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_a',
+            wait: true,
+            timeoutMs: 10_000
+          }
         })
         const b = openFramedSession(endpoint, {
           id: 'req_b',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_b', wait: true, timeoutMs: 10_000 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_b',
+            wait: true,
+            timeoutMs: 10_000
+          }
         })
         // Let the two waits land in the handler and increment the counter.
         await sleep(100)
@@ -471,7 +483,12 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_c',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_c', wait: true, timeoutMs: 100 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_c',
+            wait: true,
+            timeoutMs: 100
+          }
         })
         await c.done
         const cTerminal = c.frames.find((f) => f.ok !== undefined)
@@ -506,7 +523,12 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_stop',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_stop', wait: true, timeoutMs: 10_000 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_stop',
+            wait: true,
+            timeoutMs: 10_000
+          }
         })
         await waitFor(() => server['activeLongPolls'] === 1)
 
@@ -546,7 +568,12 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_a',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_a', wait: true, timeoutMs: 5_000 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_a',
+            wait: true,
+            timeoutMs: 5_000
+          }
         })
         await sleep(100)
         expect(server['activeLongPolls']).toBe(1)
@@ -556,7 +583,12 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_overflow',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_b', wait: true, timeoutMs: 5_000 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_b',
+            wait: true,
+            timeoutMs: 5_000
+          }
         })
         expect(overflow).toMatchObject({
           id: 'req_overflow',
@@ -638,6 +670,7 @@ describe('OrcaRuntimeRpcServer', () => {
               authToken: metadata!.authToken,
               method: 'orchestration.ask',
               params: {
+                expectUserDataPath: userDataPath,
                 from: `term_w${i}`,
                 to: 'term_coord',
                 question: 'proceed?',
@@ -669,7 +702,12 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_check_wait',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_other', wait: true, timeoutMs: 100 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_other',
+            wait: true,
+            timeoutMs: 100
+          }
         })
         await check.done
         expect(check.frames.find((f) => f.ok !== undefined)).toMatchObject({
@@ -719,7 +757,12 @@ describe('OrcaRuntimeRpcServer', () => {
               id: `req_wait_${i}`,
               authToken: metadata!.authToken,
               method: 'orchestration.check',
-              params: { terminal: `term_${i}`, wait: true, timeoutMs: 10_000 }
+              params: {
+                expectUserDataPath: userDataPath,
+                terminal: `term_${i}`,
+                wait: true,
+                timeoutMs: 10_000
+              }
             })
           )
         }
@@ -730,7 +773,12 @@ describe('OrcaRuntimeRpcServer', () => {
           id: 'req_overflow',
           authToken: metadata!.authToken,
           method: 'orchestration.check',
-          params: { terminal: 'term_overflow', wait: true, timeoutMs: 5_000 }
+          params: {
+            expectUserDataPath: userDataPath,
+            terminal: 'term_overflow',
+            wait: true,
+            timeoutMs: 5_000
+          }
         })
         expect(overflow).toMatchObject({ ok: false, error: { code: 'runtime_busy' } })
       } finally {

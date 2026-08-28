@@ -298,6 +298,7 @@ import {
 } from './claude-accounts/live-pty-gate'
 import { StarNagService } from './star-nag/service'
 import { agentHookServer, type AgentHookProviderSessionIdentity } from './agent-hooks/server'
+import { createPretoolMutationResolver } from './agent-hooks/pretool-gate-runtime-binding'
 import { createHookProviderSessionInvalidator } from './agent-hooks/hook-provider-session-invalidation'
 import { createHookStatusSessionTabsInvalidator } from './agent-hooks/hook-status-session-tabs-invalidation'
 import { wslHookRelayManager } from './agent-hooks/wsl-hook-relay-manager'
@@ -337,6 +338,14 @@ import { registerSystemResumeBroadcast } from './system-resume-broadcast'
 import { settleTeardownWithinDeadline, settleWithinMs } from './quit-teardown-deadline'
 import { quitTeardownStartGate } from './quit-teardown-start-gate'
 import { beginSshShutdown } from './ipc/ssh-shutdown-drain'
+import { getDaemonPidPath } from './daemon/daemon-spawner'
+import { getDaemonRuntimeDir } from './daemon/daemon-launch-paths'
+import {
+  chooseDaemonTeardown,
+  proveDaemonExited,
+  runsOnDisposableProfile,
+  stateDeletionIsSafe
+} from './startup/disposable-profile-teardown'
 import { PluginService } from './plugins/plugin-service'
 import { PluginKillListService } from './plugins/plugin-kill-list-service'
 import { getPluginsDataDir } from './plugins/plugin-discovery'
@@ -1116,6 +1125,12 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
       agentHookServer.setTransportInterferenceListener((report) => {
         track('agent_hook_transport_blocked', { count: report.count })
       })
+      // Why here: the gate is only a fence if something installs it. Without
+      // this the hook endpoint keeps answering 204 and a worker already running
+      // in a leased worktree is stopped by nothing.
+      agentHookServer.setPretoolMutationResolver(
+        runtime ? createPretoolMutationResolver(runtime) : null
+      )
       await agentHookServer.start({
         env: app.isPackaged ? 'production' : 'development',
         // Why: hooks source this endpoint file at invocation time so old PTY env reaches the current process after restart; dev namespaces it (worktrees share `orca-dev`).
@@ -3606,7 +3621,24 @@ app.on('will-quit', (e) => {
   // Why: allSettled (not all) keeps fail-open — a daemon-disconnect rejection still quits instead of hanging.
   // Why: telemetry flush folds in before app.quit() (bounded 2s); catch defensively so a flush failure can't cancel the quit chain.
   // Why: normal quits keep the detached daemon for warm reattach, but a dead dev parent leaves the temp/dev profile ownerless.
-  const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+  // Why the profile and not just the parent: a disposable state root has
+  // nothing to reattach to, so leaving its daemon warm leaves it orphaned with
+  // every supervised session still running after the root is deleted.
+  const daemonTeardown =
+    chooseDaemonTeardown({
+      devParentShutdownRequested: isDevParentShutdownRequested(),
+      disposableProfile: runsOnDisposableProfile()
+    }) === 'shutdown'
+      ? shutdownDaemon().then(() => {
+          // Say what was actually proven. A disposable state root is deleted
+          // after this, and deleting it around a daemon that is still running is
+          // exactly what left writers alive with nothing left to find them by.
+          const proof = proveDaemonExited(getDaemonPidPath(getDaemonRuntimeDir()))
+          if (!stateDeletionIsSafe(proof)) {
+            console.warn('[shutdown] disposable daemon not proven exited', proof)
+          }
+        })
+      : disconnectDaemon()
   // Why: a wedged transport (half-open post-sleep socket) can leave one
   // member unsettled forever and block app.quit() until Force Quit (#9447).
   // Why stats/state join here: their writes are durable but not worth hanging the app for.

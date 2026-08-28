@@ -1590,7 +1590,11 @@ export class OrcaRuntimeRpcServer {
 
     try {
       return await this.dispatcher.dispatch(request, {
-        signal: longPoll ? context?.signal : undefined
+        signal: longPoll ? context?.signal : undefined,
+        // Any process on this box can connect to whichever socket path it
+        // resolved, so a certification verb must name the state root it meant.
+        transport: 'local_socket',
+        hostUserDataPath: this.userDataPath
       })
     } finally {
       this.releaseLongPoll(longPoll)
@@ -1795,6 +1799,10 @@ export class OrcaRuntimeRpcServer {
         : undefined
     try {
       await this.dispatcher.dispatchStreaming(request, replyForRequest, {
+        // The pairing credential already authenticates ONE runtime, so the
+        // target is bound by the connection rather than by a path that would
+        // mean nothing on this host anyway.
+        transport: 'authenticated_remote',
         // Why: the validated credential preserves existing federation ownership without trusting request fields.
         authenticatedCallerFingerprint: fingerprintAuthenticatedPairingCredential(token),
         connectionId,

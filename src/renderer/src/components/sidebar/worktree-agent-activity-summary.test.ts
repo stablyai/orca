@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { shallow } from 'zustand/shallow'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -439,5 +439,62 @@ describe('selectWorktreeAgentActivitySummary', () => {
 
     const summary = selectWorktreeAgentActivitySummary(state, 'repo::/wt-1')
     expect(summary.agentStatusPaneIdsByTabId['tab-parent']).toEqual(new Set([LEAF_ID]))
+  })
+})
+
+/** SETTLED_WORKER_KEEPS_SPINNING — the sidebar dot was driven entirely by agent
+ *  hook events and terminal titles, neither of which knows the control plane
+ *  already settled the Dispatch. A finished worker kept a working spinner for
+ *  the full 30-minute status staleness window.
+ */
+describe('SETTLED_WORKER_KEEPS_SPINNING', () => {
+  const paneKey = makePaneKey('tab-1', LEAF_ID)
+  // The entries below stamp updatedAt 1_000, so the clock has to sit next to it
+  // or every one of them reads as stale before any of this is reached.
+  beforeEach(() => vi.useFakeTimers({ now: 2_000 }))
+  afterEach(() => vi.useRealTimers())
+
+  function stateWithDispatchStatus(
+    dispatchStatus?: 'dispatched' | 'completed' | 'failed'
+  ): AgentActivityInput {
+    return {
+      tabsByWorktree: { 'repo::/wt-1': [makeTab('tab-1', 'repo::/wt-1')] },
+      agentStatusEpoch: 0,
+      // The hook still says `working`; only the runtime knows better.
+      agentStatusByPaneKey: {
+        [paneKey]: makeAgentStatusEntry({ paneKey, state: 'working' })
+      },
+      migrationUnsupportedByPtyId: {},
+      runtimeAgentOrchestrationByPaneKey: dispatchStatus
+        ? { [paneKey]: { taskId: 'task-1', dispatchId: 'dispatch-1', dispatchStatus } }
+        : {},
+      retainedAgentsByPaneKey: {}
+    }
+  }
+
+  it('stops showing working once the runtime has settled the Dispatch', () => {
+    const summary = selectWorktreeAgentActivitySummary(
+      stateWithDispatchStatus('completed'),
+      'repo::/wt-1'
+    )
+    expect(summary).toMatchObject({ hasLiveWorking: false, hasLiveDone: true })
+  })
+
+  it('treats a failed Dispatch as settled too, not as still working', () => {
+    expect(
+      selectWorktreeAgentActivitySummary(stateWithDispatchStatus('failed'), 'repo::/wt-1')
+    ).toMatchObject({ hasLiveWorking: false, hasLiveDone: false, hasInterrupted: true })
+  })
+
+  it('negative control: a live Dispatch still shows working', () => {
+    expect(
+      selectWorktreeAgentActivitySummary(stateWithDispatchStatus('dispatched'), 'repo::/wt-1')
+    ).toMatchObject({ hasLiveWorking: true, hasLiveDone: false })
+  })
+
+  it('negative control: with no runtime context at all the hook still drives it', () => {
+    expect(
+      selectWorktreeAgentActivitySummary(stateWithDispatchStatus(), 'repo::/wt-1')
+    ).toMatchObject({ hasLiveWorking: true })
   })
 })

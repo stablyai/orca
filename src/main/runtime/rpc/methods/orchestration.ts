@@ -23,6 +23,12 @@ import {
   orchestrationSkillRecoveryData
 } from '../../../../shared/orchestration-rpc-contract'
 import { clampOrchestrationAskTimeoutMs } from '../../../../shared/orchestration-ask-timeout'
+import { ORCHESTRATION_AWAIT_METHODS } from './orchestration-await'
+import { driveRunPhaseLaunches } from './orchestration-phase-launch'
+import { ORCHESTRATION_GATE_OPS_METHODS } from './orchestration-gate-ops'
+import { ORCHESTRATION_OUTCOME_INTAKE_METHODS } from './orchestration-outcome-intake'
+import { ORCHESTRATION_REGISTRY_OPS_METHODS } from './orchestration-registry-ops'
+import { ORCHESTRATION_CONTROL_PLANE_STATE_METHODS } from './orchestration-control-plane-state'
 import { ORCHESTRATION_GATE_METHODS } from './orchestration-gates'
 import {
   resolveBareOrchestrationRecipient,
@@ -732,7 +738,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               code: 'task_dispatch_mismatch',
               reason: `Task ${taskId} does not belong to Dispatch ${dispatch.id}.`
             }
-          } else if (capabilityBacked) {
+          } else if (capabilityBacked && orchestrationCapability) {
             const capabilityAuthority = db.verifyDispatchCapability({
               dispatchId: dispatch.id,
               capability: orchestrationCapability,
@@ -743,6 +749,34 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               valid: capabilityAuthority.valid,
               code: 'dispatch_capability_invalid',
               reason: capabilityAuthority.valid ? '' : capabilityAuthority.reason
+            }
+          } else if (capabilityBacked) {
+            // A tokenless completion is authorised ONLY by attested identity.
+            //
+            // Why not `senderPaneKey`/`processIncarnation` from above: those fall
+            // back to `runtime.getTerminalPaneKey(from)`, and `from` is
+            // caller-declared routing metadata. Resolving authority through it
+            // would let any terminal pass `--from <worker>` and inherit the real
+            // worker's pane and incarnation. Attestation is the only identity the
+            // caller cannot choose.
+            //
+            // Fails closed on every missing piece: no attestation, no recorded
+            // incarnation, or any mismatch means the capability is required.
+            const attestedPane = attestedCaller?.paneKey
+            const attestedIncarnation = attestedCaller?.processIncarnation
+            authority = {
+              valid: Boolean(
+                attestedPane &&
+                attestedIncarnation &&
+                dispatch.process_incarnation &&
+                db.isDispatchProcessCurrent({
+                  dispatchId: dispatch.id,
+                  paneKey: attestedPane,
+                  processIncarnation: attestedIncarnation
+                })
+              ),
+              code: 'dispatch_capability_invalid',
+              reason: `Dispatch ${dispatch.id} was not reported from its own attested pane and process; report from that session or present its capability.`
             }
           } else if (dispatch.process_incarnation) {
             authority = {
@@ -784,7 +818,14 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         }
         // Why: reconcile releases the dispatch lock before waking recipients, else a woken coordinator re-dispatches while the lock is still held.
         if (msg.type === 'worker_done' || msg.type === 'heartbeat') {
-          const reconciled = reconcileLifecycleMessage(db, msg)
+          const reconciled = reconcileLifecycleMessage(db, msg, undefined, {
+            // Why the runtime notifier: an accepted completion can publish a
+            // REVIEW_COMPLETE or protected-blocker wake, and a coordinator
+            // sitting in `orchestration.await` must be woken for it.
+            notify: (handle, messageType) => runtime.notifyMessageArrived(handle, messageType),
+            currentCommitSha: runtime.getBuildIdentity().commitSha ?? undefined,
+            currentRuntimeVersion: runtime.getBuildIdentity().id
+          })
           // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
           if (reconciled.action === 'suppressed') {
             return withSendWarnings({ message: msg })
@@ -795,6 +836,15 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             return withSendWarnings({ message: rejection, lifecycle: reconciled })
           }
           runtime.notifyMessageArrived(msg.to_handle, msg.type)
+          if (reconciled.action === 'completed' || reconciled.action === 'failed') {
+            // Why not awaited: starting a reviewer waits for agent readiness,
+            // and the reporting worker must not block on it. The launch record
+            // is durable and the `orchestration.await` tick re-arms it, so a
+            // dropped promise costs latency, never the launch.
+            void driveRunPhaseLaunches({ runtime, ctx: { runtime }, runId: msg.run_id }).catch(
+              () => undefined
+            )
+          }
           return withSendWarnings(
             msg.type === 'worker_done' ? { message: msg, lifecycle: reconciled } : { message: msg }
           )
@@ -1328,7 +1378,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (consumeUnread && messages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
           visibleMessages = messages.map((message) => {
-            const reconciled = reconcileLifecycleMessage(db, message)
+            const identity = runtime.getBuildIdentity()
+            const reconciled = reconcileLifecycleMessage(db, message, undefined, {
+              currentCommitSha: identity.commitSha ?? undefined,
+              currentRuntimeVersion: identity.id,
+              notify: (recipient, messageType) =>
+                runtime.notifyMessageArrived(recipient, messageType)
+            })
             return reconciled.action === 'rejected'
               ? (db.getMessageById(message.id) ?? message)
               : message
@@ -1914,6 +1970,11 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
   }),
 
   ...ORCHESTRATION_GATE_METHODS,
+  ...ORCHESTRATION_CONTROL_PLANE_STATE_METHODS,
+  ...ORCHESTRATION_AWAIT_METHODS,
+  ...ORCHESTRATION_REGISTRY_OPS_METHODS,
+  ...ORCHESTRATION_GATE_OPS_METHODS,
+  ...ORCHESTRATION_OUTCOME_INTAKE_METHODS,
 
   defineMethod({
     name: 'orchestration.reset',

@@ -20,3 +20,8 @@ declare const ORCA_POSTHOG_WRITE_KEY: string | null
 // point a packaged build at a staging server without re-running the
 // release pipeline.
 declare const ORCA_DIAGNOSTICS_TOKEN_URL: string | null
+
+/** JSON-encoded immutable build provenance, folded in at build time.
+ *  `null` in builds that predate the define or were not produced by the
+ *  electron-vite pipeline; callers must fail closed rather than guess. */
+declare const ORCA_BUILD_PROVENANCE: string | null

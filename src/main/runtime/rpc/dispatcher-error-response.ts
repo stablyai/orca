@@ -7,6 +7,8 @@ import {
   mapEmulatorError,
   mapRuntimeError
 } from './errors'
+import { RuntimeTargetMismatch } from './runtime-target-binding'
+import { ValidationLeaseFenced } from './validation-lease-fence'
 
 export function invalidArgumentResponse(
   request: RpcRequest,
@@ -32,6 +34,17 @@ export function mapDispatcherError(
   }
   if (error instanceof InvalidArgumentError) {
     return invalidArgumentResponse(request, meta, error.message)
+  }
+  // Why before the per-namespace mappers: the fence applies to git/files/
+  // terminal alike, and its typed code must survive whichever one would run.
+  if (error instanceof ValidationLeaseFenced) {
+    return errorResponse(request.id, meta, error.code, error.message, error.data)
+  }
+  // Same reason, one step earlier: aiming at the wrong runtime is not a
+  // namespace's error to report, and it must reach the caller as its own typed
+  // code rather than as whatever the target namespace would have said.
+  if (error instanceof RuntimeTargetMismatch) {
+    return errorResponse(request.id, meta, error.code, error.message, error.data)
   }
   if (request.method.startsWith('browser.')) {
     return mapBrowserError(request.id, meta, error)

@@ -334,7 +334,7 @@ describe('orchestration RPC methods', () => {
 
       expect(send).toHaveBeenCalledWith(
         'term_a',
-        expect.stringContaining('orca-dev orchestration send')
+        expect.stringContaining('orca-dev orchestration report')
       )
     })
 
@@ -350,7 +350,7 @@ describe('orchestration RPC methods', () => {
       })) as { preamble: string }
 
       expect(runtime.getTerminalOrchestrationCliCommand).toHaveBeenCalledWith('term_wsl')
-      expect(result.preamble).toContain('orca-ide orchestration send')
+      expect(result.preamble).toContain('orca-ide orchestration report')
       expect(result.preamble).not.toMatch(/(^|\s)orca orchestration/m)
     })
 

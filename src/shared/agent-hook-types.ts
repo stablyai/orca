@@ -21,6 +21,27 @@ export const AGENT_HOOK_TARGETS = [
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 
+/** Agents whose hook events Orca ingests WITHOUT installing its managed hook
+ *  scripts, because the agent ships its own plugin/extension mechanism that
+ *  posts to the same endpoint.
+ *
+ *  Why this is separate from AGENT_HOOK_TARGETS: that list answers "does Orca
+ *  install its scripts into this CLI", which is a different question from "can
+ *  Orca observe this agent". Treating the first as the answer to the second
+ *  reports a fully observable agent as unobservable — the exact mistake that
+ *  classified OpenCode/GLM as having no native route.
+ */
+export const PLUGIN_HOOK_AGENTS = ['opencode'] as const
+export type PluginHookAgent = (typeof PLUGIN_HOOK_AGENTS)[number]
+
+/** True when Orca can receive hook events for this agent by ANY mechanism. */
+export function hasAgentHookIngestion(agent: string): boolean {
+  return (
+    (AGENT_HOOK_TARGETS as readonly string[]).includes(agent) ||
+    (PLUGIN_HOOK_AGENTS as readonly string[]).includes(agent)
+  )
+}
+
 export type AgentHookInstallState = 'installed' | 'not_installed' | 'partial' | 'error' | 'skipped'
 
 export type AgentHookInstallSkipReason =

@@ -28,6 +28,7 @@ import {
 } from './orchestration-federated-attach-receipt'
 import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../shared/orchestration-timing-budgets'
 import { federatedUnknownReceipt } from './orchestration-federated-worker-start-unknown-receipt'
+import { assertFederatedWorkerStartAdmitted } from './orchestration-worker-route-admission'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -43,6 +44,20 @@ export async function startFederatedWorker(args: {
   }
 }): Promise<unknown> {
   const { params, runtime, db, task, runId, orchestrationMutation } = args
+  // A federated worker is still a worker route: an outcome-admitted Run must not
+  // reach a remote host on an uncertified route, serialized outcome, or leased
+  // worktree. Before any effect, as locally.
+  assertFederatedWorkerStartAdmitted({
+    handle: db,
+    runtimeBuildIdentity: runtime.getBuildIdentity(),
+    runId,
+    agent: params.agent,
+    model: params.model,
+    effort: params.effort,
+    terminalHandle: params.terminal,
+    worktreeSelector: params.worktree,
+    certificationIntent: params.certificationIntent
+  })
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
     throw new OrchestrationError(
       'invalid_argument',

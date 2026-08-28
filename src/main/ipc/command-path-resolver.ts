@@ -1,4 +1,5 @@
 import { access, constants as fsConstants, stat } from 'node:fs/promises'
+import { accessSync, constants as fsConstantsSync, statSync } from 'node:fs'
 import path from 'node:path'
 
 export type ResolveCommandOptions = {
@@ -57,20 +58,10 @@ async function isExecutableFile(candidate: string, isWin: boolean): Promise<bool
   }
 }
 
-/**
- * Resolve whether `command` is an executable on PATH using only `node:fs`
- * — zero `where`/`which` subprocess spawns. Mirrors the canonical
- * which(1)/where.exe lookup, including the current preflight quirk that only
- * counts matches which resolve to an ABSOLUTE path (so relative PATH entries
- * and relative command paths stay not-found, exactly as before).
- */
-export async function isCommandOnLocalPath(
-  command: string,
-  options: ResolveCommandOptions = {}
-): Promise<boolean> {
-  if (!command) {
-    return false
-  }
+/** The absolute candidates a which(1)/where.exe lookup would try, in order.
+ *  Pure path arithmetic so the async and sync resolvers below can never search
+ *  a different set. */
+function commandSearchCandidates(command: string, options: ResolveCommandOptions): string[] {
   const platform = options.platform ?? process.platform
   const env = options.env ?? process.env
   const cwd = options.cwd ?? process.cwd()
@@ -87,6 +78,7 @@ export async function isCommandOnLocalPath(
   const searchDirs = hasPathSeparator ? [''] : isWin ? [cwd, ...pathDirs] : pathDirs
   const extensions = isWin ? getWindowsExtensions(env, command) : ['']
 
+  const candidates: string[] = []
   for (const dir of searchDirs) {
     for (const ext of extensions) {
       // Why: forward-slash joins so candidates are statable on every platform
@@ -94,13 +86,63 @@ export async function isCommandOnLocalPath(
       const candidate = path.posix.join(dir, command) + ext
       // Why: preserve the prior `.some(line => path.isAbsolute(line))` filter
       // over where/which stdout — only absolute resolutions count.
-      if (!isAbsolute(candidate)) {
-        continue
-      }
-      if (await isExecutableFile(candidate, isWin)) {
-        return true
+      if (isAbsolute(candidate)) {
+        candidates.push(candidate)
       }
     }
   }
+  return candidates
+}
+
+/**
+ * Resolve whether `command` is an executable on PATH using only `node:fs`
+ * — zero `where`/`which` subprocess spawns. Mirrors the canonical
+ * which(1)/where.exe lookup, including the current preflight quirk that only
+ * counts matches which resolve to an ABSOLUTE path (so relative PATH entries
+ * and relative command paths stay not-found, exactly as before).
+ */
+export async function isCommandOnLocalPath(
+  command: string,
+  options: ResolveCommandOptions = {}
+): Promise<boolean> {
+  if (!command) {
+    return false
+  }
+  const isWin = (options.platform ?? process.platform) === 'win32'
+  for (const candidate of commandSearchCandidates(command, options)) {
+    if (await isExecutableFile(candidate, isWin)) {
+      return true
+    }
+  }
   return false
+}
+
+/** The absolute path `command` would actually execute, or null. Same search as
+ *  `isCommandOnLocalPath`; sync because gate fingerprinting is sync and must
+ *  hash the binary it is about to run, not the name it was given. */
+export function resolveCommandOnLocalPathSync(
+  command: string,
+  options: ResolveCommandOptions = {}
+): string | null {
+  if (!command) {
+    return null
+  }
+  const isWin = (options.platform ?? process.platform) === 'win32'
+  for (const candidate of commandSearchCandidates(command, options)) {
+    try {
+      const stats = statSync(candidate)
+      if (stats.isDirectory()) {
+        continue
+      }
+      if (!isWin) {
+        accessSync(candidate, fsConstantsSync.X_OK)
+      } else if (!stats.isFile()) {
+        continue
+      }
+      return candidate
+    } catch {
+      continue
+    }
+  }
+  return null
 }

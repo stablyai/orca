@@ -137,6 +137,11 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
+import type { LivenessSignalSource as OrchestrationLivenessSignalSource } from './orchestration/control-plane/liveness-sweep'
+import {
+  pinRuntimeBuildIdentity,
+  type RuntimeBuildIdentity
+} from './orchestration/control-plane/runtime-build-identity'
 import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope,
@@ -3148,8 +3153,22 @@ type ProviderSnapshotReadOptions = {
   visibleScreenOnly?: boolean
 }
 
+// Why 10 minutes: an approved blocking wait is bounded by its own timeout, so
+// the horizon only has to outlast one sweep interval to read as "in a wait".
+const APPROVED_WAIT_HORIZON_MS = 10 * 60 * 1000
+
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
+  // Why here: the build identity of a running process cannot change, so it is
+  // pinned before any RPC can read it rather than re-resolved per call.
+  private readonly buildIdentity = pinRuntimeBuildIdentity()
+
+  /** The one build identity this process has. Every Package B consumer reads
+   *  it from here rather than resolving its own, so a checkout that moves
+   *  under a running certification run cannot change what the runtime IS. */
+  getBuildIdentity(): RuntimeBuildIdentity {
+    return this.buildIdentity
+  }
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
   private managedHookReconciliationGeneration = 0
@@ -18942,6 +18961,31 @@ export class OrcaRuntimeService {
   // dispatch still works for handles without a resolvable pane.
   getTerminalPaneKey(handle: string): string | null {
     return this.getPaneKeyForTerminalHandle(handle)
+  }
+
+  /** Where an ATTESTED pane actually is, as this runtime records it.
+   *
+   *  The pre-tool gate is keyed on this rather than on anything the hook body
+   *  states. A pane key has already been authenticated against the session's
+   *  launch token by the time the gate runs, so resolving the rest here — the
+   *  terminal, the exact process incarnation in it, and the workspace it sits in
+   *  — leaves a worker with nothing about its own identity it can assert. */
+  resolveAttestedPanePlacement(paneKey: string): {
+    terminalHandle: string | null
+    processIncarnation: string | null
+    worktreeId: string | null
+  } | null {
+    for (const [handle, record] of this.handles) {
+      if (this.getPaneKeyForTerminalHandle(handle) !== paneKey) {
+        continue
+      }
+      return {
+        terminalHandle: handle,
+        processIncarnation: this.getTerminalProcessIncarnation(handle),
+        worktreeId: record.worktreeId ?? null
+      }
+    }
+    return null
   }
 
   getLiveTerminalPaneKey(handle: string): string | null {
@@ -35623,10 +35667,11 @@ export class OrcaRuntimeService {
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
       : undefined
-
     return {
       taskId: dispatch.task_id,
       dispatchId: dispatch.id,
+      ...(dispatch.process_incarnation ? { processIncarnation: dispatch.process_incarnation } : {}),
+      ...(dispatch.launch_token_hash ? { launchTokenHash: dispatch.launch_token_hash } : {}),
       dispatchStatus: dispatch.status,
       ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
       ...(display.displayName ? { displayName: display.displayName } : {}),
@@ -36106,6 +36151,112 @@ export class OrcaRuntimeService {
       }
       waiters.add(waiter)
     })
+  }
+
+  /** True while this runtime holds a blocking orchestration waiter on `handle`.
+   *  The waiter registry is the authority for "the worker is inside an
+   *  Orca-approved wait" — no model claim is involved (§B4, correction 2). */
+  hasOrchestrationMessageWaiter(handle: string): boolean {
+    return (this.messageWaitersByHandle.get(handle)?.size ?? 0) > 0
+  }
+
+  /** The authoritative liveness signal source for the orchestration control
+   *  plane. Narrow on purpose: it exposes only what the typed classifier reads,
+   *  and every field is something this runtime observed itself. */
+  getOrchestrationLivenessSignalSource(): OrchestrationLivenessSignalSource {
+    return {
+      agentStatusSnapshot: () => this.getRuntimeOwnedOrchestrationAgentStatusSnapshot(),
+      inspectProcessLiveness: (processIncarnation, hostScope) =>
+        this.inspectTerminalProcessIncarnationLiveness(processIncarnation, hostScope),
+      inspectProviderProcessLiveness: (terminalHandle, expectedAgent) =>
+        this.inspectTerminalProviderProcessLiveness(terminalHandle, expectedAgent),
+      approvedWaitUntil: (dispatchId) =>
+        // Why an open-ended deadline: the waiter exists right now, so the wait
+        // is active; its own timeout ends it and the next sweep sees it gone.
+        this.hasOrchestrationMessageWaiter(`dispatch:${dispatchId}`)
+          ? new Date(Date.now() + APPROVED_WAIT_HORIZON_MS).toISOString()
+          : null,
+      lastTerminalOutputAtMs: (terminalHandle, processIncarnation) =>
+        this.getTerminalLastOutputAtMs(terminalHandle, processIncarnation)
+    }
+  }
+
+  /** A terminal process incarnation identifies the PTY container, not the
+   * provider running inside it. Confirm the foreground agent separately so an
+   * exited Claude/Codex process that returned to a live shell cannot remain
+   * `live`, and a replacement agent cannot inherit the old Dispatch. */
+  async inspectTerminalProviderProcessLiveness(
+    terminalHandle: string,
+    expectedAgent: string
+  ): Promise<'live' | 'exited' | 'unverifiable'> {
+    const live = this.getLivePtyForHandle(terminalHandle)
+    const record = live?.record ?? this.handles.get(terminalHandle)
+    if (!record?.ptyId || !this.ptyController) {
+      return 'unverifiable'
+    }
+    let processName: string | null
+    try {
+      processName = this.ptyController.confirmForegroundProcess
+        ? await this.ptyController.confirmForegroundProcess(record.ptyId)
+        : await this.ptyController.getForegroundProcess(record.ptyId)
+    } catch {
+      return 'unverifiable'
+    }
+    const recognized = processName ? recognizeAgentProcess(processName) : null
+    if (recognized?.agent === expectedAgent) {
+      return 'live'
+    }
+    if (!processName || isShellProcess(processName) || recognized !== null) {
+      return 'exited'
+    }
+    // A foreground wrapper/tool the provider tracker cannot attribute is not
+    // exit proof. Degrade honestly instead of keeping the Dispatch live.
+    return 'unverifiable'
+  }
+
+  /** Hook payloads report provider facts, but they do not own Orca's Dispatch,
+   * terminal, process-incarnation or launch-token bindings. Enrich the raw hook
+   * snapshot at the runtime boundary so identity/liveness readers receive one
+   * exact-session record without trusting hook-supplied orchestration fields. */
+  private getRuntimeOwnedOrchestrationAgentStatusSnapshot(): AgentStatusIpcPayload[] {
+    const raw = this.getAgentStatusSnapshotFn?.() ?? []
+    const orchestrationByPane = this.buildAgentOrchestrationByPaneKey()
+    return raw.map((entry) => {
+      const context = orchestrationByPane?.[entry.paneKey]
+      const terminalHandle = this.getAgentStatusTerminalHandleForPaneKey(entry.paneKey)
+      return context && terminalHandle
+        ? { ...entry, terminalHandle, orchestration: context }
+        : entry
+    })
+  }
+
+  /** Epoch ms of the last output this runtime saw on a terminal's own PTY
+   *  stream, or null when it owns no such record. This is Orca's observation of
+   *  the stream, never anything the model reported about itself.
+   *
+   *  Scoped to the caller's process incarnation (`<ptyId>:<incarnationId>`): a
+   *  handle outlives the process bound to it, so answering for whatever pty the
+   *  handle points at now reported a different process's output as the
+   *  dispatched worker's own. */
+  getTerminalLastOutputAtMs(
+    terminalHandle: string | null,
+    processIncarnation?: string | null
+  ): number | null {
+    if (!terminalHandle) {
+      return null
+    }
+    const record = this.handles.get(terminalHandle)
+    if (!record?.ptyId) {
+      return null
+    }
+    const pty = this.ptysById.get(record.ptyId)
+    if (
+      processIncarnation &&
+      (!pty?.incarnationId || processIncarnation !== `${record.ptyId}:${pty.incarnationId}`)
+    ) {
+      return null
+    }
+    return pty?.lastOutputAt ?? null
   }
 
   cancelMessageWaiters(handle: string): void {

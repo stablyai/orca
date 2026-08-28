@@ -6,6 +6,7 @@ vi.mock('../format', () => ({ printResult: vi.fn() }))
 vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
+import { lifecycleRejectionRecovery } from '../orchestration-lifecycle-rejection-recovery'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
 
 afterEach(() => {
@@ -351,4 +352,55 @@ it('rejects a terminal Dispatch with the wrong identity', async () => {
       json: true
     } as never)
   ).rejects.toMatchObject({ code: 'operation_unknown' })
+})
+
+/** REJECTED_WORKER_DONE_NOT_TERMINAL — observed on Dispatch `ctx_de358c6c53b2`:
+ *  the rejection carried a code and a sentence and nothing else, so it read as
+ *  a terminal failure even though the Dispatch was still active. */
+it('tells a rejected worker the Dispatch is still active and how to recover', async () => {
+  callMock.mockResolvedValueOnce({
+    result: {
+      message: { id: 'msg_rejected' },
+      lifecycle: {
+        action: 'rejected' as const,
+        code: 'dispatch_capability_invalid',
+        reason: 'The Dispatch capability is missing.'
+      }
+    }
+  })
+
+  const error = await ORCHESTRATION_HANDLERS['orchestration send']({
+    flags: new Map([
+      ['from', 'term_worker'],
+      ['subject', 'done'],
+      ['type', 'worker_done'],
+      ['outcome', 'succeeded']
+    ]),
+    client: { call: callMock },
+    cwd: '/tmp/repo',
+    json: false
+  } as never).catch((thrown: unknown) => thrown)
+
+  const data = (error as { data?: { dispatchSettled?: boolean; nextSteps?: string[] } }).data
+  expect(data?.dispatchSettled).toBe(false)
+  expect(data?.nextSteps?.[0]).toMatch(/REJECTED/)
+  expect(data?.nextSteps?.some((step) => step.includes('--dispatch-capability'))).toBe(true)
+})
+
+it('offers a bounded, actionable recovery for every lifecycle rejection code', () => {
+  for (const code of [
+    'dispatch_capability_invalid',
+    'sender_not_assignee',
+    'task_dispatch_mismatch'
+  ]) {
+    const recovery = lifecycleRejectionRecovery(code)
+    expect(recovery, `no recovery for ${code}`).toBeDefined()
+    expect(recovery?.dispatchSettled).toBe(false)
+    expect(recovery?.nextSteps.length).toBeGreaterThan(1)
+    expect(recovery?.nextSteps.length).toBeLessThanOrEqual(4)
+    expect(recovery?.nextSteps.some((step) => step.includes('orca orchestration'))).toBe(true)
+    expect(recovery?.nextSteps[0]).toMatch(/REJECTED/)
+  }
+  expect(lifecycleRejectionRecovery('dispatch_inactive')).toBeUndefined()
+  expect(lifecycleRejectionRecovery(undefined)).toBeUndefined()
 })

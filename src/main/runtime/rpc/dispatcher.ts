@@ -20,12 +20,13 @@ import {
 import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
-import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
+import type { RpcDispatchOptions, RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { assertRequestAdmissible } from './request-admission'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -42,10 +43,7 @@ export class RpcDispatcher {
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }
 
-  async dispatch(
-    request: RpcRequest,
-    options?: { signal?: AbortSignal; authenticatedCallerFingerprint?: string }
-  ): Promise<RpcResponse> {
+  async dispatch(request: RpcRequest, options?: RpcDispatchOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
@@ -95,6 +93,13 @@ export class RpcDispatcher {
         )
         return successResponse(request.id, meta, clientHostedBrowser.result)
       }
+      // Admission runs BEFORE the legacy handler: `tryHandle` commits real
+      // lifecycle writes for orchestration.send/reply/ask and returns, so
+      // admitting afterwards left those exact mutations unbound to the runtime
+      // they were aimed at. The lease fence is unaffected by the ordering —
+      // it covers only git/files/terminal/worktree/repo verbs, and the legacy
+      // rewrite only ever touches orchestration params.
+      await assertRequestAdmissible(this.runtime, request, parsedParams.value, options)
       const compatibility = await this.legacyOrchestration.tryHandle(
         request,
         parsedParams.value,
@@ -203,6 +208,7 @@ export class RpcDispatcher {
           reply(JSON.stringify(successResponse(request.id, meta, clientHostedBrowser.result)))
           return
         }
+        await assertRequestAdmissible(this.runtime, request, parsedParams.value, options)
         const compatibility = await this.legacyOrchestration.tryHandle(
           request,
           parsedParams.value,

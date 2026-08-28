@@ -29,7 +29,8 @@ const COORDINATOR_PREFLIGHT_METHODS = new Set([
 
 const CURRENT_AUTHORITY_PREFLIGHT_METHODS = new Set([
   ...COORDINATOR_PREFLIGHT_METHODS,
-  'orchestration.ask'
+  'orchestration.ask',
+  'orchestration.outcomeIntake'
 ])
 
 export type LegacyCompatibilityRoute =
@@ -134,7 +135,14 @@ export class OrchestrationLegacyCompatibility {
   ): OrchestrationCompatibilityCallerAuthority | undefined {
     const db = this.runtime.getOrchestrationDb()
     const adoption = db.getLegacyAdoption()
-    if (!adoption || stringValue(params.run) || request.method === 'orchestration.runUse') {
+    // Why adoption is no longer required to reach here: attestation is how a
+    // worker proves it is reporting from its OWN session, and that has nothing
+    // to do with whether a legacy Run was ever adopted. Gating it on adoption
+    // meant a worker on a fresh Run had no attested identity at all, leaving a
+    // bearer token as its only way to complete — which forces the worker's model
+    // to hold and repeat a secret. Adoption still gates the legacy-candidate
+    // branch below, where it is genuinely about legacy state.
+    if (stringValue(params.run) || request.method === 'orchestration.runUse') {
       return undefined
     }
     const evidence = request.orchestrationCompatibilityEvidence
@@ -172,7 +180,7 @@ export class OrchestrationLegacyCompatibility {
       return undefined
     }
     const legacyCandidate =
-      boundRun.id === adoption.adopted_run_id
+      adoption && boundRun.id === adoption.adopted_run_id
         ? db.resolveLegacyCoordinatorCandidate({
             runId: adoption.adopted_run_id,
             terminalHandle: evidence.terminalHandle,
@@ -190,7 +198,7 @@ export class OrchestrationLegacyCompatibility {
     ) {
       return undefined
     }
-    if (boundRun.id !== adoption.adopted_run_id) {
+    if (!adoption || boundRun.id !== adoption.adopted_run_id) {
       return caller
     }
     return !db.resolveLegacyCoordinatorCandidate({

@@ -26,7 +26,30 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(38)
+    expect(registry.size).toBe(52)
+    expect(registry.has('orchestration.state')).toBe(true)
+    // The typed first-certification authorisation; a boolean on worker-start
+    // would have been a caller-declared claim rather than runtime authority.
+    expect(registry.has('orchestration.certificationIntent')).toBe(true)
+    // The verb that produces gate evidence: without it the completion gate can
+    // never be satisfied, only failed.
+    expect(registry.has('orchestration.gateRun')).toBe(true)
+    // A public worker-callable receipt verb would let the worker self-mint an
+    // ALLOW. Only the authenticated synchronous hook transaction records it.
+    expect(registry.has('orchestration.pretoolReceipt')).toBe(false)
+    // The read the PreTool policy makes BEFORE a tool runs: the one path that
+    // reaches a worker already running in a leased worktree.
+    expect(registry.has('orchestration.mutationVerdict')).toBe(true)
+    expect(registry.has('orchestration.await')).toBe(true)
+    expect(registry.has('orchestration.outcomeAdmit')).toBe(true)
+    expect(registry.has('orchestration.outcomeIntake')).toBe(true)
+    expect(registry.has('orchestration.gatePlan')).toBe(true)
+    expect(registry.has('orchestration.validationLease')).toBe(true)
+    expect(registry.has('orchestration.phaseLaunch')).toBe(true)
+    expect(registry.has('orchestration.routeUpsert')).toBe(true)
+    expect(registry.has('orchestration.certify')).toBe(true)
+    expect(registry.has('orchestration.routes')).toBe(true)
+    expect(registry.has('orchestration.routeTruth')).toBe(true)
     expect(registry.has('orchestration.workerRelease')).toBe(true)
     expect(registry.has('orchestration.workerRetain')).toBe(true)
     expect(registry.has('orchestration.workerList')).toBe(true)

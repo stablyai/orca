@@ -230,9 +230,9 @@ describe('orchestration new-worktree workers', () => {
     await startWorker({ worktree: 'new-top-level' })
 
     const prompt = vi.mocked(runtime.sendTerminalAgentPrompt).mock.calls[0]?.[1] ?? ''
-    expect(prompt).toContain('orca-ide orchestration send')
+    expect(prompt).toContain('orca-ide orchestration report')
     expect(prompt).toMatch(/--dispatch-capability dcap_[A-Za-z0-9_-]+/)
-    expect(prompt).not.toMatch(/(^|\s)orca orchestration send/)
+    expect(prompt).not.toMatch(/(^|\s)orca orchestration report/)
   })
 
   it('passes exact repo, base, metadata, lineage, and setup choices to worktree creation', async () => {
