@@ -284,7 +284,13 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       ? explicitTitleAgent === tab.launchAgent
       : Boolean(explicitTitleAgent || siblingHookAgent)
     // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
-    if (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal) {
+    // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an
+    // already-true flag costs SortableTab a second commit each time — and names its fiber
+    // in #185 stacks driven elsewhere (see shared/react-update-depth-attribution.ts).
+    if (
+      !hasObservedAgentSignalRef.current &&
+      (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal)
+    ) {
       hasObservedAgentSignalRef.current = true
       setHasObservedAgentSignal(true)
     }

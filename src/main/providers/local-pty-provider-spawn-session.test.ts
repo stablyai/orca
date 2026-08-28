@@ -85,7 +85,8 @@ vi.mock('./agent-foreground-process', () => ({
 }))
 
 vi.mock('./windows-pty-job-membership', () => ({
-  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args)
+  readWindowsPtyJobProcessIds: (...args: unknown[]) => readWindowsPtyJobProcessIdsMock(...args),
+  isWindowsPtyJobReadable: () => true
 }))
 
 vi.mock('../wsl', () => ({
@@ -314,6 +315,30 @@ describe('LocalPtyProvider', () => {
         provider.spawn({ cols: 80, rows: 24, sessionId: 'pending-local-session' })
       ).resolves.toMatchObject({ id: 'pending-local-session' })
       expect(spawnMock).toHaveBeenCalledOnce()
+    })
+
+    // Why (#16441): the Codex hook install and trust grant moved into
+    // buildSpawnEnv, so the env build is now the long await before node-pty
+    // exists — shutdown must be able to cancel the session id during it.
+    it('does not spawn after shutdown cancels a pending spawn during the env build', async () => {
+      spawnMock.mockClear()
+      let finishEnvBuild!: (env: Record<string, string>) => void
+      const buildSpawnEnv = vi.fn(
+        (_id: string, baseEnv: Record<string, string>) =>
+          new Promise<Record<string, string>>((resolve) => {
+            finishEnvBuild = () => resolve(baseEnv)
+          })
+      )
+      const envProvider = new LocalPtyProvider({ buildSpawnEnv })
+
+      const spawn = envProvider.spawn({ cols: 80, rows: 24, sessionId: 'env-build-session' })
+      const canceledSpawn = expect(spawn).rejects.toThrow('PTY spawn canceled: env-build-session')
+      await vi.waitFor(() => expect(buildSpawnEnv).toHaveBeenCalledOnce())
+
+      await envProvider.shutdown('env-build-session', { immediate: true })
+      finishEnvBuild({})
+      await canceledSpawn
+      expect(spawnMock).not.toHaveBeenCalled()
     })
 
     it('coalesces a concurrent same-session-id spawn before launching a redundant shell (F3)', async () => {

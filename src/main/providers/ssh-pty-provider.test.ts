@@ -25,6 +25,13 @@ describe('SshPtyProvider', () => {
     expect(provider.canProvideAuthoritativeBufferSnapshot(scopedPty1)).toBe(false)
   })
 
+  it('fails closed without foreground-shell proof on direct SSH', () => {
+    expect(
+      (provider as { confirmShellForeground?: unknown }).confirmShellForeground
+    ).toBeUndefined()
+    expect(mux.request).not.toHaveBeenCalled()
+  })
+
   it('keeps a shared claim probe alive when one waiter disconnects', async () => {
     let finishProbe!: (result: { agentSessionClaimVersion: number }) => void
     mux.request.mockReturnValueOnce(

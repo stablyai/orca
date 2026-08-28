@@ -179,7 +179,7 @@ describe('workspace cleanup broad scan opt-in', () => {
       ...makeStore(),
       getWorktreeMeta: (worktreeId: string) =>
         worktreeId === 'repo-1::/repo-old' ? runtimeMeta : META_BY_WORKTREE_ID[worktreeId]
-    } as Store
+    } as unknown as Store
 
     const result = await scanWorkspaceCleanup(store, {
       includeAllWorkspaces: true
@@ -559,6 +559,36 @@ describe('workspace cleanup broad scan opt-in', () => {
       blockers: ['ssh-disconnected'],
       reasons: []
     })
+  })
+
+  it('keeps a canonical-only SSH cleanup row blocked while local metadata collides', async () => {
+    const worktreeId = 'repo-1::/shared/workspace'
+    const localRepo = { ...REPO, path: '/local/repo' }
+    const sshRepo = { ...REPO, path: '/remote/repo', connectionId: 'ssh-1' }
+    const localMeta = makeWorktreeMeta({
+      displayName: 'Local workspace',
+      hostId: 'local'
+    })
+    const remoteMeta = makeWorktreeMeta({
+      displayName: 'Canonical remote workspace',
+      hostId: 'ssh:ssh-1'
+    })
+    const store = {
+      ...makeStore([localRepo, sshRepo], { [worktreeId]: localMeta }),
+      getAllWorktreeMetaForHost: (hostId: string) =>
+        hostId === 'ssh:ssh-1' ? { [worktreeId]: remoteMeta } : { [worktreeId]: localMeta }
+    } as unknown as Store
+
+    const result = await scanWorkspaceCleanup(store, { includeAllWorkspaces: true })
+
+    expect(result.candidates).toContainEqual(
+      expect.objectContaining({
+        worktreeId,
+        displayName: 'Canonical remote workspace',
+        executionHostId: 'ssh:ssh-1',
+        blockers: ['ssh-disconnected']
+      })
+    )
   })
 
   it('does not synthesize a disconnected SSH row from same-id local metadata', async () => {

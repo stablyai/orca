@@ -85,12 +85,26 @@ export function registerBrowserGuestViewHandlers(): void {
       ) {
         return false
       }
-      return browserManager.setAnnotationViewportBridge(args.browserPageId, {
-        enabled: args.enabled,
-        emitViewport: args.emitViewport,
-        markers: args.markers,
-        token: args.token
-      })
+      // Why resolve here: this is a tool acting on a guest the reader is looking at, so it answers
+      // for a workspace document too — and routing through the authority also pins the request to
+      // the renderer that owns the target, which page-id-only resolution never checked.
+      const resolveGuest = (): Electron.WebContents | null =>
+        browserManager.getAuthorizedGuest(args.browserPageId, event.sender.id)
+      if (!resolveGuest()) {
+        return false
+      }
+      // Why hand over the resolver rather than that guest: the op is serialized per tab, and the
+      // one it finally runs against must be the one on screen then, not the one this request saw.
+      return browserManager.setAnnotationViewportBridge(
+        args.browserPageId,
+        {
+          enabled: args.enabled,
+          emitViewport: args.emitViewport,
+          markers: args.markers,
+          token: args.token
+        },
+        resolveGuest
+      )
     }
   )
 

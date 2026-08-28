@@ -6,6 +6,7 @@ import type { RpcClientSocketFactory } from './rpc-client-socket-factory'
 import type { RpcClientSocketSession } from './rpc-client-socket-session'
 import type { RpcClientStreamRegistry } from './rpc-client-stream-registry'
 import { RpcSynthesizedCloseIndex } from './rpc-socket-close-evidence'
+import type { ConnectionLogEntry } from './types'
 
 const UNAUTHORIZED_CLOSE_CODE = 4001
 
@@ -21,7 +22,11 @@ type SocketCloseControllerOptions = {
   getAuthenticationGeneration: () => number
   isIntentionallyClosed: () => boolean
   stopLiveness: (session: RpcClientSocketSession) => void
-  emitWarning: (message: string, detail: string) => void
+  emitWarning: (
+    message: string,
+    detail: string,
+    evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+  ) => void
 }
 
 export class RpcClientSocketCloseController {
@@ -80,7 +85,11 @@ export class RpcClientSocketCloseController {
       streamCount: this.options.streams.size(),
       attempt: this.options.reconnect.getAttempt()
     })
-    this.options.emitWarning('WebSocket closed', 'Will attempt to reconnect')
+    this.options.emitWarning(
+      'WebSocket closed',
+      `${closeCode == null ? 'Close code unavailable' : `Close code ${closeCode}`}; reconnect scheduled`,
+      { code: 'socket-closed' }
+    )
     this.options.requests.rejectAll('Connection interrupted', { deliveryUnknown: true })
     this.options.connectionState.publish('reconnecting')
     this.options.reconnect.schedule()

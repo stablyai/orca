@@ -95,6 +95,8 @@ export async function publishMultiplexInitialSnapshot(
       truncatedByByteBudget: serialized?.truncatedByByteBudget,
       source: serialized?.source,
       kittyKeyboardFlags: serialized?.kittyKeyboardFlags,
+      alternateScreen: serialized?.alternateScreen,
+      terminalOwner: serialized?.terminalOwner,
       oscLinks: serialized?.oscLinks,
       pendingEscapeTailAnsi: serialized?.pendingEscapeTailAnsi,
       data: serialized?.data ?? (read.tail.length > 0 ? `${read.tail.join('\r\n')}\r\n` : '')

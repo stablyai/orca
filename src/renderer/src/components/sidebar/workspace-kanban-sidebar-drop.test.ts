@@ -574,7 +574,9 @@ describe('workspace kanban sidebar drop updates', () => {
     })
 
     expect(result.shouldSwitchToManual).toBe(false)
-    expect(Array.from(result.updates)).toEqual([['todo-a', { workspaceStatus: 'doing' }]])
+    expect(result.updates).toEqual([
+      { worktreeId: 'todo-a', updates: { workspaceStatus: 'doing' }, executionHostId: 'local' }
+    ])
   })
 
   it('keeps the dropped board position when Manual sort is active', () => {
@@ -601,12 +603,16 @@ describe('workspace kanban sidebar drop updates', () => {
     })
 
     expect(result.shouldSwitchToManual).toBe(true)
-    expect(result.updates.get('todo-a')).toEqual({
+    expect(result.updates.find((entry) => entry.worktreeId === 'todo-a')?.updates).toEqual({
       workspaceStatus: 'doing',
       manualOrder: 9000
     })
-    expect(result.updates.get('doing-a')).toEqual({ manualOrder: 10_000 })
-    expect(result.updates.get('doing-b')).toEqual({ manualOrder: 8000 })
+    expect(result.updates.find((entry) => entry.worktreeId === 'doing-a')?.updates).toEqual({
+      manualOrder: 10_000
+    })
+    expect(result.updates.find((entry) => entry.worktreeId === 'doing-b')?.updates).toEqual({
+      manualOrder: 8000
+    })
   })
 
   it('keeps board drops sparse when filtered rows already have durable ranks', () => {
@@ -662,8 +668,12 @@ describe('workspace kanban sidebar drop updates', () => {
       now: 10_000
     })
 
-    expect([...result.updates]).toEqual([
-      ['todo-a', { workspaceStatus: 'doing', manualOrder: 1500 }]
+    expect(result.updates).toEqual([
+      {
+        worktreeId: 'todo-a',
+        updates: { workspaceStatus: 'doing', manualOrder: 1500 },
+        executionHostId: 'local'
+      }
     ])
   })
 })

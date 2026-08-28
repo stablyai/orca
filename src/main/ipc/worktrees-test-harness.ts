@@ -73,6 +73,8 @@ export {
 
 /** Registers worktree IPC handlers against freshly reset shared mocks and returns the runtime stub. */
 export function setupWorktreeHandlers(): WorktreeRuntimeStub {
+  delete (store as typeof store & { getAllWorktreeMetaForHost?: (...args: unknown[]) => unknown })
+    .getAllWorktreeMetaForHost
   setPlatform(ORIGINAL_PLATFORM)
   clearConfiguredWorktreeSharedDirectoriesCacheForTests()
   __resetSshWorktreeCreateFetchCacheForTests()
@@ -125,8 +127,10 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     store.getSparsePresets,
     store.getSettings,
     store.getWorktreeMeta,
+    store.getWorktreeMetaForHost,
     store.getAllWorktreeMeta,
     store.setWorktreeMeta,
+    store.setWorktreeMetaForHost,
     store.getProjectHostSetups,
     store.removeWorktreeMeta,
     store.removeWorkspaceSessionStateForWorktree,
@@ -190,10 +194,18 @@ export function setupWorktreeHandlers(): WorktreeRuntimeStub {
     workspaceDir: '/workspace'
   })
   store.getWorktreeMeta.mockReturnValue(undefined)
+  // Host-qualified accessors delegate by default so payload assertions stay on one spy;
+  // host routing itself is covered by worktree-identity-persistence.test.ts.
+  store.getWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
+    store.getWorktreeMeta(args[0] as string)
+  )
   store.getAllWorktreeMeta.mockReturnValue({})
   store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
   resetRetirementCollisionKeyCacheForTests()
   store.setWorktreeMeta.mockReturnValue({})
+  store.setWorktreeMetaForHost.mockImplementation((...args: unknown[]) =>
+    store.setWorktreeMeta(args[0] as string, args[2] as object)
+  )
   store.getProjectHostSetups.mockReturnValue([
     {
       id: 'repo-1',

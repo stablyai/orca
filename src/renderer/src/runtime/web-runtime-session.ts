@@ -72,8 +72,14 @@ import {
 import { runRemoteAgentSessionLaunch } from './remote-agent-session-launch'
 import { translate } from '../i18n/i18n'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
+import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import {
+  resolveWebRuntimeSessionEnvironmentId,
+  shouldRestoreWebRuntimeSessionWorkspaceSelection,
+  type WebRuntimeSessionWorkspaceSelection
+} from './web-runtime-session-workspace-routing'
 import {
   forgetWebSessionTerminalPlacement,
   recordWebSessionTerminalPlacement,
@@ -272,10 +278,10 @@ export async function createWebRuntimeAgentSessionTerminalWithLaunchDraft(
 async function createWebRuntimeSessionTerminalResult(
   args: CreateWebRuntimeSessionTerminalArgs
 ): Promise<CreatedWebRuntimeSessionTerminal> {
-  const environmentId =
-    args.environmentId?.trim() ??
-    useAppStore.getState().settings?.activeRuntimeEnvironmentId?.trim() ??
-    null
+  const environmentId = resolveWebRuntimeSessionEnvironmentId(
+    args.environmentId,
+    useAppStore.getState().settings?.activeRuntimeEnvironmentId
+  )
   if (!environmentId || !isWebRuntimeSessionActive(environmentId)) {
     return {
       outcome: {
@@ -290,8 +296,17 @@ async function createWebRuntimeSessionTerminalResult(
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
+  let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
   if (args.selectWorktree !== false) {
+    const previous = readActiveWorkspaceSelection()
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
+    workspaceSelectionRollback = {
+      previous,
+      applied: {
+        worktreeId: args.worktreeId,
+        executionHostId: toRuntimeExecutionHostId(environmentId)
+      }
+    }
   }
   let hostCreated = false
   let createdTabId: string | undefined
@@ -499,6 +514,9 @@ async function createWebRuntimeSessionTerminalResult(
         worktreeId: args.worktreeId,
         hostTabId: webTerminalPlacementParentTabId(createdTabId)
       })
+    }
+    if (!hostCreated && workspaceSelectionRollback) {
+      restoreActiveWorkspaceSelection(workspaceSelectionRollback)
     }
     // Why: once the host accepted creation, reporting failure invites the user
     // to retry with a new operation ID and can duplicate a fresh agent.
@@ -1003,6 +1021,35 @@ function selectWebRuntimeSessionWorktree(worktreeId: string, environmentId: stri
   useAppStore.getState().setActiveWorktree(worktreeId, toRuntimeExecutionHostId(environmentId))
 }
 
+type WebRuntimeSessionWorkspaceSelectionRollback = {
+  previous: WebRuntimeSessionWorkspaceSelection
+  applied: WebRuntimeSessionWorkspaceSelection
+}
+
+function readActiveWorkspaceSelection(): WebRuntimeSessionWorkspaceSelection {
+  const state = useAppStore.getState()
+  return {
+    worktreeId: state.activeWorktreeId ?? null,
+    executionHostId: state.activeWorkspaceExecutionHostId ?? null
+  }
+}
+
+function restoreActiveWorkspaceSelection(
+  rollback: WebRuntimeSessionWorkspaceSelectionRollback
+): void {
+  if (
+    !shouldRestoreWebRuntimeSessionWorkspaceSelection({
+      ...rollback,
+      current: readActiveWorkspaceSelection()
+    })
+  ) {
+    return
+  }
+  useAppStore
+    .getState()
+    .setActiveWorktree(rollback.previous.worktreeId, rollback.previous.executionHostId ?? undefined)
+}
+
 function selectWebRuntimeSessionBrowserWorktree(worktreeId: string, environmentId: string): void {
   const state = useAppStore.getState()
   if (
@@ -1028,8 +1075,13 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     errorMode?: 'warn' | 'throw'
   } = {}
 ): Promise<void> {
+  const webSessionTabsSync = await import('./web-session-tabs-sync')
   const expectedEnvironmentPairingRevision =
     options.expectedEnvironmentPairingRevision ?? getRuntimeEnvironmentRevision(environmentId)
+  const expectedEnvironmentConnectionGeneration =
+    getRuntimeEnvironmentConnectionGeneration(environmentId)
+  const expectedTrackingGeneration =
+    webSessionTabsSync.getWebSessionTabsTrackingGeneration(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(
     environmentId,
     expectedEnvironmentPairingRevision
@@ -1078,7 +1130,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       applyWebSessionTabsSnapshot,
       applyWebSessionTabsStorePatch,
       decideWebSessionTabsSnapshot
-    } = await import('./web-session-tabs-sync')
+    } = webSessionTabsSync
     if (getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision) {
       return
     }
@@ -1094,7 +1146,18 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
           : state
         return patch === state ? state : patch
       },
-      { frames: [{ environmentId, worktreeId: snapshot.worktree, decision }] },
+      {
+        frames: [
+          {
+            environmentId,
+            worktreeId: snapshot.worktree,
+            decision,
+            expectedEnvironmentConnectionGeneration,
+            expectedEnvironmentPairingRevision,
+            expectedTrackingGeneration
+          }
+        ]
+      },
       snapshot
     )
     settleMirror()

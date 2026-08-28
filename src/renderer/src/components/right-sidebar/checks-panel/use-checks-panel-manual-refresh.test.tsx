@@ -2,12 +2,12 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as HostedReviewStore from '@/store/slices/hosted-review'
+import type * as HostedReviewCardRefresh from '@/store/slices/hosted-review-card-refresh'
 
 const refresh = vi.hoisted(() => ({ calls: [] as string[] }))
 
-vi.mock('@/store/slices/hosted-review', async (importOriginal) => {
-  const original = await importOriginal<typeof HostedReviewStore>()
+vi.mock('@/store/slices/hosted-review-card-refresh', async (importOriginal) => {
+  const original = await importOriginal<typeof HostedReviewCardRefresh>()
   return {
     ...original,
     refreshHostedReviewCard: vi.fn(async () => {

@@ -109,9 +109,11 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
   }
   const state = store.getState()
   const worktreeIds = exactTargetWorktreeIds(state, authority)
+  const unplacedTabWorktreePaths: string[] = []
   const remoteSession = importRemoteWorkspaceSession(snapshot.session, {
     resolveWorktreeId: uniqueWorktreeIdByPath(worktreeIds),
-    executionHostId: toSshExecutionHostId(authority.targetId)
+    executionHostId: toSshExecutionHostId(authority.targetId),
+    onUnplacedTerminalTabs: (worktreePath) => unplacedTabWorktreePaths.push(worktreePath)
   })
   const merged = mergeDirectSshRemoteWorkspaceSession(
     buildWorkspaceSessionPayload(state),
@@ -119,11 +121,13 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     worktreeIds,
     state.tabsByWorktree,
     currentRecoveryTabIds(state, authority, worktreeIds),
-    toSshExecutionHostId(authority.targetId)
+    toSshExecutionHostId(authority.targetId),
+    snapshot.revision
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return
   }
+  const hasUnplacedTerminalTabs = unplacedTabWorktreePaths.length > 0
   snapshotApplyDepth += 1
   try {
     const currentStore = store.getState()
@@ -134,15 +138,36 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     })
     currentStore.hydrateTabsSession(merged, { replaceWorkspaceKeys })
     // Why: direct SSH snapshots project terminal state only; global editor/browser hydration would reset unrelated hosts.
-    currentStore.markRemoteWorkspaceHydrated(authority.targetId)
-    currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {
-      phase: 'synced',
-      direction: 'pull',
-      revision: snapshot.revision,
-      updatedAt: snapshot.updatedAt,
-      lastSyncedAt: Date.now(),
-      message: translate('auto.hooks.useIpcEvents.4f78ba5885', 'Workspace synced')
-    })
+    if (!hasUnplacedTerminalTabs) {
+      currentStore.markRemoteWorkspaceHydrated(authority.targetId)
+      currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {
+        phase: 'synced',
+        direction: 'pull',
+        revision: snapshot.revision,
+        updatedAt: snapshot.updatedAt,
+        message: translate('auto.hooks.useIpcEvents.4f78ba5885', 'Workspace synced'),
+        lastSyncedAt: Date.now()
+      })
+    } else {
+      // The host listed tabs on paths this client cannot place, so adopting zero of them is not
+      // the host's picture. `conflict` is the phase that says exactly that, and it is load-bearing
+      // twice over:
+      //   - use-app-session-persistence.ts filters conflicted targets out of uploads, and an
+      //     upload is a `replace-session` patch (remote-workspace-relay-sync.ts) that wholesale
+      //     replaces the host snapshot - it would delete the very tabs we failed to adopt;
+      //   - workspace-terminal-host-authority.ts treats `offline`/`error` on an un-hydrated target
+      //     as `none`, its bounded floor, which authorises seeding AND sleeping-agent resume.
+      //     `conflict` is deliberately not in that set, so authority stays `unverifiable`.
+      // Hydration is cleared, not merely withheld: the set is add-only, so a target that synced
+      // cleanly before would otherwise keep uploading from this incomplete picture (STA-3593).
+      currentStore.clearRemoteWorkspaceHydrated(authority.targetId)
+      currentStore.setRemoteWorkspaceSyncStatus(authority.targetId, {
+        phase: 'conflict',
+        direction: 'pull',
+        revision: snapshot.revision,
+        updatedAt: snapshot.updatedAt
+      })
+    }
     const reconnectAbort = new AbortController()
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     await Promise.race([

@@ -41,6 +41,7 @@ function createMockSubprocess() {
     getForegroundProcess(): string | null {
       return this.foregroundProcess
     },
+    confirmShellForeground: vi.fn(async () => true),
     write(data: string) {
       written.push(data)
     },
@@ -116,6 +117,7 @@ describe('Session', () => {
     ownerBackend?: 'posix-pty' | 'windows-conpty' | 'windows-wsl'
     wslDistro?: string
     reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
+    historySeedChunks?: readonly string[]
   }): Session {
     session = new Session({
       sessionId: 'test-session',
@@ -125,6 +127,7 @@ describe('Session', () => {
       ...(opts?.launchAgent ? { launchAgent: opts.launchAgent } : {}),
       wslDistro: opts?.wslDistro,
       subprocess,
+      historySeedChunks: opts?.historySeedChunks,
       ...(opts?.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       shellReadySupported: opts?.shellReadySupported ?? false,
       ...(opts?.startupIngress ? { startupIngress: opts.startupIngress } : {}),
@@ -163,6 +166,53 @@ describe('Session', () => {
   })
 
   describe('data flow', () => {
+    it('does not confirm shell ownership from historical replay bytes', () => {
+      createSession({
+        historySeedChunks: ['\x1b[?1049hOLD-TUI\x1b]133;D;137\x07old-shell-marker']
+      })
+
+      expect(subprocess.confirmShellForeground).not.toHaveBeenCalled()
+      expect(session.getSnapshot()?.terminalOwner).toBeUndefined()
+    })
+
+    it('answers concurrent runtime confirmations from one episode inspection', async () => {
+      let resolveConfirmation: ((confirmed: boolean) => void) | undefined
+      subprocess.confirmShellForeground.mockImplementation(
+        () => new Promise((resolve) => void (resolveConfirmation = resolve))
+      )
+      createSession()
+
+      // Why no inspection without a candidate: the RPC reads the barrier's
+      // settled verdict; it must never mint proof the byte stream didn't ask for.
+      await expect(session.confirmShellForeground()).resolves.toBe(false)
+      expect(subprocess.confirmShellForeground).not.toHaveBeenCalled()
+
+      subprocess.simulateData('\x1b[?1049hTUI\x1b]133;D;137\x07')
+      const first = session.confirmShellForeground()
+      const second = session.confirmShellForeground()
+      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+      resolveConfirmation?.(true)
+
+      await expect(Promise.all([first, second])).resolves.toEqual([true, true])
+      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+    })
+
+    it('reuses the parser confirmation for a concurrent runtime request', async () => {
+      let resolveConfirmation: ((confirmed: boolean) => void) | undefined
+      subprocess.confirmShellForeground.mockImplementation(
+        () => new Promise((resolve) => void (resolveConfirmation = resolve))
+      )
+      createSession()
+
+      subprocess.simulateData('\x1b[?1049hTUI\x1b]133;D;137\x07shell-marker')
+      const runtimeConfirmation = session.confirmShellForeground()
+      expect(subprocess.confirmShellForeground).toHaveBeenCalledTimes(1)
+      resolveConfirmation?.(true)
+
+      await expect(runtimeConfirmation).resolves.toBe(true)
+      await vi.waitFor(() => expect(session.getSnapshot()?.terminalOwner).toBe('shell'))
+    })
+
     it('forwards subprocess data to attached clients', () => {
       createSession()
       const received: string[] = []

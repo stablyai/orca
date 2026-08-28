@@ -1,5 +1,6 @@
-import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
+import { GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
 
@@ -21,23 +22,6 @@ export function getProviderName(review: WorktreeCardPrDisplay): string {
     return 'Gitea'
   }
   return 'GitHub'
-}
-
-// Why: the glyph must carry review state — tone alone made a draft with failing
-// checks render as a red PR icon, which reads as closed.
-function getStateIcon(
-  state: WorktreeCardPrDisplay['state']
-): React.ComponentType<{ className?: string }> | null {
-  if (state === 'merged') {
-    return GitMerge
-  }
-  if (state === 'closed') {
-    return GitPullRequestClosed
-  }
-  if (state === 'draft') {
-    return GitPullRequestDraft
-  }
-  return null
 }
 
 // Why: checks only gate a review that is actually open; draft/closed/merged keep
@@ -88,6 +72,6 @@ export function ReviewIcon({
 }): React.JSX.Element {
   const providerIcon =
     variant === 'provider' && review.provider === 'gitlab' ? GitMerge : PullRequestIcon
-  const Icon = getStateIcon(review.state) ?? providerIcon
+  const Icon = getReviewStateIcon(review.state) ?? providerIcon
   return <Icon className={cn(className, getCheckTone(review) ?? getStateTone(review.state))} />
 }

@@ -43,6 +43,7 @@ const annotationAddedGrabToastMessage = (): string =>
 
 export function useBrowserPageGrabAnnotations({
   browserTabId,
+  toolTargetId = browserTabId,
   isActive,
   grab,
   containerRef,
@@ -51,7 +52,14 @@ export function useBrowserPageGrabAnnotations({
   browserAnnotationsLength,
   setBrowserAnnotationTrayOpen
 }: {
+  /** Scopes the stored annotations. Stable for the life of the surface. */
   browserTabId: string
+  /**
+   * The id main resolves to a guest. Defaults to the annotation scope, which is the same string
+   * for a browser page — a preview re-mints this on recovery, and its annotations must not be
+   * orphaned when it does.
+   */
+  toolTargetId?: string
   isActive: boolean
   grab: GrabModeHook
   containerRef: MutableRefObject<HTMLDivElement | null>
@@ -75,7 +83,7 @@ export function useBrowserPageGrabAnnotations({
   handleCancelPendingBrowserAnnotation: () => void
   handleGrabActionShortcut: (key: 'c' | 's') => void
 } {
-  const browserTabIdRef = useRef(browserTabId)
+  const toolTargetIdRef = useRef(toolTargetId)
   const grabToastTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
   const [grabIntent, setGrabIntent] = useState<GrabIntent>('copy')
   const grabIntentRef = useRef(grabIntent)
@@ -88,12 +96,12 @@ export function useBrowserPageGrabAnnotations({
   const grabPayloadRef = useRef(grab.payload)
 
   useLayoutEffect(() => {
-    browserTabIdRef.current = browserTabId
+    toolTargetIdRef.current = toolTargetId
     grabIntentRef.current = grabIntent
     pendingAnnotationPayloadRef.current = pendingAnnotationPayload
     grabRef.current = grab
     grabPayloadRef.current = grab.payload
-  }, [browserTabId, grab, grabIntent, pendingAnnotationPayload])
+  }, [grab, grabIntent, pendingAnnotationPayload, toolTargetId])
   // Why: Radix fires onOpenChange(false) before onSelect, so this flag lets onOpenChange skip the rearm that would clear the payload first.
   const grabMenuActionTakenRef = useRef(false)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
@@ -225,7 +233,7 @@ export function useBrowserPageGrabAnnotations({
         grabIntent,
         grab,
         grabPayloadRef,
-        browserTabIdRef,
+        toolTargetIdRef,
         recordFeatureInteraction,
         showGrabToast
       })

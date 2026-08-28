@@ -9,7 +9,7 @@ import {
   getLinearStatePillStyle
 } from '@/components/linear-state-pill-style'
 import { useTeamStates } from '@/hooks/useIssueMetadata'
-import { linearUpdateIssue } from '@/runtime/runtime-linear-client'
+import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'

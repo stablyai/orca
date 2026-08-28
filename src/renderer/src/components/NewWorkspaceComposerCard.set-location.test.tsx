@@ -171,6 +171,8 @@ function renderCard(
         onOpenAgentSettings={() => {}}
         advancedOpen={false}
         onToggleAdvanced={() => {}}
+        parentWorktreeId={null}
+        onParentWorktreeIdChange={() => {}}
         createDisabled={false}
         projectError={null}
         creating={false}

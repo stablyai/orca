@@ -2,13 +2,21 @@ diff --git a/binding.gyp b/binding.gyp
 index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
 --- a/binding.gyp
 +++ b/binding.gyp
-@@ -1,13 +1,10 @@
+@@ -1,13 +1,18 @@
  {
    'target_defaults': {
      'dependencies': [
 -      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
 +      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
      ],
++    # Orca: GCC 9 (Ubuntu 20.04 floor) accepts C++20 as gnu++2a, but rejects
++    # the newer gnu++20 spelling emitted by Node 24's gyp flags.
++    'cflags_cc!': [
++      '-std=gnu++20'
++    ],
++    'cflags_cc': [
++      '-std=gnu++2a'
++    ],
      'conditions': [
        ['OS=="win"', {
 -        'msvs_configuration_attributes': {

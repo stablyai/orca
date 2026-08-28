@@ -26,12 +26,12 @@ export type CodexSessionBackfillOptions = CodexSessionBridgeIncrementalOptions &
   shouldStop?: () => boolean
   /** Limits a launch-triggered pass to the date directories that can contain its rollouts. */
   scanDates?: readonly CodexSessionBackfillDate[]
-  /** A scheduled launch pass must not be suppressed by a marker it just invalidated. */
+  /** Forces recertification of the whole tree, ignoring any existing baseline. */
+  fullScanRequired?: boolean
+  /** A scheduled launch pass runs even when the baseline reports nothing pending. */
   ignoreCompletionMarker?: boolean
-  /** Active launch passes defer global completion until their final exit scan. */
-  writeCompletionMarker?: boolean
-  /** Final launch scans can extend a previously certified full-tree baseline. */
-  writeBoundedCompletionMarker?: boolean
+  /** A live Codex pane keeps writing into its own date, so it stays pending. */
+  retainPendingScanDates?: boolean
   /** Rechecks launch scheduling state immediately before marker publication. */
   canWriteCompletionMarker?: () => boolean
 }

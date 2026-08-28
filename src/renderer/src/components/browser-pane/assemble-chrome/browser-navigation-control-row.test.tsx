@@ -16,6 +16,11 @@ vi.mock('./BrowserAddressBar', () => ({
   }
 }))
 
+import BrowserAddressBar from './BrowserAddressBar'
+import {
+  BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE,
+  BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS
+} from './browser-chrome-address-slot'
 import {
   BrowserNavigationControlRow,
   type BrowserNavigationControls
@@ -37,15 +42,38 @@ function renderRow(overrides: Partial<BrowserNavigationControls> = {}): BrowserN
     return (
       <BrowserNavigationControlRow
         controls={controls}
-        addressBarValue="https://example.com/"
-        onAddressBarChange={vi.fn()}
-        onSubmitAddressBar={vi.fn()}
-        addressBarInputRef={inputRef}
+        addressSlot={
+          <BrowserAddressBar
+            value="https://example.com/"
+            onChange={vi.fn()}
+            onSubmit={vi.fn()}
+            onNavigate={controls.navigate}
+            inputRef={inputRef}
+          />
+        }
       />
     )
   }
   render(<Host />)
   return controls
+}
+
+/** The read-only counterpart the document preview passes, standing in for any non-URL identity. */
+function renderWithIdentityChip(): void {
+  render(
+    <BrowserNavigationControlRow
+      controls={{
+        canGoBack: false,
+        canGoForward: false,
+        loading: false,
+        goBack: vi.fn(),
+        goForward: vi.fn(),
+        reload: vi.fn(),
+        navigate: vi.fn()
+      }}
+      addressSlot={<span>docs/report.html</span>}
+    />
+  )
 }
 
 describe('BrowserNavigationControlRow', () => {
@@ -76,5 +104,35 @@ describe('BrowserNavigationControlRow', () => {
   it('anchors the contextual tour on whichever backend renders the row', () => {
     renderRow()
     expect(document.querySelector('[data-contextual-tour-target="browser-toolbar"]')).not.toBeNull()
+  })
+
+  // Why: the row must not assume its middle is an address bar — a surface with no URL to type
+  // still gets the same history controls in the same chrome.
+  it('renders a non-address identity widget in the same slot', () => {
+    renderWithIdentityChip()
+    expect(screen.getByText('docs/report.html')).not.toBeNull()
+    expect(screen.queryByLabelText('Address')).toBeNull()
+    expect(screen.getByLabelText('Back')).not.toBeNull()
+    expect(screen.getByLabelText('Reload')).not.toBeNull()
+  })
+
+  // Why the row and not each widget: a text input and a line of text come out different heights,
+  // and the whole toolbar would change size when a document tab replaces a web tab.
+  it('gives every identity widget the same slot height, and stretches it to fill', () => {
+    renderRow()
+    const addressSlot = document.querySelector(`[${BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE}]`)
+    const addressSlotClass = addressSlot?.className ?? ''
+    const addressWidgetParent = screen.getByLabelText('Address').parentElement
+    cleanup()
+
+    renderWithIdentityChip()
+    const chipSlot = document.querySelector(`[${BROWSER_CHROME_ADDRESS_SLOT_ATTRIBUTE}]`)
+
+    expect(addressSlotClass).toContain(BROWSER_CHROME_ADDRESS_SLOT_HEIGHT_CLASS)
+    expect(chipSlot?.className).toBe(addressSlotClass)
+    expect(addressSlotClass).toContain('items-stretch')
+    // Both widgets are direct children, so the slot's height reaches them instead of a wrapper.
+    expect(addressWidgetParent).toBe(addressSlot)
+    expect(screen.getByText('docs/report.html').parentElement).toBe(chipSlot)
   })
 })

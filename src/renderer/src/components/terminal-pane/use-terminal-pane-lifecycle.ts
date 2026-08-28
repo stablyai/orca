@@ -95,6 +95,7 @@ import {
   resolveNonLatinControlChordInput
 } from './terminal-non-latin-control-chord'
 import { installTerminalImeCompositionTracker } from './terminal-ime-composition-tracker'
+import { isCurrentPlatformIosWeb } from '@/lib/ios-web-platform'
 import { installTerminalImeLinuxCandidateState } from './terminal-ime-linux-candidate-state'
 import {
   armTerminalImePendingCandidateKeyRelease,
@@ -103,6 +104,8 @@ import {
   shouldApplyTerminalImePendingCandidateKeyRelease
 } from './terminal-ime-candidate-key-release-guard'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
+import { installTerminalIosHangulPreedit } from './terminal-ios-hangul-preedit'
+import { createTerminalIosHangulPreeditRenderer } from './terminal-ios-hangul-preedit-overlay'
 import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
@@ -453,13 +456,6 @@ export function resolvePaneSeedCwd(splitPaneCwd: string | undefined, fallbackCwd
   return splitPaneCwd ?? fallbackCwd
 }
 
-// Why > 1, matching isIOSWebView in mobile/src/terminal/terminal-webview-html.ts: a Mac with a
-// touch peripheral can report exactly 1, and it must keep the forwarder. Real iPads report 5.
-// Why UA rather than that helper's platform check: an iPhone reports platform "iPhone", not "MacIntel".
-export function isTouchIOSUserAgent(userAgent: string, maxTouchPoints: number): boolean {
-  return userAgent.includes('Mac') && maxTouchPoints > 1
-}
-
 type SplitStartupPayload = { command: string; env?: Record<string, string> }
 
 type SplitWithStartupDeps = {
@@ -653,7 +649,10 @@ export function retireMountedTerminalPaneSurface(args: {
   ) => void
   syncPanePtyLayoutBinding: (paneId: number, ptyId: string | null) => void
   clearTabPtyId: (tabId: string, ptyId: string) => void
-  transport?: { detach?: () => void; destroy?: () => void }
+  transport?: {
+    detach?: (options?: { preserveExitObserver?: boolean }) => void
+    destroy?: () => void
+  }
 }): void {
   args.retireAgentPaneAuthority(args.paneKey, {
     preserveSleepingAgentSession: true
@@ -662,7 +661,10 @@ export function retireMountedTerminalPaneSurface(args: {
     args.syncPanePtyLayoutBinding(args.paneId, null)
     args.clearTabPtyId(args.tabId, args.ptyId)
   }
-  args.transport?.detach?.()
+  // preserveExitObserver:false — a retired surface keeps its PTY alive but starts no parked
+  // watcher, so a preserved observer would pin the disposed pane's xterm for the whole session
+  // (the entries only die on real PTY exit). The buffered exit drains into a successor mount.
+  args.transport?.detach?.({ preserveExitObserver: false })
 }
 
 /** Wires mounted terminal panes to renderer state and terminal event handling. */
@@ -1055,22 +1057,36 @@ export function useTerminalPaneLifecycle({
           !isMac &&
           navigator.userAgent.includes('Linux') &&
           !/Android|CrOS/.test(navigator.userAgent)
-        // Why: gates the forwarder only — isMac stays as-is for the Ctrl+C, clipboard, JIS-yen and 229 policies.
-        const isTouchIOS = isTouchIOSUserAgent(navigator.userAgent, navigator.maxTouchPoints)
+        // Why: gates the iOS text-edit paths only — isMac stays as-is for the Ctrl+C, clipboard, JIS-yen and 229 policies.
+        const isIosWeb = isCurrentPlatformIosWeb()
         const linuxImeCandidateState = isLinux
           ? installTerminalImeLinuxCandidateState(pane.terminal.element)
           : null
         const imeCompositionTracker = installTerminalImeCompositionTracker(pane.terminal.element)
+        // Why after the tracker: the preedit stops propagation on `input` while
+        // a syllable is held, so anything on this element that needs those
+        // events has to be registered ahead of it. Nothing does today — the
+        // preedit reads composition ownership off the event itself.
+        const iosHangulPreedit = isIosWeb
+          ? installTerminalIosHangulPreedit({
+              terminalElement: pane.terminal.element,
+              isCompositionActive: () => imeCompositionTracker.isActive(),
+              isScreenReaderMode: () => pane.terminal.options.screenReaderMode === true,
+              sendInput: (data) => pane.terminal.input(data),
+              renderPreedit: createTerminalIosHangulPreeditRenderer(pane.terminal)
+            })
+          : null
         imeCompositionDisposablesRef.current.set(pane.id, {
           dispose: () => {
             imeCompositionTracker.dispose()
             linuxImeCandidateState?.dispose()
+            iosHangulPreedit?.dispose()
           }
         })
         // Why: macOS commits an input source's substituted text through the input event alone, so printable keydowns must not reach xterm's encoder.
         // Not on touch iOS/iPadOS: the forwarder stands aside for IME input via composition events, which iPad Hangul appears not to fire (#13345).
         const imeNativeTextForwarder =
-          isMac && !isTouchIOS
+          isMac && !isIosWeb
             ? installTerminalImeNativeTextForwarder({
                 terminalElement: pane.terminal.element,
                 isComposing: () => imeCompositionTracker.isActive(),
@@ -1210,6 +1226,7 @@ export function useTerminalPaneLifecycle({
 
           const shouldBypass = shouldBypassXtermKeyboardEvent(e, {
             isMac,
+            isIosWeb,
             hasSelection: pane.terminal.hasSelection(),
             kittyKeyboardFlags: paneKittyKeyboardModesRef.current.get(pane.id)?.flags ?? 0
           })
@@ -1494,7 +1511,10 @@ export function useTerminalPaneLifecycle({
         if (transport && !isRetiredSurface) {
           if (isDetachedToTab) {
             // Why: detach hands the PTY to a new tab, so drop renderer listeners without process teardown.
-            transport.detach?.()
+            // preserveExitObserver:false for the same reason as unmount — the destination tab's
+            // registerExit re-owns the exit, and a preserved observer would pin this pane's xterm
+            // until then (forever if the destination never mounts).
+            transport.detach?.({ preserveExitObserver: false })
           } else {
             const ptyId = suppressIntentionalPaneCloseExit(
               transport,
@@ -1951,12 +1971,21 @@ export function useTerminalPaneLifecycle({
       captureParkedTerminalPaneCandidates(
         tabId,
         worktreeId,
-        manager.getPanes().map((capturedPane) => ({
-          ptyId: paneTransports.get(capturedPane.id)?.getPtyId() ?? null,
-          paneId: capturedPane.id,
-          leafId: capturedPane.leafId,
-          drivesTabTitle: manager.getActivePane()?.id === capturedPane.id
-        }))
+        manager.getPanes().map((capturedPane) => {
+          const capturedPtyId = paneTransports.get(capturedPane.id)?.getPtyId() ?? null
+          const capturedBinding = panePtyBindings.get(capturedPane.id) as
+            | (IDisposable & { isUntouchedFreshSpawnPty?: (ptyId: string) => boolean })
+            | undefined
+          return {
+            ptyId: capturedPtyId,
+            paneId: capturedPane.id,
+            leafId: capturedPane.leafId,
+            drivesTabTitle: manager.getActivePane()?.id === capturedPane.id,
+            untouchedFreshSpawn:
+              capturedPtyId !== null &&
+              (capturedBinding?.isUntouchedFreshSpawnPty?.(capturedPtyId) ?? false)
+          }
+        })
       )
       for (const transport of paneTransports.values()) {
         const ptyId = transport.getPtyId()
@@ -1969,7 +1998,10 @@ export function useTerminalPaneLifecycle({
           })
         ) {
           // Why: tab-move rehome and web-mirror remount unmount a still-live tab; detach preserves the running PTY so the remount reattaches without restarting the shell.
-          transport.detach?.()
+          // preserveExitObserver:false — the session-bound exit observer closes over the disposed pane's xterm
+          // (~14MB/pane pinned in the ptyId-keyed dispatcher maps until exit). Detached exit is owned by the
+          // parked watcher sidecar; without a watcher it buffers and drains into the next mount's registerExit.
+          transport.detach?.({ preserveExitObserver: false })
         } else {
           // Why: un-attached transports have no PTY ID; destroy so an in-flight spawn resolves to a killed PTY, not a revived stale binding after unmount.
           transport.destroy?.()

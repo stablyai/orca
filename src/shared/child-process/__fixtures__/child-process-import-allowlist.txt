@@ -35,7 +35,6 @@ src/main/ai-vault/session-scanner-service-client.ts
 src/main/ai-vault/session-scanner-service-spawn.ts
 src/main/ai-vault/session-scanner-service-test-child.ts
 src/main/app-icon.ts
-src/main/automations/external-manager.ts
 src/main/automations/precheck-runner.ts
 src/main/browser/agent-browser-bridge.ts
 src/main/browser/browser-cookie-import.ts
@@ -45,10 +44,8 @@ src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/runtime-home-service.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
-src/main/codex/codex-app-server-grant-bridge.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
-src/main/codex/codex-trust-grant-host.ts
 src/main/codex/codex-wsl-hook-install-plan.ts
 src/main/computer/desktop-script-provider-bridge.ts
 src/main/computer/macos-computer-use-permission-status.ts

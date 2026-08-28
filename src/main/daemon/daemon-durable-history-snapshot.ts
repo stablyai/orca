@@ -1,6 +1,7 @@
 import { ColdRestoreReplayWriter } from './cold-restore-replay-writer'
 import { DAEMON_RESTORE_SCROLLBACK_ROWS } from './daemon-restore-scrollback-depth'
 import { HeadlessEmulator } from './headless-emulator'
+import { TerminalShellLifecycleScanner } from './terminal-shell-lifecycle-scanner'
 import { isValidTerminalHistorySize } from './terminal-history-dimensions'
 import type { ColdRestoreInfo } from './terminal-history-cold-restore-info'
 import type { PendingOutputRecord, TerminalSnapshot } from './types'
@@ -12,6 +13,7 @@ type RestoreBase = {
   pendingEscapeTailAnsi?: string
   oscLinks?: TerminalSnapshot['oscLinks']
   lastTitle?: string
+  terminalOwner?: TerminalSnapshot['terminalOwner']
   cwd: string | null
   cols: number
   rows: number
@@ -35,6 +37,7 @@ export function terminalSnapshotFromColdRestore(
     scrollbackLines:
       info.scrollbackLines ?? Math.max(0, countAnsiRows(info.scrollbackAnsi) - info.rows),
     ...(info.lastTitle ? { lastTitle: info.lastTitle } : {}),
+    ...(info.terminalOwner ? { terminalOwner: info.terminalOwner } : {}),
     ...(opts?.outputSequence !== undefined ? { outputSequence: opts.outputSequence } : {})
   }
 }
@@ -91,12 +94,29 @@ export async function buildDurableCheckpointSnapshot(opts: {
       }
       emulator.setCwd(base.cwd)
     }
+    // Why a scanner, not emulator state: ownership is lifecycle evidence bound
+    // to byte order — newer replayed output (a TUI starting) must revoke a
+    // persisted proof exactly as it would have live.
+    const ownershipScanner = new TerminalShellLifecycleScanner()
+    // Why the live fallback: with no disk history the live snapshot holds the
+    // only persisted proof for this boundary; the re-scan below can revoke it
+    // but never mint one, so the result is never less safe than dropping it.
+    ownershipScanner.seedOwner(
+      opts.restoreInfo ? opts.restoreInfo.terminalOwner : opts.liveSnapshot.terminalOwner
+    )
     if (!(await replayPendingRecords(replay, pendingRecords))) {
       return opts.liveSnapshot
     }
+    for (const record of pendingRecords) {
+      if (record.kind === 'output') {
+        scanAllForOwnership(ownershipScanner, record.data)
+      }
+    }
     const snapshot = emulator.getSnapshot()
+    const terminalOwner = ownershipScanner.owner
     return {
       ...snapshot,
+      ...(terminalOwner ? { terminalOwner } : {}),
       ...(opts.liveSnapshot.outputSequence !== undefined
         ? { outputSequence: opts.liveSnapshot.outputSequence }
         : {}),
@@ -122,9 +142,23 @@ function restoreBaseFrom(restoreInfo: ColdRestoreInfo): RestoreBase {
       : {}),
     oscLinks: restoreInfo.oscLinks,
     lastTitle: restoreInfo.lastTitle,
+    terminalOwner: restoreInfo.terminalOwner,
     cwd: restoreInfo.cwd,
     cols: restoreInfo.cols,
     rows: restoreInfo.rows
+  }
+}
+
+/** Replay can only carry or revoke a persisted proof, never mint one: the
+ *  scanner has no confirmation source, so triggers are consumed as revocations. */
+function scanAllForOwnership(scanner: TerminalShellLifecycleScanner, data: string): void {
+  let rest = data
+  while (rest.length > 0) {
+    const events = scanner.scan(rest)
+    if (events.uncleanDeathTriggerEnd === undefined) {
+      return
+    }
+    rest = rest.slice(events.uncleanDeathTriggerEnd)
   }
 }
 

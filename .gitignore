@@ -98,13 +98,13 @@ docs/**
 !docs/readme/**
 !docs/STYLEGUIDE.md
 !docs/agent-skill-sharing-implementation-checklist.md
-!docs/agent-skill-sharing-installation-plan.md
-!docs/ai-vault-process-isolation-plan.md
 !docs/mobile-terminal-shortcut-bar.md
 !docs/reference/
 !docs/reference/git-compatibility.md
 !docs/reference/headless-linux-server.md
 !docs/reference/linux-glibc-compatibility.md
+!docs/reference/macos-press-and-hold.md
+!docs/reference/orcad-operations.md
 !docs/reference/relay-grace-time-reconfiguration.md
 !docs/reference/windows-process-enumeration.md
 !docs/reference/wsl-runner-verification.md

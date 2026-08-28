@@ -8,6 +8,15 @@ import type {
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
+import {
+  DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
+  DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
+  DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
+  DOC_PREVIEW_MINT_GRANT_CHANNEL,
+  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
+  type DocPreviewFailure
+} from '../shared/doc-preview-scheme'
+import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -45,7 +54,9 @@ import type {
   SshConfigHostResolution,
   SshConfigImportResult,
   SshTargetAddResult,
+  SshTargetCreateInput,
   SshTarget,
+  SshTargetUpdateInput,
   PortForwardEntry,
   EnrichedDetectedPort
 } from '../shared/ssh-types'
@@ -263,6 +274,7 @@ import type {
   PluginHostInstallSource,
   PluginHostListEntry,
   PluginHostLogLine,
+  ExternalAutomationManagerResult,
   PreloadApi
 } from './api-types'
 import type { AgentKind, LaunchSource, RequestKind } from '../shared/telemetry-events'
@@ -277,20 +289,21 @@ import { createUsageProviderApi } from './usage-provider-api'
 import type { AppStarSource } from '../shared/gh-star-source'
 import type { ExecutionHostId } from '../shared/execution-host'
 import type {
-  Automation,
-  AutomationCreateInput,
   AutomationDispatchRequest,
   AutomationDispatchResult,
-  ExternalAutomationCreateInput,
-  ExternalAutomationActionInput,
-  ExternalAutomationManager,
-  ExternalAutomationRunsInput,
   ExternalAutomationRunsPage,
-  ExternalAutomationUpdateInput,
   AutomationRun,
-  AutomationPrecheckResult,
-  AutomationUpdateInput
+  AutomationPrecheckResult
 } from '../shared/automations-types'
+import type { AutomationOwnerRef } from '../shared/automation-owner-ref'
+import type {
+  ScopedExternalManagerActionRequest,
+  ScopedExternalManagerCreateRequest,
+  ScopedExternalManagerListRequest,
+  ScopedExternalManagerRunsRequest,
+  ScopedExternalManagerUpdateRequest
+} from '../shared/external-automation-scope'
+import type { AutomationsChangedPayload } from '../shared/runtime-client-events'
 import type { KeybindingActionId, KeybindingFileSnapshot } from '../shared/keybindings'
 import type {
   AiVaultDeleteSessionArgs,
@@ -1053,6 +1066,7 @@ const api = {
       snapshotFrameAnsi?: string
       snapshotFrameRestoreAnsi?: string
       snapshotKittyKeyboardFlags?: number
+      snapshotTerminalOwner?: 'shell'
       snapshotSeq?: number
       isReattach?: boolean
       isAlternateScreen?: boolean
@@ -1175,6 +1189,7 @@ const api = {
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
       kittyKeyboardFlags?: number
+      terminalOwner?: 'shell'
     } | null> => ipcRenderer.invoke('pty:getMainBufferSnapshot', { id, opts }),
 
     getRendererDeliveryDebugSnapshot: (): Promise<{
@@ -3316,6 +3331,27 @@ const api = {
     }
   } satisfies PreloadApi['updater'],
 
+  docPreview: {
+    mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
+      ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
+    revokeGrant: (grantId: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
+    authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
+    onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+    },
+    onLoadFailure: (callback: (payload: DocPreviewFailure) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewFailure): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+    }
+  },
+
   notebook: {
     runPythonCell: (args: {
       filePath: string
@@ -4763,13 +4799,11 @@ const api = {
     listRemovedTargetLabels: (): Promise<Record<string, string>> =>
       ipcRenderer.invoke('ssh:listRemovedTargetLabels'),
 
-    addTarget: (args: { target: Omit<SshTarget, 'id'> }): Promise<SshTargetAddResult> =>
+    addTarget: (args: { target: SshTargetCreateInput }): Promise<SshTargetAddResult> =>
       ipcRenderer.invoke('ssh:addTarget', args),
 
-    updateTarget: (args: {
-      id: string
-      updates: Partial<Omit<SshTarget, 'id'>>
-    }): Promise<SshTarget> => ipcRenderer.invoke('ssh:updateTarget', args),
+    updateTarget: (args: { id: string; updates: SshTargetUpdateInput }): Promise<SshTarget> =>
+      ipcRenderer.invoke('ssh:updateTarget', args),
 
     removeTarget: (args: { id: string }): Promise<void> =>
       ipcRenderer.invoke('ssh:removeTarget', args),
@@ -4921,27 +4955,25 @@ const api = {
       ipcRenderer.invoke('ssh:submitCredential', args)
   },
 
+  // Orca automation CRUD rides the local runtime RPC surface (`runtime:call`),
+  // so only external-manager and dispatch-loop plumbing stays on IPC.
   automations: {
-    list: (): Promise<Automation[]> => ipcRenderer.invoke('automations:list'),
-    listRuns: (args?: { automationId?: string }): Promise<AutomationRun[]> =>
-      ipcRenderer.invoke('automations:listRuns', args),
-    listExternalManagers: (): Promise<ExternalAutomationManager[]> =>
-      ipcRenderer.invoke('automations:listExternalManagers'),
-    listExternalRuns: (input: ExternalAutomationRunsInput): Promise<ExternalAutomationRunsPage> =>
-      ipcRenderer.invoke('automations:listExternalRuns', input),
-    createExternal: (input: ExternalAutomationCreateInput): Promise<void> =>
-      ipcRenderer.invoke('automations:createExternal', input),
-    updateExternal: (input: ExternalAutomationUpdateInput): Promise<void> =>
-      ipcRenderer.invoke('automations:updateExternal', input),
-    runExternalAction: (input: ExternalAutomationActionInput): Promise<void> =>
-      ipcRenderer.invoke('automations:runExternalAction', input),
-    create: (input: AutomationCreateInput): Promise<Automation> =>
-      ipcRenderer.invoke('automations:create', input),
-    update: (args: { id: string; updates: AutomationUpdateInput }): Promise<Automation> =>
-      ipcRenderer.invoke('automations:update', args),
-    delete: (args: { id: string }): Promise<void> => ipcRenderer.invoke('automations:delete', args),
-    runNow: (args: { id: string }): Promise<AutomationRun> =>
-      ipcRenderer.invoke('automations:runNow', args),
+    listExternalManagerForOwner: (
+      request: ScopedExternalManagerListRequest
+    ): Promise<ExternalAutomationManagerResult> =>
+      ipcRenderer.invoke('automations:listExternalManagerForOwner', request),
+    listExternalRunsForOwner: (
+      request: ScopedExternalManagerRunsRequest
+    ): Promise<ExternalAutomationRunsPage> =>
+      ipcRenderer.invoke('automations:listExternalRunsForOwner', request),
+    createExternalForOwner: (request: ScopedExternalManagerCreateRequest): Promise<void> =>
+      ipcRenderer.invoke('automations:createExternalForOwner', request),
+    updateExternalForOwner: (request: ScopedExternalManagerUpdateRequest): Promise<void> =>
+      ipcRenderer.invoke('automations:updateExternalForOwner', request),
+    runExternalActionForOwner: (request: ScopedExternalManagerActionRequest): Promise<void> =>
+      ipcRenderer.invoke('automations:runExternalActionForOwner', request),
+    retainExternalScopes: (request: { owners: readonly AutomationOwnerRef[] }): Promise<void> =>
+      ipcRenderer.invoke('automations:retainExternalScopes', request),
     runPrecheck: (args: {
       automationId: string
       runId: string
@@ -4957,6 +4989,12 @@ const api = {
         callback(request)
       ipcRenderer.on('automations:dispatchRequested', listener)
       return () => ipcRenderer.removeListener('automations:dispatchRequested', listener)
+    },
+    onChanged: (callback: (payload: AutomationsChangedPayload) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: AutomationsChangedPayload) =>
+        callback(payload)
+      ipcRenderer.on('automations:changed', listener)
+      return () => ipcRenderer.removeListener('automations:changed', listener)
     }
   },
 

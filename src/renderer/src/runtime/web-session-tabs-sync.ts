@@ -135,11 +135,16 @@ export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
 
 type SessionTabsStreamEvent =
   | (RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' })
-  | { type: 'snapshots'; snapshots: RuntimeMobileSessionTabsResult[] }
+  | {
+      type: 'snapshots'
+      snapshots: RuntimeMobileSessionTabsResult[]
+      authoritative?: boolean
+    }
   | { type: 'end' }
 
 type SessionTabsListAllResult = {
   snapshots: RuntimeMobileSessionTabsResult[]
+  authoritative?: boolean
 }
 
 type SnapshotFreshness = {
@@ -181,6 +186,7 @@ const latestSessionTabsRemovalFenceByWorktree = new Map<string, SessionTabsRemov
 const sessionTabsRecoveryStateByWorktree = new Map<string, SessionTabsRecoveryState>()
 const trackedSessionTabsWorktreeIdsByEnvironment = new Map<string, Set<string>>()
 const sessionTabsEnvironmentsByWorktree = new Map<string, Set<string>>()
+const sessionTabsTrackingGenerationByEnvironment = new Map<string, number>()
 const lastHostTerminalTabCountByWorktree = new Map<string, number>()
 const hostSessionTabIdByLocalKey = new Map<string, string>()
 const hostSessionTabMappingKeysByEnvironmentAndWorktree = new Map<
@@ -811,6 +817,10 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
     return
   }
   const keyPrefix = `${trimmedEnvironmentId}:`
+  sessionTabsTrackingGenerationByEnvironment.set(
+    trimmedEnvironmentId,
+    (sessionTabsTrackingGenerationByEnvironment.get(trimmedEnvironmentId) ?? 0) + 1
+  )
   for (const key of latestSessionTabsSnapshotByWorktree.keys()) {
     if (key.startsWith(keyPrefix)) {
       latestSessionTabsSnapshotByWorktree.delete(key)
@@ -860,6 +870,10 @@ export function clearWebSessionTabsTrackingForEnvironment(environmentId: string)
   clearWebSessionTerminalPlacementsForEnvironment(trimmedEnvironmentId)
   clearHostSessionMirrorHydration(trimmedEnvironmentId)
   clearAllWebRuntimeWakeTerminalRespawn()
+}
+
+export function getWebSessionTabsTrackingGeneration(environmentId: string): number {
+  return sessionTabsTrackingGenerationByEnvironment.get(environmentId.trim()) ?? 0
 }
 
 function hostSessionTabMappingKey(args: {
@@ -3976,6 +3990,9 @@ export type HostSessionMirrorPatchFrame = {
   environmentId: string
   worktreeId: string
   decision: WebSessionTabsSnapshotDecision
+  expectedEnvironmentConnectionGeneration?: number
+  expectedEnvironmentPairingRevision?: number
+  expectedTrackingGeneration?: number
 }
 
 /**
@@ -3990,7 +4007,14 @@ export type HostSessionMirrorPatchFrame = {
  */
 export type HostSessionMirrorPatchVerdict = {
   frames: readonly HostSessionMirrorPatchFrame[]
-  fullInventory?: { environmentId: string; publishedSnapshotCount: number }
+  fullInventory?: {
+    environmentId: string
+    publishedSnapshotCount: number
+    authoritative?: boolean
+    expectedEnvironmentConnectionGeneration?: number
+    expectedEnvironmentPairingRevision?: number
+    expectedTrackingGeneration?: number
+  }
 }
 
 /**
@@ -4005,16 +4029,52 @@ export type HostSessionMirrorPatchVerdict = {
  * `none` settles; `live` and `unverifiable` leave waiters for the next
  * inventory or per-worktree frame.
  */
-function settleEmptyHostInventoryOnlyIfHostHasNoTerminals(environmentId: string): void {
-  const probedGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
-  void probeHostLiveTerminals(environmentId, undefined, probedGeneration).then((verdict) => {
+type HostSessionMirrorSettleFence = {
+  environmentId: string
+  connectionGeneration: number
+  pairingRevision?: number
+  trackingGeneration: number
+}
+
+function captureHostSessionMirrorSettleFence(
+  environmentId: string,
+  expected: {
+    connectionGeneration?: number
+    pairingRevision?: number
+    trackingGeneration?: number
+  } = {}
+): HostSessionMirrorSettleFence {
+  return {
+    environmentId,
+    connectionGeneration:
+      expected.connectionGeneration ?? getRuntimeEnvironmentConnectionGeneration(environmentId),
+    pairingRevision: expected.pairingRevision ?? getRuntimeEnvironmentRevision(environmentId),
+    trackingGeneration:
+      expected.trackingGeneration ?? getWebSessionTabsTrackingGeneration(environmentId)
+  }
+}
+
+function hostSessionMirrorSettleFenceIsCurrent(fence: HostSessionMirrorSettleFence): boolean {
+  return (
+    getRuntimeEnvironmentConnectionGeneration(fence.environmentId) === fence.connectionGeneration &&
+    getRuntimeEnvironmentRevision(fence.environmentId) === fence.pairingRevision &&
+    getWebSessionTabsTrackingGeneration(fence.environmentId) === fence.trackingGeneration
+  )
+}
+
+function settleEmptyHostInventoryOnlyIfHostHasNoTerminals(
+  fence: HostSessionMirrorSettleFence
+): void {
+  void probeHostLiveTerminals(
+    fence.environmentId,
+    undefined,
+    fence.connectionGeneration,
+    fence.pairingRevision
+  ).then((verdict) => {
     // Why: the probe is a round trip, and a reconnect in between would make its
     // answer speak for a connection whose PTYs nobody listed.
-    if (
-      verdict === 'none' &&
-      getRuntimeEnvironmentConnectionGeneration(environmentId) === probedGeneration
-    ) {
-      markHostSessionMirrorHydrated(environmentId)
+    if (verdict === 'none' && hostSessionMirrorSettleFenceIsCurrent(fence)) {
+      markHostSessionMirrorHydrated(fence.environmentId)
     }
   })
 }
@@ -4022,19 +4082,51 @@ function settleEmptyHostInventoryOnlyIfHostHasNoTerminals(environmentId: string)
 function createHostSessionMirrorSettle(
   verdict: HostSessionMirrorPatchVerdict
 ): HostSessionMirrorSettle {
+  const fenceByEnvironment = new Map<string, HostSessionMirrorSettleFence>()
+  for (const frame of verdict.frames) {
+    fenceByEnvironment.set(
+      frame.environmentId,
+      captureHostSessionMirrorSettleFence(frame.environmentId, {
+        connectionGeneration: frame.expectedEnvironmentConnectionGeneration,
+        pairingRevision: frame.expectedEnvironmentPairingRevision,
+        trackingGeneration: frame.expectedTrackingGeneration
+      })
+    )
+  }
+  if (verdict.fullInventory) {
+    fenceByEnvironment.set(
+      verdict.fullInventory.environmentId,
+      captureHostSessionMirrorSettleFence(verdict.fullInventory.environmentId, {
+        connectionGeneration: verdict.fullInventory.expectedEnvironmentConnectionGeneration,
+        pairingRevision: verdict.fullInventory.expectedEnvironmentPairingRevision,
+        trackingGeneration: verdict.fullInventory.expectedTrackingGeneration
+      })
+    )
+  }
   return () => {
     const { frames, fullInventory } = verdict
     const settles = frames.filter(({ decision }) => decision.settlesHostMirror)
     if (fullInventory && settles.length === fullInventory.publishedSnapshotCount) {
+      const fence = fenceByEnvironment.get(fullInventory.environmentId)
+      if (!fence || !hostSessionMirrorSettleFenceIsCurrent(fence)) {
+        return
+      }
       if (fullInventory.publishedSnapshotCount === 0) {
-        settleEmptyHostInventoryOnlyIfHostHasNoTerminals(fullInventory.environmentId)
+        if (fullInventory.authoritative) {
+          markHostSessionMirrorHydrated(fullInventory.environmentId)
+        } else {
+          settleEmptyHostInventoryOnlyIfHostHasNoTerminals(fence)
+        }
         return
       }
       markHostSessionMirrorHydrated(fullInventory.environmentId)
       return
     }
     for (const { environmentId, worktreeId } of settles) {
-      markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
+      const fence = fenceByEnvironment.get(environmentId)
+      if (fence && hostSessionMirrorSettleFenceIsCurrent(fence)) {
+        markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
+      }
     }
   }
 }
@@ -4048,11 +4140,22 @@ function createHostSessionMirrorSettle(
 function hostSessionMirrorSettleForPatchlessFrame(
   decision: WebSessionTabsSnapshotDecision,
   environmentId: string,
-  worktreeId: string
+  worktreeId: string,
+  expected: {
+    connectionGeneration?: number
+    pairingRevision?: number
+    trackingGeneration?: number
+  } = {}
 ): HostSessionMirrorSettle | null {
-  return decision.settlesHostMirror
-    ? () => markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
-    : null
+  if (!decision.settlesHostMirror) {
+    return null
+  }
+  const fence = captureHostSessionMirrorSettleFence(environmentId, expected)
+  return () => {
+    if (hostSessionMirrorSettleFenceIsCurrent(fence)) {
+      markHostSessionMirrorWorktreeHydrated(environmentId, worktreeId)
+    }
+  }
 }
 
 export function applyWebSessionTabsStorePatch(
@@ -4217,7 +4320,9 @@ export function applyWebSessionTabsStorePatch(
 
 function loadInitialWebSessionTabs(
   environmentId: string,
+  expectedEnvironmentConnectionGeneration: number,
   expectedEnvironmentPairingRevision: number | undefined,
+  expectedTrackingGeneration: number,
   isCurrent: () => boolean
 ): void {
   // Why: only a conclusion that reached the store may settle the mirror, so
@@ -4294,10 +4399,17 @@ function loadInitialWebSessionTabs(
             frames: applicable.map((snapshot, position) => ({
               environmentId,
               worktreeId: snapshot.worktree,
-              decision: decisions[position]!
+              decision: decisions[position]!,
+              expectedEnvironmentConnectionGeneration,
+              expectedEnvironmentPairingRevision,
+              expectedTrackingGeneration
             })),
             fullInventory: {
               environmentId,
+              authoritative: result.authoritative === true,
+              expectedEnvironmentConnectionGeneration,
+              expectedEnvironmentPairingRevision,
+              expectedTrackingGeneration,
               // Why: a workspace the mirror never writes is not part of the
               // inventory the environment-wide verdict has to account for.
               publishedSnapshotCount: result.snapshots.filter((snapshot) =>
@@ -4406,9 +4518,11 @@ export function useWebSessionTabsSync(): void {
       ? runtimeSessionMirrorEnvironmentKey
           .split('\u0000')
           .map((entry) => {
-            const [environmentId = '', , , rawRevision = ''] = entry.split('\u0001')
+            const [environmentId = '', , rawConnectionGeneration = '0', rawRevision = ''] =
+              entry.split('\u0001')
             return {
               environmentId,
+              expectedEnvironmentConnectionGeneration: Number(rawConnectionGeneration),
               expectedEnvironmentPairingRevision:
                 rawRevision === '' ? undefined : Number(rawRevision)
             }
@@ -4453,6 +4567,9 @@ export function useWebSessionTabsSync(): void {
       inventoryReceived: boolean
       latestInventoryReceivedFrame: number
       pendingMissingWorktrees: Set<string>
+      expectedEnvironmentConnectionGeneration: number
+      expectedEnvironmentPairingRevision?: number
+      expectedTrackingGeneration: number
     }
     type VisibilityResumeMissing = {
       environmentId: string
@@ -4630,7 +4747,13 @@ export function useWebSessionTabsSync(): void {
             frames: decided.map(({ environmentId, snapshot, decision }) => ({
               environmentId,
               worktreeId: snapshot.worktree,
-              decision
+              decision,
+              expectedEnvironmentConnectionGeneration:
+                batch.environments.get(environmentId)?.expectedEnvironmentConnectionGeneration,
+              expectedEnvironmentPairingRevision:
+                batch.environments.get(environmentId)?.expectedEnvironmentPairingRevision,
+              expectedTrackingGeneration:
+                batch.environments.get(environmentId)?.expectedTrackingGeneration
             }))
           },
           operations.map(({ snapshot }) => snapshot)
@@ -4800,7 +4923,15 @@ export function useWebSessionTabsSync(): void {
             trackedWorktrees,
             inventoryReceived: false,
             latestInventoryReceivedFrame: 0,
-            pendingMissingWorktrees: new Set()
+            pendingMissingWorktrees: new Set(),
+            expectedEnvironmentConnectionGeneration:
+              environments.find((environment) => environment.environmentId === environmentId)
+                ?.expectedEnvironmentConnectionGeneration ??
+              getRuntimeEnvironmentConnectionGeneration(environmentId),
+            expectedEnvironmentPairingRevision: environments.find(
+              (environment) => environment.environmentId === environmentId
+            )?.expectedEnvironmentPairingRevision,
+            expectedTrackingGeneration: getWebSessionTabsTrackingGeneration(environmentId)
           })
         }
       }
@@ -4819,7 +4950,11 @@ export function useWebSessionTabsSync(): void {
     }
 
     // Why: the stream's initial snapshot can land after first render, so a one-shot fetch makes initial parity deterministic.
-    for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
+    for (const {
+      environmentId,
+      expectedEnvironmentConnectionGeneration,
+      expectedEnvironmentPairingRevision
+    } of environments) {
       if (
         !shouldSyncAllRuntimeSessionTabs({
           activeRuntimeEnvironmentId: environmentId,
@@ -4829,6 +4964,7 @@ export function useWebSessionTabsSync(): void {
         continue
       }
       let requestedInitialLoad = false
+      const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
       environmentIdBySubscriptionSpec.push(environmentId)
       subscriptionSpecs.push({
         subscribe: (isCurrent, { visibilityGeneration }) => {
@@ -4836,7 +4972,13 @@ export function useWebSessionTabsSync(): void {
           let awaitingVisibilityResumeInventory = isVisibilityRestart
           if (!requestedInitialLoad) {
             requestedInitialLoad = true
-            loadInitialWebSessionTabs(environmentId, expectedEnvironmentPairingRevision, isCurrent)
+            loadInitialWebSessionTabs(
+              environmentId,
+              expectedEnvironmentConnectionGeneration,
+              expectedEnvironmentPairingRevision,
+              expectedTrackingGeneration,
+              isCurrent
+            )
           }
           return window.api.runtimeEnvironments.subscribe(
             {
@@ -4957,10 +5099,17 @@ export function useWebSessionTabsSync(): void {
                             frames: applicable.map(({ snapshot }, position) => ({
                               environmentId,
                               worktreeId: snapshot.worktree,
-                              decision: decisions[position]!
+                              decision: decisions[position]!,
+                              expectedEnvironmentConnectionGeneration,
+                              expectedEnvironmentPairingRevision,
+                              expectedTrackingGeneration
                             })),
                             fullInventory: {
                               environmentId,
+                              authoritative: event.authoritative === true,
+                              expectedEnvironmentConnectionGeneration,
+                              expectedEnvironmentPairingRevision,
+                              expectedTrackingGeneration,
                               // Why: a workspace the mirror never writes is not
                               // part of the inventory this verdict accounts for.
                               publishedSnapshotCount: event.snapshots.filter((snapshot) =>
@@ -5049,7 +5198,16 @@ export function useWebSessionTabsSync(): void {
                         settleHydration = applyWebSessionTabsStorePatch(
                           (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
                           {
-                            frames: [{ environmentId, worktreeId: recovered.worktree, decision }]
+                            frames: [
+                              {
+                                environmentId,
+                                worktreeId: recovered.worktree,
+                                decision,
+                                expectedEnvironmentConnectionGeneration,
+                                expectedEnvironmentPairingRevision,
+                                expectedTrackingGeneration
+                              }
+                            ]
                           },
                           recovered,
                           event.type === 'updated' && !replayed
@@ -5059,7 +5217,12 @@ export function useWebSessionTabsSync(): void {
                         settleHydration = hostSessionMirrorSettleForPatchlessFrame(
                           decision,
                           environmentId,
-                          recovered.worktree
+                          recovered.worktree,
+                          {
+                            connectionGeneration: expectedEnvironmentConnectionGeneration,
+                            pairingRevision: expectedEnvironmentPairingRevision,
+                            trackingGeneration: expectedTrackingGeneration
+                          }
                         )
                       }
                     }
@@ -5137,6 +5300,7 @@ export function useWebSessionTabsSync(): void {
     ) {
       return
     }
+    const expectedTrackingGeneration = getWebSessionTabsTrackingGeneration(environmentId)
 
     let requestedInitialTerminal = false
     let requestedRespawnAfterWake = false
@@ -5146,7 +5310,8 @@ export function useWebSessionTabsSync(): void {
       event: RuntimeMobileSessionTabsResult & { type: 'snapshot' | 'updated' },
       response: RuntimeRpcResponse<unknown>,
       isCurrent: () => boolean,
-      receivedFrame: number
+      receivedFrame: number,
+      expectedTrackingGeneration: number
     ): Promise<HostSessionMirrorSettle | null> => {
       const recovered = await recoverWebSessionTerminalOrphansBeforeApply(
         useAppStore.getState(),
@@ -5193,13 +5358,29 @@ export function useWebSessionTabsSync(): void {
       // Why: a rejected frame settles only on the accepted view that outranked it.
       let settleMirror: HostSessionMirrorSettle | null = fresh
         ? null
-        : hostSessionMirrorSettleForPatchlessFrame(decision, environmentId, recovered.worktree)
+        : hostSessionMirrorSettleForPatchlessFrame(decision, environmentId, recovered.worktree, {
+            connectionGeneration: activeWorktreeRuntimeConnectionGeneration,
+            pairingRevision: expectedEnvironmentPairingRevision,
+            trackingGeneration: expectedTrackingGeneration
+          })
       try {
         if (fresh) {
           const replayed = isRuntimeSubscriptionReplayResponse(response)
           settleMirror = applyWebSessionTabsStorePatch(
             (state) => applyWebSessionTabsSnapshot(state, recovered, environmentId),
-            { frames: [{ environmentId, worktreeId: recovered.worktree, decision }] },
+            {
+              frames: [
+                {
+                  environmentId,
+                  worktreeId: recovered.worktree,
+                  decision,
+                  expectedEnvironmentConnectionGeneration:
+                    activeWorktreeRuntimeConnectionGeneration,
+                  expectedEnvironmentPairingRevision,
+                  expectedTrackingGeneration
+                }
+              ]
+            },
             recovered,
             event.type === 'updated' && !replayed
           )
@@ -5278,7 +5459,13 @@ export function useWebSessionTabsSync(): void {
                   event.worktree,
                   receivedFrame
                 )
-                void applyActiveSnapshot(event, response, isCurrent, receivedFrame)
+                void applyActiveSnapshot(
+                  event,
+                  response,
+                  isCurrent,
+                  receivedFrame,
+                  expectedTrackingGeneration
+                )
                   .catch((error) => {
                     if (isCurrent()) {
                       console.warn(

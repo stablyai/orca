@@ -2,7 +2,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -15,6 +18,7 @@ import {
 } from '../shared/agent-hook-listener/endpoint-publication'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
@@ -24,10 +28,16 @@ import {
   isHookRequestTruncatedError
 } from '../shared/agent-hook-transport-interference'
 import {
+  isAgentHookSource,
   REMOTE_AGENT_HOOK_ENV,
   type AgentHookRelayEnvelope,
   type AgentHookSource
 } from '../shared/agent-hook-relay'
+import {
+  buildSpoolHookBody,
+  drainAgentHookSpool,
+  type SpoolRecord
+} from '../shared/agent-hook-spool'
 import { buildRelayHookPtyEnv, defaultEndpointDir } from './agent-hook-endpoint-coordinates'
 import { buildRelayHookEnvelope, hookBodyEnv, hookBodyVersion } from './agent-hook-envelope-build'
 import { AgentHookResultRetryScheduler } from './agent-hook-result-retry-scheduler'
@@ -101,6 +111,19 @@ export class RelayAgentHookServer {
     this.endpointFileWritten = false
     this.portFallbackApplied = false
     try {
+      drainAgentHookSpool({
+        endpointDir: this.endpointDir,
+        getPersistedLaunchTokenHash: () => undefined,
+        ingest: (record) => this.ingestSpoolRecord(record)
+      })
+    } catch (err) {
+      // Why: a downstream relay failure must not prevent the loopback listener from starting;
+      // the untruncated spool file remains available for retry on the next restart.
+      process.stderr.write(
+        `[relay-hook-server] spool replay failed: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    }
+    try {
       await this.listenOn(this.preferredPort)
     } catch (err) {
       // Why: fall back to an ephemeral port on EADDRINUSE; clients use the endpoint file.
@@ -155,7 +178,8 @@ export class RelayAgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     return this.endpointFileWritten
   }
@@ -233,7 +257,6 @@ export class RelayAgentHookServer {
       req.destroy()
     })
     try {
-      const body = await readRequestBody(req)
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
       const source = resolveHookSource(pathname)
       if (!source) {
@@ -241,16 +264,18 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
-      const event = normalizeHookPayload(this.state, source, body, this.env, {
+      const body = await readRequestBody(req)
+      const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+      const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
         deferCompactOwnershipToClient: true
       })
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
-        const env = hookBodyEnv(body)
-        const version = hookBodyVersion(body)
+        const env = hookBodyEnv(hookBody)
+        const version = hookBodyVersion(hookBody)
         this.applyEvent(event, source, env, version)
-        this.retryScheduler.scheduleAssistantMessageRetry(source, body, event, env, version)
-        this.retryScheduler.scheduleCodexSubagentPoll(source, body, event, env, version)
+        this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
+        this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
       }
       res.writeHead(204)
       res.end()
@@ -273,7 +298,8 @@ export class RelayAgentHookServer {
     event: AgentHookEventPayload,
     source: AgentHookSource,
     env?: string,
-    version?: string
+    version?: string,
+    options: { isReplay?: boolean } = {}
   ): void {
     if (event.payload.state !== 'done' || event.payload.lastAssistantMessage) {
       this.retryScheduler.clearAssistantMessageRetry(event.paneKey)
@@ -294,6 +320,22 @@ export class RelayAgentHookServer {
       }
       this.clearPaneState(oldest)
     }
-    this.forward(buildRelayHookEnvelope(event, source, env, version))
+    this.forward(buildRelayHookEnvelope(event, source, env, version, options))
+  }
+
+  private ingestSpoolRecord(record: SpoolRecord): void {
+    if (!isAgentHookSource(record.source)) {
+      return
+    }
+    const body = buildSpoolHookBody(record)
+    const event = normalizeHookPayload(this.state, record.source, body, this.env, {
+      deferCompactOwnershipToClient: true
+    })
+    if (!event) {
+      return
+    }
+    this.applyEvent(event, record.source, hookBodyEnv(body), hookBodyVersion(body), {
+      isReplay: true
+    })
   }
 }

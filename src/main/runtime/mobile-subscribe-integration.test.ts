@@ -3,7 +3,6 @@
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest'
 import type * as GitUsernameModule from '../git/git-username'
-import type { RuntimeMobileSessionTabsSnapshot } from '../../shared/runtime-types'
 import { OrcaRuntimeService } from './orca-runtime'
 
 vi.mock('../git/worktree', () => ({
@@ -211,6 +210,7 @@ describe('mobile subscribe integration', () => {
       }
       outputSequence: number
       writeChain: Promise<void>
+      ownership: { settle: () => Promise<void>; owner: undefined }
     }
     const runtimePrivate = runtime as unknown as {
       headlessTerminals: Map<string, HeadlessStateForTest>
@@ -221,7 +221,8 @@ describe('mobile subscribe integration', () => {
         getSnapshot: () => ({ rehydrateSequences: '', snapshotAnsi: '', cols: 90, rows: 30 })
       },
       outputSequence: 17,
-      writeChain: Promise.resolve()
+      writeChain: Promise.resolve(),
+      ownership: { settle: async () => {}, owner: undefined }
     })
 
     await expect(runtime.serializeMainTerminalBuffer('pty-empty')).resolves.toEqual({
@@ -840,15 +841,80 @@ describe('mobile subscribe integration', () => {
       await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
       runtime.handleMobileUnsubscribe('pty-1', 'client-a')
 
-      // No subscribers, indefinite hold — PTY stays at phone dims.
-      await vi.advanceTimersByTimeAsync(60_000)
-      expect(ptySizes.get('pty-1')).toEqual({ cols: 45, rows: 20 })
-      expect(runtime.isMobileSubscriberActive('pty-1')).toBe(false)
-
-      // Manual reclaim: PTY restored to desktop dims via the held branch.
-      const ok = await runtime.reclaimTerminalForDesktop('pty-1')
-      expect(ok).toBe(true)
+      await runtime.reclaimTerminalForDesktop('pty-1')
       expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+
+      await vi.advanceTimersByTimeAsync(250)
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    })
+
+    it('reclaim cancels the soft-leave timer in the remote-layout branch', async () => {
+      const { runtime } = createRuntime()
+      await runtime.updateRemoteDesktopViewer('pty-1', 'sub-a', 'viewer-a', 120, 32)
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+      await vi.advanceTimersByTimeAsync(250)
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    })
+
+    it('reclaim cancels pending restore timers on the active-subscriber branch', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      await runtime.handleMobileSubscribe('pty-1', 'client-b', { cols: 40, rows: 18 })
+
+      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      pendingRestore.set('pty-1', { timer: setTimeout(() => {}, 60_000), clientId: 'client-b' })
+      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      expect(pendingSoft.has('pty-1')).toBe(true)
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(pendingRestore.has('pty-1')).toBe(false)
+      expect(pendingSoft.has('pty-1')).toBe(false)
+    })
+
+    it('reclaim cancels pending restore timers on the orphan-driver branch', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
+
+      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(pendingRestore.has('pty-1')).toBe(false)
+      expect(pendingSoft.has('pty-1')).toBe(false)
+    })
+
+    it('reclaim cancels pending restore timers when no driver lock remains', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+      ;(Reflect.get(runtime, 'terminalFitOverrides') as Map<string, unknown>).delete('pty-1')
+      ;(Reflect.get(runtime, 'currentDriver') as Map<string, { kind: string }>).set('pty-1', {
+        kind: 'idle'
+      })
+
+      const pendingRestore = Reflect.get(runtime, 'pendingRestoreTimers') as Map<string, unknown>
+      const pendingSoft = Reflect.get(runtime, 'pendingSoftLeavers') as Map<string, unknown>
+      expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
+      expect(pendingRestore.has('pty-1')).toBe(false)
+      expect(pendingSoft.has('pty-1')).toBe(false)
+    })
+
+    it('reclaim revokes soft-leave grace admission for mobile input', async () => {
+      const { runtime } = createRuntime()
+      await runtime.handleMobileSubscribe('pty-1', 'client-a', { cols: 45, rows: 20 })
+      runtime.handleMobileUnsubscribe('pty-1', 'client-a')
+
+      const claim = runtime.beginMobileInputFloor('pty-1', 'client-a')
+      expect(claim).not.toBeNull()
+      claim?.rollback()
+
+      await runtime.reclaimTerminalForDesktop('pty-1')
+      expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+      expect(runtime.beginMobileInputFloor('pty-1', 'client-a')).toBeNull()
     })
 
     it('reclaimTerminalForDesktop prefers fresh desktop geometry for a held PTY', async () => {
@@ -912,109 +978,6 @@ describe('mobile subscribe integration', () => {
       await vi.advanceTimersByTimeAsync(LEGACY_RESTORE_MS)
       // Now restored to desktop — no subscriber, no override.
       expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(false)
-    })
-  })
-
-  describe('session.tabs title/status churn coalescing', () => {
-    type SessionTabsPrivate = {
-      mobileSessionTabsByWorktree: Map<string, RuntimeMobileSessionTabsSnapshot>
-      touchMobileSessionSnapshotsForPty: (ptyId: string) => void
-      notifyMobileSessionTabsChanged: (worktreeId?: string) => void
-    }
-
-    function seedPtyBackedSnapshot(runtime: OrcaRuntimeService, ptyId: string): void {
-      const priv = runtime as unknown as SessionTabsPrivate
-      priv.mobileSessionTabsByWorktree.set('worktree-a', {
-        worktree: 'worktree-a',
-        publicationEpoch: 'epoch-1',
-        snapshotVersion: 1,
-        activeGroupId: 'group-1',
-        activeTabId: 'tab-1',
-        activeTabType: 'terminal',
-        tabs: [
-          {
-            type: 'terminal',
-            id: 'tab-1',
-            title: 'agent',
-            parentTabId: 'group-1',
-            leafId: 'leaf-1',
-            ptyId,
-            isActive: true
-          }
-        ]
-      })
-    }
-
-    it('collapses a rapid title-flip burst into a single emit (repro)', () => {
-      const { runtime } = createRuntime()
-      seedPtyBackedSnapshot(runtime, 'pty-1')
-      const priv = runtime as unknown as SessionTabsPrivate
-
-      const emits: number[] = []
-      const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        emits.push(snapshot.snapshotVersion)
-      })
-
-      // A spinner-in-title agent flips the title ~20 times within a second.
-      const FLIPS = 20
-      for (let i = 0; i < FLIPS; i++) {
-        priv.touchMobileSessionSnapshotsForPty('pty-1')
-        vi.advanceTimersByTime(10)
-      }
-      // Nothing has fired yet — all flips landed inside the trailing window.
-      expect(emits).toHaveLength(0)
-
-      vi.advanceTimersByTime(50)
-
-      // Pre-fix this fanned out one emit per flip; now it is a single emit.
-      expect(emits).toHaveLength(1)
-      // The emitted version is the freshest (monotonic, never a stale one).
-      const stored = priv.mobileSessionTabsByWorktree.get('worktree-a')
-      expect(emits[0]).toBe(stored?.snapshotVersion)
-      expect(emits[0]).toBe(1 + FLIPS)
-
-      unsubscribe()
-    })
-
-    it('lets a structural change emit immediately and supersede the coalesced notify', () => {
-      const { runtime } = createRuntime()
-      seedPtyBackedSnapshot(runtime, 'pty-1')
-      const priv = runtime as unknown as SessionTabsPrivate
-
-      const emits: number[] = []
-      const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        emits.push(snapshot.snapshotVersion)
-      })
-
-      // Title churn schedules a coalesced notify...
-      priv.touchMobileSessionSnapshotsForPty('pty-1')
-      // ...then a structural change (e.g. tab activated) demands a prompt emit.
-      priv.notifyMobileSessionTabsChanged('worktree-a')
-      expect(emits).toHaveLength(1)
-
-      // The immediate emit cancelled the pending coalesced notify — no duplicate trailing emit.
-      vi.advanceTimersByTime(50)
-      expect(emits).toHaveLength(1)
-
-      unsubscribe()
-    })
-
-    it('flushes a pending notify when the last subscriber closes', () => {
-      const { runtime } = createRuntime()
-      seedPtyBackedSnapshot(runtime, 'pty-1')
-      const priv = runtime as unknown as SessionTabsPrivate
-
-      const emits: number[] = []
-      const unsubscribe = runtime.onMobileSessionTabsChanged((snapshot) => {
-        emits.push(snapshot.snapshotVersion)
-      })
-
-      priv.touchMobileSessionSnapshotsForPty('pty-1')
-      expect(emits).toHaveLength(0)
-
-      // Closing the subscription flushes the pending window so the final state reaches the listener.
-      unsubscribe()
-      expect(emits).toHaveLength(1)
     })
   })
 })

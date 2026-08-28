@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import { resumePaneRendering, suspendPaneRendering } from './pane-rendering-control'
+import { collectPaneRenderingDiagnostics } from './pane-rendering-diagnostics'
+import { schedulePaneRevealPresent } from './pane-reveal-repaint'
 import { attachWebgl, resetTerminalWebglSuggestion } from './pane-webgl-renderer'
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 
@@ -168,6 +170,44 @@ describe('terminal WebGL context recovery', () => {
     expect(pane.webglAddon).toBeNull()
   })
 
+  it('stops resume retries after repeated losses in the retry window', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+
+    expect(pane.webglContextLossTimestamps).toHaveLength(3)
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+
+    resumePaneRendering([pane])
+
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(3)
+  })
+
+  it('stops reveal retries after repeated losses in the retry window', () => {
+    const pane = createPane()
+
+    attachWebgl(pane)
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+    resumePaneRendering([pane])
+    fireContextLoss(pane)
+
+    schedulePaneRevealPresent(() => [pane])
+
+    expect(pane.webglDisabledAfterContextLoss).toBe(true)
+    expect(pane.webglAddon).toBeNull()
+    expect(pane.terminal.loadAddon).toHaveBeenCalledTimes(3)
+  })
+
   // Why exact keys: a GPU death loses every pane's context at once and the
   // crash ring coalesces the repeats, so the population has to survive on the
   // payload. It must use the same names the fit-retry crumb uses, or one ring
@@ -186,8 +226,25 @@ describe('terminal WebGL context recovery', () => {
     expect(recorded).toEqual([
       {
         kind: 'webgl-context-loss',
-        detail: { paneId: 1, livePanes: expect.any(Number), livePaneManagers: expect.any(Number) }
+        detail: {
+          paneId: 1,
+          lossesInWindow: 1,
+          livePanes: expect.any(Number),
+          livePaneManagers: expect.any(Number)
+        }
       }
     ])
+  })
+
+  it('reports only recent context losses in rendering diagnostics', () => {
+    const now = 1_700_000_000_000
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    const pane = createPane()
+    pane.webglContextLossTimestamps = [now - 60_001, now - 1_000]
+
+    const [diagnostics] = collectPaneRenderingDiagnostics(new Map([[pane.id, pane]]))
+
+    expect(diagnostics.webglContextLossesInWindow).toBe(1)
+    expect(pane.webglContextLossTimestamps).toEqual([now - 60_001, now - 1_000])
   })
 })

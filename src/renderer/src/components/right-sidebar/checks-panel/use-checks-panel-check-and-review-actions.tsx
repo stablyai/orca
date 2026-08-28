@@ -1,6 +1,6 @@
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
-import { refreshHostedReviewCard } from '@/store/slices/hosted-review'
+import { refreshHostedReviewCard } from '@/store/slices/hosted-review-card-refresh'
 import { checksPanelAsyncResultKey } from '../checks-panel-async-result-key'
 import {
   buildFixBrokenChecksPrompt,
@@ -349,11 +349,20 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
   )
 
   const handleUnlinkPullRequest = useCallback(() => {
-    if (!activeWorktreeId || activeReview?.provider !== 'github' || linkedPR === null) {
+    if (
+      !activeWorktreeId ||
+      !activeWorktree ||
+      activeReview?.provider !== 'github' ||
+      linkedPR === null
+    ) {
       return
     }
-    void updateWorktreeMeta(activeWorktreeId, { linkedPR: null })
-  }, [activeReview?.provider, activeWorktreeId, linkedPR, updateWorktreeMeta])
+    void updateWorktreeMeta(
+      activeWorktreeId,
+      { linkedPR: null },
+      { executionHostId: activeWorktree.hostId }
+    )
+  }, [activeReview?.provider, activeWorktree, activeWorktreeId, linkedPR, updateWorktreeMeta])
 
   const handleLinkAnotherPullRequest = useCallback(() => {
     if (!activeWorktreeId || !activeWorktree || activeReview?.provider !== 'github') {
@@ -364,6 +373,7 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
       // Why: the same workspace ID can exist under two hosts. Naming the owner
       // keeps the dialog on this workspace instead of the ambiguous lookup.
       repoId: activeWorktree.repoId,
+      executionHostId: activeWorktree.hostId,
       currentDisplayName: activeWorktree.displayName,
       currentIssue: activeWorktree.linkedIssue,
       currentPR: activeWorktree.linkedPR ?? activeReview.number,

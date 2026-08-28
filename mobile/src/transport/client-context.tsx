@@ -21,6 +21,7 @@ import {
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
 import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
+import { recordConnectionRevival } from './persisted-connection-log-store'
 import {
   createHostClientSelectors,
   listHostClients,
@@ -35,8 +36,6 @@ import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
 type StoreEntry = HostClientStoreEntry
-export type { HostClientAcquisition } from './host-client-acquisition-registry'
-export type { RpcClientContextValue } from './rpc-client-context-contract'
 
 const Ctx = createContext<RpcClientContextValue | null>(null)
 
@@ -311,7 +310,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       for (const hostId of pendingAcquisitionsRef.current.keys()) {
         retrySchedulerRef.current?.expedite(hostId)
       }
-      for (const entry of storeRef.current.values()) {
+      for (const [hostId, entry] of storeRef.current) {
+        recordConnectionRevival(hostId, reason)
         try {
           entry.client.notifyForeground(reason)
         } catch {

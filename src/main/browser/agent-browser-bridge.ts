@@ -49,14 +49,22 @@ import type {
 } from '../../shared/runtime-types'
 import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipboard-text'
 import { normalizeBrowserNavigationUrl } from '../../shared/browser-url'
+import { mapSettledWithConcurrency } from '../../shared/map-with-concurrency'
 import { iterateBrowserTextInsertionChunks } from './browser-text-insertion'
 import { createAgentBrowserProcessEnvironment } from './agent-browser-process-environment'
+import {
+  ORCA_TAB_SESSION_PREFIX,
+  sweepOrphanedAgentBrowserSessions
+} from './agent-browser-orphan-sweep'
 
 // Why: must exceed agent-browser's internal timeouts (goto 30s, wait 60s) so the bridge never kills a command before its own timeout fires.
 const EXEC_TIMEOUT_MS = 90_000
 const CONSECUTIVE_TIMEOUT_LIMIT = 3
 const WAIT_PROCESS_TIMEOUT_GRACE_MS = 1_000
 const STALE_SESSION_CLOSE_TIMEOUT_MS = 3_000
+// Why separate from EXEC_TIMEOUT_MS: a close is a member of the 20s will-quit barrier and must finish well inside it.
+const AGENT_BROWSER_CLEANUP_TIMEOUT_MS = 5_000
+const AGENT_BROWSER_CLEANUP_CONCURRENCY = 4
 const EMBEDDED_NAVIGATION_TIMEOUT_MS = 30_000
 export const AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES = 8 * 1024
 export const AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES = AGENT_BROWSER_TEXT_ARGUMENT_MAX_BYTES
@@ -69,6 +77,8 @@ type SessionState = {
   // Why: track active interception patterns so they can be re-enabled after session restart
   activeInterceptPatterns: string[]
   activeCapture: boolean
+  // Why: the daemon retires itself once idle; the gap since the last command is how the bridge notices.
+  lastCommandAt: number
   // Why: verify the tab is alive at execution time, not just enqueue time — queue delay can destroy it in between.
   webContentsId: number
   activeProcess: ChildProcess | null
@@ -83,6 +93,10 @@ type QueuedCommand = {
 type ResolvedBrowserCommandTarget = {
   browserPageId: string
   webContentsId: number
+}
+
+type AgentBrowserCleanupOptions = {
+  closeTimeoutMs?: number
 }
 
 export type BrowserMouseModifier = 'cmd' | 'ctrl' | 'alt' | 'shift'
@@ -341,7 +355,7 @@ function isTabClosedTransportError(message: string): boolean {
 }
 
 function pageUnavailableMessageForSession(sessionName: string): string {
-  const prefix = 'orca-tab-'
+  const prefix = ORCA_TAB_SESSION_PREFIX
   const browserPageId = sessionName.startsWith(prefix) ? sessionName.slice(prefix.length) : null
   return browserPageId
     ? `Browser page ${browserPageId} is no longer available`
@@ -580,6 +594,9 @@ export class AgentBrowserBridge {
   private screenshotTurn: Promise<void> = Promise.resolve()
   private readonly agentBrowserBin: string
   private readonly agentBrowserEnv: NodeJS.ProcessEnv
+  private readonly ownsAgentBrowserSocketDirectory: boolean
+  // Why: null when nothing bounds the daemon, so the bridge never guesses that one was replaced.
+  private readonly agentBrowserIdleTimeoutMs: number | null
   // Why: stash intercept patterns from a swap-destroyed session, keyed by name, so the next session restores them.
   private readonly pendingInterceptRestore = new Map<string, string[]>()
   // Why: promise-lock so two concurrent ensureSession calls don't both create the session entry.
@@ -587,17 +604,22 @@ export class AgentBrowserBridge {
   // Why: `agent-browser close` is async, keyed by session name — recreating before it finishes lets the old teardown close the new session.
   private readonly pendingSessionDestruction = new Map<string, Promise<void>>()
   private readonly cancelledProcesses = new WeakSet<ChildProcess>()
+  private shutdownStarted = false
 
   constructor(
     private readonly browserManager: BrowserManager,
     private readonly options: AgentBrowserBridgeOptions = {}
   ) {
     this.agentBrowserBin = resolveAgentBrowserBinary()
-    this.agentBrowserEnv = createAgentBrowserProcessEnvironment({
+    const processEnvironment = createAgentBrowserProcessEnvironment({
       inheritedEnv: process.env,
       platform: process.platform,
       userDataPath: app.getPath('userData')
     })
+    this.agentBrowserEnv = processEnvironment.env
+    this.ownsAgentBrowserSocketDirectory = processEnvironment.ownsSocketDirectory
+    const idleTimeoutMs = Number(this.agentBrowserEnv.AGENT_BROWSER_IDLE_TIMEOUT_MS)
+    this.agentBrowserIdleTimeoutMs = idleTimeoutMs > 0 ? idleTimeoutMs : null
   }
 
   // ── Tab tracking ──
@@ -678,11 +700,22 @@ export class AgentBrowserBridge {
       this.activeWebContentsId = nextWorktreeActiveWebContentsId
     }
     if (browserPageId) {
-      const sessionName = `orca-tab-${browserPageId}`
-      await this.destroySession(sessionName)
-      this.pendingInterceptRestore.delete(sessionName)
+      await this.onPageClosed(browserPageId)
     }
     this.options.onTabsChanged?.(owningWorktreeId)
+  }
+
+  /**
+   * Retire a page's daemon by page id.
+   *
+   * The headless offscreen backend owns pages by id and unregisters the guest
+   * itself, so `onTabClosed`'s webContentsId lookup can never resolve one — it
+   * has to say which page closed (#16367).
+   */
+  async onPageClosed(browserPageId: string): Promise<void> {
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
+    await this.destroySession(sessionName)
+    this.pendingInterceptRestore.delete(sessionName)
   }
 
   async onProcessSwap(
@@ -691,7 +724,7 @@ export class AgentBrowserBridge {
     previousWebContentsId?: number
   ): Promise<void> {
     // Why: an Electron process swap keeps browserPageId but gives a new webContentsId — destroy the session so the next command recreates it.
-    const sessionName = `orca-tab-${browserPageId}`
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${browserPageId}`
     const session = this.sessions.get(sessionName)
     const oldWebContentsId = previousWebContentsId ?? session?.webContentsId
     const owningWorktreeId = this.browserManager.getWorktreeIdForTab(browserPageId)
@@ -885,7 +918,9 @@ export class AgentBrowserBridge {
             navigationTimeout = null
           }
           if (!this.getWebContents(target.webContentsId)) {
-            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+            throw this.createPageUnavailableError(
+              `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+            )
           }
           // Why: ERR_ABORTED also covers a page vetoing unload; that navigation did not succeed.
           if (
@@ -1606,7 +1641,9 @@ export class AgentBrowserBridge {
             throw error
           }
           if (!this.getWebContents(target.webContentsId)) {
-            throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+            throw this.createPageUnavailableError(
+              `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
+            )
           }
           throw new BrowserError(
             'browser_error',
@@ -2044,12 +2081,32 @@ export class AgentBrowserBridge {
 
   // ── Session lifecycle ──
 
-  async destroyAllSessions(): Promise<void> {
-    const promises: Promise<void>[] = []
-    for (const sessionName of this.sessions.keys()) {
-      promises.push(this.destroySession(sessionName))
-    }
-    await Promise.allSettled(promises)
+  // Why: a previous run that crashed or was SIGKILL'd left one daemon per open tab with
+  // nobody holding its name — closeStaleAgentBrowserSession only resets a name being reused.
+  async sweepOrphanedSessions(): Promise<string[]> {
+    return sweepOrphanedAgentBrowserSessions({
+      binaryPath: this.agentBrowserBin,
+      env: this.agentBrowserEnv,
+      ownsSocketDirectory: this.ownsAgentBrowserSocketDirectory,
+      isSessionLive: (sessionName) =>
+        this.sessions.has(sessionName) || this.pendingSessionCreation.has(sessionName)
+    })
+  }
+
+  async destroyAllSessions(options?: AgentBrowserCleanupOptions): Promise<void> {
+    this.shutdownStarted = true
+    // Why the union: a session still being created has already spawned its daemon but is not in
+    // `sessions` yet, so closing only `sessions` lets that daemon outlive the quit (#16367).
+    const sessionNames = new Set([
+      ...this.sessions.keys(),
+      ...this.pendingSessionCreation.keys(),
+      ...this.pendingSessionDestruction.keys()
+    ])
+    await mapSettledWithConcurrency(
+      [...sessionNames],
+      AGENT_BROWSER_CLEANUP_CONCURRENCY,
+      (sessionName) => this.destroySession(sessionName, options)
+    )
     this.pendingInterceptRestore.clear()
   }
 
@@ -2073,12 +2130,14 @@ export class AgentBrowserBridge {
     execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
     options: EnqueueTargetedCommandOptions = {}
   ): Promise<T> {
+    this.assertCommandAdmission()
     const target = this.resolveCommandTarget(worktreeId, browserPageId, options.requireScopedTarget)
-    const sessionName = `orca-tab-${target.browserPageId}`
+    const sessionName = `${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`
 
     if (options.ensureSession !== false) {
       await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
     }
+    this.assertCommandAdmission()
 
     return new Promise<T>((resolve, reject) => {
       let queue = this.commandQueues.get(sessionName)
@@ -2302,6 +2361,7 @@ export class AgentBrowserBridge {
     if (pendingDestruction) {
       await pendingDestruction
     }
+    this.assertCommandAdmission()
 
     if (this.sessions.has(sessionName)) {
       return
@@ -2311,6 +2371,7 @@ export class AgentBrowserBridge {
     const pending = this.pendingSessionCreation.get(sessionName)
     if (pending) {
       await pending
+      this.assertCommandAdmission()
       return
     }
 
@@ -2337,6 +2398,7 @@ export class AgentBrowserBridge {
         consecutiveTimeouts: 0,
         activeInterceptPatterns: [],
         activeCapture: false,
+        lastCommandAt: Date.now(),
         webContentsId,
         activeProcess: null
       })
@@ -2381,7 +2443,9 @@ export class AgentBrowserBridge {
 
       const destroy = (async (): Promise<void> => {
         try {
-          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+          await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'], {
+            timeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS
+          })
         } catch {
           // Session may already be dead.
         }
@@ -2400,7 +2464,10 @@ export class AgentBrowserBridge {
     }
   }
 
-  private async destroySession(sessionName: string): Promise<void> {
+  private async destroySession(
+    sessionName: string,
+    options: AgentBrowserCleanupOptions = { closeTimeoutMs: AGENT_BROWSER_CLEANUP_TIMEOUT_MS }
+  ): Promise<void> {
     const pendingDestruction = this.pendingSessionDestruction.get(sessionName)
     if (pendingDestruction) {
       await pendingDestruction
@@ -2443,7 +2510,12 @@ export class AgentBrowserBridge {
     const destroy = (async (): Promise<void> => {
       try {
         // Why: each tab has its own named session — close without --session leaves this tab's daemon running.
-        await this.runAgentBrowserRaw(sessionName, ['--session', sessionName, 'close'])
+        // Why bounded: this runs inside the 20s will-quit barrier, so it cannot inherit the 90s exec timeout.
+        await this.runAgentBrowserRaw(
+          sessionName,
+          ['--session', sessionName, 'close'],
+          options.closeTimeoutMs === undefined ? undefined : { timeoutMs: options.closeTimeoutMs }
+        )
       } catch {
         // Session may already be dead
       }
@@ -2474,6 +2546,32 @@ export class AgentBrowserBridge {
     }
   }
 
+  /**
+   * Notice that the daemon retired itself between two commands.
+   *
+   * A replacement daemon still serves the page (every call reasserts `--cdp`)
+   * but carries none of the session's network routes, so without this the
+   * interception the caller configured is silently gone (#16367).
+   */
+  private reinitializeIfDaemonIdledOut(sessionName: string, session: SessionState): void {
+    if (
+      this.agentBrowserIdleTimeoutMs === null ||
+      Date.now() - session.lastCommandAt < this.agentBrowserIdleTimeoutMs
+    ) {
+      return
+    }
+    session.initialized = false
+    if (session.activeInterceptPatterns.length > 0) {
+      this.pendingInterceptRestore.set(sessionName, [...session.activeInterceptPatterns])
+    }
+  }
+
+  private assertCommandAdmission(): void {
+    if (this.shutdownStarted) {
+      throw new BrowserError('browser_owner_unavailable', 'Browser runtime is shutting down')
+    }
+  }
+
   private async execAgentBrowser(
     sessionName: string,
     commandArgs: string[],
@@ -2490,6 +2588,9 @@ export class AgentBrowserBridge {
       await this.destroySession(sessionName)
       throw this.createPageUnavailableError(sessionName)
     }
+
+    this.reinitializeIfDaemonIdledOut(sessionName, session)
+    session.lastCommandAt = Date.now()
 
     const args = ['--session', sessionName]
     const managesInterceptRoutes =
@@ -2772,7 +2873,7 @@ export class AgentBrowserBridge {
   private requireTargetWebContents(target: ResolvedBrowserCommandTarget): WebContents {
     const wc = this.getWebContents(target.webContentsId)
     if (!wc || wc.isDestroyed()) {
-      throw this.createPageUnavailableError(`orca-tab-${target.browserPageId}`)
+      throw this.createPageUnavailableError(`${ORCA_TAB_SESSION_PREFIX}${target.browserPageId}`)
     }
     return wc
   }

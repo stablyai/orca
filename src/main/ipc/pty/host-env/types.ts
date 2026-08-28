@@ -39,11 +39,14 @@ export type CodexHomeLaunchContext = {
   unavailableManagedHomePath?: string
 }
 
+// Why (#16441): Codex launch prep grants hook trust through a codex app-server
+// session. It resolves asynchronously so the Electron main thread stays
+// responsive; every consumer already runs inside an async spawn path.
 export type GetSelectedCodexHomePath = (
   target?: CodexAccountSelectionTarget,
   launchEnv?: NodeJS.ProcessEnv,
   launchContext?: CodexHomeLaunchContext
-) => string | null
+) => string | null | Promise<string | null>
 
 export type PrepareCodexSessionResume = (args: {
   providerSession: AgentProviderSessionMetadata

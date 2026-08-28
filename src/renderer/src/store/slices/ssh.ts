@@ -4,11 +4,13 @@ import type {
   SshConnectionState,
   PortForwardEntry,
   EnrichedDetectedPort,
-  SshTarget
+  SshTargetSummary
 } from '../../../../shared/ssh-types'
 import {
   buildRemovedSshTargetCleanupPatch,
+  collectSshTargetGenerations,
   sshConnectionStatesEqual,
+  sshTargetGenerationsEqual,
   sshTargetLabelsEqual
 } from './ssh-target-cleanup'
 
@@ -33,6 +35,16 @@ export type SshSlice = {
   /** Maps target IDs to their user-facing labels. Populated during hydration
    * so components can look up labels without per-component IPC calls. */
   sshTargetLabels: Map<string, string>
+  /**
+   * Maps target IDs to their *registration* generations — the incarnation an
+   * owner is fenced against, not `SshConnectionState.connectionGeneration`.
+   *
+   * Mirrored here for the same reason as the labels, and mirrored by the runtime
+   * buckets already: only a generation makes a desktop SSH host fenceable, so a
+   * consumer without it degrades every such host to view-only. A target with no
+   * usable generation is simply absent — see `collectSshTargetGenerations`.
+   */
+  sshTargetGenerations: Map<string, number>
   /** Maps REMOVED target IDs to their last known label (from re-adoption
    * tombstones). Lets ghost-host UI show a friendly name instead of the raw id
    * for a workspace still pinned to a deleted target. */
@@ -60,7 +72,7 @@ export type SshSlice = {
   setSshConnectionState: (targetId: string, state: SshConnectionState) => void
   setSshTargetLabels: (labels: Map<string, string>) => void
   setRemovedSshTargetLabels: (labels: Record<string, string>) => void
-  setSshTargetsMetadata: (targets: Pick<SshTarget, 'id' | 'label'>[]) => void
+  setSshTargetsMetadata: (targets: SshTargetSummary[]) => void
   clearRemovedSshTargetState: (targetId: string) => void
   markRemoteWorkspaceHydrated: (targetId: string) => void
   clearRemoteWorkspaceHydrated: (targetId: string) => void
@@ -85,6 +97,7 @@ function advanceLocalSshTargetConnectionGeneration(targetId: string): void {
 export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) => ({
   sshConnectionStates: new Map(),
   sshTargetLabels: new Map(),
+  sshTargetGenerations: new Map(),
   removedSshTargetLabels: new Map(),
   sshTargetsHydrated: false,
   remoteWorkspaceHydratedTargetIds: new Set(),
@@ -123,13 +136,20 @@ export const createSshSlice: StateCreator<AppState, [], [], SshSlice> = (set) =>
     set({ removedSshTargetLabels: new Map(Object.entries(labels)) }),
   setSshTargetsMetadata: (targets) =>
     set((s) => {
-      if (sshTargetLabelsEqual(s.sshTargetLabels, targets)) {
+      const sshTargetGenerations = collectSshTargetGenerations(targets)
+      // Both maps gate the early return: a caller that first hydrated through a
+      // generation-less path would otherwise be frozen out by matching labels.
+      if (
+        sshTargetLabelsEqual(s.sshTargetLabels, targets) &&
+        sshTargetGenerationsEqual(s.sshTargetGenerations, sshTargetGenerations)
+      ) {
         // Why: an unchanged (even empty) list is still a successful load — the
         // hydration flag must flip on the first fetch of an empty target set.
         return s.sshTargetsHydrated ? s : { sshTargetsHydrated: true }
       }
       return {
         sshTargetLabels: new Map(targets.map((target) => [target.id, target.label])),
+        sshTargetGenerations,
         sshTargetsHydrated: true
       }
     }),

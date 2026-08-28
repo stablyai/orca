@@ -79,11 +79,12 @@ describe('folder workspace owner-routed mutations', () => {
       folderWorkspaces: [folderWorkspace]
     })
 
-    await store
-      .getState()
-      .updateWorktreesMeta(
-        new Map([[folderWorkspaceKey(folderWorkspace.id), { manualOrder: 9000 }]])
-      )
+    await store.getState().updateWorktreesMeta([
+      {
+        worktreeId: folderWorkspaceKey(folderWorkspace.id),
+        updates: { manualOrder: 9000 }
+      }
+    ])
 
     expect(folderWorkspacesUpdate).toHaveBeenCalledWith({
       folderWorkspaceId: folderWorkspace.id,

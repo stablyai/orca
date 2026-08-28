@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { getConnectionId } from '@/lib/connection-context'
+import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
 import {
   flushAsyncWork,
@@ -37,6 +40,15 @@ vi.mock('@/lib/worktree-activation', () => ({
 
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
+}))
+
+vi.mock('./terminal-remote-file-download-open', () => ({
+  downloadAndOpenRemoteTerminalFile: vi.fn()
+}))
+
+vi.mock('@/lib/file-preview', () => ({
+  getWorkspaceFilePreviewPlan: vi.fn(() => ({ status: 'doc-preview' })),
+  openFileInBrowserTab: vi.fn()
 }))
 
 installTerminalLinkTestEnvironment(doubles)
@@ -114,8 +126,7 @@ describe('handleOscLink', () => {
 
     openDetectedFilePath('/home/me/repo/src/main.ts', null, null, {
       worktreeId: 'wt-1',
-      worktreePath: '/home/me/repo',
-      openWithSystemDefault: true
+      worktreePath: '/home/me/repo'
     })
     await new Promise((resolve) => setTimeout(resolve, 0))
 
@@ -205,7 +216,7 @@ describe('handleOscLink', () => {
     )
   })
 
-  it('does not open SSH html file links as client-local file browser tabs', async () => {
+  it('downloads shift-modifier SSH file links before the OS opens them, like the popover row', async () => {
     setPlatform('Macintosh')
     vi.mocked(getConnectionId).mockReturnValue('ssh-1')
 
@@ -217,6 +228,53 @@ describe('handleOscLink', () => {
     await new Promise((resolve) => setTimeout(resolve, 0))
 
     expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openFilePathMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(downloadAndOpenRemoteTerminalFile).toHaveBeenCalledWith(
+      expect.objectContaining({ connectionId: 'ssh-1' }),
+      '/home/me/repo/report.html'
+    )
+  })
+
+  it('renders plain-modifier SSH html links in the doc preview, not a client-local browser tab', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+
+    openDetectedFilePath('/home/me/repo/report.html', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
+    expect(openFileMock).not.toHaveBeenCalled()
+    expect(openFileInBrowserTab).toHaveBeenCalledWith({
+      filePath: '/home/me/repo/report.html',
+      worktreeId: 'wt-1'
+    })
+    // Why: the preview tab is the surface — activation must not re-seed a shell into a
+    // workspace whose last terminal the user closed.
+    expect(activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      providesInitialSurface: true
+    })
+  })
+
+  it('falls back to the source editor when the preview plan is unsupported', async () => {
+    setPlatform('Macintosh')
+    vi.mocked(getConnectionId).mockReturnValue('ssh-1')
+    vi.mocked(getWorkspaceFilePreviewPlan).mockReturnValueOnce({
+      status: 'unsupported',
+      message: 'nope',
+      reason: 'outside-worktree'
+    })
+
+    openDetectedFilePath('/home/me/repo/report.html', null, null, {
+      worktreeId: 'wt-1',
+      worktreePath: '/home/me/repo'
+    })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+
+    expect(openFileInBrowserTab).not.toHaveBeenCalled()
     expect(openFileMock).toHaveBeenCalledWith(
       expect.objectContaining({
         filePath: '/home/me/repo/report.html',

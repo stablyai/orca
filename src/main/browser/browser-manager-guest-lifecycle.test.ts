@@ -45,6 +45,32 @@ import {
   resetBrowserManagerMocks,
   resetBrowserManagerState
 } from './browser-manager-test-harness'
+import { installDocPreviewGuestPolicy } from './doc-preview-guest-policy'
+import { mintDocPreviewGrant, revokeAllDocPreviewGrants } from './doc-preview-grant-registry'
+import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
+
+/**
+ * A page the document half of the registry really holds. Built rather than named: membership is
+ * what both doors refuse on now, so an id that merely looks like a preview's would be admitted.
+ */
+function registerWorkspaceDocPage(browserPageId: string): void {
+  const grant = mintDocPreviewGrant({
+    owner: { kind: 'ssh', connectionId: 'ssh-1' },
+    root: '/home/alice/docs',
+    entryRelativePath: 'index.html',
+    browserPageId
+  })
+  const guest = {
+    isFocused: () => false,
+    isDestroyed: () => false,
+    getURL: () => buildDocPreviewUrl(grant.id, grant.entryRelativePath),
+    on: vi.fn(),
+    once: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn()
+  }
+  installDocPreviewGuestPolicy(guest as never, { id: rendererWebContentsId, send: vi.fn() })
+}
 
 const {
   guestOffMock,
@@ -60,6 +86,7 @@ describe('browserManager', () => {
   beforeEach(() => {
     resetBrowserManagerMocks(browserMocks)
     resetBrowserManagerState()
+    revokeAllDocPreviewGrants()
   })
 
   afterEach(() => {
@@ -90,6 +117,77 @@ describe('browserManager', () => {
     })
 
     expect(browserManager.getSessionProfileIdForTab('browser-1')).toBe('work')
+  })
+
+  // Why both doors: one id in both halves of the registry would make the tool door answer with a
+  // document guest for a page the reader is browsing in.
+  it.each(['registerGuest', 'registerOffscreenGuest'] as const)(
+    'refuses %s for a page the document registry already holds',
+    (entryPoint) => {
+      const guest = {
+        id: 129,
+        isDestroyed: vi.fn(() => false),
+        getType: vi.fn(() => 'webview'),
+        setBackgroundThrottling: guestSetBackgroundThrottlingMock,
+        setWindowOpenHandler: guestSetWindowOpenHandlerMock,
+        on: guestOnMock,
+        off: guestOffMock,
+        openDevTools: guestOpenDevToolsMock
+      }
+      webContentsFromIdMock.mockReturnValue(guest)
+      browserManager.attachGuestPolicies(guest as never)
+      const browserPageId = 'doc-page-1'
+      registerWorkspaceDocPage(browserPageId)
+
+      if (entryPoint === 'registerGuest') {
+        expect(
+          browserManager.registerGuest({
+            browserPageId,
+            webContentsId: guest.id,
+            rendererWebContentsId
+          })
+        ).toBe(false)
+      } else {
+        expect(
+          browserManager.registerOffscreenGuest({ browserPageId, webContentsId: guest.id })
+        ).toBe(false)
+      }
+
+      expect(browserManager.getGuestWebContentsId(browserPageId)).toBeNull()
+    }
+  )
+
+  // Why this answer is load-bearing: the headless backend destroys its window on false, so a true
+  // for a guest that is already gone would leave a page id registered onto nothing.
+  it.each(['missing', 'destroyed'] as const)(
+    'refuses registerOffscreenGuest when the named guest is %s',
+    (guestState) => {
+      webContentsFromIdMock.mockReturnValue(
+        guestState === 'missing' ? null : { id: 137, isDestroyed: vi.fn(() => true) }
+      )
+
+      expect(
+        browserManager.registerOffscreenGuest({ browserPageId: 'offscreen-1', webContentsId: 137 })
+      ).toBe(false)
+
+      expect(browserManager.getGuestWebContentsId('offscreen-1')).toBeNull()
+    }
+  )
+
+  // Why the exit door needs the same check: a document page withdraws by revoking its grant, so its
+  // id here is misaddressed — and unregistering opens by evicting whatever grab that id names.
+  it('refuses unregisterGuest for a page the document registry holds', () => {
+    registerWorkspaceDocPage('doc-page-2')
+    const cancelGrabOp = vi.spyOn(browserManager, 'cancelGrabOp')
+
+    browserManager.unregisterGuest('doc-page-2')
+
+    expect(cancelGrabOp).not.toHaveBeenCalled()
+
+    // The presence half: the same door does evict a browsing page's grab.
+    browserManager.unregisterGuest('browser-page-1')
+    expect(cancelGrabOp).toHaveBeenCalledWith('browser-page-1', 'evicted')
+    cancelGrabOp.mockRestore()
   })
 
   it('blocks non-web guest navigations after attach', () => {

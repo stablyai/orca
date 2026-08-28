@@ -23,6 +23,7 @@ import {
   listDisconnectedSshWorktrees
 } from './ssh-worktree-fallback'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
 
 export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
   const { store } = context
@@ -76,7 +77,10 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
               )
             )
       }
-      const metaIndex = createSshWorktreeMetaIndexForRepo(store.getAllWorktreeMeta(), repo.id)
+      const metaIndex = createSshWorktreeMetaIndexForRepo(
+        readAllWorktreeMetaForHost(store, requestedExecutionHostId),
+        repo.id
+      )
       return complete(
         buildDisconnectedDetectedWorktrees(
           store,
@@ -111,7 +115,7 @@ export function registerHostCatalogHandlers(context: WorktreeIpcContext): void {
       if (isFolderRepo(repo)) {
         return nothingForgotten
       }
-      const allMeta = store.getAllWorktreeMeta()
+      const allMeta = readAllWorktreeMetaForHost(store, requestedExecutionHostId)
       const forgottenWorktreeIds: string[] = []
       for (const worktreeId of worktreeIds) {
         const meta = typeof worktreeId === 'string' ? allMeta[worktreeId] : undefined

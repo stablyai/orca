@@ -13,6 +13,7 @@ const getAllProcessesMock = vi.fn()
 import { resetProcessTableSnapshotForTests } from '../../shared/process-table-snapshot'
 import { __setWindowsProcessTreeLoaderForTests } from '../windows/windows-process-table'
 import {
+  confirmShellForegroundProcess,
   resolveAgentForegroundProcess,
   resolveAgentForegroundProcessWithAvailability
 } from './agent-foreground-process'
@@ -217,6 +218,106 @@ describe('resolveAgentForegroundProcess', () => {
       processName: 'zsh'
     })
     await expect(resolveAgentForegroundProcess(100, 'zsh')).resolves.toBe('zsh')
+  })
+
+  it('confirms a quoted login shell only when its fresh PTY tree contains shells', async () => {
+    mockPs(['100 99 Ss+  "/bin/zsh" -l', '101 100 S+   /bin/bash'].join('\n'))
+
+    await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(true)
+  })
+
+  it('uses spawned-shell identity instead of a lagging foreground child label', async () => {
+    mockPs(['100 99 Ss+  /bin/zsh -l'].join('\n'))
+
+    await expect(confirmShellForegroundProcess(100, '/bin/zsh')).resolves.toBe(true)
+  })
+
+  it('confirms the spawned shell behind a login wrapper while prompt hooks run', async () => {
+    mockPs(
+      [
+        '100 99 Ss   /usr/bin/login -pfl developer /bin/zsh',
+        '101 100 S+   -zsh',
+        '102 101 S+   (zsh)',
+        '103 102 S+   (sed)',
+        '104 102 R+   (git)'
+      ].join('\n')
+    )
+
+    await expect(confirmShellForegroundProcess(100, '/bin/zsh')).resolves.toBe(true)
+  })
+
+  it('rejects a foreground nested shell while the spawned shell remains suspended', async () => {
+    mockPs(
+      [
+        '100 99 Ss   /usr/bin/login -pfl developer /bin/zsh',
+        '101 100 S    -zsh',
+        '102 101 S+   agent-tui',
+        '103 102 S+   /bin/zsh -i'
+      ].join('\n')
+    )
+
+    await expect(confirmShellForegroundProcess(100, '/bin/zsh')).resolves.toBe(false)
+  })
+
+  it('rejects shell ownership while a TUI and its nested shell remain in the PTY tree', async () => {
+    mockPs(
+      [
+        '100 99 Ss   /bin/zsh -l',
+        '101 100 S+   /usr/local/bin/agent-tui',
+        '102 101 S+   /bin/bash -i'
+      ].join('\n')
+    )
+
+    await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(false)
+  })
+
+  it('rejects shell ownership while a stopped TUI remains resumable', async () => {
+    mockPs(['100 99 Ss+  /bin/zsh -l', '101 100 T    /usr/local/bin/agent-tui'].join('\n'))
+
+    await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(false)
+  })
+
+  it('refuses WSL shells: wsl.exe is not a provable shell identity', async () => {
+    // Why pinned: the WSL job object holds only wsl.exe, so a looser
+    // isShellProcess would confirm ownership regardless of distro-side state.
+    await expect(confirmShellForegroundProcess(100, 'wsl.exe')).resolves.toBe(false)
+    expect(execFileMock).not.toHaveBeenCalled()
+  })
+
+  it('fails open when fresh shell ownership inspection is unavailable', async () => {
+    execFileMock.mockImplementation(
+      (_cmd: string, _args: string[], _opts: unknown, cb: unknown) => {
+        const callback = cb as (err: unknown, result: { stdout: string; stderr: string }) => void
+        callback(new Error('ps unavailable'), { stdout: '', stderr: '' })
+      }
+    )
+
+    await expect(confirmShellForegroundProcess(100, 'zsh')).resolves.toBe(false)
+  })
+
+  it('confirms a Windows shell from fresh root-only ConPTY membership', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    const readWindowsPtyJobProcessIds = vi.fn(async () => new Set([100]))
+
+    await expect(
+      confirmShellForegroundProcess(100, 'powershell.exe', { readWindowsPtyJobProcessIds })
+    ).resolves.toBe(true)
+    expect(getAllProcessesMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects Windows shell ownership with a child or unavailable membership', async () => {
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+
+    await expect(
+      confirmShellForegroundProcess(100, 'powershell.exe', {
+        readWindowsPtyJobProcessIds: async () => new Set([100, 101])
+      })
+    ).resolves.toBe(false)
+    await expect(
+      confirmShellForegroundProcess(100, 'powershell.exe', {
+        readWindowsPtyJobProcessIds: async () => null
+      })
+    ).resolves.toBe(false)
   })
 
   it('does not report Claude print-mode hook descendants as foreground agents', async () => {

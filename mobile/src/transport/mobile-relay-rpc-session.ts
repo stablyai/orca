@@ -11,11 +11,12 @@ import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-re
 import { isRpcResponse } from './rpc-response-shape'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionState, RpcResponse } from './types'
+import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
+let relayRpcSessionSequence = 0
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -41,6 +42,7 @@ export function connectMobileRelayRpcSession(args: {
   desktopPublicKeyB64: string
   requestTimeoutMs?: number
   createSocket?: (url: string) => WebSocket
+  onLog?: ConnectionLogSink
 }): MobileRelayRpcSession {
   const requestTimeoutMs = args.requestTimeoutMs ?? 30_000
   const pending = new Map<string, PendingRequest>()
@@ -53,6 +55,8 @@ export function connectMobileRelayRpcSession(args: {
   let resumeConfirmation: DeviceResumeConfirmed | null = null
   let failure: Error | null = null
   let closed = false
+  let logSequence = 0
+  const logSessionId = `${Date.now().toString(36)}-${(++relayRpcSessionSequence).toString(36)}`
   const livenessIdentity = {}
   const streams = new MobileRelayRpcStreams({
     nextId,
@@ -145,6 +149,17 @@ export function connectMobileRelayRpcSession(args: {
     voluntaryProbeMinIntervalMs: RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS,
     sendProbe: () =>
       state === 'connected' && sendFrame({ id: nextId(), method: 'status.get', params: undefined }),
+    onTimeout: (evidence) => {
+      args.onLog?.({
+        id: `relay-liveness-${logSessionId}-${++logSequence}`,
+        ts: Date.now(),
+        level: 'error',
+        code: 'liveness-timeout',
+        path: 'relay',
+        message: 'Relay health check failed',
+        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
+      })
+    },
     terminate: () => fail(new Error('relay session liveness timeout'))
   })
   return client

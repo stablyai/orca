@@ -14,7 +14,7 @@ import {
   getSchedulePresetDraft
 } from './AutomationSchedulePicker'
 import { formatUiAutomationSchedule } from './automation-schedule-label'
-import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
 import { SelectItem } from '@/components/ui/select'
 import { i18n } from '@/i18n/i18n'
 

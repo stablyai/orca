@@ -79,6 +79,17 @@ export function sendSnapshotFrames(
         ...(typeof options.seq === 'number' && options.kittyKeyboardFlags !== undefined
           ? { kittyKeyboardFlags: options.kittyKeyboardFlags }
           : {}),
+        ...(typeof options.seq === 'number' && options.terminalOwner
+          ? { terminalOwner: options.terminalOwner }
+          : {}),
+        // The terminalOwner conjunct is load-bearing, not redundant: no consumer
+        // re-checks it, and an un-gated alternateScreen would flip the renderer's
+        // mouse-reset selection on every alt-screen reattach of a live TUI.
+        ...(typeof options.seq === 'number' &&
+        options.terminalOwner &&
+        options.alternateScreen !== undefined
+          ? { alternateScreen: options.alternateScreen }
+          : {}),
         truncated: options.truncated === true,
         truncatedByByteBudget: options.truncatedByByteBudget === true
       })

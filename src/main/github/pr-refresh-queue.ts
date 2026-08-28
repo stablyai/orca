@@ -32,6 +32,80 @@ export type PRRefreshEnqueue = {
   coalesced: boolean
 }
 
+/** A worktree has one live branch at a time, so a second cacheKey for it is a
+ *  branch it moved off. Drop those: a linked-PR key survives every branch
+ *  switch, so while its entry is parked (rate-limit pause, error backoff, or
+ *  just waiting to drain) every switch used to add a cacheKey that the drain
+ *  snapshot then carries forward, and each dead one costs IPC payload and a
+ *  renderer cache write on every later broadcast. */
+function setLiveAlias(
+  aliases: Map<string, GitHubPRRefreshAlias>,
+  alias: GitHubPRRefreshAlias
+): void {
+  if (alias.worktreeId) {
+    for (const [cacheKey, existing] of aliases) {
+      if (cacheKey !== alias.cacheKey && existing.worktreeId === alias.worktreeId) {
+        aliases.delete(cacheKey)
+      }
+    }
+  }
+  aliases.set(alias.cacheKey, alias)
+}
+
+/** Follow-up aliases were captured before the request ran, so anything enqueued
+ *  while it was in flight is newer. Return that preserved alias so callers do
+ *  not pair it with the stale request candidate. */
+function mergeFollowUpAlias(
+  aliases: Map<string, GitHubPRRefreshAlias>,
+  alias: GitHubPRRefreshAlias
+): GitHubPRRefreshAlias | undefined {
+  if (alias.worktreeId) {
+    for (const existing of aliases.values()) {
+      if (existing.worktreeId === alias.worktreeId) {
+        return existing
+      }
+    }
+  }
+  setLiveAlias(aliases, alias)
+  return undefined
+}
+
+function sameAliasRequestIdentity(
+  left: GitHubPRRefreshAlias,
+  right: GitHubPRRefreshAlias
+): boolean {
+  return (
+    left.cacheKey === right.cacheKey &&
+    left.repoId === right.repoId &&
+    left.repoPath === right.repoPath &&
+    left.branch === right.branch &&
+    left.worktreeId === right.worktreeId &&
+    left.connectionId === right.connectionId &&
+    left.executionHostId === right.executionHostId &&
+    left.linkedPRNumber === right.linkedPRNumber &&
+    left.fallbackPRNumber === right.fallbackPRNumber &&
+    left.fallbackPRSource === right.fallbackPRSource &&
+    left.currentHeadOid === right.currentHeadOid
+  )
+}
+
+/** A manual refresh merges its alias into its own copy of the map and writes it
+ *  back, so re-entry through `set` has to re-apply the same bound; later
+ *  insertions are the newer branch and win. */
+function dropSupersededWorktreeAliases(aliases: Map<string, GitHubPRRefreshAlias>): void {
+  const liveCacheKeyByWorktree = new Map<string, string>()
+  for (const [cacheKey, alias] of aliases) {
+    if (!alias.worktreeId) {
+      continue
+    }
+    const superseded = liveCacheKeyByWorktree.get(alias.worktreeId)
+    if (superseded !== undefined) {
+      aliases.delete(superseded)
+    }
+    liveCacheKeyByWorktree.set(alias.worktreeId, cacheKey)
+  }
+}
+
 export class PRRefreshQueue {
   private readonly entries = new Map<string, PRRefreshQueueEntry>()
   private order = 0
@@ -47,6 +121,7 @@ export class PRRefreshQueue {
   }
 
   set(key: string, entry: PRRefreshQueueEntry): void {
+    dropSupersededWorktreeAliases(entry.aliases)
     this.entries.set(key, entry)
   }
 
@@ -92,7 +167,7 @@ export class PRRefreshQueue {
       return { alias, key, dueAt, coalesced: false }
     }
 
-    existing.aliases.set(alias.cacheKey, alias)
+    setLiveAlias(existing.aliases, alias)
     const shouldPromote =
       priority > existing.priority ||
       reason === 'manual' ||
@@ -190,20 +265,29 @@ export class PRRefreshQueue {
   setVisibleFollowUp(entry: PRRefreshQueueEntry): void {
     const existing = this.entries.get(entry.key)
     if (!existing) {
-      this.entries.set(entry.key, entry)
+      this.set(entry.key, entry)
       return
     }
+    let candidateSuperseded = false
     for (const alias of entry.aliases.values()) {
-      existing.aliases.set(alias.cacheKey, alias)
+      const preserved = mergeFollowUpAlias(existing.aliases, alias)
+      if (
+        preserved &&
+        alias.worktreeId === entry.candidate.worktreeId &&
+        !sameAliasRequestIdentity(preserved, alias)
+      ) {
+        candidateSuperseded = true
+      }
     }
     if (
+      candidateSuperseded ||
       bypassesFreshnessDelay(existing.reason) ||
       existing.priority > entry.priority ||
       existing.dueAt <= entry.dueAt
     ) {
       return
     }
-    this.entries.set(entry.key, { ...entry, aliases: existing.aliases })
+    this.set(entry.key, { ...entry, aliases: existing.aliases })
   }
 
   ordered(

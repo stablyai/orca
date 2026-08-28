@@ -165,6 +165,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
+    getAllWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
     removeWorktreeMeta: vi.fn(),
     addRetiredWorktreeName: vi.fn(),
@@ -209,6 +210,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
+    store.getAllWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
     store.removeWorktreeMeta.mockReset()
     store.addRetiredWorktreeName.mockReset()
@@ -251,6 +253,7 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     })
     resolveSetupRunnerShellMock.mockReturnValue(undefined)
     store.getWorktreeMeta.mockReturnValue(undefined)
+    store.getAllWorktreeMeta.mockReturnValue({})
     store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
     store.setWorktreeMeta.mockReturnValue({})
     resolveLocalGitUsernameMock.mockResolvedValue('')
@@ -501,6 +504,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
           }
         : undefined
     )
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-1::C:/workspaces/improve-dashboard': {
+        lastActivityAt: 123,
+        displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456
+      }
+    })
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',

@@ -14,7 +14,10 @@ import {
   parseFormEncodedBody,
   readRequestBody
 } from './agent-hook-listener/request-body'
+import { mergeAgentHookRequestHeaders } from './agent-hook-listener/hook-envelope'
+import { createHookListenerState } from './agent-hook-listener/listener-state'
 import { resolveHookSource } from './agent-hook-listener/source-routing'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { clearGrokSessionPathLookupCacheForTests } from './grok-session-paths'
 
 type FakeIncomingMessage = EventEmitter & {
@@ -38,6 +41,10 @@ function expectRequestParserListenersReleased(req: FakeIncomingMessage): void {
 }
 
 describe('shared agent-hook-listener', () => {
+  const paneKey = 'tab-1:11111111-1111-4111-8111-111111111111'
+  const b64 = (value: string): string => Buffer.from(value, 'utf8').toString('base64')
+  const packedMetadata = (...values: string[]): string => b64(values.join('\x1f'))
+
   afterEach(() => {
     clearGrokSessionPathLookupCacheForTests()
     vi.unstubAllEnvs()
@@ -58,6 +65,76 @@ describe('shared agent-hook-listener', () => {
 
     await expect(body).resolves.toEqual({ ok: true })
     expectRequestParserListenersReleased(req)
+  })
+
+  it('normalizes a raw JSON hook body with metadata headers', async () => {
+    const req = createReadableRequest({
+      'content-type': 'application/json',
+      'x-orca-pane-key': paneKey,
+      'x-orca-worktree-id': 'repo::/tmp/work',
+      'x-orca-agent-hook-env': 'production',
+      'x-orca-agent-hook-version': '1'
+    })
+    const body = readRequestBody(req as unknown as IncomingMessage)
+    req.emit('data', Buffer.from('{"hook_event_name":"UserPromptSubmit","prompt":"hello"}'))
+    req.emit('end')
+
+    const merged = mergeAgentHookRequestHeaders(await body, req.headers)
+    expect(
+      normalizeHookPayload(createHookListenerState(), 'claude', merged, 'production')
+    ).toMatchObject({
+      paneKey,
+      worktreeId: 'repo::/tmp/work',
+      payload: { state: 'working', prompt: 'hello' }
+    })
+  })
+
+  it('decodes base64 metadata headers without corrupting path text', () => {
+    const worktreeId = 'repo::/tmp/中文 worktree'
+    const merged = mergeAgentHookRequestHeaders(
+      { hook_event_name: 'UserPromptSubmit', prompt: 'hello' },
+      {
+        'x-orca-agent-hook-meta-encoding': 'base64',
+        'x-orca-agent-hook-meta': packedMetadata(
+          paneKey,
+          'tab-1',
+          '',
+          worktreeId,
+          'production',
+          '1'
+        )
+      }
+    )
+
+    expect(
+      normalizeHookPayload(createHookListenerState(), 'claude', merged, 'production')
+    ).toMatchObject({
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId,
+      payload: { state: 'working', prompt: 'hello' }
+    })
+  })
+
+  it('keeps raw envelope-like fields inside the agent payload', () => {
+    const rawBody = {
+      paneKey: 'payload-owned-pane',
+      payload: { hook_event_name: 'PayloadField' },
+      hook_event_name: 'UserPromptSubmit',
+      prompt: 'hello'
+    }
+    const merged = mergeAgentHookRequestHeaders(rawBody, {
+      'x-orca-pane-key': paneKey,
+      'x-orca-tab-id': 'tab-1'
+    })
+
+    expect(merged).toMatchObject({ paneKey, tabId: 'tab-1', payload: rawBody })
+    expect(
+      normalizeHookPayload(createHookListenerState(), 'claude', merged, 'production')
+    ).toMatchObject({
+      paneKey,
+      payload: { state: 'working', prompt: 'hello' }
+    })
   })
 
   it('releases request parser listeners after rejecting an oversized body', async () => {
@@ -168,13 +245,15 @@ describe('shared agent-hook-listener', () => {
         port: 12345,
         token: 'abcdef-0123',
         env: 'production',
-        version: '1'
+        version: '1',
+        transport: 'raw-json-v1'
       })
       expect(ok).toBe(true)
       const text = readFileSync(finalPath, 'utf8')
       expect(text).toContain('ORCA_AGENT_HOOK_PORT=12345')
       expect(text).toContain('ORCA_AGENT_HOOK_TOKEN=abcdef-0123')
       expect(text).toContain('ORCA_AGENT_HOOK_VERSION=1')
+      expect(text).toContain('ORCA_AGENT_HOOK_TRANSPORT=raw-json-v1')
       // POSIX 0o600 — owner read/write only.
       if (process.platform !== 'win32') {
         const mode = statSync(finalPath).mode & 0o777

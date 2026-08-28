@@ -11,10 +11,17 @@ type BufferedPreHandlerPtyState = {
   chunks: BufferedPreHandlerPtyData[]
   head: number
   bytes: number
+  /** Sequence of the newest chunk, used to fence state left by a prior incarnation of a reused id. */
+  sequence: number
+}
+
+type BufferedPreHandlerPtyExit = {
+  code: number
+  sequence: number
 }
 
 const preHandlerPtyData = new Map<string, BufferedPreHandlerPtyState>()
-const preHandlerPtyExit = new Map<string, number>()
+const preHandlerPtyExit = new Map<string, BufferedPreHandlerPtyExit>()
 const consumedPreHandlerPtyExits = new Map<string, true>()
 const discardedPreHandlerPtyStates = new Map<string, ReturnType<typeof setTimeout>>()
 const DISCARDED_PRE_HANDLER_PTY_STATE_TTL_MS = 60_000
@@ -30,6 +37,21 @@ const PRE_HANDLER_PTY_EXIT_MAX_PTYS = 64
 // frozen-pane detach/attach race) — leave a breadcrumb for trace capture.
 const PRE_HANDLER_PTY_DATA_WARN_BYTES = 64 * 1024
 const warnedLostHandlerPtyIds = new Set<string>()
+
+// Why: pty ids are NOT unique over time — a redeployed SSH relay renumbers from pty-1, so a fresh
+// spawn can be handed an id whose previous incarnation left buffered state here. A monotonic
+// counter dates every record so a spawn can tell "arrived before I asked for this PTY" (someone
+// else's) from "arrived while it was starting" (mine).
+let preHandlerPtySequence = 0
+
+function nextPreHandlerPtySequence(): number {
+  preHandlerPtySequence += 1
+  return preHandlerPtySequence
+}
+
+export function currentPreHandlerPtySequence(): number {
+  return preHandlerPtySequence
+}
 
 export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyDataMeta): void {
   if (discardedPreHandlerPtyStates.has(ptyId)) {
@@ -51,9 +73,10 @@ export function bufferPreHandlerPtyData(ptyId: string, data: string, meta?: PtyD
       : meta
   let state = preHandlerPtyData.get(ptyId)
   if (!state) {
-    state = { chunks: [], head: 0, bytes: 0 }
+    state = { chunks: [], head: 0, bytes: 0, sequence: 0 }
     preHandlerPtyData.set(ptyId, state)
   }
+  state.sequence = nextPreHandlerPtySequence()
   state.chunks.push({
     data: chunk.data,
     bytes: chunk.bytes,
@@ -117,7 +140,31 @@ export function bufferPreHandlerPtyExit(ptyId: string, code: number): void {
       preHandlerPtyExit.delete(oldestPtyId)
     }
   }
-  preHandlerPtyExit.set(ptyId, code)
+  preHandlerPtyExit.set(ptyId, { code, sequence: nextPreHandlerPtySequence() })
+}
+
+/** Drop pre-handler state a freshly spawned PTY inherited from an earlier owner of its id.
+ *
+ *  `fenceSequence` is read before the spawn request leaves the renderer, so anything at or below it
+ *  was recorded when this PTY did not yet exist and cannot describe it. Bytes and exits recorded
+ *  after the fence are kept: that is the real pre-attach race (a shell that dies instantly, or
+ *  writes before the pane registers its handler) and losing it would blank a legitimate pane. */
+export function discardPreHandlerPtyStateFromPriorIncarnation(
+  ptyId: string,
+  fenceSequence: number
+): void {
+  const exit = preHandlerPtyExit.get(ptyId)
+  if (exit && exit.sequence <= fenceSequence) {
+    preHandlerPtyExit.delete(ptyId)
+  }
+  const data = preHandlerPtyData.get(ptyId)
+  if (data && data.sequence <= fenceSequence) {
+    preHandlerPtyData.delete(ptyId)
+    warnedLostHandlerPtyIds.delete(ptyId)
+  }
+  // Why: the id now names a different, live PTY, so a prior incarnation's consumed/discarded marks
+  // must not suppress this one's own exit — the same admission boundary a same-id reattach gets.
+  clearConsumedPreHandlerPtyExit(ptyId)
 }
 
 // Why: primary handlers and pane-less parked owners have fully handled this
@@ -173,13 +220,13 @@ export function hasPreHandlerPtyExit(ptyId: string): boolean {
 }
 
 export function drainPreHandlerPtyExit(ptyId: string, handler: (code: number) => void): void {
-  const code = preHandlerPtyExit.get(ptyId)
-  if (code === undefined) {
+  const exit = preHandlerPtyExit.get(ptyId)
+  if (exit === undefined) {
     return
   }
   preHandlerPtyExit.delete(ptyId)
   try {
-    handler(code)
+    handler(exit.code)
   } finally {
     // Why: draining transfers ownership to this handler. Even when it throws,
     // a duplicate exit must not become a new pre-handler event.

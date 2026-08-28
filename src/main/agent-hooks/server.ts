@@ -8,7 +8,10 @@ import { join } from 'node:path'
 import { track } from '../telemetry/client'
 import { getCohortAtEmit } from '../telemetry/cohort-classifier'
 import { AGENT_KIND_VALUES, type AgentKind } from '../../shared/telemetry-events'
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -46,6 +49,7 @@ import {
 } from '../../shared/agent-hook-listener/listener-limits'
 import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
+import { mergeAgentHookRequestHeaders } from '../../shared/agent-hook-listener/hook-envelope'
 import {
   parseFormEncodedBody,
   readRequestBody
@@ -116,6 +120,12 @@ import {
   type AgentProviderSessionMetadata
 } from '../../shared/agent-session-resume'
 import { isCommandCodeNewTurnWhileWorking } from '../../shared/command-code-turn-boundary'
+import {
+  buildSpoolHookBody,
+  drainAgentHookSpool,
+  launchTokenHash,
+  type SpoolRecord
+} from '../../shared/agent-hook-spool'
 
 export type { AgentHookSource }
 
@@ -798,6 +808,44 @@ export class AgentHookServer {
     this.enrichedStatusListeners.add(listener)
     return () => {
       this.enrichedStatusListeners.delete(listener)
+    }
+  }
+
+  /** Replay is durable evidence from a prior runtime, not a live observation. */
+  private withdrawReplayObservation(paneKey: string): void {
+    if (this.runtimeObservedStatusPaneKeys.delete(paneKey)) {
+      this.notifyStatusChangeListeners()
+    }
+  }
+
+  private ingestSpoolRecord(record: SpoolRecord): void {
+    if (!isAgentHookSource(record.source)) {
+      return
+    }
+    const body = this.normalizeHookBodyPaneKeyAlias(buildSpoolHookBody(record))
+    const normalized = this.normalizeLocalHookPayload(record.source, body)
+    if (!normalized.event) {
+      return
+    }
+    const replay = { ...normalized.event, isReplay: true as const }
+    const statusDisposition = this.getAgentStatusDisposition(replay.paneKey, {
+      source: record.source,
+      hookEventName: replay.hookEventName,
+      isReplay: true,
+      hasExplicitPrompt: replay.hasExplicitPrompt,
+      launchToken: replay.launchToken
+    })
+    if (statusDisposition === 'suppress') {
+      return
+    }
+    const event = statusDisposition === 'restart' ? { ...replay, launchToken: undefined } : replay
+    if (statusDisposition === 'restart') {
+      this.observations.rebind(event.paneKey)
+    }
+    this.recordCurrentAuthorityObservation(event)
+    this.applyNormalizedStatus(event, normalized.onAccepted)
+    if (event.payload.state !== 'done') {
+      this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }
   }
 
@@ -2259,14 +2307,14 @@ export class AgentHookServer {
       claudeRunningNonAgentTask?: unknown
       payload: unknown
     },
-    connectionId: string
+    connectionId: string | null
   ): void {
     // Why: wire crosses a trust boundary — re-check/trim so an empty connectionId can't poison caches.
-    if (typeof connectionId !== 'string') {
+    if (connectionId !== null && typeof connectionId !== 'string') {
       return
     }
-    const trimmedConnectionId = connectionId.trim()
-    if (trimmedConnectionId.length === 0) {
+    const trimmedConnectionId = connectionId?.trim() ?? null
+    if (trimmedConnectionId !== null && trimmedConnectionId.length === 0) {
       return
     }
     if (!envelope || typeof envelope.paneKey !== 'string') {
@@ -2285,6 +2333,14 @@ export class AgentHookServer {
     }
     if (!parsedPaneKey) {
       return
+    }
+    // Why: fence relay spool replay at main so stale generations cannot overwrite hydrated state.
+    if (envelope.isReplay === true) {
+      const expectedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
+      const actualLaunchTokenHash = launchTokenHash(envelope.launchToken)
+      if (expectedLaunchTokenHash && actualLaunchTokenHash !== expectedLaunchTokenHash) {
+        return
+      }
     }
     if (envelope.tabId !== undefined && typeof envelope.tabId !== 'string') {
       return
@@ -2515,6 +2571,15 @@ export class AgentHookServer {
       this.hydrateLastStatusFromDisk()
     }
     this.captureHydratedAuthorityCommitments()
+    // Drain before binding the listener so replay cannot race a live hook during startup.
+    if (this.endpointDir) {
+      drainAgentHookSpool({
+        endpointDir: this.endpointDir,
+        getPersistedLaunchTokenHash: (paneKey) =>
+          this.hydratedLaunchTokenHashByPaneKey.get(this.resolvePaneKeyAlias(paneKey)),
+        ingest: (record: SpoolRecord) => this.ingestSpoolRecord(record)
+      })
+    }
     const handleRequest = async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
       if (req.method !== 'POST') {
         res.writeHead(404)
@@ -2555,8 +2620,9 @@ export class AgentHookServer {
           return
         }
 
-        trackEmptyPaneKeyHook(body)
-        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(body)
+        const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+        trackEmptyPaneKeyHook(hookBody)
+        const aliasedBody = this.normalizeHookBodyPaneKeyAlias(hookBody)
         const normalized = this.normalizeLocalHookPayload(source, aliasedBody)
         const statusDisposition = normalized.event
           ? this.getAgentStatusDisposition(normalized.event.paneKey, {
@@ -3068,7 +3134,8 @@ export class AgentHookServer {
       ORCA_AGENT_HOOK_PORT: String(this.port),
       ORCA_AGENT_HOOK_TOKEN: this.token,
       ORCA_AGENT_HOOK_ENV: this.env,
-      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION
+      ORCA_AGENT_HOOK_VERSION: ORCA_HOOK_PROTOCOL_VERSION,
+      ORCA_AGENT_HOOK_TRANSPORT: ORCA_HOOK_RAW_JSON_TRANSPORT
     }
     // Why: hooks source this file at invocation; dev namespaces it so parallel `pnpm dev` runs don't steal each other's hooks.
     if (this.endpointFileWritten && this.endpointFilePathCache) {
@@ -3095,7 +3162,8 @@ export class AgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     this.endpointFileWritten = ok
   }
@@ -3309,6 +3377,8 @@ export class AgentHookServer {
         restoredUnconfirmed: _restoredUnconfirmed,
         // Why: same — the sequencer that issued it dies with the process (see PersistedAgentHookEventPayload).
         observation: _observation,
+        // Replay provenance is runtime-only and must not survive another restart.
+        isReplay: _isReplay,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

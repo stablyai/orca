@@ -161,6 +161,49 @@ describe('terminal live input commit hook', () => {
     expect(sent).toEqual([])
   })
 
+  it('Given an iOS pinyin preedit When accessory Backspace edits it Then only the candidate reaches the terminal', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, 'ni hao', true)
+
+    // When
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS * 2)
+    changeLiveInput(handlers, '你好', false)
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['你好']))
+  })
+
+  it('Given an Android heuristic hold When accessory Backspace edits it Then the remaining text still settles', async () => {
+    // Given
+    vi.useFakeTimers()
+    const { handlers, sent } = createTerminalLiveInputCommitHarness()
+    changeLiveInput(handlers, '한글')
+
+    // When
+    await handlers.handleLiveInputAccessoryBytes({ bytes: '\x7f', localEdit: 'backspace' })
+    await vi.advanceTimersByTimeAsync(TERMINAL_LIVE_HELD_PREEDIT_COMMIT_DELAY_MS)
+
+    // Then
+    await vi.waitFor(() => expect(sent).toEqual(['한']))
+  })
+
+  it('Given a failed mirrored Backspace When accessory input commits Then reports failure', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
+    changeLiveInput(handlers, 'a', false)
+    await vi.waitFor(() => expect(sent).toEqual(['a']))
+
+    const result = await handlers.handleLiveInputAccessoryBytes({
+      bytes: '\x7f',
+      localEdit: 'backspace'
+    })
+
+    expect(sent).toEqual(['a', '\x7f'])
+    expect(result).toEqual({ kind: 'suppress-raw' })
+  })
+
   it('Given a held syllable When the settle timer elapses Then commits it to the terminal', async () => {
     // Given
     vi.useFakeTimers()

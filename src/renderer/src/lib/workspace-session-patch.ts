@@ -19,6 +19,7 @@ import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tab
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-closed-tab-tombstones'
 
 type SessionRelevantField = keyof WorkspaceSessionSnapshot
 
@@ -159,6 +160,11 @@ export function buildWorkspaceSessionPatch(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined
+  }
+  if (changed.has('closedTerminalTabTombstonesByTabId')) {
+    patch.closedTerminalTabTombstonesByTabId = buildPersistedClosedTerminalTabTombstones(
+      snapshot.closedTerminalTabTombstonesByTabId
+    )
   }
   if (changed.has('sleepingAgentSessionsByPaneKey')) {
     patch.sleepingAgentSessionsByPaneKey =

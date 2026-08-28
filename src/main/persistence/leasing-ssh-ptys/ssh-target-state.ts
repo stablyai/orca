@@ -2,10 +2,12 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { RemovedSshTargetTombstone, SshTarget } from '../../../shared/ssh-types'
 import type { ProtectedSecretPersistence } from '../../protected-secret-persistence'
 import { sshPtyOwnerLeaseSecretSlot } from '../../protected-secret-persistence'
+import { MAX_CLAUDE_LIVE_PTY_SESSION_IDS } from '../restoring-sessions/pane-alias-normalization'
 import {
-  MAX_CLAUDE_LIVE_PTY_SESSION_IDS,
-  MAX_REMOVED_SSH_TARGET_TOMBSTONES
-} from '../restoring-sessions/pane-alias-normalization'
+  MAX_REMOVED_SSH_TARGET_TOMBSTONES,
+  capRemovedSshTargetTombstones,
+  collectSshTargetRemovalEvidenceDependencies
+} from '../../ssh/removed-ssh-target-tombstone-retention'
 import { normalizeSshTarget } from './ssh-normalization'
 import { isRuntimeOwnedSshTargetId } from '../../../shared/execution-host'
 import {
@@ -30,8 +32,8 @@ export function getSshTarget(state: PersistedState, id: string): SshTarget | und
 }
 
 export function addSshTarget(operations: SshTargetStateOperations, target: SshTarget): void {
-  operations.state.sshTargets ??= []
-  operations.state.sshTargets.push(normalizeSshTarget(target))
+  // Replaced, not pushed in place: the automation list projection caches on array identity.
+  operations.state.sshTargets = [...(operations.state.sshTargets ?? []), normalizeSshTarget(target)]
   operations.scheduleSave()
 }
 
@@ -69,6 +71,9 @@ export function updateSshTarget(
       to: sshHostIdentity(target)
     })
   }
+  // The Object.assign above patches the row in place (other callers hold the
+  // reference); the automation list projection caches on array identity.
+  operations.state.sshTargets = [...(operations.state.sshTargets ?? [])]
   operations.scheduleSave()
   return { ...target }
 }
@@ -170,11 +175,33 @@ export function addRemovedSshTargetTombstone(
   const existing = operations.state.removedSshTargetTombstones ?? []
   // Why: dedupe by oldTargetId so re-removing the same id can't stack duplicate tombstones; newest wins.
   const filtered = existing.filter((entry) => entry.oldTargetId !== tombstone.oldTargetId)
-  // Cap the history so pathological churn can't grow the state file unbounded.
-  operations.state.removedSshTargetTombstones = [...filtered, tombstone].slice(
-    -MAX_REMOVED_SSH_TARGET_TOMBSTONES
+  operations.state.removedSshTargetTombstones = capRemovedSshTargetTombstones(
+    [...filtered, tombstone],
+    sshTargetRemovalEvidenceDependencies(operations.state),
+    MAX_REMOVED_SSH_TARGET_TOMBSTONES
   )
   operations.scheduleSave()
+}
+
+function sshTargetRemovalEvidenceDependencies(state: PersistedState): Set<string> {
+  return collectSshTargetRemovalEvidenceDependencies({
+    automations: state.automations ?? [],
+    automationHostFilter: state.ui?.automationHostFilter,
+    workspaceState: {
+      folderWorkspaces: state.folderWorkspaces ?? [],
+      projectGroups: state.projectGroups ?? [],
+      repos: state.repos ?? []
+    }
+  })
+}
+
+export function releaseRemovedSshTargetTombstone(
+  operations: SshTargetStateOperations,
+  oldTargetId: string
+): void {
+  if (!sshTargetRemovalEvidenceDependencies(operations.state).has(oldTargetId)) {
+    removeRemovedSshTargetTombstone(operations, oldTargetId)
+  }
 }
 
 export function removeRemovedSshTargetTombstone(

@@ -2303,14 +2303,10 @@ function WorktreeJumpPaletteContent({
       pushLeadingHeader()
       appendPaletteListEntries(entries, multiPrimaryLayout.leadingPreview as PaletteItem[])
       // Soft more for the leading section (rows resuming below + hard-cap tail).
-      // Why: only actionable when rows are actually hidden — with the whole
-      // section already rendered below, expanding would just reshuffle rows.
-      pushOverflowHint(
-        leadingHintId,
-        multiPrimaryLayout.leadingMoreCount,
-        multiPrimaryLayout.leadingHardOverflowCount > 0
-          ? () => handleExpandSection(leadingSectionKey)
-          : undefined
+      // Why: reveals the next batch into the leading preview so the user can
+      // keep browsing tabs without having to scroll past the worktrees section.
+      pushOverflowHint(leadingHintId, multiPrimaryLayout.leadingMoreCount, () =>
+        handleExpandSection(leadingSectionKey)
       )
       pushTrailingHeader()
       // Floor first, then remaining leading rows, then trailing rest — same order

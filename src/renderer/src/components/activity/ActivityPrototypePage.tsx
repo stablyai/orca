@@ -1426,6 +1426,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
+  // Why: bounds auto mark-read to one acknowledgement per selected thread turn.
+  const autoAcknowledgedTurnRef = useRef<string | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
@@ -1731,11 +1733,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ) {
       return
     }
+    // Why (React #185): a turn stamped ahead of this clock (SSH/remote execution host) can never
+    // have its unread cleared, and each retry lands on a later millisecond, so acknowledgeAgents'
+    // `prev < now` guard rewrites the ack map every time and re-enters here forever through
+    // storeData. Auto-read is once per turn, not a retry.
+    const autoAcknowledgeKey = `${selectedThread.paneKey}:${selectedThread.latestTimestamp}`
+    if (autoAcknowledgedTurnRef.current === autoAcknowledgeKey) {
+      return
+    }
     const selectedThreadHasDetailOnlyView =
       !selectedHasLiveTab || selectedThread.migrationUnsupportedPtyId !== undefined
     const selectedThreadIsVisibleTerminal =
       visibleThread?.paneKey === effectiveSelectedPaneKey && visiblePortalReady
     if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
+      autoAcknowledgedTurnRef.current = autoAcknowledgeKey
       storeData.acknowledgeAgents([selectedThread.paneKey])
     }
   }, [

@@ -114,6 +114,14 @@ export async function confirmForegroundProcessFromRuntimeController(ptyId: strin
   }
 }
 
+export async function confirmShellForegroundFromRuntimeController(ptyId: string) {
+  try {
+    return (await getProviderForPty(ptyId).confirmShellForeground?.(ptyId)) ?? false
+  } catch {
+    return false
+  }
+}
+
 export async function getCwdFromRuntimeController(ptyId: string) {
   try {
     const cwd = await getProviderForPty(ptyId).getCwd(ptyId)
