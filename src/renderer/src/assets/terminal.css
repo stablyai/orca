@@ -463,6 +463,14 @@
   color: var(--orca-pane-title-button-hover-fg, rgb(255 255 255 / 0.8));
 }
 
+.pane-title-split-trigger[aria-disabled='true'] {
+  /* Why: maintained grids keep this control focusable for its explanation,
+     while matching the design system's disabled-button opacity. */
+  cursor: not-allowed;
+  color: var(--orca-pane-title-button-fg, rgb(255 255 255 / 0.3));
+  opacity: 0.5;
+}
+
 /* Inline edit input — matches the title text styling exactly to prevent
    layout shift. A subtle bottom border indicates active edit mode. */
 /* When inline-editing, remove the bar's side padding so the input

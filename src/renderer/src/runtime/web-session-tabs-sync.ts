@@ -1030,6 +1030,9 @@ function chooseRemoteTerminalLayout(
     }),
     activeLeafId,
     expandedLeafId,
+    // Why: paired-web and SSH clients must keep the host's grid marker so
+    // later add/close operations continue to reflow equal worker panes.
+    ...(parentLayout?.layoutMode ? { layoutMode: parentLayout.layoutMode } : {}),
     ptyIdsByLeafId,
     // Why: surface.title is the tab/PTY label, not a pane title; restoring it as one renders a fake title bar. Only host layout titles are real pane titles.
     ...(parentLayout?.titlesByLeafId ? { titlesByLeafId: parentLayout.titlesByLeafId } : {})
@@ -3349,6 +3352,12 @@ function applyWebSessionTabsSnapshotWithContext(
 
   let nextTerminalLayoutsByTabId = state.terminalLayoutsByTabId
   for (const removedId of removedTerminalResourceIds) {
+  for (const removedId of removedTerminalIds) {
+    // Why: mirrored tabs are rebuilt from every authoritative snapshot; keep
+    // their layout entry long enough for semantic equality to preserve identity.
+    if (mirroredTerminalIds.has(removedId)) {
+      continue
+    }
     if (nextTerminalLayoutsByTabId[removedId]) {
       nextTerminalLayoutsByTabId =
         nextTerminalLayoutsByTabId === state.terminalLayoutsByTabId

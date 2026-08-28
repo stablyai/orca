@@ -60,7 +60,6 @@ import { RUNNING_CLOSE_PROBE_TIMEOUT_MS } from '../terminal/running-terminal-clo
 import CodexRestartChip from '../CodexRestartChip'
 import { MobileDriverOverlay } from './MobileDriverOverlay'
 import { stripSshReconnectOwnedErrorLines, TerminalErrorToast } from './TerminalErrorToast'
-import { TerminalProcessExitOverlay } from './TerminalProcessExitOverlay'
 import { TerminalSessionStateSaveFailureDialog } from './TerminalSessionStateSaveFailureDialog'
 import TerminalContextMenu from './TerminalContextMenu'
 import TerminalPaneHeaderOverlay, { type PaneTitleOverlayRect } from './TerminalPaneHeaderOverlay'
@@ -101,8 +100,6 @@ import type { PreparedAgentSessionFork } from './terminal-agent-session-fork'
 import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
 import { useNotificationDispatch } from './use-notification-dispatch'
 import { connectPanePty } from './pty-connection'
-import type { PaneProcessExit, PtyConnectionDeps } from './pty-connection-types'
-import { resolveTerminalProcessExitRestartStartup } from './terminal-process-exit-restart'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { shouldPreserveTerminalScrollbackBuffers } from '../../../../shared/workspace-session-terminal-buffers'
 import {
@@ -155,10 +152,8 @@ import {
   isHostAuthoritativeLayout,
   planTerminalLiveLayoutInsertions
 } from './terminal-live-layout-reconciliation'
-import type {
-  TerminalQuickCommand,
-  TerminalQuickCommandScope
-} from '../../../../shared/terminal-quick-command-types'
+import { finalizeTerminalLiveLayoutInsertions } from './terminal-live-orchestration-grid'
+import type { TerminalQuickCommand, TerminalQuickCommandScope } from '../../../../shared/types'
 import {
   createRemotePaneLayoutPusher,
   type RemotePaneLayoutPusher
@@ -169,7 +164,7 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
 import { useProjectHostSetupProjection, useRepoById } from '@/store/selectors'
 import { refitAndRefreshAllTerminalPanes } from '@/lib/pane-manager/pane-manager-registry'
 import {
@@ -198,8 +193,6 @@ import { useVisibleTerminalTabClaim } from './use-visible-terminal-tab-claim'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
 import { selectTerminalTabAgentTypesByLeaf } from './terminal-tab-agent-type-index'
-import { resolveProtectedMultilinePasteOptionsForPane } from './terminal-agent-paste-bracketing'
-import { resolveTerminalInputHostPlatform } from './terminal-input-host-platform'
 import { canContinueAgentSessionInNewSession } from './terminal-agent-session-continuation'
 import {
   updateTerminalRemoteRuntimeRecoveryUiState,
@@ -351,7 +344,6 @@ function TerminalPane(
   const {
     nativeChatTranscriptIsLocalReadable,
     sshReconnectEnvironmentId,
-    sshReconnectError,
     sshReconnectStatus,
     sshReconnectTargetId,
     sshReconnectTargetLabel,
@@ -402,15 +394,6 @@ function TerminalPane(
   const [agentSessionContinuation, setAgentSessionContinuation] =
     useState<AgentSessionContinuationRequest | null>(null)
   const [terminalError, setTerminalError] = useState<string | null>(null)
-  const [paneProcessExitsByPaneId, setPaneProcessExitsByPaneId] = useState<
-    Record<number, PaneProcessExit>
-  >({})
-  const handlePaneProcessDied = useCallback((processExit: PaneProcessExit) => {
-    setPaneProcessExitsByPaneId((current) => ({
-      ...current,
-      [processExit.paneId]: processExit
-    }))
-  }, [])
   const [ptyRecoveryStatesByPaneId, setPtyRecoveryStatesByPaneId] = useState<
     Record<number, VisiblePtyRecoveryState>
   >({})
@@ -550,6 +533,7 @@ function TerminalPane(
     () => (terminalTab ? sanitizeTerminalLayoutPaneTitles(savedLayout, terminalTab) : savedLayout),
     [savedLayout, terminalTab]
   )
+  const canUserSplitPane = restoredLayout.layoutMode !== 'orchestration-grid'
   const expectedLayoutLeafIds = useMemo(
     () => collectLeafIdsInOrder(restoredLayout.root),
     [restoredLayout.root]
@@ -566,10 +550,6 @@ function TerminalPane(
     const leafIds = getNativeChatLeafIds()
     return leafIds.length === 1 ? leafIds[0] : null
   }, [getNativeChatLeafIds, tabWideAgentHintLeafId])
-  const getTabWideAgentHintLeafIdRef = useRef(getTabWideAgentHintLeafId)
-  useEffect(() => {
-    getTabWideAgentHintLeafIdRef.current = getTabWideAgentHintLeafId
-  }, [getTabWideAgentHintLeafId])
   useEffect(() => {
     if (tabWideAgentHintLeafId !== undefined) {
       return
@@ -743,12 +723,19 @@ function TerminalPane(
   const [sessionRestoredBannerPaneIds, setSessionRestoredBannerPaneIds] = useState<
     Map<number, SessionRestoredBannerReason>
   >(() => new Map())
+  const consumeTabStartupCommand = useAppStore((store) => store.consumeTabStartupCommand)
   const [setupSplit] = useState(() => useAppStore.getState().pendingSetupSplitByTabId[tabId])
   const consumeTabSetupSplit = useAppStore((store) => store.consumeTabSetupSplit)
   const [issueCommandSplit] = useState(
     () => useAppStore.getState().pendingIssueCommandSplitByTabId[tabId]
   )
   const consumeTabIssueCommandSplit = useAppStore((store) => store.consumeTabIssueCommandSplit)
+  useEffect(() => {
+    if (startup) {
+      consumeTabStartupCommand(tabId)
+    }
+  }, [startup, tabId, consumeTabStartupCommand])
+
   useLayoutEffect(() => {
     if (isVisible && shouldMeasureHiddenStartup) {
       // Why: hidden startup measurement is first-launch only; keeping it past first visibility would let inactive tabs refit and SIGWINCH.
@@ -906,6 +893,11 @@ function TerminalPane(
       leafIdByPaneId
     )
     const existing = useAppStore.getState().terminalLayoutsByTabId[tabId]
+    if (existing?.layoutMode) {
+      // Why: DOM serialization captures the split tree, while grid ownership is
+      // durable session metadata that must survive every layout-only persist.
+      layout.layoutMode = existing.layoutMode
+    }
     const currentPanes = manager.getPanes()
     const currentLeafIds = new Set(currentPanes.map((p) => p.leafId))
     const clearedScrollbackLeafIds = clearedScrollbackLeafIdsRef.current
@@ -977,6 +969,14 @@ function TerminalPane(
     )
     if (hasRemotePane) {
       remotePaneLayoutPusherRef.current?.push({ worktreeId, tabId, layout })
+      void updateWebRuntimePaneLayout({
+        worktreeId,
+        tabId,
+        root: layout.root,
+        expandedLeafId: layout.expandedLeafId,
+        ...(layout.layoutMode ? { layoutMode: layout.layoutMode } : {}),
+        ...(layout.titlesByLeafId ? { titlesByLeafId: layout.titlesByLeafId } : {})
+      })
     }
     for (const leafId of currentLeafIds) {
       clearedScrollbackLeafIds.delete(leafId)
@@ -1364,8 +1364,8 @@ function TerminalPane(
     effectiveMacOptionAsAltRef: macOptionAsAltRef,
     initialLayoutRef,
     managerRef,
-    getTabWideAgentHintLeafId: () => getTabWideAgentHintLeafIdRef.current(),
     containerRef,
+    expandedPaneIdRef,
     expandedStyleSnapshotRef,
     paneFontSizesRef,
     paneTransportsRef,
@@ -1380,7 +1380,6 @@ function TerminalPane(
     onPtyExitRef,
     onAgentExitedRef,
     onPtyErrorRef,
-    onPaneProcessDied: handlePaneProcessDied,
     onPtyRecoveryStateRef,
     clearTabPtyId,
     consumeSuppressedPtyExit: useAppStore((store) => store.consumeSuppressedPtyExit),
@@ -1436,10 +1435,8 @@ function TerminalPane(
       restoredLayout.root,
       manager.getPanes().map((pane) => pane.leafId)
     )
-    if (insertions.length === 0) {
-      return
-    }
 
+    const isOrchestrationGridReconciliation = restoredLayout.layoutMode === 'orchestration-grid'
     let appliedInsertion = false
     for (const insertion of insertions) {
       const ptyId = restoredLayout.ptyIdsByLeafId?.[insertion.newLeafId]
@@ -1463,7 +1460,14 @@ function TerminalPane(
           ...(splitRatio !== undefined && { ratio: splitRatio }),
           leafId: insertion.newLeafId,
           ptyId,
-          placement: insertion.placement
+          placement: insertion.placement,
+          ...(isOrchestrationGridReconciliation
+            ? {
+                activate: false,
+                notifyLayoutChanged: false,
+                allowOrchestrationGridMutation: true
+              }
+            : {})
         }
       )
       if (!createdPane) {
@@ -1472,18 +1476,28 @@ function TerminalPane(
       appliedInsertion = true
     }
 
-    if (appliedInsertion) {
-      persistLayoutSnapshot()
+    const restoreActivePane = (): void => {
+      const activePaneId = restoredLayout.activeLeafId
+        ? manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
+        : null
+      const fallbackActivePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
+      const nextActivePaneId = activePaneId ?? fallbackActivePaneId
+      if (nextActivePaneId !== null) {
+        // Why: the final grid notification owns persistence; publish the host's
+        // active leaf through that commit instead of an intermediate focus write.
+        manager.setActivePane(nextActivePaneId, {
+          focus: isActive,
+          notifyActiveChange: !(isOrchestrationGridReconciliation && appliedInsertion)
+        })
+      }
     }
-
-    const activePaneId = restoredLayout.activeLeafId
-      ? manager.getNumericIdForLeaf(restoredLayout.activeLeafId)
-      : null
-    const fallbackActivePaneId = manager.getActivePane()?.id ?? manager.getPanes()[0]?.id ?? null
-    const nextActivePaneId = activePaneId ?? fallbackActivePaneId
-    if (nextActivePaneId !== null) {
-      manager.setActivePane(nextActivePaneId, { focus: isActive })
-    }
+    finalizeTerminalLiveLayoutInsertions({
+      manager,
+      restoredLayout,
+      appliedInsertion,
+      restoreActivePane,
+      persistLayoutSnapshot
+    })
   }, [isActive, paneCount, persistLayoutSnapshot, restoredLayout])
 
   // Activity-only isolation: when portaled into Activity for one agent pane, hide split siblings via a separate snapshot ref (independent of expand state).
@@ -1548,10 +1562,7 @@ function TerminalPane(
   }, [])
 
   const handleRestartCodexPane = useCallback(
-    (
-      paneId: number,
-      restartStartup: PtyConnectionDeps['startup'] = CODEX_ACCOUNT_RESTART_STARTUP
-    ) => {
+    (paneId: number) => {
       const manager = managerRef.current
       const pane = manager?.getPanes().find((candidate) => candidate.id === paneId)
       if (!manager || !pane) {
@@ -1581,8 +1592,7 @@ function TerminalPane(
         tabId,
         worktreeId,
         cwd,
-        startup: restartStartup,
-        mountFollowsTerminalPark: false,
+        startup: CODEX_ACCOUNT_RESTART_STARTUP,
         paneTransportsRef,
         paneMode2031Ref,
         paneKittyKeyboardModesRef,
@@ -1593,7 +1603,6 @@ function TerminalPane(
         onPtyExitRef,
         onAgentExitedRef,
         onPtyErrorRef,
-        onPaneProcessDied: handlePaneProcessDied,
         onPtyRecoveryStateRef,
         clearTabPtyId,
         consumeSuppressedPtyExit: useAppStore.getState().consumeSuppressedPtyExit,
@@ -1624,7 +1633,6 @@ function TerminalPane(
       clearTabPtyId,
       cwd,
       dispatchNotification,
-      handlePaneProcessDied,
       markWorktreeUnread,
       markTerminalTabUnread,
       markTerminalPaneUnread,
@@ -1643,36 +1651,6 @@ function TerminalPane(
       updateTabTitle,
       worktreeId
     ]
-  )
-
-  const clearPaneProcessExit = useCallback((paneId: number) => {
-    setPaneProcessExitsByPaneId((current) => {
-      if (current[paneId] === undefined) {
-        return current
-      }
-      const next = { ...current }
-      delete next[paneId]
-      return next
-    })
-  }, [])
-
-  const handleRestartExitedPane = useCallback(
-    (processExit: PaneProcessExit) => {
-      clearPaneProcessExit(processExit.paneId)
-      handleRestartCodexPane(
-        processExit.paneId,
-        resolveTerminalProcessExitRestartStartup(processExit)
-      )
-    },
-    [clearPaneProcessExit, handleRestartCodexPane]
-  )
-
-  const handleCloseExitedPane = useCallback(
-    (paneId: number) => {
-      clearPaneProcessExit(paneId)
-      executeClosePane(paneId)
-    },
-    [clearPaneProcessExit, executeClosePane]
   )
 
   // Why leaf bindings are a dep: a parked or deferred tab mounts with no
@@ -1712,6 +1690,7 @@ function TerminalPane(
     tabId,
     worktreeId,
     isActive,
+    canSplitPane: canUserSplitPane,
     keyboardScopeRef: containerRef,
     managerRef,
     paneTransportsRef,
@@ -1980,7 +1959,6 @@ function TerminalPane(
         },
         forceBracketedPaste: options?.forceBracketedPaste,
         forceBracketedPasteForMultiline: options?.forceBracketedPasteForMultiline,
-        windowsInputRecordNewline: options?.windowsInputRecordNewline,
         terminalBracketedPasteMode: pane.terminal.modes.bracketedPasteMode
       })
       const execution = await executeTerminalPastePlan(plan, {
@@ -2011,28 +1989,6 @@ function TerminalPane(
       }
     }
 
-    // Why: resolved per pane and PTY host; split siblings and remote hosts can need
-    // different multiline paste protocols.
-    const resolvePaneProtectedMultilinePasteOptions = (
-      pane: ManagedPane
-    ): TerminalPasteTextOptions | undefined => {
-      const state = useAppStore.getState()
-      const transport = paneTransportsRef.current.get(pane.id) ?? null
-      return resolveProtectedMultilinePasteOptionsForPane({
-        isWindowsClient: forceBracketedMultilineTextPaste,
-        hostPlatform: resolveTerminalInputHostPlatform({
-          clientPlatform: shortcutPlatform,
-          state,
-          worktreeId,
-          transport
-        }),
-        agentStatusByPaneKey: state.agentStatusByPaneKey,
-        paneForegroundAgentByPaneKey: state.paneForegroundAgentByPaneKey,
-        tabId,
-        leafId: pane.leafId
-      })
-    }
-
     const pasteFromClipboard = (
       pane: ManagedPane,
       source: Extract<TerminalPasteSource, 'keyboard' | 'paste-event'>,
@@ -2050,7 +2006,7 @@ function TerminalPane(
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
-        protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
+        forceBracketedMultilineTextPaste,
         pasteText: (text, options) =>
           executePanePasteText(pane, source, activeElementAtDispatch, text, options),
         onTextPasteError: () =>
@@ -2197,7 +2153,7 @@ function TerminalPane(
         saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,
         connectionId,
         runtimeEnvironmentId,
-        protectedMultilineTextPasteOptions: resolvePaneProtectedMultilinePasteOptions(pane),
+        forceBracketedMultilineTextPaste,
         pasteText: (text, options) =>
           executePanePasteText(pane, 'app-menu', activeElementAtDispatch, text, options),
         onTextPasteError: () =>
@@ -2592,7 +2548,8 @@ function TerminalPane(
     onAgentSessionForkReady: setAgentSessionFork,
     onAgentSessionContinuationReady: setAgentSessionContinuation,
     forceBracketedMultilineTextPaste,
-    rightClickToPaste
+    rightClickToPaste,
+    canSplitPane: canUserSplitPane
   })
   const {
     executionHostId: quickCommandExecutionHostId,
@@ -2774,7 +2731,6 @@ function TerminalPane(
             ? 'win32'
             : 'linux'
         const connectionId = getConnectionId(worktreeId) ?? null
-        const pasteState = useAppStore.getState()
         const targetStillMounted = (): boolean => {
           const manager = managerRef.current
           return Boolean(
@@ -2806,19 +2762,6 @@ function TerminalPane(
               transport
             })
           },
-          ...resolveProtectedMultilinePasteOptionsForPane({
-            isWindowsClient: forceBracketedMultilineTextPaste,
-            hostPlatform: resolveTerminalInputHostPlatform({
-              clientPlatform: shortcutPlatform,
-              state: pasteState,
-              worktreeId,
-              transport: transport ?? null
-            }),
-            agentStatusByPaneKey: pasteState.agentStatusByPaneKey,
-            paneForegroundAgentByPaneKey: pasteState.paneForegroundAgentByPaneKey,
-            tabId,
-            leafId: clickedPane.leafId
-          }),
           terminalBracketedPasteMode: clickedPane.terminal.modes.bracketedPasteMode
         })
         const execution = await executeTerminalPastePlan(plan, {
@@ -2835,7 +2778,7 @@ function TerminalPane(
         recordTerminalUserInputForLeaf(tabId, clickedPane.leafId)
       })
     },
-    [getPrimarySelectionMiddleClickPane, forceBracketedMultilineTextPaste, tabId, worktreeId]
+    [getPrimarySelectionMiddleClickPane, tabId, worktreeId]
   )
 
   const handlePrimarySelectionAuxClick = useCallback(
@@ -3079,22 +3022,6 @@ function TerminalPane(
           onRestartDaemon={() => daemonActions.setPending('restart')}
         />
       ) : null}
-      {isActive
-        ? managedPanes.map((pane) => {
-            const processExit = paneProcessExitsByPaneId[pane.id]
-            return processExit
-              ? createPortal(
-                  <TerminalProcessExitOverlay
-                    processExit={processExit}
-                    onRestart={() => handleRestartExitedPane(processExit)}
-                    onClose={() => handleCloseExitedPane(pane.id)}
-                  />,
-                  pane.container,
-                  `process-exit-${pane.id}`
-                )
-              : null
-          })
-        : null}
       {/* Why: portal into the pane so the banner stacks above the xterm canvas (sibling mount painted under WebGL). */}
       {showSshReconnectOverlay && sshReconnectTargetId && sshReconnectStatus
         ? managedPanes.map((pane) =>
@@ -3103,7 +3030,6 @@ function TerminalPane(
                 targetId={sshReconnectTargetId}
                 targetLabel={sshReconnectTargetLabel}
                 status={sshReconnectStatus}
-                error={sshReconnectError}
                 targetRemoved={sshReconnectTargetRemoved}
                 worktreeId={worktreeId}
                 sshOwnerEnvironmentId={sshReconnectEnvironmentId}
@@ -3148,6 +3074,7 @@ function TerminalPane(
                 onSwitchToTerminal={switchNativeChatToTerminal}
                 readTerminalScreen={readNativeChatTerminalScreen}
                 contextMenuActions={{
+                  canSplitPane: canUserSplitPane,
                   onSplitRight: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitRight),
                   onSplitDown: () => contextMenu.runForPane(chatPane.id, contextMenu.onSplitDown),
                   canEqualizePaneSizes: managedPanes.length > 1 && expandedPaneId === null,
@@ -3195,6 +3122,7 @@ function TerminalPane(
         onCopy={() => void contextMenu.onCopy()}
         onSelectAll={contextMenu.onSelectAll}
         onPaste={() => void contextMenu.onPaste()}
+        canSplitPane={canUserSplitPane}
         onSplitRight={contextMenu.onSplitRight}
         onSplitDown={contextMenu.onSplitDown}
         keybindings={keybindings}
@@ -3263,7 +3191,7 @@ function TerminalPane(
         worktreeId={worktreeId}
         cwd={cwd ?? ''}
         showAlwaysOnHeaders={isActive && terminalContentVisible}
-        showSplitButton={showSplitButton}
+        canSplitPane={canUserSplitPane}
         paneCount={paneCount}
         activePaneId={activePane?.id}
         panes={managedPanes}

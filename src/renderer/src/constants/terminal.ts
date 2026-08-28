@@ -1,4 +1,5 @@
 import type { TerminalPaneSplitSource } from '../../../shared/feature-education-telemetry'
+import type { WorktreeStartupLaunch } from '../../../shared/types'
 
 export const TOGGLE_TERMINAL_PANE_EXPAND_EVENT = 'orca-toggle-terminal-pane-expand'
 export const FOCUS_TERMINAL_PANE_EVENT = 'orca-focus-terminal-pane'
@@ -46,16 +47,35 @@ export type PasteTerminalTextDetail = {
   text: string
 }
 
+export type SplitTerminalPaneAcknowledgement =
+  | {
+      status: 'success'
+      /** Reverses every renderer resource created by this split before the
+       *  dispatching store restores its pre-action snapshot. */
+      rollback: () => void
+      /** Defers telemetry and other irreversible notifications until the pane
+       *  and its canonical store layout have both committed. */
+      afterCommit?: () => void
+    }
+  | { status: 'failure'; error: unknown }
+
 export type SplitTerminalPaneDetail = {
   tabId: string
   paneRuntimeId: number
   direction: 'horizontal' | 'vertical'
   command?: string
   sourceLeafId?: string
+  sourceLeafIds?: string[]
   sourcePtyId?: string
   telemetrySource?: TerminalPaneSplitSource
   newLeafId?: string
   ptyId?: string
+  startup?: WorktreeStartupLaunch
+  orchestrationGrid?: boolean
+  activate?: boolean
+  /** Transactional runtime appends require one synchronous result. Manual
+   *  splits omit this callback and retain their existing fire-and-forget path. */
+  acknowledge?: (result: SplitTerminalPaneAcknowledgement) => void
 }
 
 export type RequestActiveTerminalPaneSplitDetail = {

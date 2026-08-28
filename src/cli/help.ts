@@ -189,6 +189,7 @@ export function formatFlagHelp(flag: string): string {
     force:
       '--force                Force worktree removal when supported; does not force branch deletion',
     focus: '--focus                Reveal the created terminal session in Orca',
+    placement: '--placement <mode>    tab or orchestration-grid',
     for: '--for exit|tui-idle    Wait condition to satisfy',
     'from-element-index': '--from-element-index <n> Source element index from get-app-state',
     'from-x': '--from-x <x>           Source window-local x coordinate',

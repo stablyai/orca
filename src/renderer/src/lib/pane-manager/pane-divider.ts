@@ -18,6 +18,25 @@ export function createDivider(
   styleOptions: PaneStyleOptions,
   callbacks: DividerCallbacks
 ): HTMLElement {
+  const divider = createDividerElement(isVertical, styleOptions, true)
+  attachDividerDrag(divider, isVertical, callbacks)
+  return divider
+}
+
+export function createOrchestrationGridDivider(
+  isVertical: boolean,
+  styleOptions: PaneStyleOptions
+): HTMLElement {
+  // Why: grid geometry is host-owned; accepting resize gestures would persist
+  // unequal cells that the next canonical reflow immediately replaces.
+  return createDividerElement(isVertical, styleOptions, false)
+}
+
+function createDividerElement(
+  isVertical: boolean,
+  styleOptions: PaneStyleOptions,
+  interactive: boolean
+): HTMLElement {
   const divider = document.createElement('div')
   divider.className = `pane-divider ${isVertical ? 'is-vertical' : 'is-horizontal'}`
 
@@ -27,15 +46,20 @@ export function createDivider(
   const hitSize = getDividerHitSize(styleOptions)
   if (isVertical) {
     divider.style.width = `${hitSize}px`
-    divider.style.cursor = 'col-resize'
+    if (interactive) {
+      divider.style.cursor = 'col-resize'
+    }
   } else {
     divider.style.height = `${hitSize}px`
-    divider.style.cursor = 'row-resize'
+    if (interactive) {
+      divider.style.cursor = 'row-resize'
+    }
   }
   divider.style.flex = 'none'
   divider.style.position = 'relative'
-
-  attachDividerDrag(divider, isVertical, callbacks)
+  if (!interactive) {
+    divider.style.pointerEvents = 'none'
+  }
   return divider
 }
 

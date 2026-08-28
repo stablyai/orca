@@ -4,9 +4,12 @@ import { randomUUID } from 'node:crypto'
 import { app, ipcMain } from 'electron'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
-import type { ReleaseBuildListResult, UpdateCheckOptions } from '../../shared/update-status-types'
-import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
-import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
+import type {
+  CreateWorktreeResult,
+  ReleaseBuildListResult,
+  UpdateCheckOptions,
+  WorktreeStartupLaunch
+} from '../../shared/types'
 import { RELEASE_CHANNELS, type ReleaseChannel } from '../../shared/release-channel'
 import {
   acknowledgePendingTccPromptNotice,
@@ -14,9 +17,7 @@ import {
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
-import { registerRepoHandlers } from '../ipc/repos'
-import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
-import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
+import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
@@ -58,7 +59,6 @@ import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
-import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
@@ -66,10 +66,11 @@ import {
   scheduleWorktreeBaseDirectoryWatcherSync,
   setWorktreeBaseDirectoryWatcherSyncContext
 } from '../ipc/worktree-base-directory-watcher'
-import { startFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { logStartupMilestone } from '../startup/startup-diagnostics'
-import { createRuntimeRendererNotificationSender } from './runtime-renderer-notification-sender'
-import { registerRendererDocumentNavigation } from './renderer-document-navigation'
+import {
+  requestTerminalGridAppendRollback,
+  rollbackMismatchedTerminalGridAppend
+} from './terminal-grid-append-rollback-relay'
 
 const UPDATER_SETUP_FALLBACK_MS = 15_000
 
@@ -113,16 +114,12 @@ export function attachMainWindowServices(
   registerRepoHandlers(mainWindow, store)
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
-  setWorktreeCatalogRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
   // Why: repo/settings mutations resync watchers through this attached main-window context.
   setWorktreeBaseDirectoryWatcherSyncContext(store, mainWindow)
   scheduleWorktreeBaseDirectoryWatcherSync(store, mainWindow)
-  // Why: folder projects get no watch target, so an external `git init` needs its own
-  // marker poll to upgrade them without a restart (#11477).
-  startFolderRepoGitUpgradeWatch(store, mainWindow)
   registerWorkspaceCleanupHandlers(store, { runtime, getLocalPtyProvider })
   registerPtyHandlers(
     mainWindow,
@@ -328,13 +325,13 @@ function registerRuntimeWindowLifecycle(
   const notifierToken = ++runtimeNotifierTokenCounter
   activeRuntimeNotifierToken = notifierToken
   runtime.attachWindow(mainWindow.id)
-  const mainWebContents = mainWindow.webContents
-  const rendererNotifications = createRuntimeRendererNotificationSender({
-    isWindowDestroyed: () => mainWindow.isDestroyed(),
-    webContents: mainWebContents,
-    onFailure: (reason) => runtime.markGraphReloadFailed(mainWindow.id, reason)
-  })
-  const send = rendererNotifications.send
+  const send = (channel: string, ...args: unknown[]): boolean => {
+    if (mainWindow.isDestroyed()) {
+      return false
+    }
+    mainWindow.webContents.send(channel, ...args)
+    return true
+  }
   runtime.setNotifier({
     worktreesChanged: (repoId, renamed) => {
       // Why: clear scan caches before the renderer handles this event, so it can't read stale TTL entries after a mutation.
@@ -344,7 +341,6 @@ function registerRuntimeWindowLifecycle(
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
-    automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (
       repoId,
       worktreeId,
@@ -371,6 +367,10 @@ function registerRuntimeWindowLifecycle(
       }),
     revealTerminalSession: (worktreeId, opts) =>
       new Promise((resolve, reject) => {
+        if (mainWindow.isDestroyed()) {
+          reject(new Error('Terminal reveal window is no longer available'))
+          return
+        }
         const requestId = randomUUID()
         const expectedIdentity = opts.expectedProcessIdentity
           ? opts.tabId && opts.leafId
@@ -396,58 +396,94 @@ function registerRuntimeWindowLifecycle(
             reject(new Error(reply.error))
             return
           }
+          if (!reply.tabId) {
+            reject(new Error('Terminal reveal reply did not include a tab id'))
+            return
+          }
+          const rollbackIdentity =
+            opts.placement === 'orchestration-grid' &&
+            opts.splitFromLeafId !== undefined &&
+            opts.tabId !== undefined &&
+            opts.leafId !== undefined
+              ? {
+                  transactionId: requestId,
+                  tabId: opts.tabId,
+                  leafId: opts.leafId
+                }
+              : null
           if (
-            expectedIdentity &&
-            (!reply.identity ||
-              reply.identity.worktreeId !== expectedIdentity.worktreeId ||
-              reply.identity.tabId !== expectedIdentity.tabId ||
-              reply.identity.leafId !== expectedIdentity.leafId ||
-              reply.identity.ptyId !== expectedIdentity.ptyId)
+            rollbackIdentity &&
+            (reply.tabId !== rollbackIdentity.tabId || reply.leafId !== rollbackIdentity.leafId)
           ) {
-            reject(new Error('terminal_reveal_identity_mismatch'))
+            if (reply.leafId) {
+              void rollbackMismatchedTerminalGridAppend(mainWindow, {
+                transactionId: requestId,
+                tabId: reply.tabId,
+                leafId: reply.leafId
+              }).catch(reject)
+            } else {
+              reject(new Error('Terminal grid reply did not match its staged identity'))
+            }
             return
           }
           resolve({
-            tabId: reply.tabId!,
+            tabId: reply.tabId,
+            leafId: reply.leafId,
+            layout: reply.layout,
             title: reply.title,
-            ...(reply.identity ? { identity: reply.identity } : {})
+            ...(rollbackIdentity
+              ? {
+                  rollback: () => requestTerminalGridAppendRollback(mainWindow, rollbackIdentity),
+                  complete: () => {
+                    send('ui:commitTerminalGridAppend', rollbackIdentity)
+                  }
+                }
+              : {})
           })
         }
         ipcMain.on('terminal:tabCreateReply', handler)
-        const sent = send('ui:createTerminal', {
-          requestId,
-          worktreeId,
-          ptyId: opts.ptyId,
-          title: opts.title ?? undefined,
-          ...(opts.cwd ? { cwd: opts.cwd } : {}),
-          ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
-          ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
-          ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
-          ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
-          activate: opts.activate !== false,
-          ...(opts.presentation ? { presentation: opts.presentation } : {}),
-          ...(opts.surfaceOwner === false ? { surfaceOwner: false } : {}),
-          // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
-          ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
-          ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
-          ...(opts.splitFromLeafId !== undefined ? { splitFromLeafId: opts.splitFromLeafId } : {}),
-          ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
-          ...(opts.splitTelemetrySource !== undefined
-            ? { splitTelemetrySource: opts.splitTelemetrySource }
-            : {}),
-          ...(opts.focus !== undefined ? { focus: opts.focus } : {})
-        })
-        if (!sent) {
+        try {
+          const sent = send('ui:createTerminal', {
+            requestId,
+            worktreeId,
+            ptyId: opts.ptyId,
+            ...(opts.command !== undefined ? { command: opts.command } : {}),
+            title: opts.title ?? undefined,
+            ...(opts.cwd ? { cwd: opts.cwd } : {}),
+            ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {}),
+            ...(opts.launchToken ? { launchToken: opts.launchToken } : {}),
+            ...(opts.launchAgent ? { launchAgent: opts.launchAgent } : {}),
+            ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
+            activate: opts.activate !== false,
+            ...(opts.presentation ? { presentation: opts.presentation } : {}),
+            // Why: pre-minted tabId aligns the renderer tab id with the paneKey baked into the PTY env, so hook events route right.
+            ...(opts.tabId !== undefined ? { tabId: opts.tabId } : {}),
+            ...(opts.leafId !== undefined ? { leafId: opts.leafId } : {}),
+            ...(opts.splitFromLeafId !== undefined
+              ? { splitFromLeafId: opts.splitFromLeafId }
+              : {}),
+            ...(opts.splitSourceLeafIds !== undefined
+              ? { splitSourceLeafIds: opts.splitSourceLeafIds }
+              : {}),
+            ...(opts.splitDirection !== undefined ? { splitDirection: opts.splitDirection } : {}),
+            ...(opts.splitTelemetrySource !== undefined
+              ? { splitTelemetrySource: opts.splitTelemetrySource }
+              : {}),
+            ...(opts.placement !== undefined ? { placement: opts.placement } : {})
+          })
+          if (!sent) {
+            clearTimeout(timer)
+            ipcMain.removeListener('terminal:tabCreateReply', handler)
+            reject(new Error('Terminal reveal window is no longer available'))
+          }
+        } catch (error) {
+          // Why: a synchronous renderer dispatch failure cannot ever receive a
+          // reply, so release its request-owned listener and timeout immediately.
           clearTimeout(timer)
           ipcMain.removeListener('terminal:tabCreateReply', handler)
-          reject(new Error('runtime_unavailable'))
+          reject(error)
         }
-      }),
-    resolveLegacyWorkerTerminalRecovery: (paneKey, resolution, ptyId) =>
-      send('agentStatus:legacyWorkerTerminalRecovery', {
-        paneKey,
-        resolution,
-        ...(ptyId ? { ptyId } : {})
+
       }),
     splitTerminal: (tabId, paneRuntimeId, opts) => {
       send('ui:splitTerminal', {
@@ -462,8 +498,7 @@ function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
-    closeSessionTab: (tabId, worktreeId) =>
-      requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
+    closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
@@ -496,8 +531,7 @@ function registerRuntimeWindowLifecycle(
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
-    closeTerminalTab: (tabId, options) =>
-      requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
+    closeTerminalTab: (tabId) => requestTerminalTabCloseFromRenderer(mainWindow, tabId),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
@@ -507,28 +541,13 @@ function registerRuntimeWindowLifecycle(
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
-      send('runtime:browserDriverChanged', { browserPageId, driver }),
-    browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
-      send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
-    clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
+      send('runtime:browserDriverChanged', { browserPageId, driver })
   })
-  registerRendererDocumentNavigation(mainWebContents, () => {
-    rendererNotifications.onMainFrameReloadStarted()
-    const fence = runtime.markRendererReloading(mainWindow.id)
-    return () => {
-      if (fence && runtime.markRendererReloadCancelled(mainWindow.id, fence)) {
-        rendererNotifications.onMainFrameReloadCancelled()
-      }
-    }
-  })
-  mainWebContents.on('did-finish-load', () => {
-    rendererNotifications.onMainFrameLoadFinished()
-  })
-  mainWebContents.on('render-process-gone', () => {
-    rendererNotifications.onRendererProcessGone()
+  // Why: fail closed during renderer reload so CLI calls can't act on stale terminal mappings.
+  mainWindow.webContents.on('did-start-loading', () => {
+    runtime.markRendererReloading(mainWindow.id)
   })
   mainWindow.on('closed', () => {
-    rendererNotifications.close()
     runtime.markGraphUnavailable(mainWindow.id)
     if (activeRuntimeNotifierToken === notifierToken) {
       // Why: the notifier closes over the window; clear it in the no-window gap so the runtime can't retain destroyed graphs.

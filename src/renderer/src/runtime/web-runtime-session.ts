@@ -35,6 +35,9 @@ import type {
 import type { TerminalPaneLayoutNode } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { createBrowserUuid } from '../lib/browser-uuid'
+import type { SleepingAgentLaunchConfig } from '../../../shared/agent-session-resume'
+import type { TerminalLayoutMode, TerminalPaneLayoutNode, TuiAgent } from '../../../shared/types'
+import type { AppState } from '../store/types'
 import { getRuntimeEnvironmentIdForWorktree } from '../lib/worktree-runtime-owner'
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
@@ -1682,6 +1685,7 @@ export async function updateWebRuntimePaneLayout(args: {
   tabId: string
   root: TerminalPaneLayoutNode | null
   expandedLeafId: string | null
+  layoutMode?: TerminalLayoutMode
   titlesByLeafId?: Record<string, string>
 }): Promise<boolean> {
   const environmentId =
@@ -1701,6 +1705,7 @@ export async function updateWebRuntimePaneLayout(args: {
         tabId: hostTabId,
         root: args.root,
         expandedLeafId: args.expandedLeafId,
+        ...(args.layoutMode ? { layoutMode: args.layoutMode } : {}),
         ...(args.titlesByLeafId ? { titlesByLeafId: args.titlesByLeafId } : {})
       },
       timeoutMs: 15_000

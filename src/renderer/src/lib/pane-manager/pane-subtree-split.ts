@@ -2,16 +2,13 @@ import type {
   ManagedPane,
   ManagedPaneInternal,
   PaneManagerOptions,
+  PaneSplitOptions,
   PaneStyleOptions
 } from './pane-manager-types'
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import { splitManagedPane } from './pane-split-close'
 
-export type SplitPaneAroundLeafIdsOptions = {
-  ratio?: number
-  cwd?: string
-  leafId?: string
-  ptyId?: string
+export type SplitPaneAroundLeafIdsOptions = PaneSplitOptions & {
   placement?: 'before' | 'after'
 }
 
@@ -32,6 +29,7 @@ type SplitPaneAroundLeafIdsArgs = {
     spawnHints?: Parameters<NonNullable<PaneManagerOptions['onPaneCreated']>>[1]
   ) => void
   getDragCallbacks: () => DragReorderCallbacks
+  getActivePaneId: () => number | null
   setActivePaneId: (paneId: number | null) => void
   isDestroyed: () => boolean
 }
@@ -60,6 +58,7 @@ export function splitPaneAroundMountedSubtree(
     createDivider: args.createDivider,
     publishPaneCreated: args.publishPaneCreated,
     getDragCallbacks: args.getDragCallbacks,
+    getActivePaneId: args.getActivePaneId,
     setActivePaneId: args.setActivePaneId,
     isDestroyed: args.isDestroyed
   })

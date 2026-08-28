@@ -755,16 +755,18 @@ async function syncRuntimeGraph(): Promise<void> {
     const activePaneId = manager?.getActivePane()?.id ?? null
     const root =
       container?.firstElementChild instanceof HTMLElement ? container.firstElementChild : null
+    const savedLayout = state.terminalLayoutsByTabId[tabId]
 
     graph.tabs.push({
       tabId,
       worktreeId: registeredTab.worktreeId,
       title: resolveRuntimeTerminalTitle(tab, generatedTitlesEnabled),
       activeLeafId: activePaneId === null ? null : (manager?.getLeafId(activePaneId) ?? null),
-      layout: serializePaneTree(root)
+      layout: serializePaneTree(root),
+      ...(savedLayout?.layoutMode ? { layoutMode: savedLayout.layoutMode } : {})
     })
 
-    const savedPtyIdsByLeafId = state.terminalLayoutsByTabId[tabId]?.ptyIdsByLeafId ?? {}
+    const savedPtyIdsByLeafId = savedLayout?.ptyIdsByLeafId ?? {}
     for (const pane of manager?.getPanes() ?? []) {
       const leafId = pane.leafId
       const ptyId = registeredTab.getPtyIdForPane(pane.id)
@@ -847,7 +849,8 @@ async function syncRuntimeGraph(): Promise<void> {
             console.warn(
               `[sync-runtime-graph] synthesized layout for ${leafCount} unmounted leaves with no saved tree`
             )
-        })
+        }),
+        ...(layout?.layoutMode ? { layoutMode: layout.layoutMode } : {})
       })
       liveLeaves.forEach(([leafId, ptyId], index) => {
         // Why the watcher's id wins: PaneManager ids are allocated monotonically
@@ -1949,6 +1952,7 @@ function buildMobileTerminalSurfaceTabs(
     }),
     activeLeafId,
     expandedLeafId: sanitizedSavedLayout?.expandedLeafId ?? null,
+    ...(sanitizedSavedLayout?.layoutMode ? { layoutMode: sanitizedSavedLayout.layoutMode } : {}),
     ...(Object.keys(savedPtyIdsByLeafId).length > 0 ? { ptyIdsByLeafId: savedPtyIdsByLeafId } : {}),
     ...(sanitizedSavedLayout?.titlesByLeafId
       ? { titlesByLeafId: sanitizedSavedLayout.titlesByLeafId }

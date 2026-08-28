@@ -830,17 +830,29 @@ describe('attachMainWindowServices', () => {
         worktreeId: string,
         opts: {
           ptyId: string
+          command?: string
           title?: string
           cwd?: string
+          launchConfig?: {
+            agentCommand: string
+            agentArgs: string
+            agentEnv: Record<string, string>
+          }
           viewMode?: 'terminal' | 'chat'
           activate?: boolean
         }
-      ) => Promise<{ tabId: string; title?: string }>
+      ) => Promise<{ tabId: string; leafId?: string; title?: string }>
     }
     const revealPromise = notifier.revealTerminalSession('wt-1', {
       ptyId: 'pty-1',
+      command: 'codex --profile worker',
       title: 'SSH tmux',
       cwd: '/repo/packages/web',
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '--profile worker',
+        agentEnv: { CODEX_PROFILE: 'worker' }
+      },
       viewMode: 'chat'
     })
     const sentPayload = sendMock.mock.calls.find(
@@ -849,7 +861,16 @@ describe('attachMainWindowServices', () => {
     const handler = onMock.mock.calls.find(
       ([channel]) => channel === 'terminal:tabCreateReply'
     )?.[1]
-    expect(sentPayload).toMatchObject({ cwd: '/repo/packages/web', viewMode: 'chat' })
+    expect(sentPayload).toMatchObject({
+      command: 'codex --profile worker',
+      cwd: '/repo/packages/web',
+      launchConfig: {
+        agentCommand: 'codex',
+        agentArgs: '--profile worker',
+        agentEnv: { CODEX_PROFILE: 'worker' }
+      },
+      viewMode: 'chat'
+    })
 
     handler?.(
       { sender: { send: vi.fn() } },
@@ -859,10 +880,19 @@ describe('attachMainWindowServices', () => {
 
     handler?.(
       { sender: mainWindow.webContents },
-      { requestId: sentPayload.requestId, tabId: 'tab-1', title: 'SSH tmux' }
+      {
+        requestId: sentPayload.requestId,
+        tabId: 'tab-1',
+        leafId: 'leaf-1',
+        title: 'SSH tmux'
+      }
     )
 
-    await expect(revealPromise).resolves.toEqual({ tabId: 'tab-1', title: 'SSH tmux' })
+    await expect(revealPromise).resolves.toEqual({
+      tabId: 'tab-1',
+      leafId: 'leaf-1',
+      title: 'SSH tmux'
+    })
     expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
   })
 
@@ -871,6 +901,10 @@ describe('attachMainWindowServices', () => {
     const mainWindow = createMainWindow({ send: sendMock })
     const runtime = createRuntime()
 
+  it('exposes an acknowledged exact-leaf rollback for staged grid appends', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
     attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
 
     const notifier = runtime.setNotifier.mock.calls[0][0] as {
@@ -933,6 +967,246 @@ describe('attachMainWindowServices', () => {
       title: undefined,
       identity
     })
+          placement: 'orchestration-grid'
+          splitFromLeafId: string
+          splitSourceLeafIds: string[]
+          tabId: string
+          leafId: string
+        }
+      ) => Promise<{ rollback: () => Promise<void>; complete: () => void }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-new',
+      placement: 'orchestration-grid',
+      splitFromLeafId: 'leaf-old',
+      splitSourceLeafIds: ['leaf-old', 'leaf-peer'],
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+    const createPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const createReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    expect(createPayload).toMatchObject({
+      placement: 'orchestration-grid',
+      splitSourceLeafIds: ['leaf-old', 'leaf-peer']
+    })
+    createReplyHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: createPayload.requestId,
+        tabId: 'tab-grid',
+        leafId: 'leaf-new'
+      }
+    )
+    const revealed = await revealPromise
+
+    const rollbackPromise = revealed.rollback()
+    const rollbackPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:rollbackTerminalGridAppend'
+    )?.[1]
+    const rollbackReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:gridAppendRollbackReply'
+    )?.[1]
+    expect(rollbackPayload).toEqual({
+      requestId: expect.any(String),
+      transactionId: createPayload.requestId,
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+
+    rollbackReplyHandler?.({ sender: { send: vi.fn() } }, { requestId: rollbackPayload.requestId })
+    expect(removeListenerMock).not.toHaveBeenCalledWith(
+      'terminal:gridAppendRollbackReply',
+      rollbackReplyHandler
+    )
+    rollbackReplyHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: rollbackPayload.requestId }
+    )
+    await expect(rollbackPromise).resolves.toBeUndefined()
+    expect(removeListenerMock).toHaveBeenCalledWith(
+      'terminal:gridAppendRollbackReply',
+      rollbackReplyHandler
+    )
+  })
+
+  it('releases the renderer rollback token after a staged grid append commits', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          placement: 'orchestration-grid'
+          splitFromLeafId: string
+          tabId: string
+          leafId: string
+        }
+      ) => Promise<{ complete: () => void }>
+    }
+    const revealPromise = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-new',
+      placement: 'orchestration-grid',
+      splitFromLeafId: 'leaf-old',
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+    const createPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:createTerminal'
+    )?.[1]
+    const createReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+    createReplyHandler?.(
+      { sender: mainWindow.webContents },
+      {
+        requestId: createPayload.requestId,
+        tabId: 'tab-grid',
+        leafId: 'leaf-new'
+      }
+    )
+
+    const revealed = await revealPromise
+    revealed.complete()
+
+    expect(sendMock).toHaveBeenCalledWith('ui:commitTerminalGridAppend', {
+      transactionId: createPayload.requestId,
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+  })
+  it('removes the reveal listener and timeout when renderer dispatch throws', async () => {
+    vi.useFakeTimers()
+    try {
+      const sendFailure = new Error('renderer dispatch failed')
+      const mainWindow = createMainWindow({
+        send: vi.fn(() => {
+          throw sendFailure
+        })
+      })
+      const runtime = createRuntime()
+      attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+      const baselineTimerCount = vi.getTimerCount()
+      const notifier = runtime.setNotifier.mock.calls[0][0] as {
+        revealTerminalSession: (
+          worktreeId: string,
+          opts: { ptyId: string }
+        ) => Promise<{ tabId: string }>
+      }
+
+      await expect(
+        notifier.revealTerminalSession('wt-1', { ptyId: 'ssh:conn-1@@pty-staged' })
+      ).rejects.toBe(sendFailure)
+
+      const handler = onMock.mock.calls.find(
+        ([channel]) => channel === 'terminal:tabCreateReply'
+      )?.[1]
+      expect(removeListenerMock).toHaveBeenCalledWith('terminal:tabCreateReply', handler)
+      expect(vi.getTimerCount()).toBe(baselineTimerCount)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects a reveal immediately when its window is already destroyed', async () => {
+    vi.useFakeTimers()
+    try {
+      const sendMock = vi.fn()
+      const mainWindow = createMainWindow({ send: sendMock })
+      mainWindow.isDestroyed?.mockReturnValue(true)
+      const runtime = createRuntime()
+      attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+      const notifier = runtime.setNotifier.mock.calls[0][0] as {
+        revealTerminalSession: (worktreeId: string, opts: { ptyId: string }) => Promise<unknown>
+      }
+      const timerCount = vi.getTimerCount()
+
+      await expect(notifier.revealTerminalSession('wt-1', { ptyId: 'pty-1' })).rejects.toThrow(
+        'window is no longer available'
+      )
+      expect(sendMock).not.toHaveBeenCalledWith('ui:createTerminal', expect.anything())
+      expect(onMock).not.toHaveBeenCalledWith('terminal:tabCreateReply', expect.anything())
+      expect(vi.getTimerCount()).toBe(timerCount)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('rejects a reveal reply that omits its tab identity', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (worktreeId: string, opts: { ptyId: string }) => Promise<unknown>
+    }
+    const reveal = notifier.revealTerminalSession('wt-1', { ptyId: 'pty-1' })
+    const payload = sendMock.mock.calls.find(([channel]) => channel === 'ui:createTerminal')?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+
+    handler?.({ sender: mainWindow.webContents }, { requestId: payload.requestId })
+
+    await expect(reveal).rejects.toThrow('did not include a tab id')
+  })
+
+  it('rejects a staged grid reply with a different tab or leaf identity', async () => {
+    const sendMock = vi.fn()
+    const mainWindow = createMainWindow({ send: sendMock })
+    const runtime = createRuntime()
+    attachMainWindowServices(mainWindow as never, createStore(), runtime as never)
+    const notifier = runtime.setNotifier.mock.calls[0][0] as {
+      revealTerminalSession: (
+        worktreeId: string,
+        opts: {
+          ptyId: string
+          placement: 'orchestration-grid'
+          splitFromLeafId: string
+          tabId: string
+          leafId: string
+        }
+      ) => Promise<unknown>
+    }
+    const reveal = notifier.revealTerminalSession('wt-1', {
+      ptyId: 'pty-new',
+      placement: 'orchestration-grid',
+      splitFromLeafId: 'leaf-old',
+      tabId: 'tab-grid',
+      leafId: 'leaf-new'
+    })
+    const payload = sendMock.mock.calls.find(([channel]) => channel === 'ui:createTerminal')?.[1]
+    const handler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:tabCreateReply'
+    )?.[1]
+
+    handler?.(
+      { sender: mainWindow.webContents },
+      { requestId: payload.requestId, tabId: 'tab-grid', leafId: 'leaf-other' }
+    )
+    const rollbackPayload = sendMock.mock.calls.find(
+      ([channel]) => channel === 'ui:rollbackTerminalGridAppend'
+    )?.[1]
+    const rollbackReplyHandler = onMock.mock.calls.find(
+      ([channel]) => channel === 'terminal:gridAppendRollbackReply'
+    )?.[1]
+    expect(rollbackPayload).toMatchObject({
+      transactionId: payload.requestId,
+      tabId: 'tab-grid',
+      leafId: 'leaf-other'
+    })
+    rollbackReplyHandler?.(
+      { sender: mainWindow.webContents },
+      { requestId: rollbackPayload.requestId }
+    )
+
+    await expect(reveal).rejects.toThrow('did not match its staged identity')
   })
 
   it('keeps deferred worktree watcher setup inside the service boundary', async () => {

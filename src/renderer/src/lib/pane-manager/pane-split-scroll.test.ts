@@ -76,6 +76,7 @@ function createPane(bufferType: 'normal' | 'alternate'): {
     webLinksAddon: {} as never,
     compositionHandler: null,
     pendingSplitScrollState: scrollState,
+    pendingSplitWebglReattach: false,
     pendingSplitScrollBufferDisposable: null,
     debugLabel: null
   }
@@ -116,12 +117,14 @@ describe('scheduleSplitScrollRestore', () => {
       reattachWebgl
     )
 
+    expect(pane.pendingSplitWebglReattach).toBe(true)
     expect(restoreScrollState).toHaveBeenCalledTimes(1)
     expect(pane.terminal.refresh).toHaveBeenCalledWith(0, 23)
 
     vi.advanceTimersByTime(200)
 
     expect(pane.pendingSplitScrollState).toBeNull()
+    expect(pane.pendingSplitWebglReattach).toBe(false)
     expect(reattachWebgl).toHaveBeenCalledWith(pane)
     expect(restoreScrollState).toHaveBeenCalledTimes(2)
     expect(pane.terminal.refresh).toHaveBeenCalledTimes(2)
@@ -146,6 +149,7 @@ describe('scheduleSplitScrollRestore', () => {
     vi.advanceTimersByTime(200)
 
     expect(pane.pendingSplitScrollState).toBeNull()
+    expect(pane.pendingSplitWebglReattach).toBe(true)
     expect(pane.pendingSplitScrollBufferDisposable).toBe(bufferChangeDisposables[0])
     expect(reattachWebgl).not.toHaveBeenCalled()
     expect(restoreScrollState).not.toHaveBeenCalled()
@@ -160,6 +164,7 @@ describe('scheduleSplitScrollRestore', () => {
 
     expect(bufferChangeDisposables[0].dispose).toHaveBeenCalledTimes(1)
     expect(pane.pendingSplitScrollBufferDisposable).toBeNull()
+    expect(pane.pendingSplitWebglReattach).toBe(false)
     expect(reattachWebgl).toHaveBeenCalledWith(pane)
     expect(restoreScrollState).not.toHaveBeenCalled()
     expect(pane.terminal.refresh).not.toHaveBeenCalled()
@@ -236,16 +241,19 @@ describe('scheduleSplitScrollRestore', () => {
     )
     vi.stubGlobal('cancelAnimationFrame', cancelAnimationFrame)
     const { pane } = createPane('normal')
+    const reattachWebgl = vi.fn()
 
     scheduleSplitScrollRestore(
       () => pane,
       pane.id,
       scrollState,
-      () => false
+      () => false,
+      reattachWebgl
     )
 
     expect(pane.pendingSplitScrollRafIds).toEqual([10])
     expect(pane.pendingSplitScrollTimerId).not.toBeNull()
+    expect(pane.pendingSplitWebglReattach).toBe(true)
     expect(vi.getTimerCount()).toBe(1)
 
     clearPendingSplitScrollRestore(pane)
@@ -255,6 +263,8 @@ describe('scheduleSplitScrollRestore', () => {
     expect(pane.pendingSplitScrollRafIds).toEqual([])
     expect(pane.pendingSplitScrollTimerId).toBeNull()
     expect(pane.pendingSplitScrollState).toBeNull()
+    expect(pane.pendingSplitWebglReattach).toBe(false)
+    expect(reattachWebgl).not.toHaveBeenCalled()
     expect(releaseScrollStateMarker).toHaveBeenCalledWith(scrollState)
   })
 })
