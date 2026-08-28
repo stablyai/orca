@@ -248,7 +248,7 @@ describe('Claude terminal session option detection', () => {
         frame('Opus 4.8 with high effort · API Usage Billing'),
         DISCOVERED
       )
-    ).toEqual({ model: 'opus', effort: 'high' })
+    ).toEqual({ model: 'opus', effort: 'high', fastMode: false })
   })
 
   it('still reports a custom model when the host list cannot name it', () => {
@@ -268,7 +268,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'high'
+      effort: 'high',
+      fastMode: false
     })
   })
 
@@ -280,7 +281,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'high'
+      effort: 'high',
+      fastMode: false
     })
   })
 
@@ -316,7 +318,8 @@ describe('Claude terminal session option detection', () => {
 
     expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
       model: 'opus',
-      effort: 'xhigh'
+      effort: 'xhigh',
+      fastMode: false
     })
   })
 
@@ -332,6 +335,44 @@ describe('Claude terminal session option detection', () => {
     expect(
       readClaudeSessionOptionsFromTerminalScreen('I recommend Opus 4.8 for this task.')
     ).toBeNull()
+  })
+
+  it('reads fast mode from the status-line ↯ glyph once the banner names Opus', () => {
+    const withGlyph =
+      'Claude Code v2.1.237\r\n' +
+      'Opus 5 with high effort · API Usage Billing\r\n' +
+      '~/repo\r\n' +
+      '↯ Fast'
+
+    expect(readClaudeSessionOptionsFromTerminalScreen(withGlyph)).toEqual({
+      model: 'opus',
+      effort: 'high',
+      fastMode: true
+    })
+
+    const withoutGlyph =
+      'Claude Code v2.1.237\r\n' + 'Opus 5 with high effort · API Usage Billing\r\n' + '~/repo'
+
+    expect(readClaudeSessionOptionsFromTerminalScreen(withoutGlyph)).toEqual({
+      model: 'opus',
+      effort: 'high',
+      fastMode: false
+    })
+  })
+
+  it('does not treat the confirmation panel title as live fast mode', () => {
+    const screen =
+      'Claude Code v2.1.237\r\n' +
+      'Opus 5 with high effort · API Usage Billing\r\n' +
+      '~/repo\r\n' +
+      '↯ Fast mode (research preview)\r\n' +
+      'Tab to toggle · Enter to confirm · Esc to cancel'
+
+    expect(readClaudeSessionOptionsFromTerminalScreen(screen)).toEqual({
+      model: 'opus',
+      effort: 'high',
+      fastMode: false
+    })
   })
 
   it('recovers a custom model name that is not in the catalog', () => {

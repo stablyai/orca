@@ -1,8 +1,5 @@
 import type { AgentType } from './agent-status-types'
-import type {
-  CatalogMidSessionApply,
-  AgentSessionOptionCatalog
-} from './agent-session-option-catalog'
+import type { AgentSessionOptionCatalog } from './agent-session-option-catalog'
 import type { SessionOptionValue, SessionOptionValueSource } from './native-chat-session-options'
 
 export type TrackedNativeChatSessionOption = {
@@ -35,12 +32,6 @@ export function cloneNativeChatSessionOptionRecord(
       ])
     )
   }
-}
-
-export function isFlipOnlyMidSession(
-  midSession: CatalogMidSessionApply | undefined
-): midSession is Extract<CatalogMidSessionApply, { kind: 'toggle-command' }> {
-  return midSession?.kind === 'toggle-command'
 }
 
 export function getTrackedSessionOption(

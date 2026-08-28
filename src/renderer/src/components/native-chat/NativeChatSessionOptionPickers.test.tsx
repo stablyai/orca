@@ -337,7 +337,7 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('model'))
   })
 
-  it('uses a Toggle action for unknown flip-only options via invokeAction', async () => {
+  it('uses On/Off radios for unknown fast mode instead of a Toggle action', async () => {
     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
     const liveSurface = { ...surface, setOption, invokeAction }
@@ -349,19 +349,17 @@ describe('NativeChatSessionOptionPickers', () => {
           {
             ...fast,
             kind: { type: 'boolean' },
-            valueSource: 'unknown',
-            action: { type: 'toggle-command' }
+            valueSource: 'unknown'
           }
         ]}
         isWorking={false}
       />
     )
-    expect(screen.getByText('Toggle fast mode')).not.toBeNull()
-    expect(screen.queryByText('On')).toBeNull()
-    expect(screen.queryByText('Off')).toBeNull()
-    screen.getByText('Toggle fast mode').click()
-    await waitFor(() => expect(invokeAction).toHaveBeenCalledWith('fastMode'))
-    expect(setOption).not.toHaveBeenCalled()
+    expect(screen.queryByText('Toggle fast mode')).toBeNull()
+    expect(screen.getByText('Current value unknown — pick On or Off')).not.toBeNull()
+    screen.getByRole('radio', { name: 'On' }).click()
+    await waitFor(() => expect(setOption).toHaveBeenCalledWith('fastMode', true))
+    expect(invokeAction).not.toHaveBeenCalled()
   })
 
   it('uses On/Off radios for known boolean options without inventing a selection', async () => {

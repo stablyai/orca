@@ -36,9 +36,9 @@ export type SessionOptionDescriptor = {
   valueSource: SessionOptionValueSource
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
-  /** Why: picker-only and toggle-only PTY commands cannot be represented as
-   * a truthful radio/checkbox state, so the producer exposes an action row. */
-  action?: { type: 'agent-picker' | 'toggle-command' }
+  /** Why: picker-only PTY commands cannot be represented as a truthful
+   *  radio/checkbox state, so the producer exposes an action row. */
+  action?: { type: 'agent-picker' }
 }
 
 export type SessionOptionSetResult = {
@@ -57,7 +57,7 @@ export type PersistedNativeChatSessionOptions = Partial<
 
 export type SessionOptionsSurface = {
   getSnapshot(): SessionOptionDescriptor[]
-  /** Apply an absolute target; known flip-only options use their tracked baseline. */
+  /** Apply an absolute target. */
   setOption(id: string, value: SessionOptionValue): Promise<SessionOptionSetResult>
   /** Invoke the value-less action exposed by the current descriptor. */
   invokeAction(id: string): Promise<SessionOptionSetResult>

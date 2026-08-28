@@ -225,7 +225,7 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
     })
   })
 
-  it('marks flip-only toggles without a baseline as toggle actions', () => {
+  it('offers On/Off for unknown Claude fast mode instead of a Toggle action', () => {
     const record = claudeRecord()
     record.model = { value: 'opus', source: 'reported' }
     const snapshot = buildNativeChatSessionOptionSnapshot({
@@ -236,7 +236,13 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
       modelLabel: 'Model'
     })
     const fastMode = snapshot.find((descriptor) => descriptor.id === 'fastMode')
-    expect(fastMode).toMatchObject({ action: { type: 'toggle-command' } })
+    expect(fastMode).toMatchObject({
+      kind: { type: 'boolean' },
+      valueSource: 'unknown',
+      settable: true
+    })
+    expect(fastMode?.action).toBeUndefined()
+    expect(fastMode?.kind).not.toHaveProperty('currentValue')
   })
 })
 

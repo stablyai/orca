@@ -51,21 +51,22 @@ describe('buildNativeChatSessionOptionCommand', () => {
     ).toBe('/effort high')
   })
 
-  it('returns the bare toggle command for flip-only options', () => {
+  it('sets Claude fast mode with /fast on and /fast off rather than a bare /fast', () => {
     const fastModeApply = CLAUDE_SESSION_OPTION_CATALOG.models
       .find((model) => model.id === 'opus')!
       .options.find((option) => option.id === 'fastMode')!.apply
-    expect(
-      buildNativeChatSessionOptionCommand({
-        optionId: 'fastMode',
-        value: true,
-        apply: fastModeApply,
-        modelId: 'opus',
-        catalog: CLAUDE_SESSION_OPTION_CATALOG,
-        models: CLAUDE_SESSION_OPTION_CATALOG.models,
-        record: claudeRecord('opus')
-      })
-    ).toBe('/fast')
+    const args = {
+      optionId: 'fastMode' as const,
+      apply: fastModeApply,
+      modelId: 'opus',
+      catalog: CLAUDE_SESSION_OPTION_CATALOG,
+      models: CLAUDE_SESSION_OPTION_CATALOG.models,
+      record: claudeRecord('opus')
+    }
+    expect(buildNativeChatSessionOptionCommand({ ...args, value: true })).toBe('/fast on')
+    expect(buildNativeChatSessionOptionCommand({ ...args, value: false })).toBe('/fast off')
+    expect(buildNativeChatSessionOptionCommand({ ...args, value: true })).not.toBe('/fast')
+    expect(buildNativeChatSessionOptionCommand({ ...args, value: false })).not.toBe('/fast')
   })
 
   it('does not turn a Codex model pick into pasted slash-command prose', () => {
@@ -141,17 +142,62 @@ describe('recordNativeChatSessionOptionCommand', () => {
     expect(codexRecord.model).toBeUndefined()
   })
 
-  it('clears a flip-only toggle’s tracked baseline on a typed flip', () => {
+  it('tracks typed /fast on and /fast off as booleans without clearing the model', () => {
     const record = claudeRecord('opus')
-    record.valuesByModel.opus = { fastMode: { value: true, source: 'applied' } }
+    record.valuesByModel.opus = { effort: { value: 'high', source: 'applied' } }
+    expect(
+      recordNativeChatSessionOptionCommand({
+        catalog: CLAUDE_SESSION_OPTION_CATALOG,
+        models: CLAUDE_SESSION_OPTION_CATALOG.models,
+        record,
+        command: '/fast on'
+      })
+    ).toEqual({ changed: true, opensAgentPicker: false })
+    expect(record.model).toEqual({ value: 'opus', source: 'dispatched' })
+    expect(record.valuesByModel.opus?.fastMode).toEqual({ value: true, source: 'dispatched' })
+    expect(record.valuesByModel.opus?.effort).toEqual({ value: 'high', source: 'applied' })
+
     recordNativeChatSessionOptionCommand({
+      catalog: CLAUDE_SESSION_OPTION_CATALOG,
+      models: CLAUDE_SESSION_OPTION_CATALOG.models,
+      record,
+      command: '/fast off'
+    })
+    expect(record.valuesByModel.opus?.fastMode).toEqual({ value: false, source: 'dispatched' })
+  })
+
+  it('clears only fast mode on a typed bare /fast, not the model', () => {
+    const record = claudeRecord('opus')
+    record.valuesByModel.opus = {
+      effort: { value: 'high', source: 'applied' },
+      fastMode: { value: true, source: 'applied' }
+    }
+    const result = recordNativeChatSessionOptionCommand({
       catalog: CLAUDE_SESSION_OPTION_CATALOG,
       models: CLAUDE_SESSION_OPTION_CATALOG.models,
       record,
       command: '/fast'
     })
-    // A typed flip inverts an unknown-to-us direction; the baseline is gone.
+    // Why: a typed bare `/fast` opens Claude's confirmation panel. We cannot
+    // observe the outcome, so fast mode is unknown — but the model did not change.
+    expect(result.opensAgentPicker).toBe(true)
+    expect(record.model).toEqual({ value: 'opus', source: 'dispatched' })
+    expect(record.valuesByModel.opus?.effort).toEqual({ value: 'high', source: 'applied' })
     expect(record.valuesByModel.opus?.fastMode).toBeUndefined()
+  })
+
+  it('rejects a /fast argument the CLI would also reject', () => {
+    const record = claudeRecord('opus')
+    record.valuesByModel.opus = { fastMode: { value: true, source: 'applied' } }
+    expect(
+      recordNativeChatSessionOptionCommand({
+        catalog: CLAUDE_SESSION_OPTION_CATALOG,
+        models: CLAUDE_SESSION_OPTION_CATALOG.models,
+        record,
+        command: '/fast maybe'
+      })
+    ).toEqual({ changed: false, opensAgentPicker: false })
+    expect(record.valuesByModel.opus?.fastMode).toEqual({ value: true, source: 'applied' })
   })
 
   it('rejects prose that merely starts with a command template', () => {

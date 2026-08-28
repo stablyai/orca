@@ -143,6 +143,21 @@ describe('useMobileNativeChatSessionOptions', () => {
     expect(effort!.kind).toMatchObject({ currentValue: 'low' })
   })
 
+  it('sets Claude fast mode with /fast on rather than a bare /fast', async () => {
+    mount({ reportedModel: 'opus' })
+    const fast = api!.snapshot.find((descriptor) => descriptor.id === 'fastMode')
+    expect(fast?.action).toBeUndefined()
+    await act(async () => {
+      await api!.setOption('fastMode', true)
+    })
+    expect(dispatchCommand).toHaveBeenCalledWith('/fast on')
+    expect(dispatchCommand).not.toHaveBeenCalledWith('/fast')
+    expect(api!.snapshot.find((descriptor) => descriptor.id === 'fastMode')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { currentValue: true }
+    })
+  })
+
   it('does not file an option under a model that changed mid-dispatch', async () => {
     const resolvers: ((outcome: MobileNativeChatSendOutcome) => void)[] = []
     dispatchCommand.mockImplementation(

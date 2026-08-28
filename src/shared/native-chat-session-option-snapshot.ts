@@ -8,10 +8,9 @@ import type {
   SessionOptionDescriptor,
   SessionOptionSelectChoice
 } from './native-chat-session-options'
-import {
-  isFlipOnlyMidSession,
-  type NativeChatSessionOptionRecord,
-  type TrackedNativeChatSessionOption
+import type {
+  NativeChatSessionOptionRecord,
+  TrackedNativeChatSessionOption
 } from './native-chat-session-option-state'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
@@ -49,7 +48,6 @@ function settableState(args: {
 
 function actionForApply(
   apply: { midSession?: CatalogMidSessionApply },
-  tracked: TrackedNativeChatSessionOption | undefined,
   mode: NativeChatSessionOptionMode
 ): SessionOptionDescriptor['action'] {
   if (mode !== 'live') {
@@ -58,9 +56,7 @@ function actionForApply(
   if (apply.midSession?.kind === 'agent-picker') {
     return { type: 'agent-picker' }
   }
-  // Why: only unknown flip-only options are actions; once we have a tracked
-  // baseline the UI can show absolute On/Off without inventing a start state.
-  return isFlipOnlyMidSession(apply.midSession) && !tracked ? { type: 'toggle-command' } : undefined
+  return undefined
 }
 
 function optionDescriptor(args: {
@@ -71,7 +67,7 @@ function optionDescriptor(args: {
   composedModelApply: AgentSessionOptionCatalog['modelApply']
 }): SessionOptionDescriptor | null {
   const { option, tracked, mode, modelIsCliDefault, composedModelApply } = args
-  const action = actionForApply(option.apply, tracked, mode)
+  const action = actionForApply(option.apply, mode)
   const settable = settableState({ mode, apply: option.apply, composedModelApply })
   // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
   // a draft names this option's value exactly when a model was picked. Under the CLI's
@@ -212,7 +208,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
-  const modelAction = actionForApply(catalog.modelApply, modelTracked, mode)
+  const modelAction = actionForApply(catalog.modelApply, mode)
   const snapshot: SessionOptionDescriptor[] = [
     {
       id: 'model',

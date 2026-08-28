@@ -231,5 +231,21 @@ export function readClaudeSessionOptionsFromTerminalScreen(
   if (effort && model.options.some((option) => option.id === 'effort')) {
     result.effort = effort
   }
+  // The banner proves this is Claude, so a missing glyph is a truthful `off`.
+  if (model.options.some((option) => option.id === 'fastMode')) {
+    result.fastMode = matchFastModeGlyph(lines)
+  }
   return result
+}
+
+const FAST_MODE_GLYPH = '\u21AF'
+const FAST_MODE_PANEL_TITLE = 'fast mode (research preview)'
+
+/** Whether the live status line carries the fast-mode glyph. Skips the
+ *  confirmation panel's title row, which carries it too — we never open that
+ *  panel ourselves, but a user can. */
+function matchFastModeGlyph(lines: readonly string[]): boolean {
+  return lines.some(
+    (line) => line.includes(FAST_MODE_GLYPH) && !line.toLowerCase().includes(FAST_MODE_PANEL_TITLE)
+  )
 }

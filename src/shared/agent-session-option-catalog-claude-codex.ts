@@ -118,12 +118,22 @@ function parseClaudeCatalogModels(stdout: string): CatalogModel[] {
   })
 }
 
+// Why `/fast on|off` rather than a bare `/fast`: the bare form opens a
+// confirmation panel (Tab to toggle · Enter to confirm) that a dispatch leaves
+// hanging and unapplied. The argument form sets the value outright.
 const CLAUDE_FAST_MODE: CatalogOption = {
   id: 'fastMode',
   label: 'Fast mode',
   category: 'mode',
   kind: { type: 'boolean', defaultValue: false },
-  apply: { midSession: { kind: 'toggle-command', command: '/fast' } }
+  apply: {
+    midSession: {
+      kind: 'command',
+      build: (value) => `/fast ${value === true ? 'on' : value === false ? 'off' : String(value)}`,
+      // A typed bare `/fast` opens the panel; the outcome is not observable.
+      pickerCommand: '/fast'
+    }
+  }
 }
 
 export const CLAUDE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {

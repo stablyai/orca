@@ -54,7 +54,7 @@ describe('native chat PTY session options', () => {
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
-      reportedValues: { model: 'opus', effort: 'medium' },
+      reportedValues: { model: 'opus', effort: 'medium', fastMode: true },
       dispatchCommand: vi.fn()
     })!
 
@@ -69,6 +69,11 @@ describe('native chat PTY session options', () => {
           id: 'effort',
           valueSource: 'reported',
           kind: expect.objectContaining({ currentValue: 'medium' })
+        }),
+        expect.objectContaining({
+          id: 'fastMode',
+          valueSource: 'reported',
+          kind: expect.objectContaining({ type: 'boolean', currentValue: true })
         })
       ])
     )
@@ -235,7 +240,7 @@ describe('native chat PTY session options', () => {
     expect(onAgentPicker).not.toHaveBeenCalled()
   })
 
-  it('leaves flip-only unknown after a one-shot so the UI never invents on/off', async () => {
+  it('sets Claude fast mode with /fast on and /fast off rather than a bare /fast', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high'
@@ -250,25 +255,34 @@ describe('native chat PTY session options', () => {
       persistSelection: persist
     })!
     const fastBefore = surface.getSnapshot().find(({ id }) => id === 'fastMode')
-    expect(fastBefore?.action?.type).toBe('toggle-command')
+    expect(fastBefore?.action).toBeUndefined()
     expect(fastBefore?.kind).toMatchObject({ type: 'boolean' })
-    expect(fastBefore?.kind).not.toHaveProperty('defaultValue')
+    expect(fastBefore?.kind).not.toHaveProperty('currentValue')
 
-    await expect(surface.setOption('fastMode', true)).rejects.toThrow(
-      'Current value is unknown; use the Toggle action instead.'
-    )
-    expect(dispatch).not.toHaveBeenCalled()
-    const result = await surface.invokeAction('fastMode')
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Why: a flip-only command never reports an absolute value.
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
+    const onResult = await surface.setOption('fastMode', true)
+    expect(dispatch.mock.calls.map((call) => call[0])).toEqual(['/fast on'])
+    expect(onResult.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { type: 'boolean', currentValue: true }
     })
+
+    const offResult = await surface.setOption('fastMode', false)
+    expect(dispatch.mock.calls.map((call) => call[0])).toEqual(['/fast on', '/fast off'])
+    expect(offResult.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { type: 'boolean', currentValue: false }
+    })
+    for (const [command, options] of dispatch.mock.calls) {
+      expect(command).not.toBe('/fast')
+      expect(String(command)).not.toMatch(/[\t\r]/)
+      expect(options).toBeUndefined()
+    }
+    // Why: Claude has no launch flag for fast mode, so a picker set is not a
+    // durable default the next session can honor.
     expect(persist).not.toHaveBeenCalled()
   })
 
-  it('no-ops a seeded toggle when already at the requested value', async () => {
+  it('re-sends an absolute fast-mode command at the current value', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high',
@@ -283,64 +297,14 @@ describe('native chat PTY session options', () => {
     })!
 
     const result = await surface.setOption('fastMode', true)
-    expect(dispatch).not.toHaveBeenCalled()
+    expect(dispatch).toHaveBeenCalledWith('/fast on')
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
+      valueSource: 'dispatched',
       kind: { type: 'boolean', currentValue: true }
     })
   })
 
-  it('no-ops a known toggle at the same absolute target (flip is not set-to-value)', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch
-    })!
-
-    await surface.setOption('fastMode', false)
-    dispatch.mockClear()
-    // Why: a second same-target set would re-send `/fast` and invert the agent
-    // if the first flip landed — unlike set-to-value commands, flips cannot retry.
-    const result = await surface.setOption('fastMode', false)
-    expect(dispatch).not.toHaveBeenCalled()
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
-      kind: { type: 'boolean', currentValue: false }
-    })
-  })
-
-  it('dispatches the opposite absolute target for a known toggle', async () => {
-    seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
-      model: 'opus',
-      effort: 'high',
-      fastMode: true
-    })
-    const dispatch = vi.fn()
-    const surface = createNativeChatPtySessionOptions({
-      agent: 'claude',
-      scopeKey: 'pty-1',
-      mode: 'live',
-      dispatchCommand: dispatch
-    })!
-
-    await surface.setOption('fastMode', false)
-    dispatch.mockClear()
-    const result = await surface.setOption('fastMode', true)
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
-      kind: { type: 'boolean', currentValue: true }
-    })
-  })
-
-  it('tracks a known toggle flip as applied without persisting', async () => {
+  it('dispatches the opposite absolute fast-mode target', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high',
@@ -357,10 +321,9 @@ describe('native chat PTY session options', () => {
     })!
 
     const result = await surface.setOption('fastMode', false)
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    // Why: flip-only never heals; applied is best-known absolute, not dispatched.
+    expect(dispatch).toHaveBeenCalledWith('/fast off')
     expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'applied',
+      valueSource: 'dispatched',
       kind: { type: 'boolean', currentValue: false }
     })
     expect(result.snapshot.find(({ id }) => id === 'fastMode')?.action).toBeUndefined()
@@ -375,7 +338,7 @@ describe('native chat PTY session options', () => {
     })
     let releaseFirst: (() => void) | undefined
     const dispatch = vi.fn((command: string) => {
-      if (command === '/fast') {
+      if (command === '/fast off') {
         return new Promise<void>((resolve) => {
           releaseFirst = resolve
         })
@@ -407,31 +370,34 @@ describe('native chat PTY session options', () => {
     })
   })
 
-  it('stays unknown after a typed flip then a picker toggle (no invented absolute)', async () => {
+  it('sets fast mode from an unknown baseline after a typed bare /fast', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'opus',
       effort: 'high'
     })
     const dispatch = vi.fn()
+    const onAgentPicker = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
-      dispatchCommand: dispatch
+      dispatchCommand: dispatch,
+      onAgentPicker
     })!
 
-    // Typed `/fast` clears any prior tracking; option stays unknown.
+    // Typed `/fast` opens Claude's panel; tracking is gone until an absolute set.
     surface.recordOutgoingCommand('/fast')
+    expect(onAgentPicker).toHaveBeenCalledOnce()
     expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
+      valueSource: 'unknown'
     })
+    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')?.action).toBeUndefined()
 
-    await surface.invokeAction('fastMode')
-    expect(dispatch).toHaveBeenCalledWith('/fast')
-    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
+    const result = await surface.setOption('fastMode', true)
+    expect(dispatch).toHaveBeenCalledWith('/fast on')
+    expect(result.snapshot.find(({ id }) => id === 'fastMode')).toMatchObject({
+      valueSource: 'dispatched',
+      kind: { type: 'boolean', currentValue: true }
     })
   })
 
@@ -462,9 +428,9 @@ describe('native chat PTY session options', () => {
     resolveDispatch?.()
     await pending
     expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')).toMatchObject({
-      valueSource: 'unknown',
-      action: { type: 'toggle-command' }
+      valueSource: 'unknown'
     })
+    expect(surface.getSnapshot().find(({ id }) => id === 'fastMode')?.action).toBeUndefined()
   })
 
   it('does not write flip state onto a model that changed mid-dispatch', async () => {

@@ -15,7 +15,6 @@ export type CatalogMidSessionApply =
       pickerCommand?: string
       detectAgentInteraction?: CatalogAgentInteractionDetection
     }
-  | { kind: 'toggle-command'; command: string }
   | { kind: 'agent-picker'; command: string; delivery?: CatalogCommandDelivery }
   | { kind: 'unsupported' }
 
