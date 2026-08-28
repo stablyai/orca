@@ -125,3 +125,30 @@ It also flagged, and I fixed: `listAdmissibleRoutes` and `selectRoute` structura
 And it identified a genuine coverage gap: the federated and retained refusals, and the marking seam itself, had no regression test at any level — which is exactly where the over-marking bug lived. `certification-intent-admission.test.ts` now covers all of it.
 
 The reviewer independently confirmed, with file references: single-use claim-before-create with no orphan Dispatch on a losing race; deterministic mint with no replay grant; UNTESTED-only opening; ownership enforced at mint by re-deriving the coordinator terminal's real worktree rather than trusting the caller's string; the automatic phase-launch driver never forwarding an intent; and `buildId` being runtime-derived rather than caller-suppliable.
+
+
+## The Fable review — and the worst defect in the package
+
+A fresh Fable reviewer read the branch end to end. It confirmed the central claim holds for outcome-admitted Runs, and then found that it held **partly by vacuity**. Three defects, all fixed:
+
+### `runGate` had no production caller — the package was a rejection machine
+The completion gate required a runtime-proven gate for every receipt on an outcome-admitted Run. But `runGate` — the half where the runtime actually executes the gate — was never called from production. The only writer of `control_plane_gate_executions` outside it was the test fixture. So **no completion could ever be accepted**: every legitimate `worker_done` died at `gate_not_executed`, and the entire accept path (reviewer planning, the ledger, `REVIEW_COMPLETE`) was unreachable outside tests. My own reports had presented `gate_not_executed` as a working discriminator, proven only against rows a fixture wrote.
+
+`orchestration.gateRun` / `orca orchestration gate-run` is the missing verb. The runtime resolves the worktree and the SHA from the Dispatch and observes both itself, runs the command through the approved wrapper, and records exit code, log digest and build id. A caller may name the command; it cannot name the result.
+
+**Proven live on the candidate** at `368ad2cb5f`: the runtime ran the gate in a real worker's tree, observed the SHA itself, and recorded `passed=true, exit=0`. That had never once happened before this dispatch.
+
+### The lease fence missed eight mutating methods
+`git.pull`, `git.fastForward`, `git.forkSync`, `git.conflictOperation`, `files.writeBase64Chunk`, `files.commitUpload`, `files.createDirNoClobber`, `files.writeTerminalArtifact`. A mid-gate `git.pull` into a leased worktree was exactly the reproduction the fence exists to stop — the fence's own "twenty-first method" failure, shipped on day one. The list is now pinned against the real method registries, so a newly added mutation cannot quietly skip it.
+
+### The checkout fallback claimed a commit it did not match
+`resolveRuntimeCommitSha` ran `rev-parse` but never `status`, so a dirty dev checkout — or a stale bundle in a repo whose HEAD had moved — stamped evidence with a commit the running code never came from. The embedded path already refused a dirty build; this was the softer way in. It refuses now too.
+
+### And the blind spot that hid the first one
+Every accepted-completion test satisfied the gate through a fixture that wrote the row directly. Faithful to `runGate` — and therefore proving the guard while concealing that its satisfiable side did not exist. The fixture now goes through `runGate` and runs a real process, so those tests fail if the execution path breaks rather than if someone stops writing a row.
+
+## Final state
+
+`0aa1164a13`, tree clean, `origin/main` `6cdae26e1c` an ancestor. Affected trees: 408 files, 3563 tests passing. Typecheck, lint and react-doctor clean. No `max-lines` disable was added anywhere; both files that crossed the limit were split.
+
+Remaining, unchanged from above: the Playwright CDP spinner proof was not performed; remote (SSH/WSL) completions fail closed pending an async reconcile path; and the final accepted `worker_done` is proven at exact head by test rather than live, because the dispatch capability is held only inside the worker agent's own session.
