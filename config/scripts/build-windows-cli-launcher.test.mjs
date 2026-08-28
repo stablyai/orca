@@ -5,12 +5,15 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  statSync,
+  utimesSync,
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { spawnSync } from 'node:child_process'
 import { describe, expect, it } from 'vitest'
+import { shouldReuseCompiledWindowsCliLauncher } from './build-windows-cli-launcher.mjs'
 
 const itCrossHost = process.platform === 'win32' ? it.skip : it
 const projectRoot = resolve(import.meta.dirname, '../..')
@@ -37,6 +40,33 @@ function itWindows(name, test) {
 }
 
 describe('Windows CLI launcher', () => {
+  it('reuses a compiled launcher that is at least as new as the C# source', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-cli-launcher-reuse-'))
+    try {
+      const sourcePath = join(root, 'OrcaCliLauncher.cs')
+      const outputPath = join(root, '.build', 'orca.exe')
+      mkdirSync(join(root, '.build'))
+      writeFileSync(sourcePath, 'source\n')
+      writeFileSync(outputPath, 'binary\n')
+      const later = new Date(statSync(sourcePath).mtimeMs + 1_000)
+      utimesSync(outputPath, later, later)
+
+      expect(shouldReuseCompiledWindowsCliLauncher(outputPath, sourcePath)).toBe(true)
+      writeFileSync(sourcePath, 'changed\n')
+      const sourceLater = new Date(statSync(outputPath).mtimeMs + 1_000)
+      utimesSync(sourcePath, sourceLater, sourceLater)
+      expect(shouldReuseCompiledWindowsCliLauncher(outputPath, sourcePath)).toBe(false)
+      expect(
+        shouldReuseCompiledWindowsCliLauncher(outputPath, sourcePath, { reuseCached: true })
+      ).toBe(true)
+      expect(shouldReuseCompiledWindowsCliLauncher(join(root, 'missing.exe'), sourcePath)).toBe(
+        false
+      )
+    } finally {
+      removeFixtureTree(root)
+    }
+  })
+
   itCrossHost('fails closed when the Windows launcher cannot be compiled on this host', () => {
     const outputRoot = mkdtempSync(join(tmpdir(), 'orca cross-host launcher '))
     try {

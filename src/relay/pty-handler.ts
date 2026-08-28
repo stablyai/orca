@@ -17,6 +17,7 @@ import {
   listShellProfiles
 } from './pty-shell-utils'
 import { getRelayShellLaunchConfig, isRelayWslShell } from './pty-shell-launch'
+import { RetiredPaneSurfaceRegistry } from './retired-pane-surfaces'
 import { addWslEnvKeys } from '../shared/wsl-env'
 import { SHELL_STARTUP_FEATURE_ENV } from '../main/shell-startup-features'
 import { DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS } from '../shared/ssh-types'
@@ -151,6 +152,9 @@ type ManagedPty = {
   buffered: RecentPtyOutputBuffer
   /** Timer for SIGKILL fallback after a graceful SIGTERM shutdown. */
   killTimer?: ReturnType<typeof setTimeout>
+  /** Timer for the post-shutdown reap sweep: re-probes liveness after a kill request instead of
+   *  assuming the request landed. */
+  reapTimer?: ReturnType<typeof setTimeout>
   /** True once disposeManagedPty has run; blocks double-dispose and makes post-dispose calls fail "not found" not silently. */
   disposed?: boolean
   /** True once external cleanup observers have been notified. */
@@ -242,6 +246,10 @@ function disposeManagedPty(managed: ManagedPty): void {
     clearTimeout(managed.killTimer)
     managed.killTimer = undefined
   }
+  if (managed.reapTimer) {
+    clearTimeout(managed.reapTimer)
+    managed.reapTimer = undefined
+  }
   // Why: neutralize pty.kill before destroy() so UnixTerminal's async 'close' SIGHUP can't hit a recycled pid.
   // Windows exempt: its destroy() IS a kill() (via _deferNoArgs), so neutralizing leaks the ConPTY agent.
   if (process.platform !== 'win32') {
@@ -258,6 +266,9 @@ function disposeManagedPty(managed: ManagedPty): void {
 }
 const DEFAULT_GRACE_TIME_MS = DEFAULT_SSH_RELAY_GRACE_PERIOD_SECONDS * 1000
 export const IMMEDIATE_PTY_EXIT_TIMEOUT_MS = 8_000
+/** Longer than the 5s armed SIGKILL fallback, so the first sweep observes the post-kill state. */
+export const SHUTDOWN_REAP_VERIFY_DELAY_MS = 6_000
+export const SHUTDOWN_REAP_MAX_SWEEPS = 3
 export const MAX_RELAY_PTY_SESSIONS = 50
 export const REPLAY_BUFFER_MAX = 100 * 1024
 const PTY_OUTPUT_BATCH_INTERVAL_MS = 8
@@ -389,6 +400,10 @@ function sanitizeEnvToDelete(value: unknown): string[] {
 
 export type PtyExitListener = (event: { id: string; paneKey?: string }) => void
 
+/** Notified when a client retires a pane's surface (`pty.shutdown`). Deliberately separate from
+ *  {@link PtyExitListener}: retirement says the tab is gone, never that the process exited. */
+export type PtySurfaceRetiredListener = (event: { id: string; paneKey: string }) => void
+
 type PtyIdentity = { paneKey?: string; tabId?: string }
 
 /**
@@ -443,6 +458,8 @@ export class PtyHandler {
   private reloadPtyModuleFromDisk = false
   // Why: single optional slot is intentional — callers compose externally; a throw is swallowed so it can't block cleanup.
   private exitListener: PtyExitListener | null = null
+  private surfaceRetiredListener: PtySurfaceRetiredListener | null = null
+  private readonly retiredPaneSurfaces = new RetiredPaneSurfaceRegistry()
   private ptyPoolEmptyListener: (() => void) | null = null
   private ptyPoolActiveListener: (() => void) | null = null
   // Why: augment environment on every spawn so PTYs receive current hook coordinates.
@@ -569,6 +586,19 @@ export class PtyHandler {
   /** Subscribe to PTY-exit events (relay-hook server uses this to evict per-paneKey caches). */
   setExitListener(listener: PtyExitListener | null): void {
     this.exitListener = listener
+  }
+
+  /** Subscribe to pane-surface retirement (relay-hook server uses this to drop the pane's cached
+   *  agent status the moment the tab goes away, rather than waiting for a process exit that a
+   *  surviving shell may never produce). */
+  setSurfaceRetiredListener(listener: PtySurfaceRetiredListener | null): void {
+    this.surfaceRetiredListener = listener
+  }
+
+  /** True when the client has told this host the pane's tab is gone and no PTY has re-bound the
+   *  paneKey since. Nothing this pane emits can belong to a surface any client still owns. */
+  isPaneSurfaceRetired(paneKey: string): boolean {
+    return this.retiredPaneSurfaces.isRetired(paneKey)
   }
 
   /** Notified when the last PTY leaves the pool, so the relay can re-arm its idle grace. */
@@ -786,6 +816,12 @@ export class PtyHandler {
   private wireAndStore(managed: ManagedPty): void {
     managed.physicalExit = new PhysicalExitTracker()
     this.ptys.set(managed.id, managed)
+    // Why: a PTY joining the pool under this paneKey means the surface exists again (reopened pane
+    // or revive), so a prior retirement no longer describes anything and must not mute its hooks.
+    const boundPaneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
+    if (boundPaneKey) {
+      this.retiredPaneSurfaces.restore(boundPaneKey)
+    }
     // Why: a second announce covers any store whose admission window has already closed.
     this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
@@ -1778,14 +1814,7 @@ export class PtyHandler {
 
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (managed.pty.pid && !isProcessAlive(managed.pty.pid)) {
-      managed.physicalExit?.markExited()
-      this.releaseRelayIngress(managed)
-      this.flushPtyOutput(id)
-      this.notifyExitListener(managed)
-      this.agentSessionOwners.release(managed.id)
-      disposeManagedPty(managed)
-      this.removePty(id)
-      this.clearPtyFlowState(id)
+      this.reapExitedPty(managed)
       throw new Error(`PTY "${id}" not found`)
     }
 
@@ -1799,6 +1828,14 @@ export class PtyHandler {
     )
     if (mismatch) {
       throw new Error(`PTY "${id}" not found (identity mismatch)`)
+    }
+
+    // Why: an accepted attach is a client surface for this pane, so a prior retirement no longer
+    // describes anything — without this a reattach to a shut-down-but-surviving PTY would keep the
+    // pane's agent hooks muted for the rest of the daemon's life.
+    const attachedPaneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
+    if (attachedPaneKey) {
+      this.retiredPaneSurfaces.restore(attachedPaneKey)
     }
 
     managed.startupIngress?.snapshotBarrier()
@@ -1917,6 +1954,17 @@ export class PtyHandler {
     if (!managed) {
       return
     }
+    // Why: `pty.shutdown` is the only authoritative statement this host ever gets that a tab is
+    // gone. Record it before the kill request, because the kill is the part that can fail: an agent
+    // that survives teardown otherwise keeps posting hooks the relay forwards as a live agent pane
+    // with no tab, and that advertisement is what drives a second `--resume` onto its transcript.
+    // Why gated on an actual retirement: the teardown below is fire-and-forget — one SIGTERM, one
+    // armed SIGKILL, and nobody ever looks again. Re-probing is what stops a retired pane's shell
+    // outliving its tab; a PTY with no pane surface has nothing to outlive, so its long-standing
+    // teardown contract is left exactly as it was.
+    if (this.retirePaneSurface(managed)) {
+      this.armShutdownReapSweep(managed, SHUTDOWN_REAP_MAX_SWEEPS)
+    }
 
     if (immediate) {
       this.releaseStartupCommand(managed)
@@ -1928,6 +1976,93 @@ export class PtyHandler {
       this.releaseStartupCommand(managed)
       this.requestGracefulKill(managed, 'force-kill')
     }
+  }
+
+  /** Record that this pane's client surface is gone, and tell the hook server so the pane's cached
+   *  agent status stops being replayed to reconnecting clients. Returns false when there is no pane
+   *  surface to retire. */
+  private retirePaneSurface(managed: ManagedPty): boolean {
+    const paneKey = managed.paneKey ?? managed.attachIdentity?.paneKey
+    if (!paneKey) {
+      return false
+    }
+    this.retiredPaneSurfaces.retire(paneKey)
+    const listener = this.surfaceRetiredListener
+    if (!listener) {
+      return true
+    }
+    try {
+      listener({ id: managed.id, paneKey })
+    } catch (err) {
+      process.stderr.write(
+        `[pty-handler] surface-retired listener threw: ${err instanceof Error ? err.message : String(err)}\n`
+      )
+    }
+    return true
+  }
+
+  /**
+   * After a retirement, verify the host actually reaped the shell rather than trusting the kill
+   * request. Two outcomes matter and both are bookkeeping the relay previously never did:
+   *
+   * - the pid is gone but node-pty never produced `onExit` — retire the record here, so the entry
+   *   and its agent-session owners stop being published by `pty.listProcesses`;
+   * - the pid is still alive — re-issue the force kill instead of leaving a detached shell (and the
+   *   agent inside it) outliving its tab for the life of the daemon.
+   *
+   * Bounded: after {@link SHUTDOWN_REAP_MAX_SWEEPS} the owner claim is deliberately *retained*.
+   * Releasing a claim we cannot prove dead is what lets a reopened project spawn a second agent
+   * over one transcript; keeping it makes the next `pty.spawn` adopt this PTY instead.
+   */
+  private armShutdownReapSweep(managed: ManagedPty, attemptsRemaining: number): void {
+    if (managed.reapTimer) {
+      return
+    }
+    const timer = setTimeout(() => {
+      managed.reapTimer = undefined
+      if (this.ptys.get(managed.id) !== managed || managed.disposed) {
+        return
+      }
+      const pid = managed.pty.pid
+      if (pid && !isProcessAlive(pid)) {
+        this.reapExitedPty(managed)
+        return
+      }
+      if (attemptsRemaining <= 0) {
+        process.stderr.write(
+          `[pty-handler] retired pane PTY ${managed.id} still alive after force kill; ownership retained as unverifiable\n`
+        )
+        return
+      }
+      // Why POSIX-only: a SIGKILL that returned success is not proof of death there — the group
+      // probe can degrade to a root-pid kill, leaving the agent running under a shell nobody is
+      // watching. On Windows ConPTY's kill is already force-final and closing its handle twice is
+      // the hazard disposeManagedPty guards against, so the probe above is the whole sweep.
+      if (process.platform !== 'win32') {
+        managed.forceKillSent = false
+        try {
+          this.requestForceKill(managed)
+        } catch {
+          /* Re-probed on the next sweep; a transient failure must not end the escalation. */
+        }
+      }
+      this.armShutdownReapSweep(managed, attemptsRemaining - 1)
+    }, SHUTDOWN_REAP_VERIFY_DELAY_MS)
+    timer.unref?.()
+    managed.reapTimer = timer
+  }
+
+  /** Retire every record for a PTY whose process is proven gone. Shared by the attach probe, the
+   *  listing probe and the post-shutdown sweep so the three cannot drift on what "gone" retires. */
+  private reapExitedPty(managed: ManagedPty): void {
+    managed.physicalExit?.markExited()
+    this.releaseRelayIngress(managed)
+    this.flushPtyOutput(managed.id)
+    this.notifyExitListener(managed)
+    this.agentSessionOwners.release(managed.id)
+    disposeManagedPty(managed)
+    this.removePty(managed.id)
+    this.clearPtyFlowState(managed.id)
   }
 
   private async sendSignal(params: Record<string, unknown>): Promise<void> {
@@ -2101,7 +2236,15 @@ export class PtyHandler {
 
   private async listProcesses(): Promise<PtyProcessSummary[]> {
     const results: PtyProcessSummary[] = []
-    for (const [id, managed] of this.ptys) {
+    // Why (SSH-v3 P2 — the host is the authoritative liveness source, so it has to look): this
+    // listing is what publishes `agentSessionOwners`, i.e. "there is a live agent session here you
+    // can adopt". A shell can exit without node-pty's onExit, and an unverified entry advertised
+    // that session forever. Snapshot the map because reaping mutates it.
+    for (const [id, managed] of Array.from(this.ptys)) {
+      if (managed.disposed || (managed.pty.pid && !isProcessAlive(managed.pty.pid))) {
+        this.reapExitedPty(managed)
+        continue
+      }
       const title =
         (await getForegroundProcessName(managed.pty.pid, managed.pty.process || null)) || 'shell'
       results.push({

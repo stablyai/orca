@@ -12,7 +12,7 @@ import type { PaletteDocumentRank } from './palette-match/palette-document'
 function rank(overrides: Partial<PaletteDocumentRank> = {}): PaletteDocumentRank {
   return {
     exactIntent: 1,
-    matchedDirectField: 0,
+    containerOnlyTokenCount: 0,
     wholeQuery: 3,
     worstQuality: 5,
     usesSupportingEvidence: 0,

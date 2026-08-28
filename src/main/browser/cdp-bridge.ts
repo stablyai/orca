@@ -6,9 +6,7 @@ import type {
   BrowserCheckResult,
   BrowserClearResult,
   BrowserClickResult,
-  BrowserConsoleEntry,
   BrowserConsoleResult,
-  BrowserCookie,
   BrowserCookieDeleteResult,
   BrowserCookieGetResult,
   BrowserCookieSetResult,
@@ -39,41 +37,18 @@ import type {
   BrowserViewportResult,
   BrowserWaitResult
 } from '../../shared/runtime-types'
-import {
-  buildSnapshot,
-  type CdpCommandSender,
-  type RefEntry,
-  type SnapshotResult
-} from './snapshot-engine'
+import { buildSnapshot, type CdpCommandSender, type RefEntry } from './snapshot-engine'
 import { insertTextThroughCdp } from './browser-text-insertion'
 import type { BrowserManager } from './browser-manager'
 import { ANTI_DETECTION_SCRIPT } from './anti-detection'
 import { BrowserError } from './browser-error'
+import { CdpAuxiliaryCommands, type CdpTabState } from './cdp-auxiliary-commands'
 
 const CAPTURE_LOG_LIMIT = 1000
 
 // Why re-exported: moved to ./browser-error so the runtime can catch it without
 // pulling Chromium in. Existing importers of this path keep working.
 export { BrowserError } from './browser-error'
-
-type TabState = {
-  navigationId: string | null
-  snapshotResult: SnapshotResult | null
-  debuggerAttached: boolean
-  debuggerDetachListener: (() => void) | null
-  debuggerMessageListener: ((_event: unknown, method: string, params: unknown) => void) | null
-  iframeSessions: Map<string, string>
-  // Why: capture state is per-tab so one tab's console/network events don't pollute another's buffer.
-  capturing: boolean
-  consoleLog: BrowserConsoleEntry[]
-  networkLog: BrowserNetworkEntry[]
-  // Why: interception state lets the agent selectively continue or block individual requests.
-  intercepting: boolean
-  interceptPatterns: string[]
-  pausedRequests: Map<string, BrowserInterceptedRequest>
-  // Why: maps CDP requestId → networkLog entry so loadingFinished attributes size to the right overlapping response.
-  networkRequestMap: Map<string, BrowserNetworkEntry>
-}
 
 type QueuedCommand = {
   execute: () => Promise<unknown>
@@ -83,13 +58,45 @@ type QueuedCommand = {
 
 export class CdpBridge {
   private activeWebContentsId: number | null = null
-  private readonly tabState = new Map<string, TabState>()
+  private readonly tabState = new Map<string, CdpTabState>()
   private readonly commandQueues = new Map<string, QueuedCommand[]>()
   private readonly processingQueues = new Set<string>()
   private readonly browserManager: BrowserManager
+  private readonly auxiliaryCommands: CdpAuxiliaryCommands
 
   constructor(browserManager: BrowserManager) {
     this.browserManager = browserManager
+    this.auxiliaryCommands = new CdpAuxiliaryCommands({
+      run: <T>(
+        operation: (context: {
+          guest: Electron.WebContents
+          sender: CdpCommandSender
+          state: CdpTabState
+        }) => Promise<T>
+      ): Promise<T> =>
+        this.enqueueCommand(async () => {
+          const guest = this.getActiveGuest()
+          const sender = this.makeCdpSender(guest)
+          await this.ensureDebuggerAttached(guest)
+          const state = this.getOrCreateTabState(this.resolveTabId(guest.id))
+          return operation({ guest, sender, state })
+        }),
+      runOnState: <T>(
+        operation: (context: { guest: Electron.WebContents; state: CdpTabState }) => Promise<T>
+      ): Promise<T> =>
+        this.enqueueCommand(async () => {
+          const guest = this.getActiveGuest()
+          const state = this.getOrCreateTabState(this.resolveTabId(guest.id))
+          return operation({ guest, state })
+        }),
+      current: () => {
+        const guest = this.getActiveGuest()
+        return {
+          guest,
+          state: this.getOrCreateTabState(this.resolveTabId(guest.id))
+        }
+      }
+    })
   }
 
   setActiveTab(webContentsId: number): void {
@@ -636,25 +643,11 @@ export class CdpBridge {
 
   // ── Cookie management ──
 
-  async cookieGet(url?: string): Promise<BrowserCookieGetResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      const params: Record<string, unknown> = {}
-      if (url) {
-        params.urls = [url]
-      }
-      const { cookies } = (await sender('Network.getCookies', params)) as {
-        cookies: BrowserCookie[]
-      }
-
-      return { cookies }
-    })
+  cookieGet(url?: string): Promise<BrowserCookieGetResult> {
+    return this.auxiliaryCommands.cookieGet(url)
   }
 
-  async cookieSet(cookie: {
+  cookieSet(cookie: {
     name: string
     value: string
     domain?: string
@@ -664,211 +657,66 @@ export class CdpBridge {
     sameSite?: string
     expires?: number
   }): Promise<BrowserCookieSetResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      // Why: Network.setCookie needs a domain or url to scope the cookie; infer the domain from the current page when omitted.
-      let domain = cookie.domain
-      if (!domain) {
-        const { result: urlResult } = (await sender('Runtime.evaluate', {
-          expression: 'location.hostname',
-          returnByValue: true
-        })) as { result: { value: string } }
-        domain = urlResult.value
-      }
-
-      const params: Record<string, unknown> = {
-        name: cookie.name,
-        value: cookie.value,
-        domain,
-        path: cookie.path ?? '/',
-        secure: cookie.secure ?? false,
-        httpOnly: cookie.httpOnly ?? false,
-        sameSite: cookie.sameSite ?? 'Lax'
-      }
-      if (cookie.expires !== undefined) {
-        params.expires = cookie.expires
-      }
-
-      const { success } = (await sender('Network.setCookie', params)) as { success: boolean }
-      return { success }
-    })
+    return this.auxiliaryCommands.cookieSet(cookie)
   }
 
-  async cookieDelete(
-    name: string,
-    domain?: string,
-    url?: string
-  ): Promise<BrowserCookieDeleteResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      const params: Record<string, unknown> = { name }
-      if (domain) {
-        params.domain = domain
-      }
-      if (url) {
-        params.url = url
-      }
-      // Why: Network.deleteCookies needs a domain or url; infer from the current page if neither was given.
-      if (!domain && !url) {
-        const { result: urlResult } = (await sender('Runtime.evaluate', {
-          expression: 'location.href',
-          returnByValue: true
-        })) as { result: { value: string } }
-        params.url = urlResult.value
-      }
-
-      await sender('Network.deleteCookies', params)
-      return { deleted: true }
-    })
+  cookieDelete(name: string, domain?: string, url?: string): Promise<BrowserCookieDeleteResult> {
+    return this.auxiliaryCommands.cookieDelete(name, domain, url)
   }
 
   // ── Viewport emulation ──
 
-  async setViewport(
+  setViewport(
     width: number,
     height: number,
     deviceScaleFactor = 1,
     mobile = false
   ): Promise<BrowserViewportResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      await sender('Emulation.setDeviceMetricsOverride', {
-        width,
-        height,
-        deviceScaleFactor,
-        mobile
-      })
-      // Why: metrics-only resize can leave the compositor surface at the old size, cropping remote screencast clients.
-      await Promise.resolve(sender('Emulation.setVisibleSize', { width, height })).catch(() => {})
-
-      return { width, height, deviceScaleFactor, mobile }
-    })
+    return this.auxiliaryCommands.setViewport(width, height, deviceScaleFactor, mobile)
   }
 
   // ── Geolocation ──
 
-  async setGeolocation(
+  setGeolocation(
     latitude: number,
     longitude: number,
     accuracy = 1
   ): Promise<BrowserGeolocationResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      await sender('Emulation.setGeolocationOverride', { latitude, longitude, accuracy })
-      return { latitude, longitude, accuracy }
-    })
+    return this.auxiliaryCommands.setGeolocation(latitude, longitude, accuracy)
   }
 
   // ── Request interception ──
 
-  async interceptEnable(patterns: string[] = ['*']): Promise<BrowserInterceptEnableResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      const tabId = this.resolveTabId(guest.id)
-      const state = this.getOrCreateTabState(tabId)
-
-      const requestPatterns = patterns.map((p) => ({ urlPattern: p }))
-      await sender('Fetch.enable', { patterns: requestPatterns })
-
-      state.intercepting = true
-      state.interceptPatterns = patterns
-
-      return { enabled: true, patterns }
-    })
+  interceptEnable(patterns: string[] = ['*']): Promise<BrowserInterceptEnableResult> {
+    return this.auxiliaryCommands.interceptEnable(patterns)
   }
 
-  async interceptDisable(): Promise<BrowserInterceptDisableResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      const tabId = this.resolveTabId(guest.id)
-      const state = this.getOrCreateTabState(tabId)
-
-      await sender('Fetch.disable')
-      state.intercepting = false
-      state.interceptPatterns = []
-      state.pausedRequests.clear()
-
-      return { disabled: true }
-    })
+  interceptDisable(): Promise<BrowserInterceptDisableResult> {
+    return this.auxiliaryCommands.interceptDisable()
   }
 
   interceptList(): { requests: BrowserInterceptedRequest[] } {
-    const guest = this.getActiveGuest()
-    const tabId = this.resolveTabId(guest.id)
-    const state = this.getOrCreateTabState(tabId)
-    return { requests: [...state.pausedRequests.values()] }
+    return this.auxiliaryCommands.interceptList()
   }
 
   // TODO: Add interceptContinue/interceptBlock once agent-browser supports per-request decisions (CLI is URL-pattern-only).
 
   // ── Console/network capture ──
 
-  async captureStart(): Promise<BrowserCaptureStartResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const sender = this.makeCdpSender(guest)
-      await this.ensureDebuggerAttached(guest)
-
-      const tabId = this.resolveTabId(guest.id)
-      const state = this.getOrCreateTabState(tabId)
-
-      await sender('Runtime.enable')
-      state.capturing = true
-      state.consoleLog = []
-      state.networkLog = []
-      state.networkRequestMap.clear()
-
-      return { capturing: true }
-    })
+  captureStart(): Promise<BrowserCaptureStartResult> {
+    return this.auxiliaryCommands.captureStart()
   }
 
-  async captureStop(): Promise<BrowserCaptureStopResult> {
-    return this.enqueueCommand(async () => {
-      const guest = this.getActiveGuest()
-      const tabId = this.resolveTabId(guest.id)
-      const state = this.getOrCreateTabState(tabId)
-
-      state.capturing = false
-      state.networkRequestMap.clear()
-
-      return { stopped: true }
-    })
+  captureStop(): Promise<BrowserCaptureStopResult> {
+    return this.auxiliaryCommands.captureStop()
   }
 
   consoleLog(limit = 100): BrowserConsoleResult {
-    const guest = this.getActiveGuest()
-    const tabId = this.resolveTabId(guest.id)
-    const state = this.getOrCreateTabState(tabId)
-
-    const entries = state.consoleLog.slice(-limit)
-    return { entries, truncated: state.consoleLog.length > limit }
+    return this.auxiliaryCommands.consoleLog(limit)
   }
 
   networkLog(limit = 100): BrowserNetworkLogResult {
-    const guest = this.getActiveGuest()
-    const tabId = this.resolveTabId(guest.id)
-    const state = this.getOrCreateTabState(tabId)
-
-    const entries = state.networkLog.slice(-limit)
-    return { entries, truncated: state.networkLog.length > limit }
+    return this.auxiliaryCommands.networkLog(limit)
   }
 
   async back(): Promise<{ url: string; title: string }> {
@@ -1077,7 +925,7 @@ export class CdpBridge {
     return null
   }
 
-  private getOrCreateTabState(tabId: string): TabState {
+  private getOrCreateTabState(tabId: string): CdpTabState {
     let state = this.tabState.get(tabId)
     if (!state) {
       state = {
@@ -1100,7 +948,7 @@ export class CdpBridge {
     return state
   }
 
-  private removeDebuggerListeners(guest: Electron.WebContents, state: TabState): void {
+  private removeDebuggerListeners(guest: Electron.WebContents, state: CdpTabState): void {
     const detachListener = state.debuggerDetachListener
     const messageListener = state.debuggerMessageListener
     state.debuggerDetachListener = null

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 import { join } from 'node:path'
 import type { WorktreeLineage } from './worktree/lineage-types'
 import type { Worktree } from './worktree/types'
-import { projectResolvedWorktreeLineage } from './resolved-worktree-lineage'
+import type { WorktreeLineageBoundary } from './resolved-worktree-lineage'
+import {
+  projectResolvedWorktreeLineage,
+  sharesWorktreeLineageBoundary
+} from './resolved-worktree-lineage'
 
 function worktree(id: string, instanceId: string, overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -40,6 +44,41 @@ function lineage(overrides: Partial<WorktreeLineage> = {}): WorktreeLineage {
     ...overrides
   }
 }
+
+describe('sharesWorktreeLineageBoundary', () => {
+  const boundary = (overrides: Partial<WorktreeLineageBoundary> = {}): WorktreeLineageBoundary => ({
+    repoId: 'repo',
+    hostId: 'local',
+    projectId: 'github:stablyai/orca',
+    ...overrides
+  })
+
+  it('accepts an identical repo, host, and project', () => {
+    expect(sharesWorktreeLineageBoundary(boundary(), boundary())).toBe(true)
+  })
+
+  it('rejects a differing repo even when host and project agree', () => {
+    expect(sharesWorktreeLineageBoundary(boundary(), boundary({ repoId: 'other-repo' }))).toBe(
+      false
+    )
+  })
+
+  it.each([
+    ['child host', boundary({ hostId: undefined }), boundary()],
+    ['parent host', boundary(), boundary({ hostId: undefined })],
+    ['child project', boundary({ projectId: undefined }), boundary()],
+    ['parent project', boundary(), boundary({ projectId: undefined })]
+  ])('treats an undefined %s as compatible', (_label, child, parent) => {
+    expect(sharesWorktreeLineageBoundary(child, parent)).toBe(true)
+  })
+
+  it.each([
+    ['host', boundary({ hostId: 'ssh:remote' })],
+    ['project', boundary({ projectId: 'github:other/project' })]
+  ])('rejects a defined %s mismatch', (_label, parent) => {
+    expect(sharesWorktreeLineageBoundary(boundary(), parent)).toBe(false)
+  })
+})
 
 describe('projectResolvedWorktreeLineage', () => {
   const parent = worktree('parent', 'parent-instance')

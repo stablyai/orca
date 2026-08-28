@@ -434,6 +434,20 @@ describe('check-mode reporting', () => {
 // These run without network or a build, so ordinary `pnpm test` catches the two
 // desyncs that would otherwise only surface in the heavy xterm_patch_sync job.
 describe('committed xterm patch artifacts', () => {
+  it('normalizes Chromium font-weight serialization in every WebGL runtime copy', async () => {
+    const patch = await readFile(
+      path.join(REPO_ROOT, 'config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch'),
+      'utf8'
+    )
+    expect(patch).not.toMatch(/desiredWeight !== '400'|orcaProbeWeight!=="400"/)
+    expect(
+      patch.match(/(?:actualWeightToken === 'normal'|orcaActualWeightToken==="normal")/g)
+    ).toHaveLength(3)
+    expect(
+      patch.match(/(?:actualWeight !== desiredWeight|orcaActualWeight!==orcaProbeWeight)/g)
+    ).toHaveLength(3)
+  })
+
   it('records the lockfile hash pnpm derives from the patch file', async () => {
     const manifest = JSON.parse(await readFile(MANIFEST_PATH, 'utf8'))
     const lockfile = await readFile(path.join(REPO_ROOT, 'pnpm-lock.yaml'), 'utf8')

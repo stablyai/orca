@@ -31,7 +31,16 @@ export type RelayArtifact = {
   filename: string
   /** Only Windows relays ship it; other hosts must neither receive nor probe it. */
   windowsOnly?: boolean
+  /**
+   * Present only when the build could produce it, so it is hashed when there and
+   * never probed. Required artifacts stay required: a probe that demanded an
+   * optional one would loop forever redeploying a relay that is already correct.
+   */
+  optional?: boolean
 }
+
+/** The bare Windows process-table addon; see docs/reference/windows-process-enumeration.md. */
+export const RELAY_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 
 export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   { filename: 'relay.js' },
@@ -41,7 +50,11 @@ export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
   // Forked by the AI Vault title reader; without it a relay answers every WSL
   // title request with no title and no error.
   { filename: 'wsl-transcript-fs-process-entry.js' },
-  { filename: 'node-pty-1.1.0-console-list-agent-patch.cjs', windowsOnly: true }
+  { filename: 'node-pty-1.1.0-console-list-agent-patch.cjs', windowsOnly: true },
+  // Optional because only a Windows build machine can compile it. Without it the
+  // relay reads the process table through a PowerShell scan instead -- slower,
+  // but correct, so a relay built anywhere else is still shippable.
+  { filename: RELAY_WINDOWS_PROCESS_TREE_FILENAME, windowsOnly: true, optional: true }
 ]
 
 /** Written after the artifacts, so it is never an input to its own hash. */
@@ -50,8 +63,16 @@ export const RELAY_VERSION_FILENAME = '.version'
 /** Written last by the installer; its absence means a torn install. */
 export const RELAY_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
+/** Artifacts every relay must have; the remote install probe requires each one. */
 export function relayArtifactFilenames(isWindows: boolean): string[] {
-  return RELAY_ARTIFACTS.filter((artifact) => !artifact.windowsOnly || isWindows).map(
-    (artifact) => artifact.filename
-  )
+  return RELAY_ARTIFACTS.filter(
+    (artifact) => !artifact.optional && (!artifact.windowsOnly || isWindows)
+  ).map((artifact) => artifact.filename)
+}
+
+/** Artifacts a build may or may not emit. Hashed when present, never probed. */
+export function relayOptionalArtifactFilenames(isWindows: boolean): string[] {
+  return RELAY_ARTIFACTS.filter(
+    (artifact) => artifact.optional && (!artifact.windowsOnly || isWindows)
+  ).map((artifact) => artifact.filename)
 }

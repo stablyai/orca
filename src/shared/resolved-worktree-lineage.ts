@@ -7,7 +7,14 @@ export type WorktreeWithResolvedLineage<T extends Worktree = Worktree> = T & {
   lineage: WorktreeLineage | null
 }
 
-export function sharesResolvedWorktreeLineageBoundary(child: Worktree, parent: Worktree): boolean {
+/** The fields a lineage edge is scoped by. Split out so create-time callers — which have a
+ *  projected child, not a real Worktree — can check the same rule the projection enforces. */
+export type WorktreeLineageBoundary = Pick<Worktree, 'repoId' | 'hostId' | 'projectId'>
+
+export function sharesWorktreeLineageBoundary(
+  child: WorktreeLineageBoundary,
+  parent: WorktreeLineageBoundary
+): boolean {
   return (
     child.repoId === parent.repoId &&
     (child.hostId === undefined || parent.hostId === undefined || child.hostId === parent.hostId) &&
@@ -15,6 +22,10 @@ export function sharesResolvedWorktreeLineageBoundary(child: Worktree, parent: W
       parent.projectId === undefined ||
       child.projectId === parent.projectId)
   )
+}
+
+export function sharesResolvedWorktreeLineageBoundary(child: Worktree, parent: Worktree): boolean {
+  return sharesWorktreeLineageBoundary(child, parent)
 }
 
 export function isValidResolvedWorktreeLineageEdge(

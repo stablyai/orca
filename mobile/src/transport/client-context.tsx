@@ -11,6 +11,7 @@ import {
   type ReactNode
 } from 'react'
 import type { RpcClient } from './rpc-client'
+import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import { subscribeConnectionRevivalTriggers } from './connection-revival-triggers'
 import { HostClientOpenRegistry } from './host-client-open-registry'
 import {
@@ -19,6 +20,8 @@ import {
 } from './host-client-acquisition-registry'
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
+import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
+import { recordConnectionRevival } from './persisted-connection-log-store'
 import {
   createHostClientSelectors,
   listHostClients,
@@ -33,8 +36,6 @@ import type { ConnectionState, HostProfile } from './types'
 import type { RpcClientContextValue } from './rpc-client-context-contract'
 
 type StoreEntry = HostClientStoreEntry
-export type { HostClientAcquisition } from './host-client-acquisition-registry'
-export type { RpcClientContextValue } from './rpc-client-context-contract'
 
 const Ctx = createContext<RpcClientContextValue | null>(null)
 
@@ -238,6 +239,13 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
   const forceReconnect = useCallback(
     async (hostId: string) => {
       const entry = storeRef.current.get(hostId)
+      const logical = entry?.client as Partial<StableLogicalRpcClient> | undefined
+      if (entry && shouldPreserveActiveRelay(entry, logical)) {
+        // Keep a Relay-active host on its existing recovery state; rebuilding the
+        // facade starts the unreachable direct endpoint before Relay can race it.
+        entry.client.notifyForeground('app-resume')
+        return
+      }
       // Why: ownership survives explicit close/re-pair while observers never become synthetic owners.
       const savedRefCount = acquisitionsRef.current.count(hostId)
       manualDemandRef.current.add(hostId)
@@ -302,7 +310,8 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       for (const hostId of pendingAcquisitionsRef.current.keys()) {
         retrySchedulerRef.current?.expedite(hostId)
       }
-      for (const entry of storeRef.current.values()) {
+      for (const [hostId, entry] of storeRef.current) {
+        recordConnectionRevival(hostId, reason)
         try {
           entry.client.notifyForeground(reason)
         } catch {

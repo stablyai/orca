@@ -1,4 +1,6 @@
+import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { ProjectGroup } from '../../shared/project-group-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { parseAppSshPtyId, toAppSshPtyId } from '../../shared/ssh-pty-id'
 import { toSshExecutionHostId } from '../../shared/execution-host'
@@ -83,6 +85,34 @@ export function migrateWorkspaceSessionSshTargetId(
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
     if (record.connectionId === oldTargetId) {
       record.connectionId = newTargetId
+      changed = true
+    }
+  }
+  return changed
+}
+
+/**
+ * Re-point folder-workspace scopes pinned to the old SSH target.
+ *
+ * A folder workspace carries its own connection/host stamp, and its group can
+ * carry the scope connection — neither is a repo row, so the repo sweep misses
+ * both and the workspace (plus any automation pinned to it) stays on the dead id.
+ */
+export function migrateFolderWorkspaceHostSshTargetId(
+  scope: { folderWorkspaces?: FolderWorkspace[]; projectGroups?: ProjectGroup[] },
+  oldTargetId: string,
+  newTargetId: string
+): boolean {
+  const oldHostId = toSshExecutionHostId(oldTargetId)
+  const newHostId = toSshExecutionHostId(newTargetId)
+  let changed = false
+  for (const entry of [...(scope.folderWorkspaces ?? []), ...(scope.projectGroups ?? [])]) {
+    if (entry.connectionId === oldTargetId) {
+      entry.connectionId = newTargetId
+      changed = true
+    }
+    if (entry.executionHostId === oldHostId) {
+      entry.executionHostId = newHostId
       changed = true
     }
   }

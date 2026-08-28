@@ -88,6 +88,14 @@ export const CLAUDE_EVENTS = [
   {
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
+  // Why: a manual /compact ends at an idle prompt without emitting Stop, so PostCompact is the only
+  // signal that can clear the pane (STA-2915). PreCompact is deliberately NOT registered: it fires
+  // before the compact is validated, and an aborted compact emits it alone — mapping it to 'working'
+  // would strand the pane exactly as this registration is meant to prevent (STA-4613).
+  {
+    eventName: 'PostCompact',
+    definition: { hooks: [{ type: 'command', command: '' }] }
   }
 ] as const
 

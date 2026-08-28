@@ -120,3 +120,16 @@ describe('execution host identity', () => {
     )
   })
 })
+
+describe('execution host id delimiter invariant', () => {
+  it('rejects an unencoded pipe so a crafted id cannot rebind a worktree identity alias', () => {
+    // composeWorktreeHostIdentity splits at the first `|`, so `ssh:a|b` would resolve as `ssh:a`.
+    expect(parseExecutionHostId('ssh:a|b')).toBeNull()
+    expect(parseExecutionHostId('runtime:a|b')).toBeNull()
+    expect(parseExecutionHostId(toSshExecutionHostId('a|b'))).toEqual({
+      kind: 'ssh',
+      id: 'ssh:a%7Cb',
+      targetId: 'a|b'
+    })
+  })
+})

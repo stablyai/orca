@@ -103,8 +103,12 @@ describe('host-session-mirror settle census', () => {
       // The definitions themselves.
       'runtime/host-session-mirror-hydration.ts': { hydrated: 1, worktreeHydrated: 1 },
       // Exactly the receipt constructors: the patch receipt (environment-wide
-      // and per-worktree) and the stale-frame receipt.
-      'runtime/web-session-tabs-sync.ts': { hydrated: 1, worktreeHydrated: 2 }
+      // and per-worktree) and the stale-frame receipt. The environment-wide
+      // mark has three audited arms, all inside the receipt: an authoritative
+      // empty inventory, a non-empty inventory, and an empty inventory that
+      // settles only after `terminal.list` says the host has no live PTY —
+      // `0 === 0` is not host evidence (STA-5377).
+      'runtime/web-session-tabs-sync.ts': { hydrated: 3, worktreeHydrated: 2 }
     })
   })
 

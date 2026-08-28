@@ -1,6 +1,8 @@
 import type { Store } from '../persistence'
 import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { mergeWorktree } from './worktree-logic'
@@ -187,8 +189,11 @@ async function scanRepoWorkspaces(
       ? listWorkspaceCleanupFolderWorkspaces(store, repo, repoOwnerCount)
       : gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
+          // Host-qualified first: the same repoId::path is a different checkout on each host.
+          const hostMeta = readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo))
           const meta = store.getWorktreeMeta(worktreeId)
-          const ownedMeta = isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined
+          const ownedMeta =
+            hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
           return mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
         })
   // Why: with includeAllWorkspaces the browser shows every workspace and lets
@@ -252,8 +257,8 @@ async function scanRepoWorkspaces(
         worktree: worktreeWithActivity,
         scannedAt,
         provider,
-        // Why: a row with no inactivity reason can never be queued or selected,
-        // so full-fleet scans stream it now and let a focused scan read git later.
+        // Why: full-fleet scans defer git for recently active rows; removal preflight
+        // forces a fresh read before any selected row can be deleted.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
         signal

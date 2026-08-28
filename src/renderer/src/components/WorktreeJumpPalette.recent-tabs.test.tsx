@@ -12,6 +12,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
+  makeDuplicateRecentTabState,
   makeGroup,
   makeManyTabState,
   makeRecentTabState,
@@ -229,6 +230,25 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(testContainer.textContent).toContain('Recent Worktrees')
   })
 
+  it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
+    await renderPalette(makeDuplicateRecentTabState())
+
+    expect(
+      getRenderedRowIds().filter(
+        (id) => id === 'workspace-tab:tab-duplicate' || id.includes(':workspace-tab:tab-duplicate')
+      )
+    ).toEqual(['workspace-tab:tab-duplicate', 'palette-dup:1:workspace-tab:tab-duplicate'])
+
+    await act(async () => {
+      emitCmdJRowIndexJump(1)
+    })
+    await flushEffects()
+
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-duplicate', worktreeId: 'wt-beta' })
+    )
+  })
+
   it('caps the recent section so the worktree header stays above the fold', async () => {
     await renderPalette(makeManyTabState(12))
 
@@ -399,7 +419,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     // mount one row per workspace.
     expect(getTabRowIds()).toEqual([])
     expect(getWorktreeRows()).toHaveLength(10)
-    expect(testContainer.textContent).toContain('Type to see all 14 worktrees')
+    expect(testContainer.textContent).toContain('4 more')
   })
 
   it('captures the order when tabs hydrate after the palette is already open', async () => {
@@ -645,7 +665,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
   })
 
-  it('excludes the current tab when its agent is merely done', async () => {
+  it.each([undefined, true])('excludes current terminal outcomes', async (interrupted) => {
     await renderPalette(
       makeRecentTabState({
         activeWorktreeId: 'wt-alpha',
@@ -654,7 +674,9 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
         activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
         agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now(), {
+            interrupted
+          })
         }
       })
     )

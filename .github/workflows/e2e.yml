@@ -17,6 +17,10 @@ on:
         description: JSON array of changed specs; empty runs the full suite
         required: false
         type: string
+      ssh_source_changed:
+        description: '"true" when the PR touches SSH execution source; gates the Docker-SSH lane'
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       ref:
@@ -40,36 +44,10 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: the E2E build compiles native modules via node-gyp. Mirrors the
-      # install step in pr.yml's verify job so E2E doesn't hit missing-toolchain
-      # errors.
-      - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential python3
-
-      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
-      # Without that cache every E2E job re-downloaded the whole dependency set.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      # Why: the build's plain-Node daemon smoke load resolves node-pty.
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          cache: pnpm
-
-      # Why: this job runs the same pnpm install path as pr.yml's verify
-      # job, so it needs the same pinned node-gyp override to avoid pnpm's
-      # broken bundled gyp_main.py on Linux.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          native-runtime: node
 
       # Why: building here avoids parallel builds inside Playwright globalSetup;
       # paired-browser specs also need the standalone web bundle.
@@ -130,11 +108,11 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: pnpm install rebuilds native modules, and those postinstall
-      # scripts still need the Linux toolchain even though this shard reuses
-      # the prebuilt Electron output.
+      # Why: pnpm install used to rebuild native modules here; the composite
+      # action restores them from cache and only compiles on a miss. The
+      # toolchain is still required for that miss path, and for paired Quick
+      # Open coverage which exercises the resource-bounded host search.
       - name: Install native build tools
-        # Why: paired Quick Open coverage exercises the resource-bounded host search.
         run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep zsh
 
       # Why: Electron on Linux needs an X display even when the app
@@ -143,33 +121,9 @@ jobs:
       - name: Install xvfb
         run: sudo apt-get install -y xvfb
 
-      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
-      # Without that cache every E2E job re-downloaded the whole dependency set.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          cache: pnpm
-
-      # Why: this job runs the same pnpm install path as pr.yml's verify
-      # job, so it needs the same pinned node-gyp override to avoid pnpm's
-      # broken bundled gyp_main.py on Linux. Gate on runner.os matches
-      # release.yml so the invariant "this workaround is Linux-only" is
-      # consistent across all three workflows, even though this job
-      # currently pins runs-on: ubuntu-latest.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          native-runtime: electron
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8
@@ -222,25 +176,9 @@ jobs:
         # lane now receives those specs from pr.yml's SSH source mapping.
         run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 ripgrep xvfb zsh
 
-      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
-      # Without that cache every E2E job re-downloaded the whole dependency set.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          run_install: false
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          cache: pnpm
-
-      - name: Use external node-gyp to avoid pnpm's bundled copy
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          native-runtime: electron
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8
@@ -287,14 +225,21 @@ jobs:
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
     needs: build
+    # Why ssh_source_changed first: this lane used to trigger on SSH source only as a side
+    # effect of one route listing a startup-readiness spec — pruning that spec would have
+    # silently retired the whole lane. The signal is now derived from the SSH routes directly.
+    # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
+    # lane, so editing one must still run it here.
     if: >-
       inputs.test_files == '' ||
+      inputs.ssh_source_changed == 'true' ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest
-    # Why 35: the parking, retention, startup-exec, and paired parity specs run
-    # serially on isolated Electron/SSH fixtures after watcher isolation.
-    timeout-minutes: 35
+    # Why 60: this lane now also runs the remaining Docker-SSH specs serially. They average
+    # ~18s but several budget 4-10 minutes per test, so a slow run lands far above the old 35
+    # — and the sharded lanes already show that a lane which times out is a lane nobody trusts.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -305,29 +250,9 @@ jobs:
       - name: Install native build and headless UI tools
         run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk openssh-client python3 xvfb zsh
 
-      # Why pnpm first: setup-node needs pnpm on PATH to locate the store it caches.
-      # Without that cache every E2E job re-downloaded the whole dependency set.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          cache: pnpm
-
-      # Why: same Linux-only node-gyp pin as build/e2e jobs so the workaround
-      # stays consistent across workflows even while this job is ubuntu-latest.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+          native-runtime: electron
 
       - name: Download E2E build output
         uses: actions/download-artifact@v8
@@ -345,6 +270,14 @@ jobs:
       - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
+
+      # Why here rather than the sharded lanes: the shards set no ORCA_E2E_SSH_DOCKER, so every
+      # spec below skipped itself while the shard still reported green. Running them on this one
+      # VM pays the fixture image build once instead of ten times, and keeps an SSH regression
+      # legible as an SSH-named failure.
+      - name: Run remaining Docker SSH E2E
+        if: always()
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
 
       - name: Upload watcher isolation traces
         if: failure()

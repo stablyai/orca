@@ -16,6 +16,10 @@ export type WorkspaceCleanupBrowseController = {
   ) => void
   toggleSortField: (field: WorkspaceCleanupSortField) => void
   clearFilters: () => void
+  /** Applies a whole-state transform, for callers that clear one named constraint. */
+  replaceFilters: (
+    transform: (filters: WorkspaceCleanupFilterState) => WorkspaceCleanupFilterState
+  ) => void
 }
 
 /**
@@ -56,6 +60,15 @@ export function useWorkspaceCleanupBrowseState(): WorkspaceCleanupBrowseControll
     [updateBrowse]
   )
 
+  // Same updater form as patchFilters: a chip clear and a facet patch can land in one
+  // tick, and whichever read the render snapshot would undo the other.
+  const replaceFilters = useCallback<WorkspaceCleanupBrowseController['replaceFilters']>(
+    (transform) => {
+      updateBrowse((current) => ({ ...current, filters: transform(current.filters) }))
+    },
+    [updateBrowse]
+  )
+
   const clearFilters = useCallback(() => {
     updateBrowse((current) => ({
       ...current,
@@ -68,6 +81,7 @@ export function useWorkspaceCleanupBrowseState(): WorkspaceCleanupBrowseControll
     sort: browse.sort,
     patchFilters,
     toggleSortField,
-    clearFilters
+    clearFilters,
+    replaceFilters
   }
 }

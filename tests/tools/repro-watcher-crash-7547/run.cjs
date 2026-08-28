@@ -52,7 +52,9 @@ async function main() {
       const { code, signal } = await runOnce(s, durationMs)
       const elapsed = Date.now() - started
       const meaning = KNOWN[code] || (code === 0 ? 'clean exit' : 'unexpected')
-      console.log(`=== [${s}] iter ${i}: exit=${code} (${hex(code ?? -1)}) signal=${signal} ${meaning} after ${elapsed}ms`)
+      console.log(
+        `=== [${s}] iter ${i}: exit=${code} (${hex(code ?? -1)}) signal=${signal} ${meaning} after ${elapsed}ms`
+      )
       results.push({ scenario: s, iteration: i, code, signal, elapsed })
       if (code !== 0 && code !== null) {
         crashed = true

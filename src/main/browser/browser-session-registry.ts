@@ -12,6 +12,7 @@ import type {
   BrowserSessionProfileCreateOptions,
   BrowserSessionProfileScope
 } from '../../shared/browser-workspace-types'
+import { isBrowserRoutePartition } from './browser-route-identity'
 import {
   applyPendingBrowserCookieImports,
   clearPendingBrowserCookieImport,
@@ -175,6 +176,29 @@ class BrowserSessionRegistry {
       return this.defaultPartition
     }
     return this.profiles.get(profileId)?.partition ?? null
+  }
+
+  setupRoutePartitionPolicies(partition: string, browserProfileId: string): void {
+    const profile = this.profiles.get(browserProfileId)
+    if (!profile || !isBrowserRoutePartition(partition)) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+    installBrowserSessionPartitionPolicies({ ...profile, partition })
+  }
+
+  requireRouteBrowserProfile(browserProfileId: string): void {
+    if (!this.profiles.has(browserProfileId)) {
+      throw new Error('browser_route_partition_profile_unavailable')
+    }
+  }
+
+  clearRoutePartitionPolicies(partition: string): void {
+    if (!isBrowserRoutePartition(partition)) {
+      return
+    }
+    const sess = session.fromPartition(partition)
+    clearBrowserSessionUserAgentMode(sess)
+    clearBrowserSessionPartitionPolicies(partition, sess)
   }
 
   createProfile(

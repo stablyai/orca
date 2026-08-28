@@ -54,8 +54,8 @@ import {
   getWorktreeMapFromState,
   getWorktreeOnHostFromState
 } from '../../store/selectors'
-import { getHostedReviewCacheKey } from '../../store/slices/hosted-review'
-import { issueCacheKey as getIssueCacheKey } from '../../store/slices/github'
+import { getHostedReviewCacheKey } from '../../store/slices/hosted-review-cache-identity'
+import { issueCacheKey as getIssueCacheKey } from '../../store/github/cache-identity'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import {
   getSelectedDeletableWorkspaceRows,

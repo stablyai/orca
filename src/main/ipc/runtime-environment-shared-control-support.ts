@@ -1,4 +1,7 @@
-import { REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY } from '../../shared/protocol-version'
+import {
+  ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
+  REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
+} from '../../shared/protocol-version'
 import { sendRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
 import { markEnvironmentUsed } from '../../shared/runtime-environment-store'
 import type {
@@ -34,7 +37,10 @@ export async function supportsSharedControl(
       pairing,
       'status.get',
       undefined,
-      timeoutMs
+      timeoutMs,
+      undefined,
+      undefined,
+      ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     if (response.ok === true) {
       markEnvironmentUsed(userDataPath, environment.id, { runtimeId: response._meta.runtimeId })

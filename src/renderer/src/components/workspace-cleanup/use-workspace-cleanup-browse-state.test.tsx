@@ -9,6 +9,7 @@ import {
   resetWorkspaceCleanupBrowsePersistTimer
 } from '@/store/slices/workspace-cleanup-browse'
 import { createDefaultWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
+import { listAppliedWorkspaceCleanupFilters } from '../../../../shared/workspace-cleanup-applied-filters'
 import { useWorkspaceCleanupBrowseState } from './use-workspace-cleanup-browse-state'
 import type { WorkspaceCleanupBrowseController } from './use-workspace-cleanup-browse-state'
 
@@ -104,5 +105,27 @@ describe('useWorkspaceCleanupBrowseState', () => {
       field: 'size',
       direction: 'desc'
     })
+  })
+
+  it('keeps a cleared chip cleared when a facet patch lands in the same tick', () => {
+    const controller = mountController()
+    act(() => controller.current!.patchFilters('activity', { idleMinDays: 20 }))
+
+    const format = new Proxy({}, { get: () => () => 'chip' }) as Parameters<
+      typeof listAppliedWorkspaceCleanupFilters
+    >[1]
+    const chip = listAppliedWorkspaceCleanupFilters(
+      store.getState().workspaceCleanupBrowse.filters,
+      format
+    ).find((a) => a.id === 'activity.idleMinDays')!
+
+    act(() => {
+      controller.current!.replaceFilters(chip.clear)
+      controller.current!.patchFilters('git', { states: ['dirty'] })
+    })
+
+    const filters = store.getState().workspaceCleanupBrowse.filters
+    expect(filters.activity.idleMinDays).toBeNull()
+    expect(filters.git.states).toEqual(['dirty'])
   })
 })

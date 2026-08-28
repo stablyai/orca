@@ -176,6 +176,33 @@ Dispatch rules:
 - After 3 consecutive failures on one task, the dispatch context circuit-breaks and the task is marked failed.
 - Use `task-list --brief --json` for coordinator sweeps; it collapses whitespace and caps each echoed spec at 160 characters (`spec_truncated` marks shortened rows). Omit `--brief` when the full spec is required, or when an older CLI rejects it as an unknown flag.
 
+## How deep workers can nest
+
+A dispatched worker normally cannot dispatch sub-workers. Attempting it fails with
+`nested_worker_depth_exceeded` and a message telling the worker to complete the task
+itself. Do that — do not try to route around it.
+
+The limit is a number, not an on/off switch. `Settings -> Orchestration -> Nested worker depth`
+sets how many generations are allowed:
+
+- `1` (default): a coordinator dispatches workers; those workers do not dispatch.
+- `2`: workers may dispatch one further generation.
+
+Depth is counted from the terminal that issues the command, not from the Run. Creating a
+new Run does not reset it — a worker that runs `run-create` then `worker-start` is still a
+worker, and still counted. This is the part that changed: the old behaviour rejected
+sub-dispatch only because a worker's terminal was not bound to a Run, so creating a Run was
+enough to slip past it.
+
+Two limits worth knowing:
+
+- **It is a guardrail, not a security boundary.** A caller that declares another terminal's
+  handle while its own launch evidence is unverifiable (an ordinary restored terminal, for
+  example) can be counted as that terminal instead. Orca does not treat workers as hostile.
+- **It applies while a Dispatch is active.** After `worker_done`, or after a coordinator
+  settles the task, the terminal is no longer a worker and is counted as a root again. The
+  process may still be alive; that is the documented boundary, not an accident.
+
 ## Preferred Supervised Worker Loop
 
 Use `worker-start` for the normal supervised path. It composes the existing worktree, terminal, readiness, and dispatch primitives while returning exact created/reused effects. Agents still choose placement and concurrency; Orca does not schedule workers or infer conflicts.

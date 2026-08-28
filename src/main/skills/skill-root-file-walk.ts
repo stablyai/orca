@@ -1,6 +1,7 @@
 import type { Dirent } from 'node:fs'
 import { readdir, realpath, stat } from 'node:fs/promises'
 import { isAbsolute, join, relative, sep } from 'node:path'
+import { isSkillStagingEntryName } from './skill-delete/staging-names'
 
 export const SKILL_FILE_NAME = 'SKILL.md'
 
@@ -62,6 +63,11 @@ export async function findSkillFiles(
     }
     for (const entry of entries) {
       signal?.throwIfAborted()
+      // Why: a staged sibling sits directly in a scanned root, so without this a
+      // skill mid-transaction surfaces as a second, separately actionable row.
+      if (isSkillStagingEntryName(entry.name)) {
+        continue
+      }
       const entryPath = join(dirPath, entry.name)
       if (entry.name === SKILL_FILE_NAME) {
         if (entry.isFile()) {

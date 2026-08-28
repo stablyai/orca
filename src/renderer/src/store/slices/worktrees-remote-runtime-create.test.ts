@@ -90,7 +90,13 @@ describe('worktree remote runtime mutations', () => {
       timeoutMs: 10 * 60_000
     })
     expect(mockApi.worktrees.create).not.toHaveBeenCalled()
-    expect(store.getState().worktreesByRepo.repo1).toEqual([wt])
+    expect(store.getState().worktreesByRepo.repo1).toEqual([
+      {
+        ...wt,
+        hostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1'
+      }
+    ])
   })
 
   it('forwards generated-name provenance through paired-runtime create', async () => {

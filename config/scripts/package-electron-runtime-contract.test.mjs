@@ -17,11 +17,11 @@ describe('Electron runtime package contract', () => {
       'utf8'
     )
 
-    expect(patch).toContain('diff --git a/src/Types.ts b/src/Types.ts')
     expect(patch).toContain('readonly clearModelGeneration: number')
     expect(patch).toContain('const generation = this._atlas.clearModelGeneration')
     expect(patch).toContain('this.clearModelGeneration++')
     expect(patch).toContain('this._atlas._clearModelGeneration||0')
+    expect(patch.match(/\^\(\?:\[1-8\]\\d\{2\}\|900\)\$/g)).toHaveLength(3)
   })
 
   it('keeps root postinstall as the single Electron binary install owner', () => {
@@ -467,10 +467,11 @@ describe('Electron runtime package contract', () => {
     expect(copyStep.run).toContain('git add "$CASK_PATH"')
   })
 
-  it('installs the Electron package binary in PR checks without changing native module ABI', () => {
-    const prWorkflow = readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8')
-    const parsedWorkflow = parse(prWorkflow)
-    const installStep = parsedWorkflow.jobs.test.steps.find(
+  it('installs the Electron package binary in the shared unit-test workflow', () => {
+    const unitTestWorkflow = parse(
+      readFileSync(join(projectDir, '.github/workflows/unit-tests.yml'), 'utf8')
+    )
+    const installStep = unitTestWorkflow.jobs.test.steps.find(
       (step) => step.name === 'Install Electron package binary for tests'
     )
 

@@ -42,6 +42,15 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('motion-reduce:border-t-yellow-500')
   })
 
+  it('renders monitoring as a static yellow radio glyph', () => {
+    const markup = renderMarkup('monitoring')
+
+    expect(markup).toContain('aria-label="Monitoring background tasks"')
+    expect(markup).toContain('lucide-radio')
+    expect(markup).toContain('text-yellow-500')
+    expect(markup).not.toContain('data-agent-spinner')
+  })
+
   it('renders done as an emerald check icon', () => {
     const markup = renderMarkup('done')
 

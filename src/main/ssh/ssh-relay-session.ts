@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { replayPendingSshPtyKills } from './ssh-pending-pty-kill-replay'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
@@ -79,6 +80,10 @@ import {
 import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  findTerminalTabIdForLeaf,
+  hasHostAuthoritativeTerminalMembership
+} from '../runtime/workspace-session-terminal-membership-authority'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import {
@@ -2248,6 +2253,23 @@ export class SshRelaySession {
     mux: SshChannelMultiplexer,
     shouldContinue: () => boolean
   ): Promise<void> {
+    const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    const providerGeneration = this.activePtyProviderGeneration
+    if (!ptyProvider || providerGeneration === null || this.mux !== mux) {
+      return
+    }
+    // Why before the lease read: a stop the user asked for and this client could not deliver is
+    // replayed here, and a confirmed one tombstones its lease — so it must land before the filter
+    // below decides what to reattach, or the reattach revives a PTY that is about to die.
+    await replayPendingSshPtyKills({
+      targetId: this.targetId,
+      store: this.store,
+      provider: ptyProvider,
+      shouldContinue
+    })
+    if (!shouldContinue()) {
+      return
+    }
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
@@ -2272,11 +2294,6 @@ export class SshRelaySession {
         ...leasedPtyIds
       ])
     )
-    const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
-    const providerGeneration = this.activePtyProviderGeneration
-    if (!ptyProvider || providerGeneration === null || this.mux !== mux) {
-      return
-    }
     let nextPtyIndex = 0
     const worker = async (): Promise<void> => {
       while (shouldContinue()) {
@@ -2551,19 +2568,50 @@ export class SshRelaySession {
     lease: SshPtyLease | undefined
   ): void {
     if (lease?.worktreeId && lease.tabId && lease.leafId) {
+      const session = this.store.getWorkspaceSession?.()
+      // The lease froze its tabId at write time; `detachTerminalPaneToTab` moves a live pane, so
+      // trusting it would fence this reattach to the tab the pane LEFT and refuse a pane that
+      // merely moved. Leaf is the identity, the tab is only where it currently sits.
+      // SSH spawns bind panes into `ssh:<target>` while this reattach binds into `local`, so a
+      // fence that consulted only one partition would read "no pane" for a pane the other holds.
+      const hostSession = this.store.getWorkspaceSession?.(toSshExecutionHostId(this.targetId))
+      const tabId =
+        findTerminalTabIdForLeaf(session, lease.leafId) ??
+        findTerminalTabIdForLeaf(hostSession, lease.leafId) ??
+        lease.tabId
       this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
-        tabId: lease.tabId,
+        tabId,
         leafId: lease.leafId,
         incarnationId
       })
       try {
-        this.store.persistPtyBinding({
+        // Absence of the pane only means "the user closed it" once the persisted membership
+        // speaks for this worktree. Before that it means the renderer has not published its
+        // layout yet, and refusing there drops a tab the user still has — the regression that
+        // reverted this fix twice. Losing a tab is worse than keeping a duplicate, so an
+        // unauthoritative session still gets the creating write.
+        // Authority is read from `local` because that is the partition this write lands in — it
+        // is local's absence we would be interpreting. But a pane the other partition still holds
+        // is not gone, so it keeps its creating write: refusing there would strand a live pane
+        // behind a binding reattach can no longer reach.
+        const mayCreate =
+          !hasHostAuthoritativeTerminalMembership(session, lease.worktreeId) ||
+          findTerminalTabIdForLeaf(hostSession, lease.leafId) !== undefined
+        const bound = this.store.persistPtyBinding({
           worktreeId: lease.worktreeId,
-          tabId: lease.tabId,
+          tabId,
           leafId: lease.leafId,
           ptyId: appPtyId,
-          incarnationId
+          incarnationId,
+          ...(mayCreate ? {} : { mayCreate: false })
         })
+        if (bound === false) {
+          // The pane is gone for good, so this shell has no surface to reach it through. Expire
+          // the lease so later reconnects stop fanning out over it — deliberately not
+          // `terminated`, which would assert an exit nothing here observed, and deliberately
+          // without killing the remote process.
+          this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
+        }
       } catch (error) {
         console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
       }

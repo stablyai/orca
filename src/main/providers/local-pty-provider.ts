@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
-import { basename, delimiter, win32 as pathWin32 } from 'node:path'
+import { basename, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
@@ -15,7 +15,6 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
@@ -59,17 +58,24 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
+import {
+  confirmShellForegroundProcess,
+  resolveAgentForegroundProcessWithAvailability
+} from './agent-foreground-process'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { killWithDescendantSweep } from '../pty-descendant-termination'
-import { readWindowsConptyProcessIds } from './windows-conpty-process-membership'
+import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
+import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { terminatePtyJob } from '../windows/windows-pty-job'
-import { canConfirmAgentFromConsolePresence } from './windows-console-foreground'
+import {
+  canRevalidateCachedAgentWithoutScan,
+  judgeCachedAgentJobEvidence
+} from './windows-cached-agent-revalidation'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { assertSafeAgentStartupCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
@@ -87,18 +93,19 @@ import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
 } from '../shell-prompt-readiness-probe'
-import {
-  expandWindowsEnvironmentVariables,
-  expandWindowsPathEnvironmentVariables
-} from '../../shared/windows-environment-expansion'
+import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
-] as const
+import {
+  getDefaultCwd,
+  getSpawnedShellName,
+  getWslContextFromPreferredDistro,
+  getWslContextFromWorktreeId,
+  normalizeLocalCallerSessionId,
+  promoteAgentTeamsShimPath,
+  removeUnspecifiedPaneIdentityEnv,
+  resolveForegroundFallbackProcess
+} from './local-pty-launch-helpers'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -120,7 +127,12 @@ const pendingLocalPtySpawns = new Map<string, Set<PendingLocalPtySpawn>>()
 const ptyShellName = new Map<string, string>()
 const ptyAgentForegroundContextPaths = new Map<string, string[]>()
 // Why: remember the last recognized agent foreground so a degraded scan doesn't report the shell and look like an exit.
-const ptyLastRecognizedForeground = new Map<string, string>()
+// `pid` anchors the identity to the row that proved it (null when ambiguous);
+// `at` is the last confirmation, so unanchored job evidence -- only a superset -- cannot hold it forever.
+const ptyLastRecognizedForeground = new Map<
+  string,
+  { name: string; pid: number | null; at: number }
+>()
 const ptyTerminalHandle = new Map<string, string>()
 const ptyWorktreeId = new Map<string, string>()
 const ptyInitialCwd = new Map<string, string>()
@@ -163,51 +175,6 @@ const exitListeners = new Set<ExitCallback>()
 const startupIngressByPty = new Map<string, PtyStartupIngress>()
 
 /**
- * Returns a stable default cwd for locally spawned PTYs.
- */
-function getDefaultCwd(): string {
-  return resolveSafePtyDefaultCwd()
-}
-
-/**
- * Removes inherited pane identity unless this PTY explicitly supplies it.
- */
-function removeUnspecifiedPaneIdentityEnv(
-  env: Record<string, string>,
-  explicitEnv: Record<string, string> | undefined
-): void {
-  for (const key of PANE_IDENTITY_ENV_KEYS) {
-    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
-      delete env[key]
-    }
-  }
-}
-
-/**
- * Promotes the agent-teams shim path ahead of inherited PATH entries.
- */
-function promoteAgentTeamsShimPath(
-  env: Record<string, string>,
-  requestedPath: string | undefined
-): void {
-  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
-    return
-  }
-  const normalizedRequestedPath =
-    process.platform === 'win32'
-      ? expandWindowsEnvironmentVariables(requestedPath, env)
-      : requestedPath
-  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
-  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
-  if (!shimDir) {
-    return
-  }
-  const pathKey = resolvePathEnvKey(env, process.platform)
-  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
-  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
-}
-
-/**
  * Disposes native node-pty listeners registered for a PTY id.
  */
 function disposePtyListeners(id: string): void {
@@ -240,30 +207,6 @@ function runPtyCleanup(id: string): void {
   }
   ptyCleanupCallbacks.delete(id)
   cleanup()
-}
-
-/**
- * Resolves a WSL context from a worktree id whose path is already a WSL path.
- */
-function getWslContextFromWorktreeId(
-  worktreeId: string | undefined
-): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  // Why: strip any synthetic `::workspace:<uuid>` suffix so WSL detection parses the real path, not a nonexistent identifier.
-  const worktreePath = worktreeId
-    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-    : undefined
-  const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
-  return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
-}
-
-/**
- * Resolves a WSL launch context from a user-selected distro name.
- */
-function getWslContextFromPreferredDistro(
-  distro: string | null | undefined
-): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
 /**
@@ -364,17 +307,19 @@ function allocatePtyId(sessionId: string | undefined): string {
   return id
 }
 
-async function prepareLocalPtySpawn(id: string): Promise<void> {
+/** Awaits pre-launch work that shutdown must be able to cancel: no node-pty
+ *  process exists yet, so cancellation can only be observed after the await. */
+async function awaitCancelableLocalPtySpawn<T>(id: string, operation: T | Promise<T>): Promise<T> {
   const pendingSpawn: PendingLocalPtySpawn = { canceled: false }
   const pending = pendingLocalPtySpawns.get(id) ?? new Set()
   pending.add(pendingSpawn)
   pendingLocalPtySpawns.set(id, pending)
   try {
-    // Why: shutdown must be able to cancel a stable session id during the async macOS capability probe, before node-pty exists.
-    await prepareMacosTccLoginShell()
+    const result = await operation
     if (pendingSpawn.canceled) {
       throw new Error(`PTY spawn canceled: ${id}`)
     }
+    return result
   } finally {
     pending.delete(pendingSpawn)
     if (pending.size === 0) {
@@ -399,20 +344,6 @@ function cancelAllPendingLocalPtySpawns(): void {
   }
 }
 
-/**
- * Normalizes renderer session ids that should be reused for local PTY reattach.
- */
-function normalizeLocalCallerSessionId(
-  sessionId: string | undefined,
-  allowNumeric = false
-): string | null {
-  const requested = sessionId?.trim()
-  if (!requested || (!allowNumeric && /^\d+$/.test(requested))) {
-    return null
-  }
-  return requested
-}
-
 function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResult | null {
   const existing = ptyProcesses.get(id)
   if (!existing) {
@@ -429,37 +360,6 @@ function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResul
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
     isReattach: true
   }
-}
-
-/**
- * Normalizes node-pty foreground process strings to executable basenames.
- */
-function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
-  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
-  if (!trimmed || trimmed === 'xterm-256color') {
-    return null
-  }
-  return trimmed.split(/[\\/]/).pop() || null
-}
-
-/**
- * Falls back to the spawned Windows shell when node-pty reports a terminal name.
- */
-function resolveForegroundFallbackProcess(
-  processName: string | null | undefined,
-  shellName: string | undefined
-): string | null {
-  if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
-    return processName || null
-  }
-  // Why: Windows node-pty may expose only the terminal name (`xterm-256color`); the spawned shell is the best foreground fallback.
-  return shellName ?? processName ?? null
-}
-
-/** Basename of the spawned shell path, parsed for the *target* platform.
- *  Why: POSIX `basename` won't split a Windows `\` path (non-Windows host/CI), so it'd break the foreground comparison. */
-function getSpawnedShellName(shellPath: string): string {
-  return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
 }
 
 /**
@@ -525,7 +425,10 @@ export type LocalPtyProviderOptions = {
       isWsl?: boolean
       wslDistro?: string | null
     }
-  ) => Record<string, string>
+    // Why (#16441): Codex launch prep grants hook trust through a codex
+    // app-server session. `spawn` already awaits, so returning a promise keeps
+    // the Electron main thread responsive instead of blocking on spawnSync.
+  ) => Record<string, string> | Promise<Record<string, string>>
   /** Whether worktree-scoped shell history is enabled; when true (or absent) with a worktreeId, HISTFILE is scoped per-worktree. */
   isHistoryEnabled?: () => boolean
   /** Why: COMSPEC is always cmd.exe, so this callback injects the user's persisted shell preference. Undefined when none set. */
@@ -734,16 +637,21 @@ export class LocalPtyProvider implements IPtyProvider {
 
     const isWslShell = Boolean(wslInfo) || pathWin32.basename(shellPath).toLowerCase() === 'wsl.exe'
     const launchWslDistro = isWslShell ? (launchWslContext?.distro ?? null) : null
+    // Why (#16441): building the env now awaits Codex hook installs and trust
+    // grants, so shutdown must be able to cancel this session id here too.
     const finalEnv = this.opts.buildSpawnEnv
-      ? this.opts.buildSpawnEnv(id, spawnEnv, {
-          command: args.command,
-          launchAgent: args.launchAgent,
-          codexHomePathOverride: args.codexHomePathOverride,
-          cwd,
-          shellPath,
-          isWsl: isWslShell,
-          wslDistro: launchWslDistro
-        })
+      ? await awaitCancelableLocalPtySpawn(
+          id,
+          this.opts.buildSpawnEnv(id, spawnEnv, {
+            command: args.command,
+            launchAgent: args.launchAgent,
+            codexHomePathOverride: args.codexHomePathOverride,
+            cwd,
+            shellPath,
+            isWsl: isWslShell,
+            wslDistro: launchWslDistro
+          })
+        )
       : spawnEnv
     // Why: app-level env hooks can re-add scrubbed vars; delete last so shims like Claude Agent Teams keep their PATH.
     for (const key of args.envToDelete ?? []) {
@@ -905,7 +813,8 @@ export class LocalPtyProvider implements IPtyProvider {
       primaryLaunchEnvKeys = Object.keys(shellLaunch.env)
     }
 
-    await prepareLocalPtySpawn(id)
+    // Why: the async macOS capability probe runs before node-pty exists.
+    await awaitCancelableLocalPtySpawn(id, prepareMacosTccLoginShell())
     if (args.signal?.aborted) {
       throw new Error('client_disconnected')
     }
@@ -1406,24 +1315,48 @@ export class LocalPtyProvider implements IPtyProvider {
       proc.process || null,
       ptyShellName.get(id)
     )
-    const cachedAgent = ptyLastRecognizedForeground.get(id) ?? null
-    let consoleMembershipUnavailable = false
-    // Why: console membership preserves a live cached agent without the whole-table scan (incomplete under Windows load).
+    const cachedEntry = ptyLastRecognizedForeground.get(id)
+    const cachedAgent = cachedEntry?.name ?? null
+    let paneMembershipUnavailable = false
+    let cachedAgentAliveInJob = false
+    // Why: job membership preserves a live cached agent without the whole-table
+    // scan (incomplete under Windows load). Job, not console: this asks "is
+    // anything besides the shell alive?", which needs no console attachment and
+    // so needs no forked helper (#10857).
     if (
       process.platform === 'win32' &&
-      canConfirmAgentFromConsolePresence(cachedAgent, fallbackProcess)
+      canRevalidateCachedAgentWithoutScan(cachedAgent, fallbackProcess)
     ) {
       try {
-        const consoleProcessIds = await readWindowsConptyProcessIds(proc.pid)
+        const paneProcessIds = readWindowsPtyJobProcessIds(proc)
         if (ptyProcesses.get(id) !== proc) {
           return null
         }
-        if (consoleProcessIds !== null && consoleProcessIds.size > 1 && cachedAgent !== null) {
+        const verdict = judgeCachedAgentJobEvidence({
+          jobProcessIds: paneProcessIds,
+          jobSupported: isWindowsPtyJobReadable(),
+          shellPid: proc.pid,
+          anchorProcessId: cachedEntry?.pid ?? null,
+          identityAgeMs: Date.now() - (cachedEntry?.at ?? 0)
+        })
+        if (verdict === 'confirmed' || verdict === 'unproven') {
           return cachedAgent
         }
-        consoleMembershipUnavailable = consoleProcessIds === null
+        if (verdict === 'exited') {
+          // The shell stands alone in a complete, inescapable job list: no
+          // successor is possible, so the identity retires before the scan.
+          ptyLastRecognizedForeground.delete(id)
+        } else if (verdict === 'anchor-exited' && cachedEntry) {
+          // The recognized process died but another member remains -- a
+          // leftover, or a restarted successor. Keep the name as unanchored,
+          // age-bounded evidence and let this cycle's scan decide: deleting
+          // here made a degraded scan read a mid-restart agent as an exit.
+          ptyLastRecognizedForeground.set(id, { ...cachedEntry, pid: null })
+        }
+        cachedAgentAliveInJob = verdict === 'recheck'
+        paneMembershipUnavailable = verdict === 'unavailable'
       } catch {
-        consoleMembershipUnavailable = true
+        paneMembershipUnavailable = true
       }
     }
     try {
@@ -1431,7 +1364,10 @@ export class LocalPtyProvider implements IPtyProvider {
         proc.pid,
         fallbackProcess,
         {
-          contextPaths: ptyAgentForegroundContextPaths.get(id)
+          contextPaths: ptyAgentForegroundContextPaths.get(id),
+          ...(cachedEntry?.pid != null
+            ? { anchorProcessId: cachedEntry.pid, anchorProcessName: cachedEntry.name }
+            : {})
         }
       )
       // Why: the scan can outlive PTY teardown/id reuse; stale results must not resurrect cache for a foreign id.
@@ -1439,20 +1375,40 @@ export class LocalPtyProvider implements IPtyProvider {
         return null
       }
       // Why: a degraded scan reporting shell-as-foreground fires a false "agent done"; keep last recognized agent instead.
-      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id) ?? null
+      const lastRecognizedAgent = ptyLastRecognizedForeground.get(id)?.name ?? null
       const resolvedAgent = resolution.processName
         ? recognizeAgentProcessFromCommandLine(resolution.processName)
         : null
-      // Why: incomplete snapshot + unavailable console probe isn't exit proof; only shell-only membership may clear the cache.
-      const stable = resolveStableForegroundProcess(
-        consoleMembershipUnavailable && resolvedAgent === null
+      // A recycled anchor pid keeps job membership truthful but the identity
+      // dead; the scan proving the pid now runs a non-agent settles it.
+      const anchorContradicted = resolution.anchorPidForeign === true
+      // Why: incomplete snapshot + unavailable job read isn't exit proof; and an
+      // anchor pid still alive in the job outranks a snapshot that lost its row.
+      const stableResolution =
+        (paneMembershipUnavailable || cachedAgentAliveInJob) &&
+        !anchorContradicted &&
+        resolvedAgent === null
           ? { ...resolution, available: false }
-          : resolution,
-        lastRecognizedAgent
-      )
-      if (stable.lastRecognizedAgent) {
-        ptyLastRecognizedForeground.set(id, stable.lastRecognizedAgent)
-      } else {
+          : resolution
+      const stable = resolveStableForegroundProcess(stableResolution, lastRecognizedAgent)
+      if (stable.lastRecognizedAgent && stableResolution.available) {
+        // Only a positive recognition restarts the age bound.
+        ptyLastRecognizedForeground.set(id, {
+          name: stable.lastRecognizedAgent,
+          pid:
+            stable.lastRecognizedAgent === resolution.processName
+              ? (resolution.processId ?? null)
+              : null,
+          at: Date.now()
+        })
+      } else if (stable.lastRecognizedAgent && cachedAgentAliveInJob && !anchorContradicted) {
+        // The anchor pid in the job is proof of life; restamp so the
+        // short-circuit resumes instead of scanning on every call.
+        const entry = ptyLastRecognizedForeground.get(id)
+        if (entry) {
+          ptyLastRecognizedForeground.set(id, { ...entry, at: Date.now() })
+        }
+      } else if (!stable.lastRecognizedAgent) {
         ptyLastRecognizedForeground.delete(id)
       }
       return stable.processName
@@ -1461,7 +1417,7 @@ export class LocalPtyProvider implements IPtyProvider {
         return null
       }
       // Why: an inspection error is a degraded read; fall back to last recognized agent (null reads as an exit).
-      return ptyLastRecognizedForeground.get(id) ?? null
+      return ptyLastRecognizedForeground.get(id)?.name ?? null
     }
   }
 
@@ -1480,7 +1436,8 @@ export class LocalPtyProvider implements IPtyProvider {
           ...(process.platform === 'win32'
             ? {
                 forceProcessScan: true,
-                readWindowsConptyProcessIds: () => readWindowsConptyProcessIds(proc.pid)
+                readWindowsConsoleAttachedProcessIds: () =>
+                  readWindowsConsoleAttachedProcessIds(proc.pid)
               }
             : {})
         }
@@ -1493,6 +1450,21 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       return null
     }
+  }
+
+  async confirmShellForeground(id: string): Promise<boolean> {
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
+    const confirmed = await confirmShellForegroundProcess(
+      proc.pid,
+      ptyShellName.get(id),
+      process.platform === 'win32'
+        ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(proc) }
+        : {}
+    )
+    return ptyProcesses.get(id) === proc && confirmed
   }
 
   async serialize(_ids: string[]): Promise<string> {

@@ -270,8 +270,10 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
-    // Focus stays on the user's current tab (tab-2), not the echoed tab-1.
-    expect(groupActive(patch)).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
+    // Focus stays on the user's current tab (tab-2), not the echoed tab-1. Under
+    // client-owned placement the strongest form holds: groups are not rewritten at all.
+    const effectiveGroups = patch.groupsByWorktree?.[WT] ?? prior.groupsByWorktree[WT]
+    expect(effectiveGroups?.[0]?.activeTabId).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
   })
 })
 

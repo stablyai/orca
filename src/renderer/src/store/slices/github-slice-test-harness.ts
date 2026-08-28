@@ -63,6 +63,9 @@ export const mockApi = {
     updatePullRequestBySlug: stubMock(),
     updateIssueTypeBySlug: stubMock()
   },
+  repos: {
+    update: stubMock().mockResolvedValue(undefined)
+  },
   hostedReview: {
     forBranch: stubMock().mockResolvedValue(null),
     getCreationEligibility: stubMock(),

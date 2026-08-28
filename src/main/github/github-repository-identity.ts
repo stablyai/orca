@@ -61,6 +61,8 @@ export function ghRepoExecOptions(context: GitHubRepoContext): {
 
 const OWNER_REPO_POSITIVE_CACHE_TTL_MS = 30_000
 const OWNER_REPO_NEGATIVE_CACHE_TTL_MS = 5 * 60_000
+// Signed entries revalidate against Git config before reuse.
+const OWNER_REPO_SIGNED_CACHE_TTL_MS = 5 * 60_000
 const OWNER_REPO_CACHE_MAX_ENTRIES = 512
 
 type OwnerRepoCacheEntry = {
@@ -106,10 +108,10 @@ export async function getRemoteUrlForRepo(
 }
 
 function getOwnerRepoCacheTtl(value: OwnerRepo | null, configSignature?: string): number {
-  if (value) {
-    return OWNER_REPO_POSITIVE_CACHE_TTL_MS
+  if (configSignature) {
+    return value ? OWNER_REPO_SIGNED_CACHE_TTL_MS : OWNER_REPO_NEGATIVE_CACHE_TTL_MS
   }
-  return configSignature ? OWNER_REPO_NEGATIVE_CACHE_TTL_MS : OWNER_REPO_POSITIVE_CACHE_TTL_MS
+  return OWNER_REPO_POSITIVE_CACHE_TTL_MS
 }
 
 export async function getOwnerRepoForRemote(
@@ -135,7 +137,8 @@ export async function getOwnerRepoForRemote(
   pruneOwnerRepoCache(now)
   const cached = ownerRepoCache.get(cacheKey)
   if (cached && cached.expiresAt > now) {
-    if (cached.value === null && cached.configSignature !== undefined) {
+    // Revalidate signed hits so remote changes are immediately visible.
+    if (cached.configSignature !== undefined) {
       const currentSignature = await readLocalGitConfigSignature(context)
       if (currentSignature !== cached.configSignature) {
         ownerRepoCache.delete(cacheKey)
@@ -203,9 +206,11 @@ async function resolveOwnerRepoForRemote(
     // Why: PR mutations need the effective host behind an SSH alias.
     const classification = await classifyGitHubOwnerRepoFromRemoteUrl(remoteUrl, context)
     if (classification.kind === 'github') {
+      // Signed identities stay valid until Git config changes.
       ownerRepoCache.set(cacheKey, {
         value: classification.ownerRepo,
-        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature)
+        expiresAt: now + getOwnerRepoCacheTtl(classification.ownerRepo, configSignature),
+        ...(configSignature ? { configSignature } : {})
       })
       pruneOwnerRepoCache(now)
       return classification.ownerRepo

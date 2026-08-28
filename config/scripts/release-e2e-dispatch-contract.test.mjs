@@ -10,6 +10,17 @@ const releaseWorkflow = parse(
 const e2eWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/e2e.yml'), 'utf8'))
 
 describe('release E2E dispatch contract', () => {
+  it('validates immutable tags with the current golden test harness', () => {
+    const restoreStep = releaseWorkflow.jobs['terminal-rendering-golden'].steps.find(
+      (step) => step.name === 'Restore golden test harness from the workflow ref'
+    )
+
+    expect(restoreStep.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
+    expect(restoreStep.run).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
+    expect(restoreStep.run).toContain('golden-source-control-open-diff.spec.ts')
+    expect(restoreStep.run).toContain('golden-terminal-file-link.spec.ts')
+  })
+
   it('dispatches tag-scoped E2E only after publication', () => {
     const dispatchJob = releaseWorkflow.jobs['post-release-e2e']
     const dispatchStep = dispatchJob.steps.find((step) => step.name === 'Dispatch tag-scoped E2E')

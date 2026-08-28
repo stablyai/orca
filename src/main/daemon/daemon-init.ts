@@ -1,11 +1,9 @@
 /* eslint-disable max-lines -- Why: owns the full daemon lifecycle (init, launch, adapter wiring,
 restart, teardown); the "swap the provider atomically" invariant keeps restart + singletons co-located. */
-import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
-import { app } from 'electron'
-import { mkdirSync, existsSync, readFileSync, unlinkSync } from 'node:fs'
+import { getAppEnvironment } from '../../shared/app-environment'
+import { readFileSync, unlinkSync } from 'node:fs'
 import { fork, type ChildProcess } from 'node:child_process'
-import { connect } from 'node:net'
 import {
   DaemonSpawner,
   getDaemonPidPath,
@@ -18,7 +16,8 @@ import {
   type DaemonProcessHandle
 } from './daemon-spawner'
 import { DAEMON_EXIT_ENDPOINT_OCCUPIED } from './daemon-endpoint-ownership'
-import { DaemonPtyAdapter, type DaemonRespawnReason } from './daemon-pty-adapter'
+import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import { DaemonPtyRouter } from './daemon-pty-router'
 import { DaemonClient } from './client'
 import {
@@ -35,7 +34,7 @@ import {
 import { getDaemonLaunchIdentity } from './daemon-pid-identity'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { killStaleDaemon } from './daemon-stale-kill'
-import { parseDaemonPidFile } from './daemon-pid-file-parse'
+import { parseDaemonPidFile, type ParsedDaemonPid } from './daemon-pid-file-parse'
 import {
   collectPinnedDaemonVersions,
   materializeRelocatedDaemonHost,
@@ -51,13 +50,21 @@ import {
   rebindLocalProviderListeners
 } from '../ipc/pty'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
-import { getDaemonLogFilePath } from '../observability/logs-directory'
 import {
   confirmSeededClaudeLivePtys,
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
 import { parseDaemonReadyIdentity, readDaemonProcessIncarnation } from './daemon-ready-identity'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
+import {
+  daemonLogArgs,
+  getAliveDaemonSessionCount,
+  getDaemonEntryPath,
+  getDaemonHistoryDir as getHistoryDir,
+  getDaemonRuntimeDir as getRuntimeDir,
+  probeDaemonSocket as probeSocket,
+  resolvePackagedDarwinAppVersion
+} from './daemon-launch-paths'
 
 // Why: daemon init runs concurrent with window load, so an in-process t timestamp (not harness stderr timing) measures cold-start.
 function logDaemonMilestone(event: string, details: Record<string, unknown> = {}): void {
@@ -99,95 +106,6 @@ type DaemonProvider = DaemonPtyRouter | DaemonPtyAdapter | DegradedDaemonPtyProv
 let adapter: DaemonProvider | null = null
 // Why: coalesce concurrent restartDaemon() calls so two entries can't race the 7-step sequence against a half-spawned replacement.
 let restartInFlight: Promise<RestartDaemonResult> | null = null
-
-function getRuntimeDir(): string {
-  const dir = join(app.getPath('userData'), 'daemon')
-  mkdirSync(dir, { recursive: true })
-  return dir
-}
-
-function getHistoryDir(): string {
-  const dir = join(app.getPath('userData'), 'terminal-history')
-  mkdirSync(dir, { recursive: true })
-  return dir
-}
-
-function getDaemonEntryPath(): string {
-  const appPath = app.getAppPath()
-  // Why: packaged app.getAppPath() points at app.asar, so redirect to app.asar.unpacked where daemon-entry.js is fork-executable.
-  const basePath = app.isPackaged ? appPath.replace('app.asar', 'app.asar.unpacked') : appPath
-  const directEntryPath = join(basePath, 'daemon-entry.js')
-  if (existsSync(directEntryPath)) {
-    return directEntryPath
-  }
-  return join(basePath, 'out', 'main', 'daemon-entry.js')
-}
-
-// Why: pass a log-file arg so field failures are diagnosable, but honor the ORCA_DIAGNOSTICS_DISABLED privacy switch.
-function daemonLogArgs(): string[] {
-  const disabled = (process.env.ORCA_DIAGNOSTICS_DISABLED ?? '').trim().toLowerCase()
-  if (disabled === '1' || disabled === 'true') {
-    return []
-  }
-  return ['--log-file', getDaemonLogFilePath()]
-}
-
-// Why: a socket that accepts a connection proves a daemon survived a previous app session and can be reused.
-function probeSocket(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    if (process.platform !== 'win32' && !existsSync(socketPath)) {
-      resolve(false)
-      return
-    }
-    const sock = connect({ path: socketPath })
-    let settled = false
-    let timer: ReturnType<typeof setTimeout>
-    function finish(alive: boolean, options?: { destroy?: boolean }): void {
-      if (settled) {
-        return
-      }
-      settled = true
-      clearTimeout(timer)
-      sock.removeListener('connect', onConnect)
-      sock.removeListener('error', onError)
-      if (options?.destroy) {
-        sock.destroy()
-      }
-      resolve(alive)
-    }
-
-    function onConnect(): void {
-      finish(true, { destroy: true })
-    }
-
-    function onError(): void {
-      finish(false)
-    }
-
-    timer = setTimeout(() => {
-      finish(false, { destroy: true })
-    }, 1000)
-    sock.on('connect', onConnect)
-    sock.on('error', onError)
-  })
-}
-
-async function getAliveDaemonSessionCount(
-  socketPath: string,
-  tokenPath: string,
-  protocolVersion = PROTOCOL_VERSION
-): Promise<number | null> {
-  const client = new DaemonClient({ socketPath, tokenPath, protocolVersion })
-  try {
-    await client.ensureConnected()
-    const result = await client.request<ListSessionsResult>('listSessions', undefined)
-    return result.sessions.filter((session) => session.isAlive).length
-  } catch {
-    return null
-  } finally {
-    client.disconnect()
-  }
-}
 
 function createPreservedDaemonHandle(
   runtimeDir: string,
@@ -518,12 +436,12 @@ function createOutOfProcessLauncher(
             entryPath
           )
           const stalePackagedBundle =
-            app.isPackaged &&
+            getAppEnvironment().isPackaged() &&
             (await isDaemonStaleForCurrentBundle(
               runtimeDir,
               socketPath,
               tokenPath,
-              app.getVersion()
+              getAppEnvironment().getVersion()
             ))
           if (identity === 'mismatch' || stalePackagedBundle) {
             // Why: replacing a healthy daemon kills its child PTYs; defer code freshness until no live sessions would be lost.
@@ -661,7 +579,7 @@ function createOutOfProcessLauncher(
         trackDaemonReplaced(pendingReplacement.reason, pendingReplacement.liveSessionCount)
       }
 
-      const userDataPath = app.getPath('userData')
+      const userDataPath = getAppEnvironment().getPath('userData')
       // Why: on win32 packaged, stage a daemon-host copy in userData so its image escapes the NSIS updater's kill zone; lazy so it's off first-paint. Fail-open: null → in-dir host.
       const relocatedHost = materializeRelocatedDaemonHost()
       // Fork the relocated entry when available; otherwise the install-dir entry.
@@ -680,7 +598,7 @@ function createOutOfProcessLauncher(
           '--entry-path',
           entryPath,
           '--app-version',
-          app.getVersion(),
+          getAppEnvironment().getVersion(),
           '--spawner-exec-path',
           process.execPath,
           ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
@@ -698,7 +616,7 @@ function createOutOfProcessLauncher(
           env: {
             ...process.env,
             ELECTRON_RUN_AS_NODE: '1',
-            // Why: the detached plain-Node daemon can't call app.getPath(), but shell rcfiles must live outside swept tmp.
+            // Why: the detached plain-Node daemon has no AppEnvironment, but shell rcfiles must live outside swept tmp.
             ORCA_USER_DATA_PATH: userDataPath
           }
         }
@@ -961,7 +879,7 @@ export async function initDaemonPtyProvider(
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
     runtimeDir,
-    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
+    packagedAppVersion: resolvePackagedDarwinAppVersion(),
     historyPath: getHistoryDir(),
     // Why: on daemon death, ensureConnected() detects the dead socket and calls this to fork a replacement before retrying.
     respawn: async (reason: DaemonRespawnReason) => {
@@ -1065,6 +983,60 @@ async function reconcileSeededClaudeLivePtys(provider: DaemonProvider): Promise<
 }
 
 // Why: a narrow getter (not a raw export) keeps the "swap on restart" invariant in one place (replaceDaemonProvider).
+/**
+ * Whether the installed provider is a daemon that will own FRESH terminals too.
+ *
+ * Why not `getDaemonProvider() !== null`: DegradedDaemonPtyProvider routes the daemon's
+ * EXISTING sessions to the daemon but spawns new ones on the in-process local provider, so
+ * those die with this process. A host that answered "I can recover persistent local PTYs"
+ * from that state would be advertising recovery for terminals that cannot be recovered.
+ */
+export function daemonOwnsFreshPersistentPtys(): boolean {
+  return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
+}
+
+/** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
+export type DaemonEndpointFacts = {
+  runtimeDir: string
+  socketPath: string
+  tokenPath: string
+  pidPath: string
+  protocolVersion: number
+}
+
+export function getDaemonEndpointFacts(): DaemonEndpointFacts | null {
+  if (!adapter) {
+    return null
+  }
+  const runtimeDir = getRuntimeDir()
+  return {
+    runtimeDir,
+    socketPath: getDaemonSocketPath(runtimeDir),
+    tokenPath: getDaemonTokenPath(runtimeDir),
+    pidPath: getDaemonPidPath(runtimeDir),
+    protocolVersion: PROTOCOL_VERSION
+  }
+}
+
+/**
+ * What the live daemon's own PID record says about the build it was forked from.
+ *
+ * Why the record and not this process's version: the daemon deliberately outlives the
+ * runtime, so after an update the two can legitimately disagree — and a health surface that
+ * reported orcad's version for both would hide exactly that.
+ */
+export function readDaemonPidRecord(): ParsedDaemonPid | null {
+  const facts = getDaemonEndpointFacts()
+  if (!facts) {
+    return null
+  }
+  try {
+    return parseDaemonPidFile(readFileSync(facts.pidPath, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
 export function getDaemonProvider(): DaemonProvider | null {
   return adapter
 }
@@ -1153,6 +1125,9 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
   }
 
   const runtimeDir = getRuntimeDir()
+  // An operator asking for a restart is the deliberate "try again" that clears crash-loop
+  // containment; without this a wedged host could never be recovered from the UI.
+  currentSpawner.resetRespawnWindow()
   const currentOnly = getCurrentDaemonAdapter(currentAdapter)
   const legacyAdapters = getLegacyDaemonAdapters(currentAdapter)
 
@@ -1197,7 +1172,7 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
     pidPath: getDaemonPidPath(runtimeDir),
     profileScope: runtimeDir,
     runtimeDir,
-    packagedAppVersion: process.platform === 'darwin' && app.isPackaged ? app.getVersion() : null,
+    packagedAppVersion: resolvePackagedDarwinAppVersion(),
     historyPath: getHistoryDir(),
     respawn: async (reason: DaemonRespawnReason) => {
       // Why: attribute rather than emit — the launcher below is the one that completes the

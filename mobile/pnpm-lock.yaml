@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   react-native@0.83.9:
-    hash: a6502e7d63769bf1fd639cbbaab1cc0b8aebef31d22048e8f2186fb399d0c16e
+    hash: 44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d
     path: patches/react-native@0.83.9.patch
 
 importers:

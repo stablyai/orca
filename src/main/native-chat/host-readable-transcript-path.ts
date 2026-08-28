@@ -72,6 +72,13 @@ const WSL_HOME_DIRS_TTL_MS = 5 * 60_000
 let cachedWslHomeDirs: string[] | null = null
 let cachedWslHomeDirsExpiresAt = 0
 let inflightWslHomeDirs: Promise<string[]> | null = null
+let getAdditionalCodexHomePaths: (() => readonly string[]) | undefined
+
+export function configureHostReadableTranscriptPathSources(options: {
+  getAdditionalCodexHomePaths?: () => readonly string[]
+}): void {
+  getAdditionalCodexHomePaths = options.getAdditionalCodexHomePaths
+}
 
 async function defaultListWslHomeDirs(): Promise<string[]> {
   const homes = await Promise.all(
@@ -103,6 +110,7 @@ export function resetHostReadableTranscriptPathCacheForTests(): void {
   cachedWslHomeDirs = null
   cachedWslHomeDirsExpiresAt = 0
   inflightWslHomeDirs = null
+  getAdditionalCodexHomePaths = undefined
 }
 
 /**
@@ -189,10 +197,16 @@ export async function wslCodexSessionsDirs(
     return []
   }
   const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
-  return homeDirs.flatMap((home) => [
+  const dirs = homeDirs.flatMap((home) => [
     joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
     joinUnderWslHome(home, '.codex', 'sessions')
   ])
+  for (const home of getAdditionalCodexHomePaths?.() ?? []) {
+    if (parseWslUncPath(home)) {
+      dirs.push(joinUnderWslHome(home, 'sessions'))
+    }
+  }
+  return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 
 // Why: node:path.join is posix-flavoured off Windows and would mangle the

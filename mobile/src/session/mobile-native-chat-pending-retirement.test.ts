@@ -321,3 +321,27 @@ describe('retireLandedMobileNativeChatPending', () => {
     expect(retireLandedMobileNativeChatPending(messages, pending, new Set(['p1']))).toEqual([])
   })
 })
+
+describe('retireLandedMobileNativeChatPending on a PTY-typed send', () => {
+  // A TUI may record the leading Ctrl+U transport byte as prompt content.
+  const COMPOSER_TEXT = 'run the focused tests\nand summarize failures'
+  const TRANSCRIPT_ROW = `\u0015${COMPOSER_TEXT}`
+
+  it('retires the echo of a row the TUI pasted the Ctrl+U byte into', () => {
+    const messages = [
+      assistantTurn('m1', 'ready', 1000),
+      userTurn('m2', TRANSCRIPT_ROW, 5000),
+      assistantTurn('m3', 'on it', 6000)
+    ]
+    const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
+
+    expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual([])
+  })
+
+  it('still holds the echo when no row carries the text at all', () => {
+    const messages = [assistantTurn('m1', 'ready', 1000)]
+    const pending = [pendingSend('p1', COMPOSER_TEXT, 'm1')]
+
+    expect(retireLandedMobileNativeChatPending(messages, pending, NO_IMAGE_ECHOES)).toEqual(pending)
+  })
+})

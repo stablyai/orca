@@ -347,4 +347,149 @@ describe('renderer crash diagnostics', () => {
       })
     })
   })
+
+  describe('process footprint outside the heap counters', () => {
+    const KB = 1024
+    let readHeapStatistics: ReturnType<typeof vi.fn>
+    let readProcessMemory: ReturnType<typeof vi.fn>
+
+    const stubFootprint = (privateMB: number): void => {
+      readProcessMemory.mockResolvedValue({ privateKB: privateMB * KB })
+    }
+
+    beforeEach(() => {
+      readHeapStatistics = vi.fn().mockReturnValue({
+        usedHeapKB: 150 * KB,
+        totalHeapKB: 305 * KB,
+        heapLimitKB: 4192 * KB,
+        mallocedKB: 1 * KB,
+        blinkAllocatedKB: 29 * KB
+      })
+      readProcessMemory = vi.fn().mockResolvedValue(null)
+      Object.assign(window.api.crashReports as unknown as Record<string, unknown>, {
+        readHeapStatistics,
+        readProcessMemory
+      })
+      vi.stubGlobal('document', {
+        getElementsByTagName: () => ({ length: 3064 }),
+        querySelectorAll: () => ({ length: 24 })
+      })
+    })
+
+    const flush = async (): Promise<void> => {
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+
+    const memoryCalls = (): { data: Record<string, unknown> }[] =>
+      recordBreadcrumbMock.mock.calls
+        .filter((call) => (call[0] as { name: string }).name === 'renderer_memory')
+        .map((call) => call[0] as { data: Record<string, unknown> })
+
+    const highwaterCalls = (): { data: Record<string, unknown> }[] =>
+      recordBreadcrumbMock.mock.calls
+        .filter((call) => (call[0] as { name: string }).name === 'renderer_memory_highwater')
+        .map((call) => call[0] as { data: Record<string, unknown> })
+
+    it('reports the private footprint and what it holds outside the heap counters', async () => {
+      // Why these numbers: Windows crash 36048e26 — a 618MB private renderer
+      // whose V8 heap was 150MB. 438MB of it is xterm scrollback and glyph
+      // atlases, which no V8 or Blink counter reports.
+      stubFootprint(618)
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+
+      const latest = memoryCalls().at(-1)!
+      expect(latest.data).toMatchObject({
+        usedHeapMB: 150,
+        privateMB: 618,
+        outsideHeapMB: 438
+      })
+    })
+
+    it('arms the leak census on footprint even when the heap ratio never trips', async () => {
+      // Why: 150MB of a 4192MB limit is 3.6% — far below the 60% ratio mark, so
+      // before this the census that names the leak never reached a report.
+      stubFootprint(618)
+      diagnostics.installRendererCrashDiagnostics()
+      expect(highwaterCalls()).toHaveLength(0)
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+
+      expect(highwaterCalls()).toHaveLength(1)
+      expect(highwaterCalls()[0].data).toMatchObject({
+        thresholdPrivateMB: 600,
+        privateMB: 618,
+        terminalElements: 24,
+        domNodes: 3064
+      })
+      expect(highwaterCalls()[0].data).not.toHaveProperty('thresholdPct')
+    })
+
+    it('emits each footprint mark once and both when one sample clears them', async () => {
+      stubFootprint(618)
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+      expect(highwaterCalls()).toHaveLength(1)
+
+      await flush()
+      tick()
+      expect(highwaterCalls()).toHaveLength(1)
+
+      stubFootprint(1200)
+      await flush()
+      tick()
+      await flush()
+      tick()
+      expect(highwaterCalls()).toHaveLength(2)
+      expect(highwaterCalls().at(-1)!.data).toMatchObject({ thresholdPrivateMB: 1000 })
+    })
+
+    it('keeps sampling when the shell has no footprint bridge at all', async () => {
+      ;(window.api.crashReports as unknown as Record<string, unknown>).readProcessMemory = undefined
+
+      expect(() => diagnostics.installRendererCrashDiagnostics()).not.toThrow()
+      await flush()
+      const latest = memoryCalls().at(-1)!
+      expect(latest.data).toMatchObject({ usedHeapMB: 150 })
+      expect(latest.data).not.toHaveProperty('privateMB')
+      expect(highwaterCalls()).toHaveLength(0)
+    })
+
+    it('does not let a rejected footprint read break the heap sample', async () => {
+      readProcessMemory.mockRejectedValue(new Error('bridge gone'))
+
+      diagnostics.installRendererCrashDiagnostics()
+      await flush()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      expect(() => tick()).not.toThrow()
+      expect(memoryCalls().at(-1)!.data).toMatchObject({ usedHeapMB: 150 })
+    })
+
+    it('does not overlap footprint reads while the previous read is pending', async () => {
+      let resolveRead: (value: { privateKB: number } | null) => void = () => undefined
+      readProcessMemory.mockImplementation(
+        () =>
+          new Promise<{ privateKB: number } | null>((resolve) => {
+            resolveRead = resolve
+          })
+      )
+
+      diagnostics.installRendererCrashDiagnostics()
+      const tick = setIntervalMock.mock.calls[0][0] as () => void
+      tick()
+      tick()
+      expect(readProcessMemory).toHaveBeenCalledTimes(1)
+
+      resolveRead({ privateKB: 618 * KB })
+      await flush()
+      tick()
+      expect(readProcessMemory).toHaveBeenCalledTimes(2)
+    })
+  })
 })

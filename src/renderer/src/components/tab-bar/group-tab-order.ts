@@ -16,36 +16,12 @@ export type ActiveTabNavOrderIds = {
 }
 
 /**
- * Compute the visible tab-strip order for a single group.
+ * One group's visible tab-strip order, via the same `reconcileTabOrder` pass TabBar renders with
+ * so keyboard cycling always walks what the user sees. STA-3475: dropping a tab that hydrated
+ * before `group.tabOrder` knew it left the cycle a silent no-op until a click.
  *
- * Why: keyboard tab-cycle actions and the IPC switch-tab shortcut must walk
- * tabs in the same order the TabBar renders them. The
- * TabBar derives its order from `group.tabOrder` (the canonical split-group
- * state, updated by drag/drop via `reorderUnifiedTabs`). Reading from the
- * legacy `tabBarOrderByWorktree` drifts out of sync because that store is
- * only written when tabs are created/closed — drag-reordering updates
- * `group.tabOrder` but not the legacy flat order, which surfaces as
- * keyboard nav cycling tabs in a stale sequence (e.g. 3 → 1 → 2 instead of
- * 3 → 2 → 1). This helper returns the exact ids TabBar uses, with a dual-id
- * contract for active-group entries: `id` always carries the backing
- * entity/file id used by legacy activation APIs, while `tabId` preserves the
- * unified tab id for exact split-group selection. That keeps both code paths
- * on the same order without collapsing the identifier domains.
- *
- * Note: TabBar's reconciler appends entities present in state but missing
- * from `group.tabOrder` (an invariant-repair fallback). This helper
- * intentionally does not mirror that append — appending silently would
- * reintroduce the class of order-drift this change fixes. In practice
- * `group.tabOrder` is kept in sync on tab create/close, so the divergence
- * only matters during hydration races and is preferable to cycling tabs
- * in a phantom order.
- *
- * Scope is intentionally per-group: with split layouts each group has its
- * own tab strip, and users expect the shortcut to cycle within the strip
- * they're looking at. Tabs that belong to the group but lack a matching
- * entity (e.g. terminal-runtime tab still being hydrated, or an editor
- * whose file has been closed) are skipped so navigation never lands on a
- * phantom tab.
+ * `id` is the backing entity/file id legacy activation APIs take; `tabId` is the unified tab id
+ * that picks the right split copy. Tabs whose entity is gone are skipped.
  */
 export function getGroupVisibleTabOrder(
   group: TabGroup,
@@ -53,50 +29,104 @@ export function getGroupVisibleTabOrder(
   terminalEntityIds: ReadonlySet<string>,
   editorEntityIds: ReadonlySet<string>,
   browserEntityIds: ReadonlySet<string>,
-  simulatorTabIds: ReadonlySet<string> = new Set()
+  simulatorTabIds: ReadonlySet<string> = new Set(),
+  preserveTypeCollisions = false
 ): VisibleTabRef[] {
   const tabsById = new Map(groupTabs.map((t) => [t.id, t]))
-  const result: VisibleTabRef[] = []
-  // Dedupe per category: terminal/browser key by entityId (multiple tabs
-  // can theoretically point at the same runtime entity), editor keys by
-  // unified tab id. Keeping the keyspaces separate avoids a cross-type
-  // collision from dropping a legitimate tab.
-  const seenTerminals = new Set<string>()
-  const seenBrowsers = new Set<string>()
-  const seenEditors = new Set<string>()
-  const seenSimulators = new Set<string>()
-  for (const unifiedId of group.tabOrder) {
+  const toRef = (tab: Tab): VisibleTabRef | null => {
+    if (tab.contentType === 'terminal') {
+      return terminalEntityIds.has(tab.entityId)
+        ? { type: 'terminal', id: tab.entityId, tabId: tab.id }
+        : null
+    }
+    if (tab.contentType === 'browser') {
+      return browserEntityIds.has(tab.entityId)
+        ? { type: 'browser', id: tab.entityId, tabId: tab.id }
+        : null
+    }
+    if (tab.contentType === 'simulator') {
+      return simulatorTabIds.has(tab.id) ? { type: 'simulator', id: tab.id, tabId: tab.id } : null
+    }
+    return editorEntityIds.has(tab.entityId)
+      ? { type: 'editor', id: tab.entityId, tabId: tab.id }
+      : null
+  }
+  // Why: the strip keys terminals/browsers by entity id and editors/simulators by unified tab id
+  // (see useTabGroupItemProjections) — reconcileTabOrder must see that same id domain.
+  const visibleIdOf = (tab: Tab): string =>
+    tab.contentType === 'terminal' || tab.contentType === 'browser' ? tab.entityId : tab.id
+
+  if (preserveTypeCollisions) {
+    const seenByType = {
+      terminal: new Set<string>(),
+      editor: new Set<string>(),
+      browser: new Set<string>(),
+      simulator: new Set<string>()
+    }
+    const result: VisibleTabRef[] = []
+    for (const unifiedId of group.tabOrder) {
+      const tab = tabsById.get(unifiedId)
+      if (!tab) {
+        continue
+      }
+      const ref = toRef(tab)
+      if (!ref || seenByType[ref.type].has(visibleIdOf(tab))) {
+        continue
+      }
+      seenByType[ref.type].add(visibleIdOf(tab))
+      result.push(ref)
+    }
+    return result
+  }
+
+  // Why: the strip's per-type maps are last-write-wins, so a duplicate entity resolves to the
+  // last declared tab while the reconciled visible id still occupies one position.
+  const declaredTabs = group.tabOrder.flatMap((unifiedId) => {
     const tab = tabsById.get(unifiedId)
-    if (!tab) {
+    return tab ? [tab] : []
+  })
+  const refByVisibleId = new Map<string, VisibleTabRef>()
+  const terminalIds: string[] = []
+  const editorIds: string[] = []
+  const browserIds: string[] = []
+  const simulatorIds: string[] = []
+  const idsByType = {
+    terminal: terminalIds,
+    editor: editorIds,
+    browser: browserIds,
+    simulator: simulatorIds
+  }
+  for (const tab of [...declaredTabs, ...groupTabs]) {
+    const visibleId = visibleIdOf(tab)
+    const ref = toRef(tab)
+    if (!ref) {
       continue
     }
-    if (tab.contentType === 'terminal') {
-      if (!terminalEntityIds.has(tab.entityId) || seenTerminals.has(tab.entityId)) {
+    const existing = refByVisibleId.get(visibleId)
+    if (existing) {
+      // Keep the same type precedence as buildOrderedTabItems, whose terminal map wins over
+      // editor/browser/simulator maps when visible ids collide across content types.
+      const priority = { terminal: 0, editor: 1, browser: 2, simulator: 3 } as const
+      if (priority[ref.type] > priority[existing.type]) {
         continue
       }
-      seenTerminals.add(tab.entityId)
-      result.push({ type: 'terminal', id: tab.entityId, tabId: tab.id })
-    } else if (tab.contentType === 'browser') {
-      if (!browserEntityIds.has(tab.entityId) || seenBrowsers.has(tab.entityId)) {
-        continue
-      }
-      seenBrowsers.add(tab.entityId)
-      result.push({ type: 'browser', id: tab.entityId, tabId: tab.id })
-    } else if (tab.contentType === 'simulator') {
-      if (!simulatorTabIds.has(tab.id) || seenSimulators.has(tab.id)) {
-        continue
-      }
-      seenSimulators.add(tab.id)
-      result.push({ type: 'simulator', id: tab.id, tabId: tab.id })
-    } else {
-      if (!editorEntityIds.has(tab.entityId) || seenEditors.has(tab.id)) {
-        continue
-      }
-      seenEditors.add(tab.id)
-      result.push({ type: 'editor', id: tab.entityId, tabId: tab.id })
+      refByVisibleId.set(visibleId, ref)
+      continue
     }
+    refByVisibleId.set(visibleId, ref)
+    idsByType[ref.type].push(visibleId)
   }
-  return result
+
+  return reconcileTabOrder(
+    declaredTabs.map(visibleIdOf),
+    terminalIds,
+    editorIds,
+    browserIds,
+    simulatorIds
+  ).flatMap((visibleId) => {
+    const ref = refByVisibleId.get(visibleId)
+    return ref ? [ref] : []
+  })
 }
 
 /**
@@ -147,10 +177,16 @@ export function getActiveTabNavOrder(
     const groupTabs = (state.unifiedTabsByWorktree[worktreeId] ?? []).filter(
       (tab) => tab.groupId === group.id
     )
+    // The group strip renders unified terminal tabs before their legacy runtime rows hydrate.
+    // Keep those tabs keyboard-cyclable; activation can hydrate/reconnect the backing runtime.
+    const groupTerminalIds = new Set([
+      ...terminalIds,
+      ...groupTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
+    ])
     return getGroupVisibleTabOrder(
       group,
       groupTabs,
-      new Set(terminalIds),
+      groupTerminalIds,
       new Set(editorIds),
       new Set(browserIds),
       new Set(simulatorIds)

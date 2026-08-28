@@ -2,7 +2,7 @@ import React from 'react'
 import { GitMerge, GitPullRequestClosed, GitPullRequestDraft } from 'lucide-react'
 import type { HostedReviewInfo } from '../../../../../../shared/hosted-review'
 import { cn } from '@/lib/utils'
-import { PullRequestIcon } from '../../checks-panel-content'
+import { PullRequestIcon } from '../../checks-panel/check-presentation'
 
 function hostedReviewStateClass(review: HostedReviewInfo): string {
   if (review.state === 'merged') {

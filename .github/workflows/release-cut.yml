@@ -844,6 +844,16 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      - name: Restore golden test harness from the workflow ref
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- \
+            tests/e2e/golden-source-control-open-diff.spec.ts \
+            tests/e2e/golden-terminal-file-link.spec.ts
+
       - name: Install native build tools
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y build-essential python3 xvfb
@@ -946,6 +956,16 @@ jobs:
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
 
+      - name: Restore skill-sharing test harness from the workflow ref
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- \
+            src/main/skills/skill-freshness-inventory.test.ts \
+            src/main/skills/skill-provider-runtime-roots.test.ts
+
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
@@ -978,12 +998,25 @@ jobs:
 
     steps:
       - name: Install Ubuntu 20.04 prerequisites
-        run: apt-get update && apt-get install -y build-essential ca-certificates git python3
+        run: apt-get update && apt-get install -y build-essential ca-certificates git python3 unzip
 
       - name: Checkout
         uses: actions/checkout@v6
         with:
           ref: refs/tags/${{ needs.cut.outputs.tag }}
+
+      - name: Trust the checked-out workspace in the job container
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Restore skill-sharing test harness from the workflow ref
+        shell: bash
+        env:
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"
+          git checkout "$WORKFLOW_SHA" -- \
+            src/main/skills/skill-freshness-inventory.test.ts \
+            src/main/skills/skill-provider-runtime-roots.test.ts
 
       - uses: ./.github/actions/install-node-dependencies
         with:

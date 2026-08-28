@@ -68,9 +68,11 @@ import {
   tabIds
 } from './host-session-mirror-frame-ordering-harness'
 import {
+  clearWebSessionTabsTrackingForEnvironment,
   useWebSessionTabsSync,
   WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS
 } from './web-session-tabs-sync'
+import { hasHostSessionMirrorHydrated } from './host-session-mirror-hydration'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
 
 /**
@@ -211,6 +213,22 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
 
     expect(tabIds(WT)).not.toContain(MIRROR_TAB_ID)
     expectReplayedResume(paneKey, WT, 'codex-session-scoped-frame')
+  })
+
+  it('does not let a scoped frame from before tracking reset release its pane', async () => {
+    renderHook(() => useWebSessionTabsSync())
+    await act(settle)
+    const paneKey = seedSleepingRecord(MIRROR_TAB_ID, WT, 'codex-session-scoped-old-tracking')
+    expect(resumeSleepingAgentSessionsForWorktree(WT)).toBe(0)
+
+    clearWebSessionTabsTrackingForEnvironment(ENV)
+    await publish(findSubscription('session.tabs.subscribe'), {
+      type: 'snapshot',
+      ...makeHostSnapshot(WT, OTHER_HOST_SURFACE_ID, OTHER_HOST_PARENT_TAB_ID)
+    })
+
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+    expect(hasHostSessionMirrorHydrated(ENV, WT)).toBe(false)
   })
 })
 

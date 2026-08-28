@@ -2,7 +2,11 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import { createStore } from 'zustand/vanilla'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import type { BrowserCertificateFailure } from '../../../shared/browser-workspace-types'
+import type {
+  BrowserCertificateFailure,
+  BrowserLoadError
+} from '../../../shared/browser-workspace-types'
+import type { RuntimeBrowserPlacement } from '../../../shared/runtime-browser-placement'
 import {
   applyWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshots,
@@ -18,6 +22,21 @@ const WORKTREE_B = 'repo::/worktree-b'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const HOST_TAB_ID = 'host-tab-1'
 const MIRRORED_TAB_ID = toWebTerminalSurfaceTabId(HOST_TAB_ID)
+
+const SERVER_PLACEMENT: RuntimeBrowserPlacement = { kind: 'server' }
+
+const CLIENT_PLACEMENT: RuntimeBrowserPlacement = {
+  kind: 'client',
+  browserHostClientId: 'browser-host-a',
+  browserHostGeneration: 3,
+  pageHostGeneration: 9
+}
+
+const LOAD_ERROR: BrowserLoadError = {
+  code: -202,
+  description: 'ERR_CERT_AUTHORITY_INVALID',
+  validatedUrl: 'https://localhost:3443/'
+}
 
 const CERTIFICATE_FAILURE: BrowserCertificateFailure = {
   challengeId: 'challenge-1',
@@ -112,6 +131,7 @@ function makeBrowserSnapshot(
     url?: string
     loading?: boolean
     certificateFailure?: BrowserCertificateFailure | null
+    placement?: RuntimeBrowserPlacement
   } = {}
 ): RuntimeMobileSessionTabsResult {
   const worktree = options.worktree ?? WORKTREE_A
@@ -136,11 +156,24 @@ function makeBrowserSnapshot(
         canGoBack: false,
         canGoForward: false,
         certificateFailure,
+        ...(options.placement ? { placement: options.placement } : {}),
         isActive: true
       }
     ],
     'browser'
   )
+}
+
+// Stands in for the local guest webview recording a load failure straight into the store.
+function withLocalLoadFailure(state: WebSessionTabsSyncState): WebSessionTabsSyncState {
+  const pages = state.browserPagesByWorkspace['host-browser-workspace'] ?? []
+  return {
+    ...state,
+    browserPagesByWorkspace: {
+      ...state.browserPagesByWorkspace,
+      'host-browser-workspace': pages.map((page) => ({ ...page, loadError: LOAD_ERROR }))
+    }
+  }
 }
 
 function applySnapshot(
@@ -276,6 +309,89 @@ describe('remote mirror resource identity', () => {
       state.browserCertificateFailuresByPageId
     )
     expect(next.browserCertificateFailuresByPageId).not.toHaveProperty('host-browser-page-1')
+  })
+
+  // Why: a client-hosted page's certificate failure is recorded by the local guest webview and is
+  // structurally absent from what the host publishes, so a host snapshot must not own that record.
+  it('keeps a locally recorded certificate failure for a client-hosted page', () => {
+    const state = applySnapshot(
+      makeState({
+        browserCertificateFailuresByPageId: { 'host-browser-page-1': CERTIFICATE_FAILURE }
+      }),
+      makeBrowserSnapshot({ certificateFailure: null, placement: CLIENT_PLACEMENT })
+    )
+    const next = applySnapshot(
+      state,
+      makeBrowserSnapshot({
+        certificateFailure: null,
+        placement: CLIENT_PLACEMENT,
+        title: 'Changed title',
+        loading: true
+      }),
+      NOW + 1
+    )
+
+    expect(next.browserCertificateFailuresByPageId['host-browser-page-1']).toEqual(
+      CERTIFICATE_FAILURE
+    )
+  })
+
+  // Why: same structural gap as the certificate record — the host publishes no loadError for a
+  // client-hosted page, so the pane's failure overlay would vanish on the next metadata snapshot.
+  it('keeps a locally recorded load failure for a client-hosted page', () => {
+    const state = withLocalLoadFailure(
+      applySnapshot(
+        makeState(),
+        makeBrowserSnapshot({ certificateFailure: null, placement: CLIENT_PLACEMENT })
+      )
+    )
+    const next = applySnapshot(
+      state,
+      makeBrowserSnapshot({
+        certificateFailure: null,
+        placement: CLIENT_PLACEMENT,
+        title: 'Changed title',
+        loading: true
+      }),
+      NOW + 1
+    )
+
+    expect(next.browserPagesByWorkspace['host-browser-workspace']?.[0]?.loadError).toEqual(
+      LOAD_ERROR
+    )
+    expect(next.browserTabsByWorktree[WORKTREE_A]?.[0]?.loadError).toEqual(LOAD_ERROR)
+  })
+
+  // Why: a host that omits placement and one that publishes 'server' must land on the same side
+  // of the carve-out, or the tests cannot tell the client check apart from an absence check.
+  it.each([
+    ['an unplaced page', undefined],
+    ['an explicitly server-placed page', SERVER_PLACEMENT]
+  ])('still lets the host clear a load failure for %s', (_label, placement) => {
+    const state = withLocalLoadFailure(
+      applySnapshot(makeState(), makeBrowserSnapshot({ certificateFailure: null, placement }))
+    )
+    const next = applySnapshot(
+      state,
+      makeBrowserSnapshot({ certificateFailure: null, placement, title: 'Changed title' }),
+      NOW + 1
+    )
+
+    expect(next.browserPagesByWorkspace['host-browser-workspace']?.[0]?.loadError).toBeNull()
+  })
+
+  it.each([
+    ['an unplaced page', undefined],
+    ['an explicitly server-placed page', SERVER_PLACEMENT]
+  ])('still lets the host clear a certificate failure for %s', (_label, placement) => {
+    const state = applySnapshot(
+      makeState({
+        browserCertificateFailuresByPageId: { 'host-browser-page-1': CERTIFICATE_FAILURE }
+      }),
+      makeBrowserSnapshot({ certificateFailure: null, placement })
+    )
+
+    expect(state.browserCertificateFailuresByPageId).not.toHaveProperty('host-browser-page-1')
   })
 
   it('cleans up replaced browser page handles and certificate failures', () => {
