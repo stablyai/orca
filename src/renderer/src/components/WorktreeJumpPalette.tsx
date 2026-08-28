@@ -1,13 +1,5 @@
 /* oxlint-disable max-lines */
-import React, {
-  useCallback,
-  useDeferredValue,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState
-} from 'react'
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -75,11 +67,12 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   getWorktreePaletteSearchScope,
-  searchWorktreeDocuments,
   type MatchRange,
   type PaletteSearchResult
 } from '@/lib/worktree-palette-search'
-import { buildWorktreePaletteDocuments } from '@/lib/worktree-palette-document'
+import { useCooperativeWorktreePaletteSearch } from './cmd-j/use-cooperative-worktree-palette-search'
+import { useCooperativeWorktreePaletteDocuments } from './cmd-j/use-cooperative-worktree-palette-documents'
+import { usePaintDeferredValue } from './cmd-j/use-paint-deferred-value'
 import {
   resolveWorktreeBranchLabel,
   resolveWorktreeDisplayName
@@ -826,7 +819,7 @@ function WorktreeJumpPaletteContent({
   const settingsSections = useSettingsNavigationMetadata()
 
   const [query, setQuery] = useState('')
-  const deferredQuery = useDeferredValue(query)
+  const deferredQuery = usePaintDeferredValue(query)
   const liveQueryRef = useRef(query)
   liveQueryRef.current = query
   // Why a ref: creation must follow an explicit ArrowDown/click, and typing re-arms
@@ -1184,23 +1177,21 @@ function WorktreeJumpPaletteContent({
 
   // Why keyed on the unsorted list: normalized documents depend only on text
   // inputs, so re-sorting for recency re-ranks without re-normalizing anything.
-  const worktreeDocuments = useMemo(
-    () =>
-      // Archived workspaces are never searchable, so normalizing them is waste.
-      buildWorktreePaletteDocuments(
-        allWorktrees.filter((worktree) => !worktree.isArchived),
-        {
-          repoMap,
-          repoMapByHostIdentity: repoByHostIdentity,
-          prCache,
-          issueCache,
-          workspacePortsByWorktreeId: getWorkspacePortsByWorktreeId(workspacePortScan),
-          checksReviewByWorktree,
-          hostLabelByWorktreeId
-        }
-      ),
+  const searchableWorktrees = useMemo(
+    () => allWorktrees.filter((worktree) => !worktree.isArchived),
+    [allWorktrees]
+  )
+  const worktreeDocumentSources = useMemo(
+    () => ({
+      repoMap,
+      repoMapByHostIdentity: repoByHostIdentity,
+      prCache,
+      issueCache,
+      workspacePortsByWorktreeId: getWorkspacePortsByWorktreeId(workspacePortScan),
+      checksReviewByWorktree,
+      hostLabelByWorktreeId
+    }),
     [
-      allWorktrees,
       repoByHostIdentity,
       repoMap,
       prCache,
@@ -1210,26 +1201,19 @@ function WorktreeJumpPaletteContent({
       hostLabelByWorktreeId
     ]
   )
+  const { documents: worktreeDocuments, pending: worktreeDocumentsPending } =
+    useCooperativeWorktreePaletteDocuments(searchableWorktrees, worktreeDocumentSources)
 
-  const worktreeMatches = useMemo(
-    () =>
-      searchWorktreeDocuments({
-        worktrees: sortedWorktrees,
-        query: paletteSearchQuery,
-        documents: worktreeDocuments,
-        repoMap,
-        repoMapByHostIdentity: repoByHostIdentity,
-        checksReviewByWorktree
-      }),
-    [
-      sortedWorktrees,
-      paletteSearchQuery,
-      worktreeDocuments,
-      repoByHostIdentity,
+  const { pending: worktreeSearchPending, results: worktreeMatches } =
+    useCooperativeWorktreePaletteSearch({
+      worktrees: sortedWorktrees,
+      query: paletteSearchQuery,
+      documents: worktreeDocuments,
+      documentsPending: worktreeDocumentsPending,
       repoMap,
+      repoMapByHostIdentity: repoByHostIdentity,
       checksReviewByWorktree
-    ]
-  )
+    })
 
   const browserPageEntries = useMemo<SearchableBrowserPage[]>(() => {
     if (!paletteStatusInputsActive) {
@@ -1371,7 +1355,10 @@ function WorktreeJumpPaletteContent({
   )
 
   const worktreeItems = useMemo<WorktreePaletteItem[]>(() => {
-    const items = worktreeMatches
+    const matches = hasQuery
+      ? worktreeMatches
+      : worktreeMatches.slice(0, EMPTY_QUERY_ROW_BUDGET + (expandedSectionCaps['worktrees'] ?? 0))
+    const items = matches
       .map((match) => {
         const worktree = resolveWorktree(match.worktreeId, match.worktreeHostId)
         if (!worktree) {
@@ -1400,7 +1387,7 @@ function WorktreeJumpPaletteContent({
         { rank: b.match.rank, order: orderById.get(b.id) ?? 0, id: b.id }
       )
     )
-  }, [hasQuery, resolveWorktree, worktreeMatches])
+  }, [expandedSectionCaps, hasQuery, resolveWorktree, worktreeMatches])
 
   const browserItems = useMemo<BrowserPaletteItem[]>(
     () =>
@@ -1915,7 +1902,7 @@ function WorktreeJumpPaletteContent({
       ? capPaletteSection(worktreeItems, worktreeCap)
       : {
           visible: worktreeItems.slice(0, worktreeCap),
-          overflowCount: Math.max(0, worktreeItems.length - worktreeCap)
+          overflowCount: Math.max(0, worktreeMatches.length - worktreeCap)
         }
     const projectTargetsCap = PALETTE_SECTION_RENDER_CAP + (expandedSectionCaps['projects'] ?? 0)
     const projectTargets = capPaletteSection(hasQuery ? projectTargetItems : [], projectTargetsCap)
@@ -1957,7 +1944,8 @@ function WorktreeJumpPaletteContent({
     openTabItems,
     recentTabItems,
     hasQuery,
-    openTabsLeadSections
+    openTabsLeadSections,
+    worktreeMatches.length
   ])
 
   // Why: badges number the snapshotted recent rows only — ⌘N is meaningless on a typed query.
@@ -1985,7 +1973,8 @@ function WorktreeJumpPaletteContent({
   )
   const createWorktreeName = taskSourceUrl ? query.trim() : deferredCreateWorktreeName
   // Why: a task URL bypasses query deferral, so it arms create on its own.
-  const showCreateAction = deferredShowCreateAction || taskSourceUrl !== null
+  const showCreateAction =
+    !worktreeSearchPending && (deferredShowCreateAction || taskSourceUrl !== null)
 
   // Why: arm the lookup before Enter can target the newly rendered Linear row.
   useLayoutEffect(() => {
@@ -3231,8 +3220,12 @@ function WorktreeJumpPaletteContent({
           selectionMovedByUserRef.current = true
         }}
         className="max-h-[min(600px,calc(100vh-14rem))] px-2.5 pb-2.5 pt-2"
+        data-worktree-index-pending={worktreeDocumentsPending ? 'true' : 'false'}
+        data-worktree-search-pending={worktreeSearchPending ? 'true' : 'false'}
       >
-        {isLoading && selectableItems.length === 0 && !showCreateAction ? (
+        {(isLoading || worktreeDocumentsPending || worktreeSearchPending) &&
+        selectableItems.length === 0 &&
+        !showCreateAction ? (
           <PaletteState
             title={translate(
               'auto.components.WorktreeJumpPalette.ff908adfe9',
@@ -3817,23 +3810,25 @@ function WorktreeJumpPaletteContent({
               value0: getPaletteFilterSelectionCount(filter)
             })} `
           : ''}
-        {deferredQuery.trim()
-          ? translate(
-              'auto.components.WorktreeJumpPalette.bb72c08e63',
-              '{{value0}} results found{{value1}}',
-              {
-                value0: resultCount,
-                value1: showCreateAction ? ', create worktree action available' : ''
-              }
-            )
-          : translate(
-              'auto.components.WorktreeJumpPalette.20af998bff',
-              '{{value0}} items available{{value1}}',
-              {
-                value0: resultCount,
-                value1: showCreateAction ? ', create worktree action available' : ''
-              }
-            )}
+        {worktreeSearchPending
+          ? translate('auto.components.WorktreeJumpPalette.ff908adfe9', 'Loading jump targets')
+          : deferredQuery.trim()
+            ? translate(
+                'auto.components.WorktreeJumpPalette.bb72c08e63',
+                '{{value0}} results found{{value1}}',
+                {
+                  value0: resultCount,
+                  value1: showCreateAction ? ', create worktree action available' : ''
+                }
+              )
+            : translate(
+                'auto.components.WorktreeJumpPalette.20af998bff',
+                '{{value0}} items available{{value1}}',
+                {
+                  value0: resultCount,
+                  value1: showCreateAction ? ', create worktree action available' : ''
+                }
+              )}
       </div>
     </CommandDialog>
   )

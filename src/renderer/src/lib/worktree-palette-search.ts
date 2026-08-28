@@ -30,6 +30,7 @@ import {
   matchWorktreePaletteTaskUrl,
   parseCmdJTaskSourceUrl
 } from './worktree-palette-task-url-match'
+import { yieldToEventLoop } from '../../../shared/event-loop-yield'
 
 export type { MatchRange }
 
@@ -162,6 +163,33 @@ export type WorktreePaletteSearchArgs = {
   checksReviewByWorktree?: ReadonlyMap<Worktree, HostedReviewInfo | null>
 }
 
+function matchPreparedWorktree(
+  args: WorktreePaletteSearchArgs,
+  worktree: Worktree,
+  prepared: Extract<ReturnType<typeof preparePaletteQuery>, { state: 'ready' }>,
+  taskSourceUrl: ReturnType<typeof parseCmdJTaskSourceUrl>
+): PaletteSearchResult | null {
+  if (taskSourceUrl) {
+    return matchWorktreePaletteTaskUrl({
+      worktree,
+      intent: taskSourceUrl,
+      repo: resolvePaletteRepoForWorktree(worktree, args.repoMap, args.repoMapByHostIdentity),
+      review: args.checksReviewByWorktree?.get(worktree)
+    })
+  }
+
+  const document = args.documents.get(getWorktreeHostIdentity(worktree))
+  if (!document) {
+    return null
+  }
+  const match = matchPaletteDocument({
+    document,
+    tokens: prepared.tokens,
+    normalizedQuery: prepared.normalized
+  })
+  return match ? toWorktreePaletteSearchResult(worktree.id, match, worktree.hostId) : null
+}
+
 /** Matches prepared documents; callers memoize `documents` across keystrokes. */
 export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): PaletteSearchResult[] {
   const prepared = preparePaletteQuery(args.query)
@@ -177,33 +205,49 @@ export function searchWorktreeDocuments(args: WorktreePaletteSearchArgs): Palett
   const taskSourceUrl = parseCmdJTaskSourceUrl(args.query.trim())
   const results: PaletteSearchResult[] = []
   for (const worktree of args.worktrees) {
-    if (taskSourceUrl) {
-      const match = matchWorktreePaletteTaskUrl({
-        worktree,
-        intent: taskSourceUrl,
-        repo: resolvePaletteRepoForWorktree(worktree, args.repoMap, args.repoMapByHostIdentity),
-        review: args.checksReviewByWorktree?.get(worktree)
-      })
-      if (match) {
-        results.push(match)
-      }
-      continue
-    }
-
-    const document = args.documents.get(getWorktreeHostIdentity(worktree))
-    if (!document) {
-      continue
-    }
-    const match = matchPaletteDocument({
-      document,
-      tokens: prepared.tokens,
-      normalizedQuery: prepared.normalized
-    })
+    const match = matchPreparedWorktree(args, worktree, prepared, taskSourceUrl)
     if (match) {
-      results.push(toWorktreePaletteSearchResult(worktree.id, match, worktree.hostId))
+      results.push(match)
     }
   }
   return results
+}
+
+export async function searchWorktreeDocumentsCooperatively(
+  args: WorktreePaletteSearchArgs,
+  options: {
+    shouldContinue?: () => boolean
+    timeSliceMs?: number
+    yieldBetweenSlices?: () => Promise<void>
+  } = {}
+): Promise<PaletteSearchResult[] | null> {
+  const prepared = preparePaletteQuery(args.query)
+  if (prepared.state !== 'ready' || parseCmdJTaskSourceUrl(args.query.trim())) {
+    return searchWorktreeDocuments(args)
+  }
+
+  const shouldContinue = options.shouldContinue ?? (() => true)
+  const timeSliceMs = options.timeSliceMs ?? 8
+  const yieldBetweenSlices = options.yieldBetweenSlices ?? yieldToEventLoop
+  const results: PaletteSearchResult[] = []
+  let sliceStartedAt = performance.now()
+
+  for (let index = 0; index < args.worktrees.length; index += 1) {
+    if (!shouldContinue()) {
+      return null
+    }
+    const worktree = args.worktrees[index]
+    const match = matchPreparedWorktree(args, worktree, prepared, null)
+    if (match) {
+      results.push(match)
+    }
+    if (index === args.worktrees.length - 1 || performance.now() - sliceStartedAt < timeSliceMs) {
+      continue
+    }
+    await yieldBetweenSlices()
+    sliceStartedAt = performance.now()
+  }
+  return shouldContinue() ? results : null
 }
 
 /** Convenience entry point that prepares documents inline. */

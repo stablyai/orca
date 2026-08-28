@@ -249,6 +249,25 @@ describe('PR E2E gate contract', () => {
     expect(changedInstall.run).toContain('openssh-client')
   })
 
+  it('maps Cmd-J source edits onto the headful performance oracle', () => {
+    const mappedSpec = 'tests/e2e/cmd-j-cold-open-performance.spec.ts'
+    for (const authority of [
+      'src/renderer/src/app-shell/AppRootSurfaces.tsx',
+      'src/renderer/src/components/WorktreeJumpPalette.tsx',
+      'src/renderer/src/components/cmd-j/use-cooperative-worktree-palette-search.ts',
+      'src/renderer/src/lib/palette-cooperative-scheduler.ts',
+      'src/renderer/src/lib/palette-match/match-field.ts',
+      'src/renderer/src/lib/worktree-palette-document.ts',
+      'src/renderer/src/lib/worktree-palette-search.ts'
+    ]) {
+      expect(selectPrE2eSpecs([authority])).toContain(mappedSpec)
+    }
+    expect(
+      selectPrE2eSpecs(['src/renderer/src/components/WorktreeJumpPalette.test.tsx'])
+    ).not.toContain(mappedSpec)
+    expect(readFileSync(join(projectDir, mappedSpec), 'utf8')).toContain('@headful')
+  })
+
   it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {
     expect(rollbackStep.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(rollbackStep.run).toContain('src/shared/ephemeral-vm-recipes.ts')

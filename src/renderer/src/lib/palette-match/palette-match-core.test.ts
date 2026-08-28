@@ -188,6 +188,12 @@ describe('structured label matching', () => {
     expect(run(document, 'scam')?.rank.fuzzyTokenCount).toBe(1)
   })
 
+  it('keeps the first typo occurrence when candidate lengths differ', () => {
+    expect(run(labelOnly('needxle nedle'), 'needle')?.rangesByField.get('name')).toEqual([
+      { start: 0, end: 7 }
+    ])
+  })
+
   it('limits single Latin characters to word equality or prefix', () => {
     expect(run(labelOnly('alpha beta'), 'b')).not.toBeNull()
     expect(run(labelOnly('alpha beta'), 'l')).toBeNull()

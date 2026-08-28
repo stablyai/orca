@@ -2,7 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { fireEvent } from '@testing-library/react'
+import { fireEvent, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
@@ -356,9 +356,9 @@ describe('WorktreeJumpPalette', () => {
     await act(async () => {
       setCommandQuery?.('Feature')
     })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('Feature workspace')
+    await waitFor(() => {
+      expect(testContainer.textContent).toContain('Feature workspace')
+    })
   })
 
   // STA-4343 closed: two workspaces sharing `repoId::path` across hosts are two distinct

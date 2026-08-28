@@ -45,6 +45,15 @@ export const PR_E2E_SOURCE_ROUTES = [
       )
   },
   {
+    id: 'cmd-j.cold-open-performance',
+    specs: ['tests/e2e/cmd-j-cold-open-performance.spec.ts'],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^src\/renderer\/src\/(?:app-shell\/AppRootSurfaces\.tsx|components\/WorktreeJumpPalette\.tsx|components\/cmd-j\/|lib\/(?:palette-cooperative-scheduler|worktree-palette-document|worktree-palette-search)\.ts|lib\/palette-match\/)/.test(
+        file
+      )
+  },
+  {
     id: 'terminal-startup.quick-command-pre-bind-recovery',
     specs: ['tests/e2e/terminal-quick-command-pre-bind-recovery.spec.ts'],
     matches: (file) =>

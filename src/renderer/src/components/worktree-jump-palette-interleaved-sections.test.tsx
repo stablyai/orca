@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import type { Repo } from '../../../shared/repo-types'
@@ -314,12 +315,13 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       setCommandQuery?.('perf')
     })
-    await flushEffects()
+    await waitFor(() => {
+      const rows = getPrimaryRowsBySectionHeader()
+      expect(rows.filter((row) => row.rowId.startsWith('workspace-tab:'))).toHaveLength(8)
+      expect(rows.filter((row) => row.rowId.startsWith('worktree:'))).toHaveLength(5)
+    })
 
     const rows = getPrimaryRowsBySectionHeader()
-    // Why the counts: both remainders must still render, just under a re-emitted header.
-    expect(rows.filter((row) => row.rowId.startsWith('workspace-tab:'))).toHaveLength(8)
-    expect(rows.filter((row) => row.rowId.startsWith('worktree:'))).toHaveLength(5)
     for (const { header, rowId } of rows) {
       expect(header).toBe(rowId.startsWith('workspace-tab:') ? 'Open Tabs' : 'Worktrees')
     }
@@ -331,7 +333,11 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       setCommandQuery?.('perf')
     })
-    await flushEffects()
+    await waitFor(() => {
+      const rows = getPrimaryRowsBySectionHeader()
+      expect(rows.filter((row) => row.rowId.startsWith('workspace-tab:'))).toHaveLength(8)
+      expect(rows.filter((row) => row.rowId.startsWith('worktree:'))).toHaveLength(5)
+    })
 
     const renderedIds = Array.from(
       testContainer.querySelectorAll<HTMLElement>('[data-command-item]')
@@ -370,10 +376,11 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       setCommandQuery?.('ubuntu')
     })
-    await flushEffects()
-
-    const rows = getPrimaryRowsBySectionHeader()
-    expect(rows).toEqual([{ header: 'Open Tabs', rowId: 'workspace-tab:tab-0' }])
+    await waitFor(() => {
+      expect(getPrimaryRowsBySectionHeader()).toEqual([
+        { header: 'Open Tabs', rowId: 'workspace-tab:tab-0' }
+      ])
+    })
     expect(testContainer.textContent).toContain('Open Tabs')
     expect(testContainer.textContent).not.toContain('Worktrees')
   })
@@ -436,10 +443,8 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       setCommandQuery?.('perf')
     })
-    await flushEffects()
-
     // Preview is 6; 74 follow, 30 of them past the hard cap of 50.
-    expect(testContainer.textContent).toContain('74 more')
+    await waitFor(() => expect(testContainer.textContent).toContain('74 more'))
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
@@ -449,11 +454,11 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       seeMoreBtn?.click()
     })
-    await flushEffects()
-
     // 6 + 20 = 26 preview tabs, 54 follow, 10 still past the raised cap of 70.
-    expect(testContainer.textContent).toContain('54 more')
-    expect(testContainer.textContent).toContain('10 more')
+    await waitFor(() => {
+      expect(testContainer.textContent).toContain('54 more')
+      expect(testContainer.textContent).toContain('10 more')
+    })
   })
 
   it('expands soft preview when clicking See more even when all rows fit within the hard cap', async () => {
@@ -462,10 +467,8 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       setCommandQuery?.('perf')
     })
-    await flushEffects()
-
     // 6 preview tabs, 24 more follow below the worktrees section
-    expect(testContainer.textContent).toContain('24 more')
+    await waitFor(() => expect(testContainer.textContent).toContain('24 more'))
     const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
     )
@@ -475,9 +478,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       seeMoreBtn?.click()
     })
-    await flushEffects()
-
-    expect(testContainer.textContent).toContain('4 more')
+    await waitFor(() => expect(testContainer.textContent).toContain('4 more'))
 
     const seeMoreBtn2 = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
       btn.textContent?.includes('See more')
@@ -488,9 +489,7 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       seeMoreBtn2?.click()
     })
-    await flushEffects()
-
-    expect(testContainer.textContent).not.toContain('more')
+    await waitFor(() => expect(testContainer.textContent).not.toContain('more'))
   })
 
   it('resets expanded section caps when query changes', async () => {
@@ -499,23 +498,22 @@ describe('WorktreeJumpPalette interleaved primary sections', () => {
     await act(async () => {
       setCommandQuery?.('perf')
     })
-    await flushEffects()
-
-    const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find((btn) =>
-      btn.textContent?.includes('See more')
+    await waitFor(() => expect(testContainer.textContent).toContain('74 more'))
+    const seeMoreBtn = Array.from(testContainer.querySelectorAll('button')).find(
+      (btn) =>
+        btn.textContent?.includes('See more') && btn.parentElement?.textContent?.includes('74 more')
     )
+    expect(seeMoreBtn).toBeDefined()
     await act(async () => {
       seeMoreBtn?.click()
     })
-    await flushEffects()
-    expect(testContainer.textContent).toContain('54 more')
+    await waitFor(() => expect(testContainer.textContent).toContain('54 more'))
 
     // Change query: should reset back to 6 preview (so 74 more)
     await act(async () => {
       setCommandQuery?.('per')
     })
-    await flushEffects()
-    expect(testContainer.textContent).toContain('74 more')
+    await waitFor(() => expect(testContainer.textContent).toContain('74 more'))
   })
 
   it('allows clicking See more on empty query to expand worktree cap by 20', async () => {

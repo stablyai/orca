@@ -2,6 +2,7 @@
 
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactI18Next from 'react-i18next'
 import { useAppStore } from '@/store'
@@ -149,6 +150,10 @@ async function flushEffects(): Promise<void> {
     await Promise.resolve()
     await Promise.resolve()
   })
+}
+
+async function applyCommandQuery(query: string): Promise<void> {
+  await act(() => setCommandQuery?.(query))
 }
 
 async function renderPalette(overrides: Partial<AppState>): Promise<void> {
@@ -305,10 +310,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   it('leads a typed query with the tab section when it holds the stronger match', async () => {
     await renderPalette(makeTypedRelevanceState())
 
-    await act(async () => {
-      setCommandQuery?.('perf')
-    })
-    await flushEffects()
+    await applyCommandQuery('perf')
+    await waitFor(() => expect(getRenderedRowIds()).toContain('worktree:wt-weak'))
 
     const rows = getRenderedRowIds().filter((id) => id.length > 0)
     expect(rows[0]).toBe('workspace-tab:tab-host')
@@ -319,20 +322,17 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   it('selects the new first result when cmdk reports the deferred list selection', async () => {
     await renderPalette(makeTypedRelevanceState())
 
-    await act(async () => {
-      setCommandQuery?.('improve')
-    })
-    await flushEffects()
-    expect(getCommandValue()).toBe('worktree:wt-weak')
+    await applyCommandQuery('improve')
+    await waitFor(() => expect(getCommandValue()).toBe('worktree:wt-weak'))
 
     await act(async () => {
       setCommandQuery?.('perf')
       setCommandSelection?.('worktree:wt-weak')
     })
-    await flushEffects()
-
-    expect(getRenderedRowIds().find((id) => id.length > 0)).toBe('workspace-tab:tab-host')
-    expect(getCommandValue()).toBe('workspace-tab:tab-host')
+    await waitFor(() => {
+      expect(getRenderedRowIds().find((id) => id.length > 0)).toBe('workspace-tab:tab-host')
+      expect(getCommandValue()).toBe('workspace-tab:tab-host')
+    })
   })
 
   // Why: after typing, arrow moves must stick. Dropping onValueChange while cmdk already
@@ -340,11 +340,12 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   it('keeps arrow selection after the typed query ranking has committed', async () => {
     await renderPalette(makeTypedRelevanceState())
 
-    await act(async () => {
-      setCommandQuery?.('perf')
+    await applyCommandQuery('perf')
+    await waitFor(() => {
+      expect(getRenderedRowIds()).toContain('worktree:wt-weak')
+      expect(getRenderedRowIds()).toContain('__create_worktree__')
+      expect(getCommandValue()).toBe('workspace-tab:tab-host')
     })
-    await flushEffects()
-    expect(getCommandValue()).toBe('workspace-tab:tab-host')
 
     const rows = getRenderedRowIds().filter((id) => id.length > 0)
     expect(rows.length).toBeGreaterThan(1)
@@ -352,9 +353,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await act(async () => {
       setCommandSelection?.(rows[1])
     })
-    await flushEffects()
-
-    expect(getCommandValue()).toBe(rows[1])
+    await waitFor(() => expect(getCommandValue()).toBe(rows[1]))
   })
 
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
@@ -368,13 +367,10 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       }
     })
 
-    await act(async () => {
-      setCommandQuery?.('perf-d')
-    })
-    await flushEffects()
-
-    const firstRow = getRenderedRowIds().find((id) => id.length > 0)
-    expect(firstRow).toBe('worktree:wt-strong')
+    await applyCommandQuery('perf-d')
+    await waitFor(() =>
+      expect(getRenderedRowIds().find((id) => id.length > 0)).toBe('worktree:wt-strong')
+    )
   })
 
   it('ranks a typed query by match position inside the worktree section', async () => {
@@ -391,18 +387,16 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
       showSleepingWorkspaces: true
     })
 
-    await act(async () => {
-      setCommandQuery?.('perf')
+    await applyCommandQuery('perf')
+    await waitFor(() => {
+      // Why word-b beats word-a despite input order: `perf` is a whole word in
+      // `rc-perf-update-channels` but only a prefix of `performance`.
+      expect(getRenderedRowIds().filter((id) => id.startsWith('worktree:'))).toEqual([
+        'worktree:wt-prefix',
+        'worktree:wt-word-b',
+        'worktree:wt-word-a'
+      ])
     })
-    await flushEffects()
-
-    // Why word-b beats word-a despite input order: `perf` is a whole word in
-    // `rc-perf-update-channels` but only a prefix of `performance`.
-    expect(getRenderedRowIds().filter((id) => id.startsWith('worktree:'))).toEqual([
-      'worktree:wt-prefix',
-      'worktree:wt-word-b',
-      'worktree:wt-word-a'
-    ])
   })
 
   it('budget-caps the worktree section when nothing fills the recent one', async () => {
@@ -577,10 +571,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   it('captures the unfiltered order when reopened after a search', async () => {
     await renderPalette(makeRecentTabState())
 
-    await act(async () => {
-      setCommandQuery?.('Alpha')
-    })
-    await flushEffects()
+    await applyCommandQuery('Alpha')
+    await waitFor(() => expect(getTabRowIds()).toHaveLength(1))
 
     // Why closed-then-reopened: the palette stays mounted, and the open effect clears the query one
     // commit after the snapshot effect — so a naive capture would freeze the Alpha-only subset.
@@ -593,9 +585,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         activeModal: 'worktree-palette'
       } as Partial<AppState>)
     })
-    await flushEffects()
-
-    expect(getTabRowIds()).toHaveLength(2)
+    await waitFor(() => expect(getTabRowIds()).toHaveLength(2))
   })
 
   it('excludes the idle current tab from the recent section', async () => {
@@ -758,11 +748,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
 
     // Proves the exclusion is the current-tab rule, not a missing index entry: search still finds it.
-    await act(async () => {
-      setCommandQuery?.('notes')
-    })
-    await flushEffects()
-    expect(getTabRowIds()).toContain('tab-alpha-file')
+    await applyCommandQuery('notes')
+    await waitFor(() => expect(getTabRowIds()).toContain('tab-alpha-file'))
   })
 
   it('excludes an archived worktree tab even with a blocked agent', async () => {
@@ -929,11 +916,11 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await act(async () => {
       applyQuery('Alpha')
     })
-    await flushEffects()
-
-    // Why: searching for a tab is exactly when its status matters — the pip must survive the query.
-    expect(getTabRowIds()).toContain('tab-alpha')
-    expect(getTabRowIds()).not.toContain('tab-beta')
+    await waitFor(() => {
+      // Why: searching for a tab is exactly when its status matters — the pip must survive the query.
+      expect(getTabRowIds()).toContain('tab-alpha')
+      expect(getTabRowIds()).not.toContain('tab-beta')
+    })
     const alphaRow = testContainer.querySelector<HTMLElement>(
       '[data-command-item="workspace-tab:tab-alpha"]'
     )
@@ -943,11 +930,8 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
   it('keeps create-worktree below the matches it would otherwise outrank', async () => {
     await renderPalette(makeRecentTabState())
 
-    await act(async () => {
-      setCommandQuery?.('Alpha')
-    })
-    await flushEffects()
-
+    await applyCommandQuery('Alpha')
+    await waitFor(() => expect(getRenderedRowIds()).toContain('__create_worktree__'))
     const rows = getRenderedRowIds().filter((id) => id.length > 0)
     expect(rows.at(-1)).toBe('__create_worktree__')
     expect(rows.length).toBeGreaterThan(1)
