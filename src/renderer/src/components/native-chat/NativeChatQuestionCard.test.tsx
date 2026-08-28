@@ -336,6 +336,38 @@ describe('NativeChatQuestionCard', () => {
     expect(previewPanel()!.parentElement!.className).toContain('auto-rows-min')
   })
 
+  it('frames the preview well only beside the option list, not stacked under it', () => {
+    // Class-string level: happy-dom does not evaluate container queries, so this
+    // asserts the frame is gated to the wide variant — not that it renders.
+    render(previewPrompt, vi.fn())
+
+    const well = previewPanel()!.firstElementChild!
+    expect(well.className).toContain('@2xl/question:rounded-md')
+    expect(well.className).toContain('@2xl/question:border')
+    // Unprefixed frame classes would draw the well as a card in stacked mode.
+    expect(well.className).not.toMatch(/(^|\s)rounded-md(\s|$)/)
+    expect(well.className).not.toMatch(/(^|\s)border(\s|$)/)
+    expect(well.className).toContain('bg-muted/40')
+  })
+
+  it('indents the stacked preview to the option label column and resets it when split', () => {
+    // Class-string level. pl-13 is the row's border + padding + badge + gap, so
+    // the well lines up with the label rather than the number badge.
+    render(previewPrompt, vi.fn())
+
+    expect(previewPanel()!.className).toContain('pl-13')
+    expect(previewPanel()!.className).toContain('@2xl/question:pl-3.5')
+  })
+
+  it('gives the preview no disclosure affordance', () => {
+    // The preview follows hover, so a control inviting a click would do nothing.
+    render(previewPrompt, vi.fn())
+
+    const panel = previewPanel()!
+    expect(panel.querySelector('button, a, [role="button"], summary, details')).toBeNull()
+    expect(panel.hasAttribute('aria-expanded')).toBe(false)
+  })
+
   it('marks the highlighted row with the affinity border that ties it to the preview', () => {
     render(previewPrompt, vi.fn())
 

@@ -288,15 +288,19 @@ export function NativeChatQuestionCard({
 
 /** The highlighted option's example snippet, rendered as markdown in a monospace
  *  box to match the AskUserQuestion tool's documented contract for the field.
- *  Framed so it reads as belonging to the option it sits under, and scrolls
- *  inside that frame so a long snippet never grows the card. */
+ *  Beside the option list it is a framed well; stacked under one option it is a
+ *  flush detail region indented to that option's text column. Carries no
+ *  disclosure affordance in either mode — the highlight follows hover, so
+ *  anything that read as expandable would invite a click that does nothing. */
 function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
   return (
     <div
       data-slot="question-preview"
-      className="min-w-0 self-stretch px-3.5 pb-2.5 @2xl/question:h-full @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5"
+      // Stacked, the left inset lands on the option label's text column (row
+      // border + padding + badge + gap), past the number badge.
+      className="min-w-0 self-stretch pr-3.5 pb-2.5 pl-13 @2xl/question:h-full @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5 @2xl/question:pl-3.5"
     >
-      <div className="min-w-0 overflow-hidden rounded-md border border-border/60 bg-muted/40">
+      <div className="min-w-0 overflow-hidden bg-muted/40 @2xl/question:rounded-md @2xl/question:border @2xl/question:border-border/60">
         {preview ? (
           <CommentMarkdown
             content={preview}
