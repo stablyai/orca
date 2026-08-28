@@ -12,6 +12,7 @@ export type CertificationIntentRow = {
   model: string | null
   reasoning: string | null
   build_id: string
+  retry_of: string | null
   created_at: string
   consumed_at: string | null
   consumed_dispatch_id: string | null
@@ -46,6 +47,14 @@ export type CertificationIntentBinding = {
   worktreeId: string
   identity: RouteIdentity
   buildId: string
+  /** The Dispatch this attempt retries, when it retries one.
+   *
+   *  Why it is part of the binding: the id is deterministic so a replayed mint
+   *  is the same authorisation rather than a second one. Without this, a retry
+   *  of a failed launch re-derives the id of the intent the FAILED attempt
+   *  already consumed, and a Dispatch that died can never be picked up again. A
+   *  retry is a different attempt, so it gets its own single-use grant. */
+  retryOfDispatchId?: string | null
 }
 
 export type CertificationIntentRejection =
@@ -57,6 +66,7 @@ export type CertificationIntentRejection =
   | 'intent_worktree_mismatch'
   | 'intent_route_mismatch'
   | 'intent_build_mismatch'
+  | 'intent_attempt_mismatch'
 
 export type CertificationIntentVerdict =
   | { ok: true; intent: CertificationIntentRow }
@@ -73,7 +83,8 @@ export function certificationIntentId(binding: CertificationIntentBinding): stri
         binding.outcomeId,
         binding.worktreeId,
         routeKey(binding.identity),
-        binding.buildId
+        binding.buildId,
+        binding.retryOfDispatchId ?? ''
       ].join(' ')
     )
     .digest('hex')
@@ -119,6 +130,7 @@ export function mintCertificationIntent(
     model: binding.identity.model,
     reasoning: binding.identity.reasoning,
     build_id: binding.buildId,
+    retry_of: binding.retryOfDispatchId ?? null,
     created_at: nowIso,
     consumed_at: null,
     consumed_dispatch_id: null
@@ -127,8 +139,8 @@ export function mintCertificationIntent(
     .prepare(
       `INSERT INTO control_plane_certification_intents
          (intent_id, run_id, task_id, outcome_id, worktree_id, agent, model, reasoning,
-          build_id, created_at, consumed_at, consumed_dispatch_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          build_id, retry_of, created_at, consumed_at, consumed_dispatch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(intent_id) DO NOTHING`
     )
     .run(
@@ -141,6 +153,7 @@ export function mintCertificationIntent(
       row.model,
       row.reasoning,
       row.build_id,
+      row.retry_of,
       row.created_at,
       row.consumed_at,
       row.consumed_dispatch_id
@@ -191,7 +204,14 @@ export function verifyCertificationIntent(
       'intent_route_mismatch',
       `route ${routeKey(actual.identity)}`
     ],
-    [intent.build_id !== actual.buildId, 'intent_build_mismatch', `build ${actual.buildId}`]
+    [intent.build_id !== actual.buildId, 'intent_build_mismatch', `build ${actual.buildId}`],
+    [
+      (intent.retry_of ?? null) !== (actual.retryOfDispatchId ?? null),
+      'intent_attempt_mismatch',
+      actual.retryOfDispatchId
+        ? `a retry of Dispatch ${actual.retryOfDispatchId}`
+        : 'a first attempt'
+    ]
   ]
   for (const [failed, code, what] of checks) {
     if (failed) {

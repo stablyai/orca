@@ -75,6 +75,7 @@ export const ORCHESTRATION_CERTIFICATION_HANDLERS: Record<string, CommandHandler
       agent: getRequiredStringFlag(flags, 'agent'),
       model: getOptionalStringFlag(flags, 'model'),
       reasoning: getOptionalStringFlag(flags, 'reasoning'),
+      retryOf: getOptionalStringFlag(flags, 'retry-of'),
       from: await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
     })
     printResult(

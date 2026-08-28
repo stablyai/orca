@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS control_plane_certification_intents (
   model TEXT,
   reasoning TEXT,
   build_id TEXT NOT NULL,
+  retry_of TEXT,
   created_at TEXT NOT NULL,
   consumed_at TEXT,
   consumed_dispatch_id TEXT

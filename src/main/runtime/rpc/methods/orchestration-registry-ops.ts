@@ -222,6 +222,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
       agent: requiredString('--agent'),
       model: OptionalString,
       reasoning: OptionalString,
+      retryOf: OptionalString,
       from: OptionalString
     }),
     handler: async (params, { runtime, orchestrationCompatibilityEvidence }) => {
@@ -268,7 +269,8 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
             model: params.model ?? null,
             reasoning: params.reasoning ?? null
           },
-          buildId: resolveRuntimeBuildIdentity().id
+          buildId: resolveRuntimeBuildIdentity().id,
+          retryOfDispatchId: params.retryOf ?? null
         },
         new Date().toISOString()
       )

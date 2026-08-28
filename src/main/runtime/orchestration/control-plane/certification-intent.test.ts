@@ -148,6 +148,39 @@ describe('CERTIFICATION_BOOTSTRAP_MUST_NOT_BE_A_CALLER_CLAIM', () => {
     ).toMatchObject({ ok: false, code: 'intent_consumed' })
   })
 
+  it('gives a RETRY its own grant, so a failed launch can be picked up again', () => {
+    const cp = store()
+    const first = mint(cp)
+    claimCertificationIntent(cp, { intentId: first.intent_id, claimId: 'c1', nowIso: 'n' })
+    // The first attempt died; without a distinct binding the retry would
+    // re-derive the consumed id and the Task could never be picked up again.
+    const retry = mintCertificationIntent(
+      cp,
+      { ...BINDING, retryOfDispatchId: 'ctx_failed' },
+      '2026-01-01T00:00:00.000Z'
+    )
+    expect(retry.intent_id).not.toBe(first.intent_id)
+    expect(
+      verifyCertificationIntent(cp, {
+        intentId: retry.intent_id,
+        actual: { ...BINDING, retryOfDispatchId: 'ctx_failed' }
+      })
+    ).toMatchObject({ ok: true })
+  })
+
+  it('a retry grant still names the attempt it is for', () => {
+    const cp = store()
+    const retry = mintCertificationIntent(
+      cp,
+      { ...BINDING, retryOfDispatchId: 'ctx_failed' },
+      '2026-01-01T00:00:00.000Z'
+    )
+    // Presented as a first attempt, it is not the same authorisation.
+    expect(
+      verifyCertificationIntent(cp, { intentId: retry.intent_id, actual: BINDING })
+    ).toMatchObject({ ok: false })
+  })
+
   it('mints deterministically, so a replay is the same authorisation not a second one', () => {
     const cp = store()
     expect(mint(cp).intent_id).toBe(certificationIntentId(BINDING))

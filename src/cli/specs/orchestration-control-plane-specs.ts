@@ -88,7 +88,7 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     path: ['orchestration', 'certification-intent'],
     summary: "Mint the single-use intent that permits a never-certified route's first launch",
     usage:
-      'orca orchestration certification-intent --task <task_id> --worktree <worktree_id> --agent <agent> [--model <id>] [--reasoning <level>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration certification-intent --task <task_id> --worktree <worktree_id> --agent <agent> [--model <id>] [--reasoning <level>] [--retry-of <dispatch_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'task',
