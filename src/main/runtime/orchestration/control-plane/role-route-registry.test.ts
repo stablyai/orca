@@ -545,3 +545,59 @@ describe('AN ALIAS CAN BE LAUNCHED TO BE OBSERVED, BUT NEVER CERTIFIED UNSEEN', 
     expect(admission.ok).toBe(false)
   })
 })
+
+/** A route the catalog has never heard of, but whose provider TOLD the runtime
+ *  what it is running, is better proven than one the catalog merely lists.
+ *  Refusing it for "identity proof UNKNOWN" would discard the stronger fact. */
+describe('A RECORDED OBSERVATION OUTRANKS THE CATALOG', () => {
+  const observed = route({
+    identity: identity({ model: 'claude-opus-5' }),
+    identityProof: UNKNOWN
+  })
+
+  function admit(evidence: RouteEvidence[]) {
+    return admitRoute({
+      ...baseAdmission,
+      registry: [observed],
+      evidence,
+      requested: observed.identity,
+      effective: observed.identity,
+      requirement: { role: 'builder', sessionMode: 'fresh' }
+    })
+  }
+
+  it('refuses an unknown id with no observation behind it', () => {
+    expect(
+      checkRouteEligibility(observed, { role: 'builder', sessionMode: 'fresh' })
+    ).toMatchObject({ code: 'identity_proof_insufficient' })
+  })
+
+  it('admits it once the provider identity was recorded', () => {
+    expect(
+      checkRouteEligibility(observed, { role: 'builder', sessionMode: 'fresh' }, false, true)
+    ).toBeNull()
+    expect(
+      admit(fullEvidence({ identity: observed.identity, role: 'builder', sessionMode: 'fresh' })).ok
+    ).toBe(true)
+  })
+
+  it('a FAILED identity observation does not count as one', () => {
+    const failed = fullEvidence({
+      identity: observed.identity,
+      role: 'builder',
+      sessionMode: 'fresh'
+    }).map((record) =>
+      record.kind === 'effective_model_identity' ? { ...record, outcome: 'FAIL' as const } : record
+    )
+    expect(admit(failed).ok).toBe(false)
+  })
+
+  it('an observation for ANOTHER route does not carry over', () => {
+    const other = fullEvidence({
+      identity: identity({ model: 'some-other-model' }),
+      role: 'builder',
+      sessionMode: 'fresh'
+    })
+    expect(admit(other).ok).toBe(false)
+  })
+})

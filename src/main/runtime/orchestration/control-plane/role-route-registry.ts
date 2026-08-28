@@ -114,7 +114,10 @@ export function checkRouteEligibility(
   route: RouteRow,
   requirement: RouteRequirement,
   /** Set only under a verified certification intent. See `admitRoute`. */
-  bootstrapUncertified = false
+  bootstrapUncertified = false,
+  /** True when the runtime has recorded a provider-observed identity for this
+   *  route, which proves more than the catalog ever could. */
+  identityObserved = false
 ): EligibilityFailure | null {
   const key = routeKey(route.identity)
   if (isExcludedWorkerAgent(route.identity.agent)) {
@@ -140,7 +143,13 @@ export function checkRouteEligibility(
   // loop as demanding certification before any launch — the route could never
   // become exact. Certification still requires `effective_model_identity`
   // evidence, so an unresolved alias can be launched but never certified.
-  if (route.identityProof !== 'exact' && !bootstrapUncertified) {
+  // Why an observation outranks the catalog: `identityProof` is a guess from a
+  // static model list — it says Orca has HEARD of an id. A recorded
+  // `effective_model_identity` says the provider itself reported what it is
+  // running, which is the stronger fact and the one certification is built on.
+  // Without this, a route with all ten kinds of runtime evidence is refused for
+  // an id the catalog happens not to list, which is exactly backwards.
+  if (route.identityProof !== 'exact' && !bootstrapUncertified && !identityObserved) {
     return {
       code: 'identity_proof_insufficient',
       reason: `Route ${key} identity proof is ${route.identityProof}; an alias is not exact identity.`
@@ -215,6 +224,22 @@ export type AdmissionRequest = {
   bootstrapUncertified?: boolean
 }
 
+/** True when the runtime has already recorded that the provider reported this
+ *  exact route. Recorded by `certify`, which accepts it only from a real
+ *  provider observation. */
+function hasObservedIdentityEvidence(
+  evidence: readonly RouteEvidence[],
+  identity: RouteIdentity
+): boolean {
+  const key = routeKey(identity)
+  return evidence.some(
+    (record) =>
+      record.routeKey === key &&
+      record.kind === 'effective_model_identity' &&
+      record.outcome === 'PASS'
+  )
+}
+
 export function admitRoute(request: AdmissionRequest): RouteAdmission {
   const { requested, effective, requirement } = request
   const key = routeKey(requested)
@@ -251,7 +276,8 @@ export function admitRoute(request: AdmissionRequest): RouteAdmission {
   const eligibility = checkRouteEligibility(
     route,
     requirement,
-    request.bootstrapUncertified === true
+    request.bootstrapUncertified === true,
+    hasObservedIdentityEvidence(request.evidence, requested)
   )
   if (eligibility) {
     return fail(eligibility.code, 'UNTESTED', eligibility.reason)
