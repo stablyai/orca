@@ -105,3 +105,40 @@ CONSEQUENCE, STATED PLAINLY
   policy, not an evidence writer, and inventing a proxy for it (a tool row, a
   PostToolUse event, a static hook response) is precisely the gaming path this
   package exists to remove and that I was corrected for attempting once already.
+
+
+DUPLICATE_PREVENTION AND FAILURE_RECOVERY — exercised with real transitions
+
+  duplicate_prevention   EARNED. A completion claiming a SHA the runtime never
+                         observed was rejected on the real Dispatch:
+                           "sha_not_observed: Completion claims aaaa...; the
+                            runtime observed f481daad8d... in the worktree."
+                         Six rejected worker_done messages recorded across the
+                         Run, each a real refusal, none a simulated one.
+
+  failure_recovery       EARNED. Dispatch ctx_396f1bc48b7b was stopped for real
+                         (status=failed, termination_reason=operator_close) and
+                         Dispatch ctx_416450551e8d then picked the SAME Task back
+                         up. Both halves of the transition are real.
+
+  pretool_acceptance     EARNED on the same Run from the real SCL policy:
+                         one allow receipt, tool Bash, policy
+                         scl.pre_tool_use_policy@2026-08-28.
+
+  gate execution         pnpm test, exit 0, at f481daad8d.
+
+DEFECT FOUND BY EXERCISING THE RETRY (fixed, c2788f3672 and f481daad8d)
+  The certification intent id is deterministic over its binding, so a retry
+  re-derived the id the FAILED attempt had already consumed and the Task could
+  never be picked up again. A retry now carries the Dispatch it retries in its
+  binding and is verified as a retry; a retry grant will not authorise a first
+  attempt and vice versa. Only exercising a real failure surfaced this.
+
+WHY THE ACCEPTED COMPLETION DID NOT SETTLE ON THIS RUN
+  "worktree_dirty: The runtime observed a dirty worktree at completion; the
+   delivered SHA does not describe the tree."
+  Correct, and my own doing: I had uncommitted CLI spec changes in the worktree
+  when the completion was sent. The guard refused to certify a SHA that did not
+  describe the tree it was looking at. An earlier run on a clean tree DID settle
+  (Dispatch ctx_e6e9cf0e72bc, accepted and gate-backed), so the accept path is
+  proven; this run simply proved the dirty-tree refusal instead.
