@@ -4,12 +4,15 @@ import {
   isGitLabIssueFilter,
   isGitLabMRFilter
 } from '@/components/task-page/gitlab/gitlab-task-filters'
+import { resolveGitLabIssuePageState } from '@/components/task-page/gitlab/gitlab-issue-pages'
 import { getTaskPageRepoSourceContext } from '@/components/task-page/source/repo-source-context'
 import { withGitLabIpcTimeout } from '@/runtime/gitlab-ipc-timeout'
 import type { GitLabIssueFilter, GitLabTaskFilter } from '@/components/task-page-localized-options'
 import type { GitLabTodo, GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { TaskProvider } from '../../../../../shared/task-providers'
+
+const GITLAB_ISSUE_PAGE_SIZE = 50
 
 export function useTaskPageGitLabFetch({
   taskSource,
@@ -19,9 +22,13 @@ export function useTaskPageGitLabFetch({
   selectedRepos,
   selectedReposKey,
   primaryRepo,
+  gitlabIssuePage,
   setGitlabItems,
   setGitlabLoading,
   setGitlabError,
+  setGitlabIssuePage,
+  setGitlabIssueTotalPages,
+  setGitlabIssueLoadingTargetPage,
   setGitlabTodos,
   setGitlabTodosLoading
 }: {
@@ -32,9 +39,13 @@ export function useTaskPageGitLabFetch({
   selectedRepos: readonly Repo[]
   selectedReposKey: string
   primaryRepo: Repo | null
+  gitlabIssuePage: number
   setGitlabItems: Dispatch<SetStateAction<GitLabWorkItem[]>>
   setGitlabLoading: Dispatch<SetStateAction<boolean>>
   setGitlabError: Dispatch<SetStateAction<string | null>>
+  setGitlabIssuePage: Dispatch<SetStateAction<number>>
+  setGitlabIssueTotalPages: Dispatch<SetStateAction<number>>
+  setGitlabIssueLoadingTargetPage: Dispatch<SetStateAction<number | null>>
   setGitlabTodos: Dispatch<SetStateAction<GitLabTodo[]>>
   setGitlabTodosLoading: Dispatch<SetStateAction<boolean>>
 }): void {
@@ -65,6 +76,9 @@ export function useTaskPageGitLabFetch({
       return
     }
     let stale = false
+    // Why: a retreat re-runs this effect immediately; clearing loading in between would flash the
+    // spinner off and re-enable the pager buttons over rows that are about to be replaced.
+    let retreating = false
     setGitlabLoading(true)
     setGitlabError(null)
 
@@ -79,16 +93,18 @@ export function useTaskPageGitLabFetch({
                 sourceContext: getTaskPageRepoSourceContext(repo, 'gitlab'),
                 state: 'opened',
                 assignee: isAssignedToMe ? '@me' : undefined,
-                limit: 50
+                limit: GITLAB_ISSUE_PAGE_SIZE,
+                page: gitlabIssuePage + 1
               })
             ).then((result) => {
               const typed = result as {
                 items: GitLabWorkItem[]
+                totalPages?: number
                 error?: { type?: string; message: string }
               }
               // Why: not_found just means the repo isn't a GitLab project (mixed selection); drop it so the list shows no false errors.
               const error = typed.error?.type === 'not_found' ? undefined : typed.error
-              return { repoId: repo.id, items: typed.items, error }
+              return { repoId: repo.id, items: typed.items, totalPages: typed.totalPages, error }
             })
           }
         : (repo: (typeof eligibleRepos)[0]) =>
@@ -117,16 +133,34 @@ export function useTaskPageGitLabFetch({
         }
         const merged: GitLabWorkItem[] = []
         const errs: string[] = []
+        const settled: { items: readonly GitLabWorkItem[]; totalPages?: number }[] = []
         for (const r of results) {
           if (r.status !== 'fulfilled') {
             errs.push(r.reason instanceof Error ? r.reason.message : String(r.reason))
             continue
           }
+          settled.push(r.value)
           for (const item of r.value.items) {
             merged.push({ ...item, repoId: r.value.repoId })
           }
           if (r.value.error) {
             errs.push(r.value.error.message)
+          }
+        }
+        if (gitlabView === 'issues') {
+          const pager = resolveGitLabIssuePageState({
+            requestedPage: gitlabIssuePage,
+            errorCount: errs.length,
+            results: settled
+          })
+          if (pager.totalPages !== null) {
+            setGitlabIssueTotalPages(pager.totalPages)
+          }
+          // Why: an overshot page holds nothing worth showing — step back and let the refetch fill the list.
+          if (pager.page !== gitlabIssuePage) {
+            retreating = true
+            setGitlabIssuePage(pager.page)
+            return
           }
         }
         merged.sort((a, b) => (b.updatedAt ?? '').localeCompare(a.updatedAt ?? ''))
@@ -137,15 +171,23 @@ export function useTaskPageGitLabFetch({
         }
       })
       .finally(() => {
-        if (!stale) {
+        if (!stale && !retreating) {
           setGitlabLoading(false)
+          setGitlabIssueLoadingTargetPage(null)
         }
       })
     return () => {
       stale = true
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedReposKey covers every selectedRepos field read above (see its GitHub-scoped-context note); keying off the array ref would re-run on every parent render.
-  }, [taskSource, gitlabView, activeGitlabFilter, gitlabRefreshNonce, selectedReposKey])
+  }, [
+    taskSource,
+    gitlabView,
+    activeGitlabFilter,
+    gitlabRefreshNonce,
+    selectedReposKey,
+    gitlabIssuePage
+  ])
 
   // Why: Todos fetch has its own effect — different trigger (no chip filter) and data path (gl.todos is user-scoped, not repo-scoped).
   useEffect(() => {

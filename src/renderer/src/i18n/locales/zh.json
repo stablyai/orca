@@ -266,7 +266,10 @@
           "3b57982bf6": "删除工作区\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "81f13f48d2": "删除工作树\"{{value1}}\"后，Git 无法安全删除分支\"{{value0}}\"，因此 Orca 将其保留以避免丢失本地提交。",
           "runtimeScopeForbiddenTitle": "此连接具有受限（移动端）访问权限",
-          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。"
+          "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。",
+          "createdWithoutParentNesting": "已创建，但未嵌套在“{{value0}}”下",
+          "createdWithoutParentNestingUnnamed": "已创建，但未嵌套在所选父工作树下",
+          "createdWithoutParentNestingDetail": "父工作树已不可用。您可以从工作区菜单中重新设置。"
         },
         "repos": {
           "2975400634": "请更新 Orca 服务器，以便在此运行时打开非 Git 文件夹。",
@@ -3889,17 +3892,90 @@
       },
       "skills": {
         "SkillsPage": {
-          "cb142070b4": "刷新", "a68dee6a32": "搜索技能", "f43ad6edf3": "技能", "ea72d6185b": "无法扫描技能", "dc4c3328ee": "显示文件", "9963dff6d3": "未找到说明。", "995fde8337": "无法显示技能文件", "4acd6d68ec": "未找到技能", "6a62a0168c": "无匹配项", "08a321a984": "没有技能匹配当前搜索和筛选条件。", "cd7893fbc1": "正在扫描技能", "35b9a724a0": "可用", "c13b82793c": "管理安装", "aee7b99cc6": "从链接安装", "filterProvider": "按 Agent 筛选", "filterSource": "按来源筛选", "allSources": "全部", "clearFilters": "清除筛选", "closeSkills": "关闭技能", "closeTooltip": "关闭 · Esc", "moreActions": "更多操作", "sharedLinks": "共享链接", "emptyCopy": "扫描的技能文件夹为空。请安装共享包，或添加技能后刷新。", "retry": "重试", "remoteShareNotice": "这些技能位于 {{host}}。请在该机器上打开“技能”以进行共享。", "viewSwitch": "显示", "searchLinks": "搜索链接", "deleteSkills": "删除技能…"
+          "cb142070b4": "刷新",
+          "a68dee6a32": "搜索技能",
+          "f43ad6edf3": "技能",
+          "ea72d6185b": "无法扫描技能",
+          "dc4c3328ee": "显示文件",
+          "9963dff6d3": "未找到说明。",
+          "995fde8337": "无法显示技能文件",
+          "4acd6d68ec": "未找到技能",
+          "6a62a0168c": "无匹配项",
+          "08a321a984": "没有技能匹配当前搜索和筛选条件。",
+          "cd7893fbc1": "正在扫描技能",
+          "35b9a724a0": "可用",
+          "c13b82793c": "管理安装",
+          "aee7b99cc6": "从链接安装",
+          "filterProvider": "按 Agent 筛选",
+          "filterSource": "按来源筛选",
+          "allSources": "全部",
+          "clearFilters": "清除筛选",
+          "closeSkills": "关闭技能",
+          "closeTooltip": "关闭 · Esc",
+          "moreActions": "更多操作",
+          "sharedLinks": "共享链接",
+          "emptyCopy": "扫描的技能文件夹为空。请安装共享包，或添加技能后刷新。",
+          "retry": "重试",
+          "remoteShareNotice": "这些技能位于 {{host}}。请在该机器上打开“技能”以进行共享。",
+          "viewSwitch": "显示",
+          "searchLinks": "搜索链接",
+          "deleteSkills": "删除技能…"
         },
         "SkillShareSelectionControls": { "01c5a15e02": "共享技能" },
-        "SkillRow": { "updatedUnknown": "无日期", "pathCopied": "路径已复制", "copyPath": "复制路径", "detailPath": "路径", "skillActions": "{{value0}} 的操作", "viewDetails": "查看详情", "deleteSkill": "删除…" },
+        "SkillRow": {
+          "updatedUnknown": "无日期",
+          "pathCopied": "路径已复制",
+          "copyPath": "复制路径",
+          "detailPath": "路径",
+          "skillActions": "{{value0}} 的操作",
+          "viewDetails": "查看详情",
+          "deleteSkill": "删除…"
+        },
         "SkillsList": { "listLabel": "技能" },
-        "sourceStatus": { "missing": "未找到文件夹", "remoteRepo": "远程仓库 — 未扫描", "unavailable": "未扫描" },
+        "sourceStatus": {
+          "missing": "未找到文件夹",
+          "remoteRepo": "远程仓库 — 未扫描",
+          "unavailable": "未扫描"
+        },
         "sources": { "heading": "技能文件夹" },
-        "sourceKind": { "home": "主目录", "workspace": "工作区", "bundled": "内置", "plugin": "插件" },
-        "count": { "skillOne": "{{count}} 个技能", "skillOther": "{{count}} 个技能", "sourceOne": "{{count}} 个来源", "sourceOther": "{{count}} 个来源", "fileOne": "{{count}} 个文件", "fileOther": "{{count}} 个文件", "resultOne": "{{count}} 个结果", "resultOther": "{{count}} 个结果", "selected": "已选择 {{count}} 个", "shareOne": "共享 {{count}} 个技能", "shareOther": "共享 {{count}} 个技能", "linkOne": "{{count}} 个链接", "linkOther": "{{count}} 个链接", "deleteOne": "删除 {{count}} 个技能", "deleteOther": "删除 {{count}} 个技能", "deletedOne": "已删除 {{count}} 个技能", "deletedOther": "已删除 {{count}} 个技能", "deleteFolderOne": "{{count}} 个文件夹", "deleteFolderOther": "{{count}} 个文件夹", "deleteLinkOne": "{{count}} 个链接", "deleteLinkOther": "{{count}} 个链接" },
+        "sourceKind": {
+          "home": "主目录",
+          "workspace": "工作区",
+          "bundled": "内置",
+          "plugin": "插件"
+        },
+        "count": {
+          "skillOne": "{{count}} 个技能",
+          "skillOther": "{{count}} 个技能",
+          "sourceOne": "{{count}} 个来源",
+          "sourceOther": "{{count}} 个来源",
+          "fileOne": "{{count}} 个文件",
+          "fileOther": "{{count}} 个文件",
+          "resultOne": "{{count}} 个结果",
+          "resultOther": "{{count}} 个结果",
+          "selected": "已选择 {{count}} 个",
+          "shareOne": "共享 {{count}} 个技能",
+          "shareOther": "共享 {{count}} 个技能",
+          "linkOne": "{{count}} 个链接",
+          "linkOther": "{{count}} 个链接",
+          "deleteOne": "删除 {{count}} 个技能",
+          "deleteOther": "删除 {{count}} 个技能",
+          "deletedOne": "已删除 {{count}} 个技能",
+          "deletedOther": "已删除 {{count}} 个技能",
+          "deleteFolderOne": "{{count}} 个文件夹",
+          "deleteFolderOther": "{{count}} 个文件夹",
+          "deleteLinkOne": "{{count}} 个链接",
+          "deleteLinkOther": "{{count}} 个链接"
+        },
         "filter": { "allAgents": "所有 Agent", "sharedAgent": "共享 (.agents)" },
-        "SkillsSelectionHeader": { "exit": "退出选择", "exitTooltip": "退出选择 · Esc", "title": "选择要共享的技能", "selectAll": "选择全部 {{count}} 个符合条件的项目", "clear": "清除", "deleteTitle": "选择要删除的技能" },
+        "SkillsSelectionHeader": {
+          "exit": "退出选择",
+          "exitTooltip": "退出选择 · Esc",
+          "title": "选择要共享的技能",
+          "selectAll": "选择全部 {{count}} 个符合条件的项目",
+          "clear": "清除",
+          "deleteTitle": "选择要删除的技能"
+        },
         "SkillDetailDialog": { "agents": "Agent", "updated": "已更新", "copy": "复制" },
         "SkillFreshnessNudge": {
           "titleOne": "已安装的 Orca 技能已过期",
@@ -6118,10 +6194,9 @@
           "compareBaseBranchUpstream": "分支上游"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "占位符切换",
-          "1014ddbfaf": "今天什么也不做。保留作为隐藏实验选项的第一个插槽。",
-          "232cf83de8": "用于内部测试的未列出的切换。这里什么都不支持。",
-          "3e9e827ca5": "隐藏实验"
+          "7c4e18d2f6": "在本机启用粗体故障捕获手势：{{samplingShortcut}} 开始采样突发；{{captureShortcut}} 将窗格证据捕获到磁盘。",
+          "b09f24a51d": "终端渲染诊断",
+          "f2c81d904a": "隐藏实验设置"
         },
         "InputPane": {
           "db15068196": "在 Linux 和 macOS 上默认启用。 Linux使用系统选择剪贴板；其他平台使用私有缓冲区。",
@@ -10753,7 +10828,6 @@
             "a4e93c21d7": "当前分支：{{value0}}",
             "c7d4e2f801": "更改基引用：{{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成的评审详情未包含描述。请重试创建 PR。",
             "createPrIntentGenerateDetailsFailed": "无法生成评审详情。请重试创建 PR。"
           },
           "SourceControlAgentActionDialog": {
@@ -13699,6 +13773,7 @@
           "showMore": "显示更多"
         },
         "AutomationDetail": {
+          "host": "主机",
           "007c8ad874": "提示词",
           "a1d52c2189": "使用范围",
           "449fc83bf7": "token",
@@ -13862,6 +13937,9 @@
           "b11170a008": "无法保存自动化。",
           "2a20596d6b": "自动化已保存。",
           "244727e655": "自动化已更新。",
+          "moved": "自动化已移动到 {host}。",
+          "moveOriginalKept": "已在 {host} 上创建，但无法删除原有自动化。请在原主机上删除它。",
+          "moveOriginalUnverified": "已在 {host} 上创建，但无法确认是否删除了原有自动化。重试前请检查原主机。",
           "77b81bc4ac": "Hermes 自动化创建。",
           "08efc3ae12": "Hermes 自动化已更新。",
           "e431bb85d4": "选择与此 Hermes 自动化位于同一主机上的工作区。",
@@ -14058,6 +14136,19 @@
           "filters": "筛选器",
           "clear": "清除筛选器",
           "removeFilter": "移除 {{value0}} 筛选器"
+        },
+        "createDestination": {
+          "label": "主机",
+          "placeholder": "选择主机",
+          "storedOn": "由 {authority} 存储和调度。",
+          "unselected": "选择存储和调度此自动化的主机。",
+          "orphan": "没有主机的自动化无法容纳新的自动化。请选择要在其上创建此自动化的主机。",
+          "unavailable": "该主机尚无法容纳新的自动化。请选择另一台主机来创建它。",
+          "stale": "此表单打开期间 {host} 已更改。保存前请重新选择。",
+          "projectMismatch": "该项目不在 {host} 上。请选择该主机上的项目，或选择另一台主机。",
+          "noProjects": "{host} 上未设置任何项目。请在该主机上添加一个，或选择另一台主机。",
+          "updateRequired": "更新 {hosts} 上的 Orca 服务器即可在其中存储自动化。",
+          "move": "保存后会在 {host} 上创建此自动化，并删除原有自动化及其运行历史。"
         }
       },
       "agent": {
@@ -14408,6 +14499,13 @@
           "deleteDescription": "“{{name}}” 将无法再通过其公共链接访问。",
           "delete": "删除"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "父工作树",
+        "noParent": "无父工作树",
+        "description": "在侧边栏中将此工作区嵌套到另一个工作树下。不会更改基础分支。",
+        "searchPlaceholder": "搜索工作树...",
+        "noMatches": "无匹配项。"
       }
     },
     "i18n": {

@@ -1,9 +1,14 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { parse as parseJsonc } from 'jsonc-parser'
 import { describe, expect, it } from 'vitest'
 import { parse as parseYaml } from 'yaml'
-import { PR_E2E_SOURCE_ROUTES, selectPrE2eSpecs } from './pr-e2e-source-routing.mjs'
+import {
+  hasSshSourceChange,
+  PR_E2E_SOURCE_ROUTES,
+  selectPrE2eSpecs,
+  SSH_SOURCE_ROUTE_IDS
+} from './pr-e2e-source-routing.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parseYaml(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
@@ -100,17 +105,19 @@ describe('PR E2E gate contract', () => {
     // job without adding it to the strict loop fails here instead of silently
     // leaving that job unenforced. This is what caught GIT_COMPATIBILITY and
     // SHELL_CONTRACTS being absent from an earlier hardcoded list.
-    // Why lastIndexOf: the docs-only branch has its own loop that allows skipped.
     const successMarker = '# Require success when the PR has code-relevant changes'
-    const successLoop = verifyStep.run.slice(
-      verifyStep.run.indexOf(successMarker),
-      verifyStep.run.lastIndexOf('done')
-    )
+    const successLoop = verifyStep.run.slice(verifyStep.run.indexOf(successMarker))
     expect(successLoop.length).toBeGreaterThan(0)
+    expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
+    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
     for (const job of prWorkflow.jobs.verify.needs) {
-      const envVar = job.toUpperCase()
+      const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
+      if (job === 'code_paths' || job === 'root_directory_guard') {
+        continue
+      }
       expect(successLoop).toContain(`"$${envVar}"`)
+      expect(verifyStep.env[`${envVar}_SHOULD_RUN`]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
     }
   })
 
@@ -157,6 +164,18 @@ describe('PR E2E gate contract', () => {
     expect(sshDockerRunner).toContain("'electron-headful'")
   })
 
+  it('reuses the composite install action instead of duplicating pnpm setup', () => {
+    const installFor = (jobName) =>
+      e2eWorkflow.jobs[jobName].steps.find(
+        (step) => step.uses === './.github/actions/install-node-dependencies'
+      )
+
+    expect(installFor('build').with['native-runtime']).toBe('node')
+    for (const jobName of ['e2e', 'changed-e2e', 'ssh-docker-watcher-isolation']) {
+      expect(installFor(jobName).with['native-runtime'], jobName).toBe('electron')
+    }
+  })
+
   it('installs zsh in every Linux lane that can run paired startup readiness', () => {
     for (const jobName of ['e2e', 'changed-e2e', 'ssh-docker-watcher-isolation']) {
       const installStep = e2eWorkflow.jobs[jobName].steps.find((step) =>
@@ -195,6 +214,8 @@ describe('PR E2E gate contract', () => {
       'src/main/providers/ssh-',
       'src/main/ipc/pty',
       'src/relay/',
+      'src/shared/ssh-',
+      'src/renderer/src/store/slices/direct-ssh-',
       'src/renderer/src/components/terminal-pane/remote-runtime-'
     ]
     for (const authority of sshSourceAuthorities) {
@@ -203,10 +224,24 @@ describe('PR E2E gate contract', () => {
       )
     }
 
+    // Why named files rather than prefixes: these seams are single modules, and a prefix
+    // here would route their unrelated neighbours.
+    for (const file of [
+      'src/main/runtime/public-ssh-state.ts',
+      'src/renderer/src/startup/ssh-startup-reconnect.ts',
+      'src/renderer/src/store/slices/ssh.ts'
+    ]) {
+      expect(selectPrE2eSpecs([file]), file).toContain(
+        'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts'
+      )
+    }
+
     const mappedSpecs = [
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
+      'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
       'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts'
     ]
@@ -233,6 +268,140 @@ describe('PR E2E gate contract', () => {
       step.name.startsWith('Install native build')
     )
     expect(changedInstall.run).toContain('openssh-client')
+  })
+
+  it('routes direct-SSH workspace and tab restore from its unnamed source seams', () => {
+    // Why by name: none of these carry "ssh", so the SSH authorities above never reach them
+    // — a closed-tab tombstone and a dropped default-tabs marker both shipped through it.
+    for (const file of [
+      'src/renderer/src/hooks/remote-workspace-session-merge.ts',
+      'src/main/ipc/remote-workspace-snapshot-normalization.ts',
+      'src/renderer/src/lib/worktree-initial-terminal-seeding.ts',
+      'src/renderer/src/lib/worktree-default-terminal-tabs.ts',
+      'src/shared/remote-workspace-session-projection.ts',
+      'src/renderer/src/components/terminal/initial-terminal.ts'
+    ]) {
+      const specs = selectPrE2eSpecs([file])
+      expect(specs, file).toContain('tests/e2e/ssh-cold-activation-restore.spec.ts')
+      expect(specs, file).toContain('tests/e2e/ssh-reconnect-tab-destruction.spec.ts')
+    }
+
+    expect(
+      selectPrE2eSpecs(['src/renderer/src/hooks/remote-workspace-session-merge.test.ts'])
+    ).toEqual([])
+  })
+
+  it('triggers the Docker-SSH lane from SSH source, not from a spec name', () => {
+    // The behavioural half of the invariant, and the part that actually matters: an SSH source
+    // edit is recognised as one, through the same routes that select the specs.
+    for (const file of [
+      'src/main/ssh/connection.ts',
+      'src/relay/pty-handler.ts',
+      'src/renderer/src/store/slices/direct-ssh-pane-retry-ledger.ts',
+      'src/renderer/src/hooks/remote-workspace-session-merge.ts',
+      'src/main/ipc/remote-workspace-snapshot-normalization.ts'
+    ]) {
+      expect(hasSshSourceChange([file]), file).toBe(true)
+    }
+    for (const file of [
+      'src/main/git/git-status.ts',
+      'src/renderer/src/components/tab-bar/BrowserTab.tsx',
+      'src/main/ssh/connection.test.ts'
+    ]) {
+      expect(hasSshSourceChange([file]), file).toBe(false)
+    }
+
+    // Why: the signal must stay derived from the routes. A route id that no longer exists would
+    // silently narrow it to nothing.
+    for (const id of SSH_SOURCE_ROUTE_IDS) {
+      expect(
+        PR_E2E_SOURCE_ROUTES.map((route) => route.id),
+        id
+      ).toContain(id)
+    }
+
+    // Why text and not structure: a job `if:` is only ever available as a string. The strongest
+    // available assertion is that the source signal is its own disjunct, so the lane no longer
+    // depends on a spec name surviving in a route's spec list.
+    const sshLaneCondition = e2eWorkflow.jobs['ssh-docker-watcher-isolation'].if
+    expect(sshLaneCondition).toContain("inputs.ssh_source_changed == 'true' ||")
+
+    expect(e2eWorkflow.on.workflow_call.inputs.ssh_source_changed.type).toBe('string')
+    expect(prWorkflow.jobs['e2e-paths'].outputs.ssh_source_changed).toBe(
+      '${{ steps.filter.outputs.ssh_source_changed }}'
+    )
+    expect(prWorkflow.jobs.e2e.with.ssh_source_changed).toBe(
+      '${{ needs.e2e-paths.outputs.ssh_source_changed }}'
+    )
+    expect(filterStep.run).toContain('pr-e2e-source-routing.mjs --ssh-source')
+    expect(filterStep.run).toContain('ssh_source_changed=$SSH_SOURCE_CHANGED')
+  })
+
+  it('gives every Docker-gated SSH spec a lane that runs it', () => {
+    // Why this shape: the sharded lanes set no ORCA_E2E_SSH_DOCKER, so a Docker-gated spec
+    // that no runner names runs nowhere and still reports green — the silent skip this file
+    // exists to prevent. Asserting reachability rather than a literal keeps that true when
+    // the lanes move.
+    // Why these two are exempt: each needs something CI cannot give it, recorded in
+    // run-ssh-docker-e2e.mjs so the gap stays legible rather than looking like coverage.
+    const unreachableSpecs = new Set([
+      'tests/e2e/ssh-docker-relay-perf.spec.ts',
+      'tests/e2e/ssh-codex-display-artifacts-repro.spec.ts',
+      'tests/e2e/ssh-docker-bulk-open-freeze-repro.spec.ts'
+    ])
+    // Why comments are stripped: this file's own runner lists the two exempt specs by name in a
+    // prose comment. A substring scan over raw text would count any spec merely *discussed* in a
+    // runner as claimed by it -- the silent skip this assertion exists to catch, re-entering
+    // through the documentation.
+    const stripComments = (text) =>
+      text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
+    const laneRunners = [
+      'run-ssh-docker-e2e.mjs',
+      'run-ssh-docker-watcher-isolation-e2e.mjs',
+      'run-ssh-docker-terminal-parking-e2e.mjs'
+    ].map((file) => stripComments(readFileSync(join(projectDir, 'config/scripts', file), 'utf8')))
+
+    // Why a comparison and not the bare name: preview and demo specs cite the flag in a
+    // "how to run me" comment without gating on it. Why a regex rather than one literal: an
+    // equally-valid spelling (double quotes, or a `!==` guard) would escape a fixed-string scan
+    // and the spec would silently leave the contract.
+    const dockerGateExpression = /ORCA_E2E_SSH_DOCKER\s*[!=]==\s*['"]1['"]/
+    const dockerGatedSpecs = readdirSync(join(projectDir, 'tests/e2e'))
+      .filter((file) => file.endsWith('.spec.ts'))
+      .map((file) => `tests/e2e/${file}`)
+      .filter((spec) => dockerGateExpression.test(readFileSync(join(projectDir, spec), 'utf8')))
+    expect(dockerGatedSpecs.length).toBeGreaterThan(0)
+
+    const unclaimed = dockerGatedSpecs.filter(
+      (spec) => !unreachableSpecs.has(spec) && !laneRunners.some((runner) => runner.includes(spec))
+    )
+    expect(
+      unclaimed,
+      `Docker-gated specs claimed by no lane runner: ${unclaimed.join(', ')}`
+    ).toEqual([])
+
+    // Why: an exemption that outlives its spec would quietly excuse a real gap.
+    for (const spec of unreachableSpecs) {
+      expect(dockerGatedSpecs, spec).toContain(spec)
+      // Why also assert absence from every runner: `unreachableSpecs` short-circuits the
+      // unclaimed check above, so a spec could be documented as exempt while a runner still
+      // invokes it -- an exemption that reads as coverage removal but changes nothing, and a
+      // lane that stays red for a reason the file says it excluded.
+      for (const runner of laneRunners) {
+        expect(runner.includes(spec), `${spec} is exempt but still invoked by a lane runner`).toBe(
+          false
+        )
+      }
+    }
+
+    const laneStep = e2eWorkflow.jobs['ssh-docker-watcher-isolation'].steps.find(
+      (step) => step.name === 'Run remaining Docker SSH E2E'
+    )
+    expect(laneStep.run).toContain('test:e2e:ssh-docker')
+    // Why: the added serial tests, several budgeting 4-10 minutes each, do not fit the old 35.
+    expect(
+      e2eWorkflow.jobs['ssh-docker-watcher-isolation']['timeout-minutes']
+    ).toBeGreaterThanOrEqual(60)
   })
 
   it('scopes the VM rollback oracle to the PR range and recipe schema authorities', () => {

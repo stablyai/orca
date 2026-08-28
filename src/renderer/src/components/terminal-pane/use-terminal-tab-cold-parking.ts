@@ -138,6 +138,8 @@ export function useTerminalTabColdParking(args: {
   const [coldParkedTerminalTabIds, setColdParkedTerminalTabIds] = useState<ReadonlySet<string>>(
     () => new Set()
   )
+  // Mirrors the committed park set; written only from the post-commit effect below.
+  const coldParkedTerminalTabIdsRef = useRef(coldParkedTerminalTabIds)
 
   useEffect(() => {
     const timers = terminalTabParkingTimersRef.current
@@ -224,9 +226,16 @@ export function useTerminalTabColdParking(args: {
       parkVerdictRecords: parkVerdictRecordsRef.current,
       nowMs
     })
-    setColdParkedTerminalTabIds((current) =>
-      haveSameTerminalTabIds(current, parkedTabIds) ? current : parkedTabIds
-    )
+    // Why the ref and not the updater form: returning `current` still dispatches,
+    // and React only bails eagerly while the fiber has no pending lanes. This
+    // effect re-runs on every tab-model write (runtime titles, unread bumps),
+    // so inside any commit cascade the no-op dispatch was what tripped React's
+    // root-global nested-update counter — naming this hook in a #185 whose real
+    // driver is elsewhere (see src/shared/react-update-depth-attribution.ts).
+    if (!haveSameTerminalTabIds(coldParkedTerminalTabIdsRef.current, parkedTabIds)) {
+      coldParkedTerminalTabIdsRef.current = parkedTabIds
+      setColdParkedTerminalTabIds(parkedTabIds)
+    }
 
     for (const candidate of candidates) {
       if (

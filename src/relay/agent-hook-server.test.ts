@@ -8,6 +8,7 @@ import { endpointDirForRelaySocket } from './agent-hook-endpoint-coordinates'
 import type { AgentHookRelayEnvelope } from '../shared/agent-hook-relay'
 import { makePaneKey } from '../shared/stable-pane-id'
 import * as agentHookListener from '../shared/agent-hook-listener/grok-result-discovery'
+import { HOOK_REQUEST_MAX_BYTES } from '../shared/agent-hook-listener/request-body'
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
@@ -42,7 +43,7 @@ describe('RelayAgentHookServer', () => {
     expect(endpointDir).not.toContain('\\\\.\\pipe')
   })
 
-  it('forwards a parsed Claude UserPromptSubmit POST as a normalized envelope', async () => {
+  it('forwards a raw Claude JSON POST with base64 metadata headers', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
     await server.start()
@@ -52,16 +53,13 @@ describe('RelayAgentHookServer', () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Orca-Agent-Hook-Token': token
+          'X-Orca-Agent-Hook-Token': token,
+          'X-Orca-Agent-Hook-Meta-Encoding': 'base64',
+          'X-Orca-Agent-Hook-Meta': Buffer.from(
+            [PANE_KEY, 'tab-1', '', 'wt-1', 'remote', '1'].join('\x1f')
+          ).toString('base64')
         },
-        body: JSON.stringify({
-          paneKey: PANE_KEY,
-          tabId: 'tab-1',
-          worktreeId: 'wt-1',
-          env: 'remote',
-          version: '1',
-          payload: { hook_event_name: 'UserPromptSubmit', prompt: 'hi' }
-        })
+        body: JSON.stringify({ hook_event_name: 'UserPromptSubmit', prompt: 'hi' })
       })
       expect(res.status).toBe(204)
       expect(forward).toHaveBeenCalledTimes(1)
@@ -330,6 +328,27 @@ describe('RelayAgentHookServer', () => {
     }
   })
 
+  it('rejects unknown hook paths before parsing the request body', async () => {
+    const forward = vi.fn()
+    const server = new RelayAgentHookServer({ endpointDir: dir, forward })
+    await server.start()
+    try {
+      const { port, token } = server.getCoordinates()
+      const res = await fetch(`http://127.0.0.1:${port}/hook/unknown`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({ value: 'x'.repeat(HOOK_REQUEST_MAX_BYTES + 1) })
+      })
+      expect(res.status).toBe(404)
+      expect(forward).not.toHaveBeenCalled()
+    } finally {
+      server.stop()
+    }
+  })
+
   it('replays cached payloads on demand', async () => {
     const forward = vi.fn<(envelope: AgentHookRelayEnvelope) => void>()
     const server = new RelayAgentHookServer({ endpointDir: dir, forward })
@@ -492,6 +511,7 @@ describe('RelayAgentHookServer', () => {
       expect(env.ORCA_AGENT_HOOK_TOKEN).toBeTruthy()
       expect(env.ORCA_AGENT_HOOK_ENV).toBe('remote')
       expect(env.ORCA_AGENT_HOOK_VERSION).toBe('1')
+      expect(env.ORCA_AGENT_HOOK_TRANSPORT).toBe('raw-json-v1')
       expect(env.ORCA_AGENT_HOOK_ENDPOINT).toBeTruthy()
     } finally {
       server.stop()

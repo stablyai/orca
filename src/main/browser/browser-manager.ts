@@ -43,6 +43,11 @@ import {
   buildBrowserClickedLinkRoutingScript,
   buildBrowserIframeClickedLinkRoutingScript
 } from './browser-clicked-link-routing'
+import {
+  createPageInitiatedTabBudget,
+  type PageInitiatedTabBudget
+} from './browser-page-initiated-tab-budget'
+import { isNewBrowserTabPopupIntent } from './browser-popup-new-tab-intent'
 import { cleanElectronUserAgent } from './browser-session-ua'
 import { getBrowserSessionUserAgentMode } from './browser-session-user-agent-mode'
 import { googleAuthUserAgent, isGoogleAuthUrl } from './browser-google-auth-ua'
@@ -58,6 +63,11 @@ import {
   BROWSER_ANNOTATION_VIEWPORT_BRIDGE_WORLD_ID,
   buildBrowserAnnotationViewportBridgeScript
 } from '../../shared/browser-annotation-viewport-bridge'
+import {
+  getWorkspaceDocPageGuest,
+  installDocPreviewGuestPolicy,
+  isWorkspaceDocPageId
+} from './doc-preview-guest-policy'
 import type { KeybindingOverrides } from '../../shared/keybindings'
 import {
   BrowserCertificateTrustController,
@@ -152,6 +162,15 @@ type PopupOwnerContext = {
   browserTabId: string
   rootGuestWebContentsId: number
 }
+/**
+ * What a guest is allowed to be. A browsing guest is the web — popups, clicked-link routing and
+ * anti-detection all apply. A workspace-document guest renders one granted document and gets none
+ * of that; `host` is the renderer that minted its grant, and the only sink for what it reports.
+ */
+export type BrowserGuestPolicy =
+  | { profile: 'browsing' }
+  | { profile: 'workspace-doc'; host: Electron.WebContents }
+const BROWSING_GUEST_POLICY: BrowserGuestPolicy = { profile: 'browsing' }
 type PendingMainFrameNavigation = {
   currentUrl: string
   supersededUrls: string[]
@@ -233,6 +252,8 @@ export class BrowserManager {
   // Why: reverse map gives O(1) guest→tab lookups on every mouse/load/permission/popup event.
   private readonly tabIdByWebContentsId = new Map<number, string>()
   private readonly popupOwnerContextByGuestId = new Map<number, PopupOwnerContext>()
+  // Why: keyed by the opener tree's root so named child popups can't each mint a fresh tab quota.
+  private readonly pageInitiatedTabBudgetByRootGuestId = new Map<number, PageInitiatedTabBudget>()
   // Why: guests are keyed by page id but renderer visibility by workspace id; bridge the mismatch to activate the right tab before capture.
   private readonly workspaceIdByPageId = new Map<string, string>()
   private readonly sessionProfileIdByPageId = new Map<string, string | null>()
@@ -392,6 +413,16 @@ export class BrowserManager {
     }
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
     return null
+  }
+
+  /** Shared across the whole opener tree, so a chain of popups draws from one budget. */
+  private tryConsumePageInitiatedTab(rootGuestWebContentsId: number): boolean {
+    let budget = this.pageInitiatedTabBudgetByRootGuestId.get(rootGuestWebContentsId)
+    if (!budget) {
+      budget = createPageInitiatedTabBudget()
+      this.pageInitiatedTabBudgetByRootGuestId.set(rootGuestWebContentsId, budget)
+    }
+    return budget.tryConsume(Date.now())
   }
 
   private resolveRendererForBrowserTab(browserTabId: string): Electron.WebContents | null {
@@ -654,12 +685,20 @@ export class BrowserManager {
 
   attachGuestPolicies(
     guest: Electron.WebContents,
-    inheritedOwnerContext: PopupOwnerContext | null = null
+    inheritedOwnerContext: PopupOwnerContext | null = null,
+    policy: BrowserGuestPolicy = BROWSING_GUEST_POLICY
   ): void {
     if (this.policyAttachedGuestIds.has(guest.id)) {
       return
     }
     this.policyAttachedGuestIds.add(guest.id)
+    // Why one door with a profile rather than a second installer beside it: whether a guest was
+    // policy-attached at all is what registration and teardown both key on, so a guest that took
+    // another path into the app is invisible to both.
+    if (policy.profile === 'workspace-doc') {
+      this.attachWorkspaceDocGuestPolicies(guest, policy.host)
+      return
+    }
     if (inheritedOwnerContext) {
       this.popupOwnerContextByGuestId.set(guest.id, inheritedOwnerContext)
     }
@@ -758,8 +797,9 @@ export class BrowserManager {
       this.attachGuestPolicies(window.webContents, this.resolvePopupOwnerContext(guest.id))
     }
     guest.on('did-create-window', handleDidCreateWindow)
-    guest.setWindowOpenHandler(({ url, frameName }) => {
-      const browserTabId = this.resolveBrowserTabIdForGuestWebContentsId(guest.id)
+    guest.setWindowOpenHandler(({ url, frameName, disposition, features }) => {
+      const ownerContext = this.resolvePopupOwnerContext(guest.id)
+      const browserTabId = ownerContext?.browserTabId ?? null
       const browserUrl = normalizeBrowserNavigationUrl(url)
       const externalUrl = normalizeExternalBrowserUrl(url)
       const expectedClickedLinkFrameName = this.clickedLinkFrameNameByGuestId.get(guest.id)
@@ -781,6 +821,33 @@ export class BrowserManager {
           })
         }
         // Why: a recognized gesture must never fall through to a native popup if its renderer vanished mid-click.
+        return { action: 'deny' }
+      }
+
+      // Why: an unnamed, featureless window.open() is Chromium's own new-tab shape, so an Orca tab is
+      // the honest presentation; a floating origin-bar window is not. Opener-dependent shapes are
+      // excluded by isNewBrowserTabPopupIntent and still get a real child window below.
+      if (
+        ownerContext &&
+        externalUrl &&
+        isNewBrowserTabPopupIntent({ frameName, disposition, features })
+      ) {
+        // Why: one activation lets a page loop window.open, and each routed tab persists into
+        // workspace session state, so it survives the quit that used to clear popup windows.
+        if (!this.tryConsumePageInitiatedTab(ownerContext.rootGuestWebContentsId)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(externalUrl),
+            action: 'blocked'
+          })
+          return { action: 'deny' }
+        }
+        if (this.openLinkInOrcaTab(ownerContext.browserTabId, externalUrl)) {
+          this.forwardOrQueuePopupEvent(guest.id, {
+            origin: safeOrigin(externalUrl),
+            action: 'opened-in-orca'
+          })
+        }
+        // Why: a recognized new-tab intent must never fall through to a native popup if its renderer vanished mid-open.
         return { action: 'deny' }
       }
 
@@ -967,6 +1034,30 @@ export class BrowserManager {
         guest.off('did-start-navigation', didStartNavigationHandler)
         guest.off('did-navigate', didNavigateHandler)
         guest.off('did-fail-load', didFailLoadHandler)
+      }
+    })
+  }
+
+  /**
+   * A workspace document is not the web: no popups, no link routing, no anti-detection, and no
+   * navigation bookkeeping for chrome it does not have. What it does share with a browsing guest is
+   * this method's teardown, so a retired preview drops its listeners on the same path.
+   */
+  private attachWorkspaceDocGuestPolicies(
+    guest: Electron.WebContents,
+    host: Electron.WebContents
+  ): void {
+    const disposeDocPolicy = installDocPreviewGuestPolicy(guest, host)
+    const handleDestroyed = (): void => {
+      this.cleanupGuestPolicyAttachment(guest.id)
+    }
+    guest.on('destroyed', handleDestroyed)
+    this.policyCleanupByGuestId.set(guest.id, () => {
+      disposeDocPolicy()
+      try {
+        guest.off('destroyed', handleDestroyed)
+      } catch {
+        // guest may already be destroyed
       }
     })
   }
@@ -1243,6 +1334,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.delete(guestWebContentsId)
     this.offscreenGuestIds.delete(guestWebContentsId)
     this.popupOwnerContextByGuestId.delete(guestWebContentsId)
+    this.pageInitiatedTabBudgetByRootGuestId.delete(guestWebContentsId)
     this.authUserAgentOverrideStateByGuestId.delete(guestWebContentsId)
     this.pendingNavigationByGuestId.delete(guestWebContentsId)
     // Why: a popup must stop inheriting authorization the moment its owner retires, before Chromium destroys the child.
@@ -1272,7 +1364,9 @@ export class BrowserManager {
     rendererWebContentsId
   }: BrowserGuestRegistration): boolean {
     const browserTabId = browserPageId ?? legacyBrowserTabId
-    if (!browserTabId) {
+    // Why refuse rather than overwrite: the two halves of the registry must stay disjoint, or one
+    // id resolves in both and the tool door silently prefers the document guest over the page.
+    if (!browserTabId || isWorkspaceDocPageId(browserTabId)) {
       return false
     }
     // Why: on guest-surface swap, cancel any grab bound to the old guest's listeners so it doesn't strand on a stale webContents.
@@ -1331,6 +1425,12 @@ export class BrowserManager {
   }
 
   unregisterGuest(browserTabId: string): void {
+    // Why the check on the exit door too: a document page withdraws by revoking its grant, never
+    // through here, so its id arriving is misaddressed — and the cancel below would evict that
+    // preview's live grab on the strength of it.
+    if (isWorkspaceDocPageId(browserTabId)) {
+      return
+    }
     // Why: teardown mid-grab must cancel it so the renderer gets a signal, not a dangling Promise.
     this.cancelGrabOp(browserTabId, 'evicted')
 
@@ -1398,10 +1498,15 @@ export class BrowserManager {
     sessionProfileId?: string | null
     userAgentMode?: BrowserSessionUserAgentMode
     webContentsId: number
-  }): void {
+  }): boolean {
+    // Why the same check on both registration doors: one id resolving in both halves is the exact
+    // confusion the split registries exist to prevent.
+    if (isWorkspaceDocPageId(browserPageId)) {
+      return false
+    }
     const guest = webContents.fromId(webContentsId)
     if (!guest || guest.isDestroyed()) {
-      return
+      return false
     }
     // Why: offscreen pages have no renderer webview listeners, so main owns their load-failure lifecycle.
     this.offscreenGuestIds.add(webContentsId)
@@ -1422,6 +1527,7 @@ export class BrowserManager {
       this.worktreeIdByTabId.set(browserPageId, worktreeId)
     }
     this.certificateTrustController?.onGuestRegistered(webContentsId, browserPageId)
+    return true
   }
 
   unregisterAll(): void {
@@ -1444,6 +1550,7 @@ export class BrowserManager {
     this.clickedLinkFrameNameByGuestId.clear()
     this.tabIdByWebContentsId.clear()
     this.popupOwnerContextByGuestId.clear()
+    this.pageInitiatedTabBudgetByRootGuestId.clear()
     this.worktreeIdByTabId.clear()
     this.sessionProfileIdByPageId.clear()
     this.userAgentModeByPageId.clear()
@@ -1796,12 +1903,13 @@ export class BrowserManager {
 
   async setAnnotationViewportBridge(
     browserTabId: string,
-    options: BrowserAnnotationViewportBridgeOptions
+    options: BrowserAnnotationViewportBridgeOptions,
+    resolveGuest: () => Electron.WebContents | null
   ): Promise<boolean> {
     const prev = this.annotationViewportBridgeOpsByTabId.get(browserTabId) ?? Promise.resolve()
     const next = prev
       .catch(() => {})
-      .then(() => this.doSetAnnotationViewportBridgeImpl(browserTabId, options))
+      .then(() => this.doSetAnnotationViewportBridgeImpl(options, resolveGuest))
     this.annotationViewportBridgeOpsByTabId.set(browserTabId, next)
     try {
       return await next
@@ -1812,18 +1920,22 @@ export class BrowserManager {
     }
   }
 
+  // Why the caller resolves the guest: the same bridge serves browsing pages and workspace
+  // documents, which live in different halves of the page registry.
+  // Why a resolver and not the guest itself: this op may have waited behind another one, and a
+  // cross-process navigation meanwhile swaps the tab's contents without destroying the old one —
+  // injecting into the guest the request named would bridge a page nobody is looking at.
+  // Why no tab id: with teardown gone this reaches only the guest the resolver hands back, and
+  // taking an id it cannot act on would invite the next reader to act on it.
   private async doSetAnnotationViewportBridgeImpl(
-    browserTabId: string,
-    options: BrowserAnnotationViewportBridgeOptions
+    options: BrowserAnnotationViewportBridgeOptions,
+    resolveGuest: () => Electron.WebContents | null
   ): Promise<boolean> {
-    const webContentsId = this.webContentsIdByTabId.get(browserTabId)
-    if (!webContentsId) {
-      return false
-    }
-    const guest = webContents.fromId(webContentsId)
+    // Why no teardown here: the resolver already unregisters a page whose guest died, and the only
+    // case it uniquely leaves is an ownership mismatch on a healthy page — where tearing down would
+    // cancel that page's in-flight downloads and grabs over a request that was merely misaddressed.
+    const guest = resolveGuest()
     if (!guest || guest.isDestroyed()) {
-      // Why: a stale guest must clear every per-tab registry entry, not just the WebContents maps.
-      this.unregisterGuest(browserTabId)
       return false
     }
 
@@ -1930,10 +2042,21 @@ export class BrowserManager {
   // --- Browser Context Grab — main-owned operations ---
 
   /** Validate that the sender owns browserTabId; returns the guest WebContents or null. */
+  /**
+   * The guest a request from `senderWebContentsId` may act on, across both halves of the page
+   * registry. This is the only door taught about workspace-document guests: they are kept out of
+   * the browsing maps entirely, so page management, agent commands, download routing and
+   * certificate attribution all miss them without a guard of their own — and a reader who opens a
+   * tool on the document in front of them still gets an answer.
+   */
   getAuthorizedGuest(
     browserTabId: string,
     senderWebContentsId: number
   ): Electron.WebContents | null {
+    const docGuest = getWorkspaceDocPageGuest(browserTabId, senderWebContentsId)
+    if (docGuest) {
+      return docGuest
+    }
     const registeredRenderer = this.rendererWebContentsIdByTabId.get(browserTabId)
     if (registeredRenderer == null || registeredRenderer !== senderWebContentsId) {
       return null

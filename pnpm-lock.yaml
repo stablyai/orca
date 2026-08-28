@@ -9,7 +9,7 @@ overrides:
 
 patchedDependencies:
   '@vscode/windows-process-tree@0.8.0':
-    hash: 73a90530e6b95c05dac50f2c48787fb51cb292587773016ebe57eb05e41075a0
+    hash: 946ffb2b1026bcb554d9920681fb00f546c28fc5de6d95a877d198b49bf73988
     path: config/patches/@vscode__windows-process-tree@0.8.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.287':
     hash: 47405b9994b5acf1b4e90b49250358c1ca03649854d59560e7732b72fe336920
@@ -18,7 +18,7 @@ patchedDependencies:
     hash: af3b156143ed2ee9903b753145b63dd4a2ee72cadd7ef333ab0f4d5d3ebfc32c
     path: config/patches/@xterm__addon-serialize@0.15.0-beta.287.patch
   '@xterm/addon-webgl@0.20.0-beta.286':
-    hash: 6da7d7770b6427246f2a0d057d97da418040e498068b41d0c2d3c6b20bf49258
+    hash: 118f649459ba56a51627d46603e2d5d81d837ac9c4dc393f5cc20263d0ac1b91
     path: config/patches/@xterm__addon-webgl@0.20.0-beta.286.patch
   '@xterm/xterm@6.1.0-beta.287':
     hash: 46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7
@@ -27,7 +27,7 @@ patchedDependencies:
     hash: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
     path: config/patches/lint-staged@16.4.0.patch
   node-pty@1.1.0:
-    hash: 9c665d9e41571341cb8986607d531b953a7f32c0dd60e1e74e633c098d80f2c1
+    hash: 9a2eedbf2448b8ff1387a8a740ee5e4e968bf8484d7d80e12a3f6a2dc26b0e17
     path: config/patches/node-pty@1.1.0.patch
 
 importers:
@@ -69,7 +69,7 @@ importers:
         version: 3.3.1
       node-pty:
         specifier: ^1.1.0
-        version: 1.1.0(patch_hash=9c665d9e41571341cb8986607d531b953a7f32c0dd60e1e74e633c098d80f2c1)
+        version: 1.1.0(patch_hash=9a2eedbf2448b8ff1387a8a740ee5e4e968bf8484d7d80e12a3f6a2dc26b0e17)
       posthog-node:
         specifier: ^5.33.3
         version: 5.33.3
@@ -229,7 +229,7 @@ importers:
         version: 0.13.0-beta.287(@xterm/xterm@6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7))
       '@xterm/addon-webgl':
         specifier: 0.20.0-beta.286
-        version: 0.20.0-beta.286(patch_hash=6da7d7770b6427246f2a0d057d97da418040e498068b41d0c2d3c6b20bf49258)(@xterm/xterm@6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7))
+        version: 0.20.0-beta.286(patch_hash=118f649459ba56a51627d46603e2d5d81d837ac9c4dc393f5cc20263d0ac1b91)(@xterm/xterm@6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7))
       '@xterm/xterm':
         specifier: 6.1.0-beta.287
         version: 6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7)
@@ -407,7 +407,7 @@ importers:
     optionalDependencies:
       '@vscode/windows-process-tree':
         specifier: 0.8.0
-        version: 0.8.0(patch_hash=73a90530e6b95c05dac50f2c48787fb51cb292587773016ebe57eb05e41075a0)
+        version: 0.8.0(patch_hash=946ffb2b1026bcb554d9920681fb00f546c28fc5de6d95a877d198b49bf73988)
       sherpa-onnx-darwin-arm64:
         specifier: 1.12.37
         version: 1.12.37
@@ -9605,7 +9605,7 @@ snapshots:
       convert-source-map: 2.0.0
       tinyrainbow: 3.1.0
 
-  '@vscode/windows-process-tree@0.8.0(patch_hash=73a90530e6b95c05dac50f2c48787fb51cb292587773016ebe57eb05e41075a0)':
+  '@vscode/windows-process-tree@0.8.0(patch_hash=946ffb2b1026bcb554d9920681fb00f546c28fc5de6d95a877d198b49bf73988)':
     dependencies:
       node-addon-api: 7.1.0
     optional: true
@@ -9638,7 +9638,7 @@ snapshots:
     dependencies:
       '@xterm/xterm': 6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7)
 
-  '@xterm/addon-webgl@0.20.0-beta.286(patch_hash=6da7d7770b6427246f2a0d057d97da418040e498068b41d0c2d3c6b20bf49258)(@xterm/xterm@6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7))':
+  '@xterm/addon-webgl@0.20.0-beta.286(patch_hash=118f649459ba56a51627d46603e2d5d81d837ac9c4dc393f5cc20263d0ac1b91)(@xterm/xterm@6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7))':
     dependencies:
       '@xterm/xterm': 6.1.0-beta.287(patch_hash=46796c152f3b73e28238f44499eaf5a867a863809bc7b470b159526a41e354f7)
 
@@ -12046,7 +12046,7 @@ snapshots:
 
   node-int64@0.4.0: {}
 
-  node-pty@1.1.0(patch_hash=9c665d9e41571341cb8986607d531b953a7f32c0dd60e1e74e633c098d80f2c1):
+  node-pty@1.1.0(patch_hash=9a2eedbf2448b8ff1387a8a740ee5e4e968bf8484d7d80e12a3f6a2dc26b0e17):
     dependencies:
       node-addon-api: 7.1.1
 

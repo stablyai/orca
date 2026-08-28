@@ -3,7 +3,7 @@ import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'
-import type { HostClientAcquisition } from './client-context'
+import type { HostClientAcquisition } from './host-client-acquisition-registry'
 
 type UseAllHostClientsOptions = {
   autoConnectHostIds?: readonly string[]

@@ -22,6 +22,7 @@ import {
   EMPTY_BROWSER_ANNOTATIONS,
   type BrowserOverlayViewport
 } from '../describe-page/browser-annotation-geometry'
+import { syncGuestAnnotationViewportBridge } from '../annotate/guest-annotation-viewport-bridge'
 import { attachBrowserPageWebview } from './attach-browser-page-webview'
 import { setBrowserPageWebviewInputLock } from './browser-page-webview'
 import type {
@@ -201,27 +202,13 @@ export function useBrowserPageWebviewLifecycle({
   )
 
   const syncBrowserAnnotationViewportBridge = useCallback((): void => {
-    const pendingPayload = pendingAnnotationPayloadRef.current
-    // Why: existing badges render in-guest for smooth scroll; only the pending dialog needs viewport messages.
-    const markers = browserAnnotationsRef.current.map((annotation, index) => ({
-      id: annotation.id,
-      index,
-      isFixed: annotation.payload.target.isFixed === true,
-      rectPage: annotation.payload.target.rectPage,
-      rectViewport: annotation.payload.target.rectViewport
-    }))
-    const enabled = isActiveRef.current && (pendingPayload !== null || markers.length > 0)
-    void window.api.browser
-      .setAnnotationViewportBridge({
-        browserPageId: browserTabId,
-        emitViewport: pendingPayload !== null,
-        enabled,
-        markers,
-        token: annotationViewportBridgeTokenRef.current
-      })
-      .catch(() => {
-        // The viewport bridge is visual-only; stale markers beat breaking the pane on a destroyed guest.
-      })
+    syncGuestAnnotationViewportBridge({
+      toolTargetId: browserTabId,
+      annotations: browserAnnotationsRef.current,
+      pendingPayload: pendingAnnotationPayloadRef.current,
+      surfaceActive: isActiveRef.current,
+      token: annotationViewportBridgeTokenRef.current
+    })
   }, [browserTabId])
 
   // Why: browserTab.url excluded from deps (changes every navigation → would destroy/recreate the webview); URL logic reads browserTabUrlRef.

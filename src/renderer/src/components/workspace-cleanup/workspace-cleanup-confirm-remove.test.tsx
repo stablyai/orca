@@ -218,4 +218,43 @@ describe('WorkspaceCleanupConfirmRemove', () => {
       '1 workspace currently shows risk and may need a force delete'
     )
   })
+
+  it('gives the review pill a text equivalent for its state color without repeating the number', () => {
+    const candidate = makeFacetCandidate({
+      worktreeId: 'repo-1::/repo/merged-review',
+      displayName: 'Merged review',
+      path: '/repo/merged-review'
+    })
+
+    act(() => {
+      root.render(
+        <WorkspaceCleanupConfirmRemove
+          candidates={[candidate]}
+          now={Date.now()}
+          reviewInfoByWorktreeId={
+            new Map([
+              [
+                candidate.worktreeId,
+                {
+                  hasReview: true,
+                  label: 'PR #15716',
+                  provider: 'github' as const,
+                  state: 'merged' as const,
+                  title: 'keep editor focus'
+                }
+              ]
+            ])
+          }
+          progress={null}
+          onBack={vi.fn()}
+          onCancel={vi.fn()}
+          onConfirm={vi.fn()}
+        />
+      )
+    })
+
+    const srText = container.querySelector('span.sr-only')?.textContent ?? ''
+    expect(srText).toContain('Merged')
+    expect(srText).not.toContain('PR #15716')
+  })
 })

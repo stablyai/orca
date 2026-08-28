@@ -263,7 +263,10 @@
           "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "runtimeScopeForbiddenTitle": "この接続は制限付き（モバイル）アクセスです",
-          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。"
+          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。",
+          "createdWithoutParentNesting": "「{{value0}}」の配下にネストせずに作成しました",
+          "createdWithoutParentNestingUnnamed": "選択した親ワークツリーの配下にネストせずに作成しました",
+          "createdWithoutParentNestingDetail": "親ワークスペースは利用できなくなりました。ワークスペースメニューから設定できます。"
         },
         "repos": {
           "2975400634": "Orca サーバーを更新して、このランタイムで Git 以外のフォルダーを開くようにします。",
@@ -3903,7 +3906,9 @@
           "searchLinks": "リンクを検索",
           "deleteSkills": "スキルを削除…"
         },
-        "SkillShareSelectionControls": { "01c5a15e02": "スキルを共有" },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "スキルを共有"
+        },
         "SkillRow": {
           "updatedUnknown": "日付なし",
           "pathCopied": "パスをコピーしました",
@@ -3913,13 +3918,17 @@
           "viewDetails": "詳細を表示",
           "deleteSkill": "削除…"
         },
-        "SkillsList": { "listLabel": "スキル" },
+        "SkillsList": {
+          "listLabel": "スキル"
+        },
         "sourceStatus": {
           "missing": "フォルダーが見つかりません",
           "remoteRepo": "リモートリポジトリ — 未スキャン",
           "unavailable": "未スキャン"
         },
-        "sources": { "heading": "スキルフォルダー" },
+        "sources": {
+          "heading": "スキルフォルダー"
+        },
         "sourceKind": {
           "home": "ホーム",
           "workspace": "ワークスペース",
@@ -3941,7 +3950,10 @@
           "linkOne": "{{count}} 件のリンク",
           "linkOther": "{{count}} 件のリンク"
         },
-        "filter": { "allAgents": "すべての Agent", "sharedAgent": "共有 (.agents)" },
+        "filter": {
+          "allAgents": "すべての Agent",
+          "sharedAgent": "共有 (.agents)"
+        },
         "SkillsSelectionHeader": {
           "exit": "選択を終了",
           "exitTooltip": "選択を終了 · Esc",
@@ -3950,7 +3962,11 @@
           "clear": "クリア",
           "deleteTitle": "削除するスキルを選択"
         },
-        "SkillDetailDialog": { "agents": "Agent", "updated": "更新日", "copy": "コピー" },
+        "SkillDetailDialog": {
+          "agents": "Agent",
+          "updated": "更新日",
+          "copy": "コピー"
+        },
         "SkillFreshnessNudge": {
           "titleOne": "インストール済みの Orca スキルが古くなっています",
           "titleMany": "インストール済みの Orca スキル {{value0}} 件が古くなっています",
@@ -6180,10 +6196,9 @@
           "compareBaseBranchUpstream": "ブランチの upstream"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "プレースホルダーの切り替え",
-          "1014ddbfaf": "今日は何もしません。隠された実験的機能オプションの最初のスロットとして予約されています。",
-          "232cf83de8": "内部テスト用の非公開トグル。ここでは何もサポートされていません。",
-          "3e9e827ca5": "隠された実験的機能"
+          "7c4e18d2f6": "このマシンで太字グリッチのキャプチャジェスチャーを有効にします。{{samplingShortcut}} でサンプリングバーストを開始し、{{captureShortcut}} でペインの証拠をディスクに保存します。",
+          "b09f24a51d": "ターミナル描画診断",
+          "f2c81d904a": "隠された実験的機能の設定"
         },
         "InputPane": {
           "db15068196": "Linux および macOS ではデフォルトで有効になっています。 Linux はシステム選択クリップボードを使用します。他のプラットフォームはプライベートバッファを使用します。",
@@ -10770,7 +10785,6 @@
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PR の作成を再試行してください。",
             "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。"
           },
           "SourceControlAgentActionDialog": {
@@ -13716,6 +13730,7 @@
           "showMore": "さらに表示"
         },
         "AutomationDetail": {
+          "host": "ホスト",
           "007c8ad874": "プロンプト",
           "a1d52c2189": "使用範囲",
           "449fc83bf7": "トークン",
@@ -13879,6 +13894,9 @@
           "b11170a008": "オートメーションを保存できませんでした。",
           "2a20596d6b": "オートメーションが保存されました。",
           "244727e655": "自動化が更新されました。",
+          "moved": "自動化を {host} に移動しました。",
+          "moveOriginalKept": "{host} に作成しましたが、元の自動化を削除できませんでした。元のホストで削除してください。",
+          "moveOriginalUnverified": "{host} に作成しましたが、元の自動化の削除を確認できませんでした。再試行する前に元のホストを確認してください。",
           "77b81bc4ac": "Hermes オートメーションが作成されました。",
           "08efc3ae12": "Hermes オートメーションが更新されました。",
           "e431bb85d4": "この Hermes オートメーションと同じホスト上のワークスペースを選択します。",
@@ -14075,6 +14093,19 @@
           "filters": "フィルター",
           "clear": "フィルターをクリア",
           "removeFilter": "{{value0}} フィルターを解除"
+        },
+        "createDestination": {
+          "label": "ホスト",
+          "placeholder": "ホストを選択",
+          "storedOn": "{authority} が保存してスケジュールします。",
+          "unselected": "この自動化を保存してスケジュールするホストを選択します。",
+          "orphan": "ホストのない自動化は新しい自動化を保持できません。この自動化を作成するホストを選択してください。",
+          "unavailable": "そのホストはまだ新しい自動化を保持できません。これを作成する別のホストを選択してください。",
+          "stale": "このフォームを開いている間に {host} が変更されました。保存する前にもう一度選択してください。",
+          "projectMismatch": "そのプロジェクトは {host} にありません。そのホスト上のプロジェクト、または別のホストを選択してください。",
+          "noProjects": "{host} にはプロジェクトが設定されていません。そこに追加するか、別のホストを選択してください。",
+          "updateRequired": "{hosts} の Orca サーバーを更新すると、そこに自動化を保存できます。",
+          "move": "保存すると、この自動化は {host} に作成され、元の自動化と実行履歴は削除されます。"
         }
       },
       "agent": {
@@ -14425,6 +14456,13 @@
           "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
           "delete": "削除"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "親ワークツリー",
+        "noParent": "親なし",
+        "description": "このワークスペースをサイドバー内の別のワークスペースの配下にネストします。ベースブランチは変更されません。",
+        "searchPlaceholder": "ワークスペースを検索...",
+        "noMatches": "一致する項目がありません。"
       }
     },
     "i18n": {

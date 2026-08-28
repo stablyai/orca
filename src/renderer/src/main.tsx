@@ -1,3 +1,9 @@
+// Why first, and why the import-free shim: react-dom reads
+// __REACT_DEVTOOLS_GLOBAL_HOOK__ once at module evaluation, so the global has to
+// exist before it. The observer below only wraps a property react-dom re-reads
+// per commit, so its own import graph can evaluate whenever it likes.
+import './lib/react-devtools-commit-hook-shim'
+import './lib/react-commit-cascade-observer'
 import './assets/main.css'
 
 import { StrictMode } from 'react'

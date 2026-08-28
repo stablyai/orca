@@ -3,6 +3,8 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
+  currentPreHandlerPtySequence,
+  discardPreHandlerPtyStateFromPriorIncarnation,
   hasPreHandlerPtyExit,
   isPreHandlerPtyStateDiscarded
 } from './pty-pre-handler-buffer'
@@ -68,6 +70,10 @@ export async function connectIpcPty(
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
+    // Why read it before the request and not after: a redeployed SSH relay renumbers from pty-1, so
+    // this spawn can be handed an id a dead PTY used to own. State dated at or below this fence was
+    // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
+    const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     const retireFreshSpawn = async (): Promise<void> => {
       if (!spawnResult.isReattach && !spawnResult.coldRestore) {
@@ -87,6 +93,11 @@ export async function connectIpcPty(
       context.getCallbacks().onReattachDetermined?.()
     }
 
+    if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
+      // Why only a fresh spawn: a reattach deliberately re-owns an id that already existed, so its
+      // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
+      discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
+    }
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)

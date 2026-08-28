@@ -205,6 +205,36 @@ describe('registerWorktreeHandlers', () => {
     })
     expect(result).toMatchObject({ comment: 'keep me', isPinned: true })
   })
+  it('routes metadata updates through the explicitly selected host', () => {
+    store.setWorktreeMetaForHost.mockImplementation((_worktreeId, _executionHostId, meta) => meta)
+
+    const result = handlers['worktrees:updateMeta'](null, {
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      executionHostId: 'ssh:build-box',
+      updates: { comment: 'remote note' }
+    })
+
+    expect(store.setWorktreeMetaForHost).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-wt',
+      'ssh:build-box',
+      { comment: 'remote note' }
+    )
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+    expect(result).toMatchObject({ comment: 'remote note' })
+  })
+
+  it('rejects malformed execution-host identities at the IPC boundary', () => {
+    expect(() =>
+      handlers['worktrees:updateMeta'](null, {
+        worktreeId: 'repo-1::/workspace/feature-wt',
+        executionHostId: 'container:untrusted',
+        updates: { comment: 'must not write' }
+      })
+    ).toThrow('Invalid execution host identity.')
+
+    expect(store.setWorktreeMetaForHost).not.toHaveBeenCalled()
+    expect(store.setWorktreeMeta).not.toHaveBeenCalled()
+  })
 
   it('pushes a remote-client invalidation for renames but not read-state updates', () => {
     store.setWorktreeMeta.mockImplementation((_worktreeId, meta) => meta)

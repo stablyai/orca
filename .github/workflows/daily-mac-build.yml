@@ -308,7 +308,6 @@ jobs:
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
           echo "notes_file=$notes_file" >>"$GITHUB_OUTPUT"
 
-
       - name: Publish daily macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4

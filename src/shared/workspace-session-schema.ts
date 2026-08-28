@@ -12,12 +12,14 @@
  * Only a payload that is not a session at all falls back to defaults.
  */
 import { z } from 'zod'
+import { closedTerminalTabTombstoneSchema } from './closed-terminal-tab-tombstones'
 import type { WorkspaceKey } from './folder-workspace-types'
 import type { TabGroupLayoutNode } from './tab-types'
 import type { TerminalPaneLayoutNode } from './terminal-tab-types'
 import type { TuiAgent } from './tui-agent'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
-import { isValidTerminalTabId } from './terminal-tab-id'
+import { terminalTabIdSchema } from './terminal-tab-id-schema'
+import { terminalSurfaceTombstoneSchema } from './terminal-surface-tombstone-schema'
 import { parseExecutionHostId, type ExecutionHostId } from './execution-host'
 import { isTuiAgent } from './tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
@@ -35,10 +37,6 @@ import { salvagedField, salvagedOptional, salvagingArray, salvagingRecord } from
 // ─── Terminal pane layout (recursive) ───────────────────────────────
 
 const terminalPaneSplitDirectionSchema = z.enum(['vertical', 'horizontal'])
-const terminalTabIdSchema = z
-  .string()
-  .min(1)
-  .refine(isValidTerminalTabId, 'terminal tab id must not contain ":"')
 const workspaceKeySchema = z.custom<WorkspaceKey>(
   (value) => typeof value === 'string' && isWorkspaceKey(value)
 )
@@ -190,15 +188,6 @@ const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
 
 // ─── Workspace session ──────────────────────────────────────────────
 
-const terminalSurfaceTombstoneSchema = z.object({
-  worktreeId: z.string(),
-  parentTabId: terminalTabIdSchema,
-  leafId: z.string(),
-  ptyId: z.string(),
-  incarnationId: z.string().min(1).max(128),
-  retiredAt: z.number().finite().nonnegative()
-})
-
 const worktreeIdSchema = z.string()
 
 export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.object({
@@ -314,6 +303,10 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
   terminalSurfaceTombstonesByPaneKey: salvagedOptional(
     'terminalSurfaceTombstonesByPaneKey',
     salvagingRecord(z.string(), terminalSurfaceTombstoneSchema)
+  ),
+  closedTerminalTabTombstonesByTabId: salvagedOptional(
+    'closedTerminalTabTombstonesByTabId',
+    salvagingRecord(terminalTabIdSchema, closedTerminalTabTombstoneSchema)
   )
 })
 

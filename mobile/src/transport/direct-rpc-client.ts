@@ -1,4 +1,5 @@
 import type { ConnectOptions, RpcClient, SendRequestOptions } from './rpc-client'
+import { DirectConnectionLog } from './direct-connection-log'
 import { RpcClientAuthenticationRetry } from './rpc-client-authentication-retry'
 import { RpcClientConnectionState } from './rpc-client-connection-state'
 import {
@@ -16,12 +17,7 @@ import {
 } from './rpc-client-stream-registry'
 import { RpcSessionLivenessWatchdog } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
-import type {
-  ConnectionLogLevel,
-  ConnectionState,
-  ForegroundNudgeReason,
-  RpcResponse
-} from './types'
+import type { ConnectionState, ForegroundNudgeReason, RpcResponse } from './types'
 
 const LIVENESS_REQUEST_ID_PREFIX = 'mobile-liveness-'
 
@@ -36,7 +32,7 @@ export class DirectRpcClient implements RpcClient {
   private readonly authenticationRetry: RpcClientAuthenticationRetry
   private readonly socketClose: RpcClientSocketCloseController
   private requestCounter = 0
-  private logCounter = 0
+  private readonly connectionLog: DirectConnectionLog
   private intentionallyClosed = false
   private authenticationGeneration = 0
   private livenessSession: RpcClientSocketSession | null = null
@@ -47,10 +43,12 @@ export class DirectRpcClient implements RpcClient {
     serverPublicKeyB64: string,
     private readonly options: ConnectOptions
   ) {
+    this.connectionLog = new DirectConnectionLog(endpoint, options.onLog)
     this.reconnect = new RpcClientReconnectSchedule({
       openConnection: () => this.openConnection(),
       rejectConnectWaiters: (reason) => this.connectionState.rejectWaiters(reason),
-      emitLog: (message, detail) => this.emitLog('info', message, detail)
+      emitLog: (message, detail) =>
+        this.connectionLog.emit('info', message, detail, { code: 'retry-scheduled' })
     })
     this.connectionState = new RpcClientConnectionState({
       endpoint,
@@ -78,7 +76,8 @@ export class DirectRpcClient implements RpcClient {
         if (identity === this.livenessSession && this.socketSession === this.livenessSession) {
           this.socketClose.forceClose(this.livenessSession)
         }
-      }
+      },
+      onTimeout: this.connectionLog.livenessTimeout
     })
     this.socketFactory = new RpcClientSocketFactory({
       endpoint,
@@ -89,7 +88,7 @@ export class DirectRpcClient implements RpcClient {
       getReconnectAttempt: () => this.getReconnectAttempt(),
       getLastConnectedAt: () => this.getLastConnectedAt(),
       isIntentionallyClosed: () => this.intentionallyClosed,
-      emitLog: (level, message, detail) => this.emitLog(level, message, detail),
+      emitLog: this.connectionLog.emit,
       onHandshakeStarted: () => this.connectionState.publish('handshaking'),
       onAuthenticated: (session) => this.handleAuthenticated(session),
       onAuthRejected: (reason) => this.authenticationRetry.reject(reason),
@@ -102,7 +101,8 @@ export class DirectRpcClient implements RpcClient {
     this.authenticationRetry = new RpcClientAuthenticationRetry({
       endpoint,
       stopLiveness: () => this.stopLiveness(),
-      emitWarning: (message, detail) => this.emitLog('warn', message, detail),
+      emitWarning: (message, detail) =>
+        this.connectionLog.emit('warn', message, detail, { code: 'authentication-rejected' }),
       retry: (reason) => this.retryAuthentication(reason),
       latchFailure: (reason) => this.latchAuthenticationFailure(reason)
     })
@@ -122,7 +122,8 @@ export class DirectRpcClient implements RpcClient {
           this.stopLiveness()
         }
       },
-      emitWarning: (message, detail) => this.emitLog('warn', message, detail)
+      emitWarning: (message, detail, evidence) =>
+        this.connectionLog.emit('warn', message, detail, evidence)
     })
     this.openConnection()
   }
@@ -232,7 +233,9 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect.authenticated()
     this.authenticationRetry.accepted()
     this.connectionState.publish('connected')
-    this.emitLog('success', 'Authenticated', 'Channel ready for RPC')
+    this.connectionLog.emit('success', 'Authenticated', 'Channel ready for RPC', {
+      code: 'direct-connected'
+    })
     this.streams.replayAfterAuthentication()
   }
 
@@ -310,15 +313,5 @@ export class DirectRpcClient implements RpcClient {
 
   private nextId(): string {
     return `rpc-${++this.requestCounter}-${Date.now()}`
-  }
-
-  private emitLog(level: ConnectionLogLevel, message: string, detail?: string): void {
-    this.options.onLog?.({
-      id: `log-${++this.logCounter}-${Date.now()}`,
-      ts: Date.now(),
-      level,
-      message,
-      detail
-    })
   }
 }

@@ -206,6 +206,16 @@ describe('orchestration gate commands carry caller identity', () => {
           'The Orca runtime closed the connection before responding. Restart Orca and try again. Orchestration mutation request ID: mutation_1.',
           {
             orchestrationRequestId: 'mutation_1',
+            originalCommand: [
+              'orca',
+              'orchestration',
+              'gate-create',
+              '--task',
+              'task_1',
+              '--question',
+              'ship?',
+              '--json'
+            ],
             failedStage: 'dispatch_input',
             residualResources: [
               { kind: 'worktree', id: 'repo::child' },

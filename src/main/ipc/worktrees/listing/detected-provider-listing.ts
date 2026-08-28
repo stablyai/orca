@@ -24,6 +24,8 @@ import {
   rememberLocalWorktreeRoots
 } from './detected-worktree-scan-cache'
 import { loggedWorktreeListFailures, warnOnce } from './worktree-listing-diagnostics'
+import { readAllWorktreeMetaForHost } from '../../../persistence/host-qualified-worktree-meta'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 
 export async function listDetectedWorktreesForCapturedRepo(
   store: Store,
@@ -36,8 +38,11 @@ export async function listDetectedWorktreesForCapturedRepo(
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
+  const allMeta = isFolderRepo(repo)
+    ? undefined
+    : readAllWorktreeMetaForHost(store, getRepoExecutionHostId(repo))
   const sshWorktreeMetaIndex = repo.connectionId
-    ? createSshWorktreeMetaIndex(Object.entries(store.getAllWorktreeMeta()))
+    ? createSshWorktreeMetaIndex(Object.entries(allMeta ?? {}))
     : new Map()
 
   try {
@@ -118,7 +123,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       repoId: repo.id,
       authoritative: true,
       source: 'git',
-      worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees)
+      worktrees: buildDetectedGitWorktrees(store, repo, gitWorktrees, allMeta)
     }
   } catch (err) {
     const aborted = abortedResult()

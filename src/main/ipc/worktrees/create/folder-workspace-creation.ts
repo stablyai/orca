@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { Repo } from '../../../../shared/repo-types'
-import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-projection'
+import { getProjectHostSetupWorktreeMeta } from '../../../../shared/project-host-setup-lookup'
 import type { CreateWorktreeResult } from '../../../../shared/worktree/create-types'
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'

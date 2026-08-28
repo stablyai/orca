@@ -47,6 +47,33 @@ function executeInstallScript(fixture) {
 }
 
 describe('install-node-dependencies action', () => {
+  it('skips the lockfile diff when a job container has no Git metadata', () => {
+    const fixture = createFixture()
+    try {
+      rmSync(join(fixture.workspace, '.git'), { recursive: true, force: true })
+
+      const result = executeInstallScript(fixture)
+      expect(result.status, result.stderr || result.stdout).toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).not.toMatch(/^diff --git /m)
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
+  it('skips the lockfile diff for a bare repository', () => {
+    const fixture = createFixture()
+    try {
+      rmSync(join(fixture.workspace, '.git'), { recursive: true, force: true })
+      expect(run('git', ['init', '--bare', '-q'], { cwd: fixture.workspace }).status).toBe(0)
+
+      const result = executeInstallScript(fixture)
+      expect(result.status, result.stderr || result.stdout).toBe(0)
+      expect(`${result.stdout}\n${result.stderr}`).not.toMatch(/^diff --git /m)
+    } finally {
+      rmSync(fixture.root, { recursive: true, force: true })
+    }
+  })
+
   it.each([
     ['package.json', '{"name":"changed"}\n'],
     ['pnpm-lock.yaml', 'lockfileVersion: 9\nchanged: true\n']

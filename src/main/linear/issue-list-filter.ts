@@ -2,7 +2,7 @@ import {
   isEmptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
 } from '../../shared/linear/issue-attribute-filter'
-import type { LinearListFilter } from './issues'
+import type { LinearListFilter } from './linear-issue-listing'
 
 // Why: attribute facets must merge into Linear's IssueFilter before the first-N
 // cursor walk so hasMore reflects the filtered set, not the unfiltered window.

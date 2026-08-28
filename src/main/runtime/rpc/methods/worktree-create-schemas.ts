@@ -75,6 +75,9 @@ export const WorktreeCreate = z
     // startup and defaultTabs. Pass an explicit target to opt into an all-surface reveal.
     navigation: z.enum(RUNTIME_NAVIGATION_TARGETS).optional(),
     parentWorkspace: OptionalString,
+    // Why: an app-selected parent is a manual action, not the CLI's `--parent-workspace` flag.
+    // Absent keeps the CLI provenance older clients rely on.
+    parentWorkspaceOrigin: z.literal('manual').optional(),
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,

@@ -1,13 +1,18 @@
+import { spawnSync } from 'node:child_process'
 import { readFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { parse } from 'yaml'
-import { isDocsOnlyPath, shouldRunPrChecks } from './pr-code-change-scope.mjs'
+import {
+  classifyPrJobs,
+  isDocsOnlyPath,
+  PR_CHECK_JOBS,
+  shouldRunPrChecks
+} from './pr-code-change-scope.mjs'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const prWorkflow = parse(readFileSync(join(projectDir, '.github/workflows/pr.yml'), 'utf8'))
 
-const gatedIf = "needs.code_paths.outputs.should_run == 'true'"
 const expensiveJobs = [
   'static_analysis',
   'typecheck',
@@ -15,11 +20,33 @@ const expensiveJobs = [
   'xterm_patch_sync',
   'shell_contracts',
   'test',
+  'orcad_browser',
   'cross-version-wire',
   'managed_hook_node18',
   'package',
   'package_windows'
 ]
+
+const ALWAYS_ON = ['static_analysis', 'typecheck', 'test']
+
+function expectedJobs(overrides, { alwaysOn = true } = {}) {
+  return Object.fromEntries(
+    PR_CHECK_JOBS.map((job) => [
+      job,
+      (alwaysOn && ALWAYS_ON.includes(job)) || Boolean(overrides[job])
+    ])
+  )
+}
+
+function expectClassification(files, overrides) {
+  const result = classifyPrJobs(files)
+  const shouldRun = shouldRunPrChecks(files)
+  expect(result.should_run).toBe(shouldRun)
+  expect(result).toMatchObject({
+    should_run: shouldRun,
+    ...expectedJobs(overrides, { alwaysOn: shouldRun })
+  })
+}
 
 describe('docs-only path classification', () => {
   it('treats the WeChat README PR files as docs-only', () => {
@@ -54,9 +81,170 @@ describe('docs-only path classification', () => {
   it('runs PR Checks when the diff is empty rather than skipping by accident', () => {
     expect(shouldRunPrChecks([])).toBe(true)
   })
+
+  it('does not start desktop PR Checks for mobile-only diffs', () => {
+    expect(shouldRunPrChecks(['mobile/src/App.tsx', 'mobile/package.json'])).toBe(false)
+  })
 })
 
-describe('PR Checks docs-only skip wiring', () => {
+describe('per-job path classification', () => {
+  it('runs every expensive job on an empty diff rather than skipping by accident', () => {
+    const result = classifyPrJobs([])
+    expect(result.should_run).toBe(true)
+    for (const job of PR_CHECK_JOBS) {
+      expect(result[job], job).toBe(true)
+    }
+  })
+
+  it('skips every expensive job for docs-only diffs', () => {
+    expectClassification(['README.md', 'docs/readme/README.zh-CN.md'], {})
+  })
+
+  it('runs packaging and always-on jobs for product source, not git/xterm/shell lanes', () => {
+    expectClassification(['src/renderer/src/components/tab-bar/TabBar.tsx'], {
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it('runs Git compatibility only when git capability inputs change', () => {
+    expectClassification(['src/shared/git-capability-cache.ts'], {
+      git_compatibility: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/shared/git-binary-compatibility.test.ts'], {
+      git_compatibility: true
+    })
+  })
+
+  it('runs xterm patch sync only when xterm inputs change', () => {
+    expectClassification(['config/patches/xterm-upstream.json'], {
+      xterm_patch_sync: true
+    })
+    expectClassification(['config/patches/@xterm__xterm@6.1.0-beta.287.patch'], {
+      xterm_patch_sync: true
+    })
+  })
+
+  it('runs native package jobs only for the platform that ships the changed native', () => {
+    expectClassification(['native/windows-cli-launcher/OrcaCliLauncher.cs'], {
+      package_windows: true
+    })
+    expectClassification(['native/computer-use-linux/runtime.py'], {
+      package: true
+    })
+    expectClassification(['native/computer-use-macos/Package.swift'], {})
+  })
+
+  it('runs shell contracts when live-shell inputs change', () => {
+    expectClassification(['src/main/daemon/shell-ready.ts'], {
+      shell_contracts: true,
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it('runs shell contracts when wrapper templates or live-shell fixtures change', () => {
+    expectClassification(['src/main/shell-templates.ts'], {
+      shell_contracts: true,
+      package: true,
+      package_windows: true
+    })
+    expectClassification(['src/main/shell-startup-launch-intent-fixtures.ts'], {
+      shell_contracts: true,
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it('runs orcad browser when Chrome launch, session, or tab modules change', () => {
+    for (const file of [
+      'src/main/orcad/external-chromium-browser-session.ts',
+      'src/main/orcad/external-chromium-command-arguments.ts',
+      'src/main/orcad/external-chromium-tab-registry.ts',
+      'src/main/orcad/external-chromium-tab-projection.ts'
+    ]) {
+      expectClassification([file], {
+        orcad_browser: true,
+        package: true,
+        package_windows: true
+      })
+    }
+    expectClassification(['src/main/orcad/orcad-native-preflight.ts'], {
+      package: true,
+      package_windows: true
+    })
+  })
+
+  it('runs cross-version wire checks for every working-tree wire module', () => {
+    for (const file of [
+      'src/shared/protocol-version.ts',
+      'src/shared/terminal-stream-protocol.ts',
+      'src/main/runtime/rpc/dispatcher.ts',
+      'src/main/runtime/rpc/methods/browser-tab-create-schema.ts',
+      'src/main/runtime/rpc/methods/terminal.ts',
+      'src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+    ]) {
+      expectClassification([file], {
+        'cross-version-wire': true,
+        package: true,
+        package_windows: true
+      })
+    }
+    expectClassification(
+      ['tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts'],
+      { 'cross-version-wire': true }
+    )
+  })
+
+  it('runs workflow-self-change and lockfile diffs as force-all', () => {
+    const result = classifyPrJobs(['.github/workflows/pr.yml'])
+    expect(result.should_run).toBe(true)
+    for (const job of PR_CHECK_JOBS) {
+      expect(result[job], job).toBe(true)
+    }
+    expect(classifyPrJobs(['pnpm-lock.yaml']).git_compatibility).toBe(true)
+  })
+
+  it('primes native caches only when their immutable inputs change', () => {
+    expect(classifyPrJobs([]).native_cache_changed).toBe(true)
+    expect(classifyPrJobs(['README.md']).native_cache_changed).toBe(false)
+    expect(classifyPrJobs(['src/main/index.ts']).native_cache_changed).toBe(false)
+    for (const file of [
+      'package.json',
+      'pnpm-lock.yaml',
+      '.github/actions/install-node-dependencies/action.yml',
+      'config/scripts/ensure-native-runtime.mjs',
+      'config/scripts/rebuild-native-deps.mjs',
+      'config/patches/node-pty@1.1.0.patch'
+    ]) {
+      expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
+    }
+  })
+
+  it('keeps unit-test-only diffs out of packaging', () => {
+    expectClassification(['src/main/git/git-status.test.ts'], {
+      git_compatibility: true
+    })
+  })
+
+  it('emits GitHub output pairs from the shipped CLI', () => {
+    const result = spawnSync(process.execPath, ['config/scripts/pr-code-change-scope.mjs'], {
+      cwd: projectDir,
+      encoding: 'utf8',
+      input: 'config/patches/xterm-upstream.json\n'
+    })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('should_run=true\n')
+    expect(result.stdout).toContain('xterm_patch_sync=true\n')
+    expect(result.stdout).toContain('git_compatibility=false\n')
+    expect(result.stdout).toContain('package=false\n')
+    expect(result.stdout).toContain('test=true\n')
+  })
+})
+
+describe('PR Checks skip wiring', () => {
   it('classifies the PR range with a tested script and expands renames', () => {
     const classify = prWorkflow.jobs.code_paths.steps.find(
       (step) => step.name === 'Classify changed paths'
@@ -65,9 +253,12 @@ describe('PR Checks docs-only skip wiring', () => {
     expect(classify.run).toContain('--no-renames')
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
-    expect(prWorkflow.jobs.code_paths.outputs.should_run).toBe(
-      '${{ steps.filter.outputs.should_run }}'
-    )
+    expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
+    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
+      expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
+        `\${{ steps.filter.outputs.${jobName} }}`
+      )
+    }
   })
 
   it('keeps the cheap root-directory guard on docs-only PRs', () => {
@@ -75,11 +266,26 @@ describe('PR Checks docs-only skip wiring', () => {
     expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
   })
 
-  it('skips expensive jobs unless the detector says the PR has code', () => {
-    for (const jobName of expensiveJobs) {
+  it('gates each expensive job on its classifier and cache prerequisite', () => {
+    for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
       expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
-      expect(prWorkflow.jobs[jobName].if, jobName).toBe(gatedIf)
+      expect(prWorkflow.jobs[jobName].if, jobName).toBe(
+        `needs.code_paths.outputs.${jobName} == 'true'`
+      )
     }
+    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")
+    expect(prWorkflow.jobs.test_native_cache.needs).toEqual(['code_paths'])
+    expect(prWorkflow.jobs.test_native_cache.if).toBe(
+      "needs.code_paths.outputs.native_cache_changed == 'true'"
+    )
+    expect(prWorkflow.jobs.test_native_cache.strategy).toBeUndefined()
+    const primerInstall = prWorkflow.jobs.test_native_cache.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    expect(primerInstall.with['node-version']).toBe('24')
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
@@ -89,19 +295,23 @@ describe('PR Checks docs-only skip wiring', () => {
     )
   })
 
-  it('lets verify pass when expensive jobs are skipped for docs-only PRs', () => {
+  it('lets verify pass skipped jobs the classifier turned off', () => {
     const verifyStep = prWorkflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
     expect(prWorkflow.jobs.verify.needs[0]).toBe('code_paths')
     expect(verifyStep.env.SHOULD_RUN).toBe('${{ needs.code_paths.outputs.should_run }}')
-    expect(verifyStep.run).toContain('"$SHOULD_RUN" != "true"')
-    const docsOnlyBranch = verifyStep.run.slice(
-      0,
-      verifyStep.run.indexOf('# Require success when the PR has code-relevant changes')
-    )
-    expect(docsOnlyBranch).toContain('if [ "$result" != "skipped" ]')
-    expect(docsOnlyBranch).not.toContain('"$result" != "success"')
     expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
+    expect(verifyStep.run).toContain('# Require success when the PR has code-relevant changes')
+    expect(verifyStep.run).toContain('expected skipped')
+    expect(verifyStep.run).toContain('expected success')
+    for (const job of prWorkflow.jobs.verify.needs) {
+      if (job === 'code_paths' || job === 'root_directory_guard') {
+        continue
+      }
+      const envVar = `${job.replaceAll('-', '_').toUpperCase()}_SHOULD_RUN`
+      expect(verifyStep.env[envVar]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
+      expect(verifyStep.run).toContain(`"$${envVar}"`)
+    }
   })
 })

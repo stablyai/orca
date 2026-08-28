@@ -163,4 +163,3 @@ export function formatMissingToolchainError(
   ]
   return lines.join('\n')
 }
-

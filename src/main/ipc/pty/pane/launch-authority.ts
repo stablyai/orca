@@ -30,6 +30,21 @@ export function admitRendererAgentLaunchAuthority(args: {
   return { launchToken: args.launchToken, launchAgent: args.launchAgent }
 }
 
+export function admitProviderReattachLaunchIdentity(args: {
+  isReattach?: boolean
+  launchAgent?: unknown
+  incarnationId?: unknown
+}): { incarnationId: string; launchAgent: TuiAgent } | null {
+  if (
+    !args.isReattach ||
+    !isTuiAgent(args.launchAgent) ||
+    !isPtyIncarnationId(args.incarnationId)
+  ) {
+    return null
+  }
+  return { incarnationId: args.incarnationId, launchAgent: args.launchAgent }
+}
+
 export function shouldRefreshNativeClaudeAgentTeamsEnv(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig

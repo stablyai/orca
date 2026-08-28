@@ -263,7 +263,10 @@
           "3b57982bf6": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el espacio de trabajo \"{{value1}}\", así que Orca la conservó para evitar perder commits locales.",
           "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el worktree \"{{value1}}\", así que Orca la conservó para evitar perder commits locales.",
           "runtimeScopeForbiddenTitle": "Esta conexión tiene acceso limitado (móvil)",
-          "runtimeScopeForbiddenDescription": "Los espacios de trabajo no están disponibles con un emparejamiento de acceso móvil. Vuelve a conectarte con el enlace del navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca."
+          "runtimeScopeForbiddenDescription": "Los espacios de trabajo no están disponibles con un emparejamiento de acceso móvil. Vuelve a conectarte con el enlace del navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca.",
+          "createdWithoutParentNesting": "Creado sin anidarlo bajo \"{{value0}}\"",
+          "createdWithoutParentNestingUnnamed": "Creado sin anidarlo bajo el worktree padre seleccionado",
+          "createdWithoutParentNestingDetail": "El espacio de trabajo padre ya no estaba disponible. Puedes establecerlo desde el menú del espacio de trabajo."
         },
         "repos": {
           "2975400634": "Actualiza el servidor Orca para abrir carpetas que no sean Git en este host.",
@@ -3915,13 +3918,17 @@
           "viewDetails": "Ver detalles",
           "deleteSkill": "Eliminar…"
         },
-        "SkillsList": { "listLabel": "Skills" },
+        "SkillsList": {
+          "listLabel": "Skills"
+        },
         "sourceStatus": {
           "missing": "Carpeta no encontrada",
           "remoteRepo": "Repositorio remoto — sin analizar",
           "unavailable": "Sin analizar"
         },
-        "sources": { "heading": "Carpetas de skills" },
+        "sources": {
+          "heading": "Carpetas de skills"
+        },
         "sourceKind": {
           "home": "Inicio",
           "workspace": "Espacio de trabajo",
@@ -6167,10 +6174,9 @@
           "compareBaseBranchUpstream": "Upstream de la rama"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "Alternar marcador de posición",
-          "1014ddbfaf": "No hace nada hoy. Reservado como primer espacio para opciones experimentales ocultas.",
-          "232cf83de8": "Alternadores no listados para pruebas internas. Aquí no se admite nada.",
-          "3e9e827ca5": "experimental oculto"
+          "7c4e18d2f6": "Activa los gestos de captura del fallo de negrita en esta máquina: {{samplingShortcut}} inicia una ráfaga de muestreo; {{captureShortcut}} captura evidencia del panel en disco.",
+          "b09f24a51d": "Diagnósticos de renderizado del terminal",
+          "f2c81d904a": "Configuración experimental oculta"
         },
         "InputPane": {
           "db15068196": "Habilitado de forma predeterminada en Linux y macOS. Linux usa el portapapeles de selección del sistema; otras plataformas utilizan un búfer privado.",
@@ -10779,7 +10785,6 @@
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "Los detalles de revisión generados no incluyeron una descripción. Reintentar Crear PR.",
             "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR."
           },
           "SourceControlAgentActionDialog": {
@@ -13725,6 +13730,7 @@
           "showMore": "Mostrar más"
         },
         "AutomationDetail": {
+          "host": "Host",
           "007c8ad874": "Inmediato",
           "a1d52c2189": "Cobertura de uso",
           "449fc83bf7": "Fichas",
@@ -13888,6 +13894,9 @@
           "b11170a008": "No se pudo guardar la automatización.",
           "2a20596d6b": "Automatización guardada.",
           "244727e655": "Automatización actualizada.",
+          "moved": "Automatización movida a {host}.",
+          "moveOriginalKept": "Se creó en {host}, pero no se pudo eliminar la original. Elimínela en el host anterior.",
+          "moveOriginalUnverified": "Se creó en {host}, pero no se pudo verificar la eliminación de la original. Compruebe el host anterior antes de volver a intentarlo.",
           "77b81bc4ac": "Se crea la automatización de Hermes.",
           "08efc3ae12": "Automatización Hermes actualizada.",
           "e431bb85d4": "Elija un espacio de trabajo en el mismo host que esta automatización de Hermes.",
@@ -14084,6 +14093,19 @@
           "filters": "Filtros",
           "clear": "Limpiar filtros",
           "removeFilter": "Eliminar filtro de {{value0}}"
+        },
+        "createDestination": {
+          "label": "Host",
+          "placeholder": "Seleccionar un host",
+          "storedOn": "Almacenada y programada por {authority}.",
+          "unselected": "Elija el host que almacena y programa esta automatización.",
+          "orphan": "Las automatizaciones sin host no pueden alojar otras nuevas. Elija un host en el que crear esta automatización.",
+          "unavailable": "Ese host todavía no puede alojar una nueva automatización. Elija otro host para crear esta.",
+          "stale": "{host} cambió mientras este formulario estaba abierto. Elíjalo de nuevo antes de guardar.",
+          "projectMismatch": "Ese proyecto no está en {host}. Elija un proyecto en ese host, u otro host.",
+          "noProjects": "No hay proyectos configurados en {host}. Agregue uno allí o elija otro host.",
+          "updateRequired": "Actualice el servidor de Orca en {hosts} para almacenar automatizaciones allí.",
+          "move": "Al guardar se crea esta automatización en {host} y se eliminan la original y su historial de ejecuciones."
         }
       },
       "agent": {
@@ -14434,6 +14456,13 @@
           "deleteDescription": "“{{name}}” ya no estará disponible en su enlace público.",
           "delete": "Eliminar"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "Worktree padre",
+        "noParent": "Sin worktree padre",
+        "description": "Anida este espacio de trabajo bajo otro en la barra lateral. No cambia la rama base.",
+        "searchPlaceholder": "Buscar espacios de trabajo...",
+        "noMatches": "No hay coincidencias."
       }
     },
     "i18n": {

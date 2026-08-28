@@ -26,20 +26,34 @@ vi.mock('@/runtime/runtime-linear-client', async (importOriginal) => {
     linearConnect: (...args: unknown[]) => linearConnect(...args),
     linearDisconnect: (...args: unknown[]) => linearDisconnect(...args),
     linearDisconnectWorkspace: vi.fn(),
-    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
-    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
-    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
-    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
-    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
-    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
     linearListIssues: (...args: unknown[]) => linearListIssues(...args),
-    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
-    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
-    linearListTeams: (...args: unknown[]) => linearListTeams(...args),
     linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
     linearSelectWorkspace: vi.fn(),
     linearStatus: (...args: unknown[]) => linearStatus(...args),
     linearTestConnection: (...args: unknown[]) => linearTestConnection(...args)
+  }
+})
+
+vi.mock('@/runtime/runtime-linear-issue-mutations', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
+  }
+})
+
+vi.mock('@/runtime/runtime-linear-project-client', async (importOriginal) => {
+  const actual = await importOriginal<Record<string, unknown>>()
+  return {
+    ...actual,
+    linearGetCustomView: (...args: unknown[]) => linearGetCustomView(...args),
+    linearGetProject: (...args: unknown[]) => linearGetProject(...args),
+    linearListCustomViewIssues: (...args: unknown[]) => linearListCustomViewIssues(...args),
+    linearListCustomViewProjects: (...args: unknown[]) => linearListCustomViewProjects(...args),
+    linearListCustomViews: (...args: unknown[]) => linearListCustomViews(...args),
+    linearListProjectIssues: (...args: unknown[]) => linearListProjectIssues(...args),
+    linearListProjects: (...args: unknown[]) => linearListProjects(...args),
+    linearListTeams: (...args: unknown[]) => linearListTeams(...args)
   }
 })
 

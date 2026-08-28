@@ -7,7 +7,8 @@ import {
   readLinearBoardIssueDragData,
   writeLinearBoardIssueDragData
 } from '@/lib/linear-board-drag-payload'
-import { linearTeamStates, linearUpdateIssue } from '@/runtime/runtime-linear-client'
+import { linearUpdateIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearTeamStates } from '@/runtime/runtime-linear-project-client'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type { LinearTeam } from '../../../../../shared/linear/workspace-types'

@@ -26,7 +26,7 @@ exactly the case a POSIX script uses to mean a literal dollar.
 Build argv with `buildWslExecArgs()` in `src/shared/wsl-login-shell-command.ts`. A test walks the
 tree and fails if the `--` form reappears.
 
-The `--` inside `sh -s -- <path>` is a *shell* argument separator and is unrelated; leave it alone.
+The `--` inside `sh -s -- <path>` is a _shell_ argument separator and is unrelated; leave it alone.
 
 ## 2. Machine-read output must be fenced
 

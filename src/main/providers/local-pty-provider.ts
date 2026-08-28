@@ -1,5 +1,5 @@
 /* eslint-disable max-lines -- Why: splitting spawn() would scatter tightly coupled PTY lifecycle logic (scan → ready → write → exit) with no cleaner ownership seam. */
-import { basename, delimiter, win32 as pathWin32 } from 'node:path'
+import { basename, win32 as pathWin32 } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import {
   ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV,
@@ -15,7 +15,6 @@ import { resolveProcessCwd } from './process-cwd'
 import { existsSync } from 'node:fs'
 import * as pty from 'node-pty'
 import { getDefaultWslDistro, parseWslPath, isWslAvailableAsync } from '../wsl'
-import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import {
   injectHistoryEnv,
@@ -76,7 +75,7 @@ import {
 } from './windows-cached-agent-revalidation'
 import { forceKillPosixPtyProcessGroups } from '../pty/posix-pty-process-groups'
 import { shouldUseShellReadyStartupDelivery } from '../../shared/codex-startup-delivery'
-import { assertSafeAgentStartupCwd, resolveSafePtyDefaultCwd } from './pty-default-cwd'
+import { assertSafeAgentStartupCwd } from './pty-default-cwd'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../shared/hermes-startup-query'
 import { PhysicalExitTracker } from '../../shared/physical-exit-tracker'
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
@@ -94,18 +93,19 @@ import {
   createShellPromptReadinessProbe,
   type ShellPromptReadinessProbe
 } from '../shell-prompt-readiness-probe'
-import {
-  expandWindowsEnvironmentVariables,
-  expandWindowsPathEnvironmentVariables
-} from '../../shared/windows-environment-expansion'
+import { expandWindowsPathEnvironmentVariables } from '../../shared/windows-environment-expansion'
 import { resolveProcessExitCause, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 
-const PANE_IDENTITY_ENV_KEYS = [
-  'ORCA_PANE_KEY',
-  'ORCA_TAB_ID',
-  'ORCA_WORKTREE_ID',
-  'ORCA_AGENT_LAUNCH_TOKEN'
-] as const
+import {
+  getDefaultCwd,
+  getSpawnedShellName,
+  getWslContextFromPreferredDistro,
+  getWslContextFromWorktreeId,
+  normalizeLocalCallerSessionId,
+  promoteAgentTeamsShimPath,
+  removeUnspecifiedPaneIdentityEnv,
+  resolveForegroundFallbackProcess
+} from './local-pty-launch-helpers'
 
 let ptyCounter = 0
 const ptyProcesses = new Map<string, pty.IPty>()
@@ -175,51 +175,6 @@ const exitListeners = new Set<ExitCallback>()
 const startupIngressByPty = new Map<string, PtyStartupIngress>()
 
 /**
- * Returns a stable default cwd for locally spawned PTYs.
- */
-function getDefaultCwd(): string {
-  return resolveSafePtyDefaultCwd()
-}
-
-/**
- * Removes inherited pane identity unless this PTY explicitly supplies it.
- */
-function removeUnspecifiedPaneIdentityEnv(
-  env: Record<string, string>,
-  explicitEnv: Record<string, string> | undefined
-): void {
-  for (const key of PANE_IDENTITY_ENV_KEYS) {
-    if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
-      delete env[key]
-    }
-  }
-}
-
-/**
- * Promotes the agent-teams shim path ahead of inherited PATH entries.
- */
-function promoteAgentTeamsShimPath(
-  env: Record<string, string>,
-  requestedPath: string | undefined
-): void {
-  if (!env.ORCA_AGENT_TEAMS_TEAM_ID || !requestedPath) {
-    return
-  }
-  const normalizedRequestedPath =
-    process.platform === 'win32'
-      ? expandWindowsEnvironmentVariables(requestedPath, env)
-      : requestedPath
-  const pathDelimiter = process.platform === 'win32' ? ';' : delimiter
-  const shimDir = normalizedRequestedPath.split(pathDelimiter)[0]
-  if (!shimDir) {
-    return
-  }
-  const pathKey = resolvePathEnvKey(env, process.platform)
-  const currentParts = env[pathKey]?.split(pathDelimiter).filter(Boolean) ?? []
-  env[pathKey] = [shimDir, ...currentParts.filter((part) => part !== shimDir)].join(pathDelimiter)
-}
-
-/**
  * Disposes native node-pty listeners registered for a PTY id.
  */
 function disposePtyListeners(id: string): void {
@@ -252,30 +207,6 @@ function runPtyCleanup(id: string): void {
   }
   ptyCleanupCallbacks.delete(id)
   cleanup()
-}
-
-/**
- * Resolves a WSL context from a worktree id whose path is already a WSL path.
- */
-function getWslContextFromWorktreeId(
-  worktreeId: string | undefined
-): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  // Why: strip any synthetic `::workspace:<uuid>` suffix so WSL detection parses the real path, not a nonexistent identifier.
-  const worktreePath = worktreeId
-    ? splitWorktreeIdForFilesystem(worktreeId)?.worktreePath
-    : undefined
-  const wslInfo = worktreePath ? parseWslPath(worktreePath) : null
-  return wslInfo ? { distro: wslInfo.distro, treatPosixCwdAsWsl: true } : undefined
-}
-
-/**
- * Resolves a WSL launch context from a user-selected distro name.
- */
-function getWslContextFromPreferredDistro(
-  distro: string | null | undefined
-): { distro: string; treatPosixCwdAsWsl: true } | undefined {
-  const trimmed = distro?.trim()
-  return trimmed ? { distro: trimmed, treatPosixCwdAsWsl: true } : undefined
 }
 
 /**
@@ -413,20 +344,6 @@ function cancelAllPendingLocalPtySpawns(): void {
   }
 }
 
-/**
- * Normalizes renderer session ids that should be reused for local PTY reattach.
- */
-function normalizeLocalCallerSessionId(
-  sessionId: string | undefined,
-  allowNumeric = false
-): string | null {
-  const requested = sessionId?.trim()
-  if (!requested || (!allowNumeric && /^\d+$/.test(requested))) {
-    return null
-  }
-  return requested
-}
-
 function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResult | null {
   const existing = ptyProcesses.get(id)
   if (!existing) {
@@ -443,37 +360,6 @@ function reattachLocalPty(id: string, cols: number, rows: number): PtySpawnResul
     ...(ptyWslDistroById.has(id) ? { wslDistro: ptyWslDistroById.get(id) ?? null } : {}),
     isReattach: true
   }
-}
-
-/**
- * Normalizes node-pty foreground process strings to executable basenames.
- */
-function normalizeForegroundProcessName(processName: string | null | undefined): string | null {
-  const trimmed = processName?.trim().replace(/^["']|["']$/g, '') ?? ''
-  if (!trimmed || trimmed === 'xterm-256color') {
-    return null
-  }
-  return trimmed.split(/[\\/]/).pop() || null
-}
-
-/**
- * Falls back to the spawned Windows shell when node-pty reports a terminal name.
- */
-function resolveForegroundFallbackProcess(
-  processName: string | null | undefined,
-  shellName: string | undefined
-): string | null {
-  if (process.platform !== 'win32' || normalizeForegroundProcessName(processName)) {
-    return processName || null
-  }
-  // Why: Windows node-pty may expose only the terminal name (`xterm-256color`); the spawned shell is the best foreground fallback.
-  return shellName ?? processName ?? null
-}
-
-/** Basename of the spawned shell path, parsed for the *target* platform.
- *  Why: POSIX `basename` won't split a Windows `\` path (non-Windows host/CI), so it'd break the foreground comparison. */
-function getSpawnedShellName(shellPath: string): string {
-  return process.platform === 'win32' ? pathWin32.basename(shellPath) : basename(shellPath)
 }
 
 /**

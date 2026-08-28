@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
+import { setTerminalWebglDiagnosticRecorder } from '../../../../shared/terminal-webgl-diagnostics'
 import type { ManagedPane, ManagedPaneInternal } from './pane-manager-types'
 import { toPublicPane } from './pane-public-view'
 import { canApplyPaneMetricOptions, canMeasurePaneForFit } from './pane-fit-measurability'
@@ -163,5 +164,74 @@ describe('canApplyPaneMetricOptions gating', () => {
 
   it('leaves the cols/rows floor on the fit itself', () => {
     expect(canMeasurePaneForFit(makeSizedPane({ width: 50, height: 600 }, 5))).toBe(false)
+  })
+})
+
+describe('metric weight-change forensics', () => {
+  // Field probe for the bold-collapse bug (STA-4042 family): weights never
+  // change in normal operation, so a transition crumb is either the poisoning
+  // or the healing write. These fail if the crumb is removed.
+  it('records prev/next/reason when a weight value actually changes', () => {
+    const recorder = vi.fn()
+    setTerminalWebglDiagnosticRecorder(recorder)
+    const pane = makePane()
+    pane.terminal.options.fontWeight = 500
+
+    applyOrDeferPaneMetricOptions(pane, { fontWeight: 700, fontWeightBold: 700 }, true)
+
+    expect(recorder).toHaveBeenCalledWith('metric-weight-change', {
+      paneId: 1,
+      key: 'fontWeight',
+      prev: '500',
+      next: '700',
+      reason: 'appearance'
+    })
+    expect(recorder).toHaveBeenCalledWith('metric-weight-change', {
+      paneId: 1,
+      key: 'fontWeightBold',
+      prev: null,
+      next: '700',
+      reason: 'appearance'
+    })
+    setTerminalWebglDiagnosticRecorder(null)
+  })
+
+  it('stays silent when the written weights equal the live values', () => {
+    const recorder = vi.fn()
+    setTerminalWebglDiagnosticRecorder(recorder)
+    const pane = makePane()
+    pane.terminal.options.fontWeight = 500
+    pane.terminal.options.fontWeightBold = 700
+
+    applyOrDeferPaneMetricOptions(
+      pane,
+      { fontWeight: 500, fontWeightBold: 700, fontSize: 15 },
+      true
+    )
+
+    expect(recorder).not.toHaveBeenCalledWith('metric-weight-change', expect.anything())
+    setTerminalWebglDiagnosticRecorder(null)
+  })
+
+  it('labels a flushed deferral as the deferred-flush writer', () => {
+    const recorder = vi.fn()
+    setTerminalWebglDiagnosticRecorder(recorder)
+    const pane = makePane()
+    pane.terminal.options.fontWeight = 700
+
+    applyOrDeferPaneMetricOptions(pane, { fontWeight: 500 }, false)
+    expect(recorder).not.toHaveBeenCalledWith('metric-weight-change', expect.anything())
+    flushDeferredPaneMetricOptions(pane)
+
+    expect(recorder).toHaveBeenCalledWith(
+      'metric-weight-change',
+      expect.objectContaining({
+        key: 'fontWeight',
+        prev: '700',
+        next: '500',
+        reason: 'deferred-flush'
+      })
+    )
+    setTerminalWebglDiagnosticRecorder(null)
   })
 })

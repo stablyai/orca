@@ -26,6 +26,8 @@ export type RuntimeTerminalSummary = {
   writable: boolean
   lastOutputAt: number | null
   preview: string
+  /** Host-resolved agent identity for action consumers; absent when unknown or unsupported. */
+  agentIdentity?: TuiAgent
   /** Absent while running or when the host predates the field; never infer a clean finish. */
   exitCause?: TerminalExitCause
   /** Absent when the host predates the field or could not name the execution host. */
@@ -185,6 +187,8 @@ export type RuntimeTerminalRead = {
   latestCursor?: string
   returnedLineCount?: number
   source?: 'stream' | 'screen' | 'screen-unavailable'
+  /** UI-only composer text, excluded from `tail`. */
+  draft?: string
 }
 
 export type RuntimeTerminalRename = {

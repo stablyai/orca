@@ -9,14 +9,12 @@ import {
 } from '@/lib/pane-manager/windows-pty-compatibility'
 import { createTerminalCommandLifecycle } from '../terminal-command-lifecycle'
 import { createPaneForegroundAgentTracker } from '../pane-foreground-agent-tracker'
-import { parseAppSshPtyId } from '../../../../../shared/ssh-pty-id'
+import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
 import { dispatchTerminalCommandFinishedEvent } from '@/hooks/terminal-command-finished-event'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
-
-import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -129,7 +127,7 @@ export function installPaneAgentIdentity(session: ConnectPanePtySession): void {
     }
   }
   session.isForegroundTrackingAllowed = (id: string): boolean => {
-    if (isRemoteRuntimePtyId(id) || parseAppSshPtyId(id) !== null) {
+    if (isRemoteExecutionHostPtyId(id)) {
       return false
     }
     if (!navigator.userAgent.includes('Windows')) {

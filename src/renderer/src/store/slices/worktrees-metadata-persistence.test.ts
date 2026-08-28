@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
-import { getHostedReviewCacheKey } from './hosted-review'
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from './github-cache-key'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -155,7 +155,8 @@ describe('worktree remote runtime mutations', () => {
     const wt = makeWorktree({
       id: 'repo-ssh::/home/orca/wt1',
       repoId: 'repo-ssh',
-      path: '/home/orca/wt1'
+      path: '/home/orca/wt1',
+      hostId: 'ssh:ssh-1'
     })
     store.setState({
       settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
@@ -176,6 +177,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
+      executionHostId: 'ssh:ssh-1',
       updates: expect.objectContaining({ comment: 'ssh note' })
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
@@ -199,6 +201,7 @@ describe('worktree remote runtime mutations', () => {
 
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
+      executionHostId: 'local',
       updates: {
         displayName: 'Fix auth',
         pendingFirstAgentMessageRename: false,
@@ -378,12 +381,10 @@ describe('worktree remote runtime mutations', () => {
     } as Partial<AppState>)
 
     const unsubscribe = store.subscribe(subscriber)
-    await store.getState().updateWorktreesMeta(
-      new Map([
-        [first.id, { workspaceStatus: 'in-review' }],
-        [second.id, { workspaceStatus: 'completed' }]
-      ])
-    )
+    await store.getState().updateWorktreesMeta([
+      { worktreeId: first.id, updates: { workspaceStatus: 'in-review' } },
+      { worktreeId: second.id, updates: { workspaceStatus: 'completed' } }
+    ])
     unsubscribe()
 
     expect(store.getState().worktreesByRepo.repo1.map((w) => w.workspaceStatus)).toEqual([
@@ -412,13 +413,14 @@ describe('worktree remote runtime mutations', () => {
     })
     store.setState({ worktreesByRepo: { repo1: [local, remote] } } as Partial<AppState>)
 
-    await store.getState().updateWorktreesMeta(new Map([[worktreeId, { manualOrder: 9000 }]]))
+    await store.getState().updateWorktreesMeta([{ worktreeId, updates: { manualOrder: 9000 } }])
 
     expect(store.getState().worktreesByRepo.repo1.map((row) => row.manualOrder)).toEqual([
       9000, 9000
     ])
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId,
+      executionHostId: 'local',
       updates: { manualOrder: 9000 }
     })
     expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
@@ -427,5 +429,41 @@ describe('worktree remote runtime mutations', () => {
       params: { worktree: `id:${worktreeId}`, manualOrder: 9000 },
       timeoutMs: 15_000
     })
+  })
+  it('persists an explicit bulk host update to only the selected owner', async () => {
+    const store = createTestStore()
+    const worktreeId = 'repo1::/same/path'
+    const local = makeWorktree({ id: worktreeId, repoId: 'repo1', hostId: 'local' })
+    const remote = makeWorktree({
+      id: worktreeId,
+      repoId: 'repo1',
+      hostId: 'runtime:env-1'
+    })
+    runtimeEnvironmentCall.mockResolvedValue({
+      id: 'rpc-set-selected-owner',
+      ok: true,
+      result: { worktree: { ...remote, comment: 'selected' } },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    store.setState({ worktreesByRepo: { repo1: [local, remote] } } as Partial<AppState>)
+
+    await store
+      .getState()
+      .updateWorktreesMeta([
+        { worktreeId, updates: { comment: 'selected' }, executionHostId: 'runtime:env-1' }
+      ])
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([
+      expect.objectContaining({ hostId: 'local', comment: '' }),
+      expect.objectContaining({ hostId: 'runtime:env-1', comment: 'selected' })
+    ])
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'env-1',
+        method: 'worktree.set',
+        params: expect.objectContaining({ comment: 'selected' })
+      })
+    )
   })
 })

@@ -36,6 +36,7 @@ shell-neutral for POSIX shells, PowerShell, and cmd.exe.
 - The agent should use Orca's preview pane instead of external Simulator.app or raw serve-sim URLs.
 
 **When NOT to use**
+
 - Android emulators → use the `orca-emulator-android` skill (same `ORCA emulator` namespace, cross-platform via adb/emulator).
 - Building or installing the app itself → use `xcodebuild`, `xcrun simctl install`, `expo run:ios`, etc. (launch the app, then use `ORCA emulator` to drive it).
 - In-app debugging (state, network, views) → use the app's own tools or the browser pane if it's a webview.
@@ -75,6 +76,7 @@ An active emulator "session" for the worktree is required for most commands. Use
 ```
 
 Orca owns:
+
 - Starting/stopping the serve-sim helper (via --detach or direct).
 - Per-worktree "active" emulator (like active browser tab).
 - Explicit targeting with `--worktree`, `--device`, `--emulator <id>`.
@@ -82,26 +84,26 @@ Orca owns:
 
 Agents use the Orca executable chosen above (on PATH in Orca terminals) and never have to manage PIDs, state files in /tmp, or raw WS URLs themselves.
 
-**For `pnpm dev` testing:** run `pnpm build:cli` first (rebuilds the CLI + ensures the `orca-dev` shim points at *this* worktree). Then inside the dev app use `orca-dev emulator ...` (or the direct `./config/scripts/orca-dev.mjs emulator ...` from the repo root). The orchestration preambles and dev launchers automatically select the dev command name so the CLI reaches your in-memory EmulatorBridge / runtime. Plain `orca` reaches a packaged install instead.
+**For `pnpm dev` testing:** run `pnpm build:cli` first (rebuilds the CLI + ensures the `orca-dev` shim points at _this_ worktree). Then inside the dev app use `orca-dev emulator ...` (or the direct `./config/scripts/orca-dev.mjs emulator ...` from the repo root). The orchestration preambles and dev launchers automatically select the dev command name so the CLI reaches your in-memory EmulatorBridge / runtime. Plain `orca` reaches a packaged install instead.
 
 ## Common operations
 
 Use `--json` for agent-friendly output. Commands are workspace-scoped by default (current worktree's active emulator).
 
-| Goal                        | Command                                      | Notes |
-|-----------------------------|----------------------------------------------|-------|
-| List available / running   | `ORCA emulator list [--worktree <sel>]`     | Shows Orca-managed + raw serve-sim streams. Use output for explicit --device/--emulator. |
-| Attach / make active       | `ORCA emulator attach "iPhone 16 Pro" [--worktree <sel>] [--focus]` | Starts helper if needed (serve-sim --detach). Sets active for unqualified commands. --focus optional (does not auto-steal UI focus by default). |
-| Single tap                 | `ORCA emulator tap <x> <y> [--device <id>]` | Normalized 0..1 coords. **Preferred over gesture for simple taps.** |
-| Multi-step gesture         | `ORCA emulator gesture '<json>'`            | See gestures reference (begin/move/end). Use tap for singles. |
-| Type text                  | `ORCA emulator type "text" [--device <id>]` | US ASCII only. Supports stdin/file via exec if needed. |
-| Hardware button            | `ORCA emulator button home [--device <id>]` | home, swipe_home, app_switcher, lock, siri, side_button. |
-| Rotate device              | `ORCA emulator rotate landscape_left`       | Remembers orientation for subsequent gestures. |
-| Camera injection           | `ORCA emulator camera com.acme.App --webcam` | Or --file, placeholder. Hot-swap with switch. May (re)launch app. |
-| Permissions                | `ORCA emulator permissions grant camera com.acme.App` | grant/revoke/reset/list. See full subcommand help. |
-| Accessibility tree         | `ORCA emulator ax [--device <id>]`          | Raw serve-sim AX node tree (labels, roles, nested children, capped at 500 nodes; frames normalized 0..1 with top-left origin — tap an element at its frame center: x+width/2, y+height/2). Needs an active session. |
-| Raw / advanced             | `ORCA emulator exec --command "tap 0.5 0.7"` | Or "ca-debug blended on", "memory-warning", full serve-sim subcommands (no "serve-sim" prefix needed in the command string). Bridge injects active device context. |
-| Stop                       | `ORCA emulator kill [--device <id>]`        | Or let pane close / Orca quit clean up. |
+| Goal                     | Command                                                             | Notes                                                                                                                                                                                                               |
+| ------------------------ | ------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| List available / running | `ORCA emulator list [--worktree <sel>]`                             | Shows Orca-managed + raw serve-sim streams. Use output for explicit --device/--emulator.                                                                                                                            |
+| Attach / make active     | `ORCA emulator attach "iPhone 16 Pro" [--worktree <sel>] [--focus]` | Starts helper if needed (serve-sim --detach). Sets active for unqualified commands. --focus optional (does not auto-steal UI focus by default).                                                                     |
+| Single tap               | `ORCA emulator tap <x> <y> [--device <id>]`                         | Normalized 0..1 coords. **Preferred over gesture for simple taps.**                                                                                                                                                 |
+| Multi-step gesture       | `ORCA emulator gesture '<json>'`                                    | See gestures reference (begin/move/end). Use tap for singles.                                                                                                                                                       |
+| Type text                | `ORCA emulator type "text" [--device <id>]`                         | US ASCII only. Supports stdin/file via exec if needed.                                                                                                                                                              |
+| Hardware button          | `ORCA emulator button home [--device <id>]`                         | home, swipe_home, app_switcher, lock, siri, side_button.                                                                                                                                                            |
+| Rotate device            | `ORCA emulator rotate landscape_left`                               | Remembers orientation for subsequent gestures.                                                                                                                                                                      |
+| Camera injection         | `ORCA emulator camera com.acme.App --webcam`                        | Or --file, placeholder. Hot-swap with switch. May (re)launch app.                                                                                                                                                   |
+| Permissions              | `ORCA emulator permissions grant camera com.acme.App`               | grant/revoke/reset/list. See full subcommand help.                                                                                                                                                                  |
+| Accessibility tree       | `ORCA emulator ax [--device <id>]`                                  | Raw serve-sim AX node tree (labels, roles, nested children, capped at 500 nodes; frames normalized 0..1 with top-left origin — tap an element at its frame center: x+width/2, y+height/2). Needs an active session. |
+| Raw / advanced           | `ORCA emulator exec --command "tap 0.5 0.7"`                        | Or "ca-debug blended on", "memory-warning", full serve-sim subcommands (no "serve-sim" prefix needed in the command string). Bridge injects active device context.                                                  |
+| Stop                     | `ORCA emulator kill [--device <id>]`                                | Or let pane close / Orca quit clean up.                                                                                                                                                                             |
 
 Most support `--worktree <selector>` and explicit `--device <udid|name>` or `--emulator <id>` (from list) for targeting.
 

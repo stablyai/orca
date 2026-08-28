@@ -36,6 +36,7 @@ import {
 import { getAutomationRunContent } from './automation-run-content'
 import type { AutomationActionNotice } from './automation-row-action-dispatch'
 import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AutomationTargetAvailability } from './automation-target-availability'
 import type { AutomationRunViewState } from './automation-run-view-state'
 import type { AutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
@@ -56,6 +57,8 @@ type AutomationsDetailPaneProps = {
   selectedRepoDisplayName: string
   selectedRepoDefaultBaseRef: string | null
   selectedWorkspaceName: string
+  /** Catalog entry the selected row was listed from; absent for legacy unscoped rows. */
+  selectedHostEntry: AutomationHostCatalogEntry | null
   hostLabelById: ReadonlyMap<string, string>
   selectedRunNowAvailability: AutomationTargetAvailability | null
   selectedAutomationRunPageWorkspaceDisplay: AutomationRunWorkspaceDisplay | null
@@ -107,6 +110,7 @@ export function AutomationsDetailPane({
   selectedRepoDisplayName,
   selectedRepoDefaultBaseRef,
   selectedWorkspaceName,
+  selectedHostEntry,
   hostLabelById,
   selectedRunNowAvailability,
   selectedAutomationRunPageWorkspaceDisplay,
@@ -221,6 +225,7 @@ export function AutomationsDetailPane({
               projectName={selectedRepoDisplayName}
               projectDefaultBaseRef={selectedRepoDefaultBaseRef}
               workspaceName={selectedWorkspaceName}
+              hostEntry={selectedHostEntry}
               hostLabelById={hostLabelById}
               runNowAvailability={selectedRunNowAvailability}
               now={relativeNow}

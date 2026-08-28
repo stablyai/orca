@@ -2,7 +2,10 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 
-import { ORCA_HOOK_PROTOCOL_VERSION } from '../shared/agent-hook-types'
+import {
+  ORCA_HOOK_PROTOCOL_VERSION,
+  ORCA_HOOK_RAW_JSON_TRANSPORT
+} from '../shared/agent-hook-types'
 import {
   clearAllListenerCaches,
   clearPaneCacheState,
@@ -15,6 +18,7 @@ import {
 } from '../shared/agent-hook-listener/endpoint-publication'
 import { HOOK_REQUEST_SLOWLORIS_MS } from '../shared/agent-hook-listener/listener-limits'
 import { normalizeHookPayload } from '../shared/agent-hook-listener'
+import { mergeAgentHookRequestHeaders } from '../shared/agent-hook-listener/hook-envelope'
 import { readRequestBody } from '../shared/agent-hook-listener/request-body'
 import { resolveHookSource } from '../shared/agent-hook-listener/source-routing'
 import type { AgentHookEventPayload } from '../shared/agent-hook-listener/listener-event'
@@ -174,7 +178,8 @@ export class RelayAgentHookServer {
       port: this.port,
       token: this.token,
       env: this.env,
-      version: ORCA_HOOK_PROTOCOL_VERSION
+      version: ORCA_HOOK_PROTOCOL_VERSION,
+      transport: ORCA_HOOK_RAW_JSON_TRANSPORT
     })
     return this.endpointFileWritten
   }
@@ -252,7 +257,6 @@ export class RelayAgentHookServer {
       req.destroy()
     })
     try {
-      const body = await readRequestBody(req)
       const pathname = new URL(req.url ?? '/', 'http://127.0.0.1').pathname
       const source = resolveHookSource(pathname)
       if (!source) {
@@ -260,16 +264,18 @@ export class RelayAgentHookServer {
         res.end()
         return
       }
-      const event = normalizeHookPayload(this.state, source, body, this.env, {
+      const body = await readRequestBody(req)
+      const hookBody = mergeAgentHookRequestHeaders(body, req.headers)
+      const event = normalizeHookPayload(this.state, source, hookBody, this.env, {
         deferCompactOwnershipToClient: true
       })
       if (event) {
         // TODO: once normalizeHookPayload returns validated env/version, drop bodyEnv/bodyVersion and source them from the listener result.
-        const env = hookBodyEnv(body)
-        const version = hookBodyVersion(body)
+        const env = hookBodyEnv(hookBody)
+        const version = hookBodyVersion(hookBody)
         this.applyEvent(event, source, env, version)
-        this.retryScheduler.scheduleAssistantMessageRetry(source, body, event, env, version)
-        this.retryScheduler.scheduleCodexSubagentPoll(source, body, event, env, version)
+        this.retryScheduler.scheduleAssistantMessageRetry(source, hookBody, event, env, version)
+        this.retryScheduler.scheduleCodexSubagentPoll(source, hookBody, event, env, version)
       }
       res.writeHead(204)
       res.end()

@@ -18,12 +18,32 @@ export const PR_E2E_SOURCE_ROUTES = [
       'tests/e2e/pty-input-write-queue-ssh.spec.ts',
       'tests/e2e/ssh-cold-activation-restore.spec.ts',
       'tests/e2e/ssh-docker-reconnect-pane-restore.spec.ts',
+      'tests/e2e/ssh-port-forward-lifecycle.spec.ts',
+      'tests/e2e/ssh-reconnect-tab-destruction.spec.ts',
       'tests/e2e/ssh-startup-exec-readiness.spec.ts',
       'tests/e2e/ssh-terminal-window-wake-stale-grid-repro.spec.ts'
     ],
+    // Why the store/startup/shared additions: the SSH-named authorities stop at the main
+    // process and the pane component, but the reconnect ledgers and retained-payload
+    // admission that decide whether a pane rebinds live in the renderer store.
     matches: (file) =>
       isProductSource(file) &&
-      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/relay\/|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
+      /^(?:src\/main\/ssh\/|src\/main\/providers\/ssh-|src\/main\/ipc\/(?:ssh-|pty)|src\/main\/runtime\/(?:public-ssh-state|ssh-file-explorer-chunk-read)\.ts|src\/relay\/|src\/shared\/(?:ssh-|skill-ssh-relay-contract)|src\/renderer\/src\/startup\/(?:ssh-startup-reconnect|startup-ssh-connection-restore)\.ts|src\/renderer\/src\/store\/slices\/(?:ssh|direct-ssh-)|src\/renderer\/src\/components\/terminal-pane\/(?:pty-|ssh-|remote-runtime-|terminal-parked-pty))/.test(
+        file
+      )
+  },
+  {
+    // Why a sibling route rather than more paths on ssh-terminal-source: these modules carry
+    // no "ssh" in their names, and only the two restore specs gate them. Folding them in
+    // would run the whole SSH terminal list for a tab-tombstone edit.
+    id: 'ssh-workspace-session-restore',
+    specs: [
+      'tests/e2e/ssh-cold-activation-restore.spec.ts',
+      'tests/e2e/ssh-reconnect-tab-destruction.spec.ts'
+    ],
+    matches: (file) =>
+      isProductSource(file) &&
+      /^(?:src\/main\/ipc\/remote-workspace|src\/shared\/remote-workspace-|src\/renderer\/src\/hooks\/remote-workspace-|src\/renderer\/src\/lib\/worktree-(?:initial-terminal-seeding|default-terminal-tabs)\.ts|src\/renderer\/src\/components\/terminal\/initial-terminal)/.test(
         file
       )
   },
@@ -131,6 +151,18 @@ export function selectPrE2eSpecs(changedPaths, reportRoute = () => undefined) {
   return [...specs].sort((left, right) => left.localeCompare(right))
 }
 
+/** Routes whose authorities are SSH execution source, and so require the Docker-SSH lane. */
+export const SSH_SOURCE_ROUTE_IDS = ['ssh-terminal-source', 'ssh-workspace-session-restore']
+
+// Why derive this from the routes instead of a second path list: the Docker-SSH lane used to
+// trigger only because one route happened to list a startup-readiness spec, so pruning that
+// spec would have silently retired the lane. Two lists that must agree is how that drifted.
+export function hasSshSourceChange(changedPaths) {
+  return PR_E2E_SOURCE_ROUTES.filter((route) => SSH_SOURCE_ROUTE_IDS.includes(route.id)).some(
+    (route) => changedPaths.some(route.matches)
+  )
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   let input = ''
   process.stdin.setEncoding('utf8')
@@ -138,6 +170,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     input += chunk
   }
   const changedPaths = input.split(/\r?\n/).filter(Boolean)
-  const specs = selectPrE2eSpecs(changedPaths, (message) => console.error(message))
-  process.stdout.write(`${JSON.stringify(specs)}\n`)
+  if (process.argv.includes('--ssh-source')) {
+    process.stdout.write(`${hasSshSourceChange(changedPaths)}\n`)
+  } else {
+    const specs = selectPrE2eSpecs(changedPaths, (message) => console.error(message))
+    process.stdout.write(`${JSON.stringify(specs)}\n`)
+  }
 }

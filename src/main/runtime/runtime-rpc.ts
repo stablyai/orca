@@ -236,6 +236,7 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'files.open',
   'files.openDiff',
   'files.read',
+  'files.readDocPreview',
   'files.readChunk',
   'files.readDir',
   'files.readPreview',
@@ -466,10 +467,26 @@ export type RuntimeLongPollClass = 'ask' | 'browser-host' | 'wait'
 
 // Why: single classifier for long-poll requests (handlers that block on an external event), shared by counter/abort/keepalive. See §3.1.
 export function classifyRuntimeLongPoll(request: RpcRequest): RuntimeLongPollClass | null {
+  // Worker start waits for readiness and then verifies the submitted prompt;
+  // the complete operation can run for 90–110s. Keep every local transport
+  // (Unix sockets and Windows named pipes) alive for that long poll.
+  if (request.method === 'orchestration.workerStart') {
+    return 'wait'
+  }
   if (request.method === 'browser.clientHost.attach') {
     return 'browser-host'
   }
   if (request.method === 'terminal.wait') {
+    return 'wait'
+  }
+  // Agent-prompt submission waits for the PTY's lifecycle transition (up to
+  // the verification budget); keep the local socket alive for that wait.
+  if (
+    request.method === 'terminal.send' &&
+    typeof request.params === 'object' &&
+    request.params !== null &&
+    (request.params as { agentPrompt?: unknown }).agentPrompt === true
+  ) {
     return 'wait'
   }
   // Why: orchestration.ask blocks unconditionally (default 600 s) holding the

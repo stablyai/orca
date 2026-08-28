@@ -17,6 +17,11 @@ import { beginTabStripPointerGesture } from './tab-strip-pointer-gesture'
  * drag (activation suppressed). Because each press measures its own gesture, a
  * click after a reorder always activates.
  */
+/** Whether an in-page guest (a `<webview>`) currently owns the keyboard, which blurs the embedder. */
+function isGuestHoldingKeyboard(): boolean {
+  return typeof document !== 'undefined' && document.activeElement?.tagName === 'WEBVIEW'
+}
+
 export function useTabStripPointerActivation({
   onActivate,
   disabled = false
@@ -51,12 +56,16 @@ export function useTabStripPointerActivation({
       const startX = event.clientX
       const startY = event.clientY
       const releaseTabStripPointerGesture = beginTabStripPointerGesture()
+      // Why a press that starts under a guest forgives one window focus: an in-page <webview>
+      // holding the keyboard leaves the embedder blurred, so this very press is what pulls focus
+      // back and #7316's flush would eat the click that takes the reader out of a browser pane.
+      let pendingGuestFocusHandoff = isGuestHoldingKeyboard()
 
       const cleanup = (): void => {
         window.removeEventListener('pointerup', onPointerUp)
         window.removeEventListener('pointercancel', onPointerCancel)
         window.removeEventListener('blur', onPointerCancel)
-        window.removeEventListener('focus', onPointerCancel)
+        window.removeEventListener('focus', onWindowFocus)
         releaseTabStripPointerGesture()
         cleanupRef.current = null
       }
@@ -74,11 +83,18 @@ export function useTabStripPointerActivation({
       const onPointerCancel = (): void => {
         cleanup()
       }
+      const onWindowFocus = (): void => {
+        if (pendingGuestFocusHandoff) {
+          pendingGuestFocusHandoff = false
+          return
+        }
+        cleanup()
+      }
 
       window.addEventListener('pointerup', onPointerUp)
       window.addEventListener('pointercancel', onPointerCancel)
       window.addEventListener('blur', onPointerCancel)
-      window.addEventListener('focus', onPointerCancel)
+      window.addEventListener('focus', onWindowFocus)
       cleanupRef.current = cleanup
     },
     [disabled]

@@ -1563,12 +1563,12 @@ export function ResourceUsageStatusSegment({
               {orphanCount === 1
                 ? translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
-                    'Kill {{value0}} orphan terminal',
+                    'End {{value0}} orphan terminal',
                     { value0: orphanCount }
                   )
                 : translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
-                    'Kill {{value0}} orphan terminals',
+                    'End {{value0}} orphan terminals',
                     { value0: orphanCount }
                   )}
             </button>

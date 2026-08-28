@@ -36,7 +36,8 @@ const WorkItemsList = RepoSelector.extend({
 const IssuesList = RepoSelector.extend({
   state: z.unknown().optional(),
   assignee: OptionalString,
-  limit: OptionalFiniteNumber
+  limit: OptionalFiniteNumber,
+  page: OptionalFiniteNumber
 })
 
 const CreateIssue = RepoSelector.extend({
@@ -182,7 +183,8 @@ export const GITLAB_METHODS: RpcMethod[] = [
         params.repo,
         normalized.state,
         normalized.assignee,
-        normalized.limit
+        normalized.limit,
+        normalized.page
       )
     }
   }),

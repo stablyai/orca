@@ -16,15 +16,29 @@ permissions:
   contents: read
 
 jobs:
-  # Why: a README/docs-only PR used to start the full matrix (32 test shards,
+  # Why: a README/docs-only PR used to start the full matrix (test shards,
   # two package jobs, typecheck, git compat, xterm, shell contracts). Path
   # filters on `on.pull_request` would drop the `verify` check entirely; this
   # detector keeps verify as the required aggregate and skips the expensive jobs.
+  # Per-job outputs also skip git-compat/xterm/packaging/shell when those
+  # inputs are unchanged; empty diffs fail closed and run everything.
   code_paths:
     name: detect code-relevant changes
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
+      static_analysis: ${{ steps.filter.outputs.static_analysis }}
+      typecheck: ${{ steps.filter.outputs.typecheck }}
+      git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
+      xterm_patch_sync: ${{ steps.filter.outputs.xterm_patch_sync }}
+      shell_contracts: ${{ steps.filter.outputs.shell_contracts }}
+      test: ${{ steps.filter.outputs.test }}
+      orcad_browser: ${{ steps.filter.outputs.orcad_browser }}
+      cross-version-wire: ${{ steps.filter.outputs.cross-version-wire }}
+      managed_hook_node18: ${{ steps.filter.outputs.managed_hook_node18 }}
+      package: ${{ steps.filter.outputs.package }}
+      package_windows: ${{ steps.filter.outputs.package_windows }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -48,14 +62,12 @@ jobs:
           CHANGED="$(git diff --name-only --no-renames --diff-filter=ACDMR --merge-base "$BASE_SHA" "$HEAD_SHA")"
           echo "Changed paths:"
           printf '%s\n' "$CHANGED"
-          SHOULD_RUN="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs)"
-          echo "should_run=$SHOULD_RUN" >> "$GITHUB_OUTPUT"
-          echo "should_run=$SHOULD_RUN"
+          printf '%s\n' "$CHANGED" | node config/scripts/pr-code-change-scope.mjs | tee -a "$GITHUB_OUTPUT"
 
   static_analysis:
     name: static analysis
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.static_analysis == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -70,6 +82,8 @@ jobs:
           persist-credentials: false
 
       - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
 
       - name: Lint
         run: pnpm exec oxlint --format github
@@ -188,7 +202,7 @@ jobs:
 
   typecheck:
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.typecheck == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -216,7 +230,7 @@ jobs:
   git_compatibility:
     name: Git compatibility
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.git_compatibility == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -283,7 +297,7 @@ jobs:
   xterm_patch_sync:
     name: xterm patch sync
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.xterm_patch_sync == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -313,7 +327,7 @@ jobs:
   shell_contracts:
     name: shell contracts
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.shell_contracts == 'true'
     runs-on: ubuntu-latest
     # Why: this job's cost is almost entirely package download, and a stalled mirror has
     # no wall-clock bound of its own. A successful run finishes in ~4.5 minutes, so this
@@ -429,17 +443,13 @@ jobs:
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
-  test:
-    name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
+  # Cache-key input changes would otherwise make every shard compile the same
+  # native addon concurrently. Prime the supported Node ABI before the matrix fans out.
+  test_native_cache:
+    name: prepare test native cache node 24
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.native_cache_changed == 'true'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        node: ['24', '26']
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
-        shard_total: [16]
 
     steps:
       - name: Checkout
@@ -450,39 +460,24 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
-          node-version: ${{ matrix.node }}
+          node-version: '24'
 
-      - name: Install Electron package binary for tests
-        run: node config/scripts/install-electron-package-binary.mjs
+  test:
+    needs: [code_paths, test_native_cache]
+    if: >-
+      always() &&
+      needs.code_paths.outputs.test == 'true' &&
+      (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
+    uses: ./.github/workflows/unit-tests.yml
+    with:
+      node_versions: '["24"]'
 
-      - name: Test shard
-        run: |
-          pnpm exec vitest run --config config/vitest.config.ts \
-            --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
-            --exclude=src/main/daemon/shell-ready.test.ts \
-            --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
-            --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
-            --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
-            --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
-            --exclude=src/main/shell-startup-feature-channel.test.ts \
-            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
-            --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
-            --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
-            --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
-            --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
-            --exclude=src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
-            --exclude=src/shared/pty-reply-echo-shapes.node-pty.test.ts \
-            --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
-            --exclude=src/shared/posix-command-path-lookup.test.ts \
-            --exclude=tests/e2e/cross-version-wire/** \
-            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}
-
-  # Why a separate job: the test needs a real Chrome, and the 32-way `test` matrix
-  # would pay for it 32 times to run one file in whichever shard it landed in.
+  # Why a separate job: the test needs a real Chrome, and the sharded `test` matrix
+  # would pay for it on every shard to run one file in whichever shard it landed in.
   orcad_browser:
     name: orcad browser provider
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.orcad_browser == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -518,7 +513,7 @@ jobs:
   cross-version-wire:
     name: cross-version wire compatibility
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.cross-version-wire == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -550,7 +545,7 @@ jobs:
   managed_hook_node18:
     name: managed hooks on Node 18
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.managed_hook_node18 == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -575,7 +570,7 @@ jobs:
   package:
     name: package
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.package == 'true'
     runs-on: ubuntu-latest
 
     steps:
@@ -647,7 +642,7 @@ jobs:
   package_windows:
     name: package (windows)
     needs: [code_paths]
-    if: needs.code_paths.outputs.should_run == 'true'
+    if: needs.code_paths.outputs.package_windows == 'true'
     runs-on: windows-2022
     timeout-minutes: 30
 
@@ -656,17 +651,6 @@ jobs:
         uses: actions/checkout@v6
         with:
           persist-credentials: false
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-          cache: pnpm
 
       - name: Cache electron-builder downloads
         uses: actions/cache@v5
@@ -678,18 +662,22 @@ jobs:
           restore-keys: |
             electron-builder-windows-
 
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+      # Why persist-native-cache false: this job later rebuilds the same path for
+      # Electron. A post-job save would store the Electron ABI under the Node key.
+      - uses: ./.github/actions/install-node-dependencies
+        id: deps
+        with:
+          native-runtime: node
+          persist-native-cache: 'false'
 
-      # Why: node-pty prefers its upstream prebuild, which does not contain
-      # Orca's Windows patch, so the job-object exports would be absent and the
-      # suite below would test an unpatched binary. build_from_source removes
-      # the prebuild, and the package's postinstall restores the ConPTY runtime
-      # files that a bare node-gyp rebuild would miss.
-      - name: Rebuild node-pty from patched source
-        env:
-          npm_config_build_from_source: 'true'
-        run: pnpm rebuild node-pty
+      - name: Save compiled Node native modules
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
+            node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
+            node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Test Windows-specific boundaries
         run: >-
@@ -703,6 +691,7 @@ jobs:
           src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts
           src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts
           src/shared/child-process/windows-command-line.win32.test.ts
+          src/main/agent-hooks/windows-hook-payload-delivery.test.ts
           src/main/windows/windows-pty-job.win32.test.ts
           src/main/windows/windows-host-job.win32.test.ts
           src/main/wsl/wsl-runner.test.ts
@@ -723,8 +712,25 @@ jobs:
       # Why the :parallel variant: identical to build:release except the three
       # electron-vite targets overlap instead of running back to back. The Linux package
       # job already packages and smoke-tests an AppImage built that way.
+      - name: Cache Windows CLI launcher
+        uses: actions/cache@v5
+        with:
+          path: native/windows-cli-launcher/.build
+          key: windows-cli-launcher-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('native/windows-cli-launcher/**', 'config/scripts/build-windows-cli-launcher.mjs') }}
+
       - name: Build package inputs
+        env:
+          ORCA_REUSE_WINDOWS_CLI_LAUNCHER: '1'
         run: pnpm run build:release:parallel
+
+      - name: Restore compiled Electron native modules
+        uses: actions/cache@v5
+        with:
+          path: |
+            node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
+            node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
+            node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron
@@ -753,6 +759,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       test_files: ${{ steps.filter.outputs.test_files }}
+      ssh_source_changed: ${{ steps.filter.outputs.ssh_source_changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -775,6 +782,11 @@ jobs:
           # authorities, exclusions, and sentinels without evaluating workflow shell.
           TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
+          # Why a separate signal: the Docker-SSH lane must trigger on SSH source, not on a
+          # spec name surviving in a route's list. Same routes, so the two cannot drift.
+          SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
+          echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "SSH source changed: $SSH_SOURCE_CHANGED"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Changed E2E specs: $TEST_FILES_JSON"
@@ -793,6 +805,7 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     with:
       test_files: ${{ needs.e2e-paths.outputs.test_files }}
+      ssh_source_changed: ${{ needs.e2e-paths.outputs.ssh_source_changed }}
 
   verify:
     if: always()
@@ -806,6 +819,7 @@ jobs:
       - shell_contracts
       - test
       - orcad_browser
+      - cross-version-wire
       - managed_hook_node18
       - package
       - package_windows
@@ -825,57 +839,63 @@ jobs:
           CODE_PATHS: ${{ needs.code_paths.result }}
           SHOULD_RUN: ${{ needs.code_paths.outputs.should_run }}
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
+          STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
+          TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
+          GIT_COMPATIBILITY_SHOULD_RUN: ${{ needs.code_paths.outputs.git_compatibility }}
           XTERM_PATCH_SYNC: ${{ needs.xterm_patch_sync.result }}
+          XTERM_PATCH_SYNC_SHOULD_RUN: ${{ needs.code_paths.outputs.xterm_patch_sync }}
           SHELL_CONTRACTS: ${{ needs.shell_contracts.result }}
+          SHELL_CONTRACTS_SHOULD_RUN: ${{ needs.code_paths.outputs.shell_contracts }}
           TEST: ${{ needs.test.result }}
+          TEST_SHOULD_RUN: ${{ needs.code_paths.outputs.test }}
           ORCAD_BROWSER: ${{ needs.orcad_browser.result }}
+          ORCAD_BROWSER_SHOULD_RUN: ${{ needs.code_paths.outputs.orcad_browser }}
+          CROSS_VERSION_WIRE: ${{ needs.cross-version-wire.result }}
+          CROSS_VERSION_WIRE_SHOULD_RUN: ${{ needs.code_paths.outputs.cross-version-wire }}
           MANAGED_HOOK_NODE18: ${{ needs.managed_hook_node18.result }}
+          MANAGED_HOOK_NODE18_SHOULD_RUN: ${{ needs.code_paths.outputs.managed_hook_node18 }}
           PACKAGE: ${{ needs.package.result }}
+          PACKAGE_SHOULD_RUN: ${{ needs.code_paths.outputs.package }}
           PACKAGE_WINDOWS: ${{ needs.package_windows.result }}
+          PACKAGE_WINDOWS_SHOULD_RUN: ${{ needs.code_paths.outputs.package_windows }}
         run: |
           if [ "$CODE_PATHS" != "success" ]; then
             exit 1
           fi
+          if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
+            exit 1
+          fi
           if [ "$SHOULD_RUN" != "true" ]; then
             echo "Docs-only change; expensive PR checks skipped."
-            if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
-              exit 1
-            fi
-            for result in \
-              "$STATIC_ANALYSIS" \
-              "$TYPECHECK" \
-              "$GIT_COMPATIBILITY" \
-              "$XTERM_PATCH_SYNC" \
-              "$SHELL_CONTRACTS" \
-              "$TEST" \
-              "$ORCAD_BROWSER" \
-              "$MANAGED_HOOK_NODE18" \
-              "$PACKAGE" \
-              "$PACKAGE_WINDOWS"; do
-              if [ "$result" != "skipped" ]; then
-                exit 1
-              fi
-            done
-            exit 0
           fi
-          # Require success when the PR has code-relevant changes
-          for result in \
-            "$CODE_PATHS" \
-            "$STATIC_ANALYSIS" \
-            "$ROOT_DIRECTORY_GUARD" \
-            "$TYPECHECK" \
-            "$GIT_COMPATIBILITY" \
-            "$XTERM_PATCH_SYNC" \
-            "$SHELL_CONTRACTS" \
-            "$TEST" \
-            "$ORCAD_BROWSER" \
-            "$MANAGED_HOOK_NODE18" \
-            "$PACKAGE" \
-            "$PACKAGE_WINDOWS"; do
-            if [ "$result" != "success" ]; then
-              exit 1
+          failed=0
+          check_job() {
+            local name="$1" result="$2" should="$3"
+            if [ "$should" = "true" ]; then
+              if [ "$result" != "success" ]; then
+                echo "$name: expected success, got $result"
+                failed=1
+              fi
+            else
+              if [ "$result" != "skipped" ]; then
+                echo "$name: expected skipped, got $result"
+                failed=1
+              fi
             fi
-          done
+          }
+          # Require success when the PR has code-relevant changes
+          check_job static_analysis "$STATIC_ANALYSIS" "$STATIC_ANALYSIS_SHOULD_RUN"
+          check_job typecheck "$TYPECHECK" "$TYPECHECK_SHOULD_RUN"
+          check_job git_compatibility "$GIT_COMPATIBILITY" "$GIT_COMPATIBILITY_SHOULD_RUN"
+          check_job xterm_patch_sync "$XTERM_PATCH_SYNC" "$XTERM_PATCH_SYNC_SHOULD_RUN"
+          check_job shell_contracts "$SHELL_CONTRACTS" "$SHELL_CONTRACTS_SHOULD_RUN"
+          check_job test "$TEST" "$TEST_SHOULD_RUN"
+          check_job orcad_browser "$ORCAD_BROWSER" "$ORCAD_BROWSER_SHOULD_RUN"
+          check_job cross-version-wire "$CROSS_VERSION_WIRE" "$CROSS_VERSION_WIRE_SHOULD_RUN"
+          check_job managed_hook_node18 "$MANAGED_HOOK_NODE18" "$MANAGED_HOOK_NODE18_SHOULD_RUN"
+          check_job package "$PACKAGE" "$PACKAGE_SHOULD_RUN"
+          check_job package_windows "$PACKAGE_WINDOWS" "$PACKAGE_WINDOWS_SHOULD_RUN"
+          exit "$failed"

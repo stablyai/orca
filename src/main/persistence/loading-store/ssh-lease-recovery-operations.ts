@@ -155,6 +155,11 @@ export function getSshPtyLeaseOperations(owner: SshLeaseRecoveryOperations): Ssh
         targetId,
         ptyId
       ),
+    toComparablePtyId: (targetId, ptyId) =>
+      owner[sshLeaseRecoveryOperationsContext].bindingRecovery.getRelayPtyIdForSshLeaseComparison(
+        targetId,
+        ptyId
+      ),
     clearBindingsForTarget: (targetId) =>
       clearSshRemotePtyBindingsForTargetOperation(
         getSshPtyBindingCleanupOperations(owner),
