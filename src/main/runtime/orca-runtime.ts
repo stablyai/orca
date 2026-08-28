@@ -752,6 +752,7 @@ import {
   hasHostAuthoritativeTerminalMembership
 } from './workspace-session-terminal-membership-authority'
 import { RuntimeEmulatorCommands } from './orca-runtime-emulator'
+import { RuntimeEmulatorRecordingCommands } from './orca-runtime-emulator-recording'
 import type { EmulatorBridge } from '../emulator/emulator-bridge'
 import { getRuntimeFileTargetExecutionHostId, RuntimeFileCommands } from './orca-runtime-files'
 import { RuntimeGitCommands } from './orca-runtime-git'
@@ -39331,6 +39332,11 @@ export class OrcaRuntimeService {
     getSettings: () => this.requireStore().getSettings()
   })
 
+  private readonly emulatorRecordingCommands = new RuntimeEmulatorRecordingCommands({
+    getEmulatorBridge: () => this.emulatorBridge,
+    resolveEmulatorWorkspaceId: (selector) => this.resolveEmulatorWorkspaceId(selector)
+  })
+
   browserSnapshot: RuntimeBrowserCommands['browserSnapshot'] =
     this.browserCommands.browserSnapshot.bind(this.browserCommands)
 
@@ -39784,6 +39790,10 @@ export class OrcaRuntimeService {
   )
   emulatorLogcat: RuntimeEmulatorCommands['emulatorLogcat'] =
     this.emulatorCommands.emulatorLogcat.bind(this.emulatorCommands)
+  emulatorRecordStart: RuntimeEmulatorRecordingCommands['emulatorRecordStart'] =
+    this.emulatorRecordingCommands.emulatorRecordStart.bind(this.emulatorRecordingCommands)
+  emulatorRecordStop: RuntimeEmulatorRecordingCommands['emulatorRecordStop'] =
+    this.emulatorRecordingCommands.emulatorRecordStop.bind(this.emulatorRecordingCommands)
   emulatorUnregisterActive: RuntimeEmulatorCommands['emulatorUnregisterActive'] =
     this.emulatorCommands.emulatorUnregisterActive.bind(this.emulatorCommands)
 

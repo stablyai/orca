@@ -3,6 +3,8 @@ import { EmulatorPaneToolbar } from './emulator-pane-toolbar'
 import { EmulatorDeviceFrame } from './emulator-device-frame'
 import { MobileEmulatorAgentSetupGuideLayer } from './MobileEmulatorAgentSetupGuideLayer'
 import { useEmulatorPaneSession } from './use-emulator-pane-session'
+import { useEmulatorScreenRecording } from './use-emulator-screen-recording'
+import { isIosStreamUrl } from './emulator-stream-backend'
 import { translate } from '@/i18n/i18n'
 
 type EmulatorPaneProps = {
@@ -36,6 +38,7 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
     tabId: tab?.id,
     autoAttachOnMount: isActive
   })
+  const recording = useEmulatorScreenRecording(worktreeId, displayName, isLive)
 
   return (
     <div
@@ -48,6 +51,10 @@ export default function EmulatorPane({ tab, worktreeId, isActive = true }: Emula
         loading={loading}
         devices={devices}
         selectedUdid={selectedUdid}
+        recordingStatus={recording.status}
+        recordingElapsedSeconds={recording.elapsedSeconds}
+        canRecord={isIosStreamUrl(previewUrl)}
+        onToggleRecording={recording.toggle}
         onSelectDevice={(udid) => {
           setSelectedUdid(udid)
           void attach(udid)

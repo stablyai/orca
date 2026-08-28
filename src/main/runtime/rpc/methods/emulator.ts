@@ -129,6 +129,24 @@ const AxParams = z.object({
   worktree: z.string().optional()
 })
 
+const RecordStartParams = z.object({
+  // Absolute like install; the runtime supplies a default under userData when omitted.
+  path: z
+    .string()
+    .refine((value) => path.isAbsolute(value), { message: 'path must be absolute' })
+    .optional(),
+  name: z.string().optional(),
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
+const RecordStopParams = z.object({
+  device: z.string().optional(),
+  emulator: z.string().optional(),
+  worktree: z.string().optional()
+})
+
 const LogcatParams = z.object({
   lines: z.number().int().positive().optional(),
   filters: z.array(z.string()).optional(),
@@ -245,6 +263,16 @@ export const EMULATOR_METHODS: RpcMethod[] = [
     name: 'emulator.logcat',
     params: LogcatParams,
     handler: async (params, { runtime }) => runtime.emulatorLogcat(params)
+  }),
+  defineMethod({
+    name: 'emulator.recordStart',
+    params: RecordStartParams,
+    handler: async (params, { runtime }) => runtime.emulatorRecordStart(params)
+  }),
+  defineMethod({
+    name: 'emulator.recordStop',
+    params: RecordStopParams,
+    handler: async (params, { runtime }) => runtime.emulatorRecordStop(params)
   }),
   defineMethod({
     name: 'emulator.unregisterActive',

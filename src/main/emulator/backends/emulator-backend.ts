@@ -1,11 +1,12 @@
 import type { EmulatorGesturePoint } from '../emulator-gesture-sender'
+import type { EmulatorRecordingInfo } from '../emulator-recording-registry'
 import type {
   EmulatorBackendKind,
   EmulatorSessionInfo,
   EmulatorStreamCodec
 } from '../emulator-types'
 
-export type { EmulatorBackendKind, EmulatorStreamCodec }
+export type { EmulatorBackendKind, EmulatorStreamCodec, EmulatorRecordingInfo }
 
 // A device exposed by a backend, normalized across iOS (simulator UDID) and
 // Android (adb serial / AVD name). `id` is opaque and backend-resolved.
@@ -26,6 +27,7 @@ export type EmulatorBackendCapabilities = {
   permissions: boolean
   accessibilityTree: boolean
   logcat: boolean
+  record: boolean
 }
 
 export type BackendAvailability = {
@@ -95,4 +97,9 @@ export type EmulatorBackend = {
     deviceId: string,
     options?: { lines?: number; filters?: readonly string[] }
   ): Promise<unknown>
+  startRecording?(deviceId: string, outputPath: string): Promise<EmulatorRecordingInfo>
+  stopRecording?(deviceId: string): Promise<EmulatorRecordingInfo>
+  activeRecording?(deviceId: string): EmulatorRecordingInfo | null
+  // Called on app quit so capture processes never outlive Orca.
+  stopAllRecordings?(): Promise<void>
 }
