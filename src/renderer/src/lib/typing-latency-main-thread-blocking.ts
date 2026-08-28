@@ -36,7 +36,11 @@ function percentile(sorted: readonly number[], fraction: number): number {
   if (sorted.length === 0) {
     return 0
   }
-  const index = Math.min(sorted.length - 1, Math.floor(sorted.length * fraction))
+  // Nearest-rank, matching summarizeLatencySamples: the two appear side by side
+  // in one report, and a p95 that means different things in each is worse than
+  // either convention on its own.
+  const rank = Math.ceil(fraction * sorted.length)
+  const index = Math.min(sorted.length - 1, Math.max(0, rank - 1))
   return sorted[index] ?? 0
 }
 

@@ -206,7 +206,9 @@ function startProbe(): string {
       state.keystrokesWithoutTerminalFocus += 1
       return
     }
-    state.bySource.addCommitChars(event.data.length)
+    // Array.from, not .length: a supplementary-plane commit is two UTF-16 units
+    // but one character, and this counts characters per commit.
+    state.bySource.addCommitChars(Array.from(event.data).length)
     state.unmatchedKeystrokes += recordKeystroke(target, performance.now(), 'ime')
   }
   window.addEventListener('keydown', onKeydown, { capture: true })
