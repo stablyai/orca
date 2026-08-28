@@ -17,6 +17,7 @@ import {
   applyRootBackground,
   disposeDividersIn
 } from './pane-divider'
+import { focusPaneTerminalOnActivate } from './pane-active-focus'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
@@ -234,9 +235,7 @@ export class PaneManager {
     this.activePaneId = paneId
     applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
 
-    if (opts?.focus !== false) {
-      pane.terminal.focus()
-    }
+    focusPaneTerminalOnActivate(pane.terminal, opts?.focus)
 
     if (changed) {
       this.options.onActivePaneChange?.(toPublicPane(pane))

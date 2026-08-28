@@ -1,5 +1,6 @@
 import type { Terminal } from '@xterm/xterm'
 import { resolveCursorAgentImeAnchor, type TerminalImeAnchor } from './terminal-ime-anchor'
+import { applyTerminalImePreeditCaret } from './terminal-ime-preedit-caret'
 
 type ImeAnchorCellMetrics = {
   cellWidth: number
@@ -9,6 +10,11 @@ type ImeAnchorCellMetrics = {
 }
 
 type ImeAnchorStyleProperty = 'top' | 'left' | 'height' | 'lineHeight'
+
+type ResolvedImeAnchor = {
+  anchor: TerminalImeAnchor
+  isCursorAgent: boolean
+}
 
 /**
  * Keep the OS IME candidate window anchored to the cell the user is typing in.
@@ -44,6 +50,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   let metrics: ImeAnchorCellMetrics | null = null
   let deferredApply: number | null = null
   let cursorAgentSeen = false
+  let cachedAnchor: { key: string; value: ResolvedImeAnchor } | null = null
 
   const measureCells = (): ImeAnchorCellMetrics | null => {
     if (!screenElement) {
@@ -81,6 +88,16 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     const left = `${column * cells.cellWidth}px`
     writeStyle(textarea, 'top', top)
     writeStyle(textarea, 'left', left)
+    if (compositionView) {
+      // Independent of the Cursor Agent branch: every pane's preedit covers the
+      // cursor cell, so every pane needs the caret mirrored.
+      applyTerminalImePreeditCaret(
+        compositionView,
+        terminal.options,
+        cells.cellWidth,
+        cells.cellHeight
+      )
+    }
     if (isCursorAgent && compositionView) {
       const height = `${cells.cellHeight}px`
       writeStyle(compositionView, 'top', top)
@@ -90,8 +107,23 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }
   }
 
-  const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
+  // Why: the Cursor Agent fallback scans every visible row bottom-up and reads
+  // up to `cols` cells per row. A Hangul IME fires compositionupdate per jamo, so
+  // an uncached resolve repeated that O(rows x cols) buffer walk two to three
+  // times per typed character, and for a TUI that has no `->` input row it
+  // repeated the full walk to return nothing.
+  //
+  // The result is derived from the cursor and from the viewport's contents. The
+  // cursor is cheap to compare, so it is the key; the contents cannot be compared
+  // without doing the walk, so they invalidate by event instead (see the
+  // onWriteParsed/onCursorMove hookup below). A preedit sends no bytes to the pty,
+  // so nothing repaints mid-composition unless the agent itself writes.
+  const resolveAnchor = (): ResolvedImeAnchor => {
     const buf = terminal.buffer.active
+    const key = `${buf.cursorX}:${buf.cursorY}:${buf.baseY}:${terminal.cols}:${terminal.rows}`
+    if (cachedAnchor?.key === key) {
+      return cachedAnchor.value
+    }
     // Why: Cursor Agent draws its prompt UI while leaving xterm's public cursor
     // on a blank row, so the OS IME anchor needs the rendered prompt row instead.
     const cursorAgentAnchor = resolveCursorAgentImeAnchor({
@@ -103,13 +135,15 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       knownCursorAgent: cursorAgentSeen
     })
     cursorAgentSeen ||= cursorAgentAnchor !== null
-    return {
+    const resolved: ResolvedImeAnchor = {
       anchor: cursorAgentAnchor ?? {
         row: buf.cursorY,
         column: Math.min(buf.cursorX, terminal.cols - 1)
       },
       isCursorAgent: cursorAgentAnchor !== null
     }
+    cachedAnchor = { key, value: resolved }
+    return resolved
   }
 
   const handler = (event?: Event): void => {
@@ -122,6 +156,9 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       !metrics || metrics.cols !== terminal.cols || metrics.rows !== terminal.rows
     if (event?.type !== 'compositionupdate' || staleMetrics) {
       metrics = measureCells()
+      // A new composition re-reads the buffer rather than trusting a resolve
+      // cached under the previous one.
+      cachedAnchor = null
     }
     const cells = metrics
     if (!cells) {
@@ -158,7 +195,21 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     }, 0)
   }
 
+  // Why: anything that can change what the scan would find goes through one of
+  // these two — a repaint is always a parsed write, and a bare cursor move can
+  // relocate the anchor without one. Not disposed here on purpose: this function's
+  // contract is to return the single DOM handler its callers remove, and both call
+  // sites drop the terminal right after, which disposes its own emitters with it.
+  const invalidate = (): void => {
+    cachedAnchor = null
+  }
+  terminal.onWriteParsed(invalidate)
+  terminal.onCursorMove(invalidate)
+
+  // Same non-disposal rationale as the emitters above: both call sites drop the
+  // terminal right after removing the returned handler.
   terminal.element.addEventListener('compositionstart', handler)
   terminal.element.addEventListener('compositionupdate', handler)
+
   return handler
 }

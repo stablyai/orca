@@ -14,17 +14,18 @@ type AnchorHarness = {
   element: HTMLElement
   style: { top: string; left: string }
   compositionStyle: CSSStyleDeclaration
-  counts: { rectReads: number; styleWrites: number }
+  counts: { rectReads: number; styleWrites: number; cellReads: number }
   setCursor: (cursorX: number, cursorY: number) => void
   setLines: (lines: string[]) => void
 }
 
-function makeLine(text: string): IBufferLine {
+function makeLine(text: string, counts: { cellReads: number }): IBufferLine {
   const chars = Array.from(text)
   while (chars.length < COLS) {
     chars.push(' ')
   }
   const cellAt = (column: number): IBufferCell | undefined => {
+    counts.cellReads++
     const char = chars[column]
     return char === undefined
       ? undefined
@@ -35,6 +36,7 @@ function makeLine(text: string): IBufferLine {
     length: chars.length,
     getCell: cellAt,
     translateToString: (trimRight = false, start = 0, end = chars.length) => {
+      counts.cellReads++
       const result = chars.slice(start, end).join('')
       return trimRight ? result.replace(/\s+$/, '') : result
     }
@@ -42,7 +44,7 @@ function makeLine(text: string): IBufferLine {
 }
 
 function createHarness(): AnchorHarness {
-  const counts = { rectReads: 0, styleWrites: 0 }
+  const counts = { rectReads: 0, styleWrites: 0, cellReads: 0 }
   const element = document.createElement('div')
   const screen = document.createElement('div')
   screen.className = 'xterm-screen'
@@ -75,15 +77,34 @@ function createHarness(): AnchorHarness {
     cursorX: 0,
     cursorY: 0,
     length: ROWS,
-    getLine: (row: number) => (row < lines.length ? makeLine(lines[row] ?? '') : makeLine(''))
+    getLine: (row: number) =>
+      row < lines.length ? makeLine(lines[row] ?? '', counts) : makeLine('', counts)
   } as unknown as IBuffer
+
+  // Why: a real terminal cannot change its buffer without a parsed write or a
+  // cursor move, and the anchor cache keys off exactly those. Modelling them
+  // keeps the fake honest — mutating `lines`/`cursorX` behind the emulator's back
+  // is a back door xterm does not have.
+  const writeParsedListeners: (() => void)[] = []
+  const cursorMoveListeners: (() => void)[] = []
+  const emit = (listeners: readonly (() => void)[]): void => {
+    for (const listener of listeners) {
+      listener()
+    }
+  }
+  const subscribe = (listeners: (() => void)[]) => (listener: () => void) => {
+    listeners.push(listener)
+    return { dispose: () => undefined }
+  }
 
   const terminal = {
     element,
     textarea,
     cols: COLS,
     rows: ROWS,
-    buffer: { active: buffer }
+    buffer: { active: buffer },
+    onWriteParsed: subscribe(writeParsedListeners),
+    onCursorMove: subscribe(cursorMoveListeners)
   } as unknown as Terminal
 
   return {
@@ -94,9 +115,11 @@ function createHarness(): AnchorHarness {
     counts,
     setCursor: (cursorX: number, cursorY: number) => {
       Object.assign(buffer, { cursorX, cursorY })
+      emit(cursorMoveListeners)
     },
     setLines: (next: string[]) => {
       lines = next
+      emit(writeParsedListeners)
     }
   }
 }
@@ -155,7 +178,7 @@ describe('installTerminalImeCandidateAnchor', () => {
     fire(harness.element, 'keydown')
     fire(harness.element, 'input')
 
-    expect(harness.counts).toEqual({ rectReads: 0, styleWrites: 0 })
+    expect(harness.counts).toEqual({ rectReads: 0, styleWrites: 0, cellReads: 0 })
   })
 
   it('re-corrects the anchor mid-composition after xterm rewrites the textarea', () => {
@@ -183,6 +206,41 @@ describe('installTerminalImeCandidateAnchor', () => {
     fire(harness.element, 'compositionupdate')
 
     expect(harness.counts.rectReads).toBe(2)
+  })
+
+  it('resolves the Cursor Agent anchor once per composition, not once per jamo', () => {
+    const harness = createHarness()
+    harness.setLines(['Cursor Agent', '', '→ hello'])
+    installTerminalImeCandidateAnchor(harness.terminal)
+    harness.setCursor(0, 1)
+
+    fire(harness.element, 'compositionstart')
+    const afterStart = harness.counts.cellReads
+    // The fallback scan is the expensive path this cache exists for.
+    expect(afterStart).toBeGreaterThan(0)
+
+    // Three jamo for one syllable; the cursor has not moved, so the resolve
+    // that walks the viewport must not run again.
+    fire(harness.element, 'compositionupdate')
+    fire(harness.element, 'compositionupdate')
+    fire(harness.element, 'compositionupdate')
+
+    expect(harness.counts.cellReads).toBe(afterStart)
+  })
+
+  it('re-resolves mid-composition once the cursor moves off the cached cell', () => {
+    const harness = createHarness()
+    harness.setLines(['Cursor Agent', '', '→ hello'])
+    installTerminalImeCandidateAnchor(harness.terminal)
+    harness.setCursor(0, 1)
+
+    fire(harness.element, 'compositionstart')
+    const afterStart = harness.counts.cellReads
+
+    harness.setCursor(0, 3)
+    fire(harness.element, 'compositionupdate')
+
+    expect(harness.counts.cellReads).toBeGreaterThan(afterStart)
   })
 
   it('coalesces the deferred Cursor Agent re-apply to one timer per burst', () => {
