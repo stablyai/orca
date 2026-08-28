@@ -628,34 +628,41 @@ describe('session tab RPC methods', () => {
 
   it('streams all known session tab snapshots and later updates', async () => {
     const unsubscribe = vi.fn()
-    const listeners: ((snapshot: unknown) => void)[] = []
+    const listeners: ((snapshot: unknown, changeSequence: number) => void)[] = []
+    const snapshots = [
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      },
+      {
+        worktree: 'wt-2',
+        publicationEpoch: 'epoch-2',
+        snapshotVersion: 1,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      }
+    ]
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      listAllMobileSessionTabs: vi.fn(() => [
-        {
-          worktree: 'wt-1',
-          publicationEpoch: 'epoch-1',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        },
-        {
-          worktree: 'wt-2',
-          publicationEpoch: 'epoch-2',
-          snapshotVersion: 1,
-          activeGroupId: null,
-          activeTabId: null,
-          activeTabType: null,
-          tabs: []
-        }
-      ]),
+      listAllMobileSessionTabs: vi.fn(() => snapshots),
+      listAllMobileSessionTabsWithChangeSequence: vi.fn(() => ({
+        snapshots,
+        changeSequence: 0
+      })),
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => false),
-      onMobileSessionTabsChanged: vi.fn((listener: (snapshot: unknown) => void) => {
-        listeners.push(listener)
-        return unsubscribe
-      }),
+      onMobileSessionTabsChanged: vi.fn(
+        (listener: (snapshot: unknown, changeSequence: number) => void) => {
+          listeners.push(listener)
+          return unsubscribe
+        }
+      ),
       registerSubscriptionCleanup: vi.fn()
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
@@ -666,15 +673,18 @@ describe('session tab RPC methods', () => {
       (message) => messages.push(message),
       { connectionId: 'conn-1' }
     )
-    listeners[0]?.({
-      worktree: 'wt-1',
-      publicationEpoch: 'epoch-3',
-      snapshotVersion: 2,
-      activeGroupId: null,
-      activeTabId: null,
-      activeTabType: null,
-      tabs: []
-    })
+    listeners[0]?.(
+      {
+        worktree: 'wt-1',
+        publicationEpoch: 'epoch-3',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: []
+      },
+      1
+    )
 
     expect(runtime.registerSubscriptionCleanup).toHaveBeenCalledWith(
       'session.tabs:conn-1:*:req-1',
@@ -698,6 +708,10 @@ describe('session tab RPC methods', () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       listAllMobileSessionTabs: vi.fn(() => []),
+      listAllMobileSessionTabsWithChangeSequence: vi.fn(() => ({
+        snapshots: [],
+        changeSequence: 0
+      })),
       supportsAuthoritativeSessionTabsInventory: vi.fn(() => false),
       onMobileSessionTabsChanged: vi.fn(() => vi.fn()),
       registerSubscriptionCleanup: vi.fn()

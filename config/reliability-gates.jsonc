@@ -8519,6 +8519,7 @@
         "remote terminal reveal and input",
         "paired host relaunch with preserved daemon PTYs",
         "paired host session inventory publication authority",
+        "paired host session inventory subscription linearizability",
         "manual server disconnect"
       ],
       "platforms": ["macos", "linux", "windows"],
@@ -8537,7 +8538,7 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/terminal-cold-park-pre-gate-loop.react185.test.tsx src/renderer/src/components/terminal-pane/use-parked-terminal-watcher-synchronization.react185.test.tsx src/renderer/src/components/terminal-pane/terminal-cold-park-verdict-loop.test.tsx src/renderer/src/components/terminal-pane/use-terminal-tab-cold-parking.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-multiplex-initial-snapshot-buffering.test.ts src/main/runtime/rpc/terminal-multiplex-snapshot-serialization.test.ts src/main/runtime/rpc/terminal-multiplex-pty-wait-capacity.test.ts src/main/runtime/rpc/terminal-subscribe-buffer.test.ts src/renderer/src/components/terminal-pane/parked-terminal-byte-watcher.test.ts src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-output-restore.test.ts src/renderer/src/components/terminal-pane/pty-connection-parked-ssh-snapshot.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-activation-inventory-fallback.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-view-parking.test.ts src/renderer/src/components/terminal-pane/terminal-hidden-worktree-retention.test.ts src/renderer/src/components/terminal-pane/terminal-parked-tab-watchers.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parked-watcher-partial-reconciliation.test.ts src/renderer/src/components/terminal-pane/terminal-parking-e2e-overrides.test.ts src/renderer/src/runtime/remote-runtime-terminal-stall-recovery.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/web/web-preload-api-runtime-environment.test.ts src/main/ipc/runtime-environments-pairing.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts src/main/daemon/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/session-tabs-inventory-publication.test.ts src/main/runtime/rpc/methods/session-tabs-inventory-census-race.test.ts src/main/runtime/rpc/methods/session-tabs.test.ts src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts src/main/daemon/terminal-host-agent-session.test.ts tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts --maxWorkers=1",
         "pnpm exec vitest run --config config/vitest.config.ts src/shared/remote-runtime-shared-control-connection.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/runtime/remote-runtime-terminal-parse-backpressure.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/pty-ipc-hidden-delivery-gate.test.ts",
@@ -8571,6 +8572,7 @@
         "src/main/runtime/rpc/terminal-subscribe-buffer.test.ts",
         "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
         "src/main/runtime/session-tabs-inventory-publication.test.ts",
+        "src/main/runtime/rpc/methods/session-tabs-inventory-census-race.test.ts",
         "src/main/runtime/rpc/methods/session-tabs.test.ts",
         "src/renderer/src/runtime/host-session-mirror-empty-inventory-settle.test.ts",
         "src/main/daemon/terminal-host-agent-session.test.ts",
@@ -8657,6 +8659,18 @@
         {
           "file": "src/main/runtime/terminal-subscriber-driven-daemon-attach.test.ts",
           "assertions": ["retries an existing subscriber when provider inventory becomes ready"]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/session-tabs-inventory-census-race.test.ts",
+          "assertions": [
+            "pre-boundary creation and removal are subsumed by the census exactly once",
+            "post-boundary creation and removal replay after the initial snapshot in sequence order",
+            "create/remove/recreate transitions are preserved without collapse",
+            "projected PTY state already visible in the census is deduplicated while later projected state is delivered",
+            "coalesced delivery uses its scheduling watermark across every subscriber",
+            "initialization churn is memory-bounded and repeated structural overflow fails after bounded recollection",
+            "initialization clears buffered transitions on cancellation"
+          ]
         },
         {
           "file": "tests/e2e/session-tabs-empty-inventory-daemon-oracle.unit.test.ts",
