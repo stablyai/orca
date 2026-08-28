@@ -161,6 +161,9 @@ export type GlobalSettings = {
   terminalWindowsShell: string
   /** Pins the WSL distro for terminals/agent scans instead of WSL's current global default. */
   terminalWindowsWslDistro?: string | null
+  /** Windows-only: include WSL distros in Agent Session History. Off skips the per-distro `$HOME`
+   *  probe, which boots every stopped distro; runtime reads stay `!== false` (default on). */
+  aiVaultScanWslDistros?: boolean
   /** Account/auth location; auto follows the global Windows runtime while host/wsl pin it. */
   localAccountRuntime: 'auto' | 'host' | 'wsl'
   localAccountWslDistro?: string | null

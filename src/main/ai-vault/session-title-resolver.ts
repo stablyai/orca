@@ -6,6 +6,7 @@ import {
   type AiVaultSessionTitlesResult
 } from '../../shared/ai-vault-session-title'
 import { resolveAiVaultSessionTitlesInBackground } from './session-scanner-background'
+import { isWslSessionScanEnabled } from './wsl-session-home-dirs'
 
 const TRANSCRIPT_PATH_MAX_LENGTH = 32_768
 
@@ -42,5 +43,8 @@ export async function resolveLocalAiVaultSessionTitles(
       deduped.set(key, normalized)
     }
   }
-  return resolveAiVaultSessionTitlesInBackground([...deduped.values()], signal)
+  // Why: the scanner child has no store; it learns the WSL opt-out from the request.
+  return resolveAiVaultSessionTitlesInBackground([...deduped.values()], signal, {
+    includeWslHomes: isWslSessionScanEnabled()
+  })
 }

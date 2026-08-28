@@ -1438,6 +1438,7 @@ type RuntimeStore = {
     // onPtyData to capture reply ownership at ingestion.
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
+    aiVaultScanWslDistros?: GlobalSettings['aiVaultScanWslDistros']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
   }
   // Why: narrow to `unknown` return so test mocks can return void without
@@ -3924,14 +3925,15 @@ export class OrcaRuntimeService {
     // Why: configure the shared AiVault scan cache from a serve-mode-reachable
     // seam so the aiVault.listSessions RPC includes managed-Codex + WSL sessions
     // even on headless `orca serve` hosts where registerCoreHandlers never runs.
-    if (deps?.getAdditionalAiVaultCodexHomePaths) {
-      configureAiVaultSessionSources({
-        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
-      })
-      configureHostReadableTranscriptPathSources({
-        getAdditionalCodexHomePaths: deps.getAdditionalAiVaultCodexHomePaths
-      })
-    }
+    // Unconditional: orcad passes no codex-home dep, and the WSL opt-out must
+    // still reach the scan there.
+    configureAiVaultSessionSources({
+      getAdditionalCodexHomePaths: deps?.getAdditionalAiVaultCodexHomePaths,
+      isWslSessionScanEnabled: () => this.store?.getSettings().aiVaultScanWslDistros !== false
+    })
+    configureHostReadableTranscriptPathSources({
+      getAdditionalCodexHomePaths: deps?.getAdditionalAiVaultCodexHomePaths
+    })
     // Why: the daemon adapter is installed via `setLocalPtyProvider()` during
     // attachMainWindowServices, AFTER this service is constructed. Capturing
     // `getLocalPtyProvider()` at construction time would freeze a reference to

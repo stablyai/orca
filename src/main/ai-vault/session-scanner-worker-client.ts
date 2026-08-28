@@ -55,10 +55,11 @@ export class AiVaultScannerWorkerClient {
 
   resolveTitles(
     requests: AiVaultSessionTitleRequest[],
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    options: { includeWslHomes?: boolean } = {}
   ): Promise<AiVaultSessionTitlesResult> {
     return this.dispatch(
-      { kind: 'titles', requests },
+      { kind: 'titles', requests, ...options },
       TITLE_TIMEOUT_MS,
       signal
     ) as Promise<AiVaultSessionTitlesResult>

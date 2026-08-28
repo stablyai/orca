@@ -53,13 +53,19 @@ export function scanAiVaultSessionsInBackground(
     : scanAiVaultSessionsInWorker(options, signal)
 }
 
+export type AiVaultTitleResolveOptions = {
+  /** False skips WSL guest-path translation (and the distro boot it costs). */
+  includeWslHomes?: boolean
+}
+
 export function resolveAiVaultSessionTitlesInBackground(
   requests: AiVaultSessionTitleRequest[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: AiVaultTitleResolveOptions = {}
 ): Promise<AiVaultSessionTitlesResult> {
   return shouldUseAiVaultServiceProcess()
-    ? resolveAiVaultSessionTitlesInService(requests, signal)
-    : resolveAiVaultSessionTitlesInWorker(requests, signal)
+    ? resolveAiVaultSessionTitlesInService(requests, signal, options)
+    : resolveAiVaultSessionTitlesInWorker(requests, signal, options)
 }
 
 export function listAiVaultSubagentSessionsInBackground(

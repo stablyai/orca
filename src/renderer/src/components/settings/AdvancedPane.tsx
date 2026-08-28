@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { Info, Loader2, RotateCw } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip'
@@ -20,6 +21,13 @@ type AdvancedPaneProps = {
 
 export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): React.JSX.Element {
   const mountedRef = useMountedRef()
+  // Why: the toggle governs this machine's own WSL, so it follows the local
+  // platform rather than the active runtime host.
+  const isWindows = isWindowsUserAgent()
+  const wslSessionScanEnabled = settings.aiVaultScanWslDistros !== false
+  const toggleWslSessionScan = (): void => {
+    updateSettings({ aiVaultScanWslDistros: !wslSessionScanEnabled })
+  }
   const http1CompatibilityInitialRef = useRef(Boolean(settings.electronHttp1CompatibilityMode))
   const [http1CompatibilityRelaunching, setHttp1CompatibilityRelaunching] = useState(false)
   const http1CompatibilityEnabled = Boolean(settings.electronHttp1CompatibilityMode)
@@ -135,6 +143,38 @@ export function AdvancedPane({ settings, updateSettings }: AdvancedPaneProps): R
             </div>
           ) : null}
         </SearchableSetting>
+
+        {isWindows ? (
+          <SearchableSetting
+            title={getAdvancedSearchEntry().wslSessionScan.title}
+            description={getAdvancedSearchEntry().wslSessionScan.description}
+            keywords={getAdvancedSearchEntry().wslSessionScan.keywords}
+            className="space-y-2 py-2"
+            id="advanced-wsl-session-scan"
+          >
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0 shrink space-y-1">
+                <Label id="advanced-wsl-session-scan-label">
+                  {translate(
+                    'auto.components.settings.AdvancedPane.wslSessionScanLabel',
+                    'Scan WSL for agent sessions'
+                  )}
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.AdvancedPane.wslSessionScanDescription',
+                    'Includes WSL distros in Agent Session History. Each scan boots every stopped distro to find its home directory; turn off to keep WSL idle. Off also hides WSL sessions from history, delete, and live Codex chat.'
+                  )}
+                </p>
+              </div>
+              <SettingsSwitch
+                checked={wslSessionScanEnabled}
+                onChange={toggleWslSessionScan}
+                ariaLabelledBy="advanced-wsl-session-scan-label"
+              />
+            </div>
+          </SearchableSetting>
+        ) : null}
       </section>
 
       <section className="space-y-3">

@@ -4,7 +4,49 @@ import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 
-export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+// Why: mirrors the visible controls — the WSL toggle only renders on Windows, so
+// other platforms must not be able to search their way to a hidden control.
+export function getAdvancedPaneSearchEntries(platform: {
+  isWindows: boolean
+}): SettingsSearchEntry[] {
+  return [
+    ...getAdvancedCompatibilitySearchEntries(),
+    ...(platform.isWindows ? getAdvancedWslSessionScanSearchEntries() : [])
+  ]
+}
+
+const getAdvancedWslSessionScanSearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate(
+      'auto.components.settings.advanced.search.wslSessionScanTitle',
+      'Scan WSL for agent sessions'
+    ),
+    description: translate(
+      'auto.components.settings.advanced.search.wslSessionScanDescription',
+      'Include WSL distros in Agent Session History. Off keeps stopped distros from being booted.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.advanced.search.wslKeyword', 'wsl'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.distroKeyword', 'distro'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.vmmemKeyword', 'vmmem'),
+      ...translateSearchKeyword('auto.components.settings.advanced.search.memoryKeyword', 'memory'),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.sessionHistoryKeyword',
+        'session history'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.aiVaultKeyword',
+        'ai vault'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.advanced.search.transcriptsKeyword',
+        'transcripts'
+      )
+    ]
+  }
+])
+
+const getAdvancedCompatibilitySearchEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   ...getAdvancedNetworkSearchEntries(),
   {
     title: translate(
@@ -45,7 +87,8 @@ export const getAdvancedPaneSearchEntries = createLocalizedCatalog((): SettingsS
 ])
 
 function findEntry(title: string): SettingsSearchEntry {
-  const entry = getAdvancedPaneSearchEntries().find((e) => e.title === title)
+  // Why: the superset — the pane itself decides per platform what to render.
+  const entry = getAdvancedPaneSearchEntries({ isWindows: true }).find((e) => e.title === title)
   if (!entry) {
     throw new Error(`Missing advanced-pane search entry: "${title}"`)
   }
@@ -56,6 +99,12 @@ export function getAdvancedSearchEntry() {
   return {
     http1Compatibility: findEntry(
       translate('auto.components.settings.advanced.search.11eea3da72', 'HTTP/1.1 Compatibility')
+    ),
+    wslSessionScan: findEntry(
+      translate(
+        'auto.components.settings.advanced.search.wslSessionScanTitle',
+        'Scan WSL for agent sessions'
+      )
     )
   } as const
 }

@@ -4,7 +4,11 @@ import {
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './session-scanner-background'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
+import {
+  configureWslSessionHomeDirs,
+  listWslSessionHomeDirs,
+  resetWslSessionHomeDirsForTests
+} from './wsl-session-home-dirs'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { AiVaultScanCoordinator } from './ai-vault-scan-coordinator'
@@ -26,6 +30,8 @@ const AI_VAULT_CACHE_TTL_MS = 60_000
 // drop managed-Codex sessions from remote/SSH results.
 export type AiVaultSessionSources = {
   getAdditionalCodexHomePaths?: () => readonly string[]
+  /** Windows-only opt-out: false skips the per-distro `$HOME` probe that boots stopped distros. */
+  isWslSessionScanEnabled?: () => boolean
 }
 
 type CachedAiVaultList = {
@@ -46,6 +52,7 @@ let cacheGeneration = 0
 
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
+  configureWslSessionHomeDirs({ isEnabled: next.isWslSessionScanEnabled })
 }
 
 export async function listAiVaultSessions(
@@ -120,14 +127,8 @@ export async function listAiVaultSessions(
 
 // Exported for the subagent-transcript IPC path, which validates
 // renderer-supplied paths against the same WSL-aware Claude roots the scan uses.
-export async function getAiVaultWslHomeDirs(): Promise<string[]> {
-  if (process.platform !== 'win32') {
-    return []
-  }
-  const homes = await Promise.all(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
-  )
-  return homes.filter((homeDir): homeDir is string => Boolean(homeDir))
+export function getAiVaultWslHomeDirs(): Promise<string[]> {
+  return listWslSessionHomeDirs()
 }
 
 // Drops the scan-result cache after a session is deleted so a non-force
@@ -146,5 +147,6 @@ export function resetAiVaultSessionListCacheForTests(): void {
   invalidateAiVaultSessionListCache()
   scanCoordinator = new AiVaultScanCoordinator()
   sources = {}
+  resetWslSessionHomeDirsForTests()
   resetAiVaultScannerBackgroundForTests()
 }

@@ -62,9 +62,13 @@ export function scanAiVaultSessionsInService(
 
 export function resolveAiVaultSessionTitlesInService(
   requests: AiVaultSessionTitleRequest[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { includeWslHomes?: boolean } = {}
 ): Promise<AiVaultSessionTitlesResult> {
-  return getSharedClient().request({ type: 'request', operation: 'titles', requests }, signal)
+  return getSharedClient().request(
+    { type: 'request', operation: 'titles', requests, ...options },
+    signal
+  )
 }
 
 export function listAiVaultSubagentSessionsInService(

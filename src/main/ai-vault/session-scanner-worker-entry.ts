@@ -51,6 +51,7 @@ async function handleRequest(request: AiVaultWorkerRequest): Promise<AiVaultWork
     if (request.kind === 'titles') {
       const requests = await resolveHostReadableAiVaultTitleRequests(
         request.requests,
+        request.includeWslHomes !== false,
         controller.signal
       )
       return {

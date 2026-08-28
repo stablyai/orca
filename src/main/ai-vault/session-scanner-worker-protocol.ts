@@ -14,7 +14,12 @@ export type AiVaultWorkerData = {
 
 export type AiVaultWorkerRequest =
   | { id: number; kind: 'scan'; options: AiVaultWorkerScanOptions }
-  | { id: number; kind: 'titles'; requests: AiVaultSessionTitleRequest[] }
+  | {
+      id: number
+      kind: 'titles'
+      requests: AiVaultSessionTitleRequest[]
+      includeWslHomes?: boolean
+    }
 
 export type AiVaultWorkerControl = { id: number; kind: 'cancel' }
 

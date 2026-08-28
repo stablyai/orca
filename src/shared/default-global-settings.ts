@@ -90,6 +90,7 @@ export function buildDefaultSettings(args: {
     terminalRightClickToPasteDefaultedForPlatform: true,
     terminalWindowsShell: 'powershell.exe',
     terminalWindowsWslDistro: null,
+    aiVaultScanWslDistros: true,
     localAccountRuntime: 'auto',
     localAccountRuntimeDefaultedToAutoForAllUsers: true,
     localAccountWslDistro: null,

@@ -52,6 +52,7 @@ async function executeRequest(request: AiVaultServiceRequest): Promise<AiVaultSe
     if (request.operation === 'titles') {
       const requests = await resolveHostReadableAiVaultTitleRequests(
         request.requests,
+        request.includeWslHomes !== false,
         controller.signal
       )
       return {

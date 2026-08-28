@@ -1,8 +1,11 @@
 import { existsSync } from 'node:fs'
 import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
+import {
+  listWslSessionHomeDirsCached,
+  resetWslSessionHomeDirsForTests
+} from '../ai-vault/wsl-session-home-dirs'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
-import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
 import { wslGatedAccess } from './wsl-transcript-fs-access'
 import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
@@ -60,18 +63,6 @@ async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<bool
   }
 }
 
-// Why: resolveSessionFilePath runs on a 500ms–5s poll loop. listWslDistrosAsync
-// caches, but getWslHomeAsync does NOT cache failures, so a cold/stopped distro
-// would re-spawn wsl.exe on every tick. Cache the composed answer here instead.
-const WSL_HOME_DIRS_EMPTY_RETRY_MS = 30_000
-// Why: a distro that was booting when we first probed resolves to no $HOME and
-// would otherwise be excluded for the whole session. Both branches expire so it
-// is retried; getWslHomeAsync caches successes, so a refresh only re-spawns
-// wsl.exe for the distros that actually failed.
-const WSL_HOME_DIRS_TTL_MS = 5 * 60_000
-let cachedWslHomeDirs: string[] | null = null
-let cachedWslHomeDirsExpiresAt = 0
-let inflightWslHomeDirs: Promise<string[]> | null = null
 let getAdditionalCodexHomePaths: (() => readonly string[]) | undefined
 
 export function configureHostReadableTranscriptPathSources(options: {
@@ -80,36 +71,8 @@ export function configureHostReadableTranscriptPathSources(options: {
   getAdditionalCodexHomePaths = options.getAdditionalCodexHomePaths
 }
 
-async function defaultListWslHomeDirs(): Promise<string[]> {
-  const homes = await Promise.all(
-    (await listWslDistrosAsync()).map((distro) => getWslHomeAsync(distro))
-  )
-  return homes.filter((home): home is string => Boolean(home))
-}
-
-async function wslHomeDirs(load: () => Promise<string[]>): Promise<string[]> {
-  if (cachedWslHomeDirs && Date.now() < cachedWslHomeDirsExpiresAt) {
-    return cachedWslHomeDirs
-  }
-  if (inflightWslHomeDirs) {
-    return inflightWslHomeDirs
-  }
-  inflightWslHomeDirs = load()
-    .catch(() => [] as string[])
-    .then((dirs) => {
-      cachedWslHomeDirs = dirs
-      cachedWslHomeDirsExpiresAt =
-        Date.now() + (dirs.length > 0 ? WSL_HOME_DIRS_TTL_MS : WSL_HOME_DIRS_EMPTY_RETRY_MS)
-      inflightWslHomeDirs = null
-      return dirs
-    })
-  return inflightWslHomeDirs
-}
-
 export function resetHostReadableTranscriptPathCacheForTests(): void {
-  cachedWslHomeDirs = null
-  cachedWslHomeDirsExpiresAt = 0
-  inflightWslHomeDirs = null
+  resetWslSessionHomeDirsForTests()
   getAdditionalCodexHomePaths = undefined
 }
 
@@ -144,7 +107,7 @@ export async function toHostReadableTranscriptPath(
     return (await pathExists(path)) ? path : null
   }
 
-  const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
+  const homeDirs = await listWslSessionHomeDirsCached(deps.listWslHomeDirs)
   // Sequential on purpose: the ranked order picks the owning distro, and probing
   // every distro at once would fan out 9P calls to ones the user left stopped.
   let unavailable: WslTranscriptFsError | undefined
@@ -196,7 +159,7 @@ export async function wslCodexSessionsDirs(
   if (platform !== 'win32') {
     return []
   }
-  const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
+  const homeDirs = await listWslSessionHomeDirsCached(deps.listWslHomeDirs)
   const dirs = homeDirs.flatMap((home) => [
     joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
     joinUnderWslHome(home, '.codex', 'sessions')

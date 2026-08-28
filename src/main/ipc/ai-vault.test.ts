@@ -512,6 +512,8 @@ describe('resolveAiVaultSessionTitles host routing', () => {
   const titles = {
     titles: [{ agent: 'codex' as const, sessionId: 'session-1', title: 'Exact title' }]
   }
+  // WSL scanning defaults on, but only a Windows host can scan WSL at all.
+  const wsl = { includeWslHomes: process.platform === 'win32' }
 
   it('routes local identities to the worker without a broad scan', async () => {
     mocks.resolveAiVaultSessionTitlesInWorker.mockResolvedValue(titles)
@@ -520,7 +522,7 @@ describe('resolveAiVaultSessionTitles host routing', () => {
       _internals.resolveAiVaultSessionTitles({ executionHostScope: 'local', requests })
     ).resolves.toEqual(titles)
 
-    expect(mocks.resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, undefined)
+    expect(mocks.resolveAiVaultSessionTitlesInWorker).toHaveBeenCalledWith(requests, undefined, wsl)
     expect(mocks.scanAiVaultSessionsInWorker).not.toHaveBeenCalled()
   })
 

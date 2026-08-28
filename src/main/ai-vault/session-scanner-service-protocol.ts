@@ -30,6 +30,9 @@ export type AiVaultServiceRequestBody =
       type: 'request'
       operation: 'titles'
       requests: AiVaultSessionTitleRequest[]
+      // Why: per request, not init — init is snapshotted once per client, so a
+      // settings flip would otherwise wait for an app restart. Absent = on.
+      includeWslHomes?: boolean
     }
   | {
       type: 'request'

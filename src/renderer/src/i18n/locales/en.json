@@ -6343,7 +6343,9 @@
           "8b7a8df299": "Low-level workarounds for support troubleshooting.",
           "8d8d8ac599": "Compatibility",
           "network": "Network",
-          "networkDescription": "App-level network routing for proxies and corporate environments."
+          "networkDescription": "App-level network routing for proxies and corporate environments.",
+          "wslSessionScanLabel": "Scan WSL for agent sessions",
+          "wslSessionScanDescription": "Includes WSL distros in Agent Session History. Each scan boots every stopped distro to find its home directory; turn off to keep WSL idle. Off also hides WSL sessions from history, delete, and live Codex chat."
         },
         "AgentLocationSetting": {
           "92f4238f1a": "WSL default",
@@ -8708,7 +8710,16 @@
             "2b4d26d11e": "networking",
             "e04e9db503": "advanced",
             "585f56fae0": "Use HTTP/1.1 for Electron networking when HTTP/2 fails behind a proxy.",
-            "11eea3da72": "HTTP/1.1 Compatibility"
+            "11eea3da72": "HTTP/1.1 Compatibility",
+            "wslSessionScanTitle": "Scan WSL for agent sessions",
+            "wslSessionScanDescription": "Include WSL distros in Agent Session History. Off keeps stopped distros from being booted.",
+            "wslKeyword": "wsl",
+            "distroKeyword": "distro",
+            "vmmemKeyword": "vmmem",
+            "memoryKeyword": "memory",
+            "sessionHistoryKeyword": "session history",
+            "aiVaultKeyword": "ai vault",
+            "transcriptsKeyword": "transcripts"
           }
         },
         "agents": {

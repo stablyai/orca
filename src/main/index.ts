@@ -38,6 +38,9 @@ import { setSecretStore } from '../shared/secret-store'
 import { ElectronSecretStore } from './host/electron-secret-store'
 import { reportSecretProtectionGap } from './host/secret-protection-report'
 import { initSessionParseCachePersistence } from './ai-vault/session-parse-cache-persistence'
+import { invalidateAiVaultSessionListCache } from './ai-vault/cached-session-list'
+import { clearWslSessionHomeDirsCache } from './ai-vault/wsl-session-home-dirs'
+import { invalidateAiVaultHostLegCache } from './ipc/ai-vault-host-leg-cache'
 import { ensureActiveOrcaProfile, initOrcaProfilePaths } from './orca-profiles/profile-index-store'
 import { getOrcaCloudAuthConfig } from './orca-profiles/profile-cloud-auth-config'
 import { getProfileUserDataPath } from './orca-profiles/profile-storage-paths'
@@ -2376,6 +2379,13 @@ void app.whenReady().then(async () => {
     if ('terminalWindowsWslDistro' in updates) {
       // Why: synchronize fallback WSL distro updates to runner.
       setDefaultWslDistroOverride(settings.terminalWindowsWslDistro ?? null)
+    }
+    if ('aiVaultScanWslDistros' in updates) {
+      // Why: three caches would otherwise keep serving the old distro set — the
+      // composed home-dir TTL, the local scan result, and the merged all-hosts leg.
+      clearWslSessionHomeDirsCache()
+      invalidateAiVaultSessionListCache()
+      invalidateAiVaultHostLegCache()
     }
     if (
       ('terminalWindowsShell' in updates || 'terminalWindowsPowerShellImplementation' in updates) &&

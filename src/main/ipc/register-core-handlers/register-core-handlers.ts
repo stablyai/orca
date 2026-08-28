@@ -216,6 +216,9 @@ export function registerCoreHandlers(
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
     getAdditionalCodexHomePaths: lifecycleOptions.getAdditionalAiVaultCodexHomePaths,
+    // Why: configureAiVaultSessionSources replaces the whole source set, so this
+    // must repeat what the runtime ctor already wired or the opt-out is dropped.
+    isWslSessionScanEnabled: () => store.getSettings().aiVaultScanWslDistros !== false,
     prepareSessionResume: lifecycleOptions.prepareAiVaultSessionResume,
     getActiveRuntimeAiVaultHostInfos: () =>
       getSavedRuntimeAiVaultHostInfos(app.getPath('userData')),

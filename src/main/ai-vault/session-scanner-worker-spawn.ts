@@ -46,9 +46,10 @@ export async function scanAiVaultSessionsInWorker(
 
 export function resolveAiVaultSessionTitlesInWorker(
   requests: AiVaultSessionTitleRequest[],
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  options: { includeWslHomes?: boolean } = {}
 ): Promise<AiVaultSessionTitlesResult> {
-  return getSharedClient().resolveTitles(requests, signal)
+  return getSharedClient().resolveTitles(requests, signal, options)
 }
 
 export function resetAiVaultScannerWorkerForTests(): void {
