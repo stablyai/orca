@@ -513,8 +513,12 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
   })
 
-  it('a synchronously throwing ui.set still settles the in-flight marker', async () => {
-    ;(window as unknown as { api: { ui: { set: () => Promise<void> } } }).api.ui.set = () => {
+  it('a synchronously throwing ui.set still settles the marker and reschedules', async () => {
+    const api = (
+      window as unknown as { api: { ui: { set: (u: Partial<PersistedUIState>) => Promise<void> } } }
+    ).api.ui
+    const workingSet = api.set
+    api.set = () => {
       setCallCount += 1
       throw new Error('non-cloneable argument')
     }
@@ -524,6 +528,12 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     await flushDesktopDebounce()
     // A leaked marker would pin the field against hydration for the renderer's life.
     expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+
+    // The throw must also reschedule the trailing pass: once the transport
+    // recovers, the dirty field flushes without waiting for another edit.
+    api.set = workingSet
+    await flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
   })
 
   it('a rejection re-schedules the trailing pass it caused to be skipped', async () => {
