@@ -110,5 +110,18 @@ On a quiescent tree: **64,031 passed, 1 failed**. Earlier runs reporting 4 and 3
 
 1. **Gate 3 (Playwright CDP spinner proof)** — not performed.
 2. **Remote completions fail closed.** Declining is correct — answering locally could certify the wrong repository — but a remote worker cannot currently pass the completion gate. Delegating observation to the execution host needs an async reconcile path. This is the most important follow-up.
-3. **Two independent reviewers were launched and then cancelled**, so no third-party review of the certification-intent design is folded into this report. One was relaunched at the end of the dispatch.
+3. **Independent review was run and its findings are folded in** (see below).
 4. **`git.commit` / `files.write` lease fencing** is proven through the dispatcher by test, not over the live socket — they have no CLI command. `terminal.send`, which had no fence at all before, is proven live.
+
+
+## Independent review, and what it caught
+
+A bounded read-only reviewer was run against the certification-intent design. It found one real defect, which is fixed at `9475d01a3c`:
+
+**Over-marking.** `assertWorkerStartRouteAdmitted` returned `void`, discarding `admission.bootstrap`, while the RPC handler claimed and bound the intent whenever one was merely *supplied*. So a start carrying a valid intent for a route that had since become certified — an ordinary case in a multi-task Run sharing a route — consumed the intent and branded its Dispatch a bootstrap. Since a bootstrap Dispatch can never advance an outcome, that Dispatch's real, fully certified work was silently discarded as a protected blocker. Admission now reports whether the bootstrap was actually exercised, and the intent is claimed only then; an unnecessary intent is inert.
+
+It also flagged, and I fixed: `listAdmissibleRoutes` and `selectRoute` structurally accepted `bootstrapUncertified` even though no caller set it — honouring it on a *listing* would have made every UNTESTED route admissible at once, with no per-route intent and no consumption. Both now exclude it at the type level.
+
+And it identified a genuine coverage gap: the federated and retained refusals, and the marking seam itself, had no regression test at any level — which is exactly where the over-marking bug lived. `certification-intent-admission.test.ts` now covers all of it.
+
+The reviewer independently confirmed, with file references: single-use claim-before-create with no orphan Dispatch on a losing race; deterministic mint with no replay grant; UNTESTED-only opening; ownership enforced at mint by re-deriving the coordinator terminal's real worktree rather than trusting the caller's string; the automatic phase-launch driver never forwarding an intent; and `buildId` being runtime-derived rather than caller-suppliable.
