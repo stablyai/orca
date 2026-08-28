@@ -33,11 +33,11 @@ import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { getWorktreePathBasenameFromId } from '../../../../shared/worktree/id'
 import type { Worktree } from '../../../../shared/worktree/types'
+import { buildAutomationRrule } from '../../../../shared/automation-schedule-occurrences'
 import {
-  buildAutomationRrule,
   isValidAutomationCronSchedule,
   isValidAutomationSchedule
-} from '../../../../shared/automation-schedules'
+} from '../../../../shared/automation-schedule-parsing'
 import {
   canRerunAutomationRun,
   getAutomationRunViewState,

@@ -70,6 +70,10 @@ export type RuntimeStatus = {
   runtimeProtocolVersion?: number
   minCompatibleRuntimeClientVersion?: number
   capabilities?: RuntimeCapability[]
+  /** Optional policy for clients that negotiated worktree.create-idempotency.v1. */
+  worktreeCreateIdempotency?: {
+    dedupeTtlMs: number
+  }
   /**
    * Optional for mixed-version peers. Absence means the host predates structured
    * degradation reporting, not that the host proved every optional feature available.

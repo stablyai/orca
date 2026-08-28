@@ -3,6 +3,7 @@ import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import type { ForkSyncMode, GitForkSyncResult } from '../../../../shared/git-fork-sync'
 import type { Repo } from '../../../../shared/repo-types'
+import { getRepoMainWorktreeId } from '../../../../shared/worktree/id'
 import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSegmentedControl } from './SettingsFormControls'
@@ -128,7 +129,7 @@ export function RepositoryForkSyncSection({
       const result = await syncRuntimeGitForkDefaultBranch(
         {
           settings: getRepoOwnerRoutedSettings(settings, repo),
-          worktreeId: repo.id,
+          worktreeId: getRepoMainWorktreeId(repo),
           worktreePath: repo.path,
           connectionId: repo.connectionId ?? undefined
         },

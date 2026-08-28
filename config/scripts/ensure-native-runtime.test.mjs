@@ -42,7 +42,8 @@ describe('ensure-native-runtime', () => {
 
       expect(result.status, result.stderr).toBe(0)
       const log = readFileSync(logPath, 'utf8')
-      expect(log).toContain('pnpm rebuild node-pty\n')
+      expect(log).toContain('pnpm exec node-gyp rebuild\n')
+      expect(log).toContain(join('node_modules', 'node-pty'))
       expect(log.split('\n').filter((line) => line.startsWith('node-pty child '))).toEqual([
         expect.stringMatching(/^node-pty child (?:conpty|pty) marker=false$/),
         expect.stringMatching(/^node-pty child (?:conpty|pty) marker=true$/)
@@ -51,6 +52,41 @@ describe('ensure-native-runtime', () => {
       rmSync(projectDir, { recursive: true, force: true })
     }
   })
+
+  it.skipIf(process.platform !== 'win32')(
+    'rebuilds other failed Windows addons with patched node-pty',
+    () => {
+      const projectDir = mkTempProject()
+
+      try {
+        const scriptPath = join(projectDir, 'config', 'scripts', 'ensure-native-runtime.mjs')
+        const logPath = join(projectDir, 'native-runtime.log')
+        const markerPath = join(projectDir, 'rebuilt.marker')
+        const binDir = join(projectDir, 'bin')
+        copyFileSync(sourceScriptPath, scriptPath)
+        writeFakeNativeModules(projectDir, { windowsRegistryRequiresMarker: true })
+        writeNodePtyPatchFile(projectDir)
+        writeFakePnpm(binDir)
+
+        const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
+          cwd: projectDir,
+          encoding: 'utf8',
+          env: envWithPrependedPath(binDir, {
+            ORCA_NATIVE_TEST_LOG: logPath,
+            ORCA_NATIVE_TEST_MARKER: markerPath
+          })
+        })
+
+        expect(result.status, result.stderr).toBe(0)
+        const log = readFileSync(logPath, 'utf8')
+        expect(log.match(/pnpm exec node-gyp rebuild\n/g)).toHaveLength(2)
+        expect(log).toContain(join('node_modules', 'node-pty'))
+        expect(log).toContain(join('node_modules', 'windows-native-registry'))
+      } finally {
+        rmSync(projectDir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it.skipIf(process.platform === 'win32')(
     'rebuilds patched node-pty artifacts even when the Node load check passes',
@@ -80,7 +116,7 @@ describe('ensure-native-runtime', () => {
         expect(result.stderr).toContain(
           'Patched node-pty build artifacts are missing; rebuilding native deps.'
         )
-        expect(readFileSync(logPath, 'utf8')).toContain('pnpm rebuild node-pty\n')
+        expect(readFileSync(logPath, 'utf8')).toContain('pnpm exec node-gyp rebuild\n')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -114,7 +150,7 @@ describe('ensure-native-runtime', () => {
 
         expect(result.status, result.stderr).toBe(0)
         expect(result.stderr).toContain("expected build/Release so Orca's node-pty patch is active")
-        expect(readFileSync(logPath, 'utf8')).toContain('pnpm rebuild node-pty\n')
+        expect(readFileSync(logPath, 'utf8')).toContain('pnpm exec node-gyp rebuild\n')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -148,7 +184,7 @@ describe('ensure-native-runtime', () => {
 
         expect(result.status, result.stderr).toBe(0)
         expect(result.stderr).not.toContain('Patched node-pty build artifacts are missing')
-        expect(readFileSync(logPath, 'utf8')).not.toContain('pnpm rebuild node-pty')
+        expect(readFileSync(logPath, 'utf8')).not.toContain('pnpm exec node-gyp rebuild')
       } finally {
         rmSync(projectDir, { recursive: true, force: true })
       }
@@ -178,9 +214,15 @@ function envWithPrependedPath(binDir, extraEnv) {
   }
 }
 
-function writeFakeNativeModules(projectDir) {
+function writeFakeNativeModules(projectDir, { windowsRegistryRequiresMarker = false } = {}) {
   const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
   mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
+  writeFileSync(
+    join(nodePtyDir, 'package.json'),
+    '{"name":"node-pty","version":"1.1.0","main":"index.js"}\n'
+  )
+  mkdirSync(join(nodePtyDir, 'scripts'), { recursive: true })
+  writeFileSync(join(nodePtyDir, 'scripts', 'post-install.js'), '')
 
   writeFileSync(join(nodePtyDir, 'index.js'), 'module.exports = {}\n')
   writeFileSync(
@@ -200,12 +242,18 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
 }
 `
   )
-  writeFakeWindowsRegistry(projectDir)
+  writeFakeWindowsRegistry(projectDir, { requiresMarker: windowsRegistryRequiresMarker })
 }
 
 function writeLoadableNativeModules(projectDir, { nativeDir = null } = {}) {
   const nodePtyDir = join(projectDir, 'node_modules', 'node-pty')
   mkdirSync(join(nodePtyDir, 'lib'), { recursive: true })
+  writeFileSync(
+    join(nodePtyDir, 'package.json'),
+    '{"name":"node-pty","version":"1.1.0","main":"index.js"}\n'
+  )
+  mkdirSync(join(nodePtyDir, 'scripts'), { recursive: true })
+  writeFileSync(join(nodePtyDir, 'scripts', 'post-install.js'), '')
 
   writeFileSync(join(nodePtyDir, 'index.js'), 'module.exports = {}\n')
   writeFileSync(
@@ -218,23 +266,40 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   const dir = ${JSON.stringify(nativeDir)} ??
     (rebuilt ? '../build/Release/' : '../prebuilds/' + process.platform + '-' + process.arch + '/')
   appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`node-pty load \${nativeName} dir=\${dir}\\n\`)
-  return { dir, module: {} }
+  return {
+    dir,
+    module: {
+      listJobProcessIds: () => [],
+      terminateJob: () => true,
+      assignCurrentProcessToJob: () => true
+    }
+  }
 }
 `
   )
   writeFakeWindowsRegistry(projectDir)
 }
 
-function writeFakeWindowsRegistry(projectDir) {
+function writeFakeWindowsRegistry(projectDir, { requiresMarker = false } = {}) {
   if (process.platform !== 'win32') {
     return
   }
   const registryDir = join(projectDir, 'node_modules', 'windows-native-registry')
   mkdirSync(registryDir, { recursive: true })
   writeFileSync(
-    join(registryDir, 'index.js'),
-    'exports.HK = { CU: 0x80000001 }; exports.getRegistryKey = () => ({})\n'
+    join(registryDir, 'package.json'),
+    '{"name":"windows-native-registry","version":"3.2.2","main":"index.js"}\n'
   )
+  const markerGate = requiresMarker
+    ? `if (!require('node:fs').existsSync(process.env.ORCA_NATIVE_TEST_MARKER)) { throw new Error('registry ABI mismatch sentinel') }`
+    : ''
+  writeFileSync(
+    join(registryDir, 'index.js'),
+    `exports.HK = { CU: 0x80000001 }; exports.getRegistryKey = () => { ${markerGate}; return {} }\n`
+  )
+  const processTreeDir = join(projectDir, 'node_modules', '@vscode', 'windows-process-tree')
+  mkdirSync(processTreeDir, { recursive: true })
+  writeFileSync(join(processTreeDir, 'index.js'), 'module.exports = {}\n')
 }
 
 function writeNodePtyPatchFile(projectDir) {
@@ -245,6 +310,13 @@ function writeNodePtyPatchFile(projectDir) {
 function writePatchedNodePtyBuildArtifacts(projectDir) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
+  if (process.platform === 'win32') {
+    writeFileSync(join(buildDir, 'conpty.node'), '')
+    mkdirSync(join(buildDir, 'conpty'), { recursive: true })
+    writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
+    writeFileSync(join(buildDir, 'conpty', 'OpenConsole.exe'), '')
+    return
+  }
   writeFileSync(join(buildDir, 'pty.node'), '')
   if (process.platform === 'darwin') {
     writeFileSync(join(buildDir, 'spawn-helper'), '')
@@ -260,6 +332,11 @@ function writeFakePnpm(binDir) {
 const { appendFileSync, writeFileSync } = require('node:fs')
 
 appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`pnpm \${process.argv.slice(2).join(' ')}\\n\`)
+appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cwd=\${process.cwd()}\\n\`)
+appendFileSync(
+  process.env.ORCA_NATIVE_TEST_LOG,
+  \`npm_config_build_from_source=\${process.env.npm_config_build_from_source || ''}\\n\`
+)
 writeFileSync(process.env.ORCA_NATIVE_TEST_MARKER, 'rebuilt')
 `
   )

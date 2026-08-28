@@ -2098,6 +2098,7 @@ describe('OrcaRuntimeService', () => {
     expect(status.capabilities).toContain('mobile.tasks.v1')
     expect(status.capabilities).toContain('terminal.quick-commands.v1')
     expect(status.capabilities).toContain('worktree.create-idempotency.v1')
+    expect(status.worktreeCreateIdempotency).toEqual({ dedupeTtlMs: 60_000 })
     expect(status.capabilities).toContain('files.mutation-ownership.v1')
     expect(status.capabilities).toContain('project-host-setup.v1')
     expect(status.capabilities).toContain('linear.issue-attribute-filter.v1')
@@ -13769,6 +13770,7 @@ describe('OrcaRuntimeService', () => {
 
     const terminal = await runtime.createTerminal(`path:${TEST_WORKTREE_PATH}`, {
       command: 'codex',
+      launchAgent: 'codex',
       launchConfig: { agentCommand: 'codex', agentArgs: '', agentEnv: {} }
     })
     const spawnEnv =
@@ -13785,6 +13787,9 @@ describe('OrcaRuntimeService', () => {
         launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
       })
     ).toBeDefined()
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ handle: terminal.handle, agentIdentity: 'codex' })
+    ])
 
     runtime.onPtyData('pty-authority', '\x1b]133;D;0\x07', 100)
 
@@ -13795,6 +13800,9 @@ describe('OrcaRuntimeService', () => {
         launchToken: spawnEnv.ORCA_AGENT_LAUNCH_TOKEN
       })
     ).toBeUndefined()
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.not.objectContaining({ agentIdentity: expect.anything() })
+    ])
   })
 
   it('retires only receipted restored PTY authority on command completion and exit', () => {

@@ -4,7 +4,7 @@ import { translate } from '@/i18n/i18n'
 import { isPositiveHostedReviewNumber } from '../../../../../../shared/hosted-review'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
-import { getHostedReviewCacheKey } from '../../hosted-review'
+import { getHostedReviewCacheKey } from '../../hosted-review-cache-identity'
 import { getGitHubPRCacheKey, getLegacyGitHubPRCacheKey } from '../../github-cache-key'
 import {
   applyDetectedWorktreeUpdates,

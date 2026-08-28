@@ -12,7 +12,7 @@ export function runBrowserGrabActionShortcut({
   grabIntent,
   grab,
   grabPayloadRef,
-  toolTargetIdRef,
+  browserTabIdRef,
   recordFeatureInteraction,
   showGrabToast
 }: {
@@ -20,7 +20,7 @@ export function runBrowserGrabActionShortcut({
   grabIntent: GrabIntent
   grab: GrabModeHook
   grabPayloadRef: MutableRefObject<BrowserGrabPayload | null>
-  toolTargetIdRef: MutableRefObject<string>
+  browserTabIdRef: MutableRefObject<string>
   recordFeatureInteraction: (feature: 'browser-grab') => void | Promise<void>
   showGrabToast: (
     message: string,
@@ -70,7 +70,7 @@ export function runBrowserGrabActionShortcut({
       let result: Awaited<ReturnType<typeof window.api.browser.extractHoverPayload>>
       try {
         result = await window.api.browser.extractHoverPayload({
-          browserPageId: toolTargetIdRef.current
+          browserPageId: browserTabIdRef.current
         })
       } catch {
         // Why: the guest can be destroyed or the IPC channel torn down mid-shortcut; surface it like a miss instead of an unhandled rejection.
@@ -86,7 +86,7 @@ export function runBrowserGrabActionShortcut({
       if (key === 's') {
         try {
           const ssResult = await window.api.browser.captureSelectionScreenshot({
-            browserPageId: toolTargetIdRef.current,
+            browserPageId: browserTabIdRef.current,
             rect: payload.target.rectViewport
           })
           if (ssResult.ok) {

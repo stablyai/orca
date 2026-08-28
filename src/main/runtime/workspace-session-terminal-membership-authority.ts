@@ -188,7 +188,9 @@ export function rebaseWorkspaceSessionTerminalMembership(
     )
   }
   const tabsByWorktree = { ...incoming.tabsByWorktree }
-  const terminalLayoutsByTabId = { ...incoming.terminalLayoutsByTabId }
+  const incomingTerminalLayoutsByTabId = incoming.terminalLayoutsByTabId ?? {}
+  const priorTerminalLayoutsByTabId = prior.terminalLayoutsByTabId ?? {}
+  const terminalLayoutsByTabId = { ...incomingTerminalLayoutsByTabId }
   const unifiedTabs = { ...incoming.unifiedTabs }
   const tabGroups = { ...incoming.tabGroups }
   const tabGroupLayouts = { ...incoming.tabGroupLayouts }
@@ -226,8 +228,8 @@ export function rebaseWorkspaceSessionTerminalMembership(
     }
     for (const tabId of terminalTabIds) {
       const layout = rebaseLayout(
-        incoming.terminalLayoutsByTabId[tabId],
-        prior.terminalLayoutsByTabId[tabId]
+        incomingTerminalLayoutsByTabId[tabId],
+        priorTerminalLayoutsByTabId[tabId]
       )
       if (layout) {
         terminalLayoutsByTabId[tabId] = layout

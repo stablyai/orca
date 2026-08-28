@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
 import { release } from 'node:os'
-import { basename, resolve } from 'node:path'
+import { basename, dirname, resolve } from 'node:path'
 
 const require = createRequire(import.meta.url)
 const { assertNodePtyJobOwnership } = require('./node-pty-job-ownership.cjs')
@@ -67,7 +67,12 @@ function ensureNodeRuntime() {
     if (!initial.ok) {
       printCheckError(initial)
     }
-    runPnpm(['rebuild', 'node-pty'])
+    const failedModules = initial.failures.map((failure) => failure.moduleName)
+    const rebuildModules = [
+      'node-pty',
+      ...failedModules.filter((moduleName) => moduleName !== 'node-pty')
+    ]
+    rebuildNodeRuntimeModules(rebuildModules)
     verifyNodeRuntimeAfterRebuild()
     return
   }
@@ -77,7 +82,7 @@ function ensureNodeRuntime() {
     `[native-runtime] ${formatRuntimeLabel('node')} cannot load native modules; rebuilding ${failedModules.join(', ')} for Node.`
   )
   printCheckError(initial)
-  runPnpm(['rebuild', ...failedModules])
+  rebuildNodeRuntimeModules(failedModules)
   verifyNodeRuntimeAfterRebuild()
 }
 
@@ -312,14 +317,10 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix
-  // patch only lands in the source-built build/Release artifacts.
+  // Why: a loadable upstream node-pty prebuild is not enough; Orca's Unix and
+  // Windows patches only land in the source-built build/Release artifacts.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
-  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
-  if (process.platform === 'darwin') {
-    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
-  }
+  const artifactPaths = patchedNodePtyArtifactPaths(nodePtyDir)
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
@@ -329,11 +330,24 @@ function getPatchedNodePtyRebuildReason() {
   return 'Patched node-pty build artifacts are missing; rebuilding native deps.'
 }
 
-function requiresPatchedNodePtySourceBuild() {
+function patchedNodePtyArtifactPaths(nodePtyDir) {
   if (process.platform === 'win32') {
-    return false
+    const releaseDir = resolve(nodePtyDir, 'build', 'Release')
+    return [
+      resolve(releaseDir, 'conpty.node'),
+      ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) => resolve(releaseDir, 'conpty', filename))
+    ]
   }
 
+  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
+  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
+  if (process.platform === 'darwin') {
+    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
+  }
+  return artifactPaths
+}
+
+function requiresPatchedNodePtySourceBuild() {
   const nodePtyPatchPath = resolve(projectDir, 'config', 'patches', 'node-pty@1.1.0.patch')
   if (!existsSync(nodePtyPatchPath)) {
     return false
@@ -351,16 +365,28 @@ function getWindowsBuildNumber() {
   return match && match.length === 4 ? Number.parseInt(match[3], 10) : 0
 }
 
-function runPnpm(args) {
+function rebuildNodeRuntimeModules(moduleNames) {
+  for (const moduleName of moduleNames) {
+    const moduleDir = dirname(require.resolve(`${moduleName}/package.json`))
+    console.warn(`[native-runtime] Rebuilding ${moduleName} with node-gyp.`)
+    runPnpm(['exec', 'node-gyp', 'rebuild'], { cwd: moduleDir })
+    if (moduleName === 'node-pty' && process.platform === 'win32') {
+      runNodeScript([resolve(moduleDir, 'scripts', 'post-install.js')])
+    }
+  }
+}
+
+function runPnpm(args, { cwd = projectDir } = {}) {
   const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
   const result = spawnSync(command, args, {
-    cwd: projectDir,
+    cwd,
     stdio: 'inherit',
-    shell: process.platform === 'win32'
+    shell: process.platform === 'win32',
+    env: process.env
   })
 
   if (result.error || result.status !== 0) {
-    console.error(`[native-runtime] ${command} ${args.join(' ')} failed.`)
+    console.error(`[native-runtime] ${command} ${args.join(' ')} failed in ${cwd}.`)
     if (result.error) {
       console.error(formatError(result.error))
     }

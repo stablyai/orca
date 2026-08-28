@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
   filterWorkspaceCleanupCandidates,
   getWorkspaceCleanupGitLabel,

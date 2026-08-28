@@ -55,6 +55,7 @@ const INVENTORY: readonly InventoryGroup[] = [
       ['src/renderer/src/components/automations/automation-list-search-rows.ts', 2],
       ['src/renderer/src/components/dashboard-popout/AgentMapSnapshotWorkspaceMenu.tsx', 2],
       ['src/renderer/src/components/dashboard-popout/AgentMapWorktreeRingNode.tsx', 2],
+      ['src/renderer/src/components/settings/NativeChatSupportedAgents.tsx', 2],
       ['src/renderer/src/components/settings/QuickCommandsList.tsx', 2],
       ['src/renderer/src/components/tab-bar/TabBarQuickCommandItem.tsx', 2],
       ['src/renderer/src/components/tab-bar/TabBarQuickCommandsMenu.tsx', 2],
@@ -122,11 +123,6 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'titleHasAgentName',
     classification: 'evidence-producer',
     paths: [['src/renderer/src/hooks/ipc-events/agent-status-routing.ts', 2]]
-  },
-  {
-    helper: 'buildAgentNameRe',
-    classification: 'action-consumer',
-    paths: [['src/main/runtime/orchestration/groups.ts', 2]]
   },
   {
     helper: 'buildAgentNameRe',

@@ -3,87 +3,36 @@ import { absolutePathToFileUri } from '@/components/editor/markdown-internal-lin
 import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
 import { useCallback } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { basename, getRelativePathInsideRoot } from '@/lib/path'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
-import { activateBrowserWorkspaceTab } from '@/lib/browser-workspace-tab-activation'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { translate } from '@/i18n/i18n'
+import { createWebRuntimeSessionBrowserTab } from '@/runtime/web-runtime-session'
+import { observeE2eWebRuntimeBrowserCreation } from '@/runtime/web-runtime-browser-creation-e2e-fault'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { findSiblingGroupId } from '@/store/slices/tabs'
-import { browserPageDocLocationsEqual } from '../../../shared/browser-page-doc-location'
-import { ORCA_BROWSER_BLANK_URL } from '../../../shared/constants'
 
 export type PreviewableLanguage = 'html'
-/** Still the answer for flows that need a real `file://` URL (e.g. dropping a file on a browser pane). */
 export const REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE =
   'Open in Orca Browser is only available for local files.'
+const FILE_BROWSER_OPEN_FAILED_MESSAGE = 'Unable to open this file in Orca Browser.'
 
-/** Localized lazily: a module constant would freeze the language at import time. */
-function pairedOutsideWorktreeMessage(): string {
-  return translate(
-    'auto.lib.file.preview.pairedOutsideWorktree',
-    "Files outside the workspace can't be previewed on a paired server yet."
-  )
-}
+type WorkspaceFileBrowserActionMode = 'local-client' | 'paired-runtime' | null
 
-/**
- * How a previewable document should be rendered.
- *
- * `browser-tab` keeps local workspaces on the pre-existing embedded browser tab.
- * `doc-preview` renders the document locally from the owning workspace's disk
- * over the `orca-preview` scheme, which is the only option for SSH and paired
- * workspaces: client-hosted browser guests refuse `file:` by design, and a
- * `file://` URL would resolve on the wrong machine anyway.
- */
-export type WorkspaceFilePreviewPlan =
-  | { status: 'browser-tab'; url: string; title: string }
-  | { status: 'doc-preview' }
-  | { status: 'unsupported'; message: string; reason: 'no-channel' | 'outside-worktree' }
-
-export function getWorkspaceFilePreviewPlan(
+function getWorkspaceFileBrowserActionMode(
   state: AppState,
-  worktreeId: string,
-  filePath: string
-): WorkspaceFilePreviewPlan {
-  const connectionId = getConnectionIdForFileFromState(state, worktreeId, filePath)
-  if (connectionId === undefined) {
-    // Why: an unresolved owner can't pick a channel — reading it locally would hand a
-    // remote path to this machine's filesystem.
-    return {
-      status: 'unsupported',
-      message: REMOTE_FILE_BROWSER_UNSUPPORTED_MESSAGE,
-      reason: 'no-channel'
-    }
-  }
-  if (connectionId !== null) {
-    return { status: 'doc-preview' }
-  }
-  // Why: the doc preview needs no browser at all, so a paired runtime without the
-  // screencast capability still previews documents.
-  if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
-    const worktreeRoot = state.getKnownWorktreeById(worktreeId)?.path ?? null
-    if (worktreeRoot && !getRelativePathInsideRoot(filePath, worktreeRoot)) {
-      // Why: the host's files.read is worktree-scoped, so this would 404 at request time with
-      // nothing telling the user which boundary they hit.
-      return {
-        status: 'unsupported',
-        message: pairedOutsideWorktreeMessage(),
-        reason: 'outside-worktree'
-      }
-    }
-    return { status: 'doc-preview' }
-  }
+  worktreeId: string
+): WorkspaceFileBrowserActionMode {
   const availability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
   if (availability.state !== 'enabled') {
-    return { status: 'unsupported', message: availability.reason, reason: 'no-channel' }
+    return null
   }
-  return {
-    status: 'browser-tab',
-    url: absolutePathToFileUri(filePath),
-    title: basename(filePath) || filePath
-  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  return environmentId
+    ? availability.provider === 'paired-runtime'
+      ? 'paired-runtime'
+      : null
+    : 'local-client'
 }
 
 export function canShowWorkspaceFileBrowserAction(
@@ -91,27 +40,16 @@ export function canShowWorkspaceFileBrowserAction(
   worktreeId: string,
   filePath: string
 ): boolean {
-  const plan = getWorkspaceFilePreviewPlan(state, worktreeId, filePath)
-  // Why: an out-of-worktree paired doc keeps its action so activating it can say why it cannot
-  // render; hiding the control would leave the limitation unexplained.
-  return plan.status !== 'unsupported' || plan.reason === 'outside-worktree'
+  const mode = getWorkspaceFileBrowserActionMode(state, worktreeId)
+  return mode !== null && getConnectionIdForFileFromState(state, worktreeId, filePath) === null
 }
 
 export function useWorkspaceFileBrowserActionPredicate(
   worktreeId: string | null
 ): (filePath: string) => boolean {
-  // Why this subscribes but does not decide: visibility must come from the same plan the action
-  // itself runs, or the two drift apart — they already disagreed about a local workspace whose
-  // managed browser is disabled. The subscription only re-renders the caller; the predicate reads
-  // the live store, so it stays identity-stable for the memoized handlers that depend on it.
-  useAppStore(
+  const inputs = useAppStore(
     useShallow((state) => ({
-      managedBrowser: worktreeId
-        ? getClientCreationActionPolicy(state, worktreeId)['managed-browser'].state
-        : null,
-      runtimeEnvironmentId: worktreeId
-        ? (getRuntimeEnvironmentIdForWorktree(state, worktreeId) ?? null)
-        : null,
+      mode: worktreeId ? getWorkspaceFileBrowserActionMode(state, worktreeId) : null,
       folderWorkspaces: state.folderWorkspaces,
       projectGroups: state.projectGroups,
       repos: state.repos,
@@ -120,11 +58,23 @@ export function useWorkspaceFileBrowserActionPredicate(
   )
   return useCallback(
     (filePath: string) =>
-      worktreeId
-        ? canShowWorkspaceFileBrowserAction(useAppStore.getState(), worktreeId, filePath)
-        : false,
-    [worktreeId]
+      inputs.mode !== null &&
+      getConnectionIdForFileFromState(inputs, worktreeId, filePath) === null,
+    [inputs, worktreeId]
   )
+}
+
+function reportRemoteFileBrowserOpen(result: Promise<boolean>): void {
+  observeE2eWebRuntimeBrowserCreation(result)
+  void result
+    .then((created) => {
+      if (!created) {
+        toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+      }
+    })
+    .catch(() => {
+      toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+    })
 }
 
 export type WorkspaceFileBrowserOpenTarget =
@@ -139,7 +89,6 @@ export type WorkspaceFileBrowserOpenTarget =
       reason: 'remote-worktree'
     }
 
-/** `file://` resolution only; remote files have no local path, so this stays local-only. */
 export function getWorkspaceFileBrowserOpenTarget(params: {
   filePath: string
   worktreeId: string
@@ -157,65 +106,50 @@ export function getWorkspaceFileBrowserOpenTarget(params: {
   return {
     status: 'ready',
     url: absolutePathToFileUri(params.filePath),
-    title: basename(params.filePath) || params.filePath
+    title: params.filePath.split(/[/\\]/).pop() ?? params.filePath
   }
-}
-
-function openDocPreviewTab(
-  state: AppState,
-  params: { filePath: string; worktreeId: string; targetGroupId?: string; activate: boolean }
-): void {
-  const docLocation = {
-    kind: 'workspace-doc' as const,
-    worktreeId: params.worktreeId,
-    filePath: params.filePath
-  }
-  // Why reuse and not a second tab: previewing a document already on screen is a request to look at
-  // it, and two tabs of one document would each hold their own grant on the same file.
-  const existing = (state.browserTabsByWorktree[params.worktreeId] ?? []).find((tab) =>
-    browserPageDocLocationsEqual(tab.docLocation ?? null, docLocation)
-  )
-  if (existing) {
-    if (
-      !params.activate ||
-      !activateBrowserWorkspaceTab({ worktreeId: params.worktreeId, workspaceId: existing.id })
-    ) {
-      state.setActiveBrowserTab(existing.id)
-    }
-    return
-  }
-  state.createBrowserTab(params.worktreeId, ORCA_BROWSER_BLANK_URL, {
-    docLocation,
-    title: basename(params.filePath) || params.filePath,
-    targetGroupId: params.targetGroupId,
-    // Why explicitly client-local: the document is read through a grant this desktop mints, so the
-    // page never belongs to a remote runtime even when the worktree does.
-    browserRuntimeEnvironmentId: null,
-    // Why the caller decides: opening a file is a request to look at it, while a preview opened to
-    // the side belongs beside the source the reader is still working in.
-    activate: params.activate
-  })
 }
 
 export function openFileInBrowserTab(params: {
   filePath: string
   worktreeId: string
-}): WorkspaceFilePreviewPlan {
-  const state = useAppStore.getState()
-  const plan = getWorkspaceFilePreviewPlan(state, params.worktreeId, params.filePath)
-  if (plan.status === 'unsupported') {
-    return plan
-  }
-  if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, { ...params, activate: true })
-    return plan
+}): WorkspaceFileBrowserOpenTarget {
+  const target = getWorkspaceFileBrowserOpenTarget(params)
+  if (target.status === 'unsupported') {
+    return target
   }
 
-  state.createBrowserTab(params.worktreeId, plan.url, {
-    title: plan.title,
+  const state = useAppStore.getState()
+  const browserAvailability = getClientCreationActionPolicy(state, params.worktreeId)[
+    'managed-browser'
+  ]
+  if (browserAvailability.state !== 'enabled') {
+    toast.error(browserAvailability.reason)
+    return target
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, params.worktreeId)
+  if (environmentId) {
+    if (browserAvailability.provider !== 'paired-runtime') {
+      toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
+      return target
+    }
+    reportRemoteFileBrowserOpen(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId: params.worktreeId,
+        environmentId,
+        url: target.url,
+        stagedTitle: target.title,
+        stagedFocusAddressBar: false
+      })
+    )
+    return target
+  }
+
+  state.createBrowserTab(params.worktreeId, target.url, {
+    title: target.title,
     activate: true
   })
-  return plan
+  return target
 }
 
 export function canPreviewLanguage(language: string): language is PreviewableLanguage {
@@ -238,9 +172,22 @@ export function openFilePreviewToSide(params: {
 
   const state = useAppStore.getState()
   const worktreeId = params.worktreeId
-  const plan = getWorkspaceFilePreviewPlan(state, worktreeId, params.filePath)
-  if (plan.status === 'unsupported') {
-    toast.error(plan.message)
+  const target = getWorkspaceFileBrowserOpenTarget({
+    filePath: params.filePath,
+    worktreeId
+  })
+  if (target.status === 'unsupported') {
+    toast.error(target.message)
+    return
+  }
+  const browserAvailability = getClientCreationActionPolicy(state, worktreeId)['managed-browser']
+  if (browserAvailability.state !== 'enabled') {
+    toast.error(browserAvailability.reason)
+    return
+  }
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (environmentId && browserAvailability.provider !== 'paired-runtime') {
+    toast.error(FILE_BROWSER_OPEN_FAILED_MESSAGE)
     return
   }
 
@@ -259,29 +206,37 @@ export function openFilePreviewToSide(params: {
   const layout = state.layoutByWorktree[worktreeId] ?? null
   const existingSibling = layout ? findSiblingGroupId(layout, sourceGroupId) : null
 
-  // Why the unfocused split on a paired workspace: the preview opens in the background, and a host
-  // snapshot reads an activated empty group as a terminal pane.
-  const targetGroupId =
-    existingSibling ??
-    (getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  let targetGroupId = existingSibling
+  if (!targetGroupId) {
+    // Why: no split yet — create one to the right so the preview lands beside
+    // the editor. Remote previews stay unfocused until click, so do not activate
+    // the empty group or a host snapshot will treat it as a terminal pane.
+    targetGroupId = environmentId
       ? state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right', { activate: false })
-      : state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right'))
+      : state.createEmptySplitGroup(worktreeId, sourceGroupId, 'right')
+  }
   if (!targetGroupId) {
     return
   }
 
-  if (plan.status === 'doc-preview') {
-    openDocPreviewTab(state, {
-      filePath: params.filePath,
-      worktreeId,
-      targetGroupId,
-      activate: false
-    })
+  if (environmentId) {
+    reportRemoteFileBrowserOpen(
+      createWebRuntimeSessionBrowserTab({
+        worktreeId,
+        environmentId,
+        url: target.url,
+        clientTargetGroupId: targetGroupId,
+        clientTargetGroupCreated: !existingSibling,
+        focusOnCreate: false,
+        stagedTitle: target.title,
+        stagedFocusAddressBar: false
+      })
+    )
     return
   }
 
-  state.createBrowserTab(worktreeId, plan.url, {
-    title: plan.title,
+  state.createBrowserTab(worktreeId, target.url, {
+    title: target.title,
     targetGroupId,
     activate: true
   })

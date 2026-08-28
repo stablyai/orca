@@ -50,6 +50,7 @@ vi.mock('../providers/local-pty-utils', async (importOriginal) => {
   const actual = await importOriginal<typeof LocalPtyUtils>()
   return {
     ...actual,
+    getNodePtySpawnHelperCandidates: () => [import.meta.filename],
     resolveUnixShellPath: resolveUnixShellPathMock,
     validateWorkingDirectory: validateWorkingDirectoryMock,
     validateWorkingDirectoryAsync: validateWorkingDirectoryMock

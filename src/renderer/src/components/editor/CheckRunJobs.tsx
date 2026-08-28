@@ -5,6 +5,8 @@ import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { PRCheckJob, PRCheckStep } from '../../../../shared/github/check-types'
 import { resolveStepOutcome, summarizeJobSteps, type StepOutcome } from './check-job-step-status'
+import { formatJobsForClipboard } from './check-run-clipboard-text'
+import { CheckRunCopyButton } from './CheckRunCopyButton'
 
 function StepOutcomeIcon({ outcome }: { outcome: StepOutcome }): React.JSX.Element {
   switch (outcome) {
@@ -149,12 +151,23 @@ export function CheckRunJobs({
   jobs: PRCheckJob[]
   hasFailedJobs: boolean
 }): React.JSX.Element {
+  const clipboardText = formatJobsForClipboard(
+    jobs,
+    translate('auto.components.editor.CheckRunDetailsPanel.ee07b33924', 'unknown')
+  )
+
   return (
     <section className="rounded-md border border-border bg-background">
-      <div className="border-b border-border px-3 py-2 text-sm font-medium">
-        {hasFailedJobs
-          ? translate('auto.components.editor.CheckRunDetailsPanel.066fedd446', 'Failed jobs')
-          : translate('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
+      <div className="flex items-center justify-between border-b border-border px-3 py-2">
+        <div className="text-sm font-medium">
+          {hasFailedJobs
+            ? translate('auto.components.editor.CheckRunDetailsPanel.066fedd446', 'Failed jobs')
+            : translate('auto.components.editor.CheckRunDetailsPanel.49731703ea', 'Jobs')}
+        </div>
+        <CheckRunCopyButton
+          text={clipboardText}
+          label={translate('auto.components.editor.CheckRunJobs.copy', 'Copy jobs')}
+        />
       </div>
       <div className="divide-y divide-border/50">
         {jobs.map((job, index) => (

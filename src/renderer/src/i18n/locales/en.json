@@ -925,11 +925,6 @@
       },
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
-      },
-      "file": {
-        "preview": {
-          "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
-        }
       }
     },
     "hooks": {
@@ -1088,13 +1083,6 @@
         "description": "Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.",
         "openManageSessions": "Open Manage Sessions",
         "dismiss": "Dismiss"
-      },
-      "ipc": {
-        "events": {
-          "browserStateIpcBridge": {
-            "docPreviewLinkFailed": "Could not open this link in Orca Browser."
-          }
-        }
       }
     },
     "components": {
@@ -3084,9 +3072,7 @@
             "copyLink": "Copy link",
             "copied": "Copied",
             "copiedLink": "Copied link",
-            "copyLinkFailed": "Failed to copy link",
-            "downloadOpenWithDefaultApp": "Download & open with default app",
-            "downloadOpenFailed": "Failed to download '{{value0}}'."
+            "copyLinkFailed": "Failed to copy link"
           },
           "TerminalSessionStateSaveFailureDialog": {
             "6bee0c8f17": "Open Disk Space Analyzer",
@@ -11484,6 +11470,9 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "NativeChatSupportedAgents": {
+          "label": "Supported agents:"
         }
       },
       "right": {
@@ -14689,14 +14678,16 @@
           "d5a8c2f1b9": "Start the default AI agent to fix this check",
           "e2b4d7c8a1": "Choose an agent for this check",
           "f1c9e3a6d4": "Choose agent to fix check",
-          "actionRequired": "Action required"
+          "actionRequired": "Action required",
+          "copyOutput": "Copy output"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "succeeded",
           "2d3b8f1a55": "skipped",
           "3e6c9a2b71": "pending",
           "4f7d0c3e88": "steps failed",
-          "5a8e1d4f23": " · "
+          "5a8e1d4f23": " · ",
+          "copy": "Copy jobs"
         },
         "check": {
           "run": {
@@ -14777,25 +14768,13 @@
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
         },
-        "HtmlDocPreview": {
-          "documentTooLargePanel": "This document is too large to preview. Open it in the editor instead.",
-          "documentUnreadablePanel": "Orca could not read this file from the workspace.",
-          "multipleAssetsFailedNotice": "{{count}} files in this document could not be loaded.",
-          "assetTooLargeNotice": "{{path}} is too large to load in this preview.",
-          "assetUnsupportedNotice": "This workspace cannot send {{path}} to a preview.",
-          "assetUnreadableNotice": "Orca could not read {{path}} from the workspace.",
-          "previewAriaLabel": "HTML preview",
-          "reloadPreviewControl": "Reload preview",
-          "previewUnavailableTitle": "Preview unavailable",
-          "copyDocumentPathControl": "Copy file path",
-          "documentPathCopied": "Copied",
-          "workspaceFileChipLabel": "Workspace file",
-          "previewMenuControl": "Preview options",
-          "openSourceControl": "Open source file",
-          "openExternallyControl": "Open with default app",
-          "copyDocumentRelativePathControl": "Copy relative path",
-          "openExternallyUnknownHostError": "Can't open '{{value0}}': the host that owns it is no longer known.",
-          "downloadBlockedNotice": "Downloads are disabled in document previews."
+        "CheckRunAnnotations": {
+          "copy": "Copy annotations"
+        },
+        "CheckRunCopyButton": {
+          "copied": "Copied",
+          "failed": "Couldn't copy",
+          "empty": "Nothing to copy"
         }
       },
       "diff": {
@@ -15115,8 +15094,7 @@
             "6e776f9ef9": "Download failed",
             "756bfc25c9": "Open",
             "09a9489aa5": "Show",
-            "2a4c4b8e1f": "Copy",
-            "fileUrlUnsupported": "This browser tab cannot open local files. Use \"Open Preview to the Side\" on the file instead."
+            "2a4c4b8e1f": "Copy"
           },
           "BrowserToolbarMenu": {
             "429ef481f9": "Cancel",

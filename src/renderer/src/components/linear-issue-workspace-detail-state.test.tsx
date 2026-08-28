@@ -20,7 +20,7 @@ const runtimeMocks = vi.hoisted(() => ({
   linearIssueComments: vi.fn()
 }))
 
-vi.mock('@/runtime/runtime-linear-client', () => runtimeMocks)
+vi.mock('@/runtime/runtime-linear-issue-mutations', () => runtimeMocks)
 vi.mock('@/components/LinearItemDrawer', () => ({
   initLinearIssueEditState: (selected: LinearIssue) => ({
     state: selected.state,

@@ -2,7 +2,7 @@ import { getWorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-displ
 import { useAppStore } from '@/store'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { issueCacheKey as getIssueCacheKey } from '@/store/github/cache-identity'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { hostedReviewInfoFromGitHubPRInfo } from '../../../../shared/hosted-review-github'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import { isFolderRepo } from '../../../../shared/repo-kind'

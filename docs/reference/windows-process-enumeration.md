@@ -326,8 +326,6 @@ the Windows CI job rebuilds from source before running the win32 suites.
 it is true before asserting anything else, so an unpatched binary fails loudly
 instead of passing every case vacuously. That guard is what caught this.
 
-`requiresPatchedNodePtySourceBuild()` in `ensure-native-runtime.mjs` still
-exempts win32, on the premise that the patch is Unix-only. That premise is now
-false, but lifting the exemption also needs `pnpm rebuild` to force a source
-build — otherwise the assertion fires and the remedy does not fix it. Left as a
-follow-up rather than changed blind.
+`requiresPatchedNodePtySourceBuild()` in `ensure-native-runtime.mjs` now covers
+win32 as well, and `pnpm rebuild node-pty` sets `npm_config_build_from_source`
+so the patched source build actually replaces the upstream prebuild.

@@ -12,7 +12,7 @@ import {
   isValidAutomationCronSchedule,
   isValidAutomationSchedule,
   tryParseAutomationRrule
-} from '../../../../shared/automation-schedules'
+} from '../../../../shared/automation-schedule-parsing'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import { AUTOMATION_DEFAULT_TIME, formatTimeInput } from './automation-draft-model'
 import { getAutomationSetupDecisionDraftValue } from './automation-setup-decision'

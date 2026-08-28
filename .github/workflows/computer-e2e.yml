@@ -71,30 +71,17 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core gedit xvfb xclip xdotool
-      # Why: pnpm's bundled node-gyp can ship gyp_main.py without execute
-      # permission on Linux runners; node-pty's install fallback then fails
-      # before this smoke job can exercise the native package.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
       # Why: without --config, bare vitest ignores config/vitest.config.ts (there
       # is no root config) and falls back to the 5s default timeout with no
       # Windows worker cap, so the real csc.exe launcher-compile tests time out
       # on hosted Windows. Use the shared config so this job matches pnpm test.
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
-          config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
@@ -159,13 +146,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-      - run: pnpm install --frozen-lockfile
+          native-runtime: electron
       - name: Owner-loss benchmark process cleanup
         run: >-
           pnpm vitest run
