@@ -22,6 +22,8 @@ type CaretStyle = 'block' | 'bar' | 'underline'
 export type PreeditCaretCursorOptions = {
   cursorStyle?: string
   cursorBlink?: boolean
+  /** xterm's resolved theme; `cursor` already carries the configured opacity. */
+  theme?: { cursor?: string }
 }
 
 function resolveCaretStyle(options: PreeditCaretCursorOptions | undefined): CaretStyle {
@@ -72,6 +74,10 @@ export function applyTerminalImePreeditCaret(
   const height = style === 'underline' ? Math.max(1, Math.round(cellHeight / 8)) : cellHeight
 
   caret.classList.toggle(BLINK_CLASS, options?.cursorBlink === true)
+  // The pane's own cursor colour, not the overlay's foreground: the two happen
+  // to match in the default theme and diverge in every other one. Empty falls
+  // back to the stylesheet's currentcolor for a pane with no theme.
+  caret.style.background = options?.theme?.cursor ?? ''
   caret.style.width = `${width}px`
   caret.style.height = `${height}px`
   caret.style.marginTop = style === 'underline' ? `${cellHeight - height}px` : '0px'
