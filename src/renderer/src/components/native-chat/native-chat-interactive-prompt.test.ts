@@ -7,6 +7,7 @@ import {
   parseApprovalFromStatus,
   parseAskFromStatus,
   parseInteractivePrompt,
+  routeAskAnswer,
   type AskPrompt
 } from './native-chat-interactive-prompt'
 
@@ -401,6 +402,74 @@ describe('buildAskAnswerKeys', () => {
       { raw: '\x1b[C' },
       { raw: '\r' }
     ])
+  })
+})
+
+describe('routeAskAnswer', () => {
+  it('keeps a pick and its note on the selector, with nothing for chat', () => {
+    const routing = routeAskAnswer(singleWithPreview(['Tabs', 'Spaces']), [
+      { indices: [1], other: 'but only in JS' }
+    ])
+    expect(routing.selectorSelections).toEqual([{ indices: [1], other: 'but only in JS' }])
+    expect(routing.chatText).toBe('')
+    expect(routing.rejectsPrompt).toBe(false)
+  })
+
+  it('routes text with no pick to chat and rejects the prompt', () => {
+    const routing = routeAskAnswer(singleWithPreview(['Tabs', 'Spaces']), [
+      { indices: [], other: 'neither, use whatever the file already uses' }
+    ])
+    expect(routing.selectorSelections).toEqual([{ indices: [], other: '' }])
+    expect(routing.chatText).toBe('neither, use whatever the file already uses')
+    expect(routing.rejectsPrompt).toBe(true)
+  })
+
+  it('submits the picked question and sends the stranded one to chat', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'Indent?', multiSelect: false, options: [{ label: 'Tabs' }] },
+        { question: 'Quotes?', multiSelect: false, options: [{ label: 'Single' }] }
+      ]
+    }
+    const routing = routeAskAnswer(prompt, [
+      { indices: [0] },
+      { indices: [], other: 'whichever the linter wants' }
+    ])
+    expect(routing.selectorSelections).toEqual([
+      { indices: [0], other: '' },
+      { indices: [], other: '' }
+    ])
+    // The question is named so the reply stands on its own in the transcript.
+    expect(routing.chatText).toBe('Quotes?\nwhichever the linter wants')
+    expect(routing.rejectsPrompt).toBe(false)
+  })
+
+  it('joins several stranded questions into one chat message', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        { question: 'Indent?', multiSelect: false, options: [{ label: 'Tabs' }] },
+        { question: 'Quotes?', multiSelect: false, options: [{ label: 'Single' }] }
+      ]
+    }
+    const routing = routeAskAnswer(prompt, [
+      { indices: [], other: 'tabs please' },
+      { indices: [], other: 'single' }
+    ])
+    expect(routing.chatText).toBe('Indent?\ntabs please\n\nQuotes?\nsingle')
+    expect(routing.rejectsPrompt).toBe(true)
+  })
+
+  it('leaves a lone question’s text unlabelled', () => {
+    const routing = routeAskAnswer(single(['Tabs', 'Spaces']), [
+      { indices: [], other: 'no strong opinion' }
+    ])
+    expect(routing.chatText).toBe('no strong opinion')
+  })
+
+  it('has nothing to route when nothing was entered', () => {
+    const routing = routeAskAnswer(single(['Tabs', 'Spaces']), [{ indices: [] }])
+    expect(routing.chatText).toBe('')
+    expect(routing.rejectsPrompt).toBe(false)
   })
 })
 
