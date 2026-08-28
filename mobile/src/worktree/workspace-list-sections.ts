@@ -129,15 +129,16 @@ export function buildSections(
   pinnedIds: Set<string>,
   repoIdsByName: ReadonlyMap<string, string> = new Map(),
   workspaceStatuses: readonly WorkspaceStatusDefinition[] = DEFAULT_MOBILE_WORKSPACE_STATUSES,
-  collapsedGroups: ReadonlySet<string> = new Set()
+  collapsedGroups: ReadonlySet<string> = new Set(),
+  showPinnedWorktreesInGroups = false
 ): Section[] {
   const filtered = filterWorktrees(worktrees, filters, search)
   const sorted = sortWorktrees(filtered, sortMode)
 
   const pinned = sorted.filter((w) => isWorktreePinned(w, pinnedIds))
-  // Why: desktop treats Pinned as an overlay. Keeping pinned rows in canonical
-  // groups preserves exact cross-surface order and literal section counts.
-  const canonicalGroupWorktrees = sorted
+  const canonicalGroupWorktrees = showPinnedWorktreesInGroups
+    ? sorted
+    : sorted.filter((w) => !isWorktreePinned(w, pinnedIds))
 
   const sections: Section[] = []
   if (pinned.length > 0) {

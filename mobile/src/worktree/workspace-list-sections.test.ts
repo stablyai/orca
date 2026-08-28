@@ -689,7 +689,7 @@ describe('buildSections', () => {
     expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['progress'])
   })
 
-  it('keeps pinned worktrees in their canonical status group like desktop', () => {
+  it('shows pinned worktrees in one location by default like desktop', () => {
     const pinned = worktree({
       worktreeId: 'pinned',
       workspaceStatus: 'in-progress',
@@ -708,9 +708,59 @@ describe('buildSections', () => {
     )
 
     expect(withoutSectionListKeys(sections)).toEqual([
-      { key: 'pinned', title: 'Pinned', icon: 'pin', data: [pinned] },
-      { key: 'workspace-status:in-progress', title: 'In progress', data: [pinned] }
+      { key: 'pinned', title: 'Pinned', icon: 'pin', data: [pinned] }
     ])
+  })
+
+  it.each([
+    ['none', 'all'],
+    ['repo', 'repo:repo-1'],
+    ['workspaceStatus', 'workspace-status:in-progress'],
+    ['prStatus', 'pr:in-progress']
+  ] as const)('duplicates pinned worktrees in %s only when enabled', (groupMode, groupKey) => {
+    const pinned = worktree({ worktreeId: 'pinned', isPinned: true })
+    const defaultSections = buildSections(
+      [pinned],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      groupMode,
+      new Set(),
+      new Map([['orca', 'repo-1']]),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES
+    )
+    const sections = buildSections(
+      [pinned],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      groupMode,
+      new Set(),
+      new Map([['orca', 'repo-1']]),
+      DEFAULT_MOBILE_WORKSPACE_STATUSES,
+      new Set(),
+      true
+    )
+
+    expect(defaultSections.map((section) => section.key)).toEqual(['pinned'])
+    expect(sections.map((section) => section.key)).toEqual(['pinned', groupKey])
+    expect(sections[1]?.data.map((item) => item.worktreeId)).toEqual(['pinned'])
+  })
+
+  it('removes optimistic local pins from All by default', () => {
+    const pinned = worktree({ worktreeId: 'locally-pinned' })
+    const unpinned = worktree({ worktreeId: 'unpinned' })
+    const sections = buildSections(
+      [pinned, unpinned],
+      'manual',
+      { filterRepoIds: new Set(), hideSleeping: false, hideDefaultBranch: false },
+      '',
+      'none',
+      new Set(['locally-pinned'])
+    )
+
+    expect(sections[0]?.data.map((item) => item.worktreeId)).toEqual(['locally-pinned'])
+    expect(sections[1]?.data.map((item) => item.worktreeId)).toEqual(['unpinned'])
   })
 
   it('renders one sorted All section when grouping is off like desktop', () => {

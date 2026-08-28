@@ -4,6 +4,7 @@
 // or filter change on the phone show up on desktop and vice-versa.
 
 import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
+import type { RpcClient } from '../transport/rpc-client'
 import { coerceMobileWorkspaceStatuses } from './mobile-workspace-statuses'
 
 export type MobileGroupMode = 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
@@ -20,6 +21,37 @@ export type WorkspaceViewSettings = {
   filterRepoIds?: string[]
   collapsedGroups?: string[]
   workspaceStatuses?: WorkspaceStatusDefinition[]
+}
+
+export type WorkspaceDisplaySettings = {
+  showPinnedWorktreesInGroups?: boolean
+}
+
+/** Normalizes the optional desktop preference, defaulting missing or invalid values to false. */
+export function getShowPinnedWorktreesInGroups(
+  settings: WorkspaceDisplaySettings | null | undefined
+): boolean {
+  return settings?.showPinnedWorktreesInGroups === true
+}
+
+/** Loads view and display settings independently so older hosts can return either payload. */
+export async function loadDesktopWorkspaceSettings(
+  client: Pick<RpcClient, 'sendRequest'>
+): Promise<{
+  ui?: WorkspaceViewSettings
+  showPinnedWorktreesInGroups?: boolean
+}> {
+  const [uiResponse, settingsResponse] = await Promise.all([
+    client.sendRequest('ui.get').catch(() => null),
+    client.sendRequest('settings.get').catch(() => null)
+  ])
+  const ui = uiResponse?.ok ? (uiResponse.result as { ui?: WorkspaceViewSettings }).ui : undefined
+  const showPinnedWorktreesInGroups = settingsResponse?.ok
+    ? getShowPinnedWorktreesInGroups(
+        (settingsResponse.result as { settings?: WorkspaceDisplaySettings }).settings
+      )
+    : undefined
+  return { ui, showPinnedWorktreesInGroups }
 }
 
 const GROUP_TO_DESKTOP: Record<MobileGroupMode, NonNullable<WorkspaceViewSettings['groupBy']>> = {

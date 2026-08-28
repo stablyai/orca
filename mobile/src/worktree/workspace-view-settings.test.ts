@@ -1,9 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
 import {
   applyDesktopViewSettings,
+  getShowPinnedWorktreesInGroups,
   groupModeFromDesktop,
   groupModeToDesktop,
+  loadDesktopWorkspaceSettings,
   sortModeFromDesktop,
   type MobileViewState,
   type WorkspaceViewSettings
@@ -39,6 +41,35 @@ describe('sort mode mapping', () => {
     expect(sortModeFromDesktop('smart')).toBe('smart')
     expect(sortModeFromDesktop(undefined)).toBeNull()
     expect(sortModeFromDesktop('bogus' as never)).toBeNull()
+  })
+})
+
+describe('pinned workspace display preference', () => {
+  it('defaults missing and older-host settings to one location', () => {
+    expect(getShowPinnedWorktreesInGroups(undefined)).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({})).toBe(false)
+  })
+
+  it('duplicates pinned workspaces only when explicitly enabled', () => {
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: false })).toBe(false)
+    expect(getShowPinnedWorktreesInGroups({ showPinnedWorktreesInGroups: true })).toBe(true)
+  })
+
+  it('loads the preference when the view settings request fails', async () => {
+    const sendRequest = vi.fn(async (method: string) => {
+      if (method === 'ui.get') {
+        throw new Error('unavailable')
+      }
+      return {
+        ok: true,
+        result: { settings: { showPinnedWorktreesInGroups: true } }
+      } as never
+    })
+
+    await expect(loadDesktopWorkspaceSettings({ sendRequest })).resolves.toEqual({
+      ui: undefined,
+      showPinnedWorktreesInGroups: true
+    })
   })
 })
 
