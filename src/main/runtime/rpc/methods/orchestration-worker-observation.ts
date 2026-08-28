@@ -2,6 +2,7 @@ import type { RuntimeTerminalInteractiveWait } from '../../../../shared/runtime-
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { WorkerTerminalResourceRow } from '../../orchestration/worker-terminal-ownership'
 import type {
   DispatchContextRow,
   FederatedDispatchRow,
@@ -60,6 +61,19 @@ export async function inspectWorkerTerminal(
     status: terminal.connected === false ? 'exited' : 'live',
     agentWait
   }
+}
+
+export async function recheckProcessLiveness(
+  runtime: OrcaRuntimeService,
+  resource: WorkerTerminalResourceRow
+): Promise<'live' | 'exited' | 'unverifiable'> {
+  const processIncarnation = runtime.getTerminalProcessIncarnation(resource.terminal_handle)
+  if (!processIncarnation || processIncarnation !== resource.process_incarnation) {
+    return 'unverifiable'
+  }
+  return runtime
+    .inspectTerminalProcessIncarnationLiveness(processIncarnation, resource.host_scope)
+    .catch(() => 'unverifiable' as const)
 }
 
 export function exposeContextOnlyWorker(dispatch: DispatchContextRow) {

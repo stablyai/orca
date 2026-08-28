@@ -11,7 +11,7 @@ import {
 } from '../../orchestration/worker-output-archive'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
-import { inspectWorkerTerminal } from './orchestration-worker-observation'
+import { inspectWorkerTerminal, recheckProcessLiveness } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
 
 export type WorkerReleaseReceipt = {
@@ -32,10 +32,8 @@ type WorkerTerminalReleaseArgs = {
   mode?: 'interactive' | 'recovery'
 }
 
-const activeReleaseByRuntime = new WeakMap<
-  OrcaRuntimeService,
-  Map<string, Promise<WorkerReleaseReceipt>>
->()
+type ActiveReleaseMap = Map<string, Promise<WorkerReleaseReceipt>>
+const activeReleaseByRuntime = new WeakMap<OrcaRuntimeService, ActiveReleaseMap>()
 
 export function exposeWorkerTerminalResource(resource: WorkerTerminalResourceRow): {
   id: string
@@ -228,6 +226,21 @@ async function completeWorkerTerminalReleaseOnce(
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
+    if (
+      observation.status === 'exited' &&
+      reason === 'tab_not_found' &&
+      (await recheckProcessLiveness(runtime, resource)) === 'exited'
+    ) {
+      // The exact process is still proven gone, so an absent tab makes the close idempotently complete.
+      const released = db.settleWorkerTerminalRelease(resource.id)
+      runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
+      return {
+        dispatchId,
+        state: 'released',
+        processAction: 'none',
+        archive: archiveSummary(released)
+      }
+    }
     if (/disposed|not connected|unavailable/i.test(reason)) {
       // Durable intent exists; the owning endpoint is temporarily unreachable. Recovery retries.
       return {
