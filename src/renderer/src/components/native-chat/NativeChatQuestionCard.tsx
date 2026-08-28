@@ -77,11 +77,26 @@ export function NativeChatQuestionCard({
     return [...picked, ...(other ? [other] : [])].join(', ')
   }
 
-  const currentAnswered = answerFor(index).length > 0
+  // A preview question's note attaches to a selected option — the layout offers
+  // no selection-less note — so typed text alone cannot be delivered.
+  const needsPick = (qi: number, sel = selections, oth = otherText): boolean => {
+    const question = prompt.questions[qi]
+    if (!question || question.multiSelect) {
+      return false
+    }
+    const hasPreviewText = question.options.some((option) => (option.preview ?? '').length > 0)
+    return hasPreviewText && (sel[qi]?.length ?? 0) === 0 && (oth[qi] ?? '').trim().length > 0
+  }
+
+  const currentNeedsPick = needsPick(index)
+  const currentAnswered = answerFor(index).length > 0 && !currentNeedsPick
 
   const submitAll = (sel: number[][], oth: string[]): void => {
     const resolved: AskAnswerSelection[] = prompt.questions.map((_, i) => {
-      return { indices: [...(sel[i] ?? [])], other: (oth[i] ?? '').trim() }
+      // Drop a note that never got its option rather than delivering half an
+      // answer the selector cannot express.
+      const other = needsPick(i, sel, oth) ? '' : (oth[i] ?? '').trim()
+      return { indices: [...(sel[i] ?? [])], other }
     })
     const anyAnswered = resolved.some((s) => s.indices.length > 0 || (s.other ?? '').length > 0)
     if (anyAnswered) {
@@ -126,11 +141,14 @@ export function NativeChatQuestionCard({
   // dismisses, but a reflexive Enter in the empty field is a no-op so it can't
   // throw away the whole prompt.
   const confirm = (fromKeyboard = false): void => {
+    if (currentNeedsPick) {
+      return
+    }
     if (!isLast) {
       advanceOrSubmit(selections, otherText)
       return
     }
-    const anyAnswered = prompt.questions.some((_, i) => answerFor(i).length > 0)
+    const anyAnswered = prompt.questions.some((_, i) => !needsPick(i) && answerFor(i).length > 0)
     if (anyAnswered) {
       submitAll(selections, otherText)
     } else if (!fromKeyboard) {
@@ -259,7 +277,7 @@ export function NativeChatQuestionCard({
               />
               <button
                 type="button"
-                disabled={isSubmitting}
+                disabled={isSubmitting || currentNeedsPick}
                 onClick={() => confirm()}
                 className={cn(
                   'shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
@@ -270,11 +288,13 @@ export function NativeChatQuestionCard({
               >
                 {isSubmitting
                   ? translate('components.native-chat.question.sending', 'Sending…')
-                  : currentAnswered
-                    ? isLast
-                      ? translate('components.native-chat.question.send', 'Submit')
-                      : translate('components.native-chat.question.next', 'Next')
-                    : translate('components.native-chat.question.skip', 'Skip')}
+                  : currentNeedsPick
+                    ? translate('components.native-chat.question.pickForNote', 'Pick an option')
+                    : currentAnswered
+                      ? isLast
+                        ? translate('components.native-chat.question.send', 'Submit')
+                        : translate('components.native-chat.question.next', 'Next')
+                      : translate('components.native-chat.question.skip', 'Skip')}
               </button>
             </div>
           </div>

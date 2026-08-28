@@ -51,6 +51,16 @@ function clickOptionAt(index: number): void {
   click(container.querySelectorAll('button[aria-pressed]')[index], `option index ${index}`)
 }
 
+/** The trailing Submit/Next/Skip control, whatever it currently reads. */
+function actionButton(): HTMLButtonElement {
+  const row = container.querySelector('input')!.parentElement!
+  const button = row.querySelector('button')
+  if (!button) {
+    throw new Error('trailing action button not found')
+  }
+  return button
+}
+
 function typeAnswer(text: string): void {
   const input = container.querySelector('input')!
   act(() => {
@@ -454,16 +464,57 @@ describe('NativeChatQuestionCard', () => {
     expect(container.querySelector('input')!.placeholder).toBe('Type your answer')
   })
 
-  it('submits a note with no option picked on a preview question', () => {
-    // Note-only is a valid answer in the preview layout, so the card must not
-    // require a selection alongside it.
+  it('will not submit a note until an option is picked on a preview question', () => {
+    // The note attaches to a selected option, so the card blocks the state the
+    // delivery layer cannot express.
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)
 
     typeAnswer('none of these, actually')
-    clickAction('Submit')
 
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'none of these, actually' }])
+    const action = actionButton()
+    expect(action.textContent?.trim()).toBe('Pick an option')
+    expect(action.disabled).toBe(true)
+
+    click(action, 'gated action')
+    expect(onAnswer).not.toHaveBeenCalled()
+  })
+
+  it('releases the gate once an option is picked alongside the note', () => {
+    const onAnswer = vi.fn()
+    render(previewPrompt, onAnswer)
+
+    typeAnswer('but only in JS')
+    expect(actionButton().disabled).toBe(true)
+
+    clickOption('Spaces')
+
+    const action = actionButton()
+    expect(action.disabled).toBe(false)
+    expect(action.textContent?.trim()).toBe('Submit')
+
+    click(action, 'Submit')
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'but only in JS' }])
+  })
+
+  it('does not gate the free-form row on a question without previews', () => {
+    render(tabsOrSpaces, vi.fn())
+
+    typeAnswer('four spaces')
+
+    expect(actionButton().disabled).toBe(false)
+    expect(actionButton().textContent?.trim()).toBe('Submit')
+  })
+
+  it('ignores Enter in the note field while the pick is still missing', () => {
+    const onAnswer = vi.fn()
+    render(previewPrompt, onAnswer)
+
+    typeAnswer('none of these, actually')
+    const input = container.querySelector('input')!
+    act(() => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
+
+    expect(onAnswer).not.toHaveBeenCalled()
   })
 
   it('submits a picked option together with its note', () => {
@@ -479,28 +530,31 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'but only in JS' }])
   })
 
-  it('submits typed text after hovering a preview option, with no option selected', () => {
+  it('does not treat a hovered option as the note’s pick', () => {
+    // Hover only drives which preview shows; the note still needs a real pick.
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)
 
     hoverOption('Spaces')
     typeAnswer('my typed answer')
-    clickAction('Submit')
 
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'my typed answer' }])
+    expect(actionButton().disabled).toBe(true)
+    expect(onAnswer).not.toHaveBeenCalled()
   })
 
   it('keeps typed text when focus moves from an option row to the free-form input', () => {
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)
 
-    focusOption('Spaces')
+    clickOption('Spaces')
+    focusOption('Tabs')
     const input = container.querySelector('input')!
     act(() => input.dispatchEvent(new FocusEvent('focusin', { bubbles: true })))
     typeAnswer('typed after focus')
     clickAction('Submit')
 
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'typed after focus' }])
+    // Focus moving across rows must not disturb the pick or the typed note.
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'typed after focus' }])
   })
 
   it('submits typed text per question in a multi-question preview prompt', () => {
@@ -523,15 +577,16 @@ describe('NativeChatQuestionCard', () => {
       onAnswer
     )
 
-    hoverOption('A')
+    clickOption('A')
     typeAnswer('first answer')
     clickAction('Next')
+    clickOption('B')
     typeAnswer('second answer')
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([
-      { indices: [], other: 'first answer' },
-      { indices: [], other: 'second answer' }
+      { indices: [0], other: 'first answer' },
+      { indices: [0], other: 'second answer' }
     ])
   })
 })
