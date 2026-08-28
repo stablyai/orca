@@ -60,7 +60,12 @@ function emptyCensus(windowMs: number, supported: boolean): MainThreadBlockingCe
  */
 export function watchMainThreadBlocking(): MainThreadBlockingWatch {
   const samples: LongTaskSample[] = []
-  const startedAt = typeof performance === 'undefined' ? 0 : performance.now()
+  const now = (): number => (typeof performance === 'undefined' ? 0 : performance.now())
+  const startedAt = now()
+  // Why the window closes at stop(): the observer stops collecting there, so
+  // counting wall clock up to the later report() call would divide the same
+  // blocked time by a longer window and understate the share.
+  let stoppedAt: number | null = null
   let observer: PerformanceObserver | null = null
   try {
     observer = new PerformanceObserver((list) => {
@@ -80,10 +85,10 @@ export function watchMainThreadBlocking(): MainThreadBlockingWatch {
     stop: () => {
       observer?.disconnect()
       observer = null
+      stoppedAt ??= now()
     },
     census: () => {
-      const now = typeof performance === 'undefined' ? startedAt : performance.now()
-      const windowMs = Math.max(1, now - startedAt)
+      const windowMs = Math.max(1, (stoppedAt ?? now()) - startedAt)
       if (samples.length === 0) {
         return emptyCensus(windowMs, supported)
       }

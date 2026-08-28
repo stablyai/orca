@@ -40,6 +40,8 @@ type PendingKeystroke = {
   /** When xterm emitted the bytes toward the pty; null if it never did. */
   dispatchedAt: number | null
   parsedAt: number | null
+  /** How many keystrokes the echoing write resolved alongside this one. */
+  coalescing: number
 }
 
 export type EchoSample = {
@@ -63,7 +65,6 @@ export type InstrumentedPane = {
   pending: PendingKeystroke[]
   disposables: Disposable[]
   restoreWrite: (() => void) | null
-  lastEchoCoalescing: number
 }
 
 /** An echo that has not parsed within this window is counted as unmatched, never as a sample. */
@@ -110,11 +111,18 @@ function pendingAwaitingEcho(entry: InstrumentedPane): PendingKeystroke[] {
   return entry.pending.filter((pending) => pending.parsedAt === null)
 }
 
-/** Marks the whole waiting set echoed, returning how many one write resolved. */
+/**
+ * Marks the whole waiting set echoed, returning how many one write resolved.
+ *
+ * The count is stored per keystroke, not on the pane: a second write can parse
+ * before the render that drains the first batch, and a shared slot would then
+ * report the later batch's size for the earlier samples.
+ */
 function markPendingEcho(entry: InstrumentedPane, at: number): number {
   const waiting = pendingAwaitingEcho(entry)
   for (const pending of waiting) {
     pending.parsedAt = at
+    pending.coalescing = waiting.length
   }
   return waiting.length
 }
@@ -134,7 +142,15 @@ export function recordKeystroke(
     entry.pending.shift()
     dropped += 1
   }
-  entry.pending.push({ t0: now, source, bytes: 0, writes: 0, dispatchedAt: null, parsedAt: null })
+  entry.pending.push({
+    t0: now,
+    source,
+    bytes: 0,
+    writes: 0,
+    dispatchedAt: null,
+    parsedAt: null,
+    coalescing: 0
+  })
   return dropped
 }
 
@@ -146,8 +162,7 @@ export function instrumentPaneEcho(
     pane,
     pending: [],
     disposables: [],
-    restoreWrite: null,
-    lastEchoCoalescing: 0
+    restoreWrite: null
   }
   const terminal = pane.terminal
   if (!terminal) {
@@ -193,10 +208,7 @@ export function instrumentPaneEcho(
   if (typeof terminal.onWriteParsed === 'function') {
     entry.disposables.push(
       terminal.onWriteParsed(() => {
-        const resolved = markPendingEcho(entry, performance.now())
-        if (resolved > 0) {
-          entry.lastEchoCoalescing = resolved
-        }
+        markPendingEcho(entry, performance.now())
       })
     )
   }
@@ -215,7 +227,7 @@ export function instrumentPaneEcho(
             bytes: pending.bytes,
             writes: pending.writes,
             source: pending.source,
-            coalescing: entry.lastEchoCoalescing,
+            coalescing: pending.coalescing,
             dispatchMs: pending.dispatchedAt === null ? -1 : pending.dispatchedAt - pending.t0
           })
         }

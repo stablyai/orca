@@ -8,7 +8,7 @@ import {
 } from './typing-latency-echo-instrumentation'
 
 function emptyEntry(): InstrumentedPane {
-  return { pane: {}, pending: [], disposables: [], restoreWrite: null, lastEchoCoalescing: 0 }
+  return { pane: {}, pending: [], disposables: [], restoreWrite: null }
 }
 
 type FakeTerminal = {
@@ -149,6 +149,27 @@ describe('instrumentPaneEcho', () => {
     expect(fake.terminal.write).toBe(originalWrite)
     expect(fake.disposeCount()).toBe(2)
     expect(entry.pending).toEqual([])
+  })
+
+  // The regression: a shared coalescing slot let a later batch overwrite the
+  // count before the earlier batch's samples were drained by a render.
+  it('keeps each batch its own coalescing count when two writes parse before a render', () => {
+    const fake = fakeTerminal()
+    const samples: EchoSample[] = []
+    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (sample) => samples.push(sample))
+
+    recordKeystroke(entry, 0, 'direct')
+    recordKeystroke(entry, 1, 'direct')
+    fake.terminal.write('ab')
+    fake.emitParsed()
+
+    recordKeystroke(entry, 2, 'direct')
+    fake.terminal.write('c')
+    fake.emitParsed()
+
+    fake.emitRender()
+
+    expect(samples.map((sample) => sample.coalescing)).toEqual([2, 2, 1])
   })
 
   it('degrades to a no-op instead of throwing when the pane has no terminal', () => {
