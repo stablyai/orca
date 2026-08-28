@@ -242,6 +242,81 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
 
     expect(output.trim()).toBe('custom-codex')
   })
+
+  it.skipIf(!fishAvailable)(
+    'emits no test error and installs no wrapper when codex is absent',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca-codex-absent-fish-'))
+      roots.push(root)
+      const bin = join(root, 'bin')
+      mkdirSync(bin)
+      writeExecutable(join(bin, 'orca-test'), '#!/bin/sh\nexit 0\n')
+
+      const result = spawnSync(
+        'fish',
+        [
+          '--no-config',
+          '-c',
+          [
+            getFishCodexShellLaunchPreflight(),
+            'functions -q codex; and echo WRAPPER; or echo NO_WRAPPER'
+          ].join('\n')
+        ],
+        {
+          encoding: 'utf-8',
+          env: {
+            ...process.env,
+            PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+            ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+          }
+        }
+      )
+
+      expect(result.status, result.stderr).toBe(0)
+      expect(result.stderr).not.toContain('Missing argument')
+      expect(result.stdout.trim()).toBe('NO_WRAPPER')
+    }
+  )
+
+  it.skipIf(!fishAvailable)('skips the wrapper when codex is a fish alias', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-codex-alias-fish-'))
+    roots.push(root)
+    const bin = join(root, 'bin')
+    mkdirSync(bin)
+    writeExecutable(join(bin, 'orca-test'), '#!/bin/sh\nexit 0\n')
+
+    const result = spawnSync(
+      'fish',
+      [
+        '--no-config',
+        '-c',
+        [`alias codex='echo aliased'`, getFishCodexShellLaunchPreflight(), 'functions codex'].join(
+          '\n'
+        )
+      ],
+      {
+        encoding: 'utf-8',
+        env: {
+          ...process.env,
+          PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+          ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
+        }
+      }
+    )
+
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stderr).not.toContain('Missing argument')
+    // the alias body survives untouched — no wrapper installed
+    expect(result.stdout).not.toContain('prepare-codex')
+    expect(result.stdout).toContain('echo aliased')
+  })
+
+  it('captures type -t into a variable before the fish wrapper guard', () => {
+    expect(getFishCodexShellLaunchPreflight()).toContain(
+      'set -l __orca_codex_type (type -t codex 2>/dev/null)\n' +
+        'if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test "$__orca_codex_type" = file'
+    )
+  })
 })
 
 describe('PowerShell Codex shell launch preflight', () => {

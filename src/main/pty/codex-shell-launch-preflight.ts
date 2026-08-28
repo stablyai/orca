@@ -85,7 +85,8 @@ unset __orca_codex_binary
 }
 
 export function getFishCodexShellLaunchPreflight(): string {
-  return `if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
+  return `set -l __orca_codex_type (type -t codex 2>/dev/null)
+if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test "$__orca_codex_type" = file
   function codex
     command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     command codex $argv
