@@ -5,7 +5,50 @@ import {
 } from '../../rpc/methods/orchestration-worker-route-admission'
 import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
-import { admitOutcomeIntake } from './outcome-identity'
+import { admitOutcomeIntake } from './outcome-intake'
+import type { RuntimeBuildIdentity } from './runtime-build-identity'
+
+const BUILD: RuntimeBuildIdentity = {
+  version: 'test',
+  buildHash: 'a'.repeat(16),
+  artifactManifestVerified: true,
+  provenanceSource: 'embedded',
+  dirtyBuild: false,
+  commitSha: 'a'.repeat(40),
+  id: 'build_test'
+}
+
+const GATE = {
+  gateId: 'unit',
+  program: 'node',
+  args: ['--test'],
+  dependencies: ['git:package.json'],
+  policyVersion: 'unit-v1',
+  commandIdentity: 'node:test:v1',
+  shaBinding: 'exact_head' as const
+}
+
+function outcome(outcomeId: string, runId: string, fingerprint: string) {
+  return {
+    outcomeId,
+    runId,
+    title: outcomeId,
+    fingerprint,
+    objective: `Deliver ${outcomeId}`,
+    target: 'id:repo::/wt',
+    dependencies: [] as string[],
+    semanticClaims: [outcomeId],
+    resourceClaims: ['src/shared.ts'],
+    routingPolicy: {
+      taskClassification: 'bounded_implementation' as const,
+      builderCandidates: [{ agent: 'claude' as const, model: 'opus-5', reasoning: 'high' }],
+      reviewerCandidates: [{ agent: 'claude' as const, model: 'fable', reasoning: 'high' }],
+      reviewCapabilities: ['adversarial_review' as const],
+      allowUnknownQuota: false
+    },
+    requiredGates: [GATE]
+  }
+}
 
 /** FEDERATED_START_BYPASSES_THE_FENCES — `orchestration.workerStart --on <host>`
  *  returned before `assertWorkerStartAdmitted` ever ran, so it checked the route
@@ -35,10 +78,7 @@ describe('FEDERATED_START_BYPASSES_THE_FENCES', () => {
     expect(
       admitOutcomeIntake(store, {
         batchId: 'batch_1',
-        outcomes: [
-          { outcomeId: 'out_1', runId: runs[0], title: 'A', fingerprint: 'f1' },
-          { outcomeId: 'out_2', runId: runs[1], title: 'B', fingerprint: 'f2' }
-        ],
+        outcomes: [outcome('out_1', runs[0], 'f1'), outcome('out_2', runs[1], 'f2')],
         detected: [{ leftOutcomeId: 'out_1', rightOutcomeId: 'out_2', kind: 'resource_collision' }],
         relations: [
           {
@@ -57,59 +97,56 @@ describe('FEDERATED_START_BYPASSES_THE_FENCES', () => {
       taskId: task.id,
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
-      startOptions: { agent: 'codex' }
+      startOptions: { agent: 'codex', resolvedWorktreeId: 'repo::/wt' }
     })
     return { runs }
   }
 
-  it('refuses a federated start on an outcome serialized against a live one', () => {
+  it('refuses a federated start before effects because its immutable remote target is unverified', () => {
     const { runs } = serializedPair()
     expect(() =>
       assertFederatedWorkerStartAdmitted({
         handle: db!,
-        runtimeBuildIdentity: { id: 'build_test' },
+        runtimeBuildIdentity: BUILD,
         runId: runs[1],
         agent: 'codex'
       })
-    ).toThrow(/serialized against/)
+    ).toThrow(/cannot start federated/)
   })
 
-  it('negative control: the serialization fence releases once the blocker settles', () => {
+  it('keeps the federated target boundary fail-closed after serialization releases', () => {
     const { runs } = serializedPair()
     db!.db.prepare(`UPDATE dispatch_contexts SET status = 'completed'`).run()
-    // It now fails on the ROUTE instead, which is the proof that it got past
-    // the serialization fence rather than that the fence was never applied.
     expect(() =>
       assertFederatedWorkerStartAdmitted({
         handle: db!,
-        runtimeBuildIdentity: { id: 'build_test' },
+        runtimeBuildIdentity: BUILD,
         runId: runs[1],
         agent: 'codex'
       })
-    ).toThrow(/is not in the registry/)
+    ).toThrow(/cannot start federated/)
   })
 
-  it('fences the local and federated branches identically', () => {
+  it('fences local serialization and federated target authority before either can launch', () => {
     const { runs } = serializedPair()
     const task = db!.createTask({ spec: 'work', runId: runs[1] })
-    for (const start of [
-      () =>
-        assertWorkerStartAdmitted({
-          handle: db!,
-          runtimeBuildIdentity: { id: 'build_test' },
-          runId: runs[1],
-          taskId: task.id,
-          agent: 'codex'
-        }),
-      () =>
-        assertFederatedWorkerStartAdmitted({
-          handle: db!,
-          runtimeBuildIdentity: { id: 'build_test' },
-          runId: runs[1],
-          agent: 'codex'
-        })
-    ]) {
-      expect(start).toThrow(/serialized against/)
-    }
+    expect(() =>
+      assertWorkerStartAdmitted({
+        handle: db!,
+        runtimeBuildIdentity: BUILD,
+        runId: runs[1],
+        taskId: task.id,
+        agent: 'codex',
+        worktreeId: 'repo::/wt'
+      })
+    ).toThrow(/serialized against/)
+    expect(() =>
+      assertFederatedWorkerStartAdmitted({
+        handle: db!,
+        runtimeBuildIdentity: BUILD,
+        runId: runs[1],
+        agent: 'codex'
+      })
+    ).toThrow(/cannot start federated/)
   })
 })

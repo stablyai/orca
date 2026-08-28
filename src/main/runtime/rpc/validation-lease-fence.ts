@@ -55,6 +55,12 @@ export const LEASE_FENCED_METHODS: ReadonlySet<string> = new Set([
   'files.rename',
   'files.copy',
   'files.delete',
+  // Both can execute an arbitrary startup command in the target worktree.
+  'terminal.create',
+  'terminal.split',
+  // These create or re-engage a model process that can mutate immediately.
+  'terminal.ensureAgentSession',
+  'terminal.createAgentSession',
   'terminal.send',
   'worktree.rm',
   'worktree.forceDeleteBranch',

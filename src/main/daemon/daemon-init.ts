@@ -56,6 +56,7 @@ import {
   hasSeededUnconfirmedClaudePtys
 } from '../claude-accounts/live-pty-gate'
 import { parseDaemonReadyIdentity, readDaemonProcessIncarnation } from './daemon-ready-identity'
+import { getProcessStartedAtMs } from './daemon-process-start-time'
 import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import {
   daemonLogArgs,
@@ -597,7 +598,9 @@ function createOutOfProcessLauncher(
           spawnerExecPath: process.execPath,
           macosLoginSessionWatch,
           logArgs: daemonLogArgs(),
-          ownerPid: process.pid
+          ownerPid: process.pid,
+          ownerStartedAtMs:
+            getProcessStartedAtMs(process.pid) ?? Date.now() - process.uptime() * 1_000
         }),
         {
           // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.

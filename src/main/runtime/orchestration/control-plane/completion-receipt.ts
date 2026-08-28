@@ -83,6 +83,7 @@ export type CompletionRejectionCode =
   | 'unknown_placement'
   | 'evidence_unobservable'
   | 'sha_not_observed'
+  | 'review_sha_mismatch'
   | 'changed_files_mismatch'
   | 'gate_not_executed'
 

@@ -11,7 +11,12 @@ import {
   type CertificationState,
   type RouteEvidence
 } from './route-certification-evidence'
-import { routeKey, type RouteIdentity, type RouteRole } from './route-registry-types'
+import {
+  routeKey,
+  type RouteIdentity,
+  type RouteRole,
+  type SessionMode
+} from './route-registry-types'
 
 /** B10 — one bounded structured answer for "what is the exact state of this
  *  outcome / Run / Task / Dispatch, and what may I legally do next?".
@@ -40,6 +45,7 @@ export type NextLegalAction =
   | 'fix_first'
   | 'recertify_route'
   | 'escalate_protected_blocker'
+  | 'outcome_complete'
 
 export type OutcomeStateReport = {
   identity: {
@@ -69,8 +75,14 @@ export type OutcomeStateReport = {
     expired: boolean
   }
   route: {
+    /** Provider-observed effective identity. Never a copy of the request. */
     identity: RouteIdentity | null
+    /** What Orca asked the provider to launch, kept separate from observation. */
+    requestedIdentity: RouteIdentity | null
+    identityProvenance: 'observed' | 'requested_only' | 'none'
     routeKey: string | null
+    role: RouteRole
+    sessionMode: SessionMode
     certification: CertificationState
     failureReason: string | null
   }
@@ -92,7 +104,9 @@ export type OutcomeStateSources = {
   recentMessages?: readonly MessageRow[]
   routeEvidence?: readonly RouteEvidence[]
   routeIdentity?: RouteIdentity | null
+  requestedRouteIdentity?: RouteIdentity | null
   routeRole?: RouteRole
+  routeSessionMode?: SessionMode
   completionGate?: { required: boolean; satisfied: boolean; blockingGate: string | null }
   nowMs: number
 }
@@ -120,6 +134,9 @@ function resolveNextLegalActions(
   report: Omit<OutcomeStateReport, 'nextLegalActions'>
 ): NextLegalAction[] {
   const actions: NextLegalAction[] = []
+  if (report.lifecycle.outcomeStatus === 'closed') {
+    return ['outcome_complete']
+  }
   if (!report.identity.outcomeId) {
     actions.push('admit_outcome')
     return actions
@@ -145,9 +162,9 @@ function resolveNextLegalActions(
   if (wake === 'worker_done') {
     actions.push(report.completionGate.satisfied ? 'advance_to_review' : 'validate_completion')
   }
-  if (wake === 'review_complete') {
-    actions.push('fix_first', 'advance_to_review')
-  }
+  // review_complete is emitted only after the outcome closes. If it appears
+  // without the authoritative closed row, recovery must not guess a correction
+  // or restart a reviewer; the default wait exposes the inconsistent state.
   if (actions.length === 0) {
     actions.push('wait_for_wake')
   }
@@ -176,7 +193,7 @@ export function describeOutcomeState(
     ? resolveRouteCertification(sources.routeEvidence ?? [], {
         identity: sources.routeIdentity,
         role: sources.routeRole ?? 'builder',
-        sessionMode: 'fresh',
+        sessionMode: sources.routeSessionMode ?? 'fresh',
         nowMs: sources.nowMs
       })
     : undefined
@@ -210,7 +227,15 @@ export function describeOutcomeState(
         },
     route: {
       identity: sources.routeIdentity ?? null,
+      requestedIdentity: sources.requestedRouteIdentity ?? null,
+      identityProvenance: sources.routeIdentity
+        ? 'observed'
+        : sources.requestedRouteIdentity
+          ? 'requested_only'
+          : 'none',
       routeKey: sources.routeIdentity ? routeKey(sources.routeIdentity) : null,
+      role: sources.routeRole ?? 'builder',
+      sessionMode: sources.routeSessionMode ?? 'fresh',
       certification: certification?.state ?? 'UNTESTED',
       failureReason: certification && certification.state !== 'PASS' ? certification.reason : null
     },

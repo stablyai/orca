@@ -4,13 +4,12 @@ import { join } from 'node:path'
 import { agentHookServer } from '../../../agent-hooks/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
-import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
+import { admitOutcome } from '../../orchestration/control-plane/outcome-identity'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
 import { assertWorktreeMutationAllowed } from './orchestration-worker-route-admission'
 import { acquireValidationLease } from '../../orchestration/control-plane/validation-lease'
 import { validationScopeKeyForWorktree } from '../../orchestration/control-plane/validation-scope'
 import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
-import { resolveRuntimeCommitSha } from '../../orchestration/control-plane/runtime-build-identity'
 
 const harness = createOrchestrationRpcHarness()
 const SHA = 'a1b2c3d4e5f6'
@@ -18,30 +17,16 @@ const SHA = 'a1b2c3d4e5f6'
 describe('correction 2: bounded control-plane operations', () => {
   afterEach(() => harness.cleanup())
 
-  it('admits an outcome and stores the caller-declared candidate order verbatim', async () => {
+  it('retires the single-outcome admission path without creating an outcome', async () => {
     const state = harness.setup()
-    const result = (await harness.call(
-      'orchestration.outcomeAdmit',
-      {
-        from: 'term_coord',
-        outcomeId: 'out_1',
-        title: 'Ship it',
-        builderCandidates: 'claude:opus-5:high',
-        reviewerCandidates: 'codex:gpt-5.6-sol:high,grok:grok-4.6',
-        reviewCapabilities: 'adversarial_review'
-      },
-      state.ctx
-    )) as { outcome: { run_id: string }; duplicate: boolean }
-    expect(result.outcome.run_id).toBe(state.activeRunId)
-    const policy = new OutcomePolicyStore(state.db).get('out_1')
-    // Order is preserved exactly; the control plane never reorders candidates.
-    expect(policy.reviewerCandidates).toEqual([
-      { agent: 'codex', model: 'gpt-5.6-sol', reasoning: 'high' },
-      { agent: 'grok', model: 'grok-4.6', reasoning: null }
-    ])
-    expect(policy.builderCandidates).toEqual([
-      { agent: 'claude', model: 'opus-5', reasoning: 'high' }
-    ])
+    await expect(
+      harness.call(
+        'orchestration.outcomeAdmit',
+        { from: 'term_coord', outcomeId: 'out_1', title: 'Ship it' },
+        state.ctx
+      )
+    ).rejects.toMatchObject({ code: 'command_retired' })
+    expect(new ControlPlaneStore(state.db).getOutcomeById('out_1')).toBeUndefined()
   })
 
   it('registers a route with discovered launcher/hook/identity facts and reports drift', async () => {
@@ -67,13 +52,6 @@ describe('correction 2: bounded control-plane operations', () => {
     // the runtime was BUILT from, and a mismatched SHA is refused before the
     // launch is even considered. Claiming the real one gets us to the launch
     // check this test is about.
-    const runtimeSha = resolveRuntimeCommitSha()
-    // Why the branch: a runtime that cannot name its own commit — a dirty dev
-    // checkout, or a packaged build with no repository above it — refuses a
-    // SHA-bound PASS earlier, at `commit_unknown`. Both are the same rule
-    // (evidence must be bound to the commit the code actually is), and pinning
-    // only one of them would make this test pass or fail with the developer's
-    // working tree rather than with the code.
     await expect(
       harness.call(
         'orchestration.certify',
@@ -84,11 +62,11 @@ describe('correction 2: bounded control-plane operations', () => {
           sessionMode: 'fresh',
           kind: 'fresh_launch',
           outcome: 'PASS',
-          sha: runtimeSha ?? SHA
+          sha: SHA
         },
         state.ctx
       )
-    ).rejects.toMatchObject({ code: runtimeSha ? 'unknown_dispatch' : 'commit_unknown' })
+    ).rejects.toMatchObject({ code: 'runtime_build_unverifiable' })
 
     // And a SHA that is not the one this runtime was built from is refused
     // outright, whatever the Dispatch looks like.
@@ -106,9 +84,7 @@ describe('correction 2: bounded control-plane operations', () => {
         },
         state.ctx
       )
-      // Same rule, same two worlds: a runtime that knows its commit calls this a
-      // mismatch; one that cannot know it refuses before comparing.
-    ).rejects.toMatchObject({ code: runtimeSha ? 'sha_mismatch' : 'commit_unknown' })
+    ).rejects.toMatchObject({ code: 'runtime_build_unverifiable' })
 
     const failed = (await harness.call(
       'orchestration.certify',
@@ -143,103 +119,55 @@ describe('correction 2: bounded control-plane operations', () => {
     expect(result.matrix[0].cells.every((cell) => cell.state === 'UNTESTED')).toBe(true)
   })
 
-  it('plans gates, records one receipt, and reuses it only while the inputs hold', async () => {
+  it('plans gates but refuses caller-recorded PASS evidence', async () => {
     const state = harness.setup()
-    await harness.call(
-      'orchestration.outcomeAdmit',
-      { from: 'term_coord', outcomeId: 'out_1', title: 'Ship it' },
-      state.ctx
-    )
-    const first = (await harness.call(
+    const plan = (await harness.call(
       'orchestration.gatePlan',
       {
         from: 'term_coord',
         sha: SHA,
         gates: 'unit=package.json,lint=package.json',
         files: 'package.json',
-        policyVersion: 'gates-v1',
-        record: 'unit',
-        result: 'PASS'
+        policyVersion: 'gates-v1'
       },
       state.ctx
     )) as { reuse: { gateId: string }[]; rerun: { gateId: string }[] }
-    expect(first.reuse.map((entry) => entry.gateId)).toEqual(['unit'])
-    expect(first.rerun.map((entry) => entry.gateId)).toEqual(['lint'])
-
-    // Moving the commit alone does not invalidate a content gate: it proves
-    // something about its inputs, and those are byte-identical here.
-    const moved = (await harness.call(
-      'orchestration.gatePlan',
-      {
-        from: 'term_coord',
-        sha: 'ffffff1',
-        gates: 'unit=package.json',
-        files: 'package.json',
-        policyVersion: 'gates-v1'
-      },
-      state.ctx
-    )) as { reuse: { gateId: string }[]; rerun: { gateId: string; reason: string }[] }
-    expect(moved.reuse.map((entry) => entry.gateId)).toEqual(['unit'])
-
-    // Changing a gate CONFIGURATION input is a different gate, so it reruns.
-    const rebadged = (await harness.call(
-      'orchestration.gatePlan',
-      {
-        from: 'term_coord',
-        sha: SHA,
-        gates: 'unit=package.json',
-        files: 'package.json',
-        policyVersion: 'gates-v2'
-      },
-      state.ctx
-    )) as { rerun: { gateId: string; reason: string }[] }
-    expect(rebadged.rerun[0].gateId).toBe('unit')
-
-    // A review gate is bound to its exact head and dies with the commit.
-    const review = (await harness.call(
-      'orchestration.gatePlan',
-      {
-        from: 'term_coord',
-        sha: SHA,
-        gates: 'review-exact=package.json',
-        files: 'package.json',
-        policyVersion: 'gates-v1',
-        record: 'review-exact',
-        result: 'PASS'
-      },
-      state.ctx
-    )) as { reuse: { gateId: string }[] }
-    expect(review.reuse.map((entry) => entry.gateId)).toEqual(['review-exact'])
-    const reviewMoved = (await harness.call(
-      'orchestration.gatePlan',
-      {
-        from: 'term_coord',
-        sha: 'ffffff1',
-        gates: 'review-exact=package.json',
-        files: 'package.json',
-        policyVersion: 'gates-v1'
-      },
-      state.ctx
-    )) as { rerun: { gateId: string; reason: string }[] }
-    expect(reviewMoved.rerun[0].reason).toContain(SHA)
+    expect(plan.reuse).toEqual([])
+    expect(plan.rerun.map((entry) => entry.gateId)).toEqual(['unit', 'lint'])
+    await expect(
+      harness.call(
+        'orchestration.gatePlan',
+        {
+          from: 'term_coord',
+          sha: SHA,
+          gates: 'unit=package.json',
+          files: 'package.json',
+          policyVersion: 'gates-v1',
+          record: 'unit',
+          result: 'PASS'
+        },
+        state.ctx
+      )
+    ).rejects.toMatchObject({ code: 'command_retired' })
   })
 
   it('reruns the full gate set for a high-risk outcome even when nothing changed', async () => {
     const state = harness.setup()
-    await harness.call(
-      'orchestration.outcomeAdmit',
-      { from: 'term_coord', outcomeId: 'out_1', title: 'Risky', gatePolicy: 'high_risk' },
-      state.ctx
-    )
+    const admitted = admitOutcome(new ControlPlaneStore(state.db), {
+      outcomeId: 'out_1',
+      runId: state.activeRunId!,
+      title: 'Risky',
+      fingerprint: 'risk-fingerprint',
+      gatePolicy: 'high_risk'
+    })
+    expect(admitted.ok).toBe(true)
     const plan = (await harness.call(
       'orchestration.gatePlan',
       {
         from: 'term_coord',
         sha: SHA,
         gates: 'unit',
-        policyVersion: 'gates-v1',
-        record: 'unit',
-        result: 'PASS'
+        policyVersion: 'gates-v1'
       },
       state.ctx
     )) as { riskPolicy: string; reuse: unknown[]; rerun: { reason: string }[] }
@@ -260,11 +188,13 @@ describe('correction 2: bounded control-plane operations', () => {
     // lease, so it must name a Dispatch that actually exists on this Run.
     // A lease is part of the outcome-admitted validation contract, so the Run
     // must have one before it can be protected.
-    await harness.call(
-      'orchestration.outcomeAdmit',
-      { from: 'term_coord', outcomeId: 'out_lease', title: 'Validate' },
-      state.ctx
-    )
+    const admitted = admitOutcome(new ControlPlaneStore(state.db), {
+      outcomeId: 'out_lease',
+      runId: state.activeRunId!,
+      title: 'Validate',
+      fingerprint: 'lease-fingerprint'
+    })
+    expect(admitted.ok).toBe(true)
     const task = state.db.createTask({ spec: 'validate' })
     const owner = state.db.createStartingWorkerDispatch({
       taskId: task.id,
@@ -287,14 +217,36 @@ describe('correction 2: bounded control-plane operations', () => {
       terminalOwnership: 'external'
     })
     state.db.markWorkerDispatchReady(owner, [])
+    const ownerCtx = {
+      ...state.ctx,
+      orchestrationCompatibilityCallerAuthority: {
+        hostScope: { kind: 'local', hostId: 'local' } as const,
+        terminalHandle: 'term_validator',
+        paneKey: 'tab-v:leaf-v',
+        processIncarnation: 'pty:term_validator',
+        launchTokenHash: 'hash'
+      }
+    }
     const acquired = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'acquire', dispatch: owner, task: task.id },
-      state.ctx
+      {
+        from: 'term_validator',
+        run: state.activeRunId,
+        action: 'acquire',
+        dispatch: owner,
+        task: task.id
+      },
+      ownerCtx
     )) as { scopeKey: string; lease: { leaseId: string } }
     const blocked = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'check', dispatch: owner, task: task.id },
+      {
+        from: 'term_coord',
+        run: state.activeRunId,
+        action: 'check',
+        dispatch: owner,
+        task: task.id
+      },
       state.ctx
     )) as { guard: { allowed: boolean } }
     expect(blocked.guard.allowed).toBe(false)
@@ -303,7 +255,13 @@ describe('correction 2: bounded control-plane operations', () => {
     await expect(
       harness.call(
         'orchestration.validationLease',
-        { from: 'term_coord', action: 'release', leaseId: acquired.lease.leaseId, task: task.id },
+        {
+          from: 'term_validator',
+          run: state.activeRunId,
+          action: 'release',
+          leaseId: acquired.lease.leaseId,
+          task: task.id
+        },
         state.ctx
       )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
@@ -311,13 +269,14 @@ describe('correction 2: bounded control-plane operations', () => {
       .call(
         'orchestration.validationLease',
         {
-          from: 'term_coord',
+          from: 'term_validator',
+          run: state.activeRunId,
           action: 'release',
           leaseId: acquired.lease.leaseId,
           dispatch: 'ctx_impostor',
           task: task.id
         },
-        state.ctx
+        ownerCtx
       )
       .catch((error: unknown) => error)) as { released?: boolean }
     // An owner that is not a Dispatch on this Run cannot even be named.
@@ -325,19 +284,26 @@ describe('correction 2: bounded control-plane operations', () => {
     const released = (await harness.call(
       'orchestration.validationLease',
       {
-        from: 'term_coord',
+        from: 'term_validator',
+        run: state.activeRunId,
         action: 'release',
         leaseId: acquired.lease.leaseId,
         dispatch: owner,
         task: task.id
       },
-      state.ctx
+      ownerCtx
     )) as { released: boolean }
     expect(released.released).toBe(true)
     await agentHookServer.stop?.()
     const free = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'check', dispatch: owner, task: task.id },
+      {
+        from: 'term_coord',
+        run: state.activeRunId,
+        action: 'check',
+        dispatch: owner,
+        task: task.id
+      },
       state.ctx
     )) as { guard: { allowed: boolean } }
     expect(free.guard.allowed).toBe(true)

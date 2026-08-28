@@ -8,7 +8,7 @@ import { admitOutcome } from './outcome-identity'
 import { OutcomePolicyStore } from './outcome-policy'
 import { ROUTE_EVIDENCE_KINDS } from './route-certification-evidence'
 import { RouteRegistryStore } from './route-registry-store'
-import { resolveCandidateCommitSha } from './runtime-build-identity'
+import { resolveCandidateCommitSha, type RuntimeBuildIdentity } from './runtime-build-identity'
 import type { RouteIdentity } from './route-registry-types'
 
 /** SHA_RUNTIME_BINDING — worker-start admitted a route on certification
@@ -24,8 +24,8 @@ describe('SHA_RUNTIME_BINDING', () => {
 
   const IDENTITY: RouteIdentity = { agent: 'codex', model: 'gpt-5.5', reasoning: 'xhigh' }
   const NOW = Date.parse('2026-08-27T18:00:00Z')
-  const SHA_A = 'aaaaaaaaaaaa'
-  const SHA_B = 'bbbbbbbbbbbb'
+  const SHA_A = 'a'.repeat(40)
+  const SHA_B = 'b'.repeat(40)
   const BUILD_A = '1.0+aaaa'
   const BUILD_B = '1.0+bbbb'
 
@@ -85,6 +85,21 @@ describe('SHA_RUNTIME_BINDING', () => {
     return { runId: task.run_id }
   }
 
+  function buildIdentity(id: string, commitSha: string): RuntimeBuildIdentity {
+    return {
+      version: '1.0',
+      buildHash: id
+        .replace(/[^a-f0-9]/g, '')
+        .padEnd(16, '0')
+        .slice(0, 16),
+      artifactManifestVerified: true,
+      provenanceSource: 'embedded',
+      dirtyBuild: false,
+      commitSha,
+      id
+    }
+  }
+
   function start(runId: string, build: string) {
     assertWorkerStartRouteAdmitted({
       handle: db!,
@@ -96,7 +111,7 @@ describe('SHA_RUNTIME_BINDING', () => {
       sessionMode: 'fresh',
       taskCapabilities: ['bounded_implementation'],
       nowMs: NOW,
-      runtimeBuildIdentity: { id: build }
+      runtimeBuildIdentity: buildIdentity(build, build === BUILD_A ? SHA_A : SHA_B)
     })
   }
 
@@ -136,7 +151,7 @@ describe('SHA_RUNTIME_BINDING', () => {
         sessionMode: 'fresh',
         taskCapabilities: ['bounded_implementation'],
         nowMs: NOW,
-        runtimeBuildIdentity: { id: BUILD_A, commitSha: SHA_B }
+        runtimeBuildIdentity: buildIdentity(BUILD_A, SHA_B)
       })
     ).toThrow(/route_stale/)
   })

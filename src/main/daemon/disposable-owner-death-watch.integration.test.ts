@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { DisposableOwnerDeathWatch } from './disposable-owner-death-watch'
+import { getProcessStartedAtMs } from './daemon-process-start-time'
 import { proveDaemonExited, stateDeletionIsSafe } from '../startup/disposable-profile-teardown'
 
 /** The incident with real processes and the real watch class.
@@ -29,6 +30,7 @@ describe('a disposable daemon and its descendants exit before state deletion', (
     let retiredWith: number | null = null
     const watch = new DisposableOwnerDeathWatch({
       ownerPid: owner.pid as number,
+      ownerStartedAtMs: getProcessStartedAtMs(owner.pid as number) as number,
       intervalMs: 25,
       onRetire: ({ ownerPid }) => {
         retiredWith = ownerPid

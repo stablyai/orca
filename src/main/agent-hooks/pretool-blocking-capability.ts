@@ -1,4 +1,6 @@
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
+import { nativePretoolEnforcementForAgent } from '../../shared/native-route-contract'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 
 /** Correction — which supervised routes can be STOPPED before a tool runs.
  *
@@ -75,10 +77,13 @@ export function pretoolBlockingCapability(
   source: AgentHookSource,
   platform: NodeJS.Platform = process.platform
 ): PretoolBlockingCapability {
-  if (platform === 'win32') {
+  if (source === 'claude' && platform === 'win32') {
     // No Windows adapter is being built here. Until that script reads the reply,
     // the honest answer is that this route cannot be stopped before it mutates.
     return { kind: 'unsupported', reason: WINDOWS_FIRE_AND_FORGET }
+  }
+  if (!isTuiAgent(source) || nativePretoolEnforcementForAgent(source, platform) !== 'blocking') {
+    return { kind: 'unsupported', reason: UNPROVEN }
   }
   return CAPABILITY[source] ?? { kind: 'unsupported', reason: UNPROVEN }
 }

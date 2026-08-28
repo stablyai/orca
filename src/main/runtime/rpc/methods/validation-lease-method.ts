@@ -30,7 +30,10 @@ import {
 export const VALIDATION_LEASE_METHOD: RpcMethod = defineMethod({
   name: 'orchestration.validationLease',
   params: ValidationLeaseParams,
-  handler: async (params, { runtime }) => {
+  handler: async (
+    params,
+    { runtime, orchestrationCompatibilityEvidence, orchestrationCompatibilityCallerAuthority }
+  ) => {
     const db = runtime.getOrchestrationDb()
     const runId = params.run ?? requireRunId(runtime, params.from)
     const store = new ControlPlaneStore(db)
@@ -64,9 +67,51 @@ export const VALIDATION_LEASE_METHOD: RpcMethod = defineMethod({
       taskId: requireTask(params.task, params.action)
     })
 
+    const caller =
+      orchestrationCompatibilityCallerAuthority ??
+      runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence)
+    if (
+      !params.from ||
+      !caller ||
+      caller.terminalHandle !== params.from ||
+      caller.terminalHandle !== authority.ownerHandle ||
+      caller.paneKey !== authority.ownerPaneKey ||
+      caller.processIncarnation !== authority.processIncarnation ||
+      caller.launchTokenHash !== authority.launchTokenHash
+    ) {
+      throw new OrchestrationError(
+        'validation_lease_owner_mismatch',
+        `Validation lease ${params.action} must come from the exact live process assigned to Dispatch ${params.dispatch}.`
+      )
+    }
+
+    const runtimeId = runtime.getStatus().runtimeId
+    const buildId = runtime.getBuildIdentity().id
+
     if (params.action === 'release') {
       if (!params.leaseId) {
         throw new OrchestrationError('invalid_argument', 'release requires --lease-id.')
+      }
+      const recorded = store.getValidationLeaseAuthority(authority.scopeKey, params.leaseId)
+      const currentLease = store.getValidationLease(authority.scopeKey)
+      if (
+        !recorded ||
+        recorded.run_id !== authority.runId ||
+        recorded.outcome_id !== authority.outcomeId ||
+        recorded.task_id !== authority.taskId ||
+        recorded.dispatch_id !== authority.dispatchId ||
+        recorded.worktree_id !== authority.worktreeId ||
+        recorded.owner_handle !== caller.terminalHandle ||
+        recorded.owner_pane_key !== caller.paneKey ||
+        recorded.process_incarnation !== caller.processIncarnation ||
+        recorded.launch_token_hash !== caller.launchTokenHash ||
+        recorded.runtime_id !== runtimeId ||
+        recorded.build_id !== buildId
+      ) {
+        throw new OrchestrationError(
+          'validation_lease_owner_mismatch',
+          `Validation lease ${params.leaseId} is not bound to this exact Dispatch process and runtime build.`
+        )
       }
       // Why the owner too: the lease id appears in receipts and logs, so id
       // alone would let anyone who read one release someone else's lease.
@@ -77,18 +122,42 @@ export const VALIDATION_LEASE_METHOD: RpcMethod = defineMethod({
         owner: params.dispatch
       })
       if (released.released) {
-        clearSentinelFor(authority.worktreeId)
+        clearSentinelFor(authority.worktreeId, {
+          leaseId: params.leaseId,
+          acquiredAt: currentLease?.acquired_at ?? ''
+        })
       }
       return { scopeKey: authority.scopeKey, authority, ...released }
     }
 
     const idempotencyKey =
       params.idempotencyKey ?? `${params.dispatch}:${params.leaseId ?? 'default'}`
+    const leaseId = params.leaseId ?? `lease_${params.dispatch}`
+    const existingAuthority = store.getValidationLeaseAuthority(authority.scopeKey, leaseId)
+    if (
+      existingAuthority &&
+      (existingAuthority.run_id !== authority.runId ||
+        existingAuthority.outcome_id !== authority.outcomeId ||
+        existingAuthority.task_id !== authority.taskId ||
+        existingAuthority.dispatch_id !== authority.dispatchId ||
+        existingAuthority.worktree_id !== authority.worktreeId ||
+        existingAuthority.owner_handle !== caller.terminalHandle ||
+        existingAuthority.owner_pane_key !== caller.paneKey ||
+        existingAuthority.process_incarnation !== caller.processIncarnation ||
+        existingAuthority.launch_token_hash !== caller.launchTokenHash ||
+        existingAuthority.runtime_id !== runtimeId ||
+        existingAuthority.build_id !== buildId)
+    ) {
+      throw new OrchestrationError(
+        'validation_lease_owner_mismatch',
+        `Validation lease ${leaseId} was created by a different process or runtime build.`
+      )
+    }
     let acquisition
     try {
       acquisition = acquireValidationLease(store, {
         scopeKey: authority.scopeKey,
-        leaseId: params.leaseId ?? `lease_${params.dispatch}`,
+        leaseId,
         owner: params.dispatch,
         idempotencyKey,
         nowMs,
@@ -98,8 +167,32 @@ export const VALIDATION_LEASE_METHOD: RpcMethod = defineMethod({
         // read as deny. Established INSIDE the transaction so the row and the
         // marker become true together — a lease told "acquired" whose offline
         // half does not exist is worse than a refused one.
-        establishFence: (lease) =>
-          writeSentinelFor(authority.worktreeId, lease.leaseId, Date.parse(lease.expiresAt))
+        establishFence: (lease) => {
+          if (!existingAuthority) {
+            store.insertValidationLeaseAuthority({
+              scope_key: authority.scopeKey,
+              lease_id: lease.leaseId,
+              run_id: authority.runId,
+              outcome_id: authority.outcomeId,
+              task_id: authority.taskId,
+              dispatch_id: authority.dispatchId,
+              worktree_id: authority.worktreeId,
+              owner_handle: caller.terminalHandle,
+              owner_pane_key: caller.paneKey,
+              process_incarnation: caller.processIncarnation,
+              launch_token_hash: caller.launchTokenHash,
+              runtime_id: runtimeId,
+              build_id: buildId,
+              expires_at: lease.expiresAt
+            })
+          }
+          writeSentinelFor(
+            authority.worktreeId,
+            lease.leaseId,
+            lease.acquiredAt,
+            Date.parse(lease.expiresAt)
+          )
+        }
       })
     } catch (error) {
       // The row was rolled back with the marker, so nothing is half-armed. Report

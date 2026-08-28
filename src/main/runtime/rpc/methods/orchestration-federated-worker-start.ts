@@ -55,6 +55,7 @@ export async function startFederatedWorker(args: {
     model: params.model,
     effort: params.effort,
     terminalHandle: params.terminal,
+    worktreeSelector: params.worktree,
     certificationIntent: params.certificationIntent
   })
   if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {

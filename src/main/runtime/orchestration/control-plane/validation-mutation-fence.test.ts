@@ -4,6 +4,17 @@ import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
 import { acquireValidationLease, releaseValidationLease } from './validation-lease'
 import { validationScopeKeyForWorktree } from './validation-scope'
+import type { RuntimeBuildIdentity } from './runtime-build-identity'
+
+const BUILD: RuntimeBuildIdentity = {
+  version: 'test',
+  buildHash: 'a'.repeat(16),
+  artifactManifestVerified: true,
+  provenanceSource: 'embedded',
+  dirtyBuild: false,
+  commitSha: 'a'.repeat(40),
+  id: 'build_test'
+}
 
 /** VALIDATION_MUTATION_FENCE — the fence was consulted only when a start named
  *  an explicit worktree. A retained re-engagement names a TERMINAL, so driving
@@ -64,7 +75,7 @@ describe('VALIDATION_MUTATION_FENCE', () => {
     // The re-engagement names only the terminal — no worktree in the request.
     expect(() =>
       assertWorkerStartAdmitted({
-        runtimeBuildIdentity: { id: 'build_test' },
+        runtimeBuildIdentity: BUILD,
         handle: db!,
         runId,
         taskId,
@@ -80,7 +91,7 @@ describe('VALIDATION_MUTATION_FENCE', () => {
     let thrown: unknown
     try {
       assertWorkerStartAdmitted({
-        runtimeBuildIdentity: { id: 'build_test' },
+        runtimeBuildIdentity: BUILD,
         handle: db!,
         runId,
         taskId,
@@ -117,7 +128,7 @@ describe('VALIDATION_MUTATION_FENCE', () => {
     ).toBe(true)
     expect(() =>
       assertWorkerStartAdmitted({
-        runtimeBuildIdentity: { id: 'build_test' },
+        runtimeBuildIdentity: BUILD,
         handle: db!,
         runId,
         taskId,

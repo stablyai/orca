@@ -1,0 +1,84 @@
+{
+  "schemaVersion": 1,
+  "gates": [
+    {
+      "gateId": "package-b-control-plane",
+      "program": "pnpm",
+      "args": [
+        "test",
+        "src/main/runtime/orchestration/control-plane",
+        "src/main/runtime/rpc/methods",
+        "src/main/agent-hooks"
+      ],
+      "dependencies": [
+        "git:src/main/runtime/orchestration",
+        "git:src/main/runtime/rpc",
+        "git:src/main/agent-hooks",
+        "git:src/shared/orchestration-rpc-contract.ts",
+        "git:config/scripts",
+        "package.json",
+        "pnpm-lock.yaml",
+        "config/vitest.config.ts",
+        "config/tsconfig.node.json",
+        "sha256:d5dd537de6be0066c6b29acc4ebc235815391744ac0d5a4fa3260ec2075e0994:node_modules/.bin/vitest",
+        "sha256:39db22f579acf5639bbb17a261408debbde03f4692c0c439e77e7f13aeba74d6:node_modules/vitest/vitest.mjs"
+      ],
+      "policyVersion": "package-b-v1",
+      "commandIdentity": "pnpm:package-b-control-plane:v1",
+      "shaBinding": "exact_head"
+    },
+    {
+      "gateId": "node-typecheck",
+      "program": "pnpm",
+      "args": ["tc:node"],
+      "dependencies": [
+        "git:src",
+        "git:config",
+        "package.json",
+        "pnpm-lock.yaml",
+        "config/tsconfig.node.json",
+        "sha256:00271a316b9c3a6126893fae391d82634d08ef3eb985e0e3c220220399534fce:node_modules/.bin/tsc",
+        "sha256:2219f428a7e55aaf1f7ad85b9b0f0cf5078aeb76ccc9a7c6036c92d48f492ffd:node_modules/typescript/bin/tsc"
+      ],
+      "policyVersion": "node-typecheck-v1",
+      "commandIdentity": "pnpm:tc-node:v1",
+      "shaBinding": "content"
+    },
+    {
+      "gateId": "package-b-full-suite",
+      "program": "pnpm",
+      "args": ["test"],
+      "dependencies": [
+        "git:src",
+        "git:config",
+        "git:tests",
+        "package.json",
+        "pnpm-lock.yaml",
+        "config/vitest.config.ts",
+        "sha256:d5dd537de6be0066c6b29acc4ebc235815391744ac0d5a4fa3260ec2075e0994:node_modules/.bin/vitest",
+        "sha256:39db22f579acf5639bbb17a261408debbde03f4692c0c439e77e7f13aeba74d6:node_modules/vitest/vitest.mjs"
+      ],
+      "policyVersion": "package-b-full-suite-v1",
+      "commandIdentity": "pnpm:test:full:v1",
+      "shaBinding": "exact_head"
+    },
+    {
+      "gateId": "package-b-electron-build",
+      "program": "pnpm",
+      "args": ["build:electron-vite"],
+      "dependencies": [
+        "git:src",
+        "git:config",
+        "git:resources",
+        "package.json",
+        "pnpm-lock.yaml",
+        "electron.vite.config.ts",
+        "sha256:14032a345138c49cd795421da090af29b5c14435d82908466e0f771585376c6d:node_modules/.bin/electron-vite",
+        "sha256:ad30ff88bd2f1e47bd97ce2de24d55897b5177ac791bb63e0ebba885cc72c444:node_modules/electron-vite/bin/electron-vite.js"
+      ],
+      "policyVersion": "package-b-electron-build-v1",
+      "commandIdentity": "pnpm:build-electron-vite:v1",
+      "shaBinding": "exact_head"
+    }
+  ]
+}

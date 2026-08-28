@@ -1,9 +1,14 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { buildProvenanceLiteral, readBuildProvenance } from './build-provenance.mjs'
+import {
+  ARTIFACT_AGGREGATE_PLACEHOLDER,
+  buildProvenanceLiteral,
+  readBuildProvenance,
+  writeBuildArtifactManifest
+} from './build-provenance.mjs'
 
 /** BUNDLER_SCRATCH_FILE_MAKES_EVERY_BUILD_DIRTY — vite writes its own
  *  `electron.vite.config.<timestamp>.mjs` into the repo root BEFORE evaluating
@@ -56,23 +61,57 @@ describe('BUNDLER_SCRATCH_FILE_MAKES_EVERY_BUILD_DIRTY', () => {
     const path = repo()
     writeFileSync(join(path, 'package.json'), JSON.stringify({ version: '9.9.9', changed: true }))
     process.env.ORCA_BUILD_PROVENANCE_JSON = JSON.stringify(readBuildProvenance(path))
-    expect(JSON.parse(JSON.parse(buildProvenanceLiteral(path)))).toMatchObject({ dirty: true })
+    expect(() => buildProvenanceLiteral(path)).toThrow(/clean exact-SHA/)
   })
 
-  it('measures the tree itself when handed something unusable', () => {
+  it('fails closed when a caller hands the build an unusable provenance record', () => {
     const path = repo()
     process.env.ORCA_BUILD_PROVENANCE_JSON = 'not json'
-    expect(JSON.parse(JSON.parse(buildProvenanceLiteral(path)))).toMatchObject({ dirty: false })
+    expect(() => buildProvenanceLiteral(path)).toThrow(/valid JSON/)
     process.env.ORCA_BUILD_PROVENANCE_JSON = JSON.stringify({ schemaVersion: 99 })
-    expect(JSON.parse(JSON.parse(buildProvenanceLiteral(path)))).toMatchObject({
-      schemaVersion: 1,
-      dirty: false
+    expect(() => buildProvenanceLiteral(path)).toThrow(/clean exact-SHA/)
+  })
+
+  it('rejects a forged clean SHA even when the record shape is valid', () => {
+    const path = repo()
+    const forged = readBuildProvenance(path)
+    process.env.ORCA_BUILD_PROVENANCE_JSON = JSON.stringify({
+      ...forged,
+      sourceSha: 'f'.repeat(40)
     })
+    expect(() => buildProvenanceLiteral(path)).toThrow(/does not match/)
   })
 
   it('names no commit when there is no repository above the build', () => {
     const bare = mkdtempSync(join(tmpdir(), 'orca-norepo-'))
     trees.push(bare)
     expect(readBuildProvenance(bare)).toMatchObject({ sourceSha: null, dirty: null })
+  })
+
+  it('rechecks source after compilation and seals the full artifact authority', () => {
+    const path = repo()
+    const provenance = JSON.stringify(readBuildProvenance(path))
+    mkdirSync(join(path, 'out/main'), { recursive: true })
+    writeFileSync(
+      join(path, 'out/main/index.js'),
+      `globalThis.provenance=${JSON.stringify(provenance)};${ARTIFACT_AGGREGATE_PLACEHOLDER}`
+    )
+    writeFileSync(join(path, 'out/main/chunk.js'), 'export const value = 1\n')
+    const manifest = writeBuildArtifactManifest(path, provenance)
+    expect(manifest.schemaVersion).toBe(2)
+    expect(manifest.aggregateHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(readFileSync(join(path, 'out/main/index.js'), 'utf8')).toContain(manifest.aggregateHash)
+    expect(readFileSync(join(path, 'out/main/index.js'), 'utf8')).not.toContain(
+      ARTIFACT_AGGREGATE_PLACEHOLDER
+    )
+  })
+
+  it('refuses to seal when tracked source moved during compilation', () => {
+    const path = repo()
+    const provenance = JSON.stringify(readBuildProvenance(path))
+    mkdirSync(join(path, 'out/main'), { recursive: true })
+    writeFileSync(join(path, 'out/main/index.js'), ARTIFACT_AGGREGATE_PLACEHOLDER)
+    writeFileSync(join(path, 'package.json'), JSON.stringify({ version: '9.9.9', changed: true }))
+    expect(() => writeBuildArtifactManifest(path, provenance)).toThrow(/does not match/)
   })
 })

@@ -69,6 +69,11 @@ export type ProcessResult = {
   stderr: string
   /** True when the process was killed by `timeoutMs` rather than exiting. */
   timedOut: boolean
+  /** Only meaningful under a termination barrier: true when the runtime PROVED
+   *  the whole process tree reached terminal exit. A gate cannot record a PASS
+   *  without it, because a surviving descendant can still touch the worktree
+   *  after the root exits zero. */
+  terminationVerified?: boolean
 }
 
 export const DEFAULT_PROCESS_TIMEOUT_MS = 30_000
@@ -231,7 +236,14 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
 
     const resolveFromClose = (code: number | null, signal: NodeJS.Signals | null): void =>
       settle(() =>
-        resolve({ code, signal, stdout: stdout.text(), stderr: stderr.text(), timedOut })
+        resolve({
+          code,
+          signal,
+          stdout: stdout.text(),
+          stderr: stderr.text(),
+          timedOut,
+          ...(spec.terminationBarrier ? { terminationVerified: barrierTerminationVerified } : {})
+        })
       )
 
     const settleBarrierOutcome = (): void => {

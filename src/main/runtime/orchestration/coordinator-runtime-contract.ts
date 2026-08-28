@@ -36,4 +36,8 @@ export type CoordinatorRuntime = {
   } | null
   // Why: Windows can host native and WSL workers at once, so the worker pane (not the coordinator) picks the packaged CLI name.
   getTerminalOrchestrationCliCommand?(handle: string): 'orca' | 'orca-ide'
+  /** Immutable, process-pinned identity of the runtime executing lifecycle writes. */
+  getBuildIdentity?(): { id: string; commitSha: string | null }
+  /** Wake a durable waiter after an accepted completion or typed blocker. */
+  notifyMessageArrived?(handle: string, messageType: string): void
 }

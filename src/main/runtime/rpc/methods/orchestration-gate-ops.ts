@@ -6,22 +6,27 @@ import {
 } from '../../orchestration/control-plane/gate-dependency-fingerprint'
 import {
   planGateSet,
-  recordGateReceipt,
   type GateInputs
 } from '../../orchestration/control-plane/gate-receipt-validity'
-import {
-  admitOutcome,
-  outcomeFingerprint,
-  resolveOutcomeBinding
-} from '../../orchestration/control-plane/outcome-identity'
-import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
-import type { RouteIdentity } from '../../orchestration/control-plane/route-registry-types'
+import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
 import { VALIDATION_LEASE_METHOD } from './validation-lease-method'
 import { requireRunId } from './validation-lease-sentinel'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
-import { GateRunParams, runGateForDispatch } from './orchestration-gate-run'
+import {
+  DEFAULT_GATE_TIMEOUT_MS,
+  GATE_LEASE_MARGIN_MS,
+  GateRunParams,
+  runGateForDispatch
+} from './orchestration-gate-run'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { randomUUID } from 'node:crypto'
+import { requireLeaseOwnerAuthority } from '../../orchestration/control-plane/lease-owner-authority'
+import {
+  acquireValidationLease,
+  releaseValidationLease
+} from '../../orchestration/control-plane/validation-lease'
+import { clearSentinelFor, writeSentinelFor } from './validation-lease-sentinel'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean, OptionalString, requiredString } from '../schemas'
 
@@ -30,19 +35,6 @@ function splitCsv(value: string | undefined): string[] {
     .split(',')
     .map((item) => item.trim())
     .filter(Boolean)
-}
-
-function parseIdentityList(raw: string | undefined): RouteIdentity[] {
-  // Format: `agent[:model[:reasoning]]`, comma separated. Deliberately not JSON:
-  // PowerShell strips JSON quotes, and the order here is the whole contract.
-  return splitCsv(raw).map((entry) => {
-    const [agent, model, reasoning] = entry.split(':')
-    return {
-      agent: agent as RouteIdentity['agent'],
-      model: model && model.length > 0 ? model : null,
-      reasoning: reasoning && reasoning.length > 0 ? reasoning : null
-    }
-  })
 }
 
 /** Gates whose receipt proves something about the commit itself, so it must
@@ -104,48 +96,148 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.outcomeAdmit',
     params: OutcomeAdmitParams,
-    handler: (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const runId = params.run ?? requireRunId(runtime, params.from)
-      const store = new ControlPlaneStore(db)
-      const admission = admitOutcome(store, {
-        outcomeId: params.outcomeId,
-        runId,
-        title: params.title,
-        fingerprint: outcomeFingerprint([params.outcomeId, params.title]),
-        gatePolicy: params.gatePolicy
-      })
-      if (!admission.ok) {
-        throw new OrchestrationError(admission.error.code, admission.error.reason)
-      }
-      // Why policy is stored, not inferred: the candidate ORDER comes from the
-      // classifying layer. Orca validates and launches that explicit choice.
-      new OutcomePolicyStore(db).put({
-        outcomeId: params.outcomeId,
-        taskClassification: params.taskClassification ?? 'bounded_implementation',
-        builderCandidates: parseIdentityList(params.builderCandidates),
-        reviewerCandidates: parseIdentityList(params.reviewerCandidates),
-        reviewCapabilities: splitCsv(params.reviewCapabilities),
-        allowUnknownQuota: params.allowUnknownQuota === true
-      })
-      return { outcome: admission.outcome, duplicate: admission.duplicate }
+    handler: () => {
+      // Historical outcome rows remain readable, but a single-outcome write
+      // bypasses the atomic 2-5 manifest, target, relation and required-gate
+      // contract.  Keep the method registered only to return a typed migration
+      // error to older clients; it must never create a new row.
+      throw new OrchestrationError(
+        'command_retired',
+        'orchestration.outcomeAdmit is read-compatibility only; use orchestration.outcomeIntake with 2-5 complete manifests.'
+      )
     }
   }),
 
   defineMethod({
     name: 'orchestration.gateRun',
     params: GateRunParams,
-    handler: (params, { runtime }) =>
-      runGateForDispatch({
-        db: runtime.getOrchestrationDb(),
-        runId: params.run ?? requireRunId(runtime, params.from),
+    handler: async (params, { runtime, orchestrationCompatibilityEvidence }) => {
+      const caller = runtime.verifyOrchestrationCompatibilityCaller(
+        orchestrationCompatibilityEvidence
+      )
+      const db = runtime.getOrchestrationDb()
+      const dispatch = db.getDispatchContextById(params.dispatch)
+      if (
+        !caller ||
+        caller.terminalHandle !== params.from ||
+        !dispatch ||
+        dispatch.assignee_handle !== caller.terminalHandle ||
+        dispatch.assignee_pane_key !== caller.paneKey ||
+        dispatch.process_incarnation !== caller.processIncarnation ||
+        dispatch.launch_token_hash !== caller.launchTokenHash
+      ) {
+        throw new OrchestrationError(
+          'sender_not_assignee',
+          `Required gate ${params.gate} must be requested by the exact live process assigned to Dispatch ${params.dispatch}.`
+        )
+      }
+      const runId = params.run ?? requireRunId(runtime, params.from)
+      const authority = requireLeaseOwnerAuthority(db, {
         dispatchId: params.dispatch,
-        gateId: params.gate,
-        program: params.program,
-        args: params.args,
-        buildId: runtime.getBuildIdentity().id,
-        ...(params.timeoutMs === undefined ? {} : { timeoutMs: params.timeoutMs })
+        runId,
+        taskId: dispatch.task_id
       })
+      const store = new ControlPlaneStore(db)
+      const runtimeId = runtime.getStatus().runtimeId
+      const buildIdentity = runtime.getBuildIdentity()
+      const leaseId = `lease_gate_${randomUUID()}`
+      const acquisition = acquireValidationLease(store, {
+        scopeKey: authority.scopeKey,
+        leaseId,
+        owner: params.dispatch,
+        idempotencyKey: leaseId,
+        nowMs: Date.now(),
+        // The fence must outlive the longest permitted child plus the process
+        // tree and receipt cleanup window. It is never allowed to expire while
+        // the gate process is still reading the worktree.
+        ttlMs: (params.timeoutMs ?? DEFAULT_GATE_TIMEOUT_MS) + GATE_LEASE_MARGIN_MS,
+        establishFence: (lease) => {
+          store.insertValidationLeaseAuthority({
+            scope_key: authority.scopeKey,
+            lease_id: lease.leaseId,
+            run_id: authority.runId,
+            outcome_id: authority.outcomeId,
+            task_id: authority.taskId,
+            dispatch_id: authority.dispatchId,
+            worktree_id: authority.worktreeId,
+            owner_handle: authority.ownerHandle,
+            owner_pane_key: authority.ownerPaneKey,
+            process_incarnation: authority.processIncarnation,
+            launch_token_hash: authority.launchTokenHash,
+            runtime_id: runtimeId,
+            build_id: buildIdentity.id,
+            expires_at: lease.expiresAt
+          })
+          writeSentinelFor(
+            authority.worktreeId,
+            lease.leaseId,
+            lease.acquiredAt,
+            Date.parse(lease.expiresAt)
+          )
+        }
+      })
+      if (!acquisition.ok) {
+        throw new OrchestrationError(acquisition.code, acquisition.reason)
+      }
+      let releaseFence = true
+      let gateError: unknown
+      let gateResult: Awaited<ReturnType<typeof runGateForDispatch>> | undefined
+      try {
+        gateResult = await runGateForDispatch({
+          db,
+          runId,
+          dispatchId: params.dispatch,
+          gateId: params.gate,
+          program: params.program,
+          args: params.args,
+          buildIdentity,
+          validationLease: { scopeKey: authority.scopeKey, leaseId, runtimeId },
+          ...(params.timeoutMs === undefined ? {} : { timeoutMs: params.timeoutMs })
+        })
+      } catch (error) {
+        if (
+          error instanceof OrchestrationError &&
+          typeof error.data === 'object' &&
+          error.data !== null &&
+          (error.data as { retainValidationFence?: unknown }).retainValidationFence === true
+        ) {
+          // The exact process tree may still exist. Keep both the DB lease and
+          // the offline sentinel until their bounded expiry rather than
+          // declaring the tree mutable while a gate descendant is alive.
+          releaseFence = false
+        }
+        gateError = error
+      }
+      // Why not a `finally`: a throw from there REPLACES the gate's own error,
+      // so a release failure would hide the reason the gate failed. The gate's
+      // error is the primary one; an unreleasable lease then simply stays held
+      // until its bounded expiry, which is the safe direction.
+      if (releaseFence) {
+        const released = releaseValidationLease(store, {
+          scopeKey: authority.scopeKey,
+          leaseId,
+          nowMs: Date.now(),
+          owner: params.dispatch
+        })
+        if (!released.released) {
+          if (gateError) {
+            throw gateError
+          }
+          throw new OrchestrationError(
+            'validation_lease_release_failed',
+            `Required gate ${params.gate} could not prove release of validation lease ${leaseId}.`
+          )
+        }
+        clearSentinelFor(authority.worktreeId, {
+          leaseId,
+          acquiredAt: acquisition.lease.acquiredAt
+        })
+      }
+      if (gateError) {
+        throw gateError
+      }
+      return gateResult
+    }
   }),
   defineMethod({
     name: 'orchestration.gatePlan',
@@ -187,25 +279,10 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
         throw new OrchestrationError('invalid_argument', '--gates must name at least one gate.')
       }
       if (params.record) {
-        if (!params.result) {
-          throw new OrchestrationError(
-            'invalid_argument',
-            '--record requires --result PASS or FAIL.'
-          )
-        }
-        const recorded = gates.find((gate) => gate.gateId === params.record)
-        if (!recorded) {
-          throw new OrchestrationError(
-            'invalid_argument',
-            `--record ${params.record} is not in --gates.`
-          )
-        }
-        recordGateReceipt(store, {
-          scopeKey,
-          inputs: recorded,
-          result: params.result,
-          recordedAt: new Date().toISOString()
-        })
+        throw new OrchestrationError(
+          'command_retired',
+          'Callers cannot record gate results. Use orchestration.gateRun so the runtime observes the canonical command and exit status.'
+        )
       }
       const riskPolicy =
         params.riskPolicy ?? store.getOutcomeByRun(runId)?.gate_policy ?? 'standard'

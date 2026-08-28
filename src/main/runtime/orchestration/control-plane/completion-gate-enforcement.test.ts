@@ -12,7 +12,6 @@ import { admitOutcome } from './outcome-identity'
 // A real tree, because the gate reads HEAD itself rather than believing the claim.
 let worktree: ObservedWorktreeFixture
 let HEAD = ''
-const OLDER = '0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f'
 
 describe('B6 gate on the real worker_done path', () => {
   let db: OrchestrationDb
@@ -23,7 +22,11 @@ describe('B6 gate on the real worker_done path', () => {
   afterAll(() => worktree.cleanup())
   afterEach(() => db?.close())
 
-  function setup(options: { admit: boolean; tree?: ObservedWorktreeFixture }) {
+  function setup(options: {
+    admit: boolean
+    tree?: ObservedWorktreeFixture
+    recordGate?: boolean
+  }) {
     const tree = options.tree ?? worktree
     db = new OrchestrationDb(':memory:')
     const store = new ControlPlaneStore(db)
@@ -32,7 +35,7 @@ describe('B6 gate on the real worker_done path', () => {
       taskId: task.id,
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
-      startOptions: { agent: 'claude' }
+      startOptions: { agent: 'claude', baseSha: tree.headSha }
     })
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
@@ -54,12 +57,19 @@ describe('B6 gate on the real worker_done path', () => {
         title: 'Ship it',
         fingerprint: 'f1'
       })
-      // The gate now also demands a runtime-run gate process, not a claimed PASS.
-      recordProvenGate(store, {
-        scopeKey: `${task.run_id}:out_1`,
-        gateId: 'pnpm test',
-        finalSha: tree.headSha
-      })
+      if (options.recordGate !== false) {
+        // The gate now also demands a runtime-run gate process, not a claimed PASS.
+        recordProvenGate(store, {
+          scopeKey: `${task.run_id}:out_1`,
+          gateId: 'pnpm test',
+          finalSha: tree.headSha,
+          cwd: tree.path,
+          dispatchId: dispatch.id,
+          worktreeId: tree.worktreeId,
+          buildId: 'fixture-build',
+          dependencies: ['a.txt']
+        })
+      }
     }
     return { task, dispatch }
   }
@@ -113,26 +123,42 @@ describe('B6 gate on the real worker_done path', () => {
         receipt: { sha: HEAD, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
       }
     })
-    expect(reconcileLifecycleMessage(db, message)).toMatchObject({ action: 'completed' })
+    expect(
+      reconcileLifecycleMessage(db, message, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'completed' })
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
-  it('rejects a PASS receipt produced against an older SHA and leaves the Task open', () => {
-    const { task, dispatch } = setup({ admit: true })
+  it('rejects when the runtime-owned gate is from an older SHA and leaves the Task open', () => {
+    const tree = createObservedWorktree('repo_stale_gate')
+    const { task, dispatch } = setup({ admit: true, tree })
+    tree.commit('after-gate.txt')
     const logs: string[] = []
     const message = report({
       task,
       dispatch,
       completionBlock: {
-        receipt: { sha: OLDER, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
+        // This fabricated exact-current PASS must not replace the stale runtime row.
+        headSha: tree.headSha,
+        claimedSha: tree.headSha,
+        receipt: {
+          sha: tree.headSha,
+          result: 'PASS',
+          policyVersion: 'v1',
+          commandIdentity: 'pnpm test'
+        }
       }
     })
-    expect(reconcileLifecycleMessage(db, message, (line) => logs.push(line))).toMatchObject({
-      action: 'rejected',
-      code: 'completion_receipt_invalid'
-    })
+    expect(
+      reconcileLifecycleMessage(db, message, (line) => logs.push(line), {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'rejected', code: 'completion_receipt_invalid' })
     expect(db.getTask(task.id)?.status).toBe('dispatched')
-    expect(logs.some((line) => line.includes('receipt_sha'))).toBe(true)
+    expect(logs.some((line) => line.includes('gate_not_executed'))).toBe(true)
+    tree.cleanup()
   })
 
   it('rejects a worktree the runtime reads as dirty even when the worker claims it clean', () => {
@@ -162,7 +188,7 @@ describe('B6 gate on the real worker_done path', () => {
     tree.cleanup()
   })
 
-  it('rejects a completion claiming the wrong outcome', () => {
+  it('ignores a fabricated completion identity and uses the runtime-owned binding', () => {
     const { task, dispatch } = setup({ admit: true })
     const message = report({
       task,
@@ -172,19 +198,43 @@ describe('B6 gate on the real worker_done path', () => {
         receipt: { sha: HEAD, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
       }
     })
-    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
-      action: 'rejected',
-      code: 'completion_receipt_invalid'
-    })
+    expect(
+      reconcileLifecycleMessage(db, message, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'completed' })
   })
 
-  it('rejects an admitted-Run completion that carries no completion block at all', () => {
+  it('accepts the runtime-generated report shape with no worker completion block', () => {
     const { task, dispatch } = setup({ admit: true })
     const message = report({ task, dispatch, completionBlock: null })
-    expect(reconcileLifecycleMessage(db, message)).toMatchObject({
-      action: 'rejected',
-      code: 'completion_receipt_invalid'
+    expect(
+      reconcileLifecycleMessage(db, message, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'completed' })
+  })
+
+  it('rejects a fabricated worker PASS when no runtime-owned gate execution exists', () => {
+    const { task, dispatch } = setup({ admit: true, recordGate: false })
+    const message = report({
+      task,
+      dispatch,
+      completionBlock: {
+        receipt: {
+          sha: HEAD,
+          result: 'PASS',
+          policyVersion: 'v1',
+          commandIdentity: 'pnpm test'
+        }
+      }
     })
+    expect(
+      reconcileLifecycleMessage(db, message, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'rejected', code: 'completion_receipt_invalid' })
+    expect(db.getTask(task.id)?.status).toBe('dispatched')
   })
 
   it('compatibility: a legacy Run with no admitted outcome completes exactly as before', () => {
@@ -194,16 +244,31 @@ describe('B6 gate on the real worker_done path', () => {
     expect(db.getTask(task.id)?.status).toBe('completed')
   })
 
-  it('retry idempotency: a rejected completion can be resent with the fixed gate and then settles once', () => {
-    const { task, dispatch } = setup({ admit: true })
+  it('retry idempotency: a rejected completion settles once after the runtime gate exists', () => {
+    const { task, dispatch } = setup({ admit: true, recordGate: false })
     const stale = report({
       task,
       dispatch,
       completionBlock: {
-        receipt: { sha: OLDER, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
+        receipt: { sha: HEAD, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
       }
     })
-    expect(reconcileLifecycleMessage(db, stale)).toMatchObject({ action: 'rejected' })
+    expect(
+      reconcileLifecycleMessage(db, stale, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'rejected' })
+
+    recordProvenGate(new ControlPlaneStore(db), {
+      scopeKey: `${task.run_id}:out_1`,
+      gateId: 'pnpm test',
+      finalSha: HEAD,
+      cwd: worktree.path,
+      dispatchId: dispatch.id,
+      worktreeId: worktree.worktreeId,
+      buildId: 'fixture-build',
+      dependencies: ['a.txt']
+    })
 
     const fixed = report({
       task,
@@ -212,7 +277,11 @@ describe('B6 gate on the real worker_done path', () => {
         receipt: { sha: HEAD, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
       }
     })
-    expect(reconcileLifecycleMessage(db, fixed)).toMatchObject({ action: 'completed' })
+    expect(
+      reconcileLifecycleMessage(db, fixed, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'completed' })
 
     // A duplicate of the accepted report is idempotent: same verdict, and the
     // settled Task is not re-settled with a new completion timestamp.
@@ -224,7 +293,11 @@ describe('B6 gate on the real worker_done path', () => {
         receipt: { sha: HEAD, result: 'PASS', policyVersion: 'v1', commandIdentity: 'pnpm test' }
       }
     })
-    expect(reconcileLifecycleMessage(db, duplicate)).toMatchObject({ action: 'completed' })
+    expect(
+      reconcileLifecycleMessage(db, duplicate, undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({ action: 'completed' })
     expect(db.getTask(task.id)?.status).toBe('completed')
     expect(db.getTask(task.id)?.completed_at).toBe(settledAt)
   })

@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { runCommandForStdout } from './sync-command-output'
 import { readFileSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
 
@@ -39,6 +40,38 @@ export type GateDependencySpec = {
   files: readonly string[]
 }
 
+/** Expands the one repository-owned selector supported by the control plane.
+ * `git:path` means every file tracked by Git under `path` at the current tree.
+ * This keeps a manifest small while ensuring a newly added material source file
+ * cannot be omitted by a completion caller. Plain entries remain exact files.
+ */
+export function resolveGateDependencyFiles(selectors: readonly string[], cwd: string): string[] {
+  const files = new Set<string>()
+  for (const selector of selectors) {
+    if (!selector.startsWith('git:')) {
+      files.add(selector)
+      continue
+    }
+    const pathspec = selector.slice(4)
+    if (!pathspec || pathspec.startsWith('/') || pathspec.split('/').includes('..')) {
+      files.add(selector)
+      continue
+    }
+    try {
+      const output = runCommandForStdout({
+        program: 'git',
+        args: ['-C', cwd, 'ls-files', '-z', '--', pathspec]
+      })
+      for (const file of output.split('\0').filter(Boolean)) {
+        files.add(file)
+      }
+    } catch {
+      files.add(selector)
+    }
+  }
+  return [...files].sort()
+}
+
 /** `gateId` or `gateId=fileA|fileB` — the smallest syntax that lets one request
  *  declare a different dependency set per gate. */
 export function parseGateDependencySpec(token: string): GateDependencySpec {
@@ -66,9 +99,28 @@ export function fingerprintGateDependencies(args: {
   policyVersion: string
   commandIdentity: string
 }): Record<string, string> {
-  const files = args.spec.files.length > 0 ? args.spec.files : args.fallbackFiles
+  const selectors = args.spec.files.length > 0 ? args.spec.files : args.fallbackFiles
+  const files = resolveGateDependencyFiles(selectors, args.cwd)
   const hashes: Record<string, string> = {}
   for (const file of files) {
+    const pinned = /^sha256:([a-f0-9]{64}):(.+)$/.exec(file)
+    if (pinned) {
+      const actual = hashFileBytes(pinned[2] as string, args.cwd)
+      // `hashFileBytes` uses a compact digest for ordinary incremental inputs;
+      // a pinned tool needs the complete digest so a modified ignored runner
+      // can never be accepted as the committed toolchain.
+      let full = UNREADABLE_DEPENDENCY
+      try {
+        const absolute = isAbsolute(pinned[2] as string)
+          ? (pinned[2] as string)
+          : resolve(args.cwd, pinned[2] as string)
+        full = createHash('sha256').update(readFileSync(absolute)).digest('hex')
+      } catch {
+        full = actual
+      }
+      hashes[`tool:${pinned[2] as string}`] = full === pinned[1] ? full : UNREADABLE_DEPENDENCY
+      continue
+    }
     hashes[`file:${file}`] = hashFileBytes(file, args.cwd)
   }
   hashes['config:policyVersion'] = args.policyVersion

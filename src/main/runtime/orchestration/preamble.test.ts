@@ -40,13 +40,11 @@ describe('buildDispatchPreamble', () => {
     expect(result).toContain(
       'orchestration report --from term_worker --task task_abc123 --dispatch ctx_def456'
     )
-    expect(result).toContain('orchestration check')
+    expect(result).not.toContain('orchestration check --terminal')
     expect(result).toContain('--body')
     expect(result).toMatch(/3-sentence summary/)
-    expect(result).toContain('--outcome succeeded')
-    expect(result).toContain('replace it with --outcome failed')
-    expect(result).toContain('--files-modified "path/a,path/b"')
-    expect(result).toContain('--report-path "<optional: path to the full artifact>"')
+    expect(result).toContain('--outcome <succeeded|failed>')
+    expect(result).toContain('Add --files-modified and --report-path when they exist')
     // The worker never assembles the message type, recipient or payload itself.
     expect(result).not.toContain('--type worker_done')
     expect(result).not.toContain('--payload')
@@ -55,9 +53,9 @@ describe('buildDispatchPreamble', () => {
 
   it('binds the Run and outcome identity when the runtime has them', () => {
     const result = buildDispatchPreamble(baseParams({ runId: 'run_x', outcomeId: 'out_x' }))
-    expect(result).toContain('Your Run ID is: run_x')
-    expect(result).toContain('Your outcome ID is: out_x')
-    expect(buildDispatchPreamble(baseParams())).not.toContain('Your Run ID is:')
+    expect(result).toContain('Run: run_x')
+    expect(result).toContain('Outcome: out_x')
+    expect(buildDispatchPreamble(baseParams())).not.toContain('Run:')
   })
 
   it(
@@ -68,7 +66,7 @@ describe('buildDispatchPreamble', () => {
       // Why: feeding `bash -n` the full preamble falsely fails on apostrophes
       // in the surrounding prose. Slice between the CLI markers and strip
       // shell-style comment lines so we only syntax-check the commands.
-      const cliStart = result.indexOf('=== CLI COMMANDS ===')
+      const cliStart = result.indexOf('=== OPERATIONS ===')
       const cliEnd = result.indexOf('=== AFTER YOU REPORT ===')
       expect(cliStart).toBeGreaterThan(-1)
       expect(cliEnd).toBeGreaterThan(cliStart)
@@ -100,17 +98,15 @@ describe('buildDispatchPreamble', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toMatch(/orchestration ask --from term_worker/)
     expect(result).toContain('--question')
-    expect(result).toContain('--timeout-ms 600000')
     expect(result).not.toContain('--type decision_gate')
     // Why: the exact phrase is asserted so the rule can't be trimmed away by
     // accident. BEHAVIOR RULE #1 is the only place AskUserQuestion appears.
-    expect(result).toContain('BEHAVIOR RULE #1')
     expect(result).toContain('NEVER use AskUserQuestion')
     // AskUserQuestion must appear ONLY inside the rule text, not anywhere
     // else (e.g., not in an example payload or header). Count occurrences
     // of the exact token as a sanity check.
     const occurrences = (result.match(/AskUserQuestion/g) ?? []).length
-    expect(occurrences).toBe(2)
+    expect(occurrences).toBe(1)
   })
 
   it('binds every injected worker command to the dispatched Task, Dispatch and terminal', () => {
@@ -123,7 +119,7 @@ describe('buildDispatchPreamble', () => {
     expect(result).toMatch(
       /orchestration report --from term_worker --task task_abc123 --dispatch ctx_def456/
     )
-    expect(result).toContain('orchestration check --terminal term_worker')
+    expect(result).not.toContain('orchestration check --terminal term_worker')
   })
 
   it('carries the minted Dispatch capability on lifecycle and question commands', () => {
@@ -180,14 +176,12 @@ describe('buildDispatchPreamble', () => {
   it('uses orca CLI by default when devMode is not set', () => {
     const result = buildDispatchPreamble(baseParams())
     expect(result).toContain('orca orchestration report')
-    expect(result).toContain('orca orchestration check')
     expect(result).toContain('orca orchestration ask')
   })
 
   it('uses orca-dev CLI when devMode is true', () => {
     const result = buildDispatchPreamble(baseParams({ devMode: true, cliCommand: 'orca-ide' }))
     expect(result).toContain('orca-dev orchestration report')
-    expect(result).toContain('orca-dev orchestration check')
     expect(result).toContain('orca-dev orchestration ask')
     const fragments = result.split('orca-dev')
     for (const fragment of fragments) {
@@ -198,14 +192,13 @@ describe('buildDispatchPreamble', () => {
   it('uses orca CLI when devMode is false', () => {
     const result = buildDispatchPreamble(baseParams({ devMode: false }))
     expect(result).toContain('orca orchestration report')
-    expect(result).toContain('orca orchestration check')
+    expect(result).not.toContain('orca orchestration check --terminal')
   })
 
   it('uses the exact orca-ide command for packaged WSL workers', () => {
     const result = buildDispatchPreamble(baseParams({ cliCommand: 'orca-ide' }))
 
     expect(result).toContain('orca-ide orchestration report')
-    expect(result).toContain('orca-ide orchestration check')
     expect(result).toContain('orca-ide orchestration ask')
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
   })

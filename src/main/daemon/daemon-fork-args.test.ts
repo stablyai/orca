@@ -12,7 +12,8 @@ const BASE = {
   spawnerExecPath: '/app/Electron',
   macosLoginSessionWatch: false,
   logArgs: ['--log-file', '/tmp/orca-pkgb-pass/logs/daemon.log'],
-  ownerPid: 73836
+  ownerPid: 73836,
+  ownerStartedAtMs: 1_787_883_756_000
 }
 
 /** These drive the SAME builder production forks with, and the SAME parser the
@@ -35,6 +36,7 @@ describe('what a daemon is told about its owner', () => {
   it('round-trips through the real daemon entrypoint parser', () => {
     const parsed = parseArgs(buildDaemonForkArgs({ ...BASE, disposableProfile: true }))
     expect(parsed.retireWithOwnerPid).toBe(73836)
+    expect(parsed.retireWithOwnerStartedAtMs).toBe(BASE.ownerStartedAtMs)
     expect(parsed.socketPath).toBe(BASE.socketPath)
     expect(parsed.pidPath).toBe(BASE.pidPath)
     // The warm profile parses to no watch at all, not to a zero it might act on.

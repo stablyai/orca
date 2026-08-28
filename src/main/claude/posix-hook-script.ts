@@ -101,6 +101,10 @@ export function buildClaudePosixHookScript(
     '    exit 2',
     '    ;;',
     'esac',
+    // A reachable server can still fail inside normalization or the gate and
+    // answer its historical neutral 204. The durable marker remains the
+    // authoritative fallback in that case too, not only on connection failure.
+    'orca_fence_denies',
     'exit 0',
     ''
   ].join('\n')

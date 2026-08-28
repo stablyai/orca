@@ -1,14 +1,14 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { ControlPlaneDatabaseHandle } from '../../orchestration/control-plane/control-plane-store'
-import type { OrchestrationDb } from '../../orchestration/db'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { assertCertificationIntentMatches } from './orchestration-certification-launch'
-import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
-import { assertOutcomeSerializationAllowed } from '../../orchestration/control-plane/outcome-serialization'
+import {
+  readOutcomeTarget,
+  resolveOutcomeBinding
+} from '../../orchestration/control-plane/outcome-identity'
 import { classifyNativeRoute } from '../../../../shared/native-route-contract'
-import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { admitRoute } from '../../orchestration/control-plane/role-route-registry'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
 import type {
@@ -20,6 +20,10 @@ import { isExcludedWorkerAgent } from '../../orchestration/control-plane/role-ro
 import { assertMutationAllowed } from '../../orchestration/control-plane/validation-lease'
 import { validationScopeKeyForWorktree } from '../../orchestration/control-plane/validation-scope'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import {
+  isCertifiableRuntimeBuildIdentity,
+  type RuntimeBuildIdentity
+} from '../../orchestration/control-plane/runtime-build-identity'
 
 /** B1 admission at the one place a worker session is actually created.
  *
@@ -45,7 +49,11 @@ export function assertWorkerStartRouteAdmitted(args: {
   /** The receiving runtime's pinned build identity. Required, and never
    *  resolved here: a module that resolves its own is a second authority that
    *  can disagree with the one the process was constructed with. */
-  runtimeBuildIdentity: { id: string; commitSha?: string | null }
+  runtimeBuildIdentity: RuntimeBuildIdentity
+  /** Runtime-proven placement in a worktree distinct from the coordinator and
+   * other writers. Required when the provider hook is status-only rather than
+   * a synchronous mutation fence. */
+  isolatedWorktree?: boolean
   /** A typed, single-use certification intent the runtime minted and will match
    *  field-by-field against this launch. Never a caller-declared boolean. */
   certificationIntent?: string
@@ -66,12 +74,14 @@ export function assertWorkerStartRouteAdmitted(args: {
   // Why the shared contract: admission previously re-derived what a route can
   // do from the registry alone. Reading the ONE derived contract here is what
   // makes it the single route contract rather than another opinion.
-  if (args.agent) {
-    const native = classifyNativeRoute({
-      agent: args.agent,
-      model: args.model ?? null,
-      reasoning: args.effort ?? null
-    })
+  const native = args.agent
+    ? classifyNativeRoute({
+        agent: args.agent,
+        model: args.model ?? null,
+        reasoning: args.effort ?? null
+      })
+    : null
+  if (native) {
     if (native.verdict === 'TRULY_UNSUPPORTED') {
       throw new OrchestrationError('route_unsupported', `${native.verdict}: ${native.reason}`, {
         verdict: native.verdict,
@@ -87,10 +97,27 @@ export function assertWorkerStartRouteAdmitted(args: {
   if (binding.kind === 'legacy_unbound') {
     return { bootstrapUsed: false }
   }
+  if (!isCertifiableRuntimeBuildIdentity(args.runtimeBuildIdentity)) {
+    throw new OrchestrationError(
+      'runtime_build_unverifiable',
+      'Outcome-admitted work requires a clean embedded source SHA and verified complete artifact manifest.'
+    )
+  }
   if (!args.agent) {
     throw new OrchestrationError(
       'route_not_certified',
       'An outcome-admitted Run requires an explicit certified agent route.'
+    )
+  }
+  if (native?.capability.pretoolEnforcement !== 'blocking' && !args.isolatedWorktree) {
+    throw new OrchestrationError(
+      'route_mutation_fence_unavailable',
+      `${args.agent} has ${native?.capability.pretoolEnforcement ?? 'unsupported'} pre-tool enforcement on this platform. Outcome-admitted work requires either a blocking hook or a runtime-proven isolated worktree.`,
+      {
+        agent: args.agent,
+        pretoolEnforcement: native?.capability.pretoolEnforcement ?? 'unsupported',
+        remedies: ['use_isolated_worktree', 'choose_blocking_route']
+      }
     )
   }
   const registryStore = new RouteRegistryStore(args.handle)
@@ -155,15 +182,6 @@ export function assertWorkerStartRouteAdmitted(args: {
 }
 
 /** The outcome policy's quota opt-in, or false when the Run has no policy yet. */
-function resolveAllowUnknownQuota(
-  handle: ControlPlaneDatabaseHandle,
-  binding: ReturnType<typeof resolveOutcomeBinding>
-): boolean {
-  if (binding.kind !== 'admitted') {
-    return false
-  }
-  return new OutcomePolicyStore(handle).get(binding.outcome.outcome_id)?.allowUnknownQuota ?? false
-}
 
 /** B9 (correction 2) — the mutation fence on the one path that puts a mutating
  *  worker into a worktree.
@@ -236,7 +254,7 @@ export function resolveWorkerStartRole(
  *  validation lease. Both run before any effect is created. */
 export function assertWorkerStartAdmitted(args: {
   handle: ControlPlaneDatabaseHandle
-  runtimeBuildIdentity: { id: string; commitSha?: string | null }
+  runtimeBuildIdentity: RuntimeBuildIdentity
   runId: string
   taskId: string
   agent: TuiAgent | undefined
@@ -250,7 +268,10 @@ export function assertWorkerStartAdmitted(args: {
   /** Set when the start re-engages an existing worker session instead of
    *  creating one. Its worktree is fenced the same way a new one is. */
   terminalHandle?: string
+  isolatedWorktree?: boolean
 }): { bootstrapUsed: boolean } {
+  const worktreeId = args.worktreeId ?? resolveTerminalWorktreeId(args.handle, args.terminalHandle)
+  assertOutcomeTargetMatches(args.handle, args.runId, worktreeId)
   // Why before the route check: an outcome an operator serialized against a
   // live one must not start work at all, whatever route it would have used.
   assertOutcomeNotSerialized(args.handle, args.runId)
@@ -274,12 +295,12 @@ export function assertWorkerStartAdmitted(args: {
       taskId: args.taskId,
       worktreeId: args.worktreeId ?? null,
       retryOfDispatchId: args.retryOf ?? null
-    }
+    },
+    isolatedWorktree: args.isolatedWorktree
   })
   // Why resolve the retained tree: a re-engagement names a TERMINAL, not a
   // worktree, so fencing only on an explicit worktree let an already-running
   // builder be driven back into a tree that is under validation.
-  const worktreeId = args.worktreeId ?? resolveTerminalWorktreeId(args.handle, args.terminalHandle)
   if (worktreeId) {
     assertWorktreeMutationAllowed({ handle: args.handle, worktreeId })
   }
@@ -288,41 +309,9 @@ export function assertWorkerStartAdmitted(args: {
 
 /** The worktree an existing worker terminal is bound to, from the runtime's own
  *  worker record. Null when the terminal is not a known worker session. */
-function resolveTerminalWorktreeId(
-  handle: ControlPlaneDatabaseHandle,
-  terminalHandle: string | undefined
-): string | undefined {
-  if (!terminalHandle) {
-    return undefined
-  }
-  const row = handle.db
-    .prepare(
-      `SELECT w.worktree_id AS worktreeId
-       FROM worker_dispatches w
-       JOIN dispatch_contexts d ON d.id = w.dispatch_id
-       WHERE d.assignee_handle = ? AND w.worktree_id IS NOT NULL
-       ORDER BY w.rowid DESC LIMIT 1`
-    )
-    .get(terminalHandle) as { worktreeId: string } | undefined
-  return row?.worktreeId
-}
 
 /** Serialization is a property of the OUTCOME, not of where work executes, so
  *  it is asserted identically on the local and federated branches. */
-function assertOutcomeNotSerialized(handle: ControlPlaneDatabaseHandle, runId: string): void {
-  const serialization = assertOutcomeSerializationAllowed({
-    db: handle as unknown as OrchestrationDb,
-    store: new ControlPlaneStore(handle),
-    runId
-  })
-  if (!serialization.allowed) {
-    throw new OrchestrationError('serialized_with_active_outcome', serialization.reason, {
-      blockingOutcomeId: serialization.blockingOutcomeId,
-      blockingRunId: serialization.blockingRunId,
-      blockingDispatchId: serialization.blockingDispatchId
-    })
-  }
-}
 
 /** The federated branch resolves its agent from the raw parameter, because the
  *  remote host owns the launch.
@@ -331,15 +320,17 @@ function assertOutcomeNotSerialized(handle: ControlPlaneDatabaseHandle, runId: s
  *  route only, so a serialized outcome or a worktree under a live validation
  *  lease was fenced locally and wide open federated. Where the work executes
  *  does not change whether it is allowed to start. */
+
 export function assertFederatedWorkerStartAdmitted(args: {
   handle: ControlPlaneDatabaseHandle
-  runtimeBuildIdentity: { id: string; commitSha?: string | null }
+  runtimeBuildIdentity: RuntimeBuildIdentity
   runId: string
   agent?: string
   model?: string
   effort?: string
   /** Set when the federated start re-engages an existing worker session. */
   terminalHandle?: string
+  worktreeSelector?: string
   certificationIntent?: string
 }): void {
   // The execution host owns everything that touches execution, so this client
@@ -350,7 +341,22 @@ export function assertFederatedWorkerStartAdmitted(args: {
       'A certification intent is only valid for a local launch this runtime can observe.'
     )
   }
+  const federatedBinding = resolveOutcomeBinding(new ControlPlaneStore(args.handle), args.runId)
+  if (federatedBinding.kind === 'admitted' && federatedBinding.outcome.intake_batch) {
+    // Intake currently freezes a LOCAL RuntimeTargetContext. A remote runtime
+    // may reuse the same worktree id for a different repository/path, so raw
+    // selector equality is not target proof. Refuse rather than silently let a
+    // custom/federated start bypass the batch boundary; a future remote target
+    // attestation can make this path eligible without weakening local intake.
+    throw new OrchestrationError(
+      'outcome_target_remote_unverifiable',
+      `Batch-admitted outcome ${federatedBinding.outcome.outcome_id} cannot start federated until the remote runtime attests the complete immutable target context.`
+    )
+  }
   assertOutcomeNotSerialized(args.handle, args.runId)
+  const retainedWorktree = resolveTerminalWorktreeId(args.handle, args.terminalHandle)
+  const selectedWorktree = retainedWorktree ?? args.worktreeSelector
+  assertOutcomeTargetMatches(args.handle, args.runId, selectedWorktree)
   assertWorkerStartRouteAdmitted({
     ...args,
     agent: isTuiAgent(args.agent) ? args.agent : undefined
@@ -361,36 +367,35 @@ export function assertFederatedWorkerStartAdmitted(args: {
   }
 }
 
-/** The outcome id bound to a Run, for the runtime-generated worker context. */
-export function resolveBoundOutcomeId(
+export function assertOutcomeTargetMatches(
   handle: ControlPlaneDatabaseHandle,
-  runId: string
-): string | undefined {
-  const binding = resolveOutcomeBinding(new ControlPlaneStore(handle), runId)
-  return binding.kind === 'admitted' ? binding.outcome.outcome_id : undefined
+  runId: string,
+  actualWorktreeId: string | undefined
+): void {
+  const store = new ControlPlaneStore(handle)
+  const binding = resolveOutcomeBinding(store, runId)
+  if (binding.kind !== 'admitted' || !binding.outcome.intake_batch) {
+    return
+  }
+  const target = readOutcomeTarget(store, binding.outcome.outcome_id)
+  const normalizedTarget = target?.startsWith('id:') ? target.slice(3) : target
+  const normalizedActual = actualWorktreeId?.startsWith('id:')
+    ? actualWorktreeId.slice(3)
+    : actualWorktreeId
+  if (!normalizedTarget || !normalizedActual || normalizedTarget !== normalizedActual) {
+    throw new OrchestrationError(
+      'outcome_target_mismatch',
+      `Outcome ${binding.outcome.outcome_id} is bound to ${normalizedTarget ?? '<unreadable>'}, not ${normalizedActual ?? '<unresolved>'}.`,
+      { target: normalizedTarget, actual: normalizedActual }
+    )
+  }
 }
 
-/** B5 (correction 3) — whether this worker-start is re-engaging a session Orca
- *  already owns in this Run, and which Dispatch it last carried.
- *
- *  Only an explicit `--terminal` reuse qualifies, and only when that terminal's
- *  most recent Dispatch belongs to the same Run and is not the one being
- *  created now. That is exactly the FIX_FIRST shape: same terminal, same
- *  session, new Dispatch for the correction Task.
- */
-export function resolveRetainedReengagement(
-  db: OrchestrationDb,
-  args: { terminal?: string; runId: string; dispatchId: string }
-): { previousTaskId: string; previousDispatchId: string } | null {
-  if (!args.terminal) {
-    return null
-  }
-  const previous = db.db
-    .prepare(
-      `SELECT task_id, id FROM dispatch_contexts
-       WHERE assignee_handle = ? AND run_id = ? AND id <> ?
-       ORDER BY rowid DESC LIMIT 1`
-    )
-    .get(args.terminal, args.runId, args.dispatchId) as { task_id: string; id: string } | undefined
-  return previous ? { previousTaskId: previous.task_id, previousDispatchId: previous.id } : null
-}
+/** The outcome id bound to a Run, for the runtime-generated worker context. */
+
+export * from './orchestration-worker-route-resolution'
+import {
+  assertOutcomeNotSerialized,
+  resolveAllowUnknownQuota,
+  resolveTerminalWorktreeId
+} from './orchestration-worker-route-guards'

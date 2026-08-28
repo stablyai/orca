@@ -1,59 +1,31 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
 exports[`buildDispatchPreamble > renders a stable snapshot of the full preamble 1`] = `
-"You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-Your coordinator's terminal handle is: term_COORD
-Your task ID is: task_SNAP
-Your dispatch ID is: ctx_SNAP
-
-You talk to the coordinator only through the CLI commands below. Do not use
+"You are a dispatched worker inside Orca. The runtime owns your lifecycle;
+these three operations are the only channel to your coordinator. Do not use
 Slack, GitHub comments, or any other channel to reach a human during the run.
 
+Task: task_SNAP
+Dispatch: ctx_SNAP
+Coordinator: term_COORD
+
+=== OPERATIONS ===
+
+  # Report the terminal task outcome. Exactly once, and only once.
+  # --body is a 3-sentence executive summary: what you did, what you found,
+  # what is left. Add --files-modified and --report-path when they exist.
+  orca orchestration report --from term_WORKER --task task_SNAP --dispatch ctx_SNAP --outcome <succeeded|failed> --body "<3-sentence summary>"
+
+  # Ask the coordinator and block until it answers.
+  # NEVER use AskUserQuestion — it opens a local prompt your coordinator
+  # cannot see, and your session hangs forever.
+  orca orchestration ask --from term_WORKER --question "<question>"
+
+  # Raise a blocker you cannot resolve, before completing.
+  orca orchestration escalate --from term_WORKER --task task_SNAP --dispatch ctx_SNAP --subject "<blocker>" --body "<details>"
+
 Orca tracks your liveness from your own process and session state. You do not
-send liveness signals on a timer and you do not poll in a loop.
-
-=== CLI COMMANDS ===
-
-  # Report the terminal task outcome (REQUIRED exactly once).
-  #
-  # RULE: --body must be a 3-sentence summary (what you did, what you found,
-  # what's left). Never send an empty body; the coordinator reads the body
-  # first and only opens artifacts if it needs more detail.
-  #
-  # RULE: report exactly once. Use --outcome succeeded when the requested work
-  # is done, or replace it with --outcome failed when it is not. Never encode
-  # failure only in prose and never silently exit.
-  orca orchestration report --from term_WORKER --task task_SNAP --dispatch ctx_SNAP \\
-    --outcome succeeded \\
-    --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --files-modified "path/a,path/b" \\
-    --report-path "<optional: path to the full artifact>"
-
-  # Ask the coordinator a question and block until it answers.
-  #
-  # BEHAVIOR RULE #1 (MUST NOT VIOLATE):
-  # NEVER use AskUserQuestion; use \`orca orchestration ask\`.
-  # AskUserQuestion opens a local TUI prompt that the
-  # coordinator cannot see and cannot answer — your session will hang forever
-  # waiting on a human. Every interactive question goes through \`ask\` below.
-  #
-  # The \`ask\` verb durably records a question in this Dispatch's Run and
-  # blocks until the coordinator replies, then prints the reply body. If the
-  # call times out or disconnects, resume with the returned message ID instead
-  # of creating a duplicate question.
-  orca orchestration ask --from term_WORKER \\
-    --question "<your question>" \\
-    --options "<optional,comma,separated>" \\
-    --timeout-ms 600000
-
-  # Escalate a blocker or failure (pre-completion, when you need the
-  # coordinator to do something before you can continue):
-  orca orchestration escalate --from term_WORKER --task task_SNAP --dispatch ctx_SNAP \\
-    --subject "Blocked: <reason>" \\
-    --body "<details>"
-
-  # Check for messages from the coordinator:
-  orca orchestration check --terminal term_WORKER
+send liveness signals and you do not poll for messages.
 
 === AFTER YOU REPORT ===
 

@@ -35,6 +35,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
   const TOKEN = 'launch-token-xyz'
   const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex')
   const DISPATCHED_AT_MS = Date.parse('2026-08-28T00:00:00.000Z')
+  let currentDispatchId = ''
 
   function transcript(lines: object[]): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-transcript-'))
@@ -75,6 +76,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id, [])
+    currentDispatchId = started.dispatch.id
     db!.db
       .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
       .run('2026-08-28 00:00:00', started.dispatch.id)
@@ -93,6 +95,12 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
       agentType: 'claude',
       prompt: '',
       providerSession: { key: 'session_id' as const, id: 'sess_1' },
+      orchestration: {
+        taskId: 'runtime-owned-task',
+        dispatchId: currentDispatchId,
+        processIncarnation: 'pty_1:inc_1',
+        launchTokenHash: TOKEN_HASH
+      },
       ...overrides
     } as AgentStatusIpcPayload
   }
@@ -246,12 +254,12 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
     expect(readProviderModelFromTranscript(path)).toMatchObject({ model: 'newest' })
   })
 
-  it('binds on the pane when the provider sends no token, but refuses a DIFFERENT one', () => {
+  it('refuses a missing or different launch token even in the same pane', () => {
     const dispatch = world()
     const path = transcript([assistant('claude-opus-5', '2026-08-28T00:05:00.000Z')])
     const session = { key: 'session_id' as const, id: 'sess_1', transcriptPath: path }
-    // Claude's hook populates neither launchToken nor agentType. Demanding a
-    // field the provider never sends would mean nothing is ever observed.
+    // Runtime projection enriches hook rows with Dispatch context, but it must
+    // not manufacture the provider process's launch-token possession.
     const noToken = status({ providerSession: session })
     delete (noToken as { launchToken?: string }).launchToken
     expect(
@@ -261,7 +269,7 @@ describe('EFFECTIVE_IDENTITY_MUST_COME_FROM_THE_PROVIDER', () => {
         agent: 'claude',
         reasoning: 'high'
       })
-    ).toMatchObject({ ok: true, observation: { identity: { model: 'claude-opus-5' } } })
+    ).toMatchObject({ ok: false, code: 'no_status_for_dispatch' })
     // A report carrying a DIFFERENT token is still another session.
     expect(
       observeProviderSessionIdentity({

@@ -18,7 +18,7 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'outcome-admit'],
-    summary: 'Bind one business outcome to this Run and declare its route candidate order',
+    summary: 'Retired compatibility verb; use atomic outcome-intake',
     usage:
       'orca orchestration outcome-admit --outcome-id <id> --title <text> [--task-classification <id>] [--builder-candidates <agent[:model[:reasoning]],...>] [--reviewer-candidates <...>] [--review-capabilities <csv>] [--allow-unknown-quota] [--gate-policy <standard|high_risk>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
@@ -36,30 +36,7 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
       'retry-request'
     ],
     notes: [
-      'Admitting an outcome turns on the fail-closed contract for this Run: certified routes at launch, and a SHA-bound completion receipt.',
-      'The candidate ORDER is yours; Orca validates each candidate against the certified registry and never invents a preference.',
-      'Without a reviewer candidate order, a validated completion emits a protected blocker instead of choosing a reviewer.'
-    ]
-  },
-  {
-    path: ['orchestration', 'pretool-receipt'],
-    summary: "Record the PreTool policy's own allow/block decision for this session",
-    usage:
-      'orca orchestration pretool-receipt --decision <allow|block> --policy <id> --policy-version <v> [--tool <name>] [--reason <text>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [
-      ...GLOBAL_FLAGS,
-      'decision',
-      'policy',
-      'policy-version',
-      'tool',
-      'reason',
-      'from',
-      'retry-request'
-    ],
-    notes: [
-      'Orca does not decide whether a tool may run. The authoritative PreTool policy does, and this records what that decision was so certification can see it. Duplicating the policy inside Orca would create a second security boundary free to drift from the first.',
-      'The caller states only what the decision owns: allow or block, which policy and version reached it, the tool and a reason. Dispatch, Run, outcome, Task, pane, process incarnation, route and build are filled in by the runtime from its own records, so a receipt cannot be aimed at a Dispatch its emitter does not occupy.',
-      'A receipt earned under another build is ignored, and a block outranks an allow on the same Dispatch. A PostToolUse event, a static fallback stdout, a tool row, a launch token or a healthy provider startup are none of them decisions and produce no receipt.'
+      'This verb always returns command_retired and never creates an outcome. Use outcome-intake with 2-5 complete manifests.'
     ]
   },
   {
@@ -77,7 +54,7 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     path: ['orchestration', 'gate-run'],
     summary: 'Have the RUNTIME execute a gate and record what actually happened',
     usage:
-      'orca orchestration gate-run --dispatch <dispatch_id> --gate <gate_id> --program <cmd> [--args "<a b c>"] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration gate-run --dispatch <dispatch_id> --gate <gate_id> [--program <compat-assertion>] [--args "<compat-assertions>"] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'dispatch',
@@ -91,7 +68,7 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ],
     notes: [
       'A completion receipt is only evidence when the runtime ran the gate itself. This is the verb that produces that evidence; a PASS with no successful execution behind it is a claim, not a receipt.',
-      'The runtime resolves the worktree and the SHA from the Dispatch and observes them itself, so a gate cannot be recorded against a commit it never ran on.',
+      'The runtime resolves the canonical command, dependencies, worktree, and SHA from the immutable admitted manifest. --program/--args are optional compatibility assertions and cannot redefine the gate.',
       'The exit code is what counts. A gate the runtime had to kill on timeout records exit 124 and does not pass.'
     ]
   },

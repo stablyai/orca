@@ -1,6 +1,10 @@
 import { realpathSync } from 'node:fs'
 import { getAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import {
+  isOrchestrationMutation,
+  ORCHESTRATION_MUTATION_METHODS
+} from '../../../shared/orchestration-rpc-contract'
 
 /** Correction — a candidate-scoped mutation must prove it reached the runtime it
  *  meant to reach, BEFORE it mutates anything.
@@ -51,11 +55,10 @@ export type RuntimeTargetBinding = 'local_socket' | 'authenticated_remote'
  *  socket, a request for one of these with no target stamp is refused: these are
  *  exactly the calls whose landing on the wrong runtime produced the incident. */
 export const TARGET_BOUND_METHODS: ReadonlySet<string> = new Set([
-  'orchestration.certificationIntent',
-  'orchestration.certify',
-  'orchestration.gateRun',
-  'orchestration.pretoolReceipt',
-  'orchestration.workerStart'
+  ...ORCHESTRATION_MUTATION_METHODS,
+  'orchestration.validationLease',
+  'orchestration.gatePlan',
+  'orchestration.phaseLaunch'
 ])
 
 /** Compare state roots by resolved path: a symlinked or differently spelled
@@ -106,7 +109,7 @@ export function assertExpectedRuntimeTarget(
   transport?: RuntimeTargetBinding
 ): void {
   const expected = declaredTarget(params)
-  const bound = transport === 'local_socket' && TARGET_BOUND_METHODS.has(method)
+  const bound = transport === 'local_socket' && isOrchestrationMutation(method, params)
   if (!bound && !expected.userDataPath && !expected.runtimeId && !expected.buildId) {
     return
   }

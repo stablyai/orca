@@ -175,6 +175,9 @@ export function buildWorkerStartOptions(args: {
   creationRepoId: string | null
   /** Derived readiness timeout, not the raw param. See upstream #16300. */
   readinessTimeoutMs: number
+  /** Runtime-observed HEAD before this Dispatch was accepted. Completion uses
+   * this immutable floor instead of looking only at the final commit's parent. */
+  baseSha: string | null
 }): Record<string, unknown> {
   const { params, createsWorktree } = args
   return {
@@ -184,6 +187,8 @@ export function buildWorkerStartOptions(args: {
     repo: params.repo ?? args.creationRepoId,
     baseBranch: params.baseBranch ?? null,
     terminal: params.terminal ?? null,
+    retryOf: params.retryOf ?? null,
+    baseSha: args.baseSha,
     agent: args.agent ?? null,
     launch: args.launchReceipt,
     timeoutMs: args.readinessTimeoutMs,

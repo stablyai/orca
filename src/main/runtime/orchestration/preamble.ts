@@ -1,6 +1,7 @@
 import type { OrchestrationCliCommand } from './cli-command'
 import {
   buildWorkerProtocolContext,
+  renderWorkerBootstrap,
   renderRetainedDispatchDelta
 } from './control-plane/worker-protocol-context'
 
@@ -56,80 +57,23 @@ export function buildDispatchPreamble(params: PreambleParams): string {
   // socket. Without this, agents inside the dev Electron app would call the
   // production CLI and talk to the wrong Orca instance (Section 6.4).
   const cli = params.devMode ? 'orca-dev' : (params.cliCommand ?? 'orca')
+  const context = buildWorkerProtocolContext({
+    identity: {
+      taskId: params.taskId,
+      dispatchId: params.dispatchId,
+      runId: params.runId ?? null,
+      outcomeId: params.outcomeId ?? null,
+      coordinatorHandle: params.coordinatorHandle,
+      workerHandle: params.workerHandle,
+      dispatchCapability: params.dispatchCapability
+    },
+    cli
+  })
   const postDoneInstructions = buildPostWorkerDoneInstructions({
     cli,
     workerKind: params.workerKind ?? 'prompt-returning-agent'
   })
-  const capabilityFlag = params.dispatchCapability
-    ? ` --dispatch-capability ${params.dispatchCapability}`
-    : ''
-  // Why --from is explicit: focus is not lifecycle authority, so the typed
-  // operations must name the dispatched terminal rather than rely on the
-  // worker pane's environment surviving a restart.
-  const bind = `--from ${params.workerHandle} --task ${params.taskId} --dispatch ${params.dispatchId}`
-  const identity = [
-    `Your coordinator's terminal handle is: ${params.coordinatorHandle}`,
-    `Your task ID is: ${params.taskId}`,
-    `Your dispatch ID is: ${params.dispatchId}`,
-    params.runId ? `Your Run ID is: ${params.runId}` : null,
-    params.outcomeId ? `Your outcome ID is: ${params.outcomeId}` : null
-  ]
-    .filter((line): line is string => line !== null)
-    .join('\n')
-
-  const header = `You are working inside Orca, a multi-agent IDE. You are a dispatched worker.
-${identity}
-
-You talk to the coordinator only through the CLI commands below. Do not use
-Slack, GitHub comments, or any other channel to reach a human during the run.
-
-Orca tracks your liveness from your own process and session state. You do not
-send liveness signals on a timer and you do not poll in a loop.
-
-=== CLI COMMANDS ===
-
-  # Report the terminal task outcome (REQUIRED exactly once).
-  #
-  # RULE: --body must be a 3-sentence summary (what you did, what you found,
-  # what's left). Never send an empty body; the coordinator reads the body
-  # first and only opens artifacts if it needs more detail.
-  #
-  # RULE: report exactly once. Use --outcome succeeded when the requested work
-  # is done, or replace it with --outcome failed when it is not. Never encode
-  # failure only in prose and never silently exit.
-  ${cli} orchestration report ${bind}${capabilityFlag} \\
-    --outcome succeeded \\
-    --body "<3-sentence summary: what you did, what you found, what's left>" \\
-    --files-modified "path/a,path/b" \\
-    --report-path "<optional: path to the full artifact>"
-
-  # Ask the coordinator a question and block until it answers.
-  #
-  # BEHAVIOR RULE #1 (MUST NOT VIOLATE):
-  # NEVER use AskUserQuestion; use \`${cli} orchestration ask\`.
-  # AskUserQuestion opens a local TUI prompt that the
-  # coordinator cannot see and cannot answer — your session will hang forever
-  # waiting on a human. Every interactive question goes through \`ask\` below.
-  #
-  # The \`ask\` verb durably records a question in this Dispatch's Run and
-  # blocks until the coordinator replies, then prints the reply body. If the
-  # call times out or disconnects, resume with the returned message ID instead
-  # of creating a duplicate question.
-  ${cli} orchestration ask --from ${params.workerHandle}${capabilityFlag} \\
-    --question "<your question>" \\
-    --options "<optional,comma,separated>" \\
-    --timeout-ms 600000
-
-  # Escalate a blocker or failure (pre-completion, when you need the
-  # coordinator to do something before you can continue):
-  ${cli} orchestration escalate ${bind}${capabilityFlag} \\
-    --subject "Blocked: <reason>" \\
-    --body "<details>"
-
-  # Check for messages from the coordinator:
-  ${cli} orchestration check --terminal ${params.workerHandle}
-
-${postDoneInstructions}`
+  const header = `${renderWorkerBootstrap(context)}\n\n${postDoneInstructions}`
 
   // Why: the drift section fires only when the coordinator allowed dispatch
   // against a stale worktree (via `allow-stale-base: true` in the task spec,

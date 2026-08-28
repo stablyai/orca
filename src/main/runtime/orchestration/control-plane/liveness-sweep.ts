@@ -2,8 +2,12 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-type
 import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { readObservedLaunchIdentity } from './certification-event-source'
-import { observeAndPersistProviderIdentity } from './provider-session-identity'
+import {
+  observeAndPersistProviderIdentity,
+  readDispatchProviderSessionBinding
+} from './provider-session-identity'
 import type { DispatchContextRow } from '../types'
+import { readDispatchLaunchRoutes } from './route-runtime-events'
 import { COORDINATOR_WAKE_REASONS, WAKE_REASON_PAYLOAD_KEY } from './coordinator-wake-events'
 import { ControlPlaneStore } from './control-plane-store'
 import {
@@ -55,6 +59,12 @@ export type LivenessSignalSource = {
   inspectProcessLiveness(
     processIncarnation: string,
     hostScope: string | null
+  ): Promise<'live' | 'exited' | 'unverifiable'>
+  /** Exact foreground provider-process verdict. A live PTY only proves the
+   * shell/session container survived; the agent may have exited back to it. */
+  inspectProviderProcessLiveness?(
+    terminalHandle: string,
+    expectedAgent: string
   ): Promise<'live' | 'exited' | 'unverifiable'>
   /** ISO deadline of an Orca-approved blocking wait the runtime owns, if any. */
   approvedWaitUntil(dispatchId: string): string | null
@@ -162,23 +172,71 @@ async function collectSignals(
   // persisted while the session is alive, rather than being asked for later when
   // the transcript may be gone.
   recordObservedProviderIdentity(db, dispatch, source.agentStatusSnapshot())
-  const processLiveness = dispatch.process_incarnation
+  const terminalProcessLiveness = dispatch.process_incarnation
     ? await source
         .inspectProcessLiveness(dispatch.process_incarnation, resource?.host_scope ?? null)
         // Why swallow: an unreachable host is `unverifiable`, never a crash.
         .catch(() => 'unverifiable' as const)
     : 'unverifiable'
+  const worker = db.getWorkerDispatch(dispatch.id)
+  const launch = readDispatchLaunchRoutes(worker?.start_options)
+  const launchedAgent = launch.effective?.agent ?? launch.requested?.agent ?? null
+  let processLiveness = terminalProcessLiveness
+  if (
+    processLiveness === 'live' &&
+    dispatch.assignee_handle &&
+    launchedAgent &&
+    source.inspectProviderProcessLiveness
+  ) {
+    processLiveness = await source
+      .inspectProviderProcessLiveness(dispatch.assignee_handle, launchedAgent)
+      .catch(() => 'unverifiable' as const)
+  }
+  const agentStatus = selectDispatchAgentStatus(dispatch, source.agentStatusSnapshot())
+  const providerSessionBinding = readDispatchProviderSessionBinding(db, dispatch.id)
+  let observedProviderSessionId = providerSessionBinding?.id ?? null
+  if (!observedProviderSessionId) {
+    try {
+      const options = JSON.parse(worker?.start_options ?? '{}') as {
+        launch?: { observedProviderSessionId?: unknown }
+      }
+      observedProviderSessionId =
+        typeof options.launch?.observedProviderSessionId === 'string'
+          ? options.launch.observedProviderSessionId
+          : null
+    } catch {
+      observedProviderSessionId = null
+    }
+  }
+  if (
+    processLiveness === 'live' &&
+    observedProviderSessionId &&
+    agentStatus &&
+    agentStatus.providerSession?.id !== observedProviderSessionId
+  ) {
+    // The pane and PTY survived, but a different provider session now owns it.
+    // That is exact exit/replacement evidence for the old Dispatch.
+    processLiveness = 'exited'
+  }
   return {
     dispatch,
-    agentStatus: selectDispatchAgentStatus(dispatch, source.agentStatusSnapshot()),
+    agentStatus,
     processLiveness,
     approvedWaitUntilIso: source.approvedWaitUntil(dispatch.id),
     terminalOwnership: resource?.ownership_state ?? null,
-    lastTerminalOutputAtMs: clampToDispatchStart(
-      dispatch,
-      source.lastTerminalOutputAtMs?.(dispatch.assignee_handle, dispatch.process_incarnation) ??
-        null
-    ),
+    // Output belongs to the Dispatch only while the exact provider process is
+    // still live. A replacement provider in the same PTY must not refresh the
+    // old Dispatch from that shared byte stream.
+    lastTerminalOutputAtMs:
+      processLiveness === 'live'
+        ? clampToDispatchStart(
+            dispatch,
+            source.lastTerminalOutputAtMs?.(
+              dispatch.assignee_handle,
+              dispatch.process_incarnation
+            ) ?? null
+          )
+        : null,
     settled: isDispatchSettled(dispatch)
   }
 }

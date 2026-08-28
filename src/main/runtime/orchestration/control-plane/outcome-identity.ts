@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
-import type { ControlPlaneStore, OutcomeRelationRow, OutcomeRow } from './control-plane-store'
-import { findSerializationDeadlock } from './outcome-relation-deadlock'
+import type { ControlPlaneStore, OutcomeRow } from './control-plane-store'
+import type { RequiredGateDefinition } from './required-gate-spec'
+import type { OutcomePolicy } from './outcome-policy'
 
 /** B2 — one business outcome, one durable Run.
  *
@@ -31,6 +32,17 @@ export type OutcomeAdmissionRequest = {
   fingerprint: string
   intakeBatch?: string | null
   gatePolicy?: OutcomeGatePolicy
+  /** DCS/Sol-authored semantics frozen by the batch. Orca compares exact
+   * claims and resources; it does not invent the business classification. */
+  objective?: string
+  target?: string
+  dependencies?: readonly string[]
+  semanticClaims?: readonly string[]
+  resourceClaims?: readonly string[]
+  /** DCS/Sol-authored role orders. Orca validates and follows them; it never
+   * promotes one provider to a global default. */
+  routingPolicy?: Omit<OutcomePolicy, 'outcomeId'>
+  requiredGates?: readonly RequiredGateDefinition[]
 }
 
 export type OutcomeAdmissionCode =
@@ -46,6 +58,12 @@ export type OutcomeAdmissionCode =
   | 'undecided_relation'
   | 'self_serialized_outcome'
   | 'serialized_with_merged_outcome'
+  | 'relation_endpoint_unknown'
+  | 'relation_contradiction'
+  | 'dependency_unknown'
+  | 'dependency_cycle'
+  | 'invalid_gate_spec'
+  | 'gate_spec_conflict'
 
 export type OutcomeAdmissionError = {
   code: OutcomeAdmissionCode
@@ -118,214 +136,6 @@ export function admitOutcome(
   return { ok: true, outcome: inserted, duplicate: false }
 }
 
-export type OutcomeRelationDeclaration = {
-  leftOutcomeId: string
-  rightOutcomeId: string
-  kind: OutcomeRelationRow['kind']
-  decision: OutcomeRelationRow['decision']
-  rationale: string
-}
-
-export type OutcomeIntakeRequest = {
-  batchId: string
-  /** Existence check for a claimed Run, supplied by the caller that owns the
-   *  Run table. Omitted only by pure-function tests. */
-  runExists?: (runId: string) => boolean
-  outcomes: readonly OutcomeAdmissionRequest[]
-  /** Every detected overlap or collision must carry an explicit decision. */
-  relations?: readonly OutcomeRelationDeclaration[]
-  /** Pairs the caller detected as overlapping or colliding. */
-  detected?: readonly {
-    leftOutcomeId: string
-    rightOutcomeId: string
-    kind: OutcomeRelationRow['kind']
-  }[]
-}
-
-export type OutcomeIntakeResult =
-  | { ok: true; admitted: OutcomeRow[] }
-  | { ok: false; error: OutcomeAdmissionError }
-
-function relationKey(left: string, right: string, kind: string): string {
-  // Why sorted: overlap is symmetric, so (a,b) and (b,a) are the same decision.
-  return [[left, right].sort().join('::'), kind].join('|')
-}
-
-/** Intake of 2–5 independent outcomes. Each is admitted to its own Run and
- *  stays independently addressable; an undetermined overlap or collision is a
- *  refusal, never an implicit merge. */
-/** A stable fingerprint of everything the manifest asserts. Any change to the
- *  outcomes, the detected overlaps or the decisions is a different batch. */
-export function intakeManifestFingerprint(request: OutcomeIntakeRequest): string {
-  return outcomeFingerprint([
-    ...request.outcomes
-      .map((outcome) => `o:${outcome.outcomeId}:${outcome.runId}:${outcome.fingerprint}`)
-      .sort(),
-    ...(request.detected ?? [])
-      .map((pair) => `d:${pair.leftOutcomeId}:${pair.rightOutcomeId}:${pair.kind}`)
-      .sort(),
-    ...(request.relations ?? [])
-      .map(
-        (relation) =>
-          `r:${relation.leftOutcomeId}:${relation.rightOutcomeId}:${relation.kind}:${relation.decision}`
-      )
-      .sort()
-  ])
-}
-
-export function admitOutcomeIntake(
-  store: ControlPlaneStore,
-  request: OutcomeIntakeRequest
-): OutcomeIntakeResult {
-  const first = request.outcomes[0]
-  if (
-    request.outcomes.length < MIN_OUTCOME_INTAKE ||
-    request.outcomes.length > MAX_OUTCOME_INTAKE
-  ) {
-    return {
-      ok: false,
-      error: {
-        code: 'intake_size_invalid',
-        outcomeId: first?.outcomeId ?? '',
-        runId: first?.runId ?? '',
-        reason: `Intake must carry ${MIN_OUTCOME_INTAKE}–${MAX_OUTCOME_INTAKE} outcomes; received ${request.outcomes.length}.`
-      }
-    }
-  }
-  const runIds = new Set<string>()
-  const ids = new Set<string>()
-  for (const outcome of request.outcomes) {
-    if (runIds.has(outcome.runId)) {
-      return {
-        ok: false,
-        error: {
-          code: 'duplicate_run_id',
-          outcomeId: outcome.outcomeId,
-          runId: outcome.runId,
-          reason: `Run ${outcome.runId} appears twice in one intake batch; each outcome needs its own Run.`
-        }
-      }
-    }
-    runIds.add(outcome.runId)
-    if (ids.has(outcome.outcomeId)) {
-      return {
-        ok: false,
-        error: {
-          code: 'duplicate_outcome_id',
-          outcomeId: outcome.outcomeId,
-          runId: outcome.runId,
-          reason: `Outcome ${outcome.outcomeId} appears twice in one intake batch.`
-        }
-      }
-    }
-    ids.add(outcome.outcomeId)
-    if (request.runExists && !request.runExists(outcome.runId)) {
-      return {
-        ok: false,
-        error: {
-          code: 'unknown_run',
-          outcomeId: outcome.outcomeId,
-          runId: outcome.runId,
-          reason: `Run ${outcome.runId} does not exist, so an outcome cannot be bound to it.`
-        }
-      }
-    }
-  }
-  const decided = new Set(
-    (request.relations ?? []).map((relation) =>
-      relationKey(relation.leftOutcomeId, relation.rightOutcomeId, relation.kind)
-    )
-  )
-  for (const pair of request.detected ?? []) {
-    if (!decided.has(relationKey(pair.leftOutcomeId, pair.rightOutcomeId, pair.kind))) {
-      return {
-        ok: false,
-        error: {
-          code: 'undecided_relation',
-          outcomeId: pair.leftOutcomeId,
-          runId: '',
-          reason: `Detected ${pair.kind} between ${pair.leftOutcomeId} and ${pair.rightOutcomeId} has no explicit decision.`
-        }
-      }
-    }
-  }
-
-  const deadlock = findSerializationDeadlock(store, request)
-  if (deadlock) {
-    return { ok: false, error: deadlock }
-  }
-
-  // Why a manifest fingerprint: `batchId` alone identified nothing, so the same
-  // batch id could be replayed with a DIFFERENT outcome list and simply enlarge
-  // the batch. The batch is what the manifest says it is.
-  const fingerprint = intakeManifestFingerprint(request)
-  const priorBatch = store.getIntakeBatch(request.batchId)
-  if (priorBatch && priorBatch.manifest_fingerprint !== fingerprint) {
-    return {
-      ok: false,
-      error: {
-        code: 'batch_manifest_conflict',
-        outcomeId: first?.outcomeId ?? '',
-        runId: first?.runId ?? '',
-        reason: `Batch ${request.batchId} was already admitted with a different manifest; a replay must be identical.`
-      }
-    }
-  }
-
-  // Why one transaction: admitting outcome 1 and failing on outcome 3 would
-  // leave a half-admitted batch, and a caller that retried would then collide
-  // with its own partial write. Intake is all-or-nothing.
-  store.db.exec('BEGIN IMMEDIATE')
-  try {
-    const admitted: OutcomeRow[] = []
-    for (const outcome of request.outcomes) {
-      const result = admitOutcome(store, { ...outcome, intakeBatch: request.batchId })
-      if (!result.ok) {
-        store.db.exec('ROLLBACK')
-        return { ok: false, error: result.error }
-      }
-      admitted.push(result.outcome)
-    }
-    for (const relation of request.relations ?? []) {
-      // Why compare first: the table replaces on (left, right, kind), so a
-      // later batch could quietly flip `serialize` to `independent` and let two
-      // colliding outcomes run together.
-      const existing = store
-        .listOutcomeRelations(relation.leftOutcomeId)
-        .find(
-          (row) => row.right_outcome_id === relation.rightOutcomeId && row.kind === relation.kind
-        )
-      if (existing && existing.decision !== relation.decision) {
-        store.db.exec('ROLLBACK')
-        return {
-          ok: false,
-          error: {
-            code: 'relation_decision_conflict',
-            outcomeId: relation.leftOutcomeId,
-            runId: '',
-            reason: `${relation.kind} between ${relation.leftOutcomeId} and ${relation.rightOutcomeId} is already decided ${existing.decision}; it cannot be changed to ${relation.decision} by a later intake.`
-          }
-        }
-      }
-      store.insertOutcomeRelation({
-        left_outcome_id: relation.leftOutcomeId,
-        right_outcome_id: relation.rightOutcomeId,
-        kind: relation.kind,
-        decision: relation.decision,
-        rationale: relation.rationale
-      })
-    }
-    store.putIntakeBatch({ batch_id: request.batchId, manifest_fingerprint: fingerprint })
-    store.db.exec('COMMIT')
-    return { ok: true, admitted }
-  } catch (error) {
-    // Why rollback then rethrow: an UNKNOWN mutation outcome must leave nothing
-    // admitted, so the caller's retry starts from a clean batch.
-    store.db.exec('ROLLBACK')
-    throw error
-  }
-}
-
 export type OutcomeBinding =
   | { kind: 'admitted'; outcome: OutcomeRow }
   /** A Run written before this package existed. Readable, but it can never
@@ -335,6 +145,60 @@ export type OutcomeBinding =
 export function resolveOutcomeBinding(store: ControlPlaneStore, runId: string): OutcomeBinding {
   const outcome = store.getOutcomeByRun(runId)
   return outcome ? { kind: 'admitted', outcome } : { kind: 'legacy_unbound' }
+}
+
+/** Dependencies are read from the immutable admitted manifest, never from a
+ * worker-start request. A malformed/missing manifest for a batch-admitted
+ * outcome is fail-closed by returning null. */
+export function readOutcomeDependencies(
+  store: ControlPlaneStore,
+  outcomeId: string
+): readonly string[] | null {
+  const outcome = store.getOutcomeById(outcomeId)
+  if (!outcome?.intake_batch) {
+    return []
+  }
+  const manifest = store.getIntakeManifest(outcome.intake_batch)
+  if (!manifest) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(manifest.manifest_json) as {
+      outcomes?: { outcomeId?: unknown; dependencies?: unknown }[]
+    }
+    const entry = parsed.outcomes?.find((candidate) => candidate.outcomeId === outcomeId)
+    return entry && Array.isArray(entry.dependencies) && entry.dependencies.every(isString)
+      ? entry.dependencies
+      : null
+  } catch {
+    return null
+  }
+}
+
+/** The exact managed worktree frozen by intake. A batch-admitted outcome may
+ * never be started in a caller-selected sibling tree. */
+export function readOutcomeTarget(store: ControlPlaneStore, outcomeId: string): string | null {
+  const outcome = store.getOutcomeById(outcomeId)
+  if (!outcome?.intake_batch) {
+    return null
+  }
+  const manifest = store.getIntakeManifest(outcome.intake_batch)
+  if (!manifest) {
+    return null
+  }
+  try {
+    const parsed = JSON.parse(manifest.manifest_json) as {
+      outcomes?: { outcomeId?: unknown; target?: unknown }[]
+    }
+    const entry = parsed.outcomes?.find((candidate) => candidate.outcomeId === outcomeId)
+    return entry && typeof entry.target === 'string' ? entry.target : null
+  } catch {
+    return null
+  }
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string'
 }
 
 /** Fail-closed guard for a NEW write that claims an outcome identity. A legacy

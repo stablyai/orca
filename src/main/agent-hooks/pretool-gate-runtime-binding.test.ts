@@ -99,6 +99,7 @@ describe('the gate resolver binds runtime-resolved identity only', () => {
     paneKey: PANE,
     worktreeId: WORKTREE,
     launchToken: TOKEN,
+    payload: { hook_event_name: 'PreToolUse', tool_name: 'Edit' },
     ...overrides
   })
 

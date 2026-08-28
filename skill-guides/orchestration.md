@@ -131,7 +131,7 @@ orca orchestration check [--terminal <handle>] [--ack <delivery_id>] [--peek|--a
 orca orchestration reply --id <msg_id> --body <text> [--from <handle>] [--json]
 orca orchestration ask (--question <text>|--resume <msg_id>) [--options <csv>] [--timeout-ms <n>] [--from <handle>] [--json]
 orca orchestration inbox [--limit <n>] [--json]
-orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome <succeeded|failed> --body <text> [--files-modified <csv>] [--report-path <path>] [--outcome-id <id>] [--claimed-sha <sha>] [--receipt-sha <sha>] [--receipt-result <PASS|FAIL>] [--json]
+orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome <succeeded|failed> --body <text> [--files-modified <csv>] [--report-path <path>] [--outcome-id <id>] [--json]
 orca orchestration escalate --task <task_id> --dispatch <dispatch_id> --subject <text> [--body <text>] [--json]
 orca orchestration state (--outcome <id>|--run <run_id>|--task <task_id>|--dispatch <dispatch_id>) [--json]
 orca orchestration await [--ack <delivery_id>] [--timeout-ms <n>] [--json]
@@ -163,15 +163,14 @@ Rules:
 
 ## Outcomes, Gates And Leases
 
-Admit one business outcome per Run before dispatching, and declare the route candidate ORDER yourself — Orca validates each candidate against the certified registry and never picks a provider:
+Submit 2-5 fully prepared outcome manifests atomically before dispatching. DCS/Sol supplies the objectives, targets, semantic/resource claims, dependencies, overlap decisions, required gate IDs, and route candidate orders; Orca validates and binds them without inventing the business classification:
 
 ```bash
-orca orchestration outcome-admit --outcome-id <id> --title <text> \
-  --builder-candidates "claude:opus-5:high" \
-  --reviewer-candidates "codex:gpt-5.6-sol:high,grok:grok-4.6" --json
+orca orchestration outcome-intake --batch-id <idempotency_key> \
+  --manifest <prepared-2-to-5-outcomes.json> --json
 ```
 
-Admitting an outcome turns on the fail-closed contract for that Run: worker-start requires a certified route, and `worker_done` requires a completion receipt bound to the exact final HEAD.
+Intake is all-or-nothing and replay-safe. It turns on the fail-closed contract for every admitted Run: worker-start requires a certified route and exact target; successful completion requires the runtime to observe a clean final HEAD and every required runtime-owned gate execution.
 
 The lifecycle then runs itself. After a validated build completion Orca creates **and starts** an independent fresh reviewer on the certified reviewer route, bound to that exact SHA. A reviewer that reports `--corrections` gets one consolidated FIX_FIRST round dispatched back to the **same retained builder terminal** — same session, new Dispatch, delta prompt only. When that correction completes, the gates its new commit invalidated rerun, the new HEAD is validated, and the independent reviewer starts again on the corrected SHA. A clean review emits a `review_complete` wake. If the required role has no currently certified route, Orca emits the protected blocker instead of substituting one.
 
@@ -183,16 +182,14 @@ orca orchestration phase-launch --inspect --json # read the ledger without drivi
 ```
 
 ```bash
-# Which gates may reuse a receipt, and which must rerun:
+# Read-only planning: which historical gates may reuse a runtime-owned receipt:
 orca orchestration gates --sha <sha> --gates "unit,lint,typecheck" --files "src/a.ts" --policy-version gates-v1 --json
-# Record one gate result:
-orca orchestration gates --sha <sha> --gates "unit" --record unit --result PASS --json
-# Protect a running suite from worktree mutation:
-orca orchestration validation-lease --action acquire --dispatch <dispatch_id> --json
-orca orchestration validation-lease --action release --lease-id <id> --dispatch <dispatch_id> --json
+# Execute one immutable required gate. The runtime owns its command, inputs,
+# validation lease, exact process-tree barrier, exit code, and receipt:
+orca orchestration gate-run --dispatch <dispatch_id> --gate <gate_id> --json
 ```
 
-While a lease is active, `worker-start` into that worktree is refused: wait for the lease or use a separate worktree. A completing Dispatch releases its own lease.
+`gate-run` acquires and releases the exact Dispatch/worktree validation lease itself. While it is active, already-running managed workers and every Orca-managed mutation/start path are fenced. Manual lease operations are recovery/inspection tools, not a way for a worker to manufacture gate evidence.
 
 ## Route Registry And Certification
 
@@ -471,7 +468,7 @@ Wait for `tui-idle` before dispatching. Always pass `--timeout-ms`; real coding 
 - Workers with a valid live preamble must report exactly once from their own terminal with an explicit `--outcome succeeded` or `--outcome failed`:
   `orca orchestration report --task <task_id> --dispatch <dispatch_id> --outcome succeeded --body "<3-sentence summary: what you did, what you found, what's left>" --files-modified "path/a" --report-path "<optional>" --json`
 - `report` and `escalate` are the typed worker operations; they fill in the message type and payload so a worker never assembles a `send --type worker_done` command line by hand. `orca orchestration send --type worker_done` remains accepted for older preambles.
-- `report` observes the worktree's final Git HEAD and cleanliness itself. On a Run with an admitted outcome it also requires a test/preflight receipt bound to that exact HEAD: pass `--receipt-sha <sha> --receipt-result PASS`. A PASS produced against an earlier SHA is rejected with the exact stale gate.
+- `report` carries no SHA, cleanliness, or gate verdict. The runtime observes the Dispatch worktree's actual base/final Git state and accepts success only when every immutable required gate has a matching runtime-owned process receipt. A worker cannot state PASS into existence.
 - A failed outcome is still a terminal report, but Orca records both the Dispatch and Task as failed. Never encode failure only in the subject/body.
 - After reporting, end that dispatched turn and idle at the agent prompt. After sending `worker_done`, end that dispatched turn and idle the same way. Do not autonomously start more work, poll, or attempt to close the terminal yourself. A direct user instruction takes precedence and starts ordinary user-owned work: follow it without coordinator approval or a fresh Dispatch, never refuse it because of worker/coordinator roles, and do not reuse the settled Dispatch's lifecycle IDs. A coordinator-supervised follow-up still arrives with a fresh preamble + TASK block on the same terminal.
 - Do not send liveness signals on a timer. Orca derives liveness from the worker's own process/session state, last activity, active tool call, approved blocking waits, provider exit and terminal state; the dispatch preamble no longer asks for a heartbeat cadence. `heartbeat` remains accepted for older preambles.

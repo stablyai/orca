@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
-import { admitOutcomeIntake } from './outcome-identity'
+import { admitOutcomeIntake } from './outcome-intake'
 import { assertOutcomeSerializationAllowed } from './outcome-serialization'
 
 /** SERIALIZED_OVERLAP_MUST_NOT_LAUNCH — intake recorded `serialize` decisions

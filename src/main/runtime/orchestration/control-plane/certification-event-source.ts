@@ -2,7 +2,7 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-type
 import type { OrchestrationDb } from '../db'
 import type { DispatchContextRow } from '../types'
 import { selectDispatchAgentStatus } from './dispatch-liveness-evidence'
-import { readDispatchLaunchReceipt } from './dispatch-route-identity'
+import { readDispatchLaunchReceipt, readDispatchRouteIdentity } from './dispatch-route-identity'
 import type { RouteEvidenceKind } from './route-certification-evidence'
 import { sameRouteIdentity, type RouteIdentity, type SessionMode } from './route-registry-types'
 
@@ -137,6 +137,15 @@ function duplicatePrevented(db: OrchestrationDb, dispatch: DispatchContextRow): 
   return completionMessages(db, dispatch).some((message) => isRejection(message.payload))
 }
 
+function readRetryOf(startOptions: string): string | null {
+  try {
+    const parsed = JSON.parse(startOptions) as { retryOf?: unknown }
+    return typeof parsed.retryOf === 'string' ? parsed.retryOf : null
+  } catch {
+    return null
+  }
+}
+
 /** A real recovery TRANSITION: the Dispatch failed or stalled AND the work was
  *  afterwards picked up again. A failure on its own is just a failure — treating
  *  it as recovery certified a route for surviving something it never survived.
@@ -155,13 +164,33 @@ function recoveryTransition(db: OrchestrationDb, dispatch: DispatchContextRow): 
   if (!failed) {
     return false
   }
+  const failedRoute = readDispatchRouteIdentity(db, dispatch.id)
+  const failedWorker = db.getWorkerDispatch(dispatch.id)
+  if (!failedRoute || !failedWorker?.worktree_id) {
+    return false
+  }
   const later = db.db
     .prepare(
-      `SELECT count(*) AS n FROM dispatch_contexts
-       WHERE task_id = ? AND id <> ? AND rowid > (SELECT rowid FROM dispatch_contexts WHERE id = ?)`
+      `SELECT later.* FROM dispatch_contexts later
+       WHERE later.task_id = ? AND later.id <> ?
+         AND later.rowid > (SELECT rowid FROM dispatch_contexts WHERE id = ?)
+       ORDER BY later.rowid ASC`
     )
-    .get(dispatch.task_id, dispatch.id, dispatch.id) as { n: number } | undefined
-  return (later?.n ?? 0) > 0
+    .all(dispatch.task_id, dispatch.id, dispatch.id) as DispatchContextRow[]
+  return later.some((candidate) => {
+    const worker = db.getWorkerDispatch(candidate.id)
+    const route = readDispatchRouteIdentity(db, candidate.id)
+    return (
+      readRetryOf(worker?.start_options ?? '') === dispatch.id &&
+      worker?.worktree_id === failedWorker.worktree_id &&
+      (worker?.state === 'ready' || worker?.state === 'succeeded') &&
+      worker.stage === 'input_accepted' &&
+      (candidate.status === 'dispatched' || candidate.status === 'completed') &&
+      Boolean(candidate.process_incarnation) &&
+      route !== null &&
+      sameRouteIdentity(route, failedRoute)
+    )
+  })
 }
 
 /** The role actually executed: a builder produced an accepted completion, a
@@ -182,7 +211,7 @@ function roleExecuted(
        WHERE dispatch_id = ? AND kind = 'review' AND state = 'started'`
     )
     .get(dispatch.id) as { n: number } | undefined
-  return (rows?.n ?? 0) > 0
+  return (rows?.n ?? 0) > 0 && acceptedCompletion(db, dispatch)
 }
 
 export function observeCertificationEvidence(args: {

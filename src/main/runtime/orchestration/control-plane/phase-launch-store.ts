@@ -53,6 +53,14 @@ export type PhaseLaunchRow = {
   updated_at: string
 }
 
+export type PhaseStartClaimRow = {
+  phase_id: string
+  owner_epoch: string
+  attempt: number
+  claimed_at: string
+  deadline_at: string
+}
+
 /** How many times the driver will re-attempt a launch before failing closed. */
 export const PHASE_LAUNCH_MAX_ATTEMPTS = 3
 
@@ -95,6 +103,27 @@ export class PhaseLaunchStore {
          ORDER BY created_at ASC, rowid ASC`
       )
       .all(runId) as PhaseLaunchRow[]
+  }
+
+  /** Persisted `starting` rows whose owner can no longer be trusted.  A
+   * missing claim is legacy/unverifiable and is therefore recoverable rather
+   * than silently ignored forever. */
+  listRecoverableStarting(runId: string, nowIso: string): PhaseLaunchRow[] {
+    return this.handle.db
+      .prepare(
+        `SELECT phase.* FROM control_plane_phase_launches phase
+         LEFT JOIN control_plane_phase_start_claims claim ON claim.phase_id = phase.phase_id
+         WHERE phase.run_id = ? AND phase.state = 'starting'
+           AND (claim.phase_id IS NULL OR claim.deadline_at <= ?)
+         ORDER BY phase.created_at ASC, phase.rowid ASC`
+      )
+      .all(runId, nowIso) as PhaseLaunchRow[]
+  }
+
+  getStartClaim(phaseId: string): PhaseStartClaimRow | undefined {
+    return this.handle.db
+      .prepare('SELECT * FROM control_plane_phase_start_claims WHERE phase_id = ?')
+      .get(phaseId) as PhaseStartClaimRow | undefined
   }
 
   /** Idempotent: replaying the same plan returns the existing row untouched. */
@@ -145,25 +174,56 @@ export class PhaseLaunchStore {
    *  actually changed a row owns the launch. Reading the state back instead
    *  would hand the claim to BOTH racing drivers, because the loser would see
    *  the winner's `starting` and believe it had won. */
-  claimForStart(phaseId: string, nowIso: string): boolean {
-    const result = this.handle.db
-      .prepare(
-        `UPDATE control_plane_phase_launches
-         SET state = 'starting', attempts = attempts + 1, updated_at = ?
-         WHERE phase_id = ? AND state IN ('pending', 'start_unknown', 'blocked')`
-      )
-      .run(nowIso, phaseId)
-    return Number(result.changes) === 1
+  claimForStart(args: {
+    phaseId: string
+    ownerEpoch: string
+    nowIso: string
+    deadlineIso: string
+  }): boolean {
+    this.handle.db.exec('BEGIN IMMEDIATE')
+    try {
+      const result = this.handle.db
+        .prepare(
+          `UPDATE control_plane_phase_launches
+           SET state = 'starting', attempts = attempts + 1, updated_at = ?
+           WHERE phase_id = ? AND state IN ('pending', 'start_unknown', 'blocked')`
+        )
+        .run(args.nowIso, args.phaseId)
+      if (Number(result.changes) !== 1) {
+        this.handle.db.exec('ROLLBACK')
+        return false
+      }
+      const row = this.get(args.phaseId) as PhaseLaunchRow
+      this.handle.db
+        .prepare(
+          `INSERT INTO control_plane_phase_start_claims
+             (phase_id, owner_epoch, attempt, claimed_at, deadline_at)
+           VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(phase_id) DO UPDATE SET
+             owner_epoch = excluded.owner_epoch,
+             attempt = excluded.attempt,
+             claimed_at = excluded.claimed_at,
+             deadline_at = excluded.deadline_at`
+        )
+        .run(args.phaseId, args.ownerEpoch, row.attempts, args.nowIso, args.deadlineIso)
+      this.handle.db.exec('COMMIT')
+      return true
+    } catch (error) {
+      this.handle.db.exec('ROLLBACK')
+      throw error
+    }
   }
 
   markStarted(phaseId: string, dispatchId: string, nowIso: string): void {
-    this.handle.db
-      .prepare(
-        `UPDATE control_plane_phase_launches
-         SET state = 'started', dispatch_id = ?, last_error = NULL, updated_at = ?
-         WHERE phase_id = ?`
-      )
-      .run(dispatchId, nowIso, phaseId)
+    this.transitionWithClaimRelease(() => {
+      this.handle.db
+        .prepare(
+          `UPDATE control_plane_phase_launches
+           SET state = 'started', dispatch_id = ?, last_error = NULL, updated_at = ?
+           WHERE phase_id = ?`
+        )
+        .run(dispatchId, nowIso, phaseId)
+    }, phaseId)
   }
 
   /** Binds the Dispatch a failed start still created, without leaving the row
@@ -186,12 +246,28 @@ export class PhaseLaunchStore {
     // condition, not a failing launch. Counting it against the retry budget
     // would burn the loop out while the operator is still certifying the route.
     const attempts = state === 'blocked' ? ', attempts = 0' : ''
-    this.handle.db
-      .prepare(
-        `UPDATE control_plane_phase_launches
-         SET state = ?, last_error = ?, updated_at = ?${attempts}
-         WHERE phase_id = ?`
-      )
-      .run(state, error, nowIso, phaseId)
+    this.transitionWithClaimRelease(() => {
+      this.handle.db
+        .prepare(
+          `UPDATE control_plane_phase_launches
+           SET state = ?, last_error = ?, updated_at = ?${attempts}
+           WHERE phase_id = ?`
+        )
+        .run(state, error, nowIso, phaseId)
+    }, phaseId)
+  }
+
+  private transitionWithClaimRelease(transition: () => void, phaseId: string): void {
+    this.handle.db.exec('BEGIN IMMEDIATE')
+    try {
+      transition()
+      this.handle.db
+        .prepare('DELETE FROM control_plane_phase_start_claims WHERE phase_id = ?')
+        .run(phaseId)
+      this.handle.db.exec('COMMIT')
+    } catch (error) {
+      this.handle.db.exec('ROLLBACK')
+      throw error
+    }
   }
 }

@@ -27,14 +27,15 @@ import { OrchestrationDb } from '../../orchestration/db'
 import { reconcileLifecycleMessage } from '../../orchestration/lifecycle-reconciliation'
 import { OrcaRuntimeService } from '../../orca-runtime'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
-import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
+import type { RuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 
 // Real tree and real HEAD: the completion gate observes both for itself.
 let worktree: ObservedWorktreeFixture
 let HEAD = ''
 const BUILDER: RouteIdentity = { agent: 'claude', model: 'opus-5', reasoning: 'high' }
-const REVIEWER: RouteIdentity = { agent: 'codex', model: 'gpt-5.6-sol', reasoning: 'high' }
+const REVIEWER: RouteIdentity = { agent: 'claude', model: 'fable', reasoning: 'high' }
 const COORD_PANE = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+let BUILD: RuntimeBuildIdentity
 
 function routeRow(identity: RouteIdentity, roles: ('builder' | 'reviewer')[]): RouteRow {
   return {
@@ -73,12 +74,8 @@ function evidenceFor(
     sessionMode,
     outcome: 'PASS' as const,
     observedAt: new Date().toISOString(),
-    // Why resolved, not literal: worker-start now admits evidence only when it
-    // carries THIS runtime build's identity — both the version AND the commit
-    // it was built from — so hand-written values go stale immediately. HEAD
-    // below stays the COMPLETED WORK's sha, which is a different concept.
-    runtimeVersion: resolveRuntimeBuildIdentity().id,
-    commitSha: resolveRuntimeBuildIdentity().commitSha ?? HEAD,
+    runtimeVersion: BUILD.id,
+    commitSha: BUILD.commitSha as string,
     detail: null
   }))
 }
@@ -98,6 +95,15 @@ describe('automatic lifecycle autostart', () => {
     // content-proven for a file that exists in the tree it was earned in.
     worktree.commit('src/a.ts')
     HEAD = worktree.headSha
+    BUILD = {
+      version: 'fixture',
+      buildHash: 'a'.repeat(64),
+      artifactManifestVerified: true,
+      provenanceSource: 'embedded',
+      dirtyBuild: false,
+      commitSha: HEAD,
+      id: `fixture+${'a'.repeat(64)}@${HEAD}`
+    }
   })
   afterAll(() => worktree.cleanup())
 
@@ -105,6 +111,7 @@ describe('automatic lifecycle autostart', () => {
     db = new OrchestrationDb(':memory:')
     runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
+    vi.spyOn(runtime, 'getBuildIdentity').mockReturnValue(BUILD)
     prompts = []
     runId = db.createRun({
       objective: 'Autostart',
@@ -127,7 +134,8 @@ describe('automatic lifecycle autostart', () => {
     )
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue({
       id: worktree.worktreeId,
-      repoId: 'repo'
+      repoId: 'repo',
+      path: worktree.path
     } as never)
     vi.spyOn(runtime, 'isTerminalRunningAgent').mockResolvedValue(true)
     vi.spyOn(runtime, 'createTerminal').mockImplementation(
@@ -153,6 +161,13 @@ describe('automatic lifecycle autostart', () => {
           exitCode: null
         }) as never
     )
+    vi.spyOn(runtime, 'getExactWorkerProviderSession').mockImplementation((handle: string) => ({
+      paneKey: `tab_${handle}:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb`,
+      processIncarnation: `runtime_test:${handle}:1`,
+      agent: 'claude',
+      providerSession: { key: 'session_id', id: `provider_${handle}` },
+      observedAt: Date.now()
+    }))
     vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
     vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockImplementation(async (handle, text) => {
       prompts.push({ handle, text })
@@ -165,8 +180,6 @@ describe('automatic lifecycle autostart', () => {
   function admit(reviewerCandidates: RouteIdentity[] = [REVIEWER]) {
     const store = new ControlPlaneStore(db)
     admitOutcome(store, { outcomeId: 'out_1', runId, title: 'Ship', fingerprint: 'f1' })
-    // The gate now demands a runtime-run gate process bound to the final SHA.
-    recordProvenGate(store, { scopeKey: `${runId}:out_1`, gateId: 'pnpm test', finalSha: HEAD })
     new OutcomePolicyStore(db).put({
       outcomeId: 'out_1',
       taskClassification: 'bounded_implementation',
@@ -193,6 +206,7 @@ describe('automatic lifecycle autostart', () => {
       maxDepth: Number.MAX_SAFE_INTEGER,
       startOptions: {
         agent: identity.agent,
+        baseSha: HEAD,
         launch: {
           requested: { agent: identity.agent, model: identity.model, effort: identity.reasoning },
           effective: { agent: identity.agent, model: identity.model, effort: identity.reasoning }
@@ -211,7 +225,33 @@ describe('automatic lifecycle autostart', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id, [])
-    return db.getDispatchContextById(started.dispatch.id)!
+    markObserved(started.dispatch.id)
+    const dispatch = db.getDispatchContextById(started.dispatch.id)!
+    recordProvenGate(new ControlPlaneStore(db), {
+      scopeKey: `${runId}:out_1`,
+      gateId: 'pnpm test',
+      finalSha: HEAD,
+      cwd: worktree.path,
+      dispatchId: dispatch.id,
+      worktreeId: worktree.worktreeId,
+      buildId: BUILD.id,
+      dependencies: ['src/a.ts']
+    })
+    return dispatch
+  }
+
+  function markObserved(dispatchId: string) {
+    const worker = db.getWorkerDispatch(dispatchId)!
+    const options = JSON.parse(worker.start_options) as Record<string, unknown>
+    options.launch = {
+      ...(options.launch as Record<string, unknown>),
+      effectiveProvenance: 'observed',
+      observedProviderSessionId: `provider_${dispatchId}`,
+      observedAt: new Date().toISOString()
+    }
+    db.db
+      .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+      .run(JSON.stringify(options), dispatchId)
   }
 
   function report(args: {
@@ -222,6 +262,7 @@ describe('automatic lifecycle autostart', () => {
     sha?: string
   }) {
     const sha = args.sha ?? HEAD
+    markObserved(args.dispatchId)
     return db.insertMessage({
       runId,
       from: args.handle,
@@ -258,15 +299,19 @@ describe('automatic lifecycle autostart', () => {
     await driveRunPhaseLaunches({ runtime, ctx: { runtime }, runId })
   }
 
+  function reconcile(message: ReturnType<typeof report>) {
+    return reconcileLifecycleMessage(db, message, undefined, {
+      currentCommitSha: BUILD.commitSha ?? undefined,
+      currentRuntimeVersion: BUILD.id
+    })
+  }
+
   it('starts the independent fresh reviewer on the certified route, bound to the exact SHA', async () => {
     admit()
     const task = db.createTask({ spec: 'build it', runId })
     const builder = launchBuilder(task.id, BUILDER, 'term_builder')
     expect(
-      reconcileLifecycleMessage(
-        db,
-        report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' })
-      )
+      reconcile(report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' }))
     ).toMatchObject({ action: 'completed' })
 
     const store = new PhaseLaunchStore(db)
@@ -292,18 +337,15 @@ describe('automatic lifecycle autostart', () => {
     const startOptions = JSON.parse(
       db.getWorkerDispatch(launched.dispatch_id as string)!.start_options
     )
-    expect(startOptions.agent).toBe('codex')
-    expect(startOptions.launch.effective.model).toBe('gpt-5.6-sol')
+    expect(startOptions.agent).toBe('claude')
+    expect(startOptions.launch.effective.model).toBe('fable')
   })
 
   it('bug-rejecting: driving twice starts the reviewer exactly once', async () => {
     admit()
     const task = db.createTask({ spec: 'build it', runId })
     const builder = launchBuilder(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
-      report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' })
-    )
+    reconcile(report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' }))
     await drive()
     const first = new PhaseLaunchStore(db).list(runId)[0].dispatch_id
     const promptsAfterFirst = prompts.length
@@ -318,17 +360,13 @@ describe('automatic lifecycle autostart', () => {
     admit()
     const task = db.createTask({ spec: 'build it', runId })
     const builder = launchBuilder(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
-      report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' })
-    )
+    reconcile(report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' }))
     await drive()
     const reviewLaunch = new PhaseLaunchStore(db).list(runId)[0]
     const reviewDispatch = db.getDispatchContextById(reviewLaunch.dispatch_id as string)!
 
     prompts.length = 0
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: reviewLaunch.task_id,
         dispatchId: reviewDispatch.id,
@@ -355,17 +393,13 @@ describe('automatic lifecycle autostart', () => {
     admit()
     const task = db.createTask({ spec: 'build it', runId })
     const builder = launchBuilder(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
-      report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' })
-    )
+    reconcile(report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' }))
     await drive()
     const reviewLaunch = new PhaseLaunchStore(db).list(runId)[0]
     const reviewDispatch = db.getDispatchContextById(reviewLaunch.dispatch_id as string)!
     prompts.length = 0
     for (let replay = 0; replay < 3; replay += 1) {
-      reconcileLifecycleMessage(
-        db,
+      reconcile(
         report({
           taskId: reviewLaunch.task_id,
           dispatchId: reviewDispatch.id,
@@ -386,15 +420,11 @@ describe('automatic lifecycle autostart', () => {
     const store = new ControlPlaneStore(db)
     const task = db.createTask({ spec: 'build it', runId })
     const builder = launchBuilder(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
-      report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' })
-    )
+    reconcile(report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' }))
     await drive()
     const firstReview = new PhaseLaunchStore(db).list(runId)[0]
     const reviewDispatch = db.getDispatchContextById(firstReview.dispatch_id as string)!
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: firstReview.task_id,
         dispatchId: reviewDispatch.id,
@@ -411,19 +441,14 @@ describe('automatic lifecycle autostart', () => {
     // SHA alone is not what invalidates it.
     // A real commit, because the runtime reads the tree rather than believing
     // whatever SHA the correction claims.
+    const beforeCorrection = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
     const CORRECTED = worktree.commit('src/corrected.ts')
     HEAD = CORRECTED
-    recordProvenGate(new ControlPlaneStore(db), {
-      scopeKey: `${runId}:out_1`,
-      gateId: 'pnpm test',
-      finalSha: CORRECTED
-    })
-    const beforeCorrection = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
     const contentGate = {
       gateId: 'pnpm test',
       finalSha: CORRECTED,
       inputHashes: beforeCorrection?.inputHashes ?? {},
-      policyVersion: 'gates-v1',
+      policyVersion: 'v1',
       commandIdentity: 'pnpm test'
     }
     expect(canReuseGateReceipt({ receipt: beforeCorrection, current: contentGate })).toMatchObject({
@@ -443,9 +468,19 @@ describe('automatic lifecycle autostart', () => {
       })
     ).toMatchObject({ reuse: false, code: 'sha_changed' })
 
+    recordProvenGate(new ControlPlaneStore(db), {
+      scopeKey: `${runId}:out_1`,
+      gateId: 'pnpm test',
+      finalSha: CORRECTED,
+      cwd: worktree.path,
+      dispatchId: fixDispatch.id,
+      worktreeId: worktree.worktreeId,
+      buildId: BUILD.id,
+      dependencies: ['src/a.ts']
+    })
+
     prompts.length = 0
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: fix.task_id,
         dispatchId: fixDispatch.id,
@@ -470,10 +505,7 @@ describe('automatic lifecycle autostart', () => {
     admit([])
     const task = db.createTask({ spec: 'build it', runId })
     const builder = launchBuilder(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
-      report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' })
-    )
+    reconcile(report({ taskId: task.id, dispatchId: builder.id, handle: 'term_builder' }))
     await drive()
     expect(new PhaseLaunchStore(db).list(runId)).toEqual([])
     const blocker = db

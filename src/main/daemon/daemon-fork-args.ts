@@ -20,6 +20,8 @@ export type DaemonForkArgsInput = {
   macosLoginSessionWatch: boolean
   logArgs: readonly string[]
   ownerPid: number
+  /** Exact incarnation of the owner. PID alone is recyclable. */
+  ownerStartedAtMs: number
   /** Seam for tests; production reads the real environment. */
   disposableProfile?: boolean
 }
@@ -45,7 +47,14 @@ export function buildDaemonForkArgs(input: DaemonForkArgsInput): string[] {
     // A throwaway state root has nothing to reattach to, so the daemon must die
     // with the runtime that owns it — including when that runtime is SIGKILLed
     // and never runs a quit path at all.
-    ...(disposable ? ['--retire-with-owner', String(input.ownerPid)] : []),
+    ...(disposable
+      ? [
+          '--retire-with-owner',
+          String(input.ownerPid),
+          '--retire-with-owner-started-at',
+          String(input.ownerStartedAtMs)
+        ]
+      : []),
     ...input.logArgs
   ]
 }

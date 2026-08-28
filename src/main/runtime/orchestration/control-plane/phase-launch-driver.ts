@@ -58,6 +58,7 @@ export type PhaseWorkerStarter = {
 }
 
 export const PHASE_LAUNCH_CALLER_FINGERPRINT = 'orca:lifecycle-phase-driver'
+export const PHASE_START_CLAIM_TIMEOUT_MS = 120_000
 
 export function phaseLaunchPayloadHash(row: PhaseLaunchRow): string {
   return createHash('sha256')
@@ -119,12 +120,58 @@ export async function drivePhaseLaunches(args: {
   runId: string
   starter: PhaseWorkerStarter
   nowMs: number
+  /** Exact process/runtime incarnation that owns a persisted STARTING claim. */
+  runtimeEpoch?: string
+  claimTimeoutMs?: number
   notify?: (handle: string, messageType: string) => void
 }): Promise<PhaseLaunchDriveResult> {
   const store = new PhaseLaunchStore(args.db)
   const nowIso = new Date(args.nowMs).toISOString()
+  const ownerEpoch = args.runtimeEpoch ?? 'test-runtime'
+  const claimDeadlineIso = new Date(
+    args.nowMs + (args.claimTimeoutMs ?? PHASE_START_CLAIM_TIMEOUT_MS)
+  ).toISOString()
   const launched: PhaseLaunchReport[] = []
   const blockerMessageIds: string[] = []
+
+  // A process may die after persisting STARTING but before it records the
+  // worker-start response.  Once the exact owner claim expires, reconcile the
+  // stable mutation id first.  If there is no accepted Dispatch, re-arm the
+  // same phase as start_unknown; the next attempt presents the identical
+  // request and therefore cannot fork a second worker.
+  for (const stranded of store.listRecoverableStarting(args.runId, nowIso)) {
+    const request = toRequest(stranded)
+    const recovered = request ? await safeReconcile(args.starter, request) : null
+    if (recovered) {
+      store.markStarted(stranded.phase_id, recovered.dispatchId, nowIso)
+      launched.push(report(store, stranded.phase_id))
+      continue
+    }
+    if (stranded.attempts >= PHASE_LAUNCH_MAX_ATTEMPTS) {
+      store.markOutcome(
+        stranded.phase_id,
+        'failed',
+        'The STARTING owner expired and the exact worker-start mutation could not be reconciled.',
+        nowIso
+      )
+      blockerMessageIds.push(
+        publishLaunchBlocker(
+          args,
+          stranded,
+          'phase_start_recovery_exhausted',
+          'The STARTING owner expired and the exact worker-start mutation could not be reconciled.'
+        )
+      )
+      launched.push(report(store, stranded.phase_id, 'phase_start_recovery_exhausted'))
+      continue
+    }
+    store.markOutcome(
+      stranded.phase_id,
+      'start_unknown',
+      'The STARTING owner expired; no accepted Dispatch exists for the stable mutation id.',
+      nowIso
+    )
+  }
 
   for (const pending of store.listActionable(args.runId)) {
     const request = toRequest(pending)
@@ -159,7 +206,14 @@ export async function drivePhaseLaunches(args: {
       launched.push(report(store, pending.phase_id))
       continue
     }
-    if (!store.claimForStart(pending.phase_id, nowIso)) {
+    if (
+      !store.claimForStart({
+        phaseId: pending.phase_id,
+        ownerEpoch,
+        nowIso,
+        deadlineIso: claimDeadlineIso
+      })
+    ) {
       continue
     }
     const claimed = store.get(pending.phase_id) as PhaseLaunchRow

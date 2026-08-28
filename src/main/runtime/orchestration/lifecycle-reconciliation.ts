@@ -151,7 +151,9 @@ function reconcileWorkerDoneMessage(
     runId: dispatch.run_id,
     taskId,
     dispatchId,
-    payload
+    payload,
+    reportedOutcome: outcome,
+    currentRuntimeVersion: hooks?.currentRuntimeVersion
   })
   if (gate.applies && !gate.ok) {
     return rejectLifecycleMessage(
@@ -165,11 +167,16 @@ function reconcileWorkerDoneMessage(
 
   // Why: `orchestration.send` can release the DB lock before waking the
   // coordinator; the later coordinator read still needs to observe completion.
+  // An outcome-admitted completion is authoritative only for the paths Git
+  // reported from the Dispatch worktree. The worker's list remains prose input
+  // for legacy rows, but it cannot narrow or rewrite the settled result.
   const filesModified =
-    Array.isArray(payload.filesModified) &&
-    payload.filesModified.every((file) => typeof file === 'string')
-      ? payload.filesModified
-      : []
+    gate.applies && gate.ok
+      ? [...gate.changedFiles]
+      : Array.isArray(payload.filesModified) &&
+          payload.filesModified.every((file) => typeof file === 'string')
+        ? payload.filesModified
+        : []
 
   const result = JSON.stringify({
     provenance: 'worker_report',
@@ -193,7 +200,7 @@ function reconcileWorkerDoneMessage(
     return rejectLifecycleMessage(db, msg, settlement.code, settlement.reason, onLog)
   }
   suppressEarlierHeartbeats(db, msg, dispatchId)
-  if (gate.applies && gate.ok) {
+  if (outcome === 'succeeded' && gate.applies && gate.ok && gate.claim) {
     // Why here: the completion is now settled and proven, which is exactly the
     // point the reviewer phase, gate receipt, lease release and ledger entry
     // become derivable. Never on a rejected or unproven completion.
@@ -204,7 +211,8 @@ function reconcileWorkerDoneMessage(
       // from the accepted completion, and must see the settled row.
       dispatch: db.getDispatchContextById(dispatchId) ?? dispatch,
       taskId,
-      payload,
+      payload: { ...payload, completion: gate.claim, filesModified },
+      claim: gate.claim,
       finalSha: gate.finalSha,
       outcomeOfReport: outcome as WorkerReportOutcome,
       onLog,

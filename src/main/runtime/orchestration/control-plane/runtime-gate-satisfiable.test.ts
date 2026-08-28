@@ -33,12 +33,26 @@ describe('THE_GATE_MUST_BE_SATISFIABLE_BY_A_REAL_PROCESS', () => {
 
   const scopeKey = 'run_1:out_1'
 
+  const authority = (gateId: string, finalSha: string, cwd: string, buildId = 'build-1') => ({
+    scopeKey,
+    gateId,
+    finalSha,
+    buildId,
+    runId: 'run_1',
+    outcomeId: 'out_1',
+    dispatchId: 'ctx_1',
+    worktreeId: `repo::${cwd}`,
+    policyVersion: 'v1',
+    commandIdentity: gateId,
+    specHash: `spec-${gateId}`,
+    inputHashes: { 'file:a.txt': 'hash' },
+    shaBinding: 'exact_head' as const
+  })
+
   it('a real zero-exit process makes the gate proven', () => {
     const { store, sha, cwd } = world()
     const result = runGate(store, {
-      scopeKey,
-      gateId: 'unit',
-      finalSha: sha,
+      ...authority('unit', sha, cwd),
       program: 'git',
       args: ['rev-parse', 'HEAD'],
       cwd,
@@ -46,49 +60,43 @@ describe('THE_GATE_MUST_BE_SATISFIABLE_BY_A_REAL_PROCESS', () => {
     })
     expect(result.passed).toBe(true)
     expect(result.execution.exit_code).toBe(0)
-    expect(hasRuntimeProvenGate(store, { scopeKey, gateId: 'unit', finalSha: sha })).toBe(true)
+    expect(hasRuntimeProvenGate(store, authority('unit', sha, cwd))).toBe(true)
   })
 
   it('a real failing process does NOT make it proven', () => {
     const { store, sha, cwd } = world()
     const result = runGate(store, {
-      scopeKey,
-      gateId: 'unit',
-      finalSha: sha,
+      ...authority('unit', sha, cwd),
       program: 'git',
       args: ['rev-parse', 'refs/heads/nope-does-not-exist'],
       cwd,
       buildId: 'build-1'
     })
     expect(result.passed).toBe(false)
-    expect(hasRuntimeProvenGate(store, { scopeKey, gateId: 'unit', finalSha: sha })).toBe(false)
+    expect(hasRuntimeProvenGate(store, authority('unit', sha, cwd))).toBe(false)
   })
 
   it('a proven gate is bound to its exact SHA and gate id', () => {
     const { store, sha, cwd } = world()
     runGate(store, {
-      scopeKey,
-      gateId: 'unit',
-      finalSha: sha,
+      ...authority('unit', sha, cwd),
       program: 'git',
       args: ['rev-parse', 'HEAD'],
       cwd,
       buildId: 'build-1'
     })
     const other = 'b'.repeat(40)
-    expect(hasRuntimeProvenGate(store, { scopeKey, gateId: 'unit', finalSha: other })).toBe(false)
-    expect(hasRuntimeProvenGate(store, { scopeKey, gateId: 'lint', finalSha: sha })).toBe(false)
+    expect(hasRuntimeProvenGate(store, authority('unit', other, cwd))).toBe(false)
+    expect(hasRuntimeProvenGate(store, authority('lint', sha, cwd))).toBe(false)
     expect(
-      hasRuntimeProvenGate(store, { scopeKey: 'other:out', gateId: 'unit', finalSha: sha })
+      hasRuntimeProvenGate(store, { ...authority('unit', sha, cwd), scopeKey: 'other:out' })
     ).toBe(false)
   })
 
   it('records what actually ran, not what was asked for', () => {
     const { store, sha, cwd } = world()
     const { execution } = runGate(store, {
-      scopeKey,
-      gateId: 'unit',
-      finalSha: sha,
+      ...authority('unit', sha, cwd, 'build-7'),
       program: 'git',
       args: ['rev-parse', 'HEAD'],
       cwd,

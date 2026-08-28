@@ -1,5 +1,6 @@
 import type { ControlPlaneStore } from './control-plane-store'
 import type { OrchestrationDb } from '../db'
+import { readOutcomeDependencies } from './outcome-identity'
 
 /** Correction — a `serialize` decision has to actually serialize something.
  *
@@ -19,6 +20,14 @@ export type SerializationVerdict =
       blockingDispatchId: string
       reason: string
     }
+  | {
+      allowed: false
+      code: 'outcome_dependency_unsettled' | 'outcome_manifest_unreadable'
+      blockingOutcomeId: string
+      blockingRunId: string
+      blockingDispatchId: string
+      reason: string
+    }
 
 const ACTIVE_STATUSES = ['pending', 'dispatched'] as const
 
@@ -30,6 +39,30 @@ export function assertOutcomeSerializationAllowed(args: {
   const outcome = args.store.getOutcomeByRun(args.runId)
   if (!outcome) {
     return { allowed: true }
+  }
+  const dependencies = readOutcomeDependencies(args.store, outcome.outcome_id)
+  if (dependencies === null) {
+    return {
+      allowed: false,
+      code: 'outcome_manifest_unreadable',
+      blockingOutcomeId: outcome.outcome_id,
+      blockingRunId: outcome.run_id,
+      blockingDispatchId: '',
+      reason: `Outcome ${outcome.outcome_id} has no readable immutable intake manifest.`
+    }
+  }
+  for (const dependencyId of dependencies) {
+    const dependency = args.store.getOutcomeById(dependencyId)
+    if (!dependency || dependency.status !== 'closed') {
+      return {
+        allowed: false,
+        code: 'outcome_dependency_unsettled',
+        blockingOutcomeId: dependencyId,
+        blockingRunId: dependency?.run_id ?? '',
+        blockingDispatchId: '',
+        reason: `Outcome ${outcome.outcome_id} depends on ${dependencyId}, which is not settled.`
+      }
+    }
   }
   for (const relation of args.store.listOutcomeRelations(outcome.outcome_id)) {
     if (relation.decision !== 'serialize') {

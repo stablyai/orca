@@ -71,6 +71,11 @@ export const AGENT_STATE_HISTORY_MAX = 20
 export type AgentStatusOrchestrationContext = {
   taskId: string
   dispatchId: string
+  /** Exact provider process authority for this Dispatch. Liveness must never
+   * reuse a status row from a replacement process in the same pane. */
+  processIncarnation?: string
+  launchTokenHash?: string
+  dispatchedAt?: string
   /** Runtime-authoritative lifecycle state. Hook-only contexts may omit it. */
   dispatchStatus?: 'pending' | 'dispatched' | 'completed' | 'failed' | 'circuit_broken'
   taskTitle?: string

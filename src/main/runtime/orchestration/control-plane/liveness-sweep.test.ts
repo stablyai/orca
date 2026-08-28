@@ -1,7 +1,7 @@
+import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { OrchestrationDb } from '../db'
-import { createRootDispatch } from '../db/root-dispatch-test-fixture'
 import type { DispatchContextRow } from '../types'
 import { ControlPlaneStore } from './control-plane-store'
 import { classifyWakeReason } from './coordinator-wake-events'
@@ -12,14 +12,19 @@ import {
   runLivenessSweep,
   type LivenessSignalSource
 } from './liveness-sweep'
+import { persistDispatchProviderSessionBinding } from './provider-session-identity'
 
-const NOW = Date.parse('2026-08-27T12:00:00.000Z')
+const NOW = Date.now()
+const TOKEN = 'token-liveness'
+const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex')
 
 function statusRow(overrides: Partial<AgentStatusIpcPayload> = {}): AgentStatusIpcPayload {
   return {
     state: 'working',
     prompt: 'do the work',
     paneKey: 'tab:leaf',
+    terminalHandle: 'term_worker',
+    launchToken: TOKEN,
     connectionId: null,
     receivedAt: NOW - 5_000,
     stateStartedAt: NOW - 60_000,
@@ -43,7 +48,7 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
       run_id: 'run_1',
       task_id: 'task_1',
       contract_version: 1,
-      launch_token_hash: null,
+      launch_token_hash: TOKEN_HASH,
       assignee_handle: 'term_worker',
       assignee_pane_key: 'tab:leaf',
       capability_hash: null,
@@ -154,12 +159,40 @@ describe('B4 correction 2: evidence comes from real runtime signals', () => {
 
   it('prefers the hook row stamped with this exact Dispatch over a pane match', () => {
     const stamped = statusRow({
-      paneKey: 'other:pane',
       receivedAt: NOW - 60_000,
-      orchestration: { taskId: 'task_1', dispatchId: 'ctx_1' }
+      orchestration: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        processIncarnation: 'pty1:inc1',
+        launchTokenHash: TOKEN_HASH
+      }
     })
-    const paneOnly = statusRow({ receivedAt: NOW })
+    const paneOnly = statusRow({ receivedAt: NOW, orchestration: undefined })
     expect(selectDispatchAgentStatus(dispatch(), [paneOnly, stamped])).toBe(stamped)
+  })
+
+  it('rejects missing/wrong launch tokens and a replacement process in the same pane', () => {
+    const exact = statusRow({
+      orchestration: {
+        taskId: 'task_1',
+        dispatchId: 'ctx_1',
+        processIncarnation: 'pty1:inc1',
+        launchTokenHash: TOKEN_HASH
+      }
+    })
+    expect(selectDispatchAgentStatus(dispatch(), [exact])).toBe(exact)
+    expect(selectDispatchAgentStatus(dispatch(), [{ ...exact, launchToken: undefined }])).toBeNull()
+    expect(
+      selectDispatchAgentStatus(dispatch(), [{ ...exact, launchToken: 'replacement' }])
+    ).toBeNull()
+    expect(
+      selectDispatchAgentStatus(dispatch(), [
+        {
+          ...exact,
+          orchestration: { ...exact.orchestration!, processIncarnation: 'pty1:inc2' }
+        }
+      ])
+    ).toBeNull()
   })
 
   it('never reads a model heartbeat: last_heartbeat_at is not an input', () => {
@@ -185,7 +218,34 @@ describe('B4 correction 2: the sweep is the production owner', () => {
     const task = db.createTask({ spec: 'work' })
     // A recorded process incarnation is what makes the host probe meaningful;
     // without one the runtime honestly reports `unverifiable` instead of a stall.
-    const row = createRootDispatch(db, task.id, 'term_worker', 'tab:leaf', undefined, 'pty1:inc1')
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: {
+        agent: 'claude',
+        launch: {
+          requested: { agent: 'claude', model: 'opus-5', effort: 'high' },
+          effective: { agent: 'claude', model: 'opus-5', effort: 'high' }
+        }
+      }
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: 'term_worker',
+      paneKey: 'tab:leaf',
+      processIncarnation: 'pty1:inc1',
+      launchTokenHash: TOKEN_HASH,
+      worktreeId: 'repo::/tmp/liveness-worker',
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'created'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id, [])
+    const row = db.getDispatchContextById(started.dispatch.id)!
+    db.db
+      .prepare('UPDATE dispatch_contexts SET dispatched_at = ? WHERE id = ?')
+      .run(new Date(NOW - 30 * 60 * 1000).toISOString(), row.id)
     return { task, dispatch: row, runId: row.run_id }
   }
 
@@ -202,9 +262,7 @@ describe('B4 correction 2: the sweep is the production owner', () => {
       runId,
       nowMs: NOW,
       publisher: { notifyMessageArrived: notify },
-      source: source({
-        agentStatusSnapshot: () => [statusRow({ receivedAt: NOW - 30 * 60 * 1000 })]
-      })
+      source: source()
     }).then((result) => {
       expect(result.wakes).toEqual([
         expect.objectContaining({ dispatchId: dispatch.id, reason: 'stalled' })
@@ -219,9 +277,7 @@ describe('B4 correction 2: the sweep is the production owner', () => {
 
   it('is idempotent: a second sweep in the same state publishes nothing', async () => {
     const { runId } = setup()
-    const stalled = source({
-      agentStatusSnapshot: () => [statusRow({ receivedAt: NOW - 30 * 60 * 1000 })]
-    })
+    const stalled = source()
     await runLivenessSweep({ db, runId, nowMs: NOW, source: stalled })
     const second = await runLivenessSweep({ db, runId, nowMs: NOW + 1000, source: stalled })
     expect(second.wakes).toEqual([])
@@ -239,7 +295,10 @@ describe('B4 correction 2: the sweep is the production owner', () => {
 
   it('crashes terminally on a provider exit and never resurrects', async () => {
     const { runId, dispatch } = setup()
-    db.failDispatch(dispatch.id, 'gone', { terminationReason: 'signaled' })
+    db.failDispatch(dispatch.id, 'gone', {
+      terminationReason: 'signaled',
+      workerProcessExited: true
+    })
     // A failed Dispatch is no longer active, so the sweep must not touch it.
     expect(listActiveDispatchesForRun(db, runId)).toEqual([])
     const result = await runLivenessSweep({ db, runId, nowMs: NOW, source: source() })
@@ -253,7 +312,6 @@ describe('B4 correction 2: the sweep is the production owner', () => {
       runId,
       nowMs: NOW,
       source: source({
-        agentStatusSnapshot: () => [statusRow({ receivedAt: NOW - 30 * 60 * 1000 })],
         approvedWaitUntil: (id) =>
           id === dispatch.id ? new Date(NOW + 60_000).toISOString() : null
       })
@@ -277,6 +335,65 @@ describe('B4 correction 2: the sweep is the production owner', () => {
       })
     })
     expect(new ControlPlaneStore(db).getLivenessMarker(dispatch.id)?.verdict).toBe('unverifiable')
+  })
+
+  it('marks the Dispatch crashed when the provider exits back to a still-live shell', async () => {
+    const { runId, dispatch } = setup()
+    const result = await runLivenessSweep({
+      db,
+      runId,
+      nowMs: NOW,
+      source: source({
+        inspectProcessLiveness: async () => 'live',
+        inspectProviderProcessLiveness: async () => 'exited',
+        lastTerminalOutputAtMs: () => NOW
+      })
+    })
+    expect(result.wakes).toEqual([
+      expect.objectContaining({ dispatchId: dispatch.id, reason: 'crashed' })
+    ])
+    expect(new ControlPlaneStore(db).getLivenessMarker(dispatch.id)).toMatchObject({
+      verdict: 'exited',
+      activity: 'crashed'
+    })
+  })
+
+  it('does not let a replacement provider session in the same PTY refresh the old Dispatch', async () => {
+    const { runId, dispatch } = setup()
+    expect(
+      persistDispatchProviderSessionBinding(db, {
+        dispatchId: dispatch.id,
+        binding: {
+          agent: 'claude',
+          key: 'session_id',
+          id: 'session-old',
+          processIncarnation: 'pty1:inc1',
+          observedAtMs: NOW - 10_000
+        }
+      })
+    ).toBe(true)
+    const exactStatus = statusRow({
+      providerSession: { key: 'session_id', id: 'session-new' },
+      orchestration: {
+        taskId: dispatch.task_id,
+        dispatchId: dispatch.id,
+        processIncarnation: 'pty1:inc1',
+        launchTokenHash: TOKEN_HASH
+      }
+    })
+    const result = await runLivenessSweep({
+      db,
+      runId,
+      nowMs: NOW,
+      source: source({
+        agentStatusSnapshot: () => [exactStatus],
+        inspectProviderProcessLiveness: async () => 'live',
+        lastTerminalOutputAtMs: () => NOW
+      })
+    })
+    expect(result.wakes).toEqual([
+      expect.objectContaining({ dispatchId: dispatch.id, reason: 'crashed' })
+    ])
   })
 })
 

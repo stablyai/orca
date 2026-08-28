@@ -20,88 +20,20 @@ export function ensureControlPlaneTables(handle: ControlPlaneDatabaseHandle): vo
   ENSURED_HANDLES.add(handle.db)
 }
 
-export type OutcomeRow = {
-  outcome_id: string
-  run_id: string
-  title: string
-  fingerprint: string
-  intake_batch: string | null
-  status: 'admitted' | 'closed'
-  gate_policy: 'standard' | 'high_risk'
-  created_at: string
-}
+export * from './control-plane-rows'
+import { ControlPlaneLeaseStore } from './control-plane-lease-store'
+import type {
+  GateExecutionAuthorityRow,
+  GateExecutionRow,
+  OutcomeRelationRow,
+  OutcomeRow,
+  RequiredGateSpecRow,
+  ValidationLeaseAuthorityRow
+} from './control-plane-rows'
 
-export type GateExecutionRow = {
-  execution_id: string
-  scope_key: string
-  gate_id: string
-  final_sha: string
-  command: string
-  exit_code: number | null
-  log_digest: string
-  build_id: string
-  started_at: string
-  finished_at: string
-}
-
-export type OutcomeRelationRow = {
-  left_outcome_id: string
-  right_outcome_id: string
-  kind: 'semantic_overlap' | 'resource_collision'
-  decision: 'independent' | 'serialize' | 'merge'
-  rationale: string
-}
-
-export type LivenessMarkerRow = {
-  dispatch_id: string
-  verdict: 'live' | 'unverifiable' | 'exited'
-  activity: 'working' | 'blocked_on_approved_wait' | 'stalled' | 'crashed' | 'settled'
-  reason: string
-  observed_at: string
-  expires_at: string
-  epoch: string | null
-  woke_for: string | null
-  terminal: number
-}
-
-export type GateReceiptRow = {
-  receipt_id: string
-  scope_key: string
-  gate_id: string
-  final_sha: string
-  input_hashes: string
-  policy_version: string
-  command_identity: string
-  result: 'PASS' | 'FAIL'
-  recorded_at: string
-}
-
-export type ValidationLeaseRow = {
-  scope_key: string
-  lease_id: string
-  owner: string
-  idempotency_key: string
-  acquired_at: string
-  expires_at: string
-  released_at: string | null
-}
-
-/** Thin typed accessor over the additive control-plane tables. Every method is
- *  a single statement; the transaction boundary belongs to the caller so a
- *  multi-row admission stays atomic with the orchestration write it guards. */
-export class ControlPlaneStore {
-  private readonly handle: ControlPlaneDatabaseHandle
-
-  constructor(handle: ControlPlaneDatabaseHandle) {
-    this.handle = handle
-    ensureControlPlaneTables(handle)
-  }
-
-  /** The underlying database, for callers that must wrap several store writes
-   *  in one transaction (atomic outcome intake). */
-  get db(): ControlPlaneDatabaseHandle['db'] {
-    return this.handle.db
-  }
+export class ControlPlaneStore extends ControlPlaneLeaseStore {
+  /** `handle` and the `db` accessor — for callers that must wrap several store
+   *  writes in one transaction (atomic outcome intake) — come from the base. */
 
   // --- B2 outcomes --------------------------------------------------------
 
@@ -138,11 +70,105 @@ export class ControlPlaneStore {
   insertOutcomeRelation(row: OutcomeRelationRow): void {
     this.handle.db
       .prepare(
-        `INSERT OR REPLACE INTO control_plane_outcome_relations
+        `INSERT INTO control_plane_outcome_relations
            (left_outcome_id, right_outcome_id, kind, decision, rationale)
          VALUES (?, ?, ?, ?, ?)`
       )
       .run(row.left_outcome_id, row.right_outcome_id, row.kind, row.decision, row.rationale)
+  }
+
+  closeOutcome(outcomeId: string): void {
+    this.handle.db
+      .prepare("UPDATE control_plane_outcomes SET status = 'closed' WHERE outcome_id = ?")
+      .run(outcomeId)
+  }
+
+  getValidationLeaseAuthority(
+    scopeKey: string,
+    leaseId: string
+  ): ValidationLeaseAuthorityRow | undefined {
+    return this.handle.db
+      .prepare(
+        `SELECT * FROM control_plane_validation_lease_authority
+         WHERE scope_key = ? AND lease_id = ?`
+      )
+      .get(scopeKey, leaseId) as ValidationLeaseAuthorityRow | undefined
+  }
+
+  insertValidationLeaseAuthority(row: ValidationLeaseAuthorityRow): void {
+    this.handle.db
+      .prepare(
+        `INSERT INTO control_plane_validation_lease_authority
+           (scope_key, lease_id, run_id, outcome_id, task_id, dispatch_id, worktree_id,
+            owner_handle, owner_pane_key, process_incarnation, launch_token_hash,
+            runtime_id, build_id, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        row.scope_key,
+        row.lease_id,
+        row.run_id,
+        row.outcome_id,
+        row.task_id,
+        row.dispatch_id,
+        row.worktree_id,
+        row.owner_handle,
+        row.owner_pane_key,
+        row.process_incarnation,
+        row.launch_token_hash,
+        row.runtime_id,
+        row.build_id,
+        row.expires_at
+      )
+  }
+
+  insertRequiredGateSpec(row: RequiredGateSpecRow): void {
+    this.handle.db
+      .prepare(
+        `INSERT INTO control_plane_required_gate_specs
+           (outcome_id, gate_id, program, args_json, dependencies_json, policy_version,
+            command_identity, sha_binding, spec_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        row.outcome_id,
+        row.gate_id,
+        row.program,
+        row.args_json,
+        row.dependencies_json,
+        row.policy_version,
+        row.command_identity,
+        row.sha_binding,
+        row.spec_hash
+      )
+  }
+
+  getRequiredGateSpec(outcomeId: string, gateId: string): RequiredGateSpecRow | undefined {
+    return this.handle.db
+      .prepare(
+        'SELECT * FROM control_plane_required_gate_specs WHERE outcome_id = ? AND gate_id = ?'
+      )
+      .get(outcomeId, gateId) as RequiredGateSpecRow | undefined
+  }
+
+  findRequiredGateSpecByCommandIdentity(
+    outcomeId: string,
+    commandIdentity: string
+  ): RequiredGateSpecRow | undefined {
+    return this.handle.db
+      .prepare(
+        `SELECT * FROM control_plane_required_gate_specs
+         WHERE outcome_id = ? AND command_identity = ? LIMIT 1`
+      )
+      .get(outcomeId, commandIdentity) as RequiredGateSpecRow | undefined
+  }
+
+  listRequiredGateSpecs(outcomeId: string): RequiredGateSpecRow[] {
+    return this.handle.db
+      .prepare(
+        'SELECT * FROM control_plane_required_gate_specs WHERE outcome_id = ? ORDER BY gate_id'
+      )
+      .all(outcomeId) as RequiredGateSpecRow[]
   }
 
   recordGateExecution(row: GateExecutionRow): void {
@@ -167,19 +193,78 @@ export class ControlPlaneStore {
       )
   }
 
+  recordGateExecutionAuthority(row: GateExecutionAuthorityRow): void {
+    this.handle.db
+      .prepare(
+        `INSERT INTO control_plane_gate_execution_authority
+           (execution_id, run_id, outcome_id, dispatch_id, worktree_id, build_id,
+            policy_version, command_identity, spec_hash, input_hashes)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        row.execution_id,
+        row.run_id,
+        row.outcome_id,
+        row.dispatch_id,
+        row.worktree_id,
+        row.build_id,
+        row.policy_version,
+        row.command_identity,
+        row.spec_hash,
+        row.input_hashes
+      )
+  }
+
   /** A successful runtime-owned execution of this gate at this exact SHA. */
   findSuccessfulGateExecution(args: {
     scopeKey: string
     gateId: string
-    finalSha: string
+    finalSha?: string
+    buildId?: string
+    runId?: string
+    outcomeId?: string
+    dispatchId?: string
+    worktreeId?: string
+    specHash?: string
+    inputHashes?: string
   }): GateExecutionRow | undefined {
+    const clauses = ['execution.scope_key = ?', 'execution.gate_id = ?', 'execution.exit_code = 0']
+    const values: Database.BindValue[] = [args.scopeKey, args.gateId]
+    if (args.finalSha !== undefined) {
+      clauses.push('execution.final_sha = ?')
+      values.push(args.finalSha)
+    }
+    const authorityFields: [keyof typeof args, string][] = [
+      ['buildId', 'authority.build_id'],
+      ['runId', 'authority.run_id'],
+      ['outcomeId', 'authority.outcome_id'],
+      ['dispatchId', 'authority.dispatch_id'],
+      ['worktreeId', 'authority.worktree_id'],
+      ['specHash', 'authority.spec_hash'],
+      ['inputHashes', 'authority.input_hashes']
+    ]
+    for (const [key, column] of authorityFields) {
+      const value = args[key]
+      if (value !== undefined) {
+        clauses.push(`${column} = ?`)
+        values.push(value)
+      }
+    }
+    const requiresAuthority = authorityFields.some(([key]) => args[key] !== undefined)
     return this.handle.db
       .prepare(
-        `SELECT * FROM control_plane_gate_executions
-         WHERE scope_key = ? AND gate_id = ? AND final_sha = ? AND exit_code = 0
-         ORDER BY rowid DESC LIMIT 1`
+        `SELECT execution.* FROM control_plane_gate_executions AS execution
+         ${requiresAuthority ? 'JOIN control_plane_gate_execution_authority AS authority ON authority.execution_id = execution.execution_id' : ''}
+         WHERE ${clauses.join(' AND ')}
+         ORDER BY execution.rowid DESC LIMIT 1`
       )
-      .get(args.scopeKey, args.gateId, args.finalSha) as GateExecutionRow | undefined
+      .get(...values) as GateExecutionRow | undefined
+  }
+
+  getGateExecutionAuthority(executionId: string): GateExecutionAuthorityRow | undefined {
+    return this.handle.db
+      .prepare('SELECT * FROM control_plane_gate_execution_authority WHERE execution_id = ?')
+      .get(executionId) as GateExecutionAuthorityRow | undefined
   }
 
   getIntakeBatch(batchId: string): { batch_id: string; manifest_fingerprint: string } | undefined {
@@ -191,10 +276,33 @@ export class ControlPlaneStore {
   putIntakeBatch(row: { batch_id: string; manifest_fingerprint: string }): void {
     this.handle.db
       .prepare(
-        `INSERT OR IGNORE INTO control_plane_intake_batches (batch_id, manifest_fingerprint)
+        `INSERT INTO control_plane_intake_batches (batch_id, manifest_fingerprint)
          VALUES (?, ?)`
       )
       .run(row.batch_id, row.manifest_fingerprint)
+  }
+
+  getIntakeManifest(
+    batchId: string
+  ): { batch_id: string; schema_version: number; manifest_json: string } | undefined {
+    return this.handle.db
+      .prepare('SELECT * FROM control_plane_intake_manifests WHERE batch_id = ?')
+      .get(batchId) as
+      | { batch_id: string; schema_version: number; manifest_json: string }
+      | undefined
+  }
+
+  putIntakeManifest(row: {
+    batch_id: string
+    schema_version: number
+    manifest_json: string
+  }): void {
+    this.handle.db
+      .prepare(
+        `INSERT INTO control_plane_intake_manifests (batch_id, schema_version, manifest_json)
+         VALUES (?, ?, ?)`
+      )
+      .run(row.batch_id, row.schema_version, row.manifest_json)
   }
 
   listOutcomeRelations(outcomeId: string): OutcomeRelationRow[] {
@@ -207,131 +315,4 @@ export class ControlPlaneStore {
   }
 
   // --- B4 liveness markers -------------------------------------------------
-
-  getLivenessMarker(dispatchId: string): LivenessMarkerRow | undefined {
-    return this.handle.db
-      .prepare('SELECT * FROM control_plane_dispatch_liveness WHERE dispatch_id = ?')
-      .get(dispatchId) as LivenessMarkerRow | undefined
-  }
-
-  putLivenessMarker(row: LivenessMarkerRow): void {
-    this.handle.db
-      .prepare(
-        `INSERT INTO control_plane_dispatch_liveness
-           (dispatch_id, verdict, activity, reason, observed_at, expires_at, epoch, woke_for, terminal)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT(dispatch_id) DO UPDATE SET
-           verdict = excluded.verdict,
-           activity = excluded.activity,
-           reason = excluded.reason,
-           observed_at = excluded.observed_at,
-           expires_at = excluded.expires_at,
-           epoch = excluded.epoch,
-           woke_for = excluded.woke_for,
-           terminal = excluded.terminal
-         WHERE control_plane_dispatch_liveness.terminal = 0`
-      )
-      .run(
-        row.dispatch_id,
-        row.verdict,
-        row.activity,
-        row.reason,
-        row.observed_at,
-        row.expires_at,
-        row.epoch,
-        row.woke_for,
-        row.terminal
-      )
-  }
-
-  // --- B8 gate receipts ----------------------------------------------------
-
-  putGateReceipt(row: GateReceiptRow): void {
-    this.handle.db
-      .prepare(
-        `INSERT OR REPLACE INTO control_plane_gate_receipts
-           (receipt_id, scope_key, gate_id, final_sha, input_hashes, policy_version,
-            command_identity, result, recorded_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        row.receipt_id,
-        row.scope_key,
-        row.gate_id,
-        row.final_sha,
-        row.input_hashes,
-        row.policy_version,
-        row.command_identity,
-        row.result,
-        row.recorded_at
-      )
-  }
-
-  listGateReceipts(scopeKey: string): GateReceiptRow[] {
-    return this.handle.db
-      .prepare(
-        'SELECT * FROM control_plane_gate_receipts WHERE scope_key = ? ORDER BY recorded_at DESC'
-      )
-      .all(scopeKey) as GateReceiptRow[]
-  }
-
-  // --- B9 validation leases -------------------------------------------------
-
-  getValidationLease(scopeKey: string): ValidationLeaseRow | undefined {
-    return this.handle.db
-      .prepare('SELECT * FROM control_plane_validation_leases WHERE scope_key = ?')
-      .get(scopeKey) as ValidationLeaseRow | undefined
-  }
-
-  /** Whether ANY lease is live right now. The mutation fence asks this first so
-   *  the common no-lease case costs one indexed read instead of resolving a
-   *  worktree selector on every mutating RPC. */
-  hasAnyActiveValidationLease(nowIso?: string): boolean {
-    return (
-      this.handle.db
-        .prepare(
-          `SELECT 1 FROM control_plane_validation_leases
-           WHERE released_at IS NULL AND expires_at > ? LIMIT 1`
-        )
-        .get(nowIso ?? new Date().toISOString()) !== undefined
-    )
-  }
-
-  /** Any live lease this Dispatch owns, whatever scope it was taken on. */
-  findValidationLeaseByOwner(owner: string, nowIso?: string): ValidationLeaseRow | undefined {
-    return this.handle.db
-      .prepare(
-        // Why the expiry filter: an expired lease is not a live credential, and
-        // returning one let a stale holder re-enter a scope it no longer owns.
-        `SELECT * FROM control_plane_validation_leases
-         WHERE owner = ? AND released_at IS NULL AND expires_at > ?`
-      )
-      .get(owner, nowIso ?? new Date().toISOString()) as ValidationLeaseRow | undefined
-  }
-
-  putValidationLease(row: ValidationLeaseRow): void {
-    this.handle.db
-      .prepare(
-        `INSERT OR REPLACE INTO control_plane_validation_leases
-           (scope_key, lease_id, owner, idempotency_key, acquired_at, expires_at, released_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      )
-      .run(
-        row.scope_key,
-        row.lease_id,
-        row.owner,
-        row.idempotency_key,
-        row.acquired_at,
-        row.expires_at,
-        row.released_at
-      )
-  }
-
-  releaseValidationLease(scopeKey: string, leaseId: string, releasedAt: string): void {
-    this.handle.db
-      .prepare(
-        'UPDATE control_plane_validation_leases SET released_at = ? WHERE scope_key = ? AND lease_id = ?'
-      )
-      .run(releasedAt, scopeKey, leaseId)
-  }
 }

@@ -78,10 +78,25 @@ describe('ROUTE_EVIDENCE_MUST_NOT_ACCEPT_A_PROXY', () => {
     } as AgentStatusIpcPayload
   }
 
+  function exactStatus(
+    dispatch: ReturnType<typeof world>,
+    overrides: Partial<AgentStatusIpcPayload> = {}
+  ): AgentStatusIpcPayload {
+    return status({
+      orchestration: {
+        taskId: dispatch.task_id,
+        dispatchId: dispatch.id,
+        processIncarnation: dispatch.process_incarnation as string,
+        launchTokenHash: dispatch.launch_token_hash as string
+      },
+      ...overrides
+    })
+  }
+
   it('NEGATIVE: a PreTool event with no receipt is not an acceptance', () => {
     const dispatch = world()
     // A tool is visibly in flight on this Dispatch's own pane...
-    const snapshot = [status({ toolName: 'Bash' })]
+    const snapshot = [exactStatus(dispatch, { toolName: 'Bash' })]
     expect(snapshot[0].toolName).toBe('Bash')
     // ...and that still decides nothing, because no real decision was recorded.
     expect(readPretoolVerdict(db!, { dispatchId: dispatch.id, buildId: 'b1' })).toBeNull()
@@ -108,7 +123,7 @@ describe('ROUTE_EVIDENCE_MUST_NOT_ACCEPT_A_PROXY', () => {
 
   it('reads the provider-reported model for this exact session', () => {
     const dispatch = world()
-    expect(observedIdentityFromAgentStatus(dispatch, [status()], 'high')).toEqual({
+    expect(observedIdentityFromAgentStatus(dispatch, [exactStatus(dispatch)], 'high')).toEqual({
       agent: 'claude',
       model: 'claude-opus-5',
       reasoning: 'high'
@@ -117,30 +132,44 @@ describe('ROUTE_EVIDENCE_MUST_NOT_ACCEPT_A_PROXY', () => {
 
   it('NEGATIVE: a report from ANOTHER launch in the same pane is not this session', () => {
     const dispatch = world()
-    const other = status({ launchToken: 'a-different-launch' })
+    const other = exactStatus(dispatch, { launchToken: 'a-different-launch' })
     expect(observedIdentityFromAgentStatus(dispatch, [other], 'high')).toBeNull()
   })
 
   it('NEGATIVE: a report predating the Dispatch describes an earlier process', () => {
     const dispatch = world()
-    const stale = status({ receivedAt: Date.parse('2000-01-01T00:00:00.000Z') })
+    const stale = exactStatus(dispatch, {
+      receivedAt: Date.parse('2000-01-01T00:00:00.000Z')
+    })
     expect(observedIdentityFromAgentStatus(dispatch, [stale], 'high')).toBeNull()
   })
 
   it('NEGATIVE: a report from a different terminal or pane is not this session', () => {
     const dispatch = world()
     expect(
-      observedIdentityFromAgentStatus(dispatch, [status({ paneKey: 'tab_other:leaf' })], 'high')
+      observedIdentityFromAgentStatus(
+        dispatch,
+        [exactStatus(dispatch, { paneKey: 'tab_other:leaf' })],
+        'high'
+      )
     ).toBeNull()
     expect(
-      observedIdentityFromAgentStatus(dispatch, [status({ terminalHandle: 'term_other' })], 'high')
+      observedIdentityFromAgentStatus(
+        dispatch,
+        [exactStatus(dispatch, { terminalHandle: 'term_other' })],
+        'high'
+      )
     ).toBeNull()
   })
 
   it('NEGATIVE: no provider-reported model means no observed identity', () => {
     const dispatch = world()
     expect(
-      observedIdentityFromAgentStatus(dispatch, [status({ model: undefined })], 'high')
+      observedIdentityFromAgentStatus(
+        dispatch,
+        [exactStatus(dispatch, { model: undefined })],
+        'high'
+      )
     ).toBeNull()
   })
 })

@@ -221,7 +221,7 @@ function agentStatusPaneIdsByTabIdEqual(
 
 /** Terminal states the runtime records for a Dispatch. Its own verdict, not a
  *  hook event or a title glyph. */
-const SETTLED_DISPATCH_STATUSES = new Set(['completed', 'failed', 'circuit_broken'])
+const FAILED_DISPATCH_STATUSES = new Set(['failed', 'circuit_broken'])
 
 function applyLiveAgentState(
   summary: WorktreeAgentActivitySummary,
@@ -232,11 +232,12 @@ function applyLiveAgentState(
   // settled is finished whatever its last hook event or terminal title said,
   // and reading only those spun the worker's dot for the full 30-minute
   // staleness window after it was done.
-  if (
-    orchestration?.dispatchStatus &&
-    SETTLED_DISPATCH_STATUSES.has(orchestration.dispatchStatus)
-  ) {
+  if (orchestration?.dispatchStatus === 'completed') {
     summary.hasLiveDone = true
+    return
+  }
+  if (orchestration?.dispatchStatus && FAILED_DISPATCH_STATUSES.has(orchestration.dispatchStatus)) {
+    summary.hasInterrupted = true
     return
   }
   if (entry.state === 'blocked' || entry.state === 'waiting') {

@@ -9,6 +9,8 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 import { RpcDispatcher } from './dispatcher'
 import { FILE_METHODS } from './methods/files'
 import { GIT_METHODS } from './methods/git'
+import { AGENT_SESSION_METHODS } from './methods/agent-session'
+import { TERMINAL_LIFECYCLE_METHODS } from './methods/terminal/terminal-lifecycle-methods'
 import { LEASE_FENCED_METHODS } from './validation-lease-fence'
 
 /** MUTATION_UNDER_A_RUNNING_GATE — the validation lease had exactly one
@@ -211,6 +213,7 @@ describe('the fenced list stays exhaustive against the real method registries', 
     'files.openDiff',
     'files.read',
     'files.readPreview',
+    'files.readDocPreview',
     'files.readChunk',
     'files.stat',
     'files.watch',
@@ -224,6 +227,16 @@ describe('the fenced list stays exhaustive against the real method registries', 
     const all = [...GIT_METHODS, ...FILE_METHODS].map((method) => method.name)
     const unfenced = all.filter((name) => !READ_ONLY.has(name) && !LEASE_FENCED_METHODS.has(name))
     expect(unfenced).toEqual([])
+  })
+
+  it('fences every terminal surface that can create or drive a writer', () => {
+    const required = [
+      ...TERMINAL_LIFECYCLE_METHODS.filter((method) =>
+        ['terminal.create', 'terminal.split'].includes(method.name)
+      ),
+      ...AGENT_SESSION_METHODS
+    ].map((method) => method.name)
+    expect(required.filter((name) => !LEASE_FENCED_METHODS.has(name))).toEqual([])
   })
 
   it('does not fence a read', () => {

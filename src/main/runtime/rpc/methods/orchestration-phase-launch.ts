@@ -9,6 +9,9 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext } from '../core'
 import { ORCHESTRATION_WORKER_START_METHODS } from './orchestration-workers'
+import { readDispatchLaunchReceipt } from '../../orchestration/control-plane/dispatch-route-identity'
+import { reconcileLifecycleAdvanceFailures } from '../../orchestration/control-plane/completion-gate-enforcement'
+import { runCommandForStdout } from '../../orchestration/control-plane/sync-command-output'
 
 /** B7 (correction 3) — the adapter from a planned phase to the EXISTING
  *  `orchestration.workerStart` method. There is no parallel launcher: this
@@ -39,9 +42,55 @@ function errorCode(error: unknown): string | undefined {
     : undefined
 }
 
-/** Reads the Dispatch a previous, possibly lost, worker-start already accepted.
- *  The durable mutation receipt is the authority; the Task's own Dispatch row is
- *  the fallback when the receipt was pruned. */
+function acceptedDispatchMatchesPhase(
+  db: OrchestrationDb,
+  dispatchId: string,
+  request: PhaseStartRequest
+): boolean {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (
+    !dispatch ||
+    !worker ||
+    dispatch.run_id !== request.runId ||
+    dispatch.task_id !== request.taskId ||
+    !['ready', 'succeeded'].includes(worker.state) ||
+    worker.stage !== 'input_accepted' ||
+    !['dispatched', 'completed'].includes(dispatch.status) ||
+    !dispatch.process_incarnation ||
+    (request.worktreeId !== null && worker.worktree_id !== request.worktreeId)
+  ) {
+    return false
+  }
+  let options: Record<string, unknown>
+  try {
+    options = JSON.parse(worker.start_options) as Record<string, unknown>
+  } catch {
+    return false
+  }
+  if (options.baseSha !== request.boundSha) {
+    return false
+  }
+  if (request.terminalHandle) {
+    return (
+      options.terminal === request.terminalHandle &&
+      (!dispatch.assignee_handle || dispatch.assignee_handle === request.terminalHandle)
+    )
+  }
+  const launch = readDispatchLaunchReceipt(db, dispatchId)
+  return Boolean(
+    launch?.requested &&
+    launch.requested.agent === request.route.agent &&
+    launch.requested.model === request.route.model &&
+    launch.requested.reasoning === request.route.reasoning &&
+    (options.resolvedWorktreeId === request.worktreeId || worker.worktree_id === request.worktreeId)
+  )
+}
+
+/** Reads the exact Dispatch a previous, possibly lost, worker-start accepted.
+ *  Only the stable mutation receipt can associate a Dispatch with this phase.
+ *  A Task's latest Dispatch is not sufficient: it may be failed, unrelated, or
+ *  left by an older attempt. */
 function recoverAcceptedDispatch(
   db: OrchestrationDb,
   request: PhaseStartRequest
@@ -50,15 +99,17 @@ function recoverAcceptedDispatch(
   if (receipt?.receipt) {
     try {
       const parsed = JSON.parse(receipt.receipt) as { accepted?: { dispatchId?: string } }
-      if (parsed.accepted?.dispatchId) {
+      if (
+        parsed.accepted?.dispatchId &&
+        acceptedDispatchMatchesPhase(db, parsed.accepted.dispatchId, request)
+      ) {
         return { dispatchId: parsed.accepted.dispatchId }
       }
     } catch {
       // Fall through to the Dispatch row below.
     }
   }
-  const dispatch = db.getDispatchContext(request.taskId)
-  return dispatch ? { dispatchId: dispatch.id } : null
+  return null
 }
 
 export function createPhaseWorkerStarter(args: {
@@ -74,6 +125,30 @@ export function createPhaseWorkerStarter(args: {
     async start(request): Promise<PhaseStartResult> {
       if (!WORKER_START) {
         return { kind: 'failed', reason: 'orchestration.workerStart is not registered.' }
+      }
+      if (!request.worktreeId) {
+        return {
+          kind: 'blocked',
+          reason: `Phase ${request.phaseId} has no exact worktree bound to ${request.boundSha}.`
+        }
+      }
+      let observedHead: string | null = null
+      try {
+        const worktree = await args.runtime.showManagedTerminalWorkspace(`id:${request.worktreeId}`)
+        observedHead = worktree.path
+          ? runCommandForStdout({
+              program: 'git',
+              args: ['-C', worktree.path, 'rev-parse', 'HEAD']
+            }).trim()
+          : null
+      } catch {
+        observedHead = null
+      }
+      if (observedHead !== request.boundSha) {
+        return {
+          kind: 'blocked',
+          reason: `Phase ${request.phaseId} is bound to ${request.boundSha}, but its worktree is at ${observedHead ?? '<unobservable>'}.`
+        }
       }
       const params = WORKER_START.params?.parse({
         task: request.taskId,
@@ -149,10 +224,22 @@ export async function driveRunPhaseLaunches(args: {
     // under; the phase stays pending and is retried on the next tick.
     return
   }
+  const build = args.runtime.getBuildIdentity()
+  reconcileLifecycleAdvanceFailures({
+    db,
+    runId: args.runId,
+    hooks: {
+      nowMs: Date.now(),
+      currentCommitSha: build.commitSha ?? undefined,
+      currentRuntimeVersion: build.id,
+      notify: (handle, messageType) => args.runtime.notifyMessageArrived(handle, messageType)
+    }
+  })
   await drivePhaseLaunches({
     db,
     runId: args.runId,
     nowMs: Date.now(),
+    runtimeEpoch: args.runtime.getRuntimeId(),
     starter: createPhaseWorkerStarter({
       runtime: args.runtime,
       ctx: args.ctx,

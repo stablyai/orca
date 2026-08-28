@@ -47,13 +47,16 @@ export function buildWorkerProtocolContext(args: {
   const capability = identity.dispatchCapability
     ? ` --dispatch-capability ${identity.dispatchCapability}`
     : ''
+  const outcomeBinding = `${identity.runId ? ` --run ${identity.runId}` : ''}${
+    identity.outcomeId ? ` --outcome-id ${identity.outcomeId}` : ''
+  }`
   return {
     ...identity,
     cli,
     operations: {
       report: {
         name: 'report',
-        invocation: `${cli} orchestration report ${bind}${capability} --outcome <succeeded|failed> --body "<3-sentence summary>"`,
+        invocation: `${cli} orchestration report ${bind}${capability}${outcomeBinding} --outcome <succeeded|failed> --body "<3-sentence summary>"`,
         purpose: 'Report the terminal task outcome. Exactly once, and only once.'
       },
       ask: {

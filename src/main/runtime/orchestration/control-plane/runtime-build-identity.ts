@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { readFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { readFileSync, readdirSync, statSync } from 'node:fs'
+import { dirname, isAbsolute, relative, resolve, sep } from 'node:path'
 import { gitExecFileSync } from '../../../git/runner'
 import { getAppEnvironment } from '../../../../shared/app-environment'
 import type { RouteEvidence } from './route-certification-evidence'
@@ -32,6 +32,7 @@ export type EmbeddedBuildProvenance = {
   dirty: boolean | null
   appVersion: string
   builtAt: string
+  artifactAggregate?: string | null
 }
 
 /** The build-time literal, when this bundle carries one. */
@@ -54,6 +55,9 @@ export function readEmbeddedBuildProvenance(): EmbeddedBuildProvenance | null {
 export type RuntimeBuildIdentity = {
   version: string
   buildHash: string
+  /** True only when every file named by the build-generated artifact manifest
+   * matched its byte hash and the manifest's aggregate. */
+  artifactManifestVerified: boolean
   /** How `commitSha` was established. Only `embedded` proves the artifact. */
   provenanceSource: BuildProvenanceSource
   /** True when the build was made from a dirty tree, so it matches no commit. */
@@ -68,15 +72,172 @@ export type RuntimeBuildIdentity = {
   id: string
 }
 
-export function computeRuntimeBuildHash(entryPath = process.argv[1]): string {
+export function isCertifiableRuntimeBuildIdentity(identity: RuntimeBuildIdentity): boolean {
+  return (
+    identity.artifactManifestVerified &&
+    identity.provenanceSource === 'embedded' &&
+    identity.dirtyBuild === false &&
+    typeof identity.commitSha === 'string' &&
+    /^[0-9a-f]{40}$/.test(identity.commitSha)
+  )
+}
+
+type BuildArtifactManifest = {
+  schemaVersion: number
+  aggregateHash: string
+  files: { path: string; size: number; sha256: string }[]
+}
+
+const ARTIFACT_MANIFEST = 'orca-artifact-manifest.json'
+const ARTIFACT_AGGREGATE_PLACEHOLDER = 'ORCA_ARTIFACT_AGGREGATE_PLACEHOLDER'.padEnd(64, '_')
+
+function replaceAllBytes(bytes: Buffer, needleText: string, replacementText: string): Buffer {
+  const needle = Buffer.from(needleText)
+  const replacement = Buffer.from(replacementText)
+  if (needle.byteLength !== replacement.byteLength) {
+    return bytes
+  }
+  const output = Buffer.from(bytes)
+  let cursor = 0
+  while ((cursor = output.indexOf(needle, cursor)) !== -1) {
+    replacement.copy(output, cursor)
+    cursor += replacement.byteLength
+  }
+  return output
+}
+
+function artifactFiles(root: string, current = root): string[] {
+  const files: string[] = []
+  for (const entry of readdirSync(current, { withFileTypes: true })) {
+    const absolute = resolve(current, entry.name)
+    const name = relative(root, absolute).split('\\').join('/')
+    if (
+      name === ARTIFACT_MANIFEST ||
+      name.startsWith('electron-dev/') ||
+      name.includes('/.vite/') ||
+      name.endsWith('.test.js')
+    ) {
+      continue
+    }
+    if (entry.isDirectory()) {
+      files.push(...artifactFiles(root, absolute))
+    } else if (entry.isFile()) {
+      files.push(absolute)
+    }
+  }
+  return files
+}
+
+function findArtifactManifest(entryPath: string): string | null {
+  let current = statSync(entryPath, { throwIfNoEntry: false })?.isDirectory()
+    ? resolve(entryPath)
+    : dirname(resolve(entryPath))
+  for (let depth = 0; depth < 5; depth += 1) {
+    const candidate = resolve(current, ARTIFACT_MANIFEST)
+    if (statSync(candidate, { throwIfNoEntry: false })?.isFile()) {
+      return candidate
+    }
+    const parent = dirname(current)
+    if (parent === current) {
+      break
+    }
+    current = parent
+  }
+  return null
+}
+
+export function computeRuntimeArtifactIdentity(
+  entryPath = process.argv[1],
+  expectedAggregate = readEmbeddedBuildProvenance()?.artifactAggregate ?? null
+): {
+  buildHash: string
+  verified: boolean
+} {
   if (!entryPath) {
-    return 'unknown'
+    return { buildHash: 'unknown', verified: false }
   }
   try {
-    return createHash('sha256').update(readFileSync(entryPath)).digest('hex').slice(0, 16)
+    const manifestPath = findArtifactManifest(entryPath)
+    if (manifestPath) {
+      const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as BuildArtifactManifest
+      const root = dirname(manifestPath)
+      if (
+        manifest.schemaVersion !== 2 ||
+        !/^[0-9a-f]{64}$/.test(manifest.aggregateHash) ||
+        expectedAggregate !== manifest.aggregateHash ||
+        !Array.isArray(manifest.files) ||
+        manifest.files.length === 0
+      ) {
+        return { buildHash: 'invalid-manifest', verified: false }
+      }
+      const normalized = [...manifest.files].sort((left, right) =>
+        left.path.localeCompare(right.path)
+      )
+      const actualPaths = artifactFiles(root)
+        .map((absolute) => relative(root, absolute).split('\\').join('/'))
+        .sort()
+      if (
+        actualPaths.length !== normalized.length ||
+        actualPaths.some((path, index) => path !== normalized[index]?.path)
+      ) {
+        return { buildHash: 'artifact-set-mismatch', verified: false }
+      }
+      const seen = new Set<string>()
+      const canonicalRecords: { path: string; size: number; sha256: string }[] = []
+      for (const file of normalized) {
+        if (
+          !file.path ||
+          isAbsolute(file.path) ||
+          file.path.split(/[\\/]/).includes('..') ||
+          seen.has(file.path)
+        ) {
+          return { buildHash: 'invalid-manifest', verified: false }
+        }
+        seen.add(file.path)
+        const absolute = resolve(root, file.path)
+        if (absolute !== root && !absolute.startsWith(`${root}${sep}`)) {
+          return { buildHash: 'invalid-manifest', verified: false }
+        }
+        const bytes = readFileSync(absolute)
+        const hash = createHash('sha256').update(bytes).digest('hex')
+        if (bytes.byteLength !== file.size || hash !== file.sha256) {
+          return { buildHash: hash.slice(0, 16), verified: false }
+        }
+        const canonicalBytes = replaceAllBytes(
+          bytes,
+          manifest.aggregateHash,
+          ARTIFACT_AGGREGATE_PLACEHOLDER
+        )
+        canonicalRecords.push({
+          path: file.path,
+          size: canonicalBytes.byteLength,
+          sha256: createHash('sha256').update(canonicalBytes).digest('hex')
+        })
+      }
+      const aggregate = createHash('sha256')
+        .update(
+          canonicalRecords.map((file) => `${file.path}\0${file.size}\0${file.sha256}\n`).join('')
+        )
+        .digest('hex')
+      return {
+        buildHash: aggregate.slice(0, 16),
+        verified: aggregate === manifest.aggregateHash
+      }
+    }
+    // Source-mode fallback is deliberately labelled unverified. It keeps unit
+    // tests and ordinary development usable, but cannot certify a packaged
+    // route or exact-build receipt.
+    return {
+      buildHash: createHash('sha256').update(readFileSync(entryPath)).digest('hex').slice(0, 16),
+      verified: false
+    }
   } catch {
-    return 'unknown'
+    return { buildHash: 'unknown', verified: false }
   }
+}
+
+export function computeRuntimeBuildHash(entryPath = process.argv[1]): string {
+  return computeRuntimeArtifactIdentity(entryPath).buildHash
 }
 
 /** The commit the running code was built from, owned by the runtime.
@@ -118,7 +279,8 @@ export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): Runtim
   } catch {
     version = 'unknown'
   }
-  const buildHash = computeRuntimeBuildHash(entryPath)
+  const artifact = computeRuntimeArtifactIdentity(entryPath)
+  const buildHash = artifact.buildHash
 
   // Why embedded first: it describes the artifact. Reading the checkout is a
   // dev-only fallback and is labelled as such, so evidence can never quietly
@@ -128,6 +290,7 @@ export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): Runtim
     return {
       version: embedded.appVersion || version,
       buildHash,
+      artifactManifestVerified: artifact.verified,
       commitSha: embedded.dirty === true ? null : embedded.sourceSha,
       provenanceSource: 'embedded',
       dirtyBuild: embedded.dirty,
@@ -142,6 +305,7 @@ export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): Runtim
   return {
     version,
     buildHash,
+    artifactManifestVerified: artifact.verified,
     commitSha,
     provenanceSource: commitSha ? 'checkout' : 'unknown',
     dirtyBuild: null,

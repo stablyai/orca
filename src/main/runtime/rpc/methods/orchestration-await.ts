@@ -13,6 +13,7 @@ import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { MessageRow, MessageType } from '../../orchestration/types'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalFiniteNumber, OptionalString } from '../schemas'
+import { resolveOrchestrationCaller } from './orchestration-run-scope'
 
 const AwaitParams = z.object({
   from: OptionalString,
@@ -38,21 +39,42 @@ export const ORCHESTRATION_AWAIT_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.await',
     params: AwaitParams,
-    handler: async (params, { runtime, signal }) => {
+    handler: async (
+      params,
+      {
+        runtime,
+        signal,
+        orchestrationCompatibilityEvidence,
+        orchestrationCompatibilityCallerAuthority
+      }
+    ) => {
       const db = runtime.getOrchestrationDb()
-      const handle = params.from ?? 'unknown'
-      const paneKey = runtime.getTerminalPaneKey(handle) ?? undefined
-      const boundRun = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
-      const runId = params.run ?? boundRun?.id
-      if (!runId) {
+      if (!params.from) {
         throw new OrchestrationError(
           'run_not_bound',
-          'orchestration.await requires a bound coordinator Run; bind one with run-use.'
+          'orchestration.await requires the attested coordinator terminal in --from.'
         )
       }
-      const run = db.getRun(runId)
+      const paneKey = resolveOrchestrationCaller(runtime, {
+        callerTerminalHandle: params.from,
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerAuthority: orchestrationCompatibilityCallerAuthority,
+        requireStablePane: true
+      })
+      const run = db.getCurrentRunForPane(paneKey)
       if (!run) {
-        throw new OrchestrationError('run_not_found', `Run ${runId} was not found.`)
+        throw new OrchestrationError(
+          'run_not_bound',
+          'orchestration.await requires a bound coordinator Run; bind one with run-use.',
+          { effectsApplied: false }
+        )
+      }
+      if (params.run && params.run !== run.id) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          `orchestration.await may wait, acknowledge, and drive only the Run currently bound to ${params.from}.`,
+          { effectsApplied: false, requestedRun: params.run ?? null, boundRun: run?.id ?? null }
+        )
       }
       const generation = run.consumer_generation
       const address = `run:${run.id}`

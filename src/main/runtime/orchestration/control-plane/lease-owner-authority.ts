@@ -21,6 +21,10 @@ export type LeaseOwnerAuthority = {
   outcomeId: string
   taskId: string
   worktreeId: string
+  ownerHandle: string
+  ownerPaneKey: string
+  processIncarnation: string
+  launchTokenHash: string
   /** The scope the lease must use, derived from the worktree above. Callers take
    *  this rather than computing their own: a scope resolved from the coordinator
    *  terminal can name a different workspace than the one the owner Dispatch
@@ -50,6 +54,17 @@ export function requireLeaseOwnerAuthority(
     )
   }
   const worktreeId = db.getWorkerDispatch(args.dispatchId)?.worktree_id
+  if (
+    !dispatch.assignee_handle ||
+    !dispatch.assignee_pane_key ||
+    !dispatch.process_incarnation ||
+    !dispatch.launch_token_hash
+  ) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      `Dispatch ${args.dispatchId} has no complete runtime-owned process authority and cannot own a validation lease.`
+    )
+  }
   // Why refuse rather than fall back to a Run scope: the pre-tool hook can only
   // check a WORKTREE scope — it knows the workspace it is running in and nothing
   // about Runs. A run-scoped lease would report as protection while being
@@ -76,6 +91,10 @@ export function requireLeaseOwnerAuthority(
     outcomeId: outcome.outcome_id,
     taskId: dispatch.task_id,
     worktreeId,
+    ownerHandle: dispatch.assignee_handle,
+    ownerPaneKey: dispatch.assignee_pane_key,
+    processIncarnation: dispatch.process_incarnation,
+    launchTokenHash: dispatch.launch_token_hash,
     scopeKey: validationScopeKeyForWorktree(worktreeId)
   }
 }

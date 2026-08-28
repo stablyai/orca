@@ -214,4 +214,24 @@ describe('B10 one bounded state query', () => {
       'route'
     ])
   })
+
+  it('treats a closed outcome as terminal even when review_complete is the newest wake', () => {
+    const { store, task, dispatch } = setup()
+    store.closeOutcome('out_1')
+    const report = describeOutcomeState(
+      { runId: task.run_id, taskId: task.id, dispatchId: dispatch.id },
+      {
+        store,
+        outcome: store.getOutcomeById('out_1'),
+        task,
+        dispatch,
+        recentMessages: [
+          message({ type: 'escalation', payload: '{"wakeReason":"review_complete"}' })
+        ],
+        nowMs: NOW
+      }
+    )
+    expect(report.lifecycle.outcomeStatus).toBe('closed')
+    expect(report.nextLegalActions).toEqual(['outcome_complete'])
+  })
 })

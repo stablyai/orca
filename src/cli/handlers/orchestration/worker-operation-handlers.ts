@@ -3,7 +3,6 @@ import { printResult } from '../../format'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { requireWorkerDoneSettlement } from '../orchestration-worker-settlement'
-import { observeCompletionEvidence } from './completion-evidence'
 import { callOrchestrationMutation } from './mutation-request'
 import { isDevCliInvocation } from './runtime-compatibility'
 import {
@@ -72,24 +71,13 @@ export const ORCHESTRATION_WORKER_OPERATION_HANDLERS: Record<string, CommandHand
       )
     }
     const body = getRequiredStringFlag(flags, 'body')
-    // Why observed and not declared: the completion gate compares what Orca saw
-    // in the worktree against what the worker claims it delivered (§B6).
-    const observed = flags.has('no-completion-evidence')
-      ? null
-      : await observeCompletionEvidence(cwd)
-    const receiptSha = getOptionalStringFlag(flags, 'receipt-sha')
-    const receiptResult = getOptionalStringFlag(flags, 'receipt-result')
-    if (receiptResult && receiptResult !== 'PASS' && receiptResult !== 'FAIL') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Invalid --receipt-result. Expected PASS or FAIL.'
-      )
-    }
     const runId = getOptionalStringFlag(flags, 'run')
+    const outcomeId = getOptionalStringFlag(flags, 'outcome-id')
     const payload: Record<string, unknown> = {
       taskId: identity.taskId,
       dispatchId: identity.dispatchId,
-      outcome
+      outcome,
+      ...(outcomeId ? { outcomeId } : {})
     }
     const filesModified = splitCsv(getOptionalStringFlag(flags, 'files-modified'))
     if (filesModified) {
@@ -105,29 +93,10 @@ export const ORCHESTRATION_WORKER_OPERATION_HANDLERS: Record<string, CommandHand
     if (corrections) {
       payload.corrections = corrections
     }
-    if (observed) {
-      payload.completion = {
-        taskId: identity.taskId,
-        dispatchId: identity.dispatchId,
-        ...(runId ? { runId } : {}),
-        outcomeId: getOptionalStringFlag(flags, 'outcome-id') ?? null,
-        headSha: observed.headSha ?? '',
-        claimedSha: getOptionalStringFlag(flags, 'claimed-sha') ?? observed.headSha ?? '',
-        worktreeClean: observed.worktreeClean,
-        placement: observed.placement,
-        observationError: observed.unavailableReason,
-        ...(receiptSha && receiptResult
-          ? {
-              receipt: {
-                sha: receiptSha,
-                result: receiptResult,
-                policyVersion: getOptionalStringFlag(flags, 'policy-version') ?? 'unversioned',
-                commandIdentity: getOptionalStringFlag(flags, 'command-identity') ?? 'unspecified'
-              }
-            }
-          : {})
-      }
-    }
+    // Deliberately no SHA, cleanliness or gate result in the worker payload.
+    // The runtime observes Git and reads its own gate-execution ledger on the
+    // worker_done transaction. Letting this adapter synthesize those fields
+    // would turn a local CLI process back into the evidence authority.
     const serializedPayload = JSON.stringify(payload)
     const result = await callOrchestrationMutation<WorkerOperationResult>(
       client,

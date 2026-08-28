@@ -88,27 +88,26 @@ function statusForDispatch(
 ): AgentStatusIpcPayload | undefined {
   const dispatchedAtMs = Date.parse(exposeUtcTimestamp(dispatch.dispatched_at) ?? '')
   return snapshot.find((entry) => {
-    if (entry.paneKey !== dispatch.assignee_pane_key) {
-      return false
-    }
     if (
-      dispatch.assignee_handle &&
-      entry.terminalHandle &&
-      entry.terminalHandle !== dispatch.assignee_handle
+      !dispatch.assignee_handle ||
+      !dispatch.assignee_pane_key ||
+      !dispatch.process_incarnation ||
+      !dispatch.launch_token_hash ||
+      entry.paneKey !== dispatch.assignee_pane_key ||
+      entry.terminalHandle !== dispatch.assignee_handle ||
+      entry.orchestration?.dispatchId !== dispatch.id ||
+      entry.orchestration.processIncarnation !== dispatch.process_incarnation ||
+      entry.orchestration.launchTokenHash !== dispatch.launch_token_hash ||
+      !entry.launchToken
     ) {
       return false
     }
     // The launch token is this session's identity: a report carrying a different
     // one came from a different launch in the same pane.
-    if (dispatch.launch_token_hash) {
-      if (!entry.launchToken) {
-        return false
-      }
-      if (
-        createHash('sha256').update(entry.launchToken).digest('hex') !== dispatch.launch_token_hash
-      ) {
-        return false
-      }
+    if (
+      createHash('sha256').update(entry.launchToken).digest('hex') !== dispatch.launch_token_hash
+    ) {
+      return false
     }
     // And it has to be newer than the Dispatch, so a status left behind before
     // this Dispatch existed cannot describe it.

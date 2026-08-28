@@ -124,8 +124,11 @@ function deriveChangedFiles(
   baseSha: string | null,
   headSha: string
 ): readonly string[] {
-  const range =
-    baseSha && baseSha !== headSha ? `${baseSha}..${headSha}` : `${headSha}^..${headSha}`
+  // An explicit base is authoritative even when it equals HEAD: that is a real
+  // no-change Dispatch and its changed-file set is empty. Falling back to the
+  // HEAD commit's own diff in that case attributed pre-existing work to this
+  // worker and could send unrelated files into review/gate invalidation.
+  const range = baseSha ? `${baseSha}..${headSha}` : `${headSha}^..${headSha}`
   try {
     return gitExecFileSync(['diff', '--name-only', range], { cwd: worktreePath })
       .split('\n')

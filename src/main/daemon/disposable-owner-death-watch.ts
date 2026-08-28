@@ -17,9 +17,14 @@ export type DisposableOwnerDeathWatchOptions = {
   /** The process whose death makes this daemon pointless — the runtime that
    *  spawned it and owns the throwaway state root. */
   ownerPid: number
-  onRetire: (details: { ownerPid: number; cause: 'owner-exited' }) => void
+  ownerStartedAtMs: number
+  onRetire: (details: {
+    ownerPid: number
+    cause: 'owner-exited' | 'owner-incarnation-changed' | 'owner-incarnation-unverifiable'
+  }) => void
   /** Test seams; production uses real timers and a real signal-0 probe. */
   probe?: (pid: number) => void
+  readStartedAtMs?: (pid: number) => Promise<number | null>
   setInterval?: typeof setInterval
   clearInterval?: typeof clearInterval
   intervalMs?: number
@@ -34,11 +39,19 @@ const DEFAULT_POLL_MS = 2000
 export class DisposableOwnerDeathWatch {
   private timer: ReturnType<typeof setInterval> | null = null
   private retired = false
+  private checking = false
   private readonly options: Required<DisposableOwnerDeathWatchOptions>
 
   constructor(options: DisposableOwnerDeathWatchOptions) {
     this.options = {
       probe: (pid) => process.kill(pid, 0),
+      readStartedAtMs: async (pid) => {
+        if (process.platform !== 'win32') {
+          return getProcessStartedAtMs(pid)
+        }
+        const evidence = await queryWindowsProcess(pid)
+        return evidence.status === 'present' ? evidence.startedAtMs : null
+      },
       setInterval,
       clearInterval,
       intervalMs: DEFAULT_POLL_MS,
@@ -50,7 +63,7 @@ export class DisposableOwnerDeathWatch {
     if (this.timer || this.retired) {
       return
     }
-    this.timer = this.options.setInterval(() => this.check(), this.options.intervalMs)
+    this.timer = this.options.setInterval(() => void this.check(), this.options.intervalMs)
     // Never hold the event loop open on this alone.
     this.timer.unref?.()
   }
@@ -63,19 +76,55 @@ export class DisposableOwnerDeathWatch {
   }
 
   /** Exposed so a test can step the watch without waiting on a timer. */
-  check(): void {
-    if (this.retired) {
+  async check(): Promise<void> {
+    if (this.retired || this.checking) {
       return
     }
+    this.checking = true
     try {
-      this.options.probe(this.options.ownerPid)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException | null)?.code !== 'ESRCH') {
+      try {
+        this.options.probe(this.options.ownerPid)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException | null)?.code === 'ESRCH') {
+          this.retire('owner-exited')
+        }
         return
       }
-      this.retired = true
-      this.stop()
-      this.options.onRetire({ ownerPid: this.options.ownerPid, cause: 'owner-exited' })
+      let currentStartedAtMs: number | null
+      try {
+        currentStartedAtMs = await this.options.readStartedAtMs(this.options.ownerPid)
+      } catch {
+        currentStartedAtMs = null
+      }
+      if (currentStartedAtMs === null) {
+        // Disposable profiles are fail-closed: an unverifiable recycled PID must
+        // never keep a daemon and its writer descendants alive indefinitely.
+        this.retire('owner-incarnation-unverifiable')
+      } else if (
+        !startTimesWithinTolerance(
+          currentStartedAtMs,
+          this.options.ownerStartedAtMs,
+          START_TIME_TOLERANCE_MS
+        )
+      ) {
+        this.retire('owner-incarnation-changed')
+      }
+    } finally {
+      this.checking = false
     }
   }
+
+  private retire(
+    cause: 'owner-exited' | 'owner-incarnation-changed' | 'owner-incarnation-unverifiable'
+  ): void {
+    this.retired = true
+    this.stop()
+    this.options.onRetire({ ownerPid: this.options.ownerPid, cause })
+  }
 }
+import { queryWindowsProcess } from './daemon-process-inspection'
+import {
+  getProcessStartedAtMs,
+  START_TIME_TOLERANCE_MS,
+  startTimesWithinTolerance
+} from './daemon-process-start-time'

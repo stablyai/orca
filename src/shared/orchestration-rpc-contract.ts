@@ -15,7 +15,7 @@ export const ORCHESTRATION_SKILL_COMMAND_ARGS = [
 
 export const ORCHESTRATION_LEGACY_RUN_ID = 'run_legacy_local'
 
-const ORCHESTRATION_MUTATION_METHODS = new Set([
+export const ORCHESTRATION_MUTATION_METHODS: ReadonlySet<string> = new Set([
   'orchestration.runCreate',
   'orchestration.runUse',
   'orchestration.send',
@@ -28,6 +28,10 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.workerAbandon',
   'orchestration.workerRelease',
   'orchestration.workerRetain',
+  'orchestration.workerTerminalUserInput',
+  // workerShow reconciles remote/restarted workers and therefore is not a
+  // read-only verb even though its response is observational.
+  'orchestration.workerShow',
   'orchestration.ask',
   'orchestration.gateCreate',
   'orchestration.gateResolve',
@@ -35,7 +39,13 @@ const ORCHESTRATION_MUTATION_METHODS = new Set([
   'orchestration.federationAttachStart',
   'orchestration.federationAck',
   'orchestration.federationImport',
-  'orchestration.federationStop'
+  'orchestration.federationStop',
+  'orchestration.certificationIntent',
+  'orchestration.certify',
+  'orchestration.gateRun',
+  'orchestration.outcomeAdmit',
+  'orchestration.outcomeIntake',
+  'orchestration.routeUpsert'
 ])
 
 const RETIRED_ORCHESTRATION_METHODS = new Set(['orchestration.run', 'orchestration.runStop'])
@@ -54,8 +64,20 @@ export function isOrchestrationMutation(method: string, params: unknown): boolea
     }
     return !isExplicitReadOnlyCheck(params)
   }
+  if (method === 'orchestration.await') {
+    return hasStringProperty(params, 'ack')
+  }
   if (method === 'orchestration.dispatch') {
     return !hasTrueProperty(params, 'dryRun')
+  }
+  if (method === 'orchestration.validationLease') {
+    return !hasStringPropertyValue(params, 'action', 'check')
+  }
+  if (method === 'orchestration.gatePlan') {
+    return hasStringProperty(params, 'record')
+  }
+  if (method === 'orchestration.phaseLaunch') {
+    return !hasFalseProperty(params, 'drive')
   }
   return ORCHESTRATION_MUTATION_METHODS.has(method)
 }
@@ -119,5 +141,13 @@ function hasFalseProperty(value: unknown, property: string): boolean {
     typeof value === 'object' &&
     value !== null &&
     (value as Record<string, unknown>)[property] === false
+  )
+}
+
+function hasStringPropertyValue(value: unknown, property: string, expected: string): boolean {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    (value as Record<string, unknown>)[property] === expected
   )
 }

@@ -483,7 +483,7 @@ describe('SETTLED_WORKER_KEEPS_SPINNING', () => {
   it('treats a failed Dispatch as settled too, not as still working', () => {
     expect(
       selectWorktreeAgentActivitySummary(stateWithDispatchStatus('failed'), 'repo::/wt-1')
-    ).toMatchObject({ hasLiveWorking: false, hasLiveDone: true })
+    ).toMatchObject({ hasLiveWorking: false, hasLiveDone: false, hasInterrupted: true })
   })
 
   it('negative control: a live Dispatch still shows working', () => {

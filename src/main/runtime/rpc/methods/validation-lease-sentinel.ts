@@ -8,7 +8,12 @@ import { OptionalFiniteNumber, OptionalString } from '../schemas'
 /** The durable fence sentinel lives beside the managed scripts' endpoint file.
  *  Both writes are best-effort: the live gate is the primary fence, and a
  *  sentinel that cannot be written must not fail the lease that protects. */
-export function writeSentinelFor(worktreeId: string, leaseId: string, expiresAtMs: number): void {
+export function writeSentinelFor(
+  worktreeId: string,
+  leaseId: string,
+  acquiredAt: string,
+  expiresAtMs: number
+): void {
   const endpointFilePath = agentHookServer.getEndpointFilePath()
   if (!endpointFilePath) {
     // Reporting a lease acquired with no offline fence is the failure this
@@ -21,14 +26,18 @@ export function writeSentinelFor(worktreeId: string, leaseId: string, expiresAtM
   }
   // Throws on failure by design: the caller rolls the lease back rather than
   // reporting a protection whose offline half does not exist.
-  writeFenceSentinel({ endpointFilePath, worktreeId, leaseId, expiresAtMs })
+  writeFenceSentinel({ endpointFilePath, worktreeId, leaseId, acquiredAt, expiresAtMs })
 }
 
-export function clearSentinelFor(worktreeId: string): void {
+export function clearSentinelFor(
+  worktreeId: string,
+  expected: { leaseId: string; acquiredAt: string }
+): boolean {
   const endpointFilePath = agentHookServer.getEndpointFilePath()
   if (endpointFilePath) {
-    clearFenceSentinel(endpointFilePath, worktreeId)
+    return clearFenceSentinel(endpointFilePath, worktreeId, expected)
   }
+  return false
 }
 
 /** The Run this caller's own pane is bound to. Shared by the gate and lease
@@ -56,6 +65,9 @@ export function requireTask(task: string | undefined, action: string): string {
 }
 
 export const ValidationLeaseParams = z.object({
+  // Required at the mutation boundary. Read-only checks may still be issued
+  // without a Dispatch, but acquire/release are rejected by the handler unless
+  // this handle is the attested lease owner.
   from: OptionalString,
   run: OptionalString,
   action: z.enum(['acquire', 'release', 'check']),

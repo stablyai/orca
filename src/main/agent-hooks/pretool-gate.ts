@@ -40,6 +40,9 @@ export type PretoolGateRequest = {
    *  the Dispatch's stored hash by the resolver; never trusted as identity on
    *  its own. */
   launchToken: string | undefined
+  /** Exact provider hook payload received on the synchronous pre-exec request.
+   * It is runtime transport evidence; no public worker RPC may substitute it. */
+  payload: Record<string, unknown>
 }
 
 function readString(record: Record<string, unknown>, ...keys: string[]): string | undefined {
@@ -85,7 +88,8 @@ export function readPretoolGateRequest(
     toolName: readString(payload, 'tool_name', 'toolName'),
     paneKey,
     worktreeId: readString(envelope, 'worktreeId'),
-    launchToken: readString(envelope, 'launchToken')
+    launchToken: readString(envelope, 'launchToken'),
+    payload
   }
 }
 

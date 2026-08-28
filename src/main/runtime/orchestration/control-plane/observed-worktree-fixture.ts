@@ -4,6 +4,8 @@ import { dirname, join } from 'node:path'
 import { gitExecFileSync } from '../../../git/runner'
 import type { ControlPlaneStore } from './control-plane-store'
 import { runGate } from './runtime-gate-execution'
+import { requiredGateSpecRow } from './required-gate-spec'
+import { fingerprintGateDependencies } from './gate-dependency-fingerprint'
 
 /** A real Git worktree for tests of the runtime-observed completion contract.
  *
@@ -63,8 +65,38 @@ export function createObservedWorktree(repoId = 'repo_test'): ObservedWorktreeFi
  *  stops writing the row. `cwd` is the tree the Dispatch actually ran in. */
 export function recordProvenGate(
   store: ControlPlaneStore,
-  args: { scopeKey: string; gateId: string; finalSha: string; cwd?: string }
+  args: {
+    scopeKey: string
+    gateId: string
+    finalSha: string
+    cwd?: string
+    dispatchId?: string
+    worktreeId?: string
+    buildId?: string
+    policyVersion?: string
+    commandIdentity?: string
+    dependencies?: readonly string[]
+    shaBinding?: 'content' | 'exact_head'
+  }
 ): void {
+  const [runId, outcomeId] = args.scopeKey.split(':') as [string, string]
+  const cwd = args.cwd ?? tmpdir()
+  const policyVersion = args.policyVersion ?? 'v1'
+  const commandIdentity = args.commandIdentity ?? args.gateId
+  const dependencies = args.dependencies ?? ['a.txt']
+  const shaBinding = args.shaBinding ?? 'exact_head'
+  const spec = requiredGateSpecRow(outcomeId, {
+    gateId: args.gateId,
+    program: 'git',
+    args: ['--version'],
+    dependencies,
+    policyVersion,
+    commandIdentity,
+    shaBinding
+  })
+  if (!store.getRequiredGateSpec(outcomeId, args.gateId)) {
+    store.insertRequiredGateSpec(spec)
+  }
   const result = runGate(store, {
     scopeKey: args.scopeKey,
     gateId: args.gateId,
@@ -72,8 +104,23 @@ export function recordProvenGate(
     // A command every supported platform has, whose only job is to exit zero.
     program: 'git',
     args: ['--version'],
-    cwd: args.cwd ?? tmpdir(),
-    buildId: 'fixture-build'
+    cwd,
+    buildId: args.buildId ?? 'fixture-build',
+    runId,
+    outcomeId,
+    dispatchId: args.dispatchId ?? 'fixture-dispatch',
+    worktreeId: args.worktreeId ?? `fixture::${cwd}`,
+    policyVersion,
+    commandIdentity,
+    specHash: spec.spec_hash,
+    inputHashes: fingerprintGateDependencies({
+      spec: { gateId: args.gateId, files: dependencies },
+      fallbackFiles: [],
+      cwd,
+      policyVersion,
+      commandIdentity
+    }),
+    shaBinding
   })
   if (!result.passed) {
     throw new Error(`Fixture gate did not pass: exit ${result.execution.exit_code}`)

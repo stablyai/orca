@@ -8,6 +8,74 @@ import type { DispatchContextRow } from '../types'
 import type { RouteIdentity } from './route-registry-types'
 import { readDispatchLaunchEffort, readDispatchLaunchRoutes } from './route-runtime-events'
 
+export type DispatchProviderSessionBinding = {
+  agent: string
+  key: string
+  id: string
+  processIncarnation: string
+  observedAtMs: number
+}
+
+/** The provider session Orca observed before delivering this Dispatch's task.
+ * A PTY incarnation names the container; this binding names the provider
+ * session occupying it, so a replacement in the same pane cannot inherit the
+ * prior Dispatch's liveness or mutation authority. */
+export function readDispatchProviderSessionBinding(
+  db: OrchestrationDb,
+  dispatchId: string
+): DispatchProviderSessionBinding | null {
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (!worker) {
+    return null
+  }
+  try {
+    const binding = JSON.parse(worker.start_options)?.launch?.providerSessionBinding as
+      | Record<string, unknown>
+      | undefined
+    return binding &&
+      typeof binding.agent === 'string' &&
+      typeof binding.key === 'string' &&
+      typeof binding.id === 'string' &&
+      typeof binding.processIncarnation === 'string' &&
+      typeof binding.observedAtMs === 'number'
+      ? {
+          agent: binding.agent,
+          key: binding.key,
+          id: binding.id,
+          processIncarnation: binding.processIncarnation,
+          observedAtMs: binding.observedAtMs
+        }
+      : null
+  } catch {
+    return null
+  }
+}
+
+export function persistDispatchProviderSessionBinding(
+  db: OrchestrationDb,
+  args: { dispatchId: string; binding: DispatchProviderSessionBinding }
+): boolean {
+  const worker = db.getWorkerDispatch(args.dispatchId)
+  if (!worker) {
+    return false
+  }
+  try {
+    const parsed = JSON.parse(worker.start_options)
+    const options = parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {}
+    const launch =
+      options.launch && typeof options.launch === 'object'
+        ? (options.launch as Record<string, unknown>)
+        : {}
+    options.launch = { ...launch, providerSessionBinding: args.binding }
+    db.db
+      .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
+      .run(JSON.stringify(options), args.dispatchId)
+    return true
+  } catch {
+    return false
+  }
+}
+
 /** Blocker 8 — the provider's own answer about which model is running.
  *
  *  `effective_model_identity` had no production writer, so no route could be
@@ -82,36 +150,30 @@ export function readProviderModelFromTranscript(
   return newest
 }
 
-/** True when this status report belongs to the Dispatch's own live session.
- *
- *  The pane key is the anchor: Orca mints it and the provider's hook echoes it
- *  back, so a report carrying it came from the pane this Dispatch occupies.
- *
- *  Terminal and launch token are checked WHEN THE REPORT CARRIES THEM. Claude's
- *  hook does not populate either, and demanding a field the provider never sends
- *  would mean no identity is ever observed — the failure this writer exists to
- *  end. A report carrying a DIFFERENT terminal or token is still refused, which
- *  is the case that actually distinguishes sessions. */
+/** True only when the status report is bound to the Dispatch's exact provider
+ * process. Pane-only evidence is deliberately insufficient: panes and
+ * transcripts survive replacement processes. A harness that cannot report the
+ * complete runtime-stamped orchestration context is unobservable, never an
+ * excuse to copy the requested identity into effective identity. */
 function isThisDispatchsSession(
   dispatch: DispatchContextRow,
   entry: AgentStatusIpcPayload
 ): boolean {
-  if (entry.paneKey !== dispatch.assignee_pane_key) {
-    return false
-  }
   if (
-    dispatch.assignee_handle &&
-    entry.terminalHandle &&
-    entry.terminalHandle !== dispatch.assignee_handle
+    !dispatch.assignee_handle ||
+    !dispatch.assignee_pane_key ||
+    !dispatch.process_incarnation ||
+    !dispatch.launch_token_hash ||
+    entry.paneKey !== dispatch.assignee_pane_key ||
+    entry.terminalHandle !== dispatch.assignee_handle ||
+    entry.orchestration?.dispatchId !== dispatch.id ||
+    entry.orchestration.processIncarnation !== dispatch.process_incarnation ||
+    entry.orchestration.launchTokenHash !== dispatch.launch_token_hash ||
+    !entry.launchToken
   ) {
     return false
   }
-  if (dispatch.launch_token_hash && entry.launchToken) {
-    return (
-      createHash('sha256').update(entry.launchToken).digest('hex') === dispatch.launch_token_hash
-    )
-  }
-  return true
+  return createHash('sha256').update(entry.launchToken).digest('hex') === dispatch.launch_token_hash
 }
 
 export function observeProviderSessionIdentity(args: {

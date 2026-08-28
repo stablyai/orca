@@ -5,7 +5,7 @@ import type { DispatchContextRow } from '../types'
 import type { CompletionClaim } from './completion-receipt'
 import { resolveAdvanceEligibility } from './advance-eligibility'
 import { ControlPlaneStore } from './control-plane-store'
-import { readDispatchRouteIdentity } from './dispatch-route-identity'
+import { readObservedLaunchIdentity } from './certification-event-source'
 import { completionGateInputs } from './completion-gate-inputs'
 import { recordGateReceipt } from './gate-receipt-validity'
 import { ModelPerformanceLedger, type FirstPassResult } from './model-performance-ledger'
@@ -71,6 +71,9 @@ export type AdvanceRequest = {
   dispatch: DispatchContextRow
   taskId: string
   claim: CompletionClaim
+  /** Runtime-owned all-of required-gate verdict. Production never derives it
+   * from the worker's receipt-shaped payload. */
+  gateResult?: 'PASS' | 'FAIL' | null
   /** Corrections the completing worker reported; non-empty drives FIX_FIRST. */
   corrections: readonly string[]
   /** Paths the completion claimed to have changed; bound into the gate receipt. */
@@ -142,7 +145,7 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
   policyStore.settlePhase(taskId)
   const isReviewPhase = phase?.kind === 'review'
   const corrections = isReviewPhase ? request.corrections : []
-  const observedRoute = readDispatchRouteIdentity(db, dispatch.id)
+  const observedRoute = readObservedLaunchIdentity(db, dispatch.id)
 
   // Ledger: measured, evidence-backed, never a ranking.
   const ledgerEntryId = recordLedgerEntry({
@@ -164,7 +167,7 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
   const eligibility = resolveAdvanceEligibility({
     dispatch,
     outcomeOfReport: request.outcomeOfReport,
-    gateResult: claim.receipt?.result ?? null,
+    gateResult: request.gateResult ?? claim.receipt?.result ?? null,
     // Why not for a review: a reviewer reports corrections, not a gate receipt.
     // Only the completion that produced the commit under gate must carry one.
     receiptRequired: !isReviewPhase,
@@ -192,9 +195,32 @@ export function advanceAfterValidatedCompletion(request: AdvanceRequest): Advanc
     }
   }
 
+  if (!observedRoute) {
+    const reason = `Dispatch ${dispatch.id} completed, but the provider never supplied an exact effective route identity for this session.`
+    const wakeMessageId = publishAdvanceBlocked({
+      db,
+      runId: dispatch.run_id,
+      dispatchId: dispatch.id,
+      taskId,
+      code: 'effective_identity_unobservable',
+      reason,
+      notify: request.notify
+    })
+    return {
+      kind: 'not_advanced',
+      code: 'effective_identity_unobservable',
+      reason,
+      gateReceiptRecorded,
+      leaseReleased,
+      ledgerEntryId,
+      wakeMessageId
+    }
+  }
+
   // A clean review is the end of the chain: wake the coordinator once with
   // REVIEW_COMPLETE rather than planning another review of the same SHA.
   if (isReviewPhase && corrections.length === 0) {
+    store.closeOutcome(outcome.outcome_id)
     const wakeMessageId = publishReviewComplete({
       db,
       runId: dispatch.run_id,
@@ -275,7 +301,7 @@ function resolveRetainedBuilder(
   // Why the phase's source dispatch: on a review completion the phase points
   // back at the BUILD Dispatch, which is exactly the session FIX_FIRST must
   // re-engage — never the reviewer that raised the corrections.
-  const builderIdentity = readDispatchRouteIdentity(db, phase.source_dispatch_id)
+  const builderIdentity = readObservedLaunchIdentity(db, phase.source_dispatch_id)
   const builder = db.getDispatchContextById(phase.source_dispatch_id)
   const resource = db.getWorkerTerminalResourceByOwner(phase.source_dispatch_id)
   if (!builder || !resource || !builder.assignee_handle || !builderIdentity) {

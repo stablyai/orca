@@ -79,9 +79,10 @@ export function fenceFileFor(endpointFilePath: string, worktreeId: string): stri
 export function serializeFenceSentinel(args: {
   worktreeId: string
   leaseId: string
+  acquiredAt: string
   expiresAtMs: number
 }): string {
-  return `${args.worktreeId}\n${Math.ceil(args.expiresAtMs / 1000)}\n${args.leaseId}\n`
+  return `${args.worktreeId}\n${Math.ceil(args.expiresAtMs / 1000)}\n${args.leaseId}\n${args.acquiredAt}\n`
 }
 
 /** Writes the sentinel and proves it landed. Throws when it did not: the caller
@@ -90,6 +91,7 @@ export function writeFenceSentinel(args: {
   endpointFilePath: string
   worktreeId: string
   leaseId: string
+  acquiredAt: string
   expiresAtMs: number
 }): string {
   const path = fenceFileFor(args.endpointFilePath, args.worktreeId)
@@ -118,15 +120,37 @@ export function writeFenceSentinel(args: {
 
 /** Called when the lease is released. Verified too: a marker left behind keeps
  *  denying until it expires, so a failed clear must be visible. */
-export function clearFenceSentinel(endpointFilePath: string, worktreeId: string): void {
+export function clearFenceSentinel(
+  endpointFilePath: string,
+  worktreeId: string,
+  expected: { leaseId: string; acquiredAt: string }
+): boolean {
   const path = fenceFileFor(endpointFilePath, worktreeId)
   try {
+    let current: string
+    try {
+      current = readFileSync(path, 'utf8')
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code
+      if (code === 'ENOENT') {
+        return false
+      }
+      throw error
+    }
+    const [, , leaseId, acquiredAt] = current.split('\n')
+    // Compare the runtime-generated acquisition generation, not just the
+    // caller-visible lease id. Release A can finish after acquisition B has
+    // replaced the one-per-worktree marker; A must never unlink B's fence.
+    if (leaseId !== expected.leaseId || acquiredAt !== expected.acquiredAt) {
+      return false
+    }
     rmSync(path, { force: true })
   } catch (error) {
     throw new FenceSentinelUnavailable(
       `Could not clear the offline validation fence at ${path}: ${String(error)}`
     )
   }
+  return true
 }
 
 /** The reader's contract, mirrored in the managed script. Exported so a test can

@@ -51,6 +51,12 @@ export type NativeLaunchStrategy =
   /** A custom terminal command Orca then supervises and hooks. */
   | 'custom_terminal_attach'
 
+/** Whether this route's installed hook transport can synchronously stop a
+ * mutating tool before it touches the worktree. Status ingestion is not a
+ * mutation fence; a status-only route is safe only in a separately isolated
+ * worktree whose ownership the runtime proves. */
+export type NativePretoolEnforcement = 'blocking' | 'status_only' | 'unsupported'
+
 export type NativeRouteCapability = {
   agent: TuiAgent
   /** Orca has a launch configuration for this agent at all. */
@@ -58,6 +64,7 @@ export type NativeRouteCapability = {
   /** Orca can receive hook events for this agent, by managed script OR by the
    *  agent's own plugin. Not the same as "Orca installs scripts into it". */
   hookSupported: boolean
+  pretoolEnforcement: NativePretoolEnforcement
   /** Excluded from Orca worker routing by explicit policy, whatever else holds. */
   excludedFromWorkerRouting: boolean
   hasCatalog: boolean
@@ -88,13 +95,28 @@ const EXCLUDED_FROM_WORKER_ROUTING: readonly TuiAgent[] = ['qwen-code']
 function orchestrationFacts(agent: TuiAgent): {
   launcherSupported: boolean
   hookSupported: boolean
+  pretoolEnforcement: NativePretoolEnforcement
   excludedFromWorkerRouting: boolean
 } {
   return {
     launcherSupported: Boolean(TUI_AGENT_CONFIG[agent]),
     hookSupported: hasAgentHookIngestion(agent),
+    pretoolEnforcement: nativePretoolEnforcementForAgent(agent),
     excludedFromWorkerRouting: EXCLUDED_FROM_WORKER_ROUTING.includes(agent)
   }
+}
+
+/** One platform-aware answer shared by route truth, worker admission, and the
+ * hook transport. Today only Claude's POSIX PreToolUse script consumes a deny
+ * response synchronously. Every other native hook is honest status-only data. */
+export function nativePretoolEnforcementForAgent(
+  agent: TuiAgent,
+  platform: NodeJS.Platform = process.platform
+): NativePretoolEnforcement {
+  if (!hasAgentHookIngestion(agent)) {
+    return 'unsupported'
+  }
+  return agent === 'claude' && platform !== 'win32' ? 'blocking' : 'status_only'
 }
 
 function effortChoicesFor(

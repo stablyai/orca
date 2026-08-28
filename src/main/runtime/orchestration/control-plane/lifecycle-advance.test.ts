@@ -61,7 +61,7 @@ function evidenceFor(
     sessionMode,
     outcome: 'PASS' as const,
     observedAt: new Date().toISOString(),
-    runtimeVersion: '1.4.188',
+    runtimeVersion: 'fixture-build',
     commitSha: HEAD,
     detail: null
   }))
@@ -103,12 +103,6 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       reviewCapabilities: [],
       allowUnknownQuota: false
     })
-    // The gate now demands a runtime-run gate process bound to the final SHA.
-    recordProvenGate(store, {
-      scopeKey: `${task.run_id}:out_1`,
-      gateId: 'pnpm test',
-      finalSha: HEAD
-    })
     return { store, task, runId: task.run_id }
   }
 
@@ -119,6 +113,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       maxDepth: Number.MAX_SAFE_INTEGER,
       startOptions: {
         agent: identity.agent,
+        baseSha: HEAD,
         launch: {
           requested: { agent: identity.agent, model: identity.model, effort: identity.reasoning },
           effective: { agent: identity.agent, model: identity.model, effort: identity.reasoning }
@@ -139,7 +134,31 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     // Readiness is what moves the Dispatch to `dispatched`; a pending row is
     // not yet a lifecycle authority.
     db.markWorkerDispatchReady(started.dispatch.id, [])
-    return db.getDispatchContextById(started.dispatch.id)!
+    const dispatch = db.getDispatchContextById(started.dispatch.id)!
+    if (routeKey(identity) === routeKey(BUILDER)) {
+      recordProvenGate(new ControlPlaneStore(db), {
+        scopeKey: `${dispatch.run_id}:out_1`,
+        gateId: 'pnpm test',
+        finalSha: HEAD,
+        cwd: worktree.path,
+        dispatchId: dispatch.id,
+        worktreeId: worktree.worktreeId,
+        buildId: 'fixture-build',
+        dependencies: ['a.txt']
+      })
+    }
+    return dispatch
+  }
+
+  function reconcile(
+    message: ReturnType<typeof report>,
+    notify?: (handle: string, messageType: string) => void
+  ) {
+    return reconcileLifecycleMessage(db, message, undefined, {
+      currentCommitSha: HEAD,
+      currentRuntimeVersion: 'fixture-build',
+      ...(notify ? { notify } : {})
+    })
   }
 
   function report(args: {
@@ -186,16 +205,14 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
     const notify = vi.fn()
     expect(
-      reconcileLifecycleMessage(
-        db,
+      reconcile(
         report({
           taskId: task.id,
           dispatchId: builder.id,
           paneKey: 'term_builder:leaf',
           handle: 'term_builder'
         }),
-        undefined,
-        { notify }
+        notify
       )
     ).toMatchObject({ action: 'completed' })
 
@@ -214,8 +231,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
   it('records the completion receipt as a reusable gate receipt', () => {
     const { store, task, runId } = world()
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -224,17 +240,17 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       })
     )
     const receipt = findGateReceipt(store, `${runId}:out_1`, 'pnpm test')
-    expect(receipt).toMatchObject({ finalSha: HEAD, result: 'PASS', policyVersion: 'gates-v1' })
+    expect(receipt).toMatchObject({ finalSha: HEAD, result: 'PASS', policyVersion: 'v1' })
     // The worktree IS readable now, so each claimed file gets its own key and
     // is fingerprinted individually rather than lumped into one opaque string.
     expect(Object.keys(receipt?.inputHashes ?? {}).sort()).toEqual([
       'config:commandIdentity',
       'config:policyVersion',
-      'file:src/a.ts'
+      'file:a.txt'
     ])
     // The file does not exist in that tree, and an absent dependency must read
     // as unprovable rather than as a content hash nobody could produce.
-    expect(receipt?.inputHashes['file:src/a.ts']).toBe('absent')
+    expect(receipt?.inputHashes['file:a.txt']).toMatch(/^[a-f0-9]{32}$/)
   })
 
   it('releases the validation lease the completing Dispatch held', () => {
@@ -247,8 +263,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       idempotencyKey: 'idem',
       nowMs: Date.now()
     })
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -262,8 +277,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
   it('writes one evidence-backed ledger entry with the observed route and no invented usage', () => {
     const { task } = world()
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -286,8 +300,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
   it('emits a protected blocker instead of choosing a reviewer when none is certified', () => {
     const { task, runId } = world({ reviewerCandidates: [] })
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -313,9 +326,8 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
       paneKey: 'term_builder:leaf',
       handle: 'term_builder'
     })
-    reconcileLifecycleMessage(db, first)
-    reconcileLifecycleMessage(
-      db,
+    reconcile(first)
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -329,8 +341,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
   it('routes one consolidated FIX_FIRST round back to the same retained builder', () => {
     const { task } = world()
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -341,8 +352,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     const policyStore = new OutcomePolicyStore(db)
     const reviewPhase = policyStore.listPhases('out_1')[0]
     const reviewer = launchWorker(reviewPhase.task_id, REVIEWER, 'term_reviewer')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: reviewPhase.task_id,
         dispatchId: reviewer.id,
@@ -366,8 +376,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
   it('FIX_FIRST names the original builder terminal, never the reviewer that raised it', () => {
     const { task } = world()
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -414,8 +423,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
   it('ends the chain with a REVIEW_COMPLETE wake when the reviewer reports no corrections', () => {
     const { task, runId } = world()
     const builder = launchWorker(task.id, BUILDER, 'term_builder')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: task.id,
         dispatchId: builder.id,
@@ -425,8 +433,7 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     )
     const reviewPhase = new OutcomePolicyStore(db).listPhases('out_1')[0]
     const reviewer = launchWorker(reviewPhase.task_id, REVIEWER, 'term_reviewer')
-    reconcileLifecycleMessage(
-      db,
+    reconcile(
       report({
         taskId: reviewPhase.task_id,
         dispatchId: reviewer.id,

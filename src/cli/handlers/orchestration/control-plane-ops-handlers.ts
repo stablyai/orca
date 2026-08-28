@@ -56,6 +56,7 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     const manifest = JSON.parse(
       readFileSync(isAbsolute(manifestPath) ? manifestPath : resolve(cwd, manifestPath), 'utf-8')
     ) as {
+      schemaVersion?: number
       outcomes: unknown
       detected?: unknown
       relations?: unknown
@@ -68,6 +69,7 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     }>(client, flags, 'orchestration.outcomeIntake', {
       from,
       batchId: getRequiredStringFlag(flags, 'batch-id'),
+      schemaVersion: manifest.schemaVersion,
       outcomes: manifest.outcomes,
       detected: manifest.detected,
       relations: manifest.relations

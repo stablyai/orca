@@ -4,11 +4,11 @@ import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
 import {
   admitOutcome,
-  admitOutcomeIntake,
   outcomeFingerprint,
   requireOutcomeMatch,
   resolveOutcomeBinding
 } from './outcome-identity'
+import { admitOutcomeIntake } from './outcome-intake'
 
 describe('B2 one outcome, one durable Run', () => {
   let db: OrchestrationDb
@@ -104,7 +104,30 @@ describe('B2 intake of 2-5 independent outcomes', () => {
       outcomeId: `out_${index}`,
       runId: `run_${index}`,
       title: `Outcome ${index}`,
-      fingerprint: `f_${index}`
+      fingerprint: `f_${index}`,
+      objective: `Deliver outcome ${index}`,
+      target: 'id:worktree_a',
+      dependencies: [] as string[],
+      semanticClaims: [`semantic_${index}`],
+      resourceClaims: [`src/outcome-${index}.ts`],
+      routingPolicy: {
+        taskClassification: 'bounded_implementation' as const,
+        builderCandidates: [{ agent: 'claude' as const, model: 'opus-5', reasoning: 'high' }],
+        reviewerCandidates: [{ agent: 'claude' as const, model: 'fable', reasoning: 'high' }],
+        reviewCapabilities: ['adversarial_review' as const],
+        allowUnknownQuota: false
+      },
+      requiredGates: [
+        {
+          gateId: 'unit',
+          program: 'pnpm',
+          args: ['test'],
+          dependencies: ['git:src'],
+          policyVersion: 'unit-v1',
+          commandIdentity: 'pnpm:test:v1',
+          shaBinding: 'exact_head' as const
+        }
+      ]
     }
   }
 
@@ -242,7 +265,7 @@ describe('B2 intake of 2-5 independent outcomes', () => {
         outcomes: [outcome(1), outcome(2)],
         relations: [{ ...relation, decision: 'independent' }]
       })
-    ).toMatchObject({ ok: false, error: { code: 'relation_decision_conflict' } })
+    ).toMatchObject({ ok: false, error: { code: 'batch_manifest_conflict' } })
     expect(cp.listOutcomeRelations('out_1')[0].decision).toBe('serialize')
   })
 })

@@ -2,7 +2,11 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import path from 'node:path'
 import { appendBuildOldSpaceOption } from './node-old-space-limit.mjs'
-import { readBuildProvenance } from './build-provenance.mjs'
+import {
+  readBuildProvenance,
+  verifyInheritedBuildProvenance,
+  writeBuildArtifactManifest
+} from './build-provenance.mjs'
 
 const require = createRequire(import.meta.url)
 const electronVitePackageJson = require.resolve('electron-vite/package.json')
@@ -17,7 +21,11 @@ const nodeOptions = appendBuildOldSpaceOption(process.env.NODE_OPTIONS)
 // evaluating the config, so provenance computed there always reads the tree as
 // dirty and the artifact could never name the commit it was built from. This
 // runs first, while the tree is still what the operator left it.
-const provenance = JSON.stringify(readBuildProvenance(process.cwd()))
+const provenance = process.env.ORCA_BUILD_PROVENANCE_JSON
+  ? JSON.stringify(
+      verifyInheritedBuildProvenance(process.env.ORCA_BUILD_PROVENANCE_JSON, process.cwd())
+    )
+  : JSON.stringify(readBuildProvenance(process.cwd()))
 
 const child = spawn(process.execPath, [electronViteCli, 'build', ...process.argv.slice(2)], {
   stdio: 'inherit',
@@ -34,5 +42,9 @@ child.on('exit', (code, signal) => {
     return
   }
 
-  process.exit(code ?? 1)
+  const exitCode = code ?? 1
+  if (exitCode === 0 && !process.env.ORCA_ELECTRON_VITE_TARGET) {
+    writeBuildArtifactManifest(process.cwd(), provenance)
+  }
+  process.exit(exitCode)
 })

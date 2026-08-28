@@ -135,6 +135,7 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
+import { exposeUtcTimestamp } from './orchestration/db/utc-timestamp'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import type { LivenessSignalSource as OrchestrationLivenessSignalSource } from './orchestration/control-plane/liveness-sweep'
@@ -35650,10 +35651,14 @@ export class OrcaRuntimeService {
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
       : undefined
+    const dispatchedAt = dispatch.dispatched_at ? exposeUtcTimestamp(dispatch.dispatched_at) : null
 
     return {
       taskId: dispatch.task_id,
       dispatchId: dispatch.id,
+      ...(dispatch.process_incarnation ? { processIncarnation: dispatch.process_incarnation } : {}),
+      ...(dispatch.launch_token_hash ? { launchTokenHash: dispatch.launch_token_hash } : {}),
+      ...(dispatchedAt ? { dispatchedAt } : {}),
       dispatchStatus: dispatch.status,
       ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
       ...(display.displayName ? { displayName: display.displayName } : {}),
@@ -36147,9 +36152,11 @@ export class OrcaRuntimeService {
    *  and every field is something this runtime observed itself. */
   getOrchestrationLivenessSignalSource(): OrchestrationLivenessSignalSource {
     return {
-      agentStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
+      agentStatusSnapshot: () => this.getRuntimeOwnedOrchestrationAgentStatusSnapshot(),
       inspectProcessLiveness: (processIncarnation, hostScope) =>
         this.inspectTerminalProcessIncarnationLiveness(processIncarnation, hostScope),
+      inspectProviderProcessLiveness: (terminalHandle, expectedAgent) =>
+        this.inspectTerminalProviderProcessLiveness(terminalHandle, expectedAgent),
       approvedWaitUntil: (dispatchId) =>
         // Why an open-ended deadline: the waiter exists right now, so the wait
         // is active; its own timeout ends it and the next sweep sees it gone.
@@ -36159,6 +36166,55 @@ export class OrcaRuntimeService {
       lastTerminalOutputAtMs: (terminalHandle, processIncarnation) =>
         this.getTerminalLastOutputAtMs(terminalHandle, processIncarnation)
     }
+  }
+
+  /** A terminal process incarnation identifies the PTY container, not the
+   * provider running inside it. Confirm the foreground agent separately so an
+   * exited Claude/Codex process that returned to a live shell cannot remain
+   * `live`, and a replacement agent cannot inherit the old Dispatch. */
+  async inspectTerminalProviderProcessLiveness(
+    terminalHandle: string,
+    expectedAgent: string
+  ): Promise<'live' | 'exited' | 'unverifiable'> {
+    const live = this.getLivePtyForHandle(terminalHandle)
+    const record = live?.record ?? this.handles.get(terminalHandle)
+    if (!record?.ptyId || !this.ptyController) {
+      return 'unverifiable'
+    }
+    let processName: string | null
+    try {
+      processName = this.ptyController.confirmForegroundProcess
+        ? await this.ptyController.confirmForegroundProcess(record.ptyId)
+        : await this.ptyController.getForegroundProcess(record.ptyId)
+    } catch {
+      return 'unverifiable'
+    }
+    const recognized = processName ? recognizeAgentProcess(processName) : null
+    if (recognized?.agent === expectedAgent) {
+      return 'live'
+    }
+    if (!processName || isShellProcess(processName) || recognized !== null) {
+      return 'exited'
+    }
+    // A foreground wrapper/tool the provider tracker cannot attribute is not
+    // exit proof. Degrade honestly instead of keeping the Dispatch live.
+    return 'unverifiable'
+  }
+
+  /** Hook payloads report provider facts, but they do not own Orca's Dispatch,
+   * terminal, process-incarnation or launch-token bindings. Enrich the raw hook
+   * snapshot at the runtime boundary so identity/liveness readers receive one
+   * exact-session record without trusting hook-supplied orchestration fields. */
+  private getRuntimeOwnedOrchestrationAgentStatusSnapshot(): AgentStatusIpcPayload[] {
+    const raw = this.getAgentStatusSnapshotFn?.() ?? []
+    const orchestrationByPane = this.buildAgentOrchestrationByPaneKey()
+    return raw.map((entry) => {
+      const context = orchestrationByPane?.[entry.paneKey]
+      const terminalHandle = this.getAgentStatusTerminalHandleForPaneKey(entry.paneKey)
+      return context && terminalHandle
+        ? { ...entry, terminalHandle, orchestration: context }
+        : entry
+    })
   }
 
   /** Epoch ms of the last output this runtime saw on a terminal's own PTY
@@ -36180,10 +36236,14 @@ export class OrcaRuntimeService {
     if (!record?.ptyId) {
       return null
     }
-    if (processIncarnation && processIncarnation.split(':')[0] !== record.ptyId) {
+    const pty = this.ptysById.get(record.ptyId)
+    if (
+      processIncarnation &&
+      (!pty?.incarnationId || processIncarnation !== `${record.ptyId}:${pty.incarnationId}`)
+    ) {
       return null
     }
-    return this.ptysById.get(record.ptyId)?.lastOutputAt ?? null
+    return pty?.lastOutputAt ?? null
   }
 
   cancelMessageWaiters(handle: string): void {

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import type { DispatchContextRow } from '../types'
@@ -121,18 +122,24 @@ export function selectDispatchAgentStatus(
   dispatch: DispatchContextRow,
   statuses: readonly AgentStatusIpcPayload[]
 ): AgentStatusIpcPayload | null {
-  const forDispatch = statuses.filter(
-    (row) => row.orchestration?.dispatchId === dispatch.id && row.providerSessionOnly !== true
+  const dispatchedAt = dispatch.dispatched_at ? exposeUtcTimestamp(dispatch.dispatched_at) : null
+  const dispatchedAtMs = dispatchedAt ? Date.parse(dispatchedAt) : Number.POSITIVE_INFINITY
+  const candidates = statuses.filter(
+    (row) =>
+      row.providerSessionOnly !== true &&
+      Boolean(dispatch.assignee_handle) &&
+      Boolean(dispatch.assignee_pane_key) &&
+      Boolean(dispatch.launch_token_hash) &&
+      row.terminalHandle === dispatch.assignee_handle &&
+      row.paneKey === dispatch.assignee_pane_key &&
+      Boolean(row.launchToken) &&
+      createHash('sha256')
+        .update(row.launchToken as string)
+        .digest('hex') === dispatch.launch_token_hash &&
+      row.orchestration?.dispatchId === dispatch.id &&
+      row.orchestration.processIncarnation === dispatch.process_incarnation &&
+      row.orchestration.launchTokenHash === dispatch.launch_token_hash &&
+      row.receivedAt >= dispatchedAtMs
   )
-  const candidates =
-    forDispatch.length > 0
-      ? forDispatch
-      : statuses.filter(
-          (row) =>
-            row.providerSessionOnly !== true &&
-            ((dispatch.assignee_pane_key !== null && row.paneKey === dispatch.assignee_pane_key) ||
-              (dispatch.assignee_handle !== null &&
-                row.terminalHandle === dispatch.assignee_handle))
-        )
   return candidates.sort((left, right) => right.receivedAt - left.receivedAt)[0] ?? null
 }

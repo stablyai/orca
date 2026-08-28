@@ -1,5 +1,6 @@
 import type { ControlPlaneStore, OutcomeRelationRow } from './control-plane-store'
-import type { OutcomeAdmissionError, OutcomeIntakeRequest } from './outcome-identity'
+import type { OutcomeAdmissionError } from './outcome-identity'
+import type { OutcomeIntakeRequest } from './outcome-intake'
 
 /** A `serialize` decision is symmetric mutual exclusion, so an ordinary cycle
  *  through it cannot deadlock — at most one member of the cycle runs at a time,

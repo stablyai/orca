@@ -8,7 +8,7 @@ import {
   findRegistryDrift
 } from '../../orchestration/control-plane/route-registry-discovery'
 import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
-import { MUTATION_VERDICT_METHOD, PRETOOL_RECEIPT_METHOD } from './orchestration-pretool-receipt'
+import { MUTATION_VERDICT_METHOD } from './orchestration-pretool-receipt'
 import { mintCertificationIntent } from '../../orchestration/control-plane/certification-intent'
 import { readPretoolVerdict } from '../../orchestration/control-plane/pretool-receipt'
 import { observeAndPersistProviderIdentity } from '../../orchestration/control-plane/provider-session-identity'
@@ -27,6 +27,7 @@ import type { RouteIdentity } from '../../orchestration/control-plane/route-regi
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
+import { isCertifiableRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 
 const RouteIdentityParams = {
   agent: requiredString('Missing --agent'),
@@ -117,7 +118,6 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
     }
   }),
 
-  PRETOOL_RECEIPT_METHOD,
   MUTATION_VERDICT_METHOD,
   defineMethod({
     name: 'orchestration.certify',
@@ -125,6 +125,12 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
       const build = runtime.getBuildIdentity()
+      if (params.outcome === 'PASS' && !isCertifiableRuntimeBuildIdentity(build)) {
+        throw new OrchestrationError(
+          'runtime_build_unverifiable',
+          'PASS evidence requires a clean embedded source SHA and a verified complete artifact manifest.'
+        )
+      }
       const admission = admitCertificationEvidence({
         db,
         request: {
@@ -240,6 +246,13 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
     handler: async (params, { runtime, orchestrationCompatibilityEvidence }) => {
       const db = runtime.getOrchestrationDb()
       const store = new ControlPlaneStore(db)
+      const build = runtime.getBuildIdentity()
+      if (!isCertifiableRuntimeBuildIdentity(build)) {
+        throw new OrchestrationError(
+          'runtime_build_unverifiable',
+          'Certification intent requires a clean embedded source SHA and a verified complete artifact manifest.'
+        )
+      }
       // Naming an admitted Run is not authority over it. The mint requires the
       // same ownership worker-start requires: the caller's own pane must be the
       // coordinator currently bound to this Run, and the Task must belong to it.
@@ -292,7 +305,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
             model: params.model ?? null,
             reasoning: params.reasoning ?? null
           },
-          buildId: runtime.getBuildIdentity().id,
+          buildId: build.id,
           retryOfDispatchId: params.retryOf ?? null
         },
         new Date().toISOString()

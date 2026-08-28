@@ -1,14 +1,43 @@
 import { execFileSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   readEmbeddedBuildProvenance,
+  computeRuntimeArtifactIdentity,
   resolveRuntimeBuildIdentity,
   resolveRuntimeCommitSha,
   type EmbeddedBuildProvenance
 } from './runtime-build-identity'
+
+function writeArtifact(
+  root: string,
+  files: Record<string, string>
+): { entryPath: string; aggregateHash: string } {
+  const records = Object.entries(files)
+    .map(([path, value]) => {
+      const absolute = join(root, path)
+      mkdirSync(join(absolute, '..'), { recursive: true })
+      writeFileSync(absolute, value)
+      const bytes = Buffer.from(value)
+      return {
+        path,
+        size: bytes.byteLength,
+        sha256: createHash('sha256').update(bytes).digest('hex')
+      }
+    })
+    .sort((left, right) => left.path.localeCompare(right.path))
+  const aggregateHash = createHash('sha256')
+    .update(records.map((file) => `${file.path}\0${file.size}\0${file.sha256}\n`).join(''))
+    .digest('hex')
+  writeFileSync(
+    join(root, 'orca-artifact-manifest.json'),
+    `${JSON.stringify({ schemaVersion: 2, aggregateHash, files: records })}\n`
+  )
+  return { entryPath: join(root, 'main', 'index.js'), aggregateHash }
+}
 
 /** IMMUTABLE_BUILD_PROVENANCE — a runtime that resolves its source identity
  *  from the checkout reports whatever commit the tree happens to be on. A build
@@ -18,8 +47,12 @@ import {
  */
 describe('IMMUTABLE_BUILD_PROVENANCE', () => {
   const holder = globalThis as { ORCA_BUILD_PROVENANCE?: string | null }
+  const artifactRoots: string[] = []
   afterEach(() => {
     delete holder.ORCA_BUILD_PROVENANCE
+    while (artifactRoots.length) {
+      rmSync(artifactRoots.pop() as string, { recursive: true, force: true })
+    }
   })
 
   const SHA_A = 'a'.repeat(40)
@@ -74,14 +107,68 @@ describe('IMMUTABLE_BUILD_PROVENANCE', () => {
     expect(identity.provenanceSource).not.toBe('embedded')
   })
 
-  it('changes with any bundled module, not only the entry, because the hash covers the bundle', () => {
-    embed({ sourceSha: SHA_A })
-    const fromThisFile = resolveRuntimeBuildIdentity(__filename).buildHash
-    const fromAnother = resolveRuntimeBuildIdentity(
-      __filename.replace('immutable-build-provenance.test.ts', 'runtime-build-identity.ts')
-    ).buildHash
-    // Different bundled content yields a different build hash.
-    expect(fromThisFile).not.toBe(fromAnother)
+  it('changes when a sibling emitted chunk changes while the entry stays byte-identical', () => {
+    const rootA = mkdtempSync(join(tmpdir(), 'orca-artifact-a-'))
+    const rootB = mkdtempSync(join(tmpdir(), 'orca-artifact-b-'))
+    artifactRoots.push(rootA, rootB)
+    const artifactA = writeArtifact(rootA, {
+      'main/index.js': 'require("./chunks/runtime.js")\n',
+      'main/chunks/runtime.js': 'module.exports = 1\n'
+    })
+    const artifactB = writeArtifact(rootB, {
+      'main/index.js': 'require("./chunks/runtime.js")\n',
+      'main/chunks/runtime.js': 'module.exports = 2\n'
+    })
+    const a = computeRuntimeArtifactIdentity(artifactA.entryPath, artifactA.aggregateHash)
+    const b = computeRuntimeArtifactIdentity(artifactB.entryPath, artifactB.aggregateHash)
+    expect(a.verified).toBe(true)
+    expect(b.verified).toBe(true)
+    expect(a.buildHash).not.toBe(b.buildHash)
+  })
+
+  it('is stable for byte-identical emitted artifact sets', () => {
+    const rootA = mkdtempSync(join(tmpdir(), 'orca-artifact-same-a-'))
+    const rootB = mkdtempSync(join(tmpdir(), 'orca-artifact-same-b-'))
+    artifactRoots.push(rootA, rootB)
+    const files = {
+      'main/index.js': 'require("./chunks/runtime.js")\n',
+      'main/chunks/runtime.js': 'module.exports = 1\n'
+    }
+    const artifactA = writeArtifact(rootA, files)
+    const artifactB = writeArtifact(rootB, files)
+    expect(computeRuntimeArtifactIdentity(artifactA.entryPath, artifactA.aggregateHash)).toEqual(
+      computeRuntimeArtifactIdentity(artifactB.entryPath, artifactB.aggregateHash)
+    )
+  })
+
+  it('fails closed when the manifest omits an executable artifact', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-artifact-extra-'))
+    artifactRoots.push(root)
+    const artifact = writeArtifact(root, {
+      'main/index.js': 'require("./chunks/runtime.js")\n'
+    })
+    mkdirSync(join(root, 'main', 'chunks'), { recursive: true })
+    writeFileSync(join(root, 'main', 'chunks', 'runtime.js'), 'module.exports = 1\n')
+    expect(
+      computeRuntimeArtifactIdentity(artifact.entryPath, artifact.aggregateHash)
+    ).toMatchObject({ verified: false })
+  })
+
+  it('rejects a regenerated adjacent manifest when the embedded authority did not change', () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-artifact-regenerated-'))
+    artifactRoots.push(root)
+    const original = writeArtifact(root, {
+      'main/index.js': 'require("./chunks/runtime.js")\n',
+      'main/chunks/runtime.js': 'module.exports = 1\n'
+    })
+    writeFileSync(join(root, 'main/chunks/runtime.js'), 'module.exports = 2\n')
+    const regenerated = writeArtifact(root, {
+      'main/index.js': 'require("./chunks/runtime.js")\n',
+      'main/chunks/runtime.js': 'module.exports = 2\n'
+    })
+    expect(
+      computeRuntimeArtifactIdentity(regenerated.entryPath, original.aggregateHash)
+    ).toMatchObject({ verified: false })
   })
 })
 

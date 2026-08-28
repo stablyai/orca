@@ -17,6 +17,7 @@ import {
 import { ControlPlaneStore } from '../runtime/orchestration/control-plane/control-plane-store'
 import { validationScopeKeyForWorktree } from '../runtime/orchestration/control-plane/validation-scope'
 import { listPretoolReceipts } from '../runtime/orchestration/control-plane/pretool-receipt'
+import { persistDispatchProviderSessionBinding } from '../runtime/orchestration/control-plane/provider-session-identity'
 import { VALIDATION_LEASE_METHOD } from '../runtime/rpc/methods/validation-lease-method'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 
@@ -30,6 +31,7 @@ const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex')
 const HANDLE = 'term_builder'
 const PANE = 'tab-1:leaf-1'
 const INCARNATION = 'pty:term_builder'
+const PROVIDER_SESSION = 'claude-session-1'
 const COORDINATOR_PANE = 'tab-coord:leaf-coord'
 
 /** The whole fence, end to end, with nothing stubbed between the model's tool
@@ -95,6 +97,18 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
       setupState: 'not_applicable',
       terminalOwnership: 'external'
     })
+    expect(
+      persistDispatchProviderSessionBinding(db, {
+        dispatchId,
+        binding: {
+          agent: 'claude',
+          key: 'session_id',
+          id: PROVIDER_SESSION,
+          processIncarnation: INCARNATION,
+          observedAtMs: Date.now()
+        }
+      })
+    ).toBe(true)
     db.markWorkerDispatchReady(dispatchId, [])
 
     await agentHookServer.start({ env: 'production', userDataPath: home })
@@ -132,8 +146,8 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
    *  whose model we then try to let edit. */
   async function leaseOwnedByTheBuilder(): Promise<{ leaseId: string; scopeKey: string }> {
     const result = (await VALIDATION_LEASE_METHOD.handler(
-      { action: 'acquire', run: runId, dispatch: dispatchId, task: taskId, from: 'term_coord' },
-      { runtime: leaseRuntime() }
+      { action: 'acquire', run: runId, dispatch: dispatchId, task: taskId, from: HANDLE },
+      { runtime: leaseRuntime(), orchestrationCompatibilityCallerAuthority: ownerAuthority() }
     )) as { scopeKey: string; lease: { leaseId: string } }
     return { leaseId: result.lease.leaseId, scopeKey: result.scopeKey }
   }
@@ -146,17 +160,30 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
         dispatch: dispatchId,
         task: taskId,
         leaseId,
-        from: 'term_coord'
+        from: HANDLE
       },
-      { runtime: leaseRuntime() }
+      { runtime: leaseRuntime(), orchestrationCompatibilityCallerAuthority: ownerAuthority() }
     )) as { released: boolean }
   }
 
-  /** The lease RPC only needs the database and the caller's Run binding. */
+  function ownerAuthority() {
+    return {
+      hostScope: { kind: 'local', hostId: 'local' } as const,
+      terminalHandle: HANDLE,
+      paneKey: PANE,
+      processIncarnation: INCARNATION,
+      launchTokenHash: TOKEN_HASH
+    }
+  }
+
+  /** The lease RPC uses the exact runtime and build identities as part of the
+   *  durable lease authority. */
   function leaseRuntime(): OrcaRuntimeService {
     return {
       getOrchestrationDb: () => db,
-      getTerminalPaneKey: () => COORDINATOR_PANE
+      getTerminalPaneKey: () => PANE,
+      getStatus: () => ({ runtimeId: 'runtime_test' }),
+      getBuildIdentity: () => ({ id: 'build_test' })
     } as unknown as OrcaRuntimeService
   }
 
@@ -167,7 +194,12 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
   async function runHook(
     toolName: string,
     toolInput: unknown,
-    attestation: { paneKey?: string; launchToken?: string; worktreeId?: string } = {}
+    attestation: {
+      paneKey?: string
+      launchToken?: string
+      worktreeId?: string
+      providerSessionId?: string
+    } = {}
   ): Promise<{ status: number | null; stderr: string }> {
     const env = launchEnv
     // Async on purpose: the hook server is in THIS process, so a synchronous
@@ -187,7 +219,12 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
     child.stderr.on('data', (chunk) => (stderr += String(chunk)))
     child.stdout.resume()
     child.stdin.end(
-      JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: toolName, tool_input: toolInput })
+      JSON.stringify({
+        hook_event_name: 'PreToolUse',
+        session_id: attestation.providerSessionId ?? PROVIDER_SESSION,
+        tool_name: toolName,
+        tool_input: toolInput
+      })
     )
     const status = await new Promise<number | null>((resolve) => child.once('close', resolve))
     return { status, stderr }
@@ -299,12 +336,24 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
     expect(readFileSync(target)).toEqual(before)
   })
 
-  it('an ORDINARY pane with no Dispatch keeps working while the workspace is leased', async () => {
-    // Nothing supervised is happening in it, so there is nothing for the fence
-    // to protect and blocking it would strand real work.
+  it('NEGATIVE CONTROL: an ordinary managed pane in the leased workspace is blocked too', async () => {
+    const before = readFileSync(target)
     await leaseOwnedByTheBuilder()
-    expect(await attemptBashMutation({ paneKey: 'tab-9:leaf-9' })).toBe(0)
-    expect(readFileSync(target, 'utf8')).toBe('CONTAMINATED')
+    agentHookServer.setPretoolMutationResolver(
+      createPretoolMutationResolver({
+        getOrchestrationDb: () => db,
+        resolveAttestedPanePlacement: (paneKey: string) =>
+          paneKey === 'tab-9:leaf-9'
+            ? {
+                terminalHandle: 'term_ordinary',
+                processIncarnation: 'pty:ordinary',
+                worktreeId
+              }
+            : null
+      } as unknown as OrcaRuntimeService)
+    )
+    expect(await attemptBashMutation({ paneKey: 'tab-9:leaf-9' })).toBe(2)
+    expect(readFileSync(target)).toEqual(before)
   })
 
   it('NEGATIVE CONTROL: a replaced provider session cannot reuse the old one’s answer', async () => {
@@ -323,6 +372,12 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
     expect(readFileSync(target)).toEqual(before)
   })
 
+  it('NEGATIVE CONTROL: a replacement provider in the same PTY cannot inherit mutation authority', async () => {
+    const before = readFileSync(target)
+    expect(await attemptBashMutation({ providerSessionId: 'claude-session-replacement' })).toBe(2)
+    expect(readFileSync(target)).toEqual(before)
+  })
+
   it('NEGATIVE CONTROL: losing the endpoint while leased still blocks', async () => {
     const before = readFileSync(target)
     await leaseOwnedByTheBuilder()
@@ -331,6 +386,20 @@ describe('a real supervised worker is stopped before it mutates a leased worktre
     await agentHookServer.stop?.()
     // Orca cannot answer. The durable sentinel is the only thing left, and on a
     // worktree with a gate running it has to mean deny.
+    expect(await attemptBashMutation()).toBe(2)
+    expect(readFileSync(target)).toEqual(before)
+  })
+
+  it('NEGATIVE CONTROL: a reachable hook-server failure still falls back to the durable fence', async () => {
+    const before = readFileSync(target)
+    await leaseOwnedByTheBuilder()
+    // The HTTP listener is reachable, but its synchronous decision path fails
+    // before it can return a provider deny body. Historically that outer path
+    // answered 204, and the managed script treated reachability as permission.
+    agentHookServer.setPretoolMutationResolver(() => {
+      throw new Error('synthetic pretool decision failure')
+    })
+
     expect(await attemptBashMutation()).toBe(2)
     expect(readFileSync(target)).toEqual(before)
   })

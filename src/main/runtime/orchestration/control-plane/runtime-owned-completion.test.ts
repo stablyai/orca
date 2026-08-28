@@ -195,4 +195,25 @@ describe('LOCAL_GIT_ANSWERS_FOR_A_REMOTE_TREE', () => {
     const observed = observeCompletion({ db: db!, dispatchId })
     expect(observed).toMatchObject({ observable: true, clean: true, headSha: tree.headSha })
   })
+
+  it('reports no changed files when the runtime-recorded base already equals HEAD', () => {
+    tree = createObservedWorktree()
+    const dispatchId = dispatchOn({ kind: 'local', hostId: 'local' })
+    const observed = observeCompletion({
+      db: db!,
+      dispatchId,
+      baseSha: tree.headSha
+    })
+    expect(observed).toMatchObject({ observable: true, changedFiles: [] })
+  })
+
+  it('derives every path across a multi-commit Dispatch from the recorded base', () => {
+    tree = createObservedWorktree()
+    const baseSha = tree.headSha
+    const dispatchId = dispatchOn({ kind: 'local', hostId: 'local' })
+    tree.commit('first-change.txt')
+    tree.commit('second-change.txt')
+    const observed = observeCompletion({ db: db!, dispatchId, baseSha })
+    expect(observed.changedFiles).toEqual(['first-change.txt', 'second-change.txt'])
+  })
 })

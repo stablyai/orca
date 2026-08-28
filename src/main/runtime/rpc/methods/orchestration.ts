@@ -822,7 +822,9 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
             // Why the runtime notifier: an accepted completion can publish a
             // REVIEW_COMPLETE or protected-blocker wake, and a coordinator
             // sitting in `orchestration.await` must be woken for it.
-            notify: (handle, messageType) => runtime.notifyMessageArrived(handle, messageType)
+            notify: (handle, messageType) => runtime.notifyMessageArrived(handle, messageType),
+            currentCommitSha: runtime.getBuildIdentity().commitSha ?? undefined,
+            currentRuntimeVersion: runtime.getBuildIdentity().id
           })
           // Why: a suppressed message is already read, so skip the notify that would wake a check --wait waiter to an empty result.
           if (reconciled.action === 'suppressed') {
@@ -1376,7 +1378,13 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
         if (consumeUnread && messages.length > 0) {
           // Why: unread check is an authoritative read path for worker_done/heartbeat, so reconcile lifecycle messages here too.
           visibleMessages = messages.map((message) => {
-            const reconciled = reconcileLifecycleMessage(db, message)
+            const identity = runtime.getBuildIdentity()
+            const reconciled = reconcileLifecycleMessage(db, message, undefined, {
+              currentCommitSha: identity.commitSha ?? undefined,
+              currentRuntimeVersion: identity.id,
+              notify: (recipient, messageType) =>
+                runtime.notifyMessageArrived(recipient, messageType)
+            })
             return reconciled.action === 'rejected'
               ? (db.getMessageById(message.id) ?? message)
               : message

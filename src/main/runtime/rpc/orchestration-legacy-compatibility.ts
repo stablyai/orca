@@ -29,7 +29,8 @@ const COORDINATOR_PREFLIGHT_METHODS = new Set([
 
 const CURRENT_AUTHORITY_PREFLIGHT_METHODS = new Set([
   ...COORDINATOR_PREFLIGHT_METHODS,
-  'orchestration.ask'
+  'orchestration.ask',
+  'orchestration.outcomeIntake'
 ])
 
 export type LegacyCompatibilityRoute =

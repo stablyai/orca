@@ -15,6 +15,7 @@ import {
 } from './pretool-fence-sentinel'
 
 const WORKTREE = 'repo_a::/work/jb-workflow-control-plane-b'
+const ACQUIRED_AT = '2026-08-28T12:00:00.000Z'
 
 function endpoint(): string {
   const dir = mkdtempSync(join(tmpdir(), 'orca-sentinel-'))
@@ -28,6 +29,7 @@ describe('the offline validation fence', () => {
       endpointFilePath: endpoint(),
       worktreeId: WORKTREE,
       leaseId: 'lease_1',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs: Date.now() + 60_000
     })
     expect(readFileSync(path, 'utf8').split('\n')[0]).toBe(WORKTREE)
@@ -46,6 +48,7 @@ describe('the offline validation fence', () => {
           endpointFilePath,
           worktreeId: WORKTREE,
           leaseId: 'lease_1',
+          acquiredAt: ACQUIRED_AT,
           expiresAtMs: Date.now() + 60_000
         })
       ).toThrow(FenceSentinelUnavailable)
@@ -74,12 +77,14 @@ describe('the offline validation fence', () => {
       endpointFilePath,
       worktreeId: first,
       leaseId: 'lease_same',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs
     })
     const secondPath = writeFenceSentinel({
       endpointFilePath,
       worktreeId: second,
       leaseId: 'lease_same',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs
     })
     expect(firstPath).not.toBe(secondPath)
@@ -100,6 +105,7 @@ describe('the offline validation fence', () => {
       const contents = serializeFenceSentinel({
         worktreeId: WORKTREE,
         leaseId: 'lease_1',
+        acquiredAt: ACQUIRED_AT,
         expiresAtMs
       })
       const markedSeconds = Number.parseInt(contents.split('\n')[1] as string, 10)
@@ -113,6 +119,7 @@ describe('the offline validation fence', () => {
     const contents = serializeFenceSentinel({
       worktreeId: WORKTREE,
       leaseId: 'lease_1',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs: Date.now() - 1_000
     })
     // A marker orphaned by a crash must not wedge the workspace forever.
@@ -148,10 +155,44 @@ describe('the offline validation fence', () => {
       endpointFilePath,
       worktreeId: WORKTREE,
       leaseId: 'lease_1',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs: Date.now() + 60_000
     })
-    clearFenceSentinel(endpointFilePath, WORKTREE)
+    expect(
+      clearFenceSentinel(endpointFilePath, WORKTREE, {
+        leaseId: 'lease_1',
+        acquiredAt: ACQUIRED_AT
+      })
+    ).toBe(true)
     expect(() => readFileSync(fenceFileFor(endpointFilePath, WORKTREE))).toThrow()
+  })
+
+  it('NEGATIVE CONTROL: a delayed old release cannot clear a replacement lease marker', () => {
+    const endpointFilePath = endpoint()
+    writeFenceSentinel({
+      endpointFilePath,
+      worktreeId: WORKTREE,
+      leaseId: 'lease_reused',
+      acquiredAt: '2026-08-28T12:00:00.000Z',
+      expiresAtMs: Date.now() + 60_000
+    })
+    writeFenceSentinel({
+      endpointFilePath,
+      worktreeId: WORKTREE,
+      leaseId: 'lease_reused',
+      acquiredAt: '2026-08-28T12:01:00.000Z',
+      expiresAtMs: Date.now() + 120_000
+    })
+
+    expect(
+      clearFenceSentinel(endpointFilePath, WORKTREE, {
+        leaseId: 'lease_reused',
+        acquiredAt: '2026-08-28T12:00:00.000Z'
+      })
+    ).toBe(false)
+    const current = readFileSync(fenceFileFor(endpointFilePath, WORKTREE), 'utf8')
+    expect(current.split('\n')[3]).toBe('2026-08-28T12:01:00.000Z')
+    expect(fenceSentinelDenies(current, WORKTREE, Date.now())).toBe(true)
   })
 })
 
@@ -182,6 +223,7 @@ describe('the shell reader agrees with the writer', () => {
       endpointFilePath,
       worktreeId: WORKTREE,
       leaseId: 'lease_1',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs
     })
     const read = spawnSync(
@@ -200,13 +242,14 @@ describe('writeFenceSentinel is atomic', () => {
       endpointFilePath,
       worktreeId: WORKTREE,
       leaseId: 'lease_1',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs: Date.now() + 60_000
     })
     // A half-written marker whose first line was truncated would read as "not
     // this workspace" and allow the mutation.
     writeFileSync(`${path}.leftover`, 'ignored')
     expect(readFileSync(path, 'utf8').endsWith('\n')).toBe(true)
-    expect(readFileSync(path, 'utf8').split('\n')).toHaveLength(4)
+    expect(readFileSync(path, 'utf8').split('\n')).toHaveLength(5)
   })
 })
 
@@ -220,12 +263,14 @@ describe('the shell scan matches the multi-record model', () => {
       endpointFilePath,
       worktreeId: first,
       leaseId: 'lease_same',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs: Date.now() + 60_000
     })
     writeFenceSentinel({
       endpointFilePath,
       worktreeId: second,
       leaseId: 'lease_same',
+      acquiredAt: ACQUIRED_AT,
       expiresAtMs: Date.now() + 60_000
     })
     const dir = join(endpointFilePath, '..', 'fence')
