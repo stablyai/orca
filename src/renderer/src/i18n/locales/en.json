@@ -16307,7 +16307,7 @@
           "publishingOffDescription": "Learn about public links and enable sharing in Settings.",
           "openSettings": "Open Artifacts settings",
           "sharing": "Sharing…",
-          "sharePublicLink": "Share public link",
+          "sharePublicLink": "Generate link",
           "publishedDescription": "Anyone with this link can view the shared file.",
           "checkingLink": "Checking for an existing link…",
           "checkFailed": "Could not check for an existing link.",

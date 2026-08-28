@@ -97,7 +97,7 @@ describe('ArtifactPublishButton', () => {
     await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
     expect(mocks.publish).not.toHaveBeenCalled()
 
-    await user.click(await screen.findByRole('button', { name: 'Share public link' }))
+    await user.click(await screen.findByRole('button', { name: 'Generate link' }))
     await waitFor(() => expect(mocks.publish).toHaveBeenCalledWith(createRequest))
     expect(screen.getByText('https://example.com')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Update shared content' })).toBeInTheDocument()
@@ -108,7 +108,7 @@ describe('ArtifactPublishButton', () => {
     mocks.state.orcaProfileAuthStatus = { configured: true, state: 'local' }
     render(<ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />)
 
-    expect(await screen.findByRole('button', { name: 'Share public link' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Generate link' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Sign in' }))
 
     expect(mocks.connect).toHaveBeenCalledOnce()
@@ -121,7 +121,7 @@ describe('ArtifactPublishButton', () => {
     render(<ArtifactPublishButton sourceKey="/repo/report.md" createRequest={vi.fn()} />)
 
     await user.click(screen.getByRole('button', { name: 'Share as artifact' }))
-    expect(await screen.findByRole('button', { name: 'Share public link' })).toBeDisabled()
+    expect(await screen.findByRole('button', { name: 'Generate link' })).toBeDisabled()
     await user.click(screen.getByRole('button', { name: 'Open Artifacts settings' }))
 
     expect(mocks.openSettingsTarget).toHaveBeenCalledWith({ pane: 'artifacts', repoId: null })
