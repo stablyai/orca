@@ -172,6 +172,47 @@ describe('LOCAL_GIT_ANSWERS_FOR_A_REMOTE_TREE', () => {
     return started.dispatch.id
   }
 
+  // A federated Dispatch records the REMOTE host's absolute path in the same
+  // worktree_id column a local Dispatch uses, and never gets a
+  // worker_terminal_resources row — so there is no host_scope to carry a kind
+  // and the ssh/wsl guard above never fires for it.
+  function federatedDispatchOn(worktreeId: string): string {
+    db = new OrchestrationDb(':memory:')
+    const task = db.createTask({ spec: 'work' })
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: { agent: 'claude', on: 'env_remote', serverName: 'peer' },
+      federation: {
+        environmentId: 'env_remote',
+        environmentName: 'peer',
+        peerFingerprint: 'fp',
+        protocolVersion: 1
+      }
+    })
+    db.recordWorkerStage({
+      dispatchId: started.dispatch.id,
+      stage: 'remote_input_accepted',
+      worktreeId,
+      terminalHandle: 'term_remote'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id)
+    return started.dispatch.id
+  }
+
+  it('declines to answer for a federated worker even when the path exists locally', () => {
+    tree = createObservedWorktree()
+    // The remote's path resolves here too — that is exactly the trap.
+    const dispatchId = federatedDispatchOn(tree.worktreeId)
+
+    const observed = observeCompletion({ db: db!, dispatchId })
+
+    expect(observed.observable).toBe(false)
+    expect(observed.headSha).toBeNull()
+    expect(observed.reason).toContain('federated environment')
+  })
+
   it('declines to answer for an SSH worker even when the path exists locally', () => {
     tree = createObservedWorktree()
     const dispatchId = dispatchOn({ kind: 'ssh', targetId: 'prod-box' })

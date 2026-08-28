@@ -44,10 +44,21 @@ function unobservable(reason: string, worktreePath: string | null): ObservedComp
 }
 
 /** Worktree ids are `<repoId>::<absolutePath>`. */
-export function worktreePathForDispatch(db: OrchestrationDb, dispatchId: string): string | null {
+function recordedWorktreePath(db: OrchestrationDb, dispatchId: string): string | null {
   const worktreeId = db.getWorkerDispatch(dispatchId)?.worktree_id
   const separator = worktreeId?.indexOf('::') ?? -1
   return worktreeId && separator !== -1 ? worktreeId.slice(separator + 2) : null
+}
+
+/** The worktree path THIS runtime may answer for.
+ *
+ *  Null when the Dispatch executes elsewhere. The recorded path describes the
+ *  EXECUTING host's filesystem, and an identical path can exist here too — so
+ *  reading it locally does not fail, it answers confidently for the wrong
+ *  repository. Every caller that resolves a Dispatch to a local directory has
+ *  to go through this, not the raw column. */
+export function worktreePathForDispatch(db: OrchestrationDb, dispatchId: string): string | null {
+  return executesElsewhere(db, dispatchId) ? null : recordedWorktreePath(db, dispatchId)
 }
 
 /** True when this runtime is NOT the execution host for the Dispatch.
@@ -67,6 +78,14 @@ function executesElsewhere(db: OrchestrationDb, dispatchId: string): string | nu
   if (scope?.kind === 'wsl') {
     return `The Dispatch executes inside WSL distro ${scope.distro}, which owns its tree; this client must not answer for it.`
   }
+  // A federated Dispatch never gets a worker_terminal_resources row, so there is
+  // no host_scope to read — yet its recorded worktree id carries the REMOTE
+  // host's absolute path. Without this the coordinator ran local Git against
+  // that path and, whenever it happened to exist here too, answered for a
+  // completely unrelated repository.
+  if (db.getFederatedDispatch(dispatchId)) {
+    return `The Dispatch executes on the federated environment it was attached to, which owns its tree; this coordinator must not answer for it.`
+  }
   return null
 }
 
@@ -78,7 +97,7 @@ export function observeCompletion(args: {
 }): ObservedCompletion {
   const elsewhere = executesElsewhere(args.db, args.dispatchId)
   if (elsewhere) {
-    return unobservable(elsewhere, worktreePathForDispatch(args.db, args.dispatchId))
+    return unobservable(elsewhere, recordedWorktreePath(args.db, args.dispatchId))
   }
   const worktreePath = worktreePathForDispatch(args.db, args.dispatchId)
   if (!worktreePath) {

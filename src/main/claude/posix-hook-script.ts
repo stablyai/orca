@@ -21,14 +21,6 @@ export function buildClaudePosixHookScript(
     'printf "{}\\n"',
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('claude'),
-    ...(options.skipWhenDevinImportsClaude
-      ? [
-          // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
-          '  exit 0',
-          'fi'
-        ]
-      : []),
     // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
     // Why: suppress parse errors so they neither leak nor trip outer set -e.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
@@ -70,6 +62,20 @@ export function buildClaudePosixHookScript(
     // names a pane this session does not run in (#9236) and it cannot report
     // status. It is still the same Claude session holding the same workspace,
     // so it must still be refused while a validation lease is active.
+    ...(options.skipWhenDevinImportsClaude
+      ? [
+          // Why: Devin imports .claude hooks by default; skip Orca's managed hook
+          // there so status posts stay attributed to Devin.
+          // Why below the fence: this guard lives in the script Orca installs for
+          // its OWN Claude sessions, so the process reaching it is an Orca-managed
+          // Claude session that merely has DEVIN_PROJECT_DIR in its environment.
+          // Skipping the status post is right; skipping the mutation fence is not.
+          'if [ -n "$DEVIN_PROJECT_DIR" ]; then',
+          '  orca_fence_denies',
+          '  exit 0',
+          'fi'
+        ]
+      : []),
     'if [ -n "$CLAUDE_JOB_DIR" ]; then',
     '  orca_fence_denies',
     '  exit 0',
