@@ -21,6 +21,7 @@ export type EvidenceObservationCode =
   | 'effective_identity_unobservable'
   | 'effective_identity_mismatch'
   | 'no_pretool_event'
+  | 'pretool_denied'
   | 'no_safe_launch_token'
   | 'no_worktree_binding'
   | 'no_accepted_completion'
@@ -233,15 +234,24 @@ export function observeCertificationEvidence(args: {
       // decision today, so this fails closed rather than certifying a proxy.
       const status = selectDispatchAgentStatus(dispatch, source.agentStatusSnapshot())
       const decision = source.pretoolDecision?.(dispatch.id) ?? null
+      // Why a refusal and an absence read differently: a recorded BLOCK is the
+      // policy having answered, and saying "no decision recorded" would hide the
+      // one fact that matters most about this route.
+      if (decision === 'denied') {
+        return no(
+          'pretool_denied',
+          `The PreTool policy refused an operation on Dispatch ${dispatch.id}; a route it blocked has not been shown permitted.`
+        )
+      }
       if (decision !== 'accepted') {
         return no(
           'no_pretool_event',
           status?.toolName
-            ? `Dispatch ${dispatch.id} has a tool event (${status.toolName}) but no recorded PreTool acceptance decision; a tool row is not a decision.`
-            : `No accepted PreTool decision recorded for Dispatch ${dispatch.id}.`
+            ? `Dispatch ${dispatch.id} has a tool event (${status.toolName}) but no recorded PreTool decision; a tool row is not a decision.`
+            : `No PreTool decision recorded for Dispatch ${dispatch.id}.`
         )
       }
-      return ok('An accepted PreTool decision was recorded for this Dispatch.')
+      return ok('The PreTool policy recorded an accepted decision for this Dispatch.')
     }
 
     case 'safe_launch_acceptance': {
