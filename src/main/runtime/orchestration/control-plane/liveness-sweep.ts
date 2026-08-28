@@ -2,11 +2,7 @@ import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-type
 import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import { readObservedLaunchIdentity } from './certification-event-source'
-import {
-  observeProviderSessionIdentity,
-  persistObservedLaunchReceipt
-} from './provider-session-identity'
-import { readDispatchLaunchEffort, readDispatchLaunchRoutes } from './route-runtime-events'
+import { observeAndPersistProviderIdentity } from './provider-session-identity'
 import type { DispatchContextRow } from '../types'
 import { COORDINATOR_WAKE_REASONS, WAKE_REASON_PAYLOAD_KEY } from './coordinator-wake-events'
 import { ControlPlaneStore } from './control-plane-store'
@@ -148,23 +144,7 @@ function recordObservedProviderIdentity(
     if (readObservedLaunchIdentity(db, dispatch.id)) {
       return
     }
-    const worker = db.getWorkerDispatch(dispatch.id)
-    const launched = readDispatchLaunchRoutes(worker?.start_options)
-    const verdict = observeProviderSessionIdentity({
-      dispatch,
-      snapshot,
-      agent: launched.effective?.agent ?? launched.requested?.agent,
-      reasoning: readDispatchLaunchEffort(worker?.start_options)
-    })
-    if (!verdict.ok) {
-      return
-    }
-    persistObservedLaunchReceipt(db, {
-      dispatchId: dispatch.id,
-      identity: verdict.observation.identity,
-      sessionId: verdict.observation.sessionId,
-      observedAtIso: new Date(verdict.observation.observedAtMs || Date.now()).toISOString()
-    })
+    observeAndPersistProviderIdentity({ db, dispatchId: dispatch.id, snapshot })
   } catch {
     // An unobservable identity is simply not yet observed.
   }

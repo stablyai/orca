@@ -6,6 +6,7 @@ import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
 import type { DispatchContextRow } from '../types'
 import type { RouteIdentity } from './route-registry-types'
+import { readDispatchLaunchEffort, readDispatchLaunchRoutes } from './route-runtime-events'
 
 /** Blocker 8 — the provider's own answer about which model is running.
  *
@@ -227,4 +228,36 @@ export function persistObservedLaunchReceipt(
     .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
     .run(JSON.stringify(options), args.dispatchId)
   return true
+}
+
+/** Observes the provider's identity for one Dispatch and persists it, returning
+ *  what was observed. The single entry point both the liveness sweep and
+ *  certification use, so they cannot disagree about what was seen. */
+export function observeAndPersistProviderIdentity(args: {
+  db: OrchestrationDb
+  dispatchId: string
+  snapshot: readonly AgentStatusIpcPayload[]
+}): RouteIdentity | null {
+  const dispatch = args.db.getDispatchContextById(args.dispatchId)
+  if (!dispatch) {
+    return null
+  }
+  const worker = args.db.getWorkerDispatch(args.dispatchId)
+  const launched = readDispatchLaunchRoutes(worker?.start_options)
+  const verdict = observeProviderSessionIdentity({
+    dispatch,
+    snapshot: args.snapshot,
+    agent: launched.effective?.agent ?? launched.requested?.agent,
+    reasoning: readDispatchLaunchEffort(worker?.start_options)
+  })
+  if (!verdict.ok) {
+    return null
+  }
+  persistObservedLaunchReceipt(args.db, {
+    dispatchId: args.dispatchId,
+    identity: verdict.observation.identity,
+    sessionId: verdict.observation.sessionId,
+    observedAtIso: new Date(verdict.observation.observedAtMs || Date.now()).toISOString()
+  })
+  return verdict.observation.identity
 }

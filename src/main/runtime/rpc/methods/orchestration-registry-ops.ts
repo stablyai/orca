@@ -11,11 +11,8 @@ import { readObservedLaunchIdentity } from '../../orchestration/control-plane/ce
 import { PRETOOL_RECEIPT_METHOD } from './orchestration-pretool-receipt'
 import { mintCertificationIntent } from '../../orchestration/control-plane/certification-intent'
 import { readPretoolVerdict } from '../../orchestration/control-plane/pretool-receipt'
-import {
-  observedIdentityFromAgentStatus,
-  readDispatchLaunchEffort,
-  readSafeLaunchAdmission
-} from '../../orchestration/control-plane/route-runtime-events'
+import { observeAndPersistProviderIdentity } from '../../orchestration/control-plane/provider-session-identity'
+import { readSafeLaunchAdmission } from '../../orchestration/control-plane/route-runtime-events'
 import { requireCallerOwnedRunTask } from './orchestration-run-scope'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
@@ -151,20 +148,18 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           // Prefer an independently observed launch receipt; otherwise read what
           // the PROVIDER itself reported through its own hook. Both are the
           // runtime's records; neither is the request copied back.
-          observedEffectiveIdentity: (dispatchId) => {
-            const fromReceipt = readObservedLaunchIdentity(db, dispatchId)
-            if (fromReceipt) {
-              return fromReceipt
-            }
-            const dispatch = db.getDispatchContextById(dispatchId)
-            return dispatch
-              ? observedIdentityFromAgentStatus(
-                  dispatch,
-                  runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot(),
-                  readDispatchLaunchEffort(db.getWorkerDispatch(dispatchId)?.start_options)
-                )
-              : null
-          },
+          // Why observe here too and not only in the liveness sweep: the sweep
+          // runs while a coordinator waits, which may never have happened for a
+          // Dispatch being certified. Observing on read makes the identity depend
+          // on what the provider stated, not on whether a sweep was scheduled.
+          // It is persisted the first time, so the transcript is read once.
+          observedEffectiveIdentity: (dispatchId) =>
+            readObservedLaunchIdentity(db, dispatchId) ??
+            observeAndPersistProviderIdentity({
+              db,
+              dispatchId,
+              snapshot: runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot()
+            }),
           agentStatusSnapshot: () =>
             runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot(),
           // Only an explicit decision the policy path recorded. A PreTool hook
