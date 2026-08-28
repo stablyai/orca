@@ -10,20 +10,15 @@ import {
   type WorkerTerminalTailArchive
 } from '../../orchestration/worker-output-archive'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
-import { inspectWorkerTerminal, recheckProcessLiveness } from './orchestration-worker-observation'
+import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
+import {
+  closeAndSettleWorkerTerminalRelease,
+  type WorkerReleaseReceipt
+} from './orchestration-worker-release-settlement'
 import { workerTerminalLeaseIsCurrent } from './orchestration-worker-terminal-lease'
 
-export type WorkerReleaseReceipt = {
-  dispatchId: string
-  state: 'released' | 'already_released' | 'retained' | 'release_pending' | 'release_unknown'
-  reason?: WorkerTerminalRetainedReason
-  processAction: 'closed_agent_terminal' | 'closed_exited_terminal' | 'none'
-  archive: { source: string | null; status: string | null } | null
-  recovery?: string
-  lastError?: string
-}
+export type { WorkerReleaseReceipt } from './orchestration-worker-release-settlement'
 
 type WorkerTerminalReleaseArgs = {
   runtime: OrcaRuntimeService
@@ -227,68 +222,15 @@ async function completeWorkerTerminalReleaseOnce(
     }
   }
 
-  try {
-    const close = await runtime.closeTerminal(resource.terminal_handle)
-    if (!close.ptyKilled) {
-      const reason = describeUnconfirmedAgentStop(close)
-      const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
-      return {
-        dispatchId,
-        state: 'release_unknown',
-        processAction: 'closed_agent_terminal',
-        archive: { source: archiveSource, status: archiveStatus },
-        lastError: unknown.release_error ?? reason,
-        recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
-      }
-    }
-  } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
-    if (
-      observation.status === 'exited' &&
-      reason === 'tab_not_found' &&
-      (await recheckProcessLiveness(runtime, resource)) === 'exited'
-    ) {
-      // The exact process is still proven gone, so an absent tab makes the close idempotently complete.
-      const released = db.settleWorkerTerminalRelease(resource.id)
-      runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-      return {
-        dispatchId,
-        state: 'released',
-        processAction: 'none',
-        archive: archiveSummary(released)
-      }
-    }
-    if (/disposed|not connected|unavailable/i.test(reason)) {
-      // Durable intent exists; the owning endpoint is temporarily unreachable. Recovery retries.
-      return {
-        dispatchId,
-        state: 'release_pending',
-        processAction: 'none',
-        archive: { source: archiveSource, status: archiveStatus },
-        lastError: reason,
-        recovery:
-          'The owning endpoint is temporarily unavailable; recovery will retry this release after reconnect without another coordinator decision.'
-      }
-    }
-    const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
-    return {
-      dispatchId,
-      state: 'release_unknown',
-      processAction: 'none',
-      archive: { source: archiveSource, status: archiveStatus },
-      lastError: unknown.release_error ?? reason,
-      recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
-    }
-  }
-  const released = db.settleWorkerTerminalRelease(resource.id)
-  runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-  return {
+  return closeAndSettleWorkerTerminalRelease({
+    runtime,
+    db,
     dispatchId,
-    state: 'released',
-    processAction:
-      observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
-    archive: archiveSummary(released)
-  }
+    resource: releasing,
+    observationStatus: observation.status,
+    archiveSource,
+    archiveStatus
+  })
 }
 
 function summarizeStoredArchive(archive: WorkerTerminalArchiveRow): {

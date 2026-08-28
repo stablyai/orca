@@ -97,7 +97,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'released',
       expectedProcessAction: 'none',
       settles: true,
-      rechecksProcess: true
+      processRecheckCount: 2
     },
     {
       name: 'an exact exited worker',
@@ -109,7 +109,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'released',
       expectedProcessAction: 'none',
       settles: true,
-      rechecksProcess: true
+      processRecheckCount: 2
     },
     {
       name: 'a live worker',
@@ -121,7 +121,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: false
+      processRecheckCount: 0
     },
     {
       // An observed exit is not a blank cheque: only an absent tab proves the close itself finished.
@@ -134,7 +134,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: false
+      processRecheckCount: 1
     },
     {
       // Lost contact is not a death certificate; an absent tab cannot settle an unobserved process.
@@ -150,7 +150,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: false
+      processRecheckCount: 0
     },
     {
       name: 'an exact exited worker whose process is still listed',
@@ -162,7 +162,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: true
+      processRecheckCount: 1
     },
     {
       name: 'an exact exited worker whose process can no longer be verified',
@@ -174,7 +174,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: true
+      processRecheckCount: 1
     },
     {
       name: 'an exact exited worker whose process incarnation changed',
@@ -186,7 +186,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: false
+      processRecheckCount: 0
     },
     {
       name: 'an exact exited worker whose process incarnation disappeared',
@@ -198,7 +198,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: false
+      processRecheckCount: 0
     },
     {
       name: 'an exact exited worker whose process oracle failed',
@@ -210,7 +210,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState: 'release_unknown',
       expectedProcessAction: 'none',
       settles: false,
-      rechecksProcess: true
+      processRecheckCount: 1
     }
   ])(
     'handles $closeError after trying to close $name',
@@ -224,7 +224,7 @@ describe('orchestration worker release liveness verdict', () => {
       expectedState,
       expectedProcessAction,
       settles,
-      rechecksProcess
+      processRecheckCount
     }) => {
       const resource = {
         id: 'resource-1',
@@ -302,12 +302,14 @@ describe('orchestration worker release liveness verdict', () => {
         // would strand the only readable record of the worker's output.
         archive: { source: 'terminal', status: 'captured' }
       })
-      if (rechecksProcess) {
+      if (processRecheckCount > 0) {
         expect(runtime.inspectTerminalProcessIncarnationLiveness).toHaveBeenCalledWith(
           'pty-worker:incarnation-1',
           resource.host_scope
         )
-        expect(runtime.inspectTerminalProcessIncarnationLiveness).toHaveBeenCalledTimes(1)
+        expect(runtime.inspectTerminalProcessIncarnationLiveness).toHaveBeenCalledTimes(
+          processRecheckCount
+        )
       } else {
         expect(runtime.inspectTerminalProcessIncarnationLiveness).not.toHaveBeenCalled()
       }
