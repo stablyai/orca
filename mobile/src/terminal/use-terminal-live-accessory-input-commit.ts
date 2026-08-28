@@ -21,7 +21,11 @@ export async function getTerminalLiveAccessoryInactiveInputCommitResult(
 
 type TerminalLiveAccessoryInputCommitOptions = {
   readonly activeHandle: string | null
-  readonly applyLiveInputMirror: (handle: string, fieldText: string, composing?: boolean) => void
+  readonly applyLiveInputMirror: (
+    handle: string,
+    fieldText: string,
+    composing?: boolean
+  ) => Promise<boolean>
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
@@ -84,15 +88,20 @@ export function useTerminalLiveAccessoryInputCommit({
           setLiveInputCapture(editedText)
           liveInputRef.current?.setNativeProps({ text: editedText })
           // Preserve undefined so Android's heuristic hold still settles on its timer.
-          applyLiveInputMirror(activeHandle, editedText, liveInputComposingRef.current)
-          return { kind: 'handled' }
+          const sent = await applyLiveInputMirror(
+            activeHandle,
+            editedText,
+            liveInputComposingRef.current
+          )
+          return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
         }
-        case 'commit-held-then-send':
-          await sendTerminalLiveControlAfterPendingFlush(
+        case 'commit-held-then-send': {
+          const sent = await sendTerminalLiveControlAfterPendingFlush(
             () => flushPendingLiveInputText(activeHandle),
             () => sendLiveTerminalInputRef.current(activeHandle, decision.bytes)
           )
-          return { kind: 'handled' }
+          return sent ? { kind: 'handled' } : { kind: 'suppress-raw' }
+        }
         default:
           decision satisfies never
           return { kind: 'handled' }

@@ -263,7 +263,10 @@
           "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "runtimeScopeForbiddenTitle": "この接続は制限付き（モバイル）アクセスです",
-          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。"
+          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。",
+          "createdWithoutParentNesting": "「{{value0}}」の配下にネストせずに作成しました",
+          "createdWithoutParentNestingUnnamed": "選択した親ワークツリーの配下にネストせずに作成しました",
+          "createdWithoutParentNestingDetail": "親ワークスペースは利用できなくなりました。ワークスペースメニューから設定できます。"
         },
         "repos": {
           "2975400634": "Orca サーバーを更新して、このランタイムで Git 以外のフォルダーを開くようにします。",
@@ -14424,6 +14427,13 @@
           "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
           "delete": "削除"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "親ワークツリー",
+        "noParent": "親なし",
+        "description": "このワークスペースをサイドバー内の別のワークスペースの配下にネストします。ベースブランチは変更されません。",
+        "searchPlaceholder": "ワークスペースを検索...",
+        "noMatches": "一致する項目がありません。"
       }
     },
     "i18n": {

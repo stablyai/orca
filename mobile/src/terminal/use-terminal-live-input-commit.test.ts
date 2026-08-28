@@ -190,6 +190,20 @@ describe('terminal live input commit hook', () => {
     await vi.waitFor(() => expect(sent).toEqual(['한']))
   })
 
+  it('Given a failed mirrored Backspace When accessory input commits Then reports failure', async () => {
+    const { handlers, sent } = createTerminalLiveInputCommitHarness({ sendResult: false })
+    changeLiveInput(handlers, 'a', false)
+    await vi.waitFor(() => expect(sent).toEqual(['a']))
+
+    const result = await handlers.handleLiveInputAccessoryBytes({
+      bytes: '\x7f',
+      localEdit: 'backspace'
+    })
+
+    expect(sent).toEqual(['a', '\x7f'])
+    expect(result).toEqual({ kind: 'suppress-raw' })
+  })
+
   it('Given a held syllable When the settle timer elapses Then commits it to the terminal', async () => {
     // Given
     vi.useFakeTimers()

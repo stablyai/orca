@@ -70,7 +70,7 @@ function createAccessoryInputCommitHarness({
     }
   }
   const applyLiveInputMirror = vi.fn(
-    (_handle: string, _fieldText: string, _composing?: boolean) => {}
+    async (_handle: string, _fieldText: string, _composing?: boolean) => true
   )
   const clearPendingLiveInputCommit = vi.fn(() => {})
   const flushPendingLiveInputText = vi.fn(async (_expectedHandle: string | null) => flushResult)
@@ -169,6 +169,20 @@ describe('terminal live accessory input commit hook', () => {
     expect(harness.flushPendingLiveInputText).toHaveBeenCalledWith('terminal-a')
     expect(harness.sent).toEqual(['\x1b'])
     expect(result).toEqual({ kind: 'handled' })
+  })
+
+  it('Given held text with a failed control send When committed Then reports the accessory input as suppressed', async () => {
+    const harness = createAccessoryInputCommitHarness({
+      heldText: '한',
+      pendingHandle: 'terminal-a',
+      sendResult: false
+    })
+
+    const result = await harness.commit({ bytes: '\x1b' })
+
+    expect(harness.flushPendingLiveInputText).toHaveBeenCalledWith('terminal-a')
+    expect(harness.sent).toEqual(['\x1b'])
+    expect(result).toEqual({ kind: 'suppress-raw' })
   })
 
   it('Given raw accessory bytes with no held text When committed Then allows the raw send without flushing', async () => {

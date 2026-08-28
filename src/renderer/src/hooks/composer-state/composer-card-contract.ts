@@ -14,6 +14,9 @@ export type ComposerCardSourceProps = Pick<
   | 'ephemeralVmRecipeError'
   | 'name'
   | 'branchNameOverride'
+  | 'parentWorktreeId'
+  | 'selectedRepoExecutionHostId'
+  | 'selectedRepoProjectId'
   | 'smartNameSelection'
   | 'reuseSelectedBranch'
   | 'createMultiple'
@@ -63,6 +66,7 @@ export type ComposerCardActionProps = {
   smartNameRepoSwitchTarget?: 'project' | 'task-source'
   onNameValueChange: ComposerModel['handleNameValueChange']
   onBranchNameOverrideChange: ComposerModel['handleBranchNameOverrideChange']
+  onParentWorktreeIdChange: ComposerModel['setParentWorktreeId']
   onSmartGitHubItemSelect: ComposerModel['handleSmartGitHubItemSelect']
   onSmartGitLabItemSelect: ComposerModel['handleSmartGitLabItemSelect']
   onSmartBranchSelect: ComposerModel['handleSmartBranchSelect']

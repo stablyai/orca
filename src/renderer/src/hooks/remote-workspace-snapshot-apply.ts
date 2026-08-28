@@ -119,7 +119,8 @@ export async function applyDirectSshRemoteWorkspaceSnapshot({
     worktreeIds,
     state.tabsByWorktree,
     currentRecoveryTabIds(state, authority, worktreeIds),
-    toSshExecutionHostId(authority.targetId)
+    toSshExecutionHostId(authority.targetId),
+    snapshot.revision
   )
   if (!isArrivalCurrent(authority.targetId, arrival) || !isPreparationTokenCurrent(token)) {
     return

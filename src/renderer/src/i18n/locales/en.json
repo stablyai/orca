@@ -448,7 +448,10 @@
                 }
               }
             }
-          }
+          },
+          "createdWithoutParentNesting": "Created without nesting under \"{{value0}}\"",
+          "createdWithoutParentNestingUnnamed": "Created without nesting under the selected parent",
+          "createdWithoutParentNestingDetail": "The parent workspace was no longer available. You can set it from the workspace menu."
         },
         "repos": {
           "2975400634": "Update Orca server to open non-Git folders on this runtime.",
@@ -16305,6 +16308,13 @@
         "remoteLabel": "Browsers on {{value0}}",
         "clientNoteLocalStorage": "Imports read this device’s browsers. Cookies are stored locally.",
         "remoteNoteRemoteStorage": "Imports read browsers on {{value0}}. Cookies are stored on that machine, and a permission prompt may appear on its screen."
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "Parent worktree",
+        "noParent": "No parent",
+        "description": "Nests this workspace under another in the sidebar. Does not change the base branch.",
+        "searchPlaceholder": "Search workspaces...",
+        "noMatches": "No matches."
       }
     },
     "i18n": {

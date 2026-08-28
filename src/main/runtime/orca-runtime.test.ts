@@ -6469,6 +6469,52 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  // Why: the desktop composer sends `parentWorkspace` too, and a bare selector defaults to CLI
+  // provenance — the same user action must not carry different cleanup semantics per host.
+  it('records an app-selected parent workspace as a manual action', async () => {
+    vi.mocked(addWorktree).mockClear()
+    const created = {
+      path: '/tmp/workspaces/manual-child',
+      head: 'def',
+      branch: 'refs/heads/manual-child',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const childId = `${TEST_REPO_ID}::${created.path}`
+    const metaById: Record<string, WorktreeMeta> = {}
+    const runtimeStore = {
+      ...createFolderWorkspaceRuntimeStore(),
+      getAllWorktreeMeta: () => metaById,
+      getWorktreeMeta: (worktreeId: string) => metaById[worktreeId],
+      setWorktreeMeta: (worktreeId: string, meta: Partial<WorktreeMeta>) => {
+        metaById[worktreeId] = { ...(metaById[worktreeId] ?? makeWorktreeMeta()), ...meta }
+        return metaById[worktreeId]
+      },
+      setWorkspaceLineage: vi.fn((lineage: WorkspaceLineage) => lineage)
+    }
+    computeWorktreePathMock.mockReturnValue(created.path)
+    ensurePathWithinWorkspaceMock.mockImplementation((pathValue: string) => pathValue)
+    vi.mocked(listWorktrees).mockResolvedValueOnce([created])
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+
+    const result = await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'manual-child',
+      baseBranch: 'origin/main',
+      lineage: {
+        parentWorkspace: TEST_FOLDER_WORKSPACE_KEY,
+        parentWorkspaceOrigin: 'manual'
+      }
+    })
+
+    expect(result.workspaceLineage).toMatchObject({
+      childWorkspaceKey: `worktree:${childId}`,
+      parentWorkspaceKey: TEST_FOLDER_WORKSPACE_KEY,
+      origin: 'manual',
+      capture: { source: 'active-workspace', confidence: 'explicit' }
+    })
+  })
+
   it('records folder workspace lineage inferred from environment context', async () => {
     vi.mocked(addWorktree).mockClear()
     const created = {

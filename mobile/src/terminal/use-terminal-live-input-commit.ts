@@ -133,7 +133,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
       // that differs from the native field text, so the controlled capture must
       // echo the field verbatim; only the PTY mirror sees normalized text.
       setLiveInputCapture(nativeEvent.text)
-      applyLiveInputMirror(
+      void applyLiveInputMirror(
         activeHandle,
         normalizeTerminalTextInput(nativeEvent.text),
         nativeEvent.isComposing

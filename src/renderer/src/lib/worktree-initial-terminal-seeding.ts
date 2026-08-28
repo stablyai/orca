@@ -7,9 +7,8 @@ import { createSequencedSetupAgentCommands } from '../../../shared/setup-agent-s
 import { getSetupRunnerCommandPlatformForPath } from '../../../shared/setup-runner-command'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { useAppStore } from '@/store'
-import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { queueHookCommandsForFirstWorktreeTab } from '@/lib/hook-command-delayed-delivery'
-import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { resolveWorkspaceTerminalHostAuthority } from '@/lib/workspace-terminal-host-authority'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
@@ -71,11 +70,9 @@ export function ensureWorktreeHasInitialTerminal(
   }
 
   const backendStartupTerminalSpawned = opts?.backendStartupTerminalSpawned === true
-  // Why: explicit spawn evidence survives the new-worktree ownership race; active web sessions provide the same authority for later activations.
-  if (
-    backendStartupTerminalSpawned ||
-    isWebRuntimeSessionActive(getRuntimeEnvironmentIdForWorktree(ownerState, worktreeId))
-  ) {
+  const hostAuthority = resolveWorkspaceTerminalHostAuthority(ownerState, worktreeId)
+  // Why: explicit spawn evidence survives the new-worktree ownership race; a host that owns terminal creation provides the same authority for later activations.
+  if (backendStartupTerminalSpawned || hostAuthority === 'live') {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id
     if (existingTerminalTabId && (setup || issueCommand)) {
       queueSetupAndIssueCommands(
@@ -124,10 +121,12 @@ export function ensureWorktreeHasInitialTerminal(
   // deactivation hooks for pane moves and retirement, where re-seeding is the wanted outcome.
   const shouldHonourClosedTerminalTombstone =
     Object.hasOwn(store.tabsByWorktree, worktreeId) && opts?.reseedEmptiedWorkspace !== true
-  const shouldAutoCreate = shouldAutoCreateInitialTerminal(
-    renderableTabCount,
-    shouldHonourClosedTerminalTombstone
-  )
+  // Why: an execution host that has not answered is not a host with no terminals; seeding into that
+  // gap is what adds a tab per launch (STA-4658). Explicit launch work below is a request to create
+  // a terminal now, so it stays ungated.
+  const shouldAutoCreate =
+    hostAuthority === 'none' &&
+    shouldAutoCreateInitialTerminal(renderableTabCount, shouldHonourClosedTerminalTombstone)
   const shouldCreateForExplicitWork = renderableTabCount === 0 && hasExplicitLaunchWork
   if (!shouldAutoCreate && !shouldCreateForExplicitWork) {
     const existingTerminalTabId = store.tabsByWorktree[worktreeId]?.[0]?.id

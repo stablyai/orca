@@ -10,6 +10,7 @@ import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-closed-tab-tombstones'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
 import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
 import { buildBrowserSessionData } from './workspace-session-browser-tabs'
@@ -53,6 +54,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'closedTerminalTabTombstonesByTabId'
 > & {
   activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
@@ -90,6 +92,7 @@ export const SESSION_RELEVANT_FIELDS = [
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
+  'closedTerminalTabTombstonesByTabId',
   'sleepingAgentSessionsByPaneKey',
   'clientHostedBrowserCloseIntentsByEnvironment'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
@@ -303,6 +306,9 @@ export function buildWorkspaceSessionPayload(
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined,
+    closedTerminalTabTombstonesByTabId: buildPersistedClosedTerminalTabTombstones(
+      snapshot.closedTerminalTabTombstonesByTabId
+    ),
     ...buildSleepingAgentSessionData(snapshot),
     // Why unconditional rather than omit-when-empty: a full write replaces the persisted object,
     // so an emptied map has to be written as empty or the last replay never sticks.

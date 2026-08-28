@@ -266,7 +266,10 @@
           "3b57982bf6": "\"{{value1}}\" 워크스페이스를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
           "81f13f48d2": "\"{{value1}}\" 워크트리를 삭제한 후 Git이 \"{{value0}}\" 브랜치를 안전하게 삭제할 수 없어 Orca가 로컬 커밋 손실을 방지하기 위해 유지했습니다.",
           "runtimeScopeForbiddenTitle": "이 연결은 제한된(모바일) 액세스입니다",
-          "runtimeScopeForbiddenDescription": "모바일 범위 페어링에서는 워크스페이스를 사용할 수 없습니다. 설정 → 원격 Orca 서버 → 이 Orca 서버 공유에서 브라우저 액세스 링크로 다시 연결하세요."
+          "runtimeScopeForbiddenDescription": "모바일 범위 페어링에서는 워크스페이스를 사용할 수 없습니다. 설정 → 원격 Orca 서버 → 이 Orca 서버 공유에서 브라우저 액세스 링크로 다시 연결하세요.",
+          "createdWithoutParentNesting": "\"{{value0}}\" 아래에 중첩하지 않고 생성했습니다",
+          "createdWithoutParentNestingUnnamed": "선택한 상위 워크트리 아래에 중첩하지 않고 생성했습니다",
+          "createdWithoutParentNestingDetail": "상위 워크스페이스를 더 이상 사용할 수 없습니다. 워크스페이스 메뉴에서 설정할 수 있습니다."
         },
         "repos": {
           "2975400634": "이 런타임에서 Git이 아닌 폴더를 열려면 Orca 서버를 업데이트하세요.",
@@ -3879,17 +3882,82 @@
       },
       "skills": {
         "SkillsPage": {
-          "cb142070b4": "새로 고침", "a68dee6a32": "스킬 검색", "f43ad6edf3": "스킬", "ea72d6185b": "스킬을 검색하지 못했습니다", "dc4c3328ee": "파일 표시", "9963dff6d3": "설명을 찾을 수 없습니다.", "995fde8337": "스킬 파일을 표시하지 못했습니다", "4acd6d68ec": "스킬을 찾을 수 없습니다", "6a62a0168c": "일치하는 항목 없음", "08a321a984": "현재 검색 및 필터와 일치하는 스킬이 없습니다.", "cd7893fbc1": "스킬 검색 중", "35b9a724a0": "사용 가능", "c13b82793c": "설치 관리", "aee7b99cc6": "링크에서 설치", "filterProvider": "에이전트별 필터", "filterSource": "소스별 필터", "allSources": "전체", "clearFilters": "필터 지우기", "closeSkills": "스킬 닫기", "closeTooltip": "닫기 · Esc", "moreActions": "추가 작업", "sharedLinks": "공유 링크", "emptyCopy": "검색한 스킬 폴더가 비어 있습니다. 공유 번들을 설치하거나 스킬을 추가한 후 새로 고치세요.", "retry": "다시 시도", "remoteShareNotice": "이 스킬은 {{host}}에 있습니다. 공유하려면 해당 머신에서 스킬을 여세요.", "viewSwitch": "표시", "searchLinks": "링크 검색", "deleteSkills": "스킬 삭제…"
+          "cb142070b4": "새로 고침",
+          "a68dee6a32": "스킬 검색",
+          "f43ad6edf3": "스킬",
+          "ea72d6185b": "스킬을 검색하지 못했습니다",
+          "dc4c3328ee": "파일 표시",
+          "9963dff6d3": "설명을 찾을 수 없습니다.",
+          "995fde8337": "스킬 파일을 표시하지 못했습니다",
+          "4acd6d68ec": "스킬을 찾을 수 없습니다",
+          "6a62a0168c": "일치하는 항목 없음",
+          "08a321a984": "현재 검색 및 필터와 일치하는 스킬이 없습니다.",
+          "cd7893fbc1": "스킬 검색 중",
+          "35b9a724a0": "사용 가능",
+          "c13b82793c": "설치 관리",
+          "aee7b99cc6": "링크에서 설치",
+          "filterProvider": "에이전트별 필터",
+          "filterSource": "소스별 필터",
+          "allSources": "전체",
+          "clearFilters": "필터 지우기",
+          "closeSkills": "스킬 닫기",
+          "closeTooltip": "닫기 · Esc",
+          "moreActions": "추가 작업",
+          "sharedLinks": "공유 링크",
+          "emptyCopy": "검색한 스킬 폴더가 비어 있습니다. 공유 번들을 설치하거나 스킬을 추가한 후 새로 고치세요.",
+          "retry": "다시 시도",
+          "remoteShareNotice": "이 스킬은 {{host}}에 있습니다. 공유하려면 해당 머신에서 스킬을 여세요.",
+          "viewSwitch": "표시",
+          "searchLinks": "링크 검색",
+          "deleteSkills": "스킬 삭제…"
         },
         "SkillShareSelectionControls": { "01c5a15e02": "스킬 공유" },
-        "SkillRow": { "updatedUnknown": "날짜 없음", "pathCopied": "경로 복사됨", "copyPath": "경로 복사", "detailPath": "경로", "skillActions": "{{value0}} 작업", "viewDetails": "세부 정보 보기", "deleteSkill": "삭제…" },
+        "SkillRow": {
+          "updatedUnknown": "날짜 없음",
+          "pathCopied": "경로 복사됨",
+          "copyPath": "경로 복사",
+          "detailPath": "경로",
+          "skillActions": "{{value0}} 작업",
+          "viewDetails": "세부 정보 보기",
+          "deleteSkill": "삭제…"
+        },
         "SkillsList": { "listLabel": "스킬" },
-        "sourceStatus": { "missing": "폴더를 찾을 수 없음", "remoteRepo": "원격 리포지토리 — 검색 안 됨", "unavailable": "검색 안 됨" },
+        "sourceStatus": {
+          "missing": "폴더를 찾을 수 없음",
+          "remoteRepo": "원격 리포지토리 — 검색 안 됨",
+          "unavailable": "검색 안 됨"
+        },
         "sources": { "heading": "스킬 폴더" },
-        "sourceKind": { "home": "홈", "workspace": "워크스페이스", "bundled": "번들", "plugin": "플러그인" },
-        "count": { "skillOne": "스킬 {{count}}개", "skillOther": "스킬 {{count}}개", "sourceOne": "소스 {{count}}개", "sourceOther": "소스 {{count}}개", "fileOne": "파일 {{count}}개", "fileOther": "파일 {{count}}개", "resultOne": "결과 {{count}}개", "resultOther": "결과 {{count}}개", "selected": "{{count}}개 선택됨", "shareOne": "스킬 {{count}}개 공유", "shareOther": "스킬 {{count}}개 공유", "linkOne": "링크 {{count}}개", "linkOther": "링크 {{count}}개" },
+        "sourceKind": {
+          "home": "홈",
+          "workspace": "워크스페이스",
+          "bundled": "번들",
+          "plugin": "플러그인"
+        },
+        "count": {
+          "skillOne": "스킬 {{count}}개",
+          "skillOther": "스킬 {{count}}개",
+          "sourceOne": "소스 {{count}}개",
+          "sourceOther": "소스 {{count}}개",
+          "fileOne": "파일 {{count}}개",
+          "fileOther": "파일 {{count}}개",
+          "resultOne": "결과 {{count}}개",
+          "resultOther": "결과 {{count}}개",
+          "selected": "{{count}}개 선택됨",
+          "shareOne": "스킬 {{count}}개 공유",
+          "shareOther": "스킬 {{count}}개 공유",
+          "linkOne": "링크 {{count}}개",
+          "linkOther": "링크 {{count}}개"
+        },
         "filter": { "allAgents": "모든 에이전트", "sharedAgent": "공유됨 (.agents)" },
-        "SkillsSelectionHeader": { "exit": "선택 나가기", "exitTooltip": "선택 나가기 · Esc", "title": "공유할 스킬 선택", "selectAll": "가능한 {{count}}개 모두 선택", "clear": "지우기", "deleteTitle": "삭제할 스킬 선택" },
+        "SkillsSelectionHeader": {
+          "exit": "선택 나가기",
+          "exitTooltip": "선택 나가기 · Esc",
+          "title": "공유할 스킬 선택",
+          "selectAll": "가능한 {{count}}개 모두 선택",
+          "clear": "지우기",
+          "deleteTitle": "삭제할 스킬 선택"
+        },
         "SkillDetailDialog": { "agents": "에이전트", "updated": "업데이트됨", "copy": "복사" },
         "SkillFreshnessNudge": {
           "titleOne": "설치된 Orca 스킬이 오래되었습니다",
@@ -14391,6 +14459,13 @@
           "deleteDescription": "“{{name}}”은(는) 공개 링크에서 더 이상 사용할 수 없습니다.",
           "delete": "삭제"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "상위 워크트리",
+        "noParent": "상위 워크트리 없음",
+        "description": "이 워크스페이스를 사이드바의 다른 워크스페이스 아래에 중첩합니다. 기준 브랜치는 변경되지 않습니다.",
+        "searchPlaceholder": "워크스페이스 검색...",
+        "noMatches": "일치하는 항목이 없습니다."
       }
     },
     "i18n": {

@@ -263,7 +263,10 @@
           "3b57982bf6": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el espacio de trabajo \"{{value1}}\", así que Orca la conservó para evitar perder commits locales.",
           "81f13f48d2": "Git no pudo eliminar de forma segura la rama \"{{value0}}\" después de eliminar el worktree \"{{value1}}\", así que Orca la conservó para evitar perder commits locales.",
           "runtimeScopeForbiddenTitle": "Esta conexión tiene acceso limitado (móvil)",
-          "runtimeScopeForbiddenDescription": "Los espacios de trabajo no están disponibles con un emparejamiento de acceso móvil. Vuelve a conectarte con el enlace del navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca."
+          "runtimeScopeForbiddenDescription": "Los espacios de trabajo no están disponibles con un emparejamiento de acceso móvil. Vuelve a conectarte con el enlace del navegador desde Ajustes → Servidores remotos de Orca → Comparte este servidor Orca.",
+          "createdWithoutParentNesting": "Creado sin anidarlo bajo \"{{value0}}\"",
+          "createdWithoutParentNestingUnnamed": "Creado sin anidarlo bajo el worktree padre seleccionado",
+          "createdWithoutParentNestingDetail": "El espacio de trabajo padre ya no estaba disponible. Puedes establecerlo desde el menú del espacio de trabajo."
         },
         "repos": {
           "2975400634": "Actualiza el servidor Orca para abrir carpetas que no sean Git en este host.",
@@ -14433,6 +14436,13 @@
           "deleteDescription": "“{{name}}” ya no estará disponible en su enlace público.",
           "delete": "Eliminar"
         }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "Worktree padre",
+        "noParent": "Sin worktree padre",
+        "description": "Anida este espacio de trabajo bajo otro en la barra lateral. No cambia la rama base.",
+        "searchPlaceholder": "Buscar espacios de trabajo...",
+        "noMatches": "No hay coincidencias."
       }
     },
     "i18n": {

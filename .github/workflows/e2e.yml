@@ -17,6 +17,10 @@ on:
         description: JSON array of changed specs; empty runs the full suite
         required: false
         type: string
+      ssh_source_changed:
+        description: '"true" when the PR touches SSH execution source; gates the Docker-SSH lane'
+        required: false
+        type: string
   workflow_dispatch:
     inputs:
       ref:
@@ -221,14 +225,21 @@ jobs:
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
     needs: build
+    # Why ssh_source_changed first: this lane used to trigger on SSH source only as a side
+    # effect of one route listing a startup-readiness spec — pruning that spec would have
+    # silently retired the whole lane. The signal is now derived from the SSH routes directly.
+    # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
+    # lane, so editing one must still run it here.
     if: >-
       inputs.test_files == '' ||
+      inputs.ssh_source_changed == 'true' ||
       contains(inputs.test_files, 'tests/e2e/ssh-startup-exec-readiness.spec.ts') ||
       contains(inputs.test_files, 'tests/e2e/paired-startup-exec-readiness.spec.ts')
     runs-on: ubuntu-latest
-    # Why 35: the parking, retention, startup-exec, and paired parity specs run
-    # serially on isolated Electron/SSH fixtures after watcher isolation.
-    timeout-minutes: 35
+    # Why 60: this lane now also runs the remaining Docker-SSH specs serially. They average
+    # ~18s but several budget 4-10 minutes per test, so a slow run lands far above the old 35
+    # — and the sharded lanes already show that a lane which times out is a lane nobody trusts.
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -259,6 +270,14 @@ jobs:
       - name: Run Docker SSH terminal parking + startup readiness E2E
         if: always()
         run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker-terminal-parking
+
+      # Why here rather than the sharded lanes: the shards set no ORCA_E2E_SSH_DOCKER, so every
+      # spec below skipped itself while the shard still reported green. Running them on this one
+      # VM pays the fixture image build once instead of ten times, and keeps an SSH regression
+      # legible as an SSH-named failure.
+      - name: Run remaining Docker SSH E2E
+        if: always()
+        run: xvfb-run --auto-servernum env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm run test:e2e:ssh-docker
 
       - name: Upload watcher isolation traces
         if: failure()

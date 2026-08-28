@@ -804,6 +804,7 @@ jobs:
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
       test_files: ${{ steps.filter.outputs.test_files }}
+      ssh_source_changed: ${{ steps.filter.outputs.ssh_source_changed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -826,6 +827,11 @@ jobs:
           # authorities, exclusions, and sentinels without evaluating workflow shell.
           TEST_FILES_JSON="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs)"
           echo "test_files=$TEST_FILES_JSON" >> "$GITHUB_OUTPUT"
+          # Why a separate signal: the Docker-SSH lane must trigger on SSH source, not on a
+          # spec name surviving in a route's list. Same routes, so the two cannot drift.
+          SSH_SOURCE_CHANGED="$(printf '%s\n' "$CHANGED" | node config/scripts/pr-e2e-source-routing.mjs --ssh-source)"
+          echo "ssh_source_changed=$SSH_SOURCE_CHANGED" >> "$GITHUB_OUTPUT"
+          echo "SSH source changed: $SSH_SOURCE_CHANGED"
           if [ "$TEST_FILES_JSON" != '[]' ]; then
             echo "should_run=true" >> "$GITHUB_OUTPUT"
             echo "Changed E2E specs: $TEST_FILES_JSON"
@@ -844,6 +850,7 @@ jobs:
     uses: ./.github/workflows/e2e.yml
     with:
       test_files: ${{ needs.e2e-paths.outputs.test_files }}
+      ssh_source_changed: ${{ needs.e2e-paths.outputs.ssh_source_changed }}
 
   verify:
     if: always()

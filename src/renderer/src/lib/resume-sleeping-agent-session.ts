@@ -14,6 +14,7 @@ import {
   type ResumeSleepingAgentSessionsOptions
 } from './sleeping-agent-session-launch'
 import { findUnhydratedHostMirrorForPane } from './host-mirrored-pane-liveness'
+import { resolveWorkspaceTerminalHostAuthority } from './workspace-terminal-host-authority'
 import { parkUntilHostSessionMirrorHydrates } from '@/runtime/host-session-mirror-hydration'
 
 export type { ResumeSleepingAgentSessionsOptions } from './sleeping-agent-session-launch'
@@ -171,6 +172,14 @@ export function resumeSleepingAgentSessionsForWorktree(
   options?: ResumeSleepingAgentSessionsOptions
 ): number {
   const state = useAppStore.getState()
+  // Why: every branch below reads local rows as the verdict on what the execution host is running,
+  // and before it answers "I hold no pane for this record" is `unverifiable`, not `exited`. Resuming
+  // on it forks a second agent onto a transcript the host is still writing (STA-3500). Declining is
+  // recoverable — the record survives, and the caller re-runs this sweep once the verdict lands.
+  // Paired-runtime workspaces keep their own per-pane mirror park below, which is finer-grained.
+  if (resolveWorkspaceTerminalHostAuthority(state, worktreeId) === 'unverifiable') {
+    return 0
+  }
   const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey)
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
