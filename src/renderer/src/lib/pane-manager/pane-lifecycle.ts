@@ -19,6 +19,7 @@ import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-web
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { TerminalContextualShapingAddon } from './terminal-contextual-shaping-addon'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 // ---------------------------------------------------------------------------
@@ -125,6 +126,14 @@ export function disposeLigatures(pane: ManagedPaneInternal): void {
     }
     pane.ligaturesAddon = null
   }
+  if (pane.contextualShapingAddon) {
+    try {
+      pane.contextualShapingAddon.dispose()
+    } catch {
+      /* ignore */
+    }
+    pane.contextualShapingAddon = null
+  }
 }
 
 export function attachLigatures(pane: ManagedPaneInternal): void {
@@ -135,6 +144,12 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
     const ligaturesAddon = new TerminalLigaturesAddon()
     pane.terminal.loadAddon(ligaturesAddon)
     pane.ligaturesAddon = ligaturesAddon
+    // Why: Fast-family fonts pick word-initial glyphs from the whole word, so
+    // their letter runs need a whole-word joiner; rides the ligature lifecycle
+    // so both toggle from a single place.
+    const contextualShapingAddon = new TerminalContextualShapingAddon()
+    pane.terminal.loadAddon(contextualShapingAddon)
+    pane.contextualShapingAddon = contextualShapingAddon
     // Why: ligatures can be enabled after rows already rendered, especially
     // from Settings. Force existing glyph runs to be recomputed immediately.
     if (!pane.webglAttachmentDeferred) {
@@ -149,6 +164,7 @@ export function attachLigatures(pane: ManagedPaneInternal): void {
   } catch (err) {
     console.warn('[terminal] ligatures addon failed to attach for pane', pane.id, err)
     pane.ligaturesAddon = null
+    pane.contextualShapingAddon = null
   }
 }
 

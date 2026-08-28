@@ -3,21 +3,26 @@ import type { Terminal } from '@xterm/xterm'
 
 const addonMock = vi.hoisted(() => ({
   delegateTerminal: null as Terminal | null,
-  joiner: vi.fn<(text: string) => [number, number][]>()
+  joiner: vi.fn<(text: string) => [number, number][]>(),
+  // Why a second joiner: the proxy once shared one cache across every joiner
+  // it wrapped, so the first joiner's cached `[]` suppressed later joiners.
+  secondJoiner: vi.fn<(text: string) => [number, number][]>()
 }))
 
 vi.mock('@xterm/addon-ligatures', () => ({
   LigaturesAddon: class {
-    private joinerId: number | null = null
+    private readonly joinerIds: number[] = []
 
     activate(terminal: Terminal): void {
       addonMock.delegateTerminal = terminal
-      this.joinerId = terminal.registerCharacterJoiner(addonMock.joiner)
+      // Why first: keeps getRegisteredJoiner() pointing at the ligature joiner.
+      this.joinerIds.push(terminal.registerCharacterJoiner(addonMock.secondJoiner))
+      this.joinerIds.push(terminal.registerCharacterJoiner(addonMock.joiner))
     }
 
     dispose(): void {
-      if (this.joinerId !== null) {
-        addonMock.delegateTerminal?.deregisterCharacterJoiner(this.joinerId)
+      for (const id of this.joinerIds) {
+        addonMock.delegateTerminal?.deregisterCharacterJoiner(id)
       }
     }
   }
@@ -26,7 +31,7 @@ vi.mock('@xterm/addon-ligatures', () => ({
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
 
 function createTerminalHarness() {
-  let registeredJoiner: ((text: string) => [number, number][]) | null = null
+  const registeredJoiners: Array<(text: string) => [number, number][]> = []
   const refresh = vi.fn()
   const deregisterCharacterJoiner = vi.fn()
   const terminal = {
@@ -34,8 +39,8 @@ function createTerminalHarness() {
     options: { fontFamily: 'Fira Code' },
     refresh,
     registerCharacterJoiner(joiner: (text: string) => [number, number][]): number {
-      registeredJoiner = joiner
-      return 17
+      registeredJoiners.push(joiner)
+      return 16 + registeredJoiners.length
     },
     deregisterCharacterJoiner
   } as unknown as Terminal
@@ -43,7 +48,8 @@ function createTerminalHarness() {
     terminal,
     refresh,
     deregisterCharacterJoiner,
-    getRegisteredJoiner: () => registeredJoiner!
+    getRegisteredJoiner: () => registeredJoiners.at(-1)!,
+    getRegisteredJoiners: () => registeredJoiners
   }
 }
 
@@ -52,6 +58,8 @@ describe('TerminalLigaturesAddon', () => {
     addonMock.delegateTerminal = null
     addonMock.joiner.mockReset()
     addonMock.joiner.mockImplementation((text) => (text.includes('=>') ? [[2, 4]] : []))
+    addonMock.secondJoiner.mockReset()
+    addonMock.secondJoiner.mockImplementation((text) => (text.includes('word') ? [[0, 4]] : []))
   })
 
   it('reuses joiner results for unchanged row text', () => {
@@ -142,7 +150,7 @@ describe('TerminalLigaturesAddon', () => {
     expect(addonMock.joiner).toHaveBeenCalledTimes(2)
   })
 
-  it('deregisters the wrapped joiner through the real terminal', () => {
+  it('deregisters the wrapped joiners through the real terminal', () => {
     const harness = createTerminalHarness()
     const addon = new TerminalLigaturesAddon()
     addon.activate(harness.terminal)
@@ -150,5 +158,38 @@ describe('TerminalLigaturesAddon', () => {
     addon.dispose()
 
     expect(harness.deregisterCharacterJoiner).toHaveBeenCalledWith(17)
+    expect(harness.deregisterCharacterJoiner).toHaveBeenCalledWith(18)
+  })
+
+  it('does not let one cached [] suppress another joiner', () => {
+    const harness = createTerminalHarness()
+    new TerminalLigaturesAddon().activate(harness.terminal)
+    const [second, ligature] = harness.getRegisteredJoiners()
+
+    // The ligature joiner returns [] for this row and caches it…
+    expect(ligature('word')).toEqual([])
+
+    // …the second joiner must still run for the same row text.
+    expect(second('word')).toEqual([[0, 4]])
+    expect(addonMock.secondJoiner).toHaveBeenCalledTimes(1)
+
+    // Per-joiner caching still applies within each joiner.
+    second('word')
+    expect(addonMock.secondJoiner).toHaveBeenCalledTimes(1)
+  })
+
+  it('clears every joiner’s cache on refresh', () => {
+    const harness = createTerminalHarness()
+    new TerminalLigaturesAddon().activate(harness.terminal)
+    const [second, ligature] = harness.getRegisteredJoiners()
+    second('word')
+    ligature('word')
+
+    addonMock.delegateTerminal!.refresh(0, 23)
+
+    second('word')
+    ligature('word')
+    expect(addonMock.secondJoiner).toHaveBeenCalledTimes(2)
+    expect(addonMock.joiner).toHaveBeenCalledTimes(2)
   })
 })

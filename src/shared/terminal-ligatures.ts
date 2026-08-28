@@ -1,8 +1,8 @@
-// Font families that ship with programming-ligatures out of the box. Used by
-// the `'auto'` mode of `terminalLigatures` so users who pick a ligature font
-// get the feature for free without touching settings. Matching is
-// case-insensitive and substring-based so variants like "JetBrainsMono NF"
-// still resolve.
+// Font families that need ligature (or Fast Mono's whole-word `calt`)
+// machinery enabled by default. Used by the `'auto'` mode of
+// `terminalLigatures` so users who pick such a font get the feature for free
+// without touching settings. Matching is case-insensitive and
+// substring-based so variants like "JetBrainsMono NF" still resolve.
 const LIGATURE_FONT_TOKENS = [
   'fira code',
   'fira mono',
@@ -23,7 +23,9 @@ const LIGATURE_FONT_TOKENS = [
   'commit mono',
   'geist mono',
   'maple mono',
-  'departure mono'
+  'departure mono',
+  'fast mono',
+  'fast_mono'
 ] as const
 
 /** Whether a user-facing font-family string looks like one of the well-known
