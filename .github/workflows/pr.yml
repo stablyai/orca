@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       should_run: ${{ steps.filter.outputs.should_run }}
+      native_cache_changed: ${{ steps.filter.outputs.native_cache_changed }}
       static_analysis: ${{ steps.filter.outputs.static_analysis }}
       typecheck: ${{ steps.filter.outputs.typecheck }}
       git_compatibility: ${{ steps.filter.outputs.git_compatibility }}
@@ -442,10 +443,36 @@ jobs:
             src/shared/startup-shell-portability.live-shell.test.ts \
             src/shared/posix-command-path-lookup.test.ts
 
+  # Cache-key input changes would otherwise make every shard compile the same
+  # native addon concurrently. Prime each Node ABI once before the matrix fans out.
+  test_native_cache:
+    name: prepare test native cache node ${{ matrix.node }}
+    needs: [code_paths]
+    if: needs.code_paths.outputs.native_cache_changed == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ['24', '26']
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: ${{ matrix.node }}
+
   test:
     name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
-    needs: [code_paths]
-    if: needs.code_paths.outputs.test == 'true'
+    needs: [code_paths, test_native_cache]
+    if: >-
+      always() &&
+      needs.code_paths.outputs.test == 'true' &&
+      (needs.test_native_cache.result == 'success' || needs.test_native_cache.result == 'skipped')
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -695,7 +722,7 @@ jobs:
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
             node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Test Windows-specific boundaries
         run: >-
@@ -748,7 +775,7 @@ jobs:
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
             node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
             node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron

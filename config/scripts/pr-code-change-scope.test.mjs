@@ -207,6 +207,22 @@ describe('per-job path classification', () => {
     expect(classifyPrJobs(['pnpm-lock.yaml']).git_compatibility).toBe(true)
   })
 
+  it('primes native caches only when their immutable inputs change', () => {
+    expect(classifyPrJobs([]).native_cache_changed).toBe(true)
+    expect(classifyPrJobs(['README.md']).native_cache_changed).toBe(false)
+    expect(classifyPrJobs(['src/main/index.ts']).native_cache_changed).toBe(false)
+    for (const file of [
+      'package.json',
+      'pnpm-lock.yaml',
+      '.github/actions/install-node-dependencies/action.yml',
+      'config/scripts/ensure-native-runtime.mjs',
+      'config/scripts/rebuild-native-deps.mjs',
+      'config/patches/node-pty@1.1.0.patch'
+    ]) {
+      expect(classifyPrJobs([file]).native_cache_changed, file).toBe(true)
+    }
+  })
+
   it('keeps unit-test-only diffs out of packaging', () => {
     expectClassification(['src/main/git/git-status.test.ts'], {
       git_compatibility: true
@@ -238,7 +254,7 @@ describe('PR Checks skip wiring', () => {
     expect(classify.run).toContain('--merge-base "$BASE_SHA" "$HEAD_SHA"')
     expect(classify.run).toContain('node config/scripts/pr-code-change-scope.mjs')
     expect(classify.run).toContain('tee -a "$GITHUB_OUTPUT"')
-    for (const jobName of ['should_run', ...expensiveJobs]) {
+    for (const jobName of ['should_run', 'native_cache_changed', ...expensiveJobs]) {
       expect(prWorkflow.jobs.code_paths.outputs[jobName], jobName).toBe(
         `\${{ steps.filter.outputs.${jobName} }}`
       )
@@ -250,13 +266,22 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.root_directory_guard.needs).toBeUndefined()
   })
 
-  it('gates each expensive job on its own classifier output', () => {
-    for (const jobName of expensiveJobs) {
+  it('gates each expensive job on its classifier and cache prerequisite', () => {
+    for (const jobName of expensiveJobs.filter((jobName) => jobName !== 'test')) {
       expect(prWorkflow.jobs[jobName].needs, jobName).toEqual(['code_paths'])
       expect(prWorkflow.jobs[jobName].if, jobName).toBe(
         `needs.code_paths.outputs.${jobName} == 'true'`
       )
     }
+    expect(prWorkflow.jobs.test.needs).toEqual(['code_paths', 'test_native_cache'])
+    expect(prWorkflow.jobs.test.if).toContain("needs.code_paths.outputs.test == 'true'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'success'")
+    expect(prWorkflow.jobs.test.if).toContain("needs.test_native_cache.result == 'skipped'")
+    expect(prWorkflow.jobs.test_native_cache.needs).toEqual(['code_paths'])
+    expect(prWorkflow.jobs.test_native_cache.if).toBe(
+      "needs.code_paths.outputs.native_cache_changed == 'true'"
+    )
+    expect(prWorkflow.jobs.test_native_cache.strategy.matrix.node).toEqual(['24', '26'])
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {

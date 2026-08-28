@@ -50,6 +50,11 @@ describe('packaged Windows PTY native capability routing', () => {
     expect(nodeCacheSave.uses).toBe('actions/cache/save@v5')
     expect(nodeCacheSave.with.key).toContain('-node-node')
     expect(electronCache.with.key).toContain('-electron-node')
+    for (const cache of [nodeCacheSave, electronCache]) {
+      expect(cache.with.key).toContain('.github/actions/install-node-dependencies/action.yml')
+      expect(cache.with.key).toContain('config/scripts/ensure-native-runtime.mjs')
+      expect(cache.with.key).toContain('config/scripts/rebuild-native-deps.mjs')
+    }
     expect(ensureNativeRuntime).toContain("runPnpm(['exec', 'node-gyp', 'rebuild']")
     expect(ensureNativeRuntime).toContain("resolve(moduleDir, 'scripts', 'post-install.js')")
     expect(build.run).toBe('pnpm run build:release:parallel')

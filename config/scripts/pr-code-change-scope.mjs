@@ -116,6 +116,19 @@ const NATIVE_RUNTIME_PREFIXES = [
   'config/patches/@vscode__windows-process-tree'
 ]
 
+const NATIVE_CACHE_FILES = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  '.github/actions/install-node-dependencies/action.yml',
+  'config/scripts/ensure-native-runtime.mjs',
+  'config/scripts/rebuild-native-deps.mjs'
+])
+
+const NATIVE_CACHE_PREFIXES = [
+  'config/patches/node-pty@',
+  'config/patches/@vscode__windows-process-tree'
+]
+
 const SHARED_PACKAGE_PREFIXES = [
   'electron.vite.config.ts',
   'config/electron-builder',
@@ -222,7 +235,11 @@ export function classifyPrJobs(changedFiles) {
       shouldRun && (forceAll || ALWAYS_ON_CODE_JOBS.has(job) || jobDetector(job)(changedFiles))
     ])
   )
-  return { should_run: shouldRun, ...jobs }
+  return {
+    should_run: shouldRun,
+    native_cache_changed: shouldRun && (emptyDiff || changedFiles.some(isNativeCacheInputPath)),
+    ...jobs
+  }
 }
 
 function jobDetector(job) {
@@ -272,6 +289,10 @@ function isTestFile(file) {
 
 function isDesktopIrrelevantPath(file) {
   return matchesPrefix(file, DESKTOP_IRRELEVANT_PREFIXES)
+}
+
+function isNativeCacheInputPath(file) {
+  return NATIVE_CACHE_FILES.has(file) || matchesPrefix(file, NATIVE_CACHE_PREFIXES)
 }
 
 function isGlobalForcePath(file) {
