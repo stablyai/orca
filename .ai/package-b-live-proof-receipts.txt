@@ -198,3 +198,51 @@ CONSEQUENCE
   The remaining gap is no longer missing machinery — every writer exists and each
   was exercised for real. It is that three kinds need conditions this candidate
   did not produce.
+
+
+EFFECTIVE IDENTITY ROOT PATH — CLOSED  (writer at 27d91aca6a, verified at f865367e19)
+
+Root cause, as the correction stated: route-runtime-events required
+AgentStatus.model, Claude's hook never populates it, and nothing ever wrote
+effectiveProvenance 'observed'. So the launch receipt only ever held the request.
+
+The provider does state its own model — in the transcript it writes itself, where
+every assistant record carries message.model. The runtime now reads that and
+persists it as an observed launch receipt.
+
+PERSISTED OBSERVED RECEIPT, read out of the candidate database:
+  requested            {"agent":"claude","model":"opus","effort":"high"}
+  effective            {"agent":"claude","model":"claude-opus-5","effort":"high"}
+  effectiveProvenance  "observed"
+  observedProviderSessionId  8687c21a-0881-4b5d-8bdf-368e4db550b5
+  observedAt           2026-08-28T02:08:47.885Z
+
+The alias was NOT certified. Claiming claude|opus|high against the observation
+was refused with the exact reason:
+  "effective_identity_mismatch: Dispatch launched on claude|claude-opus-5|high,
+   not claude|opus|high."
+Certification then succeeded against the OBSERVED route:
+  effective_model_identity        RECORDED
+  effective_reasoning_mode        RECORDED
+  fresh_launch                    RECORDED
+  safe_launch_acceptance          RECORDED
+  task_dispatch_worktree_binding  RECORDED
+
+BINDING, and why each part is there
+  pane key        the anchor: Orca mints it, the provider echoes it back
+  terminal/token  compared WHEN the report carries them, so a different session
+                  is refused; Claude's hook sends neither, and demanding a field
+                  the provider never sends would mean nothing is ever observed
+  agent           from Orca's own launch record — Orca chose the launcher; only
+                  the MODEL needs the provider
+  recency         a model written before the Dispatch describes an earlier run
+  Controls: requested-copy, wrong session, old process, stale transcript, a
+  session that named no model, plus the positive exact-session receipt.
+
+REMAINING ON THE OBSERVED ROUTE  (claude|claude-opus-5|high)
+  pretool_acceptance, completion_receipt, duplicate_prevention,
+  failure_recovery, role_execution — all five have working writers and each has
+  been earned live on an earlier Run; they have not yet been collected onto this
+  one exact route in a single candidate. role_execution refused here because this
+  Dispatch never ran the builder role: it was launched to observe identity and
+  was not driven through delivery.
