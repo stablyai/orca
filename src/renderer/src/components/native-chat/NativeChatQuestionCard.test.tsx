@@ -454,59 +454,37 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
   })
 
-  it('names the free-form row a note on preview questions, and an answer otherwise', () => {
-    // On a preview question the text delivers as an annotation — on the picked
-    // option, or on its own — which is a different promise from "your answer".
+  it('names the free-form row for what the text will do', () => {
+    // With a pick the text rides along as that option's note; without one it has
+    // no selector representation and leaves as a chat message.
     render(previewPrompt, vi.fn())
-    expect(container.querySelector('input')!.placeholder).toBe('Add a note')
+    expect(container.querySelector('input')!.placeholder).toBe(
+      'Answer in your own words — sends as a chat message'
+    )
+
+    clickOption('Spaces')
+    expect(container.querySelector('input')!.placeholder).toBe('Add a note (optional)')
 
     render(tabsOrSpaces, vi.fn())
     expect(container.querySelector('input')!.placeholder).toBe('Type your answer')
   })
 
-  it('will not submit a note until an option is picked on a preview question', () => {
-    // The note attaches to a selected option, so the card blocks the state the
-    // delivery layer cannot express.
+  it('submits text with no pick rather than blocking on one', () => {
+    // Routing sends it to chat; the card's job is only to hand it over.
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)
 
     typeAnswer('none of these, actually')
 
     const action = actionButton()
-    expect(action.textContent?.trim()).toBe('Pick an option')
-    expect(action.disabled).toBe(true)
-
-    click(action, 'gated action')
-    expect(onAnswer).not.toHaveBeenCalled()
-  })
-
-  it('releases the gate once an option is picked alongside the note', () => {
-    const onAnswer = vi.fn()
-    render(previewPrompt, onAnswer)
-
-    typeAnswer('but only in JS')
-    expect(actionButton().disabled).toBe(true)
-
-    clickOption('Spaces')
-
-    const action = actionButton()
     expect(action.disabled).toBe(false)
     expect(action.textContent?.trim()).toBe('Submit')
 
     click(action, 'Submit')
-    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'but only in JS' }])
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'none of these, actually' }])
   })
 
-  it('does not gate the free-form row on a question without previews', () => {
-    render(tabsOrSpaces, vi.fn())
-
-    typeAnswer('four spaces')
-
-    expect(actionButton().disabled).toBe(false)
-    expect(actionButton().textContent?.trim()).toBe('Submit')
-  })
-
-  it('ignores Enter in the note field while the pick is still missing', () => {
+  it('submits text with no pick from the Enter key too', () => {
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)
 
@@ -514,7 +492,7 @@ describe('NativeChatQuestionCard', () => {
     const input = container.querySelector('input')!
     act(() => input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true })))
 
-    expect(onAnswer).not.toHaveBeenCalled()
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'none of these, actually' }])
   })
 
   it('submits a picked option together with its note', () => {
@@ -530,16 +508,16 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'but only in JS' }])
   })
 
-  it('does not treat a hovered option as the note’s pick', () => {
-    // Hover only drives which preview shows; the note still needs a real pick.
+  it('does not treat a hovered option as a pick', () => {
+    // Hover only drives which preview shows, so the text is still unattached.
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)
 
     hoverOption('Spaces')
     typeAnswer('my typed answer')
+    clickAction('Submit')
 
-    expect(actionButton().disabled).toBe(true)
-    expect(onAnswer).not.toHaveBeenCalled()
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'my typed answer' }])
   })
 
   it('keeps typed text when focus moves from an option row to the free-form input', () => {
