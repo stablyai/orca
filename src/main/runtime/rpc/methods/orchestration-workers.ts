@@ -1,5 +1,6 @@
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { createDispatchUnderCertificationIntent } from './orchestration-certification-launch'
+import { recordSafeLaunchAdmission } from '../../orchestration/control-plane/route-runtime-events'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { startFederatedWorker } from './orchestration-federated-worker-start'
@@ -165,6 +166,13 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
             runtimeEpoch: runtime.getRuntimeId(),
             mutationReceipt: orchestrationMutation
           })
+      })
+      // The admission decision above is a real runtime fact that was previously
+      // made and discarded. Certification needs it, so it is written down.
+      recordSafeLaunchAdmission(db, {
+        dispatchId: started.dispatch.id,
+        decision: 'admitted',
+        observedAt: new Date().toISOString()
       })
       const effects = initialWorkerEffects(resolvedWorktree?.id ?? null)
       let terminalHandle = params.terminal

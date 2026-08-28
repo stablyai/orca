@@ -9,6 +9,12 @@ import {
 } from '../../orchestration/control-plane/route-registry-discovery'
 import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
 import { mintCertificationIntent } from '../../orchestration/control-plane/certification-intent'
+import {
+  observedIdentityFromAgentStatus,
+  readDispatchLaunchEffort,
+  readPretoolDecision,
+  readSafeLaunchAdmission
+} from '../../orchestration/control-plane/route-runtime-events'
 import { requireCallerOwnedRunTask } from './orchestration-run-scope'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
@@ -140,9 +146,30 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
         // Why the runtime's own signals: the caller names the kind, the runtime
         // decides whether its records actually show that event happening.
         source: {
-          observedEffectiveIdentity: (dispatchId) => readObservedLaunchIdentity(db, dispatchId),
+          // Prefer an independently observed launch receipt; otherwise read what
+          // the PROVIDER itself reported through its own hook. Both are the
+          // runtime's records; neither is the request copied back.
+          observedEffectiveIdentity: (dispatchId) => {
+            const fromReceipt = readObservedLaunchIdentity(db, dispatchId)
+            if (fromReceipt) {
+              return fromReceipt
+            }
+            const dispatch = db.getDispatchContextById(dispatchId)
+            return dispatch
+              ? observedIdentityFromAgentStatus(
+                  dispatch,
+                  runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot(),
+                  readDispatchLaunchEffort(db.getWorkerDispatch(dispatchId)?.start_options)
+                )
+              : null
+          },
           agentStatusSnapshot: () =>
-            runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot()
+            runtime.getOrchestrationLivenessSignalSource().agentStatusSnapshot(),
+          // Only an explicit decision the policy path recorded. A PreTool hook
+          // event proves a tool was seen, not that anything accepted it, and the
+          // hook can fire before any decision exists.
+          pretoolDecision: (dispatchId) => readPretoolDecision(db, dispatchId),
+          safeLaunchAdmission: (dispatchId) => readSafeLaunchAdmission(db, dispatchId)
         }
       })
       if (!admission.ok) {
