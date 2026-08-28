@@ -192,6 +192,17 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   let root: Root
   let container: HTMLDivElement
   let pendingBroadcasts: PersistedUIState[]
+  let holdAcks: boolean
+  let pendingAcks: (() => void)[]
+
+  async function resolveAcks() {
+    await act(async () => {
+      for (const resolve of pendingAcks.splice(0)) {
+        resolve()
+      }
+      await Promise.resolve()
+    })
+  }
 
   function deliverBroadcasts() {
     // Models the async ui:stateChanged IPC delivery to the desktop renderer.
@@ -231,11 +242,18 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     authority.onChanged((ui) => pendingBroadcasts.push(ui))
     store = createUIStore()
     storeRef.current = store as unknown as typeof storeRef.current
+    holdAcks = false
+    pendingAcks = []
     ;(window as unknown as { api: unknown }).api = {
       ui: {
         set: (updates: Partial<PersistedUIState>) => {
+          // Like the real IPC: main applies the update before the renderer's
+          // promise resolves; holdAcks models the in-flight round-trip window.
           authority.set(updates)
-          return Promise.resolve()
+          if (!holdAcks) {
+            return Promise.resolve()
+          }
+          return new Promise<void>((resolve) => pendingAcks.push(resolve))
         }
       }
     }
@@ -364,6 +382,35 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     // Both disjoint changes survive at the authority.
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
+  })
+
+  it('preserves a flip-back made while the first write is still in flight', async () => {
+    // CodeRabbit PR#17057 finding: toggle -> debounce fires (write in flight)
+    // -> toggle back. The flip-back equals the pre-fold baseline, so without
+    // in-flight tracking it diffs empty, the ack folds the obsolete value in,
+    // and the echo broadcast visually reverts the user's second toggle.
+    holdAcks = true
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    await flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
+
+    // Flip back while the first write's ack is still in flight.
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(false)
+    })
+    // The echo of the FIRST write arrives before the ack.
+    deliverBroadcasts()
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
+
+    // Ack lands; the writer must notice the mirror moved on and re-flush.
+    await resolveAcks()
+    await flushDesktopDebounce()
+    await resolveAcks()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
+    deliverBroadcasts()
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
   })
 
   it('desktop and mobile changing the same field converges on the newest write', async () => {

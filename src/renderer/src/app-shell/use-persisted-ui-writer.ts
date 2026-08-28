@@ -2,10 +2,44 @@ import { useEffect } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../store'
 import {
+  capturePersistedUIWriteBaseline,
   diffPersistedUIWriteFields,
   persistedUIWriteFieldsToWireUpdate,
   type PersistedUIWriteBaseline
 } from '../store/slices/persisted-ui-write-baseline'
+
+/**
+ * Send one field patch and settle it against the baseline. Fields are marked
+ * in flight so a hydration during the round-trip can't revert a newer local
+ * flip-back; on ack the patch folds into the baseline and the mirror is
+ * re-diffed — an edit made while the write was in flight (which diffed empty
+ * against the pre-fold baseline) is flushed immediately as a trailing write.
+ * A rejected write folds nothing, leaving its fields dirty to re-flush on the
+ * next change (no automatic retry loop).
+ */
+function sendPersistedUIWrite(changed: Partial<PersistedUIWriteBaseline>): void {
+  const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
+  useAppStore.getState().notePersistedUIWriteStarted(fields)
+  window.api.ui
+    .set(persistedUIWriteFieldsToWireUpdate(changed))
+    .then(() => {
+      const state = useAppStore.getState()
+      state.notePersistedUIWriteSettled(fields, changed)
+      const settled = useAppStore.getState()
+      const baseline = settled.persistedUIWriteBaseline
+      if (!baseline) {
+        return
+      }
+      const trailing = diffPersistedUIWriteFields(
+        capturePersistedUIWriteBaseline(settled),
+        baseline
+      )
+      if (Object.keys(trailing).length > 0) {
+        sendPersistedUIWrite(trailing)
+      }
+    })
+    .catch(() => useAppStore.getState().notePersistedUIWriteSettled(fields, null))
+}
 
 /**
  * Mirrors the sidebar/right-sidebar/filter preferences into the durable UI file.
@@ -79,12 +113,7 @@ export function usePersistedUIWriter(): void {
       if (Object.keys(changed).length === 0) {
         return
       }
-      // Fold into the baseline only once the write lands; a rejected write
-      // leaves the fields dirty so the next mirror change re-flushes them.
-      window.api.ui
-        .set(persistedUIWriteFieldsToWireUpdate(changed))
-        .then(() => state.markPersistedUIWriteFlushed(changed))
-        .catch(() => {})
+      sendPersistedUIWrite(changed)
     }, 150)
 
     return () => window.clearTimeout(timer)

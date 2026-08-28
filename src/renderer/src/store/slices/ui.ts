@@ -1008,8 +1008,14 @@ export type UISlice = {
   persistedUIReady: boolean
   /** Writer-owned fields as last hydrated from main or flushed by the writer; the debounced writer diffs against this so it only persists fields this client changed (STA-5781). */
   persistedUIWriteBaseline: PersistedUIWriteBaseline | null
-  /** Fold a flushed ui.set patch into the baseline so those fields stop diffing. */
-  markPersistedUIWriteFlushed: (fields: Partial<PersistedUIWriteBaseline>) => void
+  /** Fields with a ui.set round-trip in flight; hydration keeps the mirror's value for them so an echo of the in-flight write can't revert a newer flip-back. */
+  persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
+  notePersistedUIWriteStarted: (fields: readonly (keyof PersistedUIWriteBaseline)[]) => void
+  /** Settle an in-flight write: fold the acked patch into the baseline (null = rejected, leaving the fields dirty so the next change re-flushes them). */
+  notePersistedUIWriteSettled: (
+    fields: readonly (keyof PersistedUIWriteBaseline)[],
+    flushed: Partial<PersistedUIWriteBaseline> | null
+  ) => void
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
@@ -2455,12 +2461,33 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
   persistedUIWriteBaseline: null,
-  markPersistedUIWriteFlushed: (fields) =>
-    set((s) =>
-      s.persistedUIWriteBaseline
-        ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline, ...fields } }
-        : s
-    ),
+  persistedUIWriteInFlightCounts: {},
+  notePersistedUIWriteStarted: (fields) =>
+    set((s) => {
+      const counts = { ...s.persistedUIWriteInFlightCounts }
+      for (const field of fields) {
+        counts[field] = (counts[field] ?? 0) + 1
+      }
+      return { persistedUIWriteInFlightCounts: counts }
+    }),
+  notePersistedUIWriteSettled: (fields, flushed) =>
+    set((s) => {
+      const counts = { ...s.persistedUIWriteInFlightCounts }
+      for (const field of fields) {
+        const next = (counts[field] ?? 0) - 1
+        if (next > 0) {
+          counts[field] = next
+        } else {
+          delete counts[field]
+        }
+      }
+      return {
+        persistedUIWriteInFlightCounts: counts,
+        ...(flushed && s.persistedUIWriteBaseline
+          ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline, ...flushed } }
+          : {})
+      }
+    }),
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
   editorFontZoomLevel: 0,
@@ -2695,6 +2722,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           previousBaseline
         )
         Object.assign(hydrated, pendingLocalEdits)
+        // In-flight fields too: a flip-back to the baseline value diffs empty,
+        // yet the in-flight write's echo must not revert it (PR#17057 review).
+        for (const field of Object.keys(
+          s.persistedUIWriteInFlightCounts
+        ) as (keyof PersistedUIWriteBaseline)[]) {
+          ;(hydrated as Record<string, unknown>)[field] = s[field]
+        }
       }
       // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
       if (hydratedUIPartialMatchesState(s, hydrated)) {
