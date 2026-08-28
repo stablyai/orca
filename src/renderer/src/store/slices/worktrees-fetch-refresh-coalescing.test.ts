@@ -174,8 +174,10 @@ describe('fetchWorktrees', () => {
     )
     const settings = createTestStore().getState().settings
     const detected = makeDetectedResult('repo1', [])
-    const firstIds = ['repo1::/a\nb', 'repo1::/c']
-    const secondIds = ['repo1::/a', 'repo1::/b\nc']
+    const firstIds = ['repo1::/a', 'repo1::/b\nrepo1::/c']
+    const secondIds = ['repo1::/a\nrepo1::/b', 'repo1::/c']
+
+    expect([...firstIds].sort().join('\n')).toBe([...secondIds].sort().join('\n'))
 
     const first = teardownMissingWorktreeTerminalsBestEffort(
       settings,
