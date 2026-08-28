@@ -1,4 +1,12 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from 'react'
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useImperativeHandle,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
@@ -31,6 +39,7 @@ import { useNativeChatComposerAttachments } from './use-native-chat-composer-att
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
+import { useNativeChatComposerDraftChange } from './use-native-chat-composer-draft-change'
 import { useNativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
 import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
@@ -63,8 +72,9 @@ const ESC = '\x1b'
  * Slash-command and `@file` autocomplete are agent-aware; image paste persists a
  * temp file and injects the agent-appropriate path (or reports unsupported).
  */
-export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(
-  function NativeChatComposer(
+// memo: a streaming re-render here rewrites the controlled textarea mid-composition.
+export const NativeChatComposer = memo(
+  forwardRef<NativeChatComposerHandle, NativeChatComposerProps>(function NativeChatComposer(
     {
       terminalTabId,
       paneKey,
@@ -380,16 +390,16 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       setHistory
     })
 
-    const handleDraftChange = useCallback(
-      (value: string, element: HTMLTextAreaElement) => {
-        setDraft(value)
-        setHistory((prev) => ({ entries: prev.entries, index: null }))
-        syncCaret(element)
-        handleDraftOrCaretChange(value, element.selectionStart ?? value.length)
-        setActiveSuggestion(0)
-      },
-      [handleDraftOrCaretChange, setDraft, syncCaret]
-    )
+    const { handleDraftChange, handleCaretChange, handleCompositionEnd } =
+      useNativeChatComposerDraftChange({
+        draft,
+        isComposingRef,
+        setDraft,
+        syncCaret,
+        setHistory,
+        setActiveSuggestion,
+        handleDraftOrCaretChange
+      })
 
     return (
       <NativeChatComposerField
@@ -409,21 +419,12 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         isDictating={isDictating}
         isDictationHoldMode={isDictationHoldMode}
         onDraftChange={handleDraftChange}
-        onTextareaSelect={(element) => {
-          syncCaret(element)
-          handleDraftOrCaretChange(element.value, element.selectionStart ?? element.value.length)
-          setActiveSuggestion(0)
-        }}
+        onTextareaSelect={handleCaretChange}
         onKeyDown={handleKeyDown}
         onCompositionStart={() => {
           isComposingRef.current = true
         }}
-        onCompositionEnd={(event) => {
-          isComposingRef.current = false
-          if (event.currentTarget.value !== draft) {
-            handleDraftChange(event.currentTarget.value, event.currentTarget)
-          }
-        }}
+        onCompositionEnd={(event) => handleCompositionEnd(event.currentTarget)}
         onPaste={handlePaste}
         pickerListboxId={picker.listboxId}
         onChoosePickerItem={completeItem}
@@ -450,5 +451,5 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         sessionOptionsSnapshot={sessionOptionsSnapshot}
       />
     )
-  }
+  })
 )

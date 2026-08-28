@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import {
+  startTransition,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import {
   NATIVE_CHAT_SOURCE_PRIORITY,
   type AgentType,
@@ -268,7 +276,10 @@ export function useNativeChatLiveSession(
         }
         transcriptLifecycleControl.append(frame.lifecycle)
         // Merge by id then bound to the window; the base read + assembler re-dedup mean trimming the append tail can't drop a covered turn (#6).
-        setAppended(applyAppend(appendMergerRef.current, frame.messages, limitRef.current))
+        const merged = applyAppend(appendMergerRef.current, frame.messages, limitRef.current)
+        // Non-urgent so an in-flight streaming render yields to the user's next
+        // keystroke; the replace path above stays urgent so a reset is never late.
+        startTransition(() => setAppended(merged))
       }
     )
 
