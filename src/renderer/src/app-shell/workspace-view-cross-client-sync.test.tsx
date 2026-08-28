@@ -513,6 +513,50 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
   })
 
+  it('a synchronously throwing ui.set still settles the in-flight marker', async () => {
+    ;(window as unknown as { api: { ui: { set: () => Promise<void> } } }).api.ui.set = () => {
+      setCallCount += 1
+      throw new Error('non-cloneable argument')
+    }
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    await flushDesktopDebounce()
+    // A leaked marker would pin the field against hydration for the renderer's life.
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+  })
+
+  it('a rejection re-schedules the trailing pass it caused to be skipped', async () => {
+    // Round-3 verification: a trailing pass that bails because a write is in
+    // flight relies on that write's settle to reschedule — including rejection,
+    // or a pending flip-back is stranded until the next unrelated edit.
+    holdAcks = true
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    await flushDesktopDebounce()
+    // Flip back while write #1 is in flight: only a trailing flush carries it.
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(false)
+    })
+    await resolveAcks()
+
+    // Before the trailing pass fires, a different field's write goes out and
+    // is REJECTED while in flight when the trailing pass checks.
+    rejectSets = true
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+    await flushDesktopDebounce()
+
+    rejectSets = false
+    holdAcks = false
+    await flushDesktopDebounce()
+    await flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
+  })
+
   it('overlapping in-flight writes on one field decrement, not clear, the marker', () => {
     // Unit-pins the count semantics: ack #1 of two overlapping writes must not
     // un-pin the field while write #2 is still out.

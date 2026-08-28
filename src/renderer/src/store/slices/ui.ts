@@ -2490,10 +2490,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       // sent values over it would blank the mirror-vs-baseline diff and leave
       // mirror and authority divergent with nothing left to reconcile them.
       // Skipping the fold keeps the diff alive so the trailing flush re-sends.
+      // Why options is required for folding: an unguarded fold from a future
+      // caller could silently erase a remote write that landed mid-round-trip.
       const foldable =
         flushed &&
         s.persistedUIWriteBaseline &&
-        (options === undefined || options.sentAtGeneration === s.persistedUIWriteBaselineGeneration)
+        options !== undefined &&
+        options.sentAtGeneration === s.persistedUIWriteBaselineGeneration
       return {
         persistedUIWriteInFlightCounts: counts,
         ...(foldable
@@ -2744,15 +2747,21 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         }
       }
       // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
-      // The baseline must be compared too: when the overlays pin the only differing field (a remote
-      // same-field write during an in-flight ack), the visible state matches but the baseline moved —
-      // discarding it would blank the writer's diff and strand mirror and authority apart.
-      if (
-        hydratedUIPartialMatchesState(s, hydrated) &&
-        (!previousBaseline ||
-          Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length === 0)
-      ) {
-        return s
+      // The baseline must still advance when it moved (a remote same-field write during an in-flight
+      // ack pins the only visibly differing field, and our own echo precedes every ack) — but only
+      // the two baseline keys, or every ordinary write's echo would churn the store's collection
+      // identities and re-render identity-compared selectors once per write.
+      if (hydratedUIPartialMatchesState(s, hydrated)) {
+        if (
+          !previousBaseline ||
+          Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length === 0
+        ) {
+          return s
+        }
+        return {
+          persistedUIWriteBaseline: nextWriteBaseline,
+          persistedUIWriteBaselineGeneration: s.persistedUIWriteBaselineGeneration + 1
+        }
       }
       return {
         ...hydrated,

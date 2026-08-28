@@ -32,6 +32,7 @@ function sendPersistedUIWrite(changed: Partial<PersistedUIWriteBaseline>): void 
     // A synchronous throw (e.g. a non-cloneable value) must still settle the
     // in-flight marker, or the field stays pinned against hydration forever.
     useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+    scheduleTrailingPersistedUIFlush()
     return
   }
   // Two-arg then: the rejection handler must not catch throws from the ack
@@ -41,7 +42,13 @@ function sendPersistedUIWrite(changed: Partial<PersistedUIWriteBaseline>): void 
       useAppStore.getState().notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
       scheduleTrailingPersistedUIFlush()
     },
-    () => useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+    () => {
+      useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+      // A trailing pass skipped because THIS write was in flight must still
+      // happen — a rejection schedules nothing on its own, and a pending
+      // flip-back would otherwise be stranded until the next edit.
+      scheduleTrailingPersistedUIFlush()
+    }
   )
 }
 
