@@ -113,7 +113,10 @@ export function WorktreeCardSecondaryRows({
       )}
 
       {!newCardStyle && lineageChildren && (
-        <div className="-ml-[1.125rem] mt-1.5 w-[calc(100%+1.125rem)] space-y-1">
+        <div
+          className="-ml-[1.125rem] mt-1.5 w-[calc(100%+1.125rem)] space-y-1"
+          data-worktree-lineage-children=""
+        >
           {lineageChildren}
         </div>
       )}

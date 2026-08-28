@@ -4,6 +4,7 @@ import { getLineageRenderInfo } from './worktree-lineage-projection'
 
 const WORKTREE_CARD_CONTENT_TARGET_SELECTOR = '[data-worktree-card-hover-trigger]'
 const WORKTREE_DRAG_ROW_SELECTOR = '[data-worktree-drag-id]'
+const WORKTREE_LINEAGE_CHILDREN_SELECTOR = '[data-worktree-lineage-children]'
 
 const LINEAGE_DROP_ZONE_RATIO = 0.4
 const LINEAGE_DROP_ZONE_MAX_HEIGHT_PX = 44
@@ -40,7 +41,7 @@ export function getWorktreeLineageDropTargetId(args: {
   if (
     !isWorktreeLineageDropZoneHit({
       pointerY: args.pointerY,
-      rect: contentTarget.getBoundingClientRect()
+      rect: getWorktreeLineageDropContentRect(contentTarget)
     })
   ) {
     return null
@@ -51,6 +52,16 @@ export function getWorktreeLineageDropTargetId(args: {
     return null
   }
   return rowTarget.getAttribute('data-worktree-drag-id')
+}
+
+function getWorktreeLineageDropContentRect(contentTarget: HTMLElement): VerticalRect {
+  const contentRect = contentTarget.getBoundingClientRect()
+  const lineageChildren = contentTarget.querySelector<HTMLElement>(
+    WORKTREE_LINEAGE_CHILDREN_SELECTOR
+  )
+  return lineageChildren
+    ? { top: contentRect.top, bottom: lineageChildren.getBoundingClientRect().top }
+    : contentRect
 }
 
 export function getReorderedWorktreeIdsToUnnest(args: {
