@@ -1,8 +1,8 @@
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { reapOrphanedDaemonPidPublishClaims } from './daemon-pid-publish-claim-reap'
 import { DaemonSpawner, getDaemonPidPublishClaimPath } from './daemon-spawner'
 
@@ -77,6 +77,60 @@ describe('reapOrphanedDaemonPidPublishClaims', () => {
     for (const path of untouchable) {
       expect(existsSync(path)).toBe(true)
     }
+  })
+
+  it('keeps a claim whose owner exists under another user', () => {
+    // Why EPERM is not death: `kill(pid, 0)` reports EPERM for a live process owned by
+    // another user (a root-launched daemon, a shared machine). Reaping on any errno
+    // would delete a LIVE publisher's claim between its write and its link, knocking
+    // that publish off the atomic path onto the non-atomic degraded write.
+    const foreign = join(dir, `daemon-v7.pid.publish-424242-${CLAIM_UUID}`)
+    writeFileSync(foreign, '{"pid":1')
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('operation not permitted'), { code: 'EPERM' })
+    })
+
+    try {
+      reapOrphanedDaemonPidPublishClaims(dir)
+    } finally {
+      kill.mockRestore()
+    }
+
+    expect(existsSync(foreign)).toBe(true)
+  })
+
+  it('keeps a claim whose owner is live but unsignalable on Windows', () => {
+    // Why a second errno: Windows reports a live foreign owner as EACCES, not the POSIX
+    // EPERM above (isPermissionError in win32-utils treats both as one). Only ESRCH reaps.
+    const foreign = join(dir, `daemon-v7.pid.publish-424242-${CLAIM_UUID}`)
+    writeFileSync(foreign, '{"pid":1')
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => {
+      throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+    })
+
+    try {
+      reapOrphanedDaemonPidPublishClaims(dir)
+    } finally {
+      kill.mockRestore()
+    }
+
+    expect(existsSync(foreign)).toBe(true)
+  })
+
+  it('never lets an unremovable claim abort the sweep or the launch', () => {
+    // Why: reaping is hygiene on the launch funnel, so any failure here — a Windows file
+    // lock, a permission error, a stray directory under a claim name — must not escape
+    // into ensureRunning and stop the daemon from starting.
+    const pid = deadPid()
+    const unremovable = join(dir, `daemon-v7.pid.publish-${pid}-${CLAIM_UUID}`)
+    mkdirSync(unremovable)
+    writeFileSync(join(unremovable, 'occupant'), 'x')
+    const removable = join(dir, `daemon-v9.pid.publish-${pid}-${CLAIM_UUID}`)
+    writeFileSync(removable, '{"pid":1')
+
+    expect(() => reapOrphanedDaemonPidPublishClaims(dir)).not.toThrow()
+
+    expect(existsSync(removable)).toBe(false)
   })
 
   it('tolerates a missing runtime dir', () => {

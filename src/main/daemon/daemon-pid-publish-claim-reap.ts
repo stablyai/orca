@@ -13,8 +13,10 @@ const PUBLISH_CLAIM_PATTERN = /^daemon-v\d+\.pid\.publish-(\d+)-[0-9a-f-]+$/
 
 /**
  * Why proven death and not age: a claim is only scratch — its content was never canonical —
- * but deleting a LIVE publisher's claim between its write and its link would fail that
- * publish. Only ESRCH proves the owner is gone; EPERM means it exists under another user,
+ * but deleting a LIVE publisher's claim between its write and its link knocks that publish
+ * off the atomic path: the link fails non-EEXIST and degrades to the exclusive direct
+ * write, which succeeds but reopens the torn-write window this discipline exists to close.
+ * Only ESRCH proves the owner is gone; EPERM means it exists under another user,
  * and pid recycling merely preserves junk a little longer, which is the safe direction.
  */
 function claimOwnerIsProvenDead(pid: number): boolean {

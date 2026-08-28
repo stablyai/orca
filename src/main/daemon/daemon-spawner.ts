@@ -11,6 +11,7 @@ import {
 } from 'node:fs'
 import { join } from 'node:path'
 import { fsyncFileSync } from '../../shared/secure-file'
+import type { DaemonFileLog } from './daemon-file-log'
 import { PROTOCOL_VERSION } from './types'
 import { reapOrphanedDaemonPidPublishClaims } from './daemon-pid-publish-claim-reap'
 import { DaemonCrashLoopError, DaemonRespawnThrottle } from './daemon-respawn-throttle'
@@ -160,6 +161,12 @@ function isExistingFileError(error: unknown): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === 'EEXIST'
 }
 
+function describeErrnoCode(error: unknown): string {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String(error.code)
+    : 'no errno'
+}
+
 /**
  * Scratch for the atomic publish below. Distinct from the swap/hold claims: those can hold
  * the ONLY copy of a live record and must be restored, while publish scratch holds a record
@@ -170,7 +177,11 @@ export function getDaemonPidPublishClaimPath(pidPath: string): string {
   return `${pidPath}.publish-${process.pid}-${randomUUID()}`
 }
 
-export function publishDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): void {
+export function publishDaemonPidFile(
+  pidPath: string,
+  pidFile: DaemonPidFile,
+  log?: Pick<DaemonFileLog, 'log'>
+): void {
   const claimPath = getDaemonPidPublishClaimPath(pidPath)
   try {
     writeFileSync(claimPath, serializeDaemonPidFile(pidFile), { mode: 0o600, flag: 'wx' })
@@ -190,8 +201,21 @@ export function publishDaemonPidFile(pidPath: string, pidFile: DaemonPidFile): v
       }
       // Why: hard links can be unsupported on exotic volumes. The exclusive direct write
       // is exactly the pre-atomic behavior, so those filesystems keep a working daemon
-      // instead of trading a torn-write window for no pid record at all.
+      // instead of trading a torn-write window for no pid record at all. Warn because the
+      // degrade is otherwise invisible: an operator on such a volume (network mount,
+      // container overlay) should be able to tell the atomic path is not in use.
       writeFileSync(pidPath, serializeDaemonPidFile(pidFile), { mode: 0o600, flag: 'wx' })
+      // Announced only once the degraded write has actually landed: this same arm is
+      // reached by a lost ownership race, where the write throws EEXIST and nothing
+      // was published — claiming torn-write exposure for that would be a lie.
+      // Both channels, matching daemon-endpoint-lifecycle.ts: inside the detached
+      // daemon stdio is 'ignore' and its startup stderr pipe is destroyed once it is
+      // up, so console alone reaches nobody on the path this warning exists for.
+      log?.log('pid-publish-degraded', { errno: describeErrnoCode(error) })
+      console.warn(
+        `[daemon] pid-record hard-link publish failed (${describeErrnoCode(error)}); ` +
+          'degrading to the non-atomic exclusive write — torn-write protection is off for this record'
+      )
     }
   } finally {
     try {

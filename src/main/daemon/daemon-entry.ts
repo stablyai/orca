@@ -274,14 +274,18 @@ async function main(): Promise<void> {
     ...(pidPath && launchNonce
       ? {
           publishEndpointOwnership: () =>
-            publishDaemonPidFile(pidPath, {
-              pid: process.pid,
-              ...readyIdentity,
-              ...(entryPath ? { entryPath } : {}),
-              ...(appVersion ? { appVersion } : {}),
-              ...(spawnerExecPath ? { spawnerExecPath } : {}),
-              launchNonce
-            })
+            publishDaemonPidFile(
+              pidPath,
+              {
+                pid: process.pid,
+                ...readyIdentity,
+                ...(entryPath ? { entryPath } : {}),
+                ...(appVersion ? { appVersion } : {}),
+                ...(spawnerExecPath ? { spawnerExecPath } : {}),
+                launchNonce
+              },
+              daemonLog
+            )
         }
       : {}),
     log: daemonLog,
