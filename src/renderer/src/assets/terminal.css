@@ -67,19 +67,19 @@
   caret-color: transparent;
 }
 
-/* Why: while a CJK IME composes, this opaque overlay covers the cell xterm draws
-   its cursor in, and the helper textarea's caret is transparent (above) — so a
-   Hangul syllable had no caret anywhere until it committed. currentColor tracks
-   the overlay's own foreground, which xterm keeps legible against its ground. */
-/* The preedit caret. Geometry and blink come from
-   terminal-ime-preedit-caret.ts, which knows the pane cell size and cursor
-   settings; this only paints. Scoped to .xterm-container, not
-   .pane-manager-root: panes mount as `.xterm-container > .xterm` and nothing
-   carries that older class today, so a rule written under it never matches. */
+/* The preedit caret. While a CJK IME composes, this opaque overlay covers the
+   cell xterm draws its cursor in and the helper textarea's caret is transparent
+   (above), so a syllable had no caret anywhere until it committed. Geometry and
+   blink come from terminal-ime-preedit-caret.ts, which knows the pane's cell
+   size and cursor settings; this only paints. currentcolor tracks the overlay's
+   own foreground, which xterm keeps legible against its ground. Scoped to
+   .xterm-container, not .pane-manager-root: panes mount as
+   `.xterm-container > .xterm` and nothing carries that older class today, so a
+   rule written under it never matches. */
 .xterm-container .xterm .composition-view .orca-ime-preedit-caret {
   display: inline-block;
   vertical-align: top;
-  background: currentColor;
+  background: currentcolor;
 }
 
 /* Matches xterm own step blink so the preedit caret and the real cursor cannot
