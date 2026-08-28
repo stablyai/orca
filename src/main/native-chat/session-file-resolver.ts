@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { basename, extname, join } from 'node:path'
+import { basename, dirname, extname, join } from 'node:path'
 import type { AgentType } from '../../shared/native-chat-types'
 import {
   resolveNativeChatTranscriptAgent,
@@ -7,8 +7,12 @@ import {
 } from '../../shared/native-chat-agent-support'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { walkSessionFiles } from '../ai-vault/session-scanner-discovery'
+import {
+  kimiPrimaryAgentWirePath,
+  resolveKimiSessionsDir
+} from '../ai-vault/session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from '../ai-vault/session-scanner-omp-subagent-transcripts'
-import { normalizeAgentSessionsDir } from '../ai-vault/session-scanner-values'
+import { normalizeAgentSessionsDir, parseJsonObject } from '../ai-vault/session-scanner-values'
 import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
 import {
   findGrokChatHistoryBySessionId,
@@ -16,6 +20,7 @@ import {
 } from '../../shared/grok-session-paths'
 import { toHostReadableTranscriptPath, wslCodexSessionsDirs } from './host-readable-transcript-path'
 import { findWslCodexSessionPath } from './wsl-codex-session-path-scan'
+import { wslGatedReadFile } from './wsl-transcript-fs-access'
 import { wslTranscriptFsRefusal, type WslTranscriptFsError } from './wsl-transcript-fs-gate'
 
 // Why: these mirror the path constants in ai-vault/session-scanner.ts. Reads
@@ -48,6 +53,12 @@ function grokSessionsDir(): string {
   return resolveGrokSessionsDir(process.env, homedir())
 }
 
+/** Shares the AI Vault's KIMI_CODE_HOME-aware root so native chat and the
+ *  session panel resolve the same sessions directory. */
+function kimiSessionsDir(): string {
+  return resolveKimiSessionsDir()
+}
+
 /** Mirrors the AI Vault scanner so an OMP_CODING_AGENT_DIR override resolves the
  *  same root for both, rather than leaving native chat pointed at the default. */
 function ompSessionsDir(): string {
@@ -67,6 +78,8 @@ export type ResolveSessionFileOptions = {
   grokSessionsDir?: string
   /** Override the omp sessions root (`~/.omp/agent/sessions`). */
   ompSessionsDir?: string
+  /** Override the Kimi sessions root (`<KIMI_CODE_HOME>/sessions`). */
+  kimiSessionsDir?: string
   /** Authoritative transcript path reported by the agent hook
    *  (`providerSession.transcriptPath`). When set and the file exists, it is used
    *  directly — recent Claude Code names the transcript with a UUID that differs
@@ -158,6 +171,9 @@ async function resolveSessionFileById(
   if (transcriptAgent === 'omp') {
     return resolveOmpSessionFile(trimmedId, options.ompSessionsDir ?? ompSessionsDir(), signal)
   }
+  if (transcriptAgent === 'kimi') {
+    return resolveKimiSessionFile(trimmedId, options.kimiSessionsDir ?? kimiSessionsDir(), signal)
+  }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
   // the build here instead of resolving silently wrong at runtime.
@@ -245,6 +261,51 @@ async function findCodexRolloutInDirs(
     throw unavailable
   }
   return null
+}
+
+// Kimi nests transcripts as <sessions>/wd_<name>_<hash>/session_<uuid>/agents/<id>/wire.jsonl.
+// The hook's session id IS the session directory name (it keeps the `session_`
+// prefix), so find its state.json and let the shared kimi path module pick the
+// primary agent's wire file — a task subagent's own agents/<id>/wire.jsonl is
+// never the conversation the chat view should render. state.json is optional:
+// a session killed before its first persist still has agents/main/wire.jsonl,
+// so the walk also collects that file as the fallback.
+async function resolveKimiSessionFile(
+  sessionId: string,
+  sessionsDir: string,
+  signal?: AbortSignal
+): Promise<string | null> {
+  const stateFiles = await walkSessionFiles(sessionsDir, 'kimi', [], {
+    extensions: new Set(['.json', '.jsonl']),
+    // Why: state.json sits exactly two levels down (wd dir, session dir), and
+    // the session id IS the session directory name — so the only subtrees worth
+    // descending are the wd dirs (depth 0), the one matching session dir, and
+    // its agents/main dir for the state-less fallback. Everything else,
+    // including the tasks/ and subagent subtrees, is pruned.
+    directoryPredicate: (name, depth) =>
+      depth === 0 ||
+      name === sessionId ||
+      (depth === 2 && name === 'agents') ||
+      (depth === 3 && name === 'main'),
+    // Why: the dirname pins keep a stray root/wd-level state.json (layout
+    // drift, a backup copy) or another agent's wire.jsonl from resolving a
+    // bogus path.
+    filePredicate: (path) =>
+      (basename(path) === 'state.json' && basename(dirname(path)) === sessionId) ||
+      (basename(path) === 'wire.jsonl' &&
+        basename(dirname(path)) === 'main' &&
+        basename(dirname(dirname(path))) === 'agents' &&
+        basename(dirname(dirname(dirname(path)))) === sessionId),
+    signal
+  })
+  const statePath = stateFiles.find((path) => basename(path) === 'state.json')
+  if (!statePath) {
+    return stateFiles.find((path) => basename(path) === 'wire.jsonl') ?? null
+  }
+  // A missing/half-written state.json still resolves plausibly: the primary
+  // agent id defaults to "main" (kimiPrimaryAgentWirePath).
+  const stateRecord = parseJsonObject(await wslGatedReadFile(statePath, 'utf-8', 'scan', signal))
+  return kimiPrimaryAgentWirePath(statePath, stateRecord)
 }
 
 async function resolveGrokSessionFile(

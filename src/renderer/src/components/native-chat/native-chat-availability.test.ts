@@ -92,6 +92,21 @@ describe('canToggleNativeChat', () => {
 
   // Why: omp discloses no hook transcript path either, so its session file is
   // only reachable when this process can read the agent's disk.
+  // Why: kimi's hook reports a session id but no transcript path either, so
+  // its wire.jsonl is only reachable when this process can read the agent's disk.
+  it('rejects Model-A SSH kimi but accepts it local and runtime-owned', () => {
+    const forConnection = (connectionId: string | null): boolean =>
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'kimi',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBe(false)
+    expect(forConnection(null)).toBe(true)
+    expect(forConnection('runtime-ssh-env-1')).toBe(true)
+  })
+
   it('rejects Model-A SSH omp but accepts it local and runtime-owned', () => {
     const forConnection = (connectionId: string | null): boolean =>
       canToggleNativeChat({

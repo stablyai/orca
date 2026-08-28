@@ -157,6 +157,23 @@ describe('seedAgentTabStateAfterWorktreeCreate', () => {
     expect(tabViewMode('agent-tab')).toBe('chat')
   })
 
+  it('still opens a local kimi draft in chat, despite the local-transcript gate', () => {
+    // Why: kimi discloses no hook transcript path, so it joins Grok and omp in
+    // requiring a locally readable sessions root; the draft must still seed the
+    // chat view for a local workspace.
+    setTabs([{ id: 'agent-tab', launchAgent: 'kimi', viewMode: 'terminal' }])
+
+    seedAgentTabStateAfterWorktreeCreate({
+      request: { ...request, agent: 'kimi' as const },
+      worktreeId: 'wt-1',
+      primaryTabId: 'agent-tab',
+      startupTerminalTabId: 'agent-tab',
+      backendSpawned: true
+    })
+
+    expect(tabViewMode('agent-tab')).toBe('chat')
+  })
+
   it('still opens a local omp draft in chat, despite the local-transcript gate', () => {
     // Why: omp discloses no hook transcript path, so it joins Grok in requiring a
     // locally readable sessions root. This call site must therefore SUPPLY that

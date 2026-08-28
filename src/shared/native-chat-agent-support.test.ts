@@ -12,10 +12,11 @@ describe('resolveNativeChatTranscriptAgent', () => {
     expect(resolveNativeChatTranscriptAgent('claude')).toBe('claude')
   })
 
-  it('passes codex, grok and omp through and rejects everything else', () => {
+  it('passes codex, grok, omp and kimi through and rejects everything else', () => {
     expect(resolveNativeChatTranscriptAgent('codex')).toBe('codex')
     expect(resolveNativeChatTranscriptAgent('grok')).toBe('grok')
     expect(resolveNativeChatTranscriptAgent('omp')).toBe('omp')
+    expect(resolveNativeChatTranscriptAgent('kimi')).toBe('kimi')
     expect(resolveNativeChatTranscriptAgent('cursor')).toBeNull()
     expect(resolveNativeChatTranscriptAgent(null)).toBeNull()
     expect(resolveNativeChatTranscriptAgent(undefined)).toBeNull()
@@ -27,6 +28,7 @@ describe('isNativeChatSupportedAgent', () => {
     expect(isNativeChatSupportedAgent('claude')).toBe(true)
     expect(isNativeChatSupportedAgent('openclaude')).toBe(true)
     expect(isNativeChatSupportedAgent('omp')).toBe(true)
+    expect(isNativeChatSupportedAgent('kimi')).toBe(true)
     expect(isNativeChatSupportedAgent('cursor')).toBe(false)
     expect(isNativeChatSupportedAgent(null)).toBe(false)
     expect(isNativeChatSupportedAgent(undefined)).toBe(false)
@@ -35,10 +37,11 @@ describe('isNativeChatSupportedAgent', () => {
 
 describe('nativeChatRequiresLocalTranscript', () => {
   it('covers the agents whose hook discloses no transcript path', () => {
-    // Claude/Codex report `transcript_path`; Grok and omp report only an id, so
-    // native chat has to find their file on a disk this process can read.
+    // Claude/Codex report `transcript_path`; Grok, omp and Kimi report only an
+    // id, so native chat has to find their file on a disk this process can read.
     expect(nativeChatRequiresLocalTranscript('grok')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('omp')).toBe(true)
+    expect(nativeChatRequiresLocalTranscript('kimi')).toBe(true)
     expect(nativeChatRequiresLocalTranscript('claude')).toBe(false)
     expect(nativeChatRequiresLocalTranscript('openclaude')).toBe(false)
     expect(nativeChatRequiresLocalTranscript('codex')).toBe(false)
@@ -55,6 +58,9 @@ describe('shouldStepNativeChatAskAnswer', () => {
     // Codex 0.145's request_user_input card ignores typed labels and commits on
     // the highlighted row, so pasted answers misdeliver like STA-1860.
     expect(shouldStepNativeChatAskAnswer('codex')).toBe(true)
+    // Kimi's AskUserQuestion dialog routes printable keys to NUMBER_KEYS only —
+    // same digit-commit selector contract as Claude.
+    expect(shouldStepNativeChatAskAnswer('kimi')).toBe(true)
   })
 
   it('does not step other or unknown agents', () => {

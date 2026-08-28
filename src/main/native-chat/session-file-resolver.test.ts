@@ -27,6 +27,159 @@ function restoreEnv(key: string, previous: string | undefined): void {
 }
 
 describe('resolveSessionFilePath', () => {
+  const seedKimiSession = async (
+    kimiSessionsDir: string,
+    sessionId: string,
+    state: Record<string, unknown> | null,
+    agents: string[]
+  ): Promise<string> => {
+    const sessionDir = join(kimiSessionsDir, 'wd_repo_ab12cd34ef56', sessionId)
+    await mkdir(sessionDir, { recursive: true })
+    if (state) {
+      await writeFile(join(sessionDir, 'state.json'), JSON.stringify(state))
+    }
+    for (const agentId of agents) {
+      const agentDir = join(sessionDir, 'agents', agentId)
+      await mkdir(agentDir, { recursive: true })
+      await writeFile(join(agentDir, 'wire.jsonl'), '{}\n')
+    }
+    return sessionDir
+  }
+
+  it('resolves a Kimi wire.jsonl through the primary agent of state.json', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    const sessionDir = await seedKimiSession(
+      kimiSessionsDir,
+      'session_0fdbfd01-1234-5678-9abc-def012345678',
+      { agents: { main: { type: 'main' }, coder: { type: 'task', parentAgentId: 'main' } } },
+      ['main', 'coder']
+    )
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_0fdbfd01-1234-5678-9abc-def012345678', {
+        kimiSessionsDir
+      })
+    ).resolves.toBe(join(sessionDir, 'agents', 'main', 'wire.jsonl'))
+  })
+
+  it('follows a primary agent whose id is not "main"', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-primary-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    const sessionDir = await seedKimiSession(
+      kimiSessionsDir,
+      'session_renamed',
+      { agents: { 'agent-7': { type: 'main', parentAgentId: null } } },
+      ['agent-7']
+    )
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_renamed', { kimiSessionsDir })
+    ).resolves.toBe(join(sessionDir, 'agents', 'agent-7', 'wire.jsonl'))
+  })
+
+  it('skips non-matching Kimi session dirs without descending into them', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-prune-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    // An unreadable non-matching session dir would fail the walk if descended.
+    await seedKimiSession(kimiSessionsDir, 'session_other', {}, ['main'])
+    const sessionDir = await seedKimiSession(kimiSessionsDir, 'session_wanted', {}, ['main'])
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_wanted', { kimiSessionsDir })
+    ).resolves.toBe(join(sessionDir, 'agents', 'main', 'wire.jsonl'))
+  })
+
+  it('defaults to agents/main when a Kimi state.json lacks the agents map', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-default-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    const sessionDir = await seedKimiSession(kimiSessionsDir, 'session_abc', {}, ['main'])
+
+    await expect(resolveSessionFilePath('kimi', 'session_abc', { kimiSessionsDir })).resolves.toBe(
+      join(sessionDir, 'agents', 'main', 'wire.jsonl')
+    )
+  })
+
+  it('resolves agents/main/wire.jsonl when a Kimi session has no state.json', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-stateless-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    // A session killed before its first state.json persist still has its wire.
+    const sessionDir = await seedKimiSession(kimiSessionsDir, 'session_stateless', null, ['main'])
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_stateless', { kimiSessionsDir })
+    ).resolves.toBe(join(sessionDir, 'agents', 'main', 'wire.jsonl'))
+  })
+
+  it('returns null for a state-less Kimi session with no primary wire.jsonl', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-stateless-sub-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    // Only a subagent wire: no state.json and no agents/main/wire.jsonl.
+    await seedKimiSession(kimiSessionsDir, 'session_delegate', null, ['coder'])
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_delegate', { kimiSessionsDir })
+    ).resolves.toBeNull()
+  })
+
+  it('never resolves a Kimi subagent wire.jsonl for the session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-subagent-')
+    // A session that only ever delegated: no primary wire.jsonl at all.
+    const kimiSessionsDir2 = join(root, 'kimi-sessions-2')
+    await seedKimiSession(kimiSessionsDir2, 'session_sub', { agents: {} }, ['coder'])
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_sub', { kimiSessionsDir: kimiSessionsDir2 })
+    ).resolves.toBe(
+      join(kimiSessionsDir2, 'wd_repo_ab12cd34ef56', 'session_sub', 'agents', 'main', 'wire.jsonl')
+    )
+    // ...the path points at the primary agent even though that file does not
+    // exist yet — the reader reports it as a retry-worthy miss (#8401-style),
+    // never as the subagent's conversation.
+  })
+
+  it('ignores a stray state.json outside the session directory', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-stray-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    await mkdir(kimiSessionsDir, { recursive: true })
+    // A backup/cache copy at the sessions root must not resolve a bogus path.
+    await writeFile(join(kimiSessionsDir, 'state.json'), '{}')
+    await seedKimiSession(kimiSessionsDir, 'session_stray', {}, ['main'])
+
+    await expect(resolveSessionFilePath('kimi', 'state', { kimiSessionsDir })).resolves.toBeNull()
+    await expect(
+      resolveSessionFilePath('kimi', 'session_stray', { kimiSessionsDir })
+    ).resolves.toBe(
+      join(kimiSessionsDir, 'wd_repo_ab12cd34ef56', 'session_stray', 'agents', 'main', 'wire.jsonl')
+    )
+  })
+
+  it('returns null for an unknown Kimi session id', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-miss-')
+    const kimiSessionsDir = join(root, 'kimi-sessions')
+    await seedKimiSession(kimiSessionsDir, 'session_known', {}, ['main'])
+
+    await expect(
+      resolveSessionFilePath('kimi', 'session_unknown', { kimiSessionsDir })
+    ).resolves.toBeNull()
+  })
+
+  it('honors KIMI_CODE_HOME when resolving Kimi transcripts', async () => {
+    const root = await makeRoot('orca-native-chat-resolve-kimi-env-')
+    const home = join(root, 'kimi-home')
+    const sessionDir = await seedKimiSession(join(home, 'sessions'), 'session_env', {}, ['main'])
+
+    const previous = process.env.KIMI_CODE_HOME
+    process.env.KIMI_CODE_HOME = home
+    try {
+      await expect(resolveSessionFilePath('kimi', 'session_env')).resolves.toBe(
+        join(sessionDir, 'agents', 'main', 'wire.jsonl')
+      )
+    } finally {
+      restoreEnv('KIMI_CODE_HOME', previous)
+    }
+  })
+
   it('globs Claude project subdirs for <sessionId>.jsonl', async () => {
     const root = await makeRoot('orca-native-chat-resolve-claude-')
     const claudeProjectsDir = join(root, 'claude-projects')

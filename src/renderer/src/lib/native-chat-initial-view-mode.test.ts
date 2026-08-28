@@ -74,6 +74,18 @@ describe('decideInitialAgentTabViewMode', () => {
     ).toBe('chat')
   })
 
+  it('keeps Model-A SSH kimi in the terminal view but opens it locally', () => {
+    const forConnection = (connectionId: string | null): Tab['viewMode'] =>
+      decideInitialAgentTabViewMode({
+        experimentalNativeChat: true,
+        openAgentTabsInChatByDefault: true,
+        agent: 'kimi',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(connectionId)
+      })
+    expect(forConnection('ssh-target-1')).toBeUndefined()
+    expect(forConnection(null)).toBe('chat')
+  })
+
   it('keeps Model-A SSH omp in the terminal view but opens it locally', () => {
     const forConnection = (connectionId: string | null): Tab['viewMode'] =>
       decideInitialAgentTabViewMode({

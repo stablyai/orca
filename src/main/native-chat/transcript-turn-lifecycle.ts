@@ -30,6 +30,9 @@ export function nativeChatTurnLifecycleDecoderForAgent(
   if (transcriptAgent === 'claude') {
     return decodeClaudeTurnLifecycle
   }
+  if (transcriptAgent === 'kimi') {
+    return decodeKimiTurnLifecycle
+  }
   return null
 }
 
@@ -124,6 +127,51 @@ export function decodeClaudeTurnLifecycle(
     return null
   }
   return { state: 'working', turnId: decoded.id, timestamp }
+}
+
+/**
+ * Kimi turn boundaries from wire.jsonl: a user-origin `turn.prompt` (or
+ * `turn.steer`, which redirects the active generation) starts it, `step.end`
+ * with finishReason `end_turn` completes it (finishReason
+ * `tool_use` continues the same turn — the agent loops for the tool result, so
+ * it emits nothing, like Claude's tool_use rows), and `turn.cancel` interrupts.
+ */
+export function decodeKimiTurnLifecycle(
+  line: string,
+  fallbackId: string
+): NativeChatTurnLifecycle | null {
+  const record = parseJsonObject(line)
+  if (!record) {
+    return null
+  }
+  const timestamp = lifecycleTimestamp(record.time)
+  if (record.type === 'turn.prompt' || record.type === 'turn.steer') {
+    // Why: a user-origin steer redirects the active generation, so it marks
+    // working just like a prompt — otherwise a prompt outside the bounded tail
+    // window leaves the chat stuck on an older completed state. Non-user
+    // steers/injections (background_task, cron_job, system_trigger) are not
+    // user turns and must not flip the spinner on an idle session.
+    if (extractString(asRecord(record.origin)?.kind) !== 'user') {
+      return null
+    }
+    return { state: 'working', turnId: fallbackId, timestamp }
+  }
+  if (record.type === 'turn.cancel') {
+    // Why: a `target: 'queued'` cancel withdraws a prompt that never ran —
+    // the active turn (if any) is untouched, so the spinner must not settle.
+    if (extractString(record.target) === 'queued') {
+      return null
+    }
+    return { state: 'interrupted', turnId: fallbackId, timestamp }
+  }
+  if (record.type !== 'context.append_loop_event') {
+    return null
+  }
+  const event = asRecord(record.event)
+  if (event?.type !== 'step.end' || extractString(event.finishReason) !== 'end_turn') {
+    return null
+  }
+  return { state: 'completed', turnId: extractString(event.turnId) ?? fallbackId, timestamp }
 }
 
 function lifecycleTimestamp(value: unknown): number | null {

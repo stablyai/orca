@@ -21,10 +21,7 @@ import {
   selectColdParkedTerminalTabs
 } from './terminal-hidden-view-parking'
 import type { ParkVerdictFlipRecord } from './terminal-park-verdict-flip-telemetry'
-import {
-  haveSameTerminalTabIds,
-  useTerminalParkVerdictPin
-} from './use-terminal-park-verdict-pin'
+import { haveSameTerminalTabIds, useTerminalParkVerdictPin } from './use-terminal-park-verdict-pin'
 import { withholdUnparkableTerminalTabs } from './terminal-cold-park-withheld-tabs'
 import { getTerminalParkingPolicyOverrides } from './terminal-parking-e2e-overrides'
 import {

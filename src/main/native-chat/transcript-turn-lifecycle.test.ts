@@ -2,8 +2,107 @@ import { describe, expect, it } from 'vitest'
 import {
   decodeClaudeTurnLifecycle,
   decodeCodexTurnLifecycle,
+  decodeKimiTurnLifecycle,
   nativeChatTurnLifecycleDecoderForAgent
 } from './transcript-turn-lifecycle'
+
+describe('kimi turn lifecycle', () => {
+  const kimiPrompt = (kind: string, time = 1787558233174): string =>
+    JSON.stringify({
+      type: 'turn.prompt',
+      input: [{ type: 'text', text: 'go' }],
+      origin: { kind },
+      time
+    })
+  const kimiStepEnd = (finishReason: string, time = 1787558240372): string =>
+    JSON.stringify({
+      type: 'context.append_loop_event',
+      event: { type: 'step.end', uuid: 's-1', turnId: '0', step: 1, finishReason },
+      time
+    })
+
+  it('starts working on a user prompt and completes on an end_turn step', () => {
+    expect(decodeKimiTurnLifecycle(kimiPrompt('user'), 'fallback')).toEqual({
+      state: 'working',
+      turnId: 'fallback',
+      timestamp: 1787558233174
+    })
+    expect(decodeKimiTurnLifecycle(kimiStepEnd('end_turn'), 'fallback')).toEqual({
+      state: 'completed',
+      turnId: '0',
+      timestamp: 1787558240372
+    })
+  })
+
+  it('starts working on a user steer but ignores automation steers', () => {
+    const kimiSteer = (kind: string, time = 1787558235000): string =>
+      JSON.stringify({
+        type: 'turn.steer',
+        input: [{ type: 'text', text: 'actually, do this instead' }],
+        origin: { kind },
+        time
+      })
+    expect(decodeKimiTurnLifecycle(kimiSteer('user'), 'fallback')).toEqual({
+      state: 'working',
+      turnId: 'fallback',
+      timestamp: 1787558235000
+    })
+    expect(decodeKimiTurnLifecycle(kimiSteer('background_task'), 'fallback')).toBeNull()
+    expect(decodeKimiTurnLifecycle(kimiSteer('cron_job'), 'fallback')).toBeNull()
+  })
+
+  it('ignores automation prompts and mid-turn tool_use steps', () => {
+    expect(decodeKimiTurnLifecycle(kimiPrompt('background_task'), 'fallback')).toBeNull()
+    expect(decodeKimiTurnLifecycle(kimiPrompt('cron_job'), 'fallback')).toBeNull()
+    expect(decodeKimiTurnLifecycle(kimiPrompt('system_trigger'), 'fallback')).toBeNull()
+    expect(decodeKimiTurnLifecycle(kimiStepEnd('tool_use'), 'fallback')).toBeNull()
+    expect(
+      decodeKimiTurnLifecycle(
+        JSON.stringify({
+          type: 'context.append_loop_event',
+          event: { type: 'step.begin', uuid: 's-1', turnId: '0', step: 1 },
+          time: 1
+        }),
+        'fallback'
+      )
+    ).toBeNull()
+  })
+
+  it('marks turn.cancel interrupted and skips unrelated records', () => {
+    expect(
+      decodeKimiTurnLifecycle(JSON.stringify({ type: 'turn.cancel', time: 1787601518211 }), 'fb')
+    ).toEqual({ state: 'interrupted', turnId: 'fb', timestamp: 1787601518211 })
+    expect(
+      decodeKimiTurnLifecycle(
+        JSON.stringify({
+          type: 'turn.cancel',
+          target: 'active',
+          reason: 'user_cancelled',
+          time: 1787601518212
+        }),
+        'fb'
+      )
+    ).toEqual({ state: 'interrupted', turnId: 'fb', timestamp: 1787601518212 })
+    expect(
+      decodeKimiTurnLifecycle(JSON.stringify({ type: 'usage.record', time: 1 }), 'fb')
+    ).toBeNull()
+    expect(decodeKimiTurnLifecycle('not json', 'fb')).toBeNull()
+  })
+
+  it('ignores a queued-prompt cancel: nothing was interrupted', () => {
+    expect(
+      decodeKimiTurnLifecycle(
+        JSON.stringify({
+          type: 'turn.cancel',
+          target: 'queued',
+          reason: 'user_cancelled',
+          time: 1
+        }),
+        'fb'
+      )
+    ).toBeNull()
+  })
+})
 
 describe('native chat transcript turn lifecycle', () => {
   it('exposes a lifecycle decoder only for transcript formats with explicit boundaries', () => {
@@ -11,6 +110,7 @@ describe('native chat transcript turn lifecycle', () => {
     expect(nativeChatTurnLifecycleDecoderForAgent('openclaude')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('codex')).not.toBeNull()
     expect(nativeChatTurnLifecycleDecoderForAgent('grok')).toBeNull()
+    expect(nativeChatTurnLifecycleDecoderForAgent('kimi')).not.toBeNull()
   })
 
   it('decodes Codex task boundaries with the provider turn id', () => {

@@ -12,7 +12,8 @@ import {
   decodeClaudeTranscriptLine,
   decodeCodexTranscriptLine,
   decodeGrokTranscriptLine,
-  decodeOmpTranscriptLine
+  decodeOmpTranscriptLine,
+  decodeKimiTranscriptLine
 } from './transcript-line-decoders'
 import { decodeTranscriptStream } from './transcript-stream-lines'
 
@@ -66,6 +67,9 @@ export async function readNativeChatTranscript(
     }
     if (transcriptAgent === 'omp') {
       return { messages: await readTranscript(filePath, decodeOmpTranscriptLine) }
+    }
+    if (transcriptAgent === 'kimi') {
+      return { messages: await readTranscript(filePath, decodeKimiTranscriptLine) }
     }
     return { error: `Unsupported agent for Chat UI transcript: ${agent}` }
   } catch (err) {

@@ -60,6 +60,13 @@ describe('resolveBackendDraftStartup', () => {
     expect(viewModeFor('omp')).toBe('chat')
   })
 
+  it('preserves the same split for kimi', () => {
+    setRepoConnection(null)
+    expect(viewModeFor('kimi')).toBe('chat')
+    setRepoConnection('ssh-target-1')
+    expect(viewModeFor('kimi')).toBe('terminal')
+  })
+
   it('preserves the same split for Grok', () => {
     setRepoConnection(null)
     expect(viewModeFor('grok')).toBe('chat')
