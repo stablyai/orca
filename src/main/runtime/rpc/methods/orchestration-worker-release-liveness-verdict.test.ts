@@ -87,6 +87,19 @@ describe('orchestration worker release liveness verdict', () => {
   // only one half would let the other be widened without a red test.
   it.each([
     {
+      name: 'an exact exited worker after its tab was removed',
+      connected: false,
+      verdict: { status: 'exited' as const },
+      closeError: 'tab_not_found',
+      currentProcessIncarnation: 'pty-worker:incarnation-1',
+      processLiveness: 'exited' as const,
+      dispatchAuthority: null,
+      expectedState: 'released',
+      expectedProcessAction: 'none',
+      settles: true,
+      rechecksProcess: true
+    },
+    {
       name: 'an exact exited worker',
       connected: false,
       verdict: { status: 'exited' as const },
@@ -207,6 +220,7 @@ describe('orchestration worker release liveness verdict', () => {
       closeError,
       currentProcessIncarnation,
       processLiveness,
+      dispatchAuthority,
       expectedState,
       expectedProcessAction,
       settles,
@@ -233,9 +247,9 @@ describe('orchestration worker release liveness verdict', () => {
           }
           return processLiveness
         }),
-        getOrchestrationDispatchAuthority: vi.fn(() => ({
-          hostScope: { kind: 'local', hostId: 'local' }
-        })),
+        getOrchestrationDispatchAuthority: vi.fn(() =>
+          dispatchAuthority === null ? null : { hostScope: { kind: 'local', hostId: 'local' } }
+        ),
         closeTerminal: vi.fn(async () => {
           throw new Error(closeError)
         }),
@@ -264,6 +278,11 @@ describe('orchestration worker release liveness verdict', () => {
         commitWorkerTerminalArchiveForRelease: vi.fn(() => ({
           ...resource,
           release_state: 'releasing'
+        })),
+        revertWorkerTerminalReleaseToRetained: vi.fn(() => ({
+          ...resource,
+          release_state: 'retained',
+          retained_reason: 'identity_unproven'
         })),
         settleWorkerTerminalRelease,
         markWorkerTerminalReleaseUnknown

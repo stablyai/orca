@@ -13,6 +13,7 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
 import { inspectWorkerTerminal, recheckProcessLiveness } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
+import { workerTerminalLeaseIsCurrent } from './orchestration-worker-terminal-lease'
 
 export type WorkerReleaseReceipt = {
   dispatchId: string
@@ -126,7 +127,15 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(retained)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource)) {
+  if (
+    !workerTerminalLeaseIsCurrent(
+      runtime,
+      db,
+      dispatchId,
+      resource,
+      observation.status === 'exited'
+    )
+  ) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
@@ -199,7 +208,15 @@ async function completeWorkerTerminalReleaseOnce(
       archive: archiveSummary(releasing)
     }
   }
-  if (!workerTerminalLeaseIsCurrent(runtime, db, dispatchId, releasing)) {
+  if (
+    !workerTerminalLeaseIsCurrent(
+      runtime,
+      db,
+      dispatchId,
+      releasing,
+      observation.status === 'exited'
+    )
+  ) {
     const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
     return {
       dispatchId,
@@ -272,27 +289,6 @@ async function completeWorkerTerminalReleaseOnce(
       observation.status === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
     archive: archiveSummary(released)
   }
-}
-
-function workerTerminalLeaseIsCurrent(
-  runtime: OrcaRuntimeService,
-  db: OrchestrationDb,
-  dispatchId: string,
-  resource: WorkerTerminalResourceRow
-): boolean {
-  const worker = db.getWorkerDispatch(dispatchId)
-  const authority = runtime.getOrchestrationDispatchAuthority(resource.terminal_handle)
-  return Boolean(
-    worker?.agent_terminal_handle === resource.terminal_handle &&
-    authority &&
-    resource.host_scope === JSON.stringify(authority.hostScope) &&
-    db.isDispatchProcessCurrent({
-      dispatchId,
-      paneKey: runtime.getTerminalPaneKey(resource.terminal_handle),
-      processIncarnation: runtime.getTerminalProcessIncarnation(resource.terminal_handle)
-    }) &&
-    !db.workerTerminalResourceHasIdentityConflict(resource.id)
-  )
 }
 
 function summarizeStoredArchive(archive: WorkerTerminalArchiveRow): {
