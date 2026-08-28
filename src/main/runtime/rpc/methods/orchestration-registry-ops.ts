@@ -8,11 +8,12 @@ import {
   findRegistryDrift
 } from '../../orchestration/control-plane/route-registry-discovery'
 import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
+import { PRETOOL_RECEIPT_METHOD } from './orchestration-pretool-receipt'
 import { mintCertificationIntent } from '../../orchestration/control-plane/certification-intent'
+import { readPretoolVerdict } from '../../orchestration/control-plane/pretool-receipt'
 import {
   observedIdentityFromAgentStatus,
   readDispatchLaunchEffort,
-  readPretoolDecision,
   readSafeLaunchAdmission
 } from '../../orchestration/control-plane/route-runtime-events'
 import { requireCallerOwnedRunTask } from './orchestration-run-scope'
@@ -116,6 +117,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
     }
   }),
 
+  PRETOOL_RECEIPT_METHOD,
   defineMethod({
     name: 'orchestration.certify',
     params: CertifyParams,
@@ -168,7 +170,8 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           // Only an explicit decision the policy path recorded. A PreTool hook
           // event proves a tool was seen, not that anything accepted it, and the
           // hook can fire before any decision exists.
-          pretoolDecision: (dispatchId) => readPretoolDecision(db, dispatchId),
+          pretoolDecision: (dispatchId) =>
+            readPretoolVerdict(db, { dispatchId, buildId: build.id }),
           safeLaunchAdmission: (dispatchId) => readSafeLaunchAdmission(db, dispatchId)
         }
       })

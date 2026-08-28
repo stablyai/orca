@@ -42,6 +42,27 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'pretool-receipt'],
+    summary: "Record the PreTool policy's own allow/block decision for this session",
+    usage:
+      'orca orchestration pretool-receipt --decision <allow|block> --policy <id> --policy-version <v> [--tool <name>] [--reason <text>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'decision',
+      'policy',
+      'policy-version',
+      'tool',
+      'reason',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'Orca does not decide whether a tool may run. The authoritative PreTool policy does, and this records what that decision was so certification can see it. Duplicating the policy inside Orca would create a second security boundary free to drift from the first.',
+      'The caller states only what the decision owns: allow or block, which policy and version reached it, the tool and a reason. Dispatch, Run, outcome, Task, pane, process incarnation, route and build are filled in by the runtime from its own records, so a receipt cannot be aimed at a Dispatch its emitter does not occupy.',
+      'A receipt earned under another build is ignored, and a block outranks an allow on the same Dispatch. A PostToolUse event, a static fallback stdout, a tool row, a launch token or a healthy provider startup are none of them decisions and produce no receipt.'
+    ]
+  },
+  {
     path: ['orchestration', 'gate-run'],
     summary: 'Have the RUNTIME execute a gate and record what actually happened',
     usage:

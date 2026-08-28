@@ -30,7 +30,7 @@ import { isTuiAgent } from '../../../../shared/tui-agent-config'
  *                         prepared, never that admission was granted.
  */
 
-export const ROUTE_RUNTIME_EVENT_KINDS = ['safe_launch', 'pretool'] as const
+export const ROUTE_RUNTIME_EVENT_KINDS = ['safe_launch'] as const
 export type RouteRuntimeEventKind = (typeof ROUTE_RUNTIME_EVENT_KINDS)[number]
 
 function recordDecision(
@@ -66,23 +66,6 @@ export function recordSafeLaunchAdmission(
   args: { dispatchId: string; decision: 'admitted' | 'refused'; observedAt: string }
 ): void {
   recordDecision(handle, { ...args, kind: 'safe_launch' })
-}
-
-/** Written ONLY by the authoritative PreTool policy path, at the point a decision
- *  is actually reached. Nothing infers this from a hook event. */
-export function recordPretoolDecision(
-  handle: ControlPlaneDatabaseHandle,
-  args: { dispatchId: string; decision: 'accepted' | 'denied'; observedAt: string }
-): void {
-  recordDecision(handle, { ...args, kind: 'pretool' })
-}
-
-export function readPretoolDecision(
-  handle: ControlPlaneDatabaseHandle,
-  dispatchId: string
-): 'accepted' | 'denied' | null {
-  const decision = readDecision(handle, dispatchId, 'pretool')
-  return decision === 'accepted' || decision === 'denied' ? decision : null
 }
 
 export function readSafeLaunchAdmission(
@@ -151,6 +134,31 @@ export function observedIdentityFromAgentStatus(
     // The provider reports the model; effort is Orca's own launch parameter, so
     // it is read back from the worker record rather than invented here.
     reasoning: effort ?? null
+  }
+}
+
+/** The routes the runtime actually launched with, from the worker record. The
+ *  requested route is what was asked for; the effective route is what Orca
+ *  composed. Neither is a provider observation, and neither is used as one. */
+export function readDispatchLaunchRoutes(startOptions: string | undefined): {
+  requested: RouteIdentity | null
+  effective: RouteIdentity | null
+} {
+  try {
+    const launch = (startOptions ? JSON.parse(startOptions) : null)?.launch
+    const read = (value: unknown): RouteIdentity | null => {
+      const record = value as { agent?: unknown; model?: unknown; effort?: unknown } | null
+      return record && isTuiAgent(record.agent)
+        ? {
+            agent: record.agent,
+            model: typeof record.model === 'string' ? record.model : null,
+            reasoning: typeof record.effort === 'string' ? record.effort : null
+          }
+        : null
+    }
+    return { requested: read(launch?.requested), effective: read(launch?.effective) }
+  } catch {
+    return { requested: null, effective: null }
   }
 }
 

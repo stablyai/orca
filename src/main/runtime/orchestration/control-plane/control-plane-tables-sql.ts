@@ -105,6 +105,28 @@ CREATE INDEX IF NOT EXISTS idx_control_plane_outcomes_batch
 -- replay carrying different outcomes is a conflict rather than an enlargement.
 -- Blocker 1: a gate result is only evidence when the RUNTIME ran the process.
 -- A caller-declared PASS has no row here, and the completion gate refuses it.
+CREATE TABLE IF NOT EXISTS control_plane_pretool_receipts (
+  receipt_id TEXT PRIMARY KEY,
+  dispatch_id TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  policy_id TEXT NOT NULL,
+  policy_version TEXT NOT NULL,
+  tool_name TEXT,
+  reason TEXT,
+  build_id TEXT NOT NULL,
+  run_id TEXT,
+  outcome_id TEXT,
+  task_id TEXT,
+  terminal_handle TEXT,
+  pane_key TEXT,
+  process_incarnation TEXT,
+  requested_route TEXT,
+  effective_route TEXT,
+  observed_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pretool_receipts_dispatch
+  ON control_plane_pretool_receipts(dispatch_id);
+
 CREATE TABLE IF NOT EXISTS control_plane_route_runtime_events (
   dispatch_id TEXT NOT NULL,
   kind TEXT NOT NULL,

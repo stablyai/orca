@@ -3,11 +3,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
+import { readPretoolVerdict } from './pretool-receipt'
 import {
   observedIdentityFromAgentStatus,
-  readPretoolDecision,
   readSafeLaunchAdmission,
-  recordPretoolDecision,
   recordSafeLaunchAdmission
 } from './route-runtime-events'
 
@@ -79,33 +78,13 @@ describe('ROUTE_EVIDENCE_MUST_NOT_ACCEPT_A_PROXY', () => {
     } as AgentStatusIpcPayload
   }
 
-  it('NEGATIVE: a PreTool event with no recorded decision is not an acceptance', () => {
+  it('NEGATIVE: a PreTool event with no receipt is not an acceptance', () => {
     const dispatch = world()
     // A tool is visibly in flight on this Dispatch's own pane...
     const snapshot = [status({ toolName: 'Bash' })]
     expect(snapshot[0].toolName).toBe('Bash')
-    // ...and that still decides nothing, because nothing recorded a decision.
-    expect(readPretoolDecision(db!, dispatch.id)).toBeNull()
-  })
-
-  it('POSITIVE: an explicitly recorded acceptance is read back', () => {
-    const dispatch = world()
-    recordPretoolDecision(db!, {
-      dispatchId: dispatch.id,
-      decision: 'accepted',
-      observedAt: new Date().toISOString()
-    })
-    expect(readPretoolDecision(db!, dispatch.id)).toBe('accepted')
-  })
-
-  it('records a denial as a denial, never as an absence', () => {
-    const dispatch = world()
-    recordPretoolDecision(db!, {
-      dispatchId: dispatch.id,
-      decision: 'denied',
-      observedAt: new Date().toISOString()
-    })
-    expect(readPretoolDecision(db!, dispatch.id)).toBe('denied')
+    // ...and that still decides nothing, because no real decision was recorded.
+    expect(readPretoolVerdict(db!, { dispatchId: dispatch.id, buildId: 'b1' })).toBeNull()
   })
 
   it('NEGATIVE: a launch token is not a safe-launch admission', () => {
