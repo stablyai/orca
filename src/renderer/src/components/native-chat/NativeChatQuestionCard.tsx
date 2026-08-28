@@ -1,4 +1,4 @@
-import { useState, type RefObject } from 'react'
+import { Fragment, useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -191,23 +191,20 @@ export function NativeChatQuestionCard({
           {/* The card is width-constrained by the chat pane, not the window, so
               the split is driven by the card's own inline size. */}
           <div className="@container/question border-t border-border">
+            {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
+                the card's right edge instead of crowding the choices. One grid in
+                both modes: stacked, the preview is the row after its own option;
+                split, column 2 spans every row so it stays top-aligned. */}
             <div
               className={cn(
-                'flex flex-col',
-                questionHasPreviewText && '@2xl/question:flex-row @2xl/question:items-stretch'
+                'grid max-h-[50vh] min-w-0 grid-cols-1 overflow-y-auto scrollbar-sleek',
+                questionHasPreviewText &&
+                  '@2xl/question:grid-cols-2 @2xl/question:items-start @2xl/question:[&>button]:col-start-1 @2xl/question:[&>[data-slot=question-preview]]:col-start-2 @2xl/question:[&>[data-slot=question-preview]]:row-start-1 @2xl/question:[&>[data-slot=question-preview]]:row-end-[-1]'
               )}
             >
-              {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
-                  the card's right edge instead of crowding the choices. */}
-              <div
-                className={cn(
-                  'max-h-[50vh] min-w-0 divide-y divide-border/60 overflow-y-auto scrollbar-sleek',
-                  questionHasPreviewText && '@2xl/question:w-1/2 @2xl/question:shrink-0'
-                )}
-              >
-                {q.options.map((opt, i) => (
+              {q.options.map((opt, i) => (
+                <Fragment key={`${i}:${opt.label}`}>
                   <OptionRow
-                    key={`${i}:${opt.label}`}
                     badge={String(i + 1)}
                     label={opt.label}
                     description={opt.description}
@@ -216,10 +213,13 @@ export function NativeChatQuestionCard({
                     disabled={isSubmitting}
                     onSelect={() => pickOption(i)}
                     onHighlight={() => setHighlight(i)}
+                    dividerAbove={i > 0}
                   />
-                ))}
-              </div>
-              {questionHasPreviewText ? <PreviewPanel preview={preview} /> : null}
+                  {questionHasPreviewText && previewIndex === i ? (
+                    <PreviewPanel preview={preview} />
+                  ) : null}
+                </Fragment>
+              ))}
             </div>
             <div className="flex items-center gap-3 border-t border-border/60 px-3.5 py-2.5">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
@@ -277,31 +277,34 @@ export function NativeChatQuestionCard({
 
 /** The highlighted option's example snippet, rendered as markdown in a monospace
  *  box to match the AskUserQuestion tool's documented contract for the field.
- *  Scrolls internally so a long snippet never grows the card. */
+ *  Framed so it reads as belonging to the option it sits under, and scrolls
+ *  inside that frame so a long snippet never grows the card. */
 function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
   return (
     <div
       data-slot="question-preview"
-      className="min-w-0 flex-1 border-t border-border/60 bg-muted/40 @2xl/question:border-t-0 @2xl/question:border-l"
+      className="min-w-0 self-stretch px-3.5 pb-2.5 @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5"
     >
-      {preview ? (
-        <CommentMarkdown
-          content={preview}
-          className={cn(
-            'max-h-[50vh] overflow-auto p-3.5 font-mono text-xs text-foreground scrollbar-sleek',
-            // The compact variant emits paragraphs as inline spans and caps its
-            // own code blocks; blocking the spans keeps line structure, and
-            // releasing the cap lets this panel's height tier govern scrolling.
-            '[&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2',
-            '[&_pre]:my-1 [&_pre]:max-h-none [&_pre]:bg-transparent [&_pre]:p-0 [&_pre]:text-xs',
-            '[&_code]:text-xs'
-          )}
-        />
-      ) : (
-        <p className="p-3.5 text-xs text-muted-foreground">
-          {translate('components.native-chat.question.noPreview', 'This option has no preview.')}
-        </p>
-      )}
+      <div className="min-w-0 overflow-hidden rounded-md border border-border/60 bg-muted/40">
+        {preview ? (
+          <CommentMarkdown
+            content={preview}
+            className={cn(
+              'max-h-[40vh] overflow-auto p-2.5 font-mono text-xs text-foreground scrollbar-sleek',
+              // The compact variant emits paragraphs as inline spans and caps its
+              // own code blocks; blocking the spans keeps line structure, and
+              // releasing the cap lets this frame's height tier govern scrolling.
+              '[&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2',
+              '[&_pre]:my-1 [&_pre]:max-h-none [&_pre]:bg-transparent [&_pre]:p-0 [&_pre]:text-xs',
+              '[&_code]:text-xs'
+            )}
+          />
+        ) : (
+          <p className="p-2.5 text-xs text-muted-foreground">
+            {translate('components.native-chat.question.noPreview', 'This option has no preview.')}
+          </p>
+        )}
+      </div>
     </div>
   )
 }
@@ -314,7 +317,8 @@ function OptionRow({
   highlighted,
   disabled,
   onSelect,
-  onHighlight
+  onHighlight,
+  dividerAbove
 }: {
   badge: string
   label: string
@@ -324,6 +328,7 @@ function OptionRow({
   disabled: boolean
   onSelect: () => void
   onHighlight: () => void
+  dividerAbove: boolean
 }): React.JSX.Element {
   return (
     <button
@@ -337,6 +342,9 @@ function OptionRow({
       aria-pressed={selected}
       className={cn(
         'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
+        // Grid children cannot use the list's divide-y once the preview splits
+        // into a second column.
+        dividerAbove && 'border-t border-border/60',
         selected || highlighted ? 'bg-accent' : 'hover:bg-accent'
       )}
     >

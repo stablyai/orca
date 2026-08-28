@@ -258,6 +258,45 @@ describe('NativeChatQuestionCard', () => {
     expect(previewText()).not.toContain('const x = 1')
   })
 
+  it('places the preview immediately after the option it belongs to', () => {
+    render(previewPrompt, vi.fn())
+
+    const optionsGrid = previewPanel()!.parentElement!
+    const positionOf = (node: Element): number => [...optionsGrid.children].indexOf(node)
+
+    expect(positionOf(previewPanel()!)).toBe(positionOf(optionRow('Tabs')) + 1)
+
+    hoverOption('Spaces')
+
+    expect(positionOf(previewPanel()!)).toBe(positionOf(optionRow('Spaces')) + 1)
+  })
+
+  it('keeps the preview a sibling of the option rows in one shared container', () => {
+    // The split layout places the panel in a second grid column, which only
+    // works while it shares a parent with the rows it sits beside.
+    render(previewPrompt, vi.fn())
+
+    const optionsGrid = previewPanel()!.parentElement
+    expect(optionRow('Tabs').parentElement).toBe(optionsGrid)
+    expect(optionRow('Spaces').parentElement).toBe(optionsGrid)
+  })
+
+  it('carries the container-query classes that drive the split layout', () => {
+    // happy-dom does not evaluate container queries, so this asserts the class
+    // strings are present — not that the two-column layout renders.
+    render(previewPrompt, vi.fn())
+
+    const optionsGrid = previewPanel()!.parentElement!
+    expect(optionsGrid.className).toContain('@2xl/question:grid-cols-2')
+    expect(optionsGrid.className).toContain(
+      '@2xl/question:[&>[data-slot=question-preview]]:col-start-2'
+    )
+    expect(optionsGrid.className).toContain(
+      '@2xl/question:[&>[data-slot=question-preview]]:row-start-1'
+    )
+    expect(optionsGrid.closest('.\\@container\\/question')).not.toBeNull()
+  })
+
   it('keeps the preview scoped to the focused question in a multi-question prompt', () => {
     render(
       {
