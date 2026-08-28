@@ -93,6 +93,9 @@ export function buildWorkspaceViewSettingsUpdate(
   if ('collapsedGroups' in patch) {
     update.collapsedGroups = next.collapsedGroups
   }
+  if ('workspaceStatuses' in patch) {
+    update.workspaceStatuses = [...next.workspaceStatuses]
+  }
   return update
 }
 

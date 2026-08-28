@@ -31,28 +31,36 @@ export type PersistedUIWriteBaseline = {
   acknowledgedAgentsByPaneKey: Record<string, number>
 }
 
-export const PERSISTED_UI_WRITE_BASELINE_FIELDS = [
-  'sidebarWidth',
-  'rightSidebarOpen',
-  'rightSidebarTab',
-  'rightSidebarExplorerView',
-  'rightSidebarWidth',
-  'markdownTocPanelWidth',
-  'combinedDiffFileTreeWidth',
-  'groupBy',
-  'sortBy',
-  'projectOrderBy',
-  'showSleepingWorkspaces',
-  'hideDefaultBranchWorkspace',
-  'hideAutomationGeneratedWorkspaces',
-  'hideCliCreatedWorkspaces',
-  'hideDetachedHeadWorkspaces',
-  'hideWorkspacesFromOtherDevices',
-  'alwaysShowDefaultBranchWorkspace',
-  'showDotfilesByWorktree',
-  'filterRepoIds',
-  'acknowledgedAgentsByPaneKey'
-] as const satisfies readonly (keyof PersistedUIWriteBaseline)[]
+// Why `satisfies Record<...>` rather than a keyof[] annotation: a plain `satisfies
+// readonly (keyof ...)[]` only validates listed elements, so a field added to the
+// type but forgotten here would silently never persist again — the exact bug class
+// this module exists to close (see ui-state-schema-parity.ts for the same lesson).
+const PERSISTED_UI_WRITE_BASELINE_FIELD_SET = {
+  sidebarWidth: true,
+  rightSidebarOpen: true,
+  rightSidebarTab: true,
+  rightSidebarExplorerView: true,
+  rightSidebarWidth: true,
+  markdownTocPanelWidth: true,
+  combinedDiffFileTreeWidth: true,
+  groupBy: true,
+  sortBy: true,
+  projectOrderBy: true,
+  showSleepingWorkspaces: true,
+  hideDefaultBranchWorkspace: true,
+  hideAutomationGeneratedWorkspaces: true,
+  hideCliCreatedWorkspaces: true,
+  hideDetachedHeadWorkspaces: true,
+  hideWorkspacesFromOtherDevices: true,
+  alwaysShowDefaultBranchWorkspace: true,
+  showDotfilesByWorktree: true,
+  filterRepoIds: true,
+  acknowledgedAgentsByPaneKey: true
+} satisfies Record<keyof PersistedUIWriteBaseline, true>
+
+export const PERSISTED_UI_WRITE_BASELINE_FIELDS = Object.keys(
+  PERSISTED_UI_WRITE_BASELINE_FIELD_SET
+) as readonly (keyof PersistedUIWriteBaseline)[]
 
 /** Pick the writer-owned fields off a hydrated mirror (a structural superset). */
 export function capturePersistedUIWriteBaseline(
@@ -110,20 +118,56 @@ export function diffPersistedUIWriteFields(
   return changed as Partial<PersistedUIWriteBaseline>
 }
 
-/** Convert a mirror-shaped field patch to the ui.set wire shape. */
+/**
+ * Convert a mirror-shaped field patch to the ui.set wire shape. Built key-by-key
+ * (no spread): a spread is not excess-property-checked, so a future mirror field
+ * whose store name differs from its wire name would ship a bogus key and make the
+ * strict paired-host UiUpdate schema reject the whole payload.
+ */
 export function persistedUIWriteFieldsToWireUpdate(
   fields: Partial<PersistedUIWriteBaseline>
 ): Partial<PersistedUIState> {
-  const { showSleepingWorkspaces, filterRepoIds, ...rest } = fields
-  const update: Partial<PersistedUIState> = { ...rest }
-  if ('showSleepingWorkspaces' in fields) {
-    // The mirror keeps the positive form; the durable file keeps the hide form.
-    update.hideSleepingWorkspaces = showSleepingWorkspaces !== true
-  }
-  if ('filterRepoIds' in fields) {
-    // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
-    // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
-    update.filterRepoIds = [...(filterRepoIds ?? [])]
+  const update: Partial<PersistedUIState> = {}
+  for (const field of PERSISTED_UI_WRITE_BASELINE_FIELDS) {
+    if (!(field in fields)) {
+      continue
+    }
+    if (field === 'showSleepingWorkspaces') {
+      // The mirror keeps the positive form; the durable file keeps the hide form.
+      update.hideSleepingWorkspaces = fields.showSleepingWorkspaces !== true
+    } else if (field === 'filterRepoIds') {
+      // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to
+      // main, which owns a mutable array — copy at the boundary rather than widening the wire type.
+      update.filterRepoIds = [...(fields.filterRepoIds ?? [])]
+    } else {
+      assignSameNameWireField(
+        update,
+        field,
+        fields[field] as PersistedUIWriteBaseline[typeof field]
+      )
+    }
   }
   return update
+}
+
+type SameNameWriteField = Exclude<
+  keyof PersistedUIWriteBaseline,
+  'showSleepingWorkspaces' | 'filterRepoIds'
+>
+
+// Compile check: every non-special mirror field must exist on PersistedUIState
+// under the same name with an assignable type — indexing PersistedUIState[K]
+// fails to compile for a renamed field, and the conditional flags a type drift.
+type MisassignableWireField = {
+  [K in SameNameWriteField]: PersistedUIWriteBaseline[K] extends PersistedUIState[K] ? never : K
+}[SameNameWriteField]
+const assertSameNameFieldsAssignable: MisassignableWireField extends never ? true : never = true
+void assertSameNameFieldsAssignable
+
+function assignSameNameWireField<K extends SameNameWriteField>(
+  update: Partial<PersistedUIState>,
+  field: K,
+  value: PersistedUIWriteBaseline[K]
+): void {
+  ;(update as Record<SameNameWriteField, unknown>)[field] = value
 }

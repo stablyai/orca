@@ -22,8 +22,6 @@ import {
 export function usePersistedUIWriter(): void {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const activeView = useAppStore((s) => s.activeView)
-  const hydratedBaseline = useAppStore((s) => s.persistedUIWriteBaseline)
-  const markPersistedUIWriteFlushed = useAppStore((s) => s.markPersistedUIWriteFlushed)
   const ui = useAppStore(
     useShallow(
       (s): PersistedUIWriteBaseline => ({
@@ -58,22 +56,39 @@ export function usePersistedUIWriter(): void {
     // The baseline holds the values this client last saw persisted (newest
     // hydration from main, overlaid with this client's flushed writes); fields
     // equal to it are never written, so remote changes are never echoed back.
-    if (!persistedUIReady || !hydratedBaseline) {
+    // Read via getState, not a selector: baseline identity changes on every
+    // broadcast, and subscribing would re-render and re-arm the debounce on
+    // remote traffic that changed nothing this writer owns.
+    const armBaseline = useAppStore.getState().persistedUIWriteBaseline
+    if (!persistedUIReady || !armBaseline) {
       return
     }
-    const changed = diffPersistedUIWriteFields(ui, hydratedBaseline)
-    if (Object.keys(changed).length === 0) {
+    if (Object.keys(diffPersistedUIWriteFields(ui, armBaseline)).length === 0) {
       return
     }
     const timer = window.setTimeout(() => {
-      // Fold into the baseline before the async send so this effect's re-run
-      // (and the sync-hydration pending-edit overlay) both see the flush.
-      markPersistedUIWriteFlushed(changed)
-      void window.api.ui.set(persistedUIWriteFieldsToWireUpdate(changed))
+      // Re-diff against the store at fire time: a broadcast landing inside the
+      // debounce window may have refreshed the baseline (its identity is
+      // deliberately NOT an effect dep, so remote traffic can't starve the timer).
+      const state = useAppStore.getState()
+      const baseline = state.persistedUIWriteBaseline
+      if (!baseline) {
+        return
+      }
+      const changed = diffPersistedUIWriteFields(ui, baseline)
+      if (Object.keys(changed).length === 0) {
+        return
+      }
+      // Fold into the baseline only once the write lands; a rejected write
+      // leaves the fields dirty so the next mirror change re-flushes them.
+      window.api.ui
+        .set(persistedUIWriteFieldsToWireUpdate(changed))
+        .then(() => state.markPersistedUIWriteFlushed(changed))
+        .catch(() => {})
     }, 150)
 
     return () => window.clearTimeout(timer)
-  }, [persistedUIReady, hydratedBaseline, ui, markPersistedUIWriteFlushed])
+  }, [persistedUIReady, ui])
 
   // Why (#9002): activeView has its own tiny profile preference, so it can track
   // every switch without scheduling the multi-MB durable-state writer.

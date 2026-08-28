@@ -213,9 +213,12 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     })
   }
 
-  function flushDesktopDebounce() {
-    act(() => {
+  async function flushDesktopDebounce() {
+    // Async act: the writer folds its baseline in a .then after the ui.set
+    // resolves, so the microtask queue must drain for the flush to register.
+    await act(async () => {
       vi.advanceTimersByTime(200)
+      await Promise.resolve()
     })
   }
 
@@ -252,16 +255,16 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     vi.useRealTimers()
   })
 
-  it('desktop restart alone does not rewrite the authority (control)', () => {
+  it('desktop restart alone does not rewrite the authority (control)', async () => {
     const before = authority.get()
-    flushDesktopDebounce()
+    await flushDesktopDebounce()
     const after = authority.get()
     expect(after.hideSleepingWorkspaces).toBe(before.hideSleepingWorkspaces)
     expect(after.hideDefaultBranchWorkspace).toBe(before.hideDefaultBranchWorkspace)
     expect(after.hideCliCreatedWorkspaces).toBe(before.hideCliCreatedWorkspaces)
   })
 
-  it('a mobile tap must not revert a desktop change the mobile mirror has not seen', () => {
+  it('a mobile tap must not revert a desktop change the mobile mirror has not seen', async () => {
     const mobile = createMobileClient(authority)
     mobile.sync()
 
@@ -269,7 +272,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
-    flushDesktopDebounce()
+    await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
     deliverBroadcasts()
 
@@ -286,7 +289,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
   })
 
-  it('the desktop debounced writer must not revert a concurrent mobile change', () => {
+  it('the desktop debounced writer must not revert a concurrent mobile change', async () => {
     const mobile = createMobileClient(authority)
     mobile.sync()
 
@@ -304,7 +307,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
 
     // t=150ms: the desktop debounce fires from its (not yet re-hydrated) mirror.
-    flushDesktopDebounce()
+    await flushDesktopDebounce()
 
     // Both disjoint changes must survive.
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
@@ -318,7 +321,7 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(mobile.view.hideSleeping).toBe(true)
   })
 
-  it('a broadcast landing inside the debounce window must not revert the pending desktop toggle', () => {
+  it('a broadcast landing inside the debounce window must not revert the pending desktop toggle', async () => {
     const mobile = createMobileClient(authority)
     mobile.sync()
 
@@ -338,33 +341,33 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     // The remote change must land in the mirror.
     expect(store.getState().showSleepingWorkspaces).toBe(false)
 
-    flushDesktopDebounce()
+    await flushDesktopDebounce()
 
     // Both disjoint changes survive at the authority.
     expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
     expect(authority.get().hideSleepingWorkspaces).toBe(true)
   })
 
-  it('desktop and mobile changing the same field converges on the newest write', () => {
+  it('desktop and mobile changing the same field converges on the newest write', async () => {
     const mobile = createMobileClient(authority)
     mobile.sync()
 
     act(() => {
       store.getState().setHideDefaultBranchWorkspace(true)
     })
-    flushDesktopDebounce()
+    await flushDesktopDebounce()
     deliverBroadcasts()
 
     // Mobile flips the SAME field afterwards; last writer wins everywhere.
     mobile.tap({ hideDefaultBranch: false })
     deliverBroadcasts()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
-    flushDesktopDebounce()
+    await flushDesktopDebounce()
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
     expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
   })
 
-  it('pins the modeled mobile ui.set payload to the shipping source', () => {
+  it('pins the modeled mobile ui.set payload to the shipping source', async () => {
     const source = readMobileHostScreenSource()
     if (mobileHasPatchOnlyBuilder()) {
       // Candidate: index.tsx must push through the patch-only builder this model uses.
