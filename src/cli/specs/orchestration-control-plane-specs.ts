@@ -96,11 +96,13 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
       'agent',
       'model',
       'reasoning',
+      'retry-of',
       'run',
       'from',
       'retry-request'
     ],
     notes: [
+      'A retry of a failed launch takes --retry-of, because the id is deterministic over its binding: without it a retry re-derives the id the failed attempt already consumed and the Task can never be picked up again.',
       'Certification evidence is produced BY a real launch, so a route with none can never be certified without one launch that has no certification yet. This intent is that launch, and nothing more.',
       'The runtime matches the intent against the exact Run, Task, outcome, worktree, route and build it is about to launch, so it authorises one specific start rather than a class of them.',
       'Single-use, UNTESTED routes only. A route that already FAILED or whose evidence went STALE is still refused, and the Dispatch it authorises can never advance a real outcome.',

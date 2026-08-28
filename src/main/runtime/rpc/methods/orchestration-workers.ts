@@ -25,10 +25,7 @@ import {
   reusedWorktreeSetupReceipt,
   prepareLocalWorkerStart
 } from './orchestration-worker-start-validation'
-import {
-  assertFederatedWorkerStartAdmitted,
-  assertWorkerStartAdmitted
-} from './orchestration-worker-route-admission'
+import { assertWorkerStartAdmitted } from './orchestration-worker-route-admission'
 import { deliverWorkerDispatchPrompt } from './orchestration-worker-dispatch-prompt'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { requireCallerOwnedRunTask } from './orchestration-run-scope'
@@ -64,18 +61,6 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       })
 
       if (params.on) {
-        // Why here too: a federated worker is still a worker route, and an
-        // outcome-admitted Run must not reach a remote host on an uncertified
-        // route, a serialized outcome, or a leased worktree.
-        assertFederatedWorkerStartAdmitted({
-          handle: db,
-          runId: run.id,
-          agent: params.agent,
-          model: params.model,
-          effort: params.effort,
-          terminalHandle: params.terminal,
-          certificationIntent: params.certificationIntent
-        })
         return startFederatedWorker({
           params,
           runtime,
@@ -118,7 +103,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         effort: params.effort,
         worktreeId: resolvedWorktree?.id,
         terminalHandle: params.terminal,
-        certificationIntent: params.certificationIntent
+        certificationIntent: params.certificationIntent,
+        retryOf: params.retryOf
       })
       let explicitTerminal
       if (params.terminal) {

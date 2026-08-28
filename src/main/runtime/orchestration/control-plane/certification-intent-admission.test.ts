@@ -54,7 +54,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
     }
   }
 
-  function world(options: { certified: boolean }) {
+  function world(options: { certified: boolean; retryOf?: string }) {
     db = new OrchestrationDb(':memory:')
     const store = new ControlPlaneStore(db)
     const registry = new RouteRegistryStore(db)
@@ -90,14 +90,15 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
         outcomeId: 'out_1',
         worktreeId: WORKTREE,
         identity: IDENTITY,
-        buildId: resolveRuntimeBuildIdentity().id
+        buildId: resolveRuntimeBuildIdentity().id,
+        retryOfDispatchId: options.retryOf ?? null
       },
       new Date().toISOString()
     )
     return { task, runId: task.run_id, intentId: intent.intent_id }
   }
 
-  function admit(args: { runId: string; taskId: string; intentId?: string }) {
+  function admit(args: { runId: string; taskId: string; intentId?: string; retryOf?: string }) {
     return assertWorkerStartAdmitted({
       handle: db!,
       runId: args.runId,
@@ -106,7 +107,8 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
       model: 'opus[1m]',
       effort: 'high',
       worktreeId: WORKTREE,
-      certificationIntent: args.intentId
+      certificationIntent: args.intentId,
+      retryOf: args.retryOf
     })
   }
 
@@ -162,6 +164,23 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
         certificationIntent: intentId
       })
     ).toThrow(/local launch this runtime can observe/)
+  })
+
+  it('admits a RETRY under the grant minted for that retry', () => {
+    // A retry gets its own grant, so the failed attempt's consumed intent does
+    // not strand the Task. The admission seam has to carry --retry-of through
+    // or the launch is matched against the first-attempt binding instead.
+    const { runId, task, intentId } = world({ certified: false, retryOf: 'ctx_failed' })
+    expect(admit({ runId, taskId: task.id, intentId, retryOf: 'ctx_failed' })).toEqual({
+      bootstrapUsed: true
+    })
+  })
+
+  it('refuses a retry grant presented as a first attempt', () => {
+    const { runId, task, intentId } = world({ certified: false, retryOf: 'ctx_failed' })
+    expect(() => admit({ runId, taskId: task.id, intentId })).toThrow(
+      /not issued for a first attempt/
+    )
   })
 
   it('mints the same id for the same binding, so a replay is not a second grant', () => {

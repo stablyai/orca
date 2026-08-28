@@ -27,6 +27,7 @@ export function assertCertificationIntentMatches(args: {
   worktreeId: string
   identity: RouteIdentity
   buildId: string
+  retryOfDispatchId: string | null
 }): boolean {
   if (!args.intentId) {
     return false
@@ -39,7 +40,8 @@ export function assertCertificationIntentMatches(args: {
       outcomeId: args.outcomeId,
       worktreeId: args.worktreeId,
       identity: args.identity,
-      buildId: args.buildId
+      buildId: args.buildId,
+      retryOfDispatchId: args.retryOfDispatchId
     }
   })
   if (!verdict.ok) {

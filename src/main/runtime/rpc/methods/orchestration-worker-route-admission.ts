@@ -52,6 +52,7 @@ export function assertWorkerStartRouteAdmitted(args: {
   intentActual?: {
     taskId: string
     worktreeId: string | null
+    retryOfDispatchId?: string | null
   }
 }): { bootstrapUsed: boolean } {
   if (args.agent && isExcludedWorkerAgent(args.agent)) {
@@ -132,6 +133,7 @@ export function assertWorkerStartRouteAdmitted(args: {
       outcomeId: binding.kind === 'admitted' ? binding.outcome.outcome_id : '',
       taskId: args.intentActual?.taskId ?? '',
       worktreeId: args.intentActual?.worktreeId ?? '',
+      retryOfDispatchId: args.intentActual?.retryOfDispatchId ?? null,
       identity,
       buildId: build.id
     })
@@ -245,6 +247,8 @@ export function assertWorkerStartAdmitted(args: {
   worktreeId?: string
   /** Forwarded from the explicit request; the phase-launch driver sets none. */
   certificationIntent?: string
+  /** The Dispatch this start retries, so a retry grant is matched as a retry. */
+  retryOf?: string
   /** Set when the start re-engages an existing worker session instead of
    *  creating one. Its worktree is fenced the same way a new one is. */
   terminalHandle?: string
@@ -268,7 +272,11 @@ export function assertWorkerStartAdmitted(args: {
     agent: args.agent ?? planned.plannedAgent,
     model: args.model ?? planned.plannedModel,
     effort: args.effort ?? planned.plannedEffort,
-    intentActual: { taskId: args.taskId, worktreeId: args.worktreeId ?? null }
+    intentActual: {
+      taskId: args.taskId,
+      worktreeId: args.worktreeId ?? null,
+      retryOfDispatchId: args.retryOf ?? null
+    }
   })
   // Why resolve the retained tree: a re-engagement names a TERMINAL, not a
   // worktree, so fencing only on an explicit worktree let an already-running
