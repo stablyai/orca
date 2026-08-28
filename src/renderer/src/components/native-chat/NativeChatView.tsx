@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
+import { useNativeChatAccountReauth } from './use-native-chat-account-reauth'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
 import { isNativeChatTranscriptUnsettled } from './use-native-chat-live-session'
@@ -362,6 +363,7 @@ function NativeChatResolvedView({
   // Chat-only font zoom via Cmd/Ctrl +/-/0, gated to the live conversation so
   // the chord is inert on the loading/empty/error states and elsewhere.
   const fontScale = useNativeChatFontScale(isConversation)
+  const onReauthenticateAccount = useNativeChatAccountReauth(agent, terminalTabId)
 
   return (
     <div
@@ -416,6 +418,8 @@ function NativeChatResolvedView({
             onLinkClick={nativeChatFileLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             failedDeliveryMessageIds={failedLaunchPromptMessageIds}
+            onReauthenticateAccount={onReauthenticateAccount}
+            onSwitchToTerminal={onSwitchToTerminal}
           />
         )}
       </div>

@@ -1,9 +1,11 @@
 // Claude JSONL line → NativeChatMessage decoder.
 
+import { isAgentAuthError } from '../../shared/agent-auth-errors'
 import {
   NATIVE_CHAT_INTERRUPTED_STATUS_TEXT,
   type NativeChatBlock,
-  type NativeChatMessage
+  type NativeChatMessage,
+  type NativeChatNoticeKind
 } from '../../shared/native-chat-types'
 import {
   asRecord,
@@ -23,6 +25,9 @@ export function decodeClaudeTranscriptLine(
     return null
   }
   const role = record.type
+  if (role === 'system') {
+    return decodeClaudeSystemNotice(record, fallbackId)
+  }
   if (role !== 'user' && role !== 'assistant') {
     return null
   }
@@ -81,4 +86,30 @@ function claudeMessageRole(
 function parseTimestamp(value: unknown): number | null {
   const parsed = timestampMs(value)
   return Number.isFinite(parsed) ? parsed : null
+}
+
+// Only `subtype:"informational"` carries user-facing copy (e.g. a login
+// nudge); other system subtypes are internal telemetry and stay dropped.
+function decodeClaudeSystemNotice(
+  record: Record<string, unknown>,
+  fallbackId: string
+): NativeChatMessage | null {
+  if (record.subtype !== 'informational') {
+    return null
+  }
+  const text = extractString(record.content)
+  if (!text) {
+    return null
+  }
+  const noticeKind: NativeChatNoticeKind = isAgentAuthError('claude', text)
+    ? 'login-required'
+    : 'generic'
+  return {
+    id: extractString(record.uuid) ?? fallbackId,
+    role: 'system',
+    blocks: [{ type: 'text', text }],
+    timestamp: parseTimestamp(record.timestamp),
+    source: 'transcript',
+    noticeKind
+  }
 }

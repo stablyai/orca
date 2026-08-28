@@ -64,6 +64,11 @@ export type NativeChatBlock =
   | NativeChatToolResultBlock
   | NativeChatImageRefBlock
 
+/** Distinguishes a bannerable `role: 'system'` notice from an ordinary quiet
+ *  aside — `'login-required'` gets an action button, `'generic'` doesn't. */
+export const NATIVE_CHAT_NOTICE_KINDS = ['generic', 'login-required'] as const
+export type NativeChatNoticeKind = (typeof NATIVE_CHAT_NOTICE_KINDS)[number]
+
 export type NativeChatMessage = {
   /** Stable across re-reads/appends so the assembler and the renderer list can
    *  dedup and key by it. */
@@ -77,6 +82,9 @@ export type NativeChatMessage = {
   /** Optional explicit turn key. When present, two messages with the same
    *  `turnId` are treated as the same turn for dedup regardless of `id`. */
   turnId?: string
+  /** Set only on a system notice the user should actually see (e.g. a
+   *  provider login prompt), unlike the quiet asides decoders also emit. */
+  noticeKind?: NativeChatNoticeKind
 }
 
 export const NATIVE_CHAT_TURN_LIFECYCLE_STATES = ['working', 'completed', 'interrupted'] as const
@@ -145,4 +153,10 @@ export function isInterruptedStatusMessage(message: NativeChatMessage): boolean 
 
 export function isImageRefBlock(block: NativeChatBlock): block is NativeChatImageRefBlock {
   return block.type === 'image-ref'
+}
+
+/** A provider notice (see `noticeKind`) worth its own banner rather than the
+ *  quiet system aside treatment. */
+export function isAgentNoticeMessage(message: NativeChatMessage): boolean {
+  return message.role === 'system' && message.noticeKind != null
 }

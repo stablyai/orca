@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest'
 import {
+  isAgentNoticeMessage,
   isTextBlock,
   isToolCallBlock,
   isToolResultBlock,
   isImageRefBlock,
   NATIVE_CHAT_SOURCE_PRIORITY,
-  type NativeChatBlock
+  type NativeChatBlock,
+  type NativeChatMessage
 } from './native-chat-types'
 
 const textBlock: NativeChatBlock = { type: 'text', text: 'hello' }
@@ -41,5 +43,29 @@ describe('source priority', () => {
   it('ranks transcript > hook > scrape', () => {
     expect(NATIVE_CHAT_SOURCE_PRIORITY.transcript).toBeGreaterThan(NATIVE_CHAT_SOURCE_PRIORITY.hook)
     expect(NATIVE_CHAT_SOURCE_PRIORITY.hook).toBeGreaterThan(NATIVE_CHAT_SOURCE_PRIORITY.scrape)
+  })
+})
+
+describe('isAgentNoticeMessage', () => {
+  const base: Omit<NativeChatMessage, 'role' | 'noticeKind'> = {
+    id: 'm1',
+    blocks: [{ type: 'text', text: 'hi' }],
+    timestamp: null,
+    source: 'transcript'
+  }
+
+  it('is true only for a system message carrying a noticeKind', () => {
+    expect(isAgentNoticeMessage({ ...base, role: 'system', noticeKind: 'generic' })).toBe(true)
+    expect(isAgentNoticeMessage({ ...base, role: 'system', noticeKind: 'login-required' })).toBe(
+      true
+    )
+  })
+
+  it('is false for an ordinary system aside with no noticeKind', () => {
+    expect(isAgentNoticeMessage({ ...base, role: 'system' })).toBe(false)
+  })
+
+  it('is false for a non-system message even if noticeKind were set', () => {
+    expect(isAgentNoticeMessage({ ...base, role: 'assistant', noticeKind: 'generic' })).toBe(false)
   })
 })
