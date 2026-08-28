@@ -43,7 +43,14 @@ function navigationHarness(initialState: HostStackNavigationState | undefined) {
   }
 }
 
-function committedHostState(hostIdParam: string): HostStackNavigationState {
+function committedHostState(
+  hostIdParam: string,
+  activeRoute: HostStackNavigationState['routes'][number] = {
+    key: 'host-index',
+    name: '[hostId]/index',
+    params: { hostId: hostIdParam }
+  }
+): HostStackNavigationState {
   return {
     index: 0,
     routes: [
@@ -52,7 +59,7 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
         state: {
           key: '/h',
           index: 0,
-          routes: [{ key: 'host-index', name: '[hostId]/index', params: { hostId: hostIdParam } }]
+          routes: [activeRoute]
         }
       }
     ]
@@ -66,6 +73,50 @@ function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNaviga
 }
 
 describe('host stack navigation', () => {
+  it('does not navigate when the target session is already focused', () => {
+    const harness = navigationHarness(
+      committedHostState('host/one', {
+        key: 'session',
+        name: '[hostId]/session/[worktreeId]',
+        params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
+      })
+    )
+    const push = vi.fn()
+    const replace = vi.fn()
+
+    const controller = navigateToHostStackRoute(
+      harness.navigation,
+      { push, replace },
+      'host/one',
+      OTHER_TARGET
+    )
+
+    expect(controller.isActive()).toBe(false)
+    expect(push).not.toHaveBeenCalled()
+    expect(replace).not.toHaveBeenCalled()
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('preserves navigation for matching non-session routes with different context', () => {
+    const harness = navigationHarness(
+      committedHostState('host/one', {
+        name: '[hostId]/tasks',
+        params: { hostId: 'host/one', taskSource: 'linear' }
+      })
+    )
+    const push = vi.fn()
+
+    const controller = navigateToHostStackRoute(
+      harness.navigation,
+      { push, replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
+
+    expect(controller.isActive()).toBe(true)
+    expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+  })
+
   it('matches a host committed as the encoded segment it was pushed as', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
@@ -219,5 +270,36 @@ describe('host stack navigation', () => {
     expect(harness.navigation.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ payload: OTHER_TARGET })
     )
+  })
+
+  it('cancels a pending transition when its next target is already focused', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const push = vi.fn()
+    const router = { push, replace: vi.fn() }
+    const pending = coordinateHostStackNavigation(
+      null,
+      harness.navigation,
+      router,
+      'host/one',
+      TARGET
+    )
+    harness.setState(
+      committedHostState('host/one', {
+        name: '[hostId]/session/[worktreeId]',
+        params: { hostId: 'host/one', worktreeId: 'repo::/tmp/wt' }
+      })
+    )
+
+    const result = coordinateHostStackNavigation(
+      pending,
+      harness.navigation,
+      router,
+      'host/one',
+      OTHER_TARGET
+    )
+
+    expect(result.controller.isActive()).toBe(false)
+    expect(harness.listenerCount()).toBe(0)
+    expect(push).toHaveBeenCalledTimes(1)
   })
 })

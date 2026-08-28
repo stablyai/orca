@@ -7,7 +7,7 @@ export type HostStackNavigationState = Readonly<{
 export type HostStackNavigationRoute = Readonly<{
   key?: string
   name: string
-  params?: Readonly<{ hostId?: unknown }>
+  params?: Readonly<Record<string, unknown>>
   state?: HostStackNavigationState
 }>
 
@@ -80,6 +80,27 @@ function hostParamMatches(param: unknown, expectedHostId: string): boolean {
   }
 }
 
+function routeMatchesTarget(
+  route: HostStackNavigationRoute | undefined,
+  target: HostStackRouteTarget
+): boolean {
+  return (
+    route?.name === '[hostId]/session/[worktreeId]' &&
+    target.name === route.name &&
+    hostParamMatches(route.params?.hostId, target.params.hostId) &&
+    route.params?.worktreeId === target.params.worktreeId
+  )
+}
+
+function navigationMatchesTarget(
+  navigation: HostStackRootNavigation,
+  target: HostStackRouteTarget
+): boolean {
+  const state = navigation.getState()
+  const host = state && focusedHostRoute(state)
+  return routeMatchesTarget(host?.state?.routes[host.state.index], target)
+}
+
 /** The focused `h` route, however deep the caller's navigator sits above it: a screen
  *  inside the root stack sees it at the top, but app/_layout.tsx is itself a screen of
  *  Expo Router's internal navigator, so from there the root stack is one level down. */
@@ -124,6 +145,10 @@ export function navigateToHostStackRoute(
   hostId: string,
   target: HostStackRouteTarget
 ): HostStackNavigationController {
+  if (navigationMatchesTarget(navigation, target)) {
+    return { cancel: () => {}, isActive: () => false, retarget: () => {} }
+  }
+
   let active = true
   let hostRouteSeen = false
   let selectedTarget = target
@@ -194,6 +219,13 @@ export function coordinateHostStackNavigation(
   hostId: string,
   target: HostStackRouteTarget
 ): PendingHostStackNavigation {
+  if (navigationMatchesTarget(navigation, target)) {
+    current?.controller.cancel()
+    return {
+      hostId,
+      controller: navigateToHostStackRoute(navigation, router, hostId, target)
+    }
+  }
   if (current?.hostId === hostId && current.controller.isActive()) {
     current.controller.retarget(target)
     return current
