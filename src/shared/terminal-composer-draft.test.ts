@@ -25,6 +25,38 @@ describe('detectTerminalComposerDraft', () => {
     })
   })
 
+  it('accepts a Claude frame line that carries a mode label', () => {
+    const frame = `${'─'.repeat(88)} ultracode ─`
+    expect(
+      detectTerminalComposerDraft({
+        rows: [frame, '❯ Refactor the login page so that it'],
+        typedRows: [frame, '❯ Refactor the login page so that it'],
+        promptGlyphBoldRows: [false, false],
+        rowsBelow: ['─'.repeat(100), '  ⏵⏵ auto mode on (shift+tab to cycle)'],
+        typedRowsBelow: ['─'.repeat(100), ''],
+        beforeCursor: '❯ Refactor the login page so that it',
+        afterCursor: '',
+        rawAfterCursor: '',
+        cursorHidden: false,
+        cursorViewportRow: 26
+      })?.text
+    ).toBe('Refactor the login page so that it')
+    expect(
+      detectTerminalComposerDraft({
+        rows: ['some transcript text ending in ─', '❯ not a composer'],
+        typedRows: ['some transcript text ending in ─', '❯ not a composer'],
+        promptGlyphBoldRows: [false, false],
+        rowsBelow: [],
+        typedRowsBelow: [],
+        beforeCursor: '❯ not a composer',
+        afterCursor: '',
+        rawAfterCursor: '',
+        cursorHidden: false,
+        cursorViewportRow: 1
+      })
+    ).toBeNull()
+  })
+
   it('keeps stock dim placeholders out of draft metadata', () => {
     expect(
       detectTerminalComposerDraft({

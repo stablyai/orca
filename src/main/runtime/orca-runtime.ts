@@ -236,6 +236,7 @@ import {
 } from '../skills/skill-ssh-relay-service'
 import { ORCHESTRATION_MESSAGE_WAIT_DEFAULT_TIMEOUT_MS } from '../../shared/orchestration-message-wait-timeout'
 import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-query-reply-policy'
+import { AgentPromptPendingInputError } from '../../shared/agent-prompt-pending-input-error'
 import type { TerminalRevealIdentity } from '../../shared/terminal-reveal-identity'
 import type {
   OrchestrationCompatibilityEvidence,
@@ -19451,6 +19452,8 @@ export class OrcaRuntimeService {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       signal?: AbortSignal
+      /** Append to unsent composer text instead of refusing with AgentPromptPendingInputError. */
+      allowPendingInput?: boolean
     } = {}
   ): Promise<RuntimeTerminalSend> {
     const payload = buildAgentPromptPasteBytes(prompt)
@@ -19498,6 +19501,47 @@ export class OrcaRuntimeService {
     })
     const bytesWritten = Buffer.byteLength(payload, 'utf8') + submits
     return { handle, accepted: true, bytesWritten }
+  }
+
+  // Why: the paste lands wherever the composer cursor is, and Enter submits the whole
+  // row — a user's half-typed draft would ship glued to the prompt (#16289). Only a
+  // rendered draft refuses; an unreadable screen is unknown and never blocks a send.
+  private async assertNoPendingComposerInput(
+    ptyId: string,
+    options: { allowPendingInput?: boolean; signal?: AbortSignal }
+  ): Promise<void> {
+    if (options.allowPendingInput === true) {
+      return
+    }
+    const pty = this.ptysById.get(ptyId)
+    // Why: the launch agent is stale once the user swaps agents in the pane.
+    const agent = pty?.foregroundAgent ?? pty?.launchAgent
+    if (!isTerminalSendSettlementAgent(agent)) {
+      return
+    }
+    const pendingInput = await this.readComposerDraft(ptyId, options.signal)
+    if (pendingInput !== null) {
+      throw new AgentPromptPendingInputError(pendingInput)
+    }
+  }
+
+  // Why: a provider frame is discarded when output advanced past it — which is exactly
+  // what a user's keystroke echo does — so retry briefly before giving up on evidence.
+  private async readComposerDraft(ptyId: string, signal?: AbortSignal): Promise<string | null> {
+    const attempts = this.providerSnapshotPreferredPtys.has(ptyId)
+      ? COMPOSER_DRAFT_READ_ATTEMPTS
+      : 1
+    for (let attempt = 0; ; attempt += 1) {
+      assertAgentPromptRequestActive(signal)
+      const visibleState = await this.readVisibleTerminalState(ptyId)
+      if (visibleState) {
+        return visibleState.draft?.trim() ? visibleState.draft : null
+      }
+      if (attempt >= attempts - 1) {
+        return null
+      }
+      await waitForAgentPromptDelay(COMPOSER_DRAFT_RETRY_MS, signal)
+    }
   }
 
   async getTerminalAgentStatus(handle: string): Promise<RuntimeTerminalAgentStatus> {
@@ -20210,12 +20254,21 @@ export class OrcaRuntimeService {
       beforeWrite?: (ptyId: string) => void | Promise<void>
       suffixFailureError?: string
       signal?: AbortSignal
+      allowPendingInput?: boolean
     } = {}
   ): Promise<number> {
     assertAgentPromptRequestActive(options.signal)
     this.assertAgentPromptGeneration(ptyId, generation)
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)
+    // Why: after the permission check — a dialog's selected option row also starts with `❯`.
+    await this.assertNoPendingComposerInput(ptyId, options)
+    assertAgentPromptRequestActive(options.signal)
+    this.assertAgentPromptGeneration(ptyId, generation)
+    this.assertAgentPromptPermissionSafe(
+      permissionBaseline,
+      this.getAgentPromptActivity(handle, ptyId)
+    )
     // Why: the floor for every wait below. Enter must never overtake bytes the execution
     // host is still feeding the child, and that cost is proportional to the payload.
     const writeHostPlatform = this.getPtyWriteHostPlatform(ptyId)
@@ -39827,6 +39880,8 @@ const MAX_TERMINAL_PREVIEW_CHARS = 32 * 1024
 export const AUTHORITATIVE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 8_000
 const VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS = 750
 const VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS = 1_000
+const COMPOSER_DRAFT_READ_ATTEMPTS = 3
+const COMPOSER_DRAFT_RETRY_MS = 50
 const TUI_IDLE_VISIBLE_PROBE_SETTLE_MARGIN_MS = 10
 const MAX_PREVIEW_LINES = 6
 const MAX_PREVIEW_CHARS = 300

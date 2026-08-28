@@ -1,6 +1,7 @@
 import { InvalidArgumentError, defineMethod, type RpcAnyMethod } from '../../core'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
+import { AgentPromptPendingInputError } from '../../../../../shared/agent-prompt-pending-input-error'
 import { TerminalSend } from './unary-schemas'
 import {
   assertTerminalSendExactPtyBinding,
@@ -168,7 +169,8 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
         result = useSettledAgentPrompt
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               beforeWrite,
-              signal
+              signal,
+              ...(params.allowPendingInput === true ? { allowPendingInput: true } : {})
             })
           : await runtime.sendTerminal(
               params.terminal,
@@ -188,6 +190,17 @@ export const TERMINAL_SEND_METHODS: RpcAnyMethod[] = [
             )
       } catch (error) {
         mobileFloorClaim.current?.rollback()
+        if (error instanceof AgentPromptPendingInputError) {
+          return {
+            send: {
+              handle: params.terminal,
+              accepted: false,
+              bytesWritten: 0,
+              refusedReason: 'pending-input',
+              pendingInput: error.pendingInput
+            }
+          }
+        }
         const refusedReason = getTerminalSendGuardRefusedReason(error)
         if (refusedReason) {
           return {

@@ -64,6 +64,7 @@ const RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'terminal_tab_pinned',
   'agent_prompt_blocked',
   'agent_prompt_stalled',
+  'agent_prompt_pending_input',
   'no_active_terminal',
   'repo_not_found',
   'timeout',

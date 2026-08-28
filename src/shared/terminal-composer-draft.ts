@@ -22,7 +22,9 @@ export type TerminalComposerDraft = {
   promptGlyph: '❯' | '›' | '»'
 }
 
-const COMPOSER_FRAME_LINE = /^[─━-]{8,}\s*$/
+// Why: Claude Code writes a mode label into the composer's top rule (`──── ultracode ─`),
+// so a frame line is a rule that may carry text, as long as it ends in rule characters.
+const COMPOSER_FRAME_LINE = /^[─━-]{8,}(?:\s*\S.*?\s*[─━-]+)?\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[·•]\s+\S.*$/i
 
 function composerContinuationRows(

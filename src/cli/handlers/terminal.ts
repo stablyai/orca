@@ -112,9 +112,14 @@ export const TERMINAL_HANDLERS: Record<string, CommandHandler> = {
       enter,
       interrupt,
       ...(text && enter && !interrupt ? { agentPrompt: true } : {}),
+      ...(flags.get('force') === true ? { allowPendingInput: true } : {}),
       client: { id: 'orca-cli', type: 'desktop' }
     })
     printResult(result, json, formatTerminalSend)
+    if (!result.result.send.accepted) {
+      // Why: callers chain `terminal send && ...`; a refusal must not read as delivered.
+      process.exitCode = 1
+    }
   },
   'terminal wait': async ({ flags, client, cwd, json }) => {
     const timeoutMs = getOptionalPositiveIntegerFlag(flags, 'timeout-ms')

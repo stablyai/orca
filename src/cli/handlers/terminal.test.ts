@@ -94,6 +94,69 @@ describe('terminal send CLI', () => {
     })
   })
 
+  it('passes --force through as allowPendingInput', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: { send: { handle: 'term-1', accepted: true, bytesWritten: 7 } }
+    })
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await TERMINAL_HANDLERS['terminal send']({
+      flags: new Map<string, string | true>([
+        ['terminal', 'term-1'],
+        ['text', 'review'],
+        ['enter', true],
+        ['force', true]
+      ]),
+      client: { call } as unknown as RuntimeClient,
+      cwd: '/tmp/worktree',
+      json: true
+    })
+
+    expect(call).toHaveBeenCalledWith('terminal.send', {
+      terminal: 'term-1',
+      text: 'review',
+      enter: true,
+      interrupt: false,
+      agentPrompt: true,
+      allowPendingInput: true,
+      client: { id: 'orca-cli', type: 'desktop' }
+    })
+  })
+
+  it('exits non-zero and reports the draft when the send is refused for pending input', async () => {
+    const call = vi.fn().mockResolvedValue({
+      result: {
+        send: {
+          handle: 'term-1',
+          accepted: false,
+          bytesWritten: 0,
+          refusedReason: 'pending-input',
+          pendingInput: 'Refactor the login page so that it'
+        }
+      }
+    })
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const previousExitCode = process.exitCode
+    try {
+      await TERMINAL_HANDLERS['terminal send']({
+        flags: new Map<string, string | true>([
+          ['terminal', 'term-1'],
+          ['text', 'status update'],
+          ['enter', true]
+        ]),
+        client: { call } as unknown as RuntimeClient,
+        cwd: '/tmp/worktree',
+        json: false
+      })
+
+      expect(process.exitCode).toBe(1)
+      expect(String(log.mock.calls[0]?.[0])).toContain('"Refactor the login page so that it"')
+      expect(String(log.mock.calls[0]?.[0])).toContain('--force')
+    } finally {
+      process.exitCode = previousExitCode
+    }
+  })
+
   it('keeps text-only and bare Enter sends as direct terminal input', async () => {
     const call = vi.fn().mockResolvedValue({
       result: { send: { handle: 'term-1', accepted: true, bytesWritten: 1 } }

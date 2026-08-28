@@ -181,7 +181,20 @@ function formatTerminalReadLimitedWarning(terminal: RuntimeTerminalRead): string
 }
 
 export function formatTerminalSend(result: { send: RuntimeTerminalSend }): string {
-  return `Sent ${result.send.bytesWritten} bytes to ${result.send.handle}.`
+  const { send } = result
+  if (send.accepted) {
+    return `Sent ${send.bytesWritten} bytes to ${send.handle}.`
+  }
+  if (send.refusedReason === 'pending-input') {
+    return [
+      `Refused: terminal ${send.handle} has unsent input in its composer: ${JSON.stringify(send.pendingInput ?? '')}`,
+      'Wait for the user to send or clear it, or re-run with --force to append to it.'
+    ].join('\n')
+  }
+  if (send.refusedReason) {
+    return `Refused: terminal ${send.handle} did not accept input (${send.refusedReason}).`
+  }
+  return `Refused: terminal ${send.handle} did not accept input.`
 }
 
 export function formatTerminalRename(result: { rename: RuntimeTerminalRename }): string {
