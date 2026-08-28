@@ -3831,7 +3831,7 @@
             "detailed": "Detailed",
             "compact": "Compact",
             "detailedTooltip": "Full usage with bars, labels, and percentages",
-            "compactTooltip": "Condensed usage: only the tightest window",
+            "compactTooltip": "Condensed usage: highest-consumption window; Cursor lists every plan bucket",
             "footerDetailAria": "Usage footer detail"
           },
           "RemoteServerUpdateStatusSegment": {

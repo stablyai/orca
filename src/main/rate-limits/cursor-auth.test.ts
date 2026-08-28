@@ -114,10 +114,25 @@ describe('readCursorAuthSession', () => {
     expect(result).toEqual({ status: 'missing' })
   })
 
+  it('falls back to the IDE database when cursor-agent spawn fails', async () => {
+    const readIdeAccessToken = vi.fn().mockReturnValue('ide-token-789')
+    const deps = makeDeps({
+      resolveCliProgram: vi.fn().mockResolvedValue('/usr/local/bin/cursor-agent'),
+      runProcess: vi.fn().mockRejectedValue(new Error('spawn failed')),
+      readIdeAccessToken
+    })
+
+    const result = await readCursorAuthSession({ deps })
+
+    expect(result).toEqual({ status: 'ok', accessToken: 'ide-token-789', source: 'ide' })
+    expect(readIdeAccessToken).toHaveBeenCalled()
+  })
+
   it('sanitizes spawn failures and never leaks the token string', async () => {
     const deps = makeDeps({
       resolveCliProgram: vi.fn().mockResolvedValue('/usr/local/bin/cursor-agent'),
-      runProcess: vi.fn().mockRejectedValue(new Error('spawn failed leaking secret-token-abc'))
+      runProcess: vi.fn().mockRejectedValue(new Error('spawn failed leaking secret-token-abc')),
+      readIdeAccessToken: vi.fn().mockReturnValue(null)
     })
 
     const result = await readCursorAuthSession({ deps })

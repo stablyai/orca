@@ -206,7 +206,7 @@ export async function readCursorAuthSession(
 ): Promise<CursorAuthReadResult> {
   const deps = options.deps ?? buildDefaultCursorAuthDeps()
   const cliResult = await readFromCli(deps, options.signal)
-  if (cliResult) {
+  if (cliResult?.status === 'ok') {
     return cliResult
   }
   if (options.signal?.aborted) {
@@ -225,5 +225,5 @@ export async function readCursorAuthSession(
     return { status: 'ok', accessToken: ideToken, source: 'ide' }
   }
 
-  return { status: 'missing' }
+  return cliResult ?? { status: 'missing' }
 }
