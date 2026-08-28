@@ -63,8 +63,10 @@ export function formatAgentRowLabel(args: {
 }
 
 /** True when the combined label already names the model, so the row can drop its
- *  separate raw-model chip instead of saying it twice. */
+ *  separate raw-model chip instead of saying it twice. Case-insensitive to stay symmetric
+ *  with isAlreadyPrefixed: a caller label like `terra: …` is preserved verbatim there, so
+ *  a case-sensitive test here would leave the redundant chip on exactly those rows. */
 export function labelNamesModel(label: string, model: string | undefined): boolean {
   const name = friendlyModel(model)
-  return name !== '' && label.startsWith(name)
+  return name !== '' && label.toLowerCase().startsWith(name.toLowerCase())
 }

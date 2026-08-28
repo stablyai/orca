@@ -96,4 +96,11 @@ describe('labelNamesModel', () => {
     expect(labelNamesModel('Inspect scraper pipeline', undefined)).toBe(false)
     expect(labelNamesModel('Inspect scraper pipeline', '')).toBe(false)
   })
+
+  it('accepts a lowercase caller prefix that isAlreadyPrefixed preserved verbatim', () => {
+    const feature = 'terra: Inspect scraper pipeline'
+    const label = formatAgentRowLabel({ model: 'gpt-5.6-terra', feature })
+    expect(label).toBe(feature)
+    expect(labelNamesModel(label, 'gpt-5.6-terra')).toBe(true)
+  })
 })
