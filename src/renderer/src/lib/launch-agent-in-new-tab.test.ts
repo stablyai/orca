@@ -13,6 +13,7 @@ const mockSeedNativeChatLaunchDraft = vi.fn()
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
 const mockTrack = vi.fn()
 const mockToastMessage = vi.fn()
+const mockToastWarning = vi.fn()
 
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 
@@ -93,9 +94,8 @@ vi.mock('@/store', () => ({
 }))
 
 const mockToastError = vi.fn()
-
 vi.mock('sonner', () => ({
-  toast: { message: mockToastMessage, error: mockToastError }
+  toast: { message: mockToastMessage, error: mockToastError, warning: mockToastWarning }
 }))
 
 vi.mock('@/components/tab-bar/reconcile-order', () => ({
@@ -171,6 +171,16 @@ describe('launchAgentInNewTab', () => {
     store.ptyIdsByTabId = {}
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+  })
+
+  it('does not attribute a local proxy to Claude launches on SSH hosts', async () => {
+    Reflect.set(store.settings, 'httpProxyUrl', 'http://127.0.0.1:9')
+    store.repos = [{ id: 'repo-1', connectionId: 'ssh-target-1', path: '/repo' }]
+    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
+
+    launchAgentInNewTab({ agent: 'claude', worktreeId: 'wt-1' })
+
+    expect(mockToastWarning).not.toHaveBeenCalled()
   })
 
   it('stamps the launched agent on the new tab for immediate provider icon bootstrap', async () => {

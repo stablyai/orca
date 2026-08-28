@@ -9,3 +9,10 @@
 export function repoIsRemote(repo: { connectionId?: string | null }): boolean {
   return Boolean(repo.connectionId)
 }
+
+export function isAgentLaunchRemote(
+  repo: { connectionId?: string | null } | null | undefined,
+  workspaceConnectionId: string | null | undefined
+): boolean {
+  return repo ? repoIsRemote(repo) : Boolean(workspaceConnectionId)
+}

@@ -22,13 +22,14 @@ import {
 } from '../../../shared/tui-agent-launch-defaults'
 import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
-import { repoIsRemote } from '../../../shared/agent-launch-remote'
+import { isAgentLaunchRemote } from '../../../shared/agent-launch-remote'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
+import { warnIfConfiguredClaudeProxy } from '@/lib/claude-launch-proxy-notice'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -95,7 +96,9 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         )
       : CLIENT_PLATFORM)
   // Why: SSH remotes deploy the shim as plain `orca`, so skip the Linux-only `orca-ide` rename for remote launches.
-  const isRemote = repo ? repoIsRemote(repo) : false
+  // Folder workspaces are not included in allWorktrees(), so resolve their SSH owner separately.
+  const worktreeConnectionId = getConnectionIdFromState(store, worktreeId)
+  const isRemote = isAgentLaunchRemote(repo, worktreeConnectionId)
   const queuedShell = resolveLocalWindowsAgentStartupShell({
     platform: resolvedLaunchPlatform,
     isRemote,
@@ -117,9 +120,7 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
     agent,
     promptDelivery: viewModePromptDelivery,
     launchDraftText: trimmedPrompt,
-    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
-      getConnectionIdFromState(store, worktreeId)
-    )
+    nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(worktreeConnectionId)
   }
   const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
   const startupPlanBase = {
@@ -171,6 +172,11 @@ export function launchAgentInNewTab(args: LaunchAgentInNewTabArgs): LaunchAgentI
         ? { promptDeliveryResult: webHostDelivery }
         : {})
     }
+  }
+
+  // The app-level proxy is injected into local PTYs (including WSL), not SSH or paired web hosts.
+  if (!isRemote) {
+    warnIfConfiguredClaudeProxy(agent, store.settings)
   }
 
   // Why: queue startup BEFORE TerminalPane mounts — it snapshots pendingStartupByTabId in useState on first render.

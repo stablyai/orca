@@ -935,6 +935,15 @@
       "ephemeralVmWorktreeCreation": {
         "sparseCheckoutUnsupported": "Provisioned-root recipes do not support sparse checkout."
       },
+      "claude": {
+        "launch": {
+          "proxy": {
+            "notice": {
+              "9f4a8d7c21": "Orca network proxy is configured for this Claude launch; the target host is routed through it unless covered by its bypass rules. If Claude reports ConnectionRefused, check Settings → Advanced → Network."
+            }
+          }
+        }
+      },
       "file": {
         "preview": {
           "pairedOutsideWorktree": "Files outside the workspace can't be previewed on a paired server yet."
