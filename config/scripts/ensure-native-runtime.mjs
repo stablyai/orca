@@ -378,11 +378,15 @@ function rebuildNodeRuntimeModules(moduleNames) {
 
 function runPnpm(args, { cwd = projectDir } = {}) {
   const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+  const env =
+    process.platform === 'linux' && args.includes('node-gyp')
+      ? { ...process.env, CXXFLAGS: `${process.env.CXXFLAGS ?? ''} -std=gnu++2a`.trim() }
+      : process.env
   const result = spawnSync(command, args, {
     cwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    env: process.env
+    env
   })
 
   if (result.error || result.status !== 0) {
