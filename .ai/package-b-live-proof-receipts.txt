@@ -142,3 +142,59 @@ WHY THE ACCEPTED COMPLETION DID NOT SETTLE ON THIS RUN
   describe the tree it was looking at. An earlier run on a clean tree DID settle
   (Dispatch ctx_e6e9cf0e72bc, accepted and gate-backed), so the accept path is
   proven; this run simply proved the dirty-tree refusal instead.
+
+
+VERIFIED FINISH ATTEMPT — merged main, both trees committed, exact-provenance run
+
+  orca HEAD              f366e23985  (merge of origin/main ebe6b559ef, ANCESTOR of HEAD,
+                         29 commits, no conflicts; overlap files electron.vite.config.ts
+                         and orca-runtime.ts both kept this branch's work)
+  scl lane               launcher-repair-opus 44589124 on top of b588f759, never SCL main
+  artifact provenance    sourceSha f366e23985, dirty:false
+  candidate              a403bd1f-b72d-4b76-8512-e01ff709f4b6, isolated, torn down
+  native runtime         868298d7 untouched
+
+SCL COMPANION CHANGE — LANDED IN THE SANCTIONED LANE
+  One site in .codex/hooks/pre_tool_use_policy.py main(), +40 lines, additive only.
+  Behaviour equivalence PROVEN: 18 real commands run through the original and the
+  modified policy produced byte-identical verdicts, including every deny path and
+  the parse-failure path. No allowlist, pattern or deny() shape touched.
+  END TO END: the committed policy emitted its own receipt, which Orca bound to
+  run/outcome/task/dispatch from its OWN records —
+    allow scl.pre_tool_use_policy@2026-08-28 tool=Bash dispatch=ctx_c7b5b3666f21
+
+CERTIFICATION EARNED ON THE CLEAN DISPATCH  (6 of 10)
+  fresh_launch                   RECORDED
+  safe_launch_acceptance         RECORDED   <- had no writer before this package
+  task_dispatch_worktree_binding RECORDED
+  completion_receipt             RECORDED   <- accepted, gate-backed completion
+  duplicate_prevention           RECORDED   <- a real rejected completion
+  role_execution                 RECORDED
+
+STILL UNTESTED, WITH THE EXACT REASON
+
+  effective_model_identity   The provider reported no model. The candidate's
+  effective_reasoning_mode   last-status.json holds one entry with agentType,
+                             model and launchToken all absent, so there is no
+                             provider observation to read. The reader refuses to
+                             invent one, which is correct and is why this cannot
+                             be earned here.
+
+  pretool_acceptance         The receipt IS produced by the real policy and IS
+                             bound correctly — but it landed on a plain-shell
+                             Dispatch, which has no launch receipt, so
+                             certification cannot read a route from it. It has to
+                             land on a worker-start Dispatch, and that pane is
+                             occupied by an agent that treats input as prompts
+                             rather than shell, so it could not be driven to run
+                             the policy on demand.
+
+  failure_recovery           Earned on an earlier Run (real worker-stop then real
+                             retry) but not on this one.
+
+CONSEQUENCE
+  routes matrix: every cell UNTESTED. No route reaches PASS, so automatic reviewer
+  planning is still unreachable and no fresh Fable SHIP was obtained on this head.
+  The remaining gap is no longer missing machinery — every writer exists and each
+  was exercised for real. It is that three kinds need conditions this candidate
+  did not produce.
