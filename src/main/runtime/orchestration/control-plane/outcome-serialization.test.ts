@@ -15,6 +15,41 @@ describe('SERIALIZED_OVERLAP_MUST_NOT_LAUNCH', () => {
     db = undefined
   })
 
+  const WORKTREE = 'repo_a::/work/serialized'
+
+  /** Intake now refuses an outcome that declares no required gates and no
+   *  routing policy. This fixture is about serialization decisions, so it
+   *  supplies the minimum that makes an outcome admittable at all. */
+  function admittable(outcomeId: string, runId: string, title: string, fingerprint: string) {
+    return {
+      outcomeId,
+      runId,
+      title,
+      fingerprint,
+      // Intake binds an outcome to the workspace it may be implemented in, and
+      // the start path refuses a Dispatch resolved anywhere else.
+      target: `id:${WORKTREE}`,
+      routingPolicy: {
+        taskClassification: 'bounded_implementation' as const,
+        builderCandidates: [{ agent: 'claude' as const, model: 'opus-5', reasoning: 'high' }],
+        reviewerCandidates: [{ agent: 'claude' as const, model: 'fable', reasoning: 'high' }],
+        reviewCapabilities: ['adversarial_review' as const],
+        allowUnknownQuota: false
+      },
+      requiredGates: [
+        {
+          gateId: 'unit',
+          program: 'pnpm',
+          args: ['test'],
+          dependencies: ['git:src'],
+          policyVersion: 'unit-v1',
+          commandIdentity: 'pnpm:test:v1',
+          shaBinding: 'exact_head' as const
+        }
+      ]
+    }
+  }
+
   function world(decision: 'serialize' | 'independent') {
     db = new OrchestrationDb(':memory:')
     const store = new ControlPlaneStore(db)
@@ -28,10 +63,7 @@ describe('SERIALIZED_OVERLAP_MUST_NOT_LAUNCH', () => {
     )
     const admitted = admitOutcomeIntake(store, {
       batchId: 'batch_1',
-      outcomes: [
-        { outcomeId: 'out_1', runId: runs[0], title: 'A', fingerprint: 'f1' },
-        { outcomeId: 'out_2', runId: runs[1], title: 'B', fingerprint: 'f2' }
-      ],
+      outcomes: [admittable('out_1', runs[0], 'A', 'f1'), admittable('out_2', runs[1], 'B', 'f2')],
       detected: [{ leftOutcomeId: 'out_1', rightOutcomeId: 'out_2', kind: 'resource_collision' }],
       relations: [
         {
@@ -54,7 +86,7 @@ describe('SERIALIZED_OVERLAP_MUST_NOT_LAUNCH', () => {
       taskId: task.id,
       creator: { kind: 'system' },
       maxDepth: Number.MAX_SAFE_INTEGER,
-      startOptions: { agent: 'codex' }
+      startOptions: { agent: 'codex', resolvedWorktreeId: WORKTREE }
     })
     return started.dispatch.id
   }

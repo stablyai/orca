@@ -113,7 +113,8 @@ function completionGateState(args: {
       fallbackFiles: [],
       cwd: observed.worktreePath,
       policyVersion: gate.policyVersion,
-      commandIdentity: gate.commandIdentity
+      commandIdentity: gate.commandIdentity,
+      program: gate.program
     })
     if (
       hasUnprovableDependency(inputHashes) !== null ||

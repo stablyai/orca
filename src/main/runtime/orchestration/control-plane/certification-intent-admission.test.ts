@@ -7,7 +7,7 @@ import { OrchestrationDb } from '../db'
 import { certificationIntentId, mintCertificationIntent } from './certification-intent'
 import { ControlPlaneStore } from './control-plane-store'
 import { admitOutcome } from './outcome-identity'
-import { resolveRuntimeBuildIdentity } from './runtime-build-identity'
+import type { RuntimeBuildIdentity } from './runtime-build-identity'
 import { RouteRegistryStore } from './route-registry-store'
 import { requiredEvidenceKinds } from './route-certification-evidence'
 import { routeKey, UNKNOWN, type RouteIdentity, type RouteRow } from './route-registry-types'
@@ -19,6 +19,16 @@ import { routeKey, UNKNOWN, type RouteIdentity, type RouteRow } from './route-re
  *  and — the bug this file was written for — that merely CARRYING an intent does
  *  not mark a Dispatch that never needed one.
  */
+const BUILD: RuntimeBuildIdentity = {
+  version: 'test',
+  buildHash: 'a'.repeat(16),
+  artifactManifestVerified: true,
+  provenanceSource: 'embedded',
+  dirtyBuild: false,
+  commitSha: 'a'.repeat(40),
+  id: 'build_test'
+}
+
 describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
   let db: OrchestrationDb | undefined
   afterEach(() => {
@@ -67,7 +77,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
       fingerprint: 'f'
     })
     if (options.certified) {
-      const build = resolveRuntimeBuildIdentity()
+      const build = BUILD
       for (const kind of requiredEvidenceKinds('fresh')) {
         registry.recordRouteEvidence({
           routeKey: routeKey(IDENTITY),
@@ -90,7 +100,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
         outcomeId: 'out_1',
         worktreeId: WORKTREE,
         identity: IDENTITY,
-        buildId: resolveRuntimeBuildIdentity().id,
+        buildId: BUILD.id,
         retryOfDispatchId: options.retryOf ?? null
       },
       new Date().toISOString()
@@ -100,7 +110,8 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
 
   function admit(args: { runId: string; taskId: string; intentId?: string; retryOf?: string }) {
     return assertWorkerStartAdmitted({
-      runtimeBuildIdentity: resolveRuntimeBuildIdentity(),
+      runtimeBuildIdentity: BUILD,
+      isolatedWorktree: true,
       handle: db!,
       runId: args.runId,
       taskId: args.taskId,
@@ -141,7 +152,8 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
     const { runId, task, intentId } = world({ certified: false })
     expect(() =>
       assertWorkerStartAdmitted({
-        runtimeBuildIdentity: resolveRuntimeBuildIdentity(),
+        runtimeBuildIdentity: BUILD,
+        isolatedWorktree: true,
         handle: db!,
         runId,
         taskId: task.id,
@@ -158,7 +170,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
     const { runId, intentId } = world({ certified: false })
     expect(() =>
       assertFederatedWorkerStartAdmitted({
-        runtimeBuildIdentity: resolveRuntimeBuildIdentity(),
+        runtimeBuildIdentity: BUILD,
         handle: db!,
         runId,
         agent: 'claude',
@@ -195,7 +207,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
         outcomeId: 'out_1',
         worktreeId: WORKTREE,
         identity: IDENTITY,
-        buildId: resolveRuntimeBuildIdentity().id
+        buildId: BUILD.id
       })
     ).toMatch(/^ci_[0-9a-f]{32}$/)
   })

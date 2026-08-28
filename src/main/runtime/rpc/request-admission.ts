@@ -14,8 +14,16 @@ export async function assertRequestAdmissible(
   runtime: OrcaRuntimeService,
   request: RpcRequest,
   effectiveParams: unknown,
-  transport?: RuntimeTargetBinding
+  /** The dispatch options themselves: the transport's own user-data root travels
+   *  with it, so a remote caller is never matched against this host's path. */
+  origin?: { transport?: RuntimeTargetBinding; hostUserDataPath?: string }
 ): Promise<void> {
-  assertExpectedRuntimeTarget(runtime, request.method, request.params, transport)
+  assertExpectedRuntimeTarget(
+    runtime,
+    request.method,
+    request.params,
+    origin?.transport,
+    origin?.hostUserDataPath
+  )
   await assertNotFencedByValidationLease(runtime, request.method, effectiveParams)
 }

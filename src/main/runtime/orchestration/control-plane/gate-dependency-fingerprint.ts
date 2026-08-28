@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { runCommandForStdout } from './sync-command-output'
 import { readFileSync, statSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
+import { resolveCommandOnLocalPathSync } from '../../../ipc/command-path-resolver'
 
 /** Correction — a gate receipt is only as honest as what it fingerprints.
  *
@@ -98,6 +99,10 @@ export function fingerprintGateDependencies(args: {
   cwd: string
   policyVersion: string
   commandIdentity: string
+  /** The gate's declared executable. Every caller that derives this fingerprint
+   *  from a required-gate SPEC must pass it, or the recorded and the verifying
+   *  fingerprint will not match. */
+  program?: string
 }): Record<string, string> {
   const selectors = args.spec.files.length > 0 ? args.spec.files : args.fallbackFiles
   const files = resolveGateDependencyFiles(selectors, args.cwd)
@@ -122,6 +127,15 @@ export function fingerprintGateDependencies(args: {
       continue
     }
     hashes[`file:${file}`] = hashFileBytes(file, args.cwd)
+  }
+  if (args.program) {
+    // `commandIdentity` is a caller-declared label; it says nothing about which
+    // binary PATH actually resolves to. Hash the bytes that will run, so a
+    // PATH-shadowing impostor cannot inherit a genuine gate's receipt.
+    const absolute = resolveCommandOnLocalPathSync(args.program, { cwd: args.cwd })
+    hashes[`program:${absolute ?? args.program}`] = absolute
+      ? hashFileBytes(absolute, args.cwd)
+      : MISSING_DEPENDENCY
   }
   hashes['config:policyVersion'] = args.policyVersion
   hashes['config:commandIdentity'] = args.commandIdentity

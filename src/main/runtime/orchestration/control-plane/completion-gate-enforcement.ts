@@ -10,6 +10,7 @@ import {
 import { resolveOutcomeBinding } from './outcome-identity'
 import { observeCompletion } from './runtime-observed-completion'
 import { hasRuntimeProvenGate } from './runtime-gate-execution'
+import { isReadOnlyPhaseKind, readDispatchPhaseKind } from './dispatch-phase-role'
 import { fingerprintGateDependencies } from './gate-dependency-fingerprint'
 
 export * from './lifecycle-advance-failure'
@@ -45,6 +46,24 @@ export type CompletionGateVerdict =
     }
   | ({ applies: true } & CompletionRejection)
 
+/** The commit this Dispatch started from, as the runtime recorded it at launch.
+ *  Null when it was never recorded, which makes the changed-file set the head
+ *  commit's own diff rather than a guess. */
+function readDispatchBaseSha(db: OrchestrationDb, dispatchId: string): string | null {
+  const worker = db.getWorkerDispatch(dispatchId)
+  if (!worker) {
+    return null
+  }
+  try {
+    const options = JSON.parse(worker.start_options) as { baseSha?: unknown }
+    return typeof options.baseSha === 'string' && options.baseSha.length > 0
+      ? options.baseSha
+      : null
+  } catch {
+    return null
+  }
+}
+
 export function evaluateCompletionGate(args: {
   handle: ControlPlaneDatabaseHandle
   runId: string
@@ -65,9 +84,14 @@ export function evaluateCompletionGate(args: {
   // all come from the runtime; a fabricated outcome id or a missing block
   // changes nothing, because nothing the worker writes is read as evidence.
   const parsed = parseCompletionClaim(args.payload)
+  const db = args.handle as unknown as OrchestrationDb
   const observed = observeCompletion({
-    db: args.handle as unknown as OrchestrationDb,
-    dispatchId: args.dispatchId
+    db,
+    dispatchId: args.dispatchId,
+    // Why the base: without it Git falls back to the head commit's own diff,
+    // which reports only that commit's files rather than everything this
+    // Dispatch changed since it started.
+    baseSha: readDispatchBaseSha(db, args.dispatchId)
   })
   const outcomeId = binding.outcome.outcome_id
   if (!observed.observable || !observed.headSha) {
@@ -81,9 +105,11 @@ export function evaluateCompletionGate(args: {
         `The runtime cannot read the worktree for Dispatch ${args.dispatchId}, so this completion cannot be proven.`
     }
   }
-  const worktreeId =
-    (args.handle as unknown as OrchestrationDb).getWorkerDispatch(args.dispatchId)?.worktree_id ??
-    ''
+  const worktreeId = db.getWorkerDispatch(args.dispatchId)?.worktree_id ?? ''
+  // A review is not a delivery. The build gates bind a DELIVERED commit to the
+  // runs that proved it, and a reviewer neither delivers nor runs them —
+  // requiring them here would make every review impossible to complete.
+  const reviewing = isReadOnlyPhaseKind(readDispatchPhaseKind(db, args.dispatchId))
   const gates = provenGateReceipt({
     store,
     outcomeId,
@@ -112,12 +138,13 @@ export function evaluateCompletionGate(args: {
       dispatchId: args.dispatchId,
       runId: args.runId,
       outcomeId,
-      // Why always required once admitted: an outcome-admitted Run is exactly
-      // the case where a PASS bound to the delivered SHA is the whole point.
-      requireReceipt: true
+      // Why required once admitted: an outcome-admitted Run is exactly the case
+      // where a PASS bound to the delivered SHA is the whole point — except for
+      // a review, which delivers nothing.
+      requireReceipt: !reviewing
     },
     observed,
-    gates.proven
+    reviewing ? undefined : gates.proven
   )
   if (!validation.ok) {
     return { applies: true, ...validation }
@@ -175,7 +202,8 @@ function provenGateReceipt(args: {
         fallbackFiles: [],
         cwd: args.worktreePath ?? process.cwd(),
         policyVersion: spec.policy_version,
-        commandIdentity: spec.command_identity
+        commandIdentity: spec.command_identity,
+        program: spec.program
       }),
       shaBinding: spec.sha_binding
     })

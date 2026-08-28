@@ -1593,7 +1593,8 @@ export class OrcaRuntimeRpcServer {
         signal: longPoll ? context?.signal : undefined,
         // Any process on this box can connect to whichever socket path it
         // resolved, so a certification verb must name the state root it meant.
-        transport: 'local_socket'
+        transport: 'local_socket',
+        hostUserDataPath: this.userDataPath
       })
     } finally {
       this.releaseLongPoll(longPoll)

@@ -20,19 +20,24 @@ describe('who may own or release a lease on a workspace', () => {
       maxDepth: Number.MAX_SAFE_INTEGER,
       startOptions: { agent: 'claude' }
     })
-    if (worktreeId) {
-      db.prepareStartingWorkerAuthority({
-        dispatchId: started.dispatch.id,
-        handle,
-        paneKey: `${handle}:leaf`,
-        processIncarnation: `pty:${handle}`,
-        launchTokenHash: 'hash',
-        worktreeId,
-        effects: [],
-        setupState: 'not_applicable',
-        terminalOwnership: 'external'
-      })
-      db.markWorkerDispatchReady(started.dispatch.id, [])
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle,
+      paneKey: `${handle}:leaf`,
+      processIncarnation: `pty:${handle}`,
+      launchTokenHash: 'hash',
+      worktreeId: worktreeId ?? IMPLEMENTATION,
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'external'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id, [])
+    if (!worktreeId) {
+      // Full process authority, but no resolvable workspace — so the worktree
+      // check is the only thing left that can refuse it.
+      db.db
+        .prepare('UPDATE worker_dispatches SET worktree_id = NULL WHERE dispatch_id = ?')
+        .run(started.dispatch.id)
     }
     return started.dispatch.id
   }

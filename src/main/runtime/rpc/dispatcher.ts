@@ -102,7 +102,7 @@ export class RpcDispatcher {
         return successResponse(request.id, meta, compatibility.result)
       }
       const effectiveParams = compatibility.params ?? parsedParams.value
-      await assertRequestAdmissible(this.runtime, request, effectiveParams, options?.transport)
+      await assertRequestAdmissible(this.runtime, request, effectiveParams, options)
       const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
         request,
         compatibility.legacyCoordinatorAuthority
@@ -212,7 +212,7 @@ export class RpcDispatcher {
           return
         }
         const effectiveParams = compatibility.params ?? parsedParams.value
-        await assertRequestAdmissible(this.runtime, request, effectiveParams, options?.transport)
+        await assertRequestAdmissible(this.runtime, request, effectiveParams, options)
         const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
           request,
           compatibility.legacyCoordinatorAuthority

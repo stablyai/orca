@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
+import { admitOutcome } from './outcome-identity'
 import { listPretoolReceipts } from './pretool-receipt'
 import { acquireValidationLease, releaseValidationLease } from './validation-lease'
 import { validationScopeKeyForWorktree } from './validation-scope'
@@ -227,6 +228,78 @@ describe('the verdict itself pins the provider session', () => {
     supervised()
     expect(
       resolveWorkerMutationVerdict({ db, session: session(INCARNATION), nowMs: NOW })
+    ).toMatchObject({ decision: 'allow' })
+  })
+})
+
+describe('a reviewer reads the tree it reviews; it never writes it', () => {
+  let db: OrchestrationDb
+  afterEach(() => db?.close())
+
+  const PANE = 'tab_r:leaf_r'
+  const HANDLE = 'term_reviewer'
+  const INCARNATION = 'pty:term_reviewer'
+
+  /** A real Dispatch on a Task that a REVIEW phase owns. */
+  function reviewerDispatch(kind: 'review' | 'fix_first'): void {
+    db = new OrchestrationDb(':memory:')
+    const store = new ControlPlaneStore(db)
+    const task = db.createTask({ spec: 'review the delivery' })
+    admitOutcome(store, {
+      outcomeId: 'out_1',
+      runId: task.run_id,
+      title: 'Ship it',
+      fingerprint: 'f1'
+    })
+    db.db
+      .prepare(
+        `INSERT INTO control_plane_outcome_phases
+           (phase_id, outcome_id, run_id, kind, task_id, bound_sha)
+         VALUES ('phase_1', 'out_1', ?, ?, ?, 'abc')`
+      )
+      .run(task.run_id, kind, task.id)
+    const started = db.createStartingWorkerDispatch({
+      taskId: task.id,
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
+      startOptions: { agent: 'claude' }
+    })
+    db.prepareStartingWorkerAuthority({
+      dispatchId: started.dispatch.id,
+      handle: HANDLE,
+      paneKey: PANE,
+      processIncarnation: INCARNATION,
+      launchTokenHash: 'hash',
+      worktreeId: WORKTREE,
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'external'
+    })
+    db.markWorkerDispatchReady(started.dispatch.id, [])
+  }
+
+  const session = (): AttestedSession => ({
+    terminalHandle: HANDLE,
+    paneKey: PANE,
+    processIncarnation: INCARNATION,
+    worktreeId: WORKTREE
+  })
+
+  it('NEGATIVE CONTROL: a reviewer is denied with NO lease held anywhere', () => {
+    // The whole point: an idle moment between gates is not permission. Before
+    // this, a reviewer got the same `allow` a builder did whenever nothing
+    // happened to hold a lease.
+    reviewerDispatch('review')
+    expect(
+      resolveWorkerMutationVerdict({ db, session: session(), nowMs: Date.now() })
+    ).toMatchObject({ decision: 'deny', code: 'read_only_role' })
+  })
+
+  it('still allows the retained BUILDER correcting its own work', () => {
+    // fix_first is the builder fixing what review raised — it delivers.
+    reviewerDispatch('fix_first')
+    expect(
+      resolveWorkerMutationVerdict({ db, session: session(), nowMs: Date.now() })
     ).toMatchObject({ decision: 'allow' })
   })
 })

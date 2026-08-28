@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { setAppEnvironment } from '../../../shared/app-environment'
 import type { OrcaRuntimeService } from '../orca-runtime'
+import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
 import {
   assertExpectedRuntimeTarget,
   RuntimeTargetMismatch,
@@ -44,11 +45,21 @@ describe('a mutation must reach the runtime it was aimed at', () => {
     // An OPTIONAL declaration closes nothing: the invocation that caused the
     // incident declared nothing.
     const native = runtimeOn(NATIVE)
+    // Every ORCHESTRATION MUTATION is bound, which is the set that can change
+    // state. `gatePlan` without `--record` only plans, so it is a read and is
+    // deliberately not in it.
     for (const method of TARGET_BOUND_METHODS) {
+      if (!isOrchestrationMutation(method, { run: 'run_1' })) {
+        continue
+      }
       expect(() =>
         assertExpectedRuntimeTarget(native, method, { run: 'run_1' }, 'local_socket')
       ).toThrow(/must name the Orca state root/)
     }
+    // And the whole mutation set really is covered, not just whatever happens
+    // to be in the hand-written list.
+    expect(TARGET_BOUND_METHODS.has('orchestration.workerStart')).toBe(true)
+    expect(TARGET_BOUND_METHODS.has('orchestration.phaseLaunch')).toBe(true)
   })
 
   it('surfaces as its own bounded structured RPC error, not the target method’s', () => {

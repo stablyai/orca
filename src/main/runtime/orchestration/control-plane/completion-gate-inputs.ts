@@ -1,5 +1,7 @@
 import type { OrchestrationDb } from '../db'
+import { ControlPlaneStore } from './control-plane-store'
 import { fingerprintGateDependencies } from './gate-dependency-fingerprint'
+import { resolveOutcomeBinding } from './outcome-identity'
 import type { GateShaBinding } from './gate-receipt-validity'
 import { observeCompletion } from './runtime-observed-completion'
 
@@ -39,7 +41,18 @@ export function completionGateInputs(
   // Why union rather than Git alone: a file the worker names that Git does not
   // report is still a dependency it claims to have relied on, and dropping it
   // would narrow the set a discovered dependency was meant to widen.
-  const files = [...new Set([...observed.changedFiles, ...claimedFiles])].sort()
+  //
+  // The gate's own DECLARED dependencies join it for the same reason from the
+  // other direction: a receipt exists to be invalidated when what the gate
+  // READS changes, and that set is not implied by what the work happened to
+  // touch. Without it a gate whose inputs moved would keep reusing a PASS.
+  const files = [
+    ...new Set([
+      ...observed.changedFiles,
+      ...claimedFiles,
+      ...declaredGateDependencies(db, dispatchId, commandIdentity)
+    ])
+  ].sort()
   return {
     inputHashes: fingerprintGateDependencies({
       spec: { gateId: commandIdentity, files },
@@ -49,5 +62,36 @@ export function completionGateInputs(
       commandIdentity
     }),
     shaBinding: 'content'
+  }
+}
+
+/** The files the required-gate spec itself declares, when this dispatch's Run
+ *  has an admitted outcome that declares the gate. Empty otherwise, which keeps
+ *  legacy Runs fingerprinting exactly as before. */
+function declaredGateDependencies(
+  db: OrchestrationDb,
+  dispatchId: string,
+  commandIdentity: string
+): readonly string[] {
+  const dispatch = db.getDispatchContextById(dispatchId)
+  if (!dispatch) {
+    return []
+  }
+  const store = new ControlPlaneStore(db)
+  const binding = resolveOutcomeBinding(store, dispatch.run_id)
+  if (binding.kind !== 'admitted') {
+    return []
+  }
+  const spec = store.findRequiredGateSpecByCommandIdentity(
+    binding.outcome.outcome_id,
+    commandIdentity
+  )
+  if (!spec) {
+    return []
+  }
+  try {
+    return JSON.parse(spec.dependencies_json) as string[]
+  } catch {
+    return []
   }
 }

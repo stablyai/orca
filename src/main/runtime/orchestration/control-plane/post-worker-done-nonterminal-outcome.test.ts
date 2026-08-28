@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../db'
 import { reconcileLifecycleMessage } from '../lifecycle-reconciliation'
 import { ControlPlaneStore } from './control-plane-store'
+import { persistObservedLaunchReceipt } from './provider-session-identity'
 import { classifyWakeReason } from './coordinator-wake-events'
 import { admitOutcome } from './outcome-identity'
 import {
@@ -84,10 +85,23 @@ describe('POST_WORKER_DONE_NONTERMINAL_OUTCOME_STALL', () => {
       terminalOwnership: 'created'
     })
     db.markWorkerDispatchReady(started.dispatch.id, [])
+    // The advance refuses to plan a phase until the runtime has OBSERVED which
+    // provider session actually ran; a requested identity is not evidence.
+    persistObservedLaunchReceipt(db, {
+      dispatchId: started.dispatch.id,
+      identity: BUILDER,
+      sessionId: `provider_${started.dispatch.id}`,
+      observedAtIso: new Date().toISOString()
+    })
     recordProvenGate(store, {
       scopeKey: `${task.run_id}:out_1`,
       gateId: 'synthetic-gate',
-      finalSha: HEAD
+      finalSha: HEAD,
+      // The gate is proven FOR a dispatch in a worktree; the completion gate
+      // derives both from the DB, so a fixture-default scope never matches.
+      dispatchId: started.dispatch.id,
+      worktreeId: worktree.worktreeId,
+      cwd: worktree.path
     })
     return { task, dispatch: db.getDispatchContextById(started.dispatch.id)!, runId: task.run_id }
   }
@@ -125,7 +139,11 @@ describe('POST_WORKER_DONE_NONTERMINAL_OUTCOME_STALL', () => {
 
   it('never settles a nonterminal outcome silently: it blocks explicitly when no reviewer is certified', () => {
     const { task, dispatch, runId } = world([REVIEWER])
-    expect(reconcileLifecycleMessage(db, report(task.id, dispatch.id))).toMatchObject({
+    expect(
+      reconcileLifecycleMessage(db, report(task.id, dispatch.id), undefined, {
+        currentRuntimeVersion: 'fixture-build'
+      })
+    ).toMatchObject({
       action: 'completed'
     })
 
@@ -152,7 +170,9 @@ describe('POST_WORKER_DONE_NONTERMINAL_OUTCOME_STALL', () => {
 
   it('negative control: with no reviewer candidate declared it still blocks rather than idling', () => {
     const { task, dispatch, runId } = world([])
-    reconcileLifecycleMessage(db, report(task.id, dispatch.id))
+    reconcileLifecycleMessage(db, report(task.id, dispatch.id), undefined, {
+      currentRuntimeVersion: 'fixture-build'
+    })
     const blockers = db
       .getRunMailboxHistory(runId, 50, ['escalation'])
       .filter((message) => message.subject.startsWith('Protected blocker'))
@@ -162,8 +182,12 @@ describe('POST_WORKER_DONE_NONTERMINAL_OUTCOME_STALL', () => {
 
   it('emits exactly one blocker per completion, not one per reconcile replay', () => {
     const { task, dispatch, runId } = world([REVIEWER])
-    reconcileLifecycleMessage(db, report(task.id, dispatch.id))
-    reconcileLifecycleMessage(db, report(task.id, dispatch.id))
+    reconcileLifecycleMessage(db, report(task.id, dispatch.id), undefined, {
+      currentRuntimeVersion: 'fixture-build'
+    })
+    reconcileLifecycleMessage(db, report(task.id, dispatch.id), undefined, {
+      currentRuntimeVersion: 'fixture-build'
+    })
     const blockers = db
       .getRunMailboxHistory(runId, 50, ['escalation'])
       .filter((message) => message.subject.startsWith('Protected blocker'))

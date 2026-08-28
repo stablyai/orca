@@ -434,7 +434,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     const client = new RuntimeClient(userDataPath, 100)
 
     const failure = await client
-      .call('orchestration.workerShow', { dispatch: 'ctx_1' })
+      .call('orchestration.state', { dispatch: 'ctx_1' })
       .catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(RuntimeClientError)
@@ -442,7 +442,7 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
       'The Orca runtime closed the connection before responding. Restart Orca and try again.'
     )
     expect((failure as RuntimeClientError).data).toBeUndefined()
-    expect(request).toMatchObject({ method: 'orchestration.workerShow' })
+    expect(request).toMatchObject({ method: 'orchestration.state' })
     expect(request).not.toHaveProperty('orchestrationRequestId')
   })
 

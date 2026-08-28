@@ -91,7 +91,7 @@ describe('WORKER_START_IGNORES_OUTCOME_QUOTA_OPTIN', () => {
         observedAt: new Date(NOW).toISOString(),
         // Why resolved: admission now binds evidence to THIS runtime build.
         runtimeVersion: BUILD.id,
-        commitSha: SHA,
+        commitSha: BUILD.commitSha as string,
         detail: null
       })
     }
@@ -109,7 +109,11 @@ describe('WORKER_START_IGNORES_OUTCOME_QUOTA_OPTIN', () => {
       sessionMode: 'fresh',
       taskCapabilities: ['bounded_implementation'],
       nowMs: NOW,
-      runtimeBuildIdentity: BUILD
+      runtimeBuildIdentity: BUILD,
+      // codex is status_only on this platform, so an outcome-admitted route
+      // needs a proven isolated worktree. That fence is not what these tests
+      // exercise; they are about SHA/build binding and quota opt-in.
+      isolatedWorktree: true
     })
   }
 

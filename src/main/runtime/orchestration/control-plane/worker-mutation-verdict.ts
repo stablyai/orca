@@ -2,6 +2,7 @@ import type { OrchestrationDb } from '../db'
 import { ControlPlaneStore } from './control-plane-store'
 import { assertMutationAllowed, type ValidationLease } from './validation-lease'
 import { validationScopeKeyForWorktree } from './validation-scope'
+import { isReadOnlyPhaseKind, readDispatchPhaseKind } from './dispatch-phase-role'
 
 /** Correction — the fence has to reach the worker that is ALREADY running.
  *
@@ -26,6 +27,7 @@ import { validationScopeKeyForWorktree } from './validation-scope'
 
 export type WorkerMutationDenyCode =
   | 'validation_in_progress'
+  | 'read_only_role'
   | 'unattested'
   | 'incarnation_mismatch'
   | 'workspace_mismatch'
@@ -134,6 +136,19 @@ export function resolveWorkerMutationVerdict(args: {
       )
     }
   }
+  // A reviewer reads; it does not write. Its authority to mutate does not
+  // depend on whether a gate happens to be running: reviewing the tree it is
+  // also editing is the separation founder guarantee 5 exists to keep, and an
+  // idle moment between gates is not permission.
+  if (dispatch && isReadOnlyPhaseKind(readDispatchPhaseKind(args.db, dispatch.id))) {
+    return deny(
+      'read_only_role',
+      `Dispatch ${dispatch.id} is executing a review phase, which may read this workspace but never mutate it.`,
+      dispatchId,
+      worktreeId
+    )
+  }
+
   // No holder exemption. Owning a lease is authority to RELEASE it, never
   // authority to mutate under it: the builder that took the lease is the one
   // whose gate child process is reading the tree right now, so its own model

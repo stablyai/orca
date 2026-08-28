@@ -111,7 +111,11 @@ describe('SHA_RUNTIME_BINDING', () => {
       sessionMode: 'fresh',
       taskCapabilities: ['bounded_implementation'],
       nowMs: NOW,
-      runtimeBuildIdentity: buildIdentity(build, build === BUILD_A ? SHA_A : SHA_B)
+      runtimeBuildIdentity: buildIdentity(build, build === BUILD_A ? SHA_A : SHA_B),
+      // codex is status_only on this platform, so an outcome-admitted route
+      // needs a proven isolated worktree. That fence is not what these tests
+      // exercise; they are about SHA/build binding and quota opt-in.
+      isolatedWorktree: true
     })
   }
 
@@ -151,7 +155,8 @@ describe('SHA_RUNTIME_BINDING', () => {
         sessionMode: 'fresh',
         taskCapabilities: ['bounded_implementation'],
         nowMs: NOW,
-        runtimeBuildIdentity: buildIdentity(BUILD_A, SHA_B)
+        runtimeBuildIdentity: buildIdentity(BUILD_A, SHA_B),
+        isolatedWorktree: true
       })
     ).toThrow(/route_stale/)
   })

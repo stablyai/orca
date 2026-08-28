@@ -11,6 +11,7 @@ import {
   type ObservedWorktreeFixture
 } from '../../orchestration/control-plane/observed-worktree-fixture'
 import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
+import { persistObservedLaunchReceipt } from '../../orchestration/control-plane/provider-session-identity'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import {
   requiredEvidenceKinds,
@@ -240,18 +241,26 @@ describe('automatic lifecycle autostart', () => {
     return dispatch
   }
 
+  /** Stamp the observation through the SAME writer production uses, so this
+   *  fixture cannot drift from the shape the reader accepts. */
   function markObserved(dispatchId: string) {
     const worker = db.getWorkerDispatch(dispatchId)!
-    const options = JSON.parse(worker.start_options) as Record<string, unknown>
-    options.launch = {
-      ...(options.launch as Record<string, unknown>),
-      effectiveProvenance: 'observed',
-      observedProviderSessionId: `provider_${dispatchId}`,
-      observedAt: new Date().toISOString()
+    const launch = (JSON.parse(worker.start_options) as { launch?: { effective?: unknown } }).launch
+    const effective = (launch?.effective ?? {}) as {
+      agent?: string
+      model?: string
+      effort?: string
     }
-    db.db
-      .prepare('UPDATE worker_dispatches SET start_options = ? WHERE dispatch_id = ?')
-      .run(JSON.stringify(options), dispatchId)
+    persistObservedLaunchReceipt(db, {
+      dispatchId,
+      identity: {
+        agent: (effective.agent ?? 'claude') as RouteIdentity['agent'],
+        model: effective.model ?? null,
+        reasoning: effective.effort ?? null
+      },
+      sessionId: `provider_${dispatchId}`,
+      observedAtIso: new Date().toISOString()
+    })
   }
 
   function report(args: {

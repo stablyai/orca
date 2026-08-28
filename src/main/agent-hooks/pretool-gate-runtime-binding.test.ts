@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from '../runtime/orchestration/db'
+import { persistDispatchProviderSessionBinding } from '../runtime/orchestration/control-plane/provider-session-identity'
 import { ControlPlaneStore } from '../runtime/orchestration/control-plane/control-plane-store'
 import { acquireValidationLease } from '../runtime/orchestration/control-plane/validation-lease'
 import { validationScopeKeyForWorktree } from '../runtime/orchestration/control-plane/validation-scope'
@@ -12,6 +13,7 @@ const WORKTREE = 'repo_a::/work/jb-workflow-control-plane-b'
 const PANE = 'tab-1:leaf-1'
 const TOKEN = 'launch-token-abc'
 const TOKEN_HASH = createHash('sha256').update(TOKEN).digest('hex')
+const SESSION_ID = 'provider_session_1'
 
 type Placement = {
   terminalHandle: string | null
@@ -59,6 +61,19 @@ describe('the gate resolver binds runtime-resolved identity only', () => {
       terminalOwnership: 'external'
     })
     db.markWorkerDispatchReady(started.dispatch.id, [])
+    // Orca binds the provider session it observed BEFORE handing the Dispatch
+    // its task; a tool call that does not present that exact session id is not
+    // attributable to this work.
+    persistDispatchProviderSessionBinding(db, {
+      dispatchId: started.dispatch.id,
+      binding: {
+        agent: 'claude',
+        key: PANE,
+        id: SESSION_ID,
+        processIncarnation: 'pty:term_worker',
+        observedAtMs: Date.now()
+      }
+    })
     const placement =
       options.placement === undefined
         ? {
@@ -69,6 +84,7 @@ describe('the gate resolver binds runtime-resolved identity only', () => {
         : options.placement
     return {
       getOrchestrationDb: () => db,
+      getBuildIdentity: () => ({ id: 'build_test' }),
       resolveAttestedPanePlacement: (paneKey: string) => (paneKey === PANE ? placement : null)
     } as unknown as OrcaRuntimeService
   }
@@ -99,7 +115,9 @@ describe('the gate resolver binds runtime-resolved identity only', () => {
     paneKey: PANE,
     worktreeId: WORKTREE,
     launchToken: TOKEN,
-    payload: { hook_event_name: 'PreToolUse', tool_name: 'Edit' },
+    // The hook payload carries the provider session id Orca bound before it
+    // handed this Dispatch its task; without it the call is unattributable.
+    payload: { hook_event_name: 'PreToolUse', tool_name: 'Edit', session_id: SESSION_ID },
     ...overrides
   })
 

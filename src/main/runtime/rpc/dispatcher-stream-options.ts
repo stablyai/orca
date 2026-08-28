@@ -7,6 +7,8 @@ export type RpcDispatchStreamingOptions = {
   authenticatedCallerFingerprint?: string
   /** How the request reached this runtime; decides what target binding it must carry. */
   transport?: RuntimeTargetBinding
+  /** The state root this transport serves, when the host knows it. */
+  hostUserDataPath?: string
   connectionId?: string
   signal?: AbortSignal
   clientId?: string
@@ -31,4 +33,5 @@ export type RpcDispatchOptions = {
   signal?: AbortSignal
   authenticatedCallerFingerprint?: string
   transport?: RuntimeTargetBinding
+  hostUserDataPath?: string
 }

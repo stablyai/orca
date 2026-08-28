@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import { OrchestrationDb } from '../db'
 import { reconcileLifecycleMessage } from '../lifecycle-reconciliation'
 import { ControlPlaneStore } from './control-plane-store'
+import { persistObservedLaunchReceipt } from './provider-session-identity'
 import { classifyWakeReason } from './coordinator-wake-events'
 import { findGateReceipt } from './gate-receipt-validity'
 import { ModelPerformanceLedger } from './model-performance-ledger'
@@ -134,6 +135,14 @@ describe('correction 2: automatic builder to reviewer lifecycle', () => {
     // Readiness is what moves the Dispatch to `dispatched`; a pending row is
     // not yet a lifecycle authority.
     db.markWorkerDispatchReady(started.dispatch.id, [])
+    // The advance refuses to plan the next phase until the runtime has OBSERVED
+    // which provider session actually ran; a requested identity is not evidence.
+    persistObservedLaunchReceipt(db, {
+      dispatchId: started.dispatch.id,
+      identity,
+      sessionId: `provider_${started.dispatch.id}`,
+      observedAtIso: new Date().toISOString()
+    })
     const dispatch = db.getDispatchContextById(started.dispatch.id)!
     if (routeKey(identity) === routeKey(BUILDER)) {
       recordProvenGate(new ControlPlaneStore(db), {

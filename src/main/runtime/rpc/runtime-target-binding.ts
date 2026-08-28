@@ -71,7 +71,17 @@ function canonical(path: string): string {
   }
 }
 
-function runtimeUserDataPath(): string | null {
+/** The state root THIS runtime is actually serving.
+ *
+ *  Prefer the root the transport was constructed with. The process-global
+ *  `AppEnvironment` is only a fallback: a single process can legitimately host a
+ *  runtime scoped to a different directory than the environment installed in it,
+ *  and answering "which runtime am I" from the global there refuses every
+ *  correctly-addressed request. */
+function runtimeUserDataPath(hostUserDataPath?: string): string | null {
+  if (hostUserDataPath) {
+    return canonical(hostUserDataPath)
+  }
   try {
     return canonical(getAppEnvironment().getPath('userData'))
   } catch {
@@ -106,14 +116,15 @@ export function assertExpectedRuntimeTarget(
   runtime: OrcaRuntimeService,
   method: string,
   params: unknown,
-  transport?: RuntimeTargetBinding
+  transport?: RuntimeTargetBinding,
+  hostUserDataPath?: string
 ): void {
   const expected = declaredTarget(params)
   const bound = transport === 'local_socket' && isOrchestrationMutation(method, params)
   if (!bound && !expected.userDataPath && !expected.runtimeId && !expected.buildId) {
     return
   }
-  const actualUserDataPath = runtimeUserDataPath()
+  const actualUserDataPath = runtimeUserDataPath(hostUserDataPath)
   if (bound && !expected.userDataPath) {
     throw new RuntimeTargetMismatch(
       `${method} must name the Orca state root it is aimed at over the local socket. This client sent none, so the runtime it reached cannot be verified before it mutates anything.`,

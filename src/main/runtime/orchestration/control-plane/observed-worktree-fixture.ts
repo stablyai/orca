@@ -118,7 +118,8 @@ export function recordProvenGate(
       fallbackFiles: [],
       cwd,
       policyVersion,
-      commandIdentity
+      commandIdentity,
+      program: spec.program
     }),
     shaBinding
   })

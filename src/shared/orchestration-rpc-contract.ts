@@ -45,7 +45,10 @@ export const ORCHESTRATION_MUTATION_METHODS: ReadonlySet<string> = new Set([
   'orchestration.gateRun',
   'orchestration.outcomeAdmit',
   'orchestration.outcomeIntake',
-  'orchestration.routeUpsert'
+  'orchestration.routeUpsert',
+  // Minting a PreTool receipt is a durable write, so a dropped reply must be
+  // recovery-tracked rather than silently retried into a second receipt.
+  'orchestration.pretoolReceipt'
 ])
 
 const RETIRED_ORCHESTRATION_METHODS = new Set(['orchestration.run', 'orchestration.runStop'])

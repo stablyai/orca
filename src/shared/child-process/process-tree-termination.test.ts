@@ -83,7 +83,7 @@ describe('forceTerminateProcessTree', () => {
         const stdout = new EventEmitter()
         Object.defineProperty(probe, 'stdout', { value: stdout })
         queueMicrotask(() => {
-          stdout.emit('data', Buffer.from('1234 D\n'))
+          stdout.emit('data', Buffer.from('1234 1234 D\n'))
           probe.emit('close', 0)
         })
         return probe
@@ -95,4 +95,59 @@ describe('forceTerminateProcessTree', () => {
       await expect(pending).resolves.toBe(false)
     }
   )
+
+  // A gate child that calls setsid() leaves the process group, so the -pgid
+  // signal never reaches it and it keeps holding the worktree.
+  describe.skipIf(process.platform === 'win32')('setsid escapees', () => {
+    function stubPs(rows: (args: readonly string[]) => string): void {
+      spawnMock.mockImplementation((_command: string, args: readonly string[]) => {
+        const probe = mockProcess(5678)
+        const stdout = new EventEmitter()
+        Object.defineProperty(probe, 'stdout', { value: stdout })
+        queueMicrotask(() => {
+          stdout.emit('data', Buffer.from(rows(args)))
+          probe.emit('close', 0)
+        })
+        return probe
+      })
+    }
+
+    it('signals each descendant the process group signal cannot reach', async () => {
+      const killed: number[] = []
+      vi.spyOn(process, 'kill').mockImplementation((pid: number) => {
+        killed.push(pid)
+        return true
+      })
+      stubPs((args) =>
+        args.includes('pid=,ppid=')
+          ? '2000 1234\n3000 2000\n4000 999\n'
+          : // Both escapees reaped; nothing left in the group.
+            ''
+      )
+
+      await expect(forceTerminateProcessTree(mockProcess(1234))).resolves.toBe(true)
+      expect(killed).toContain(-1234)
+      expect(killed).toContain(2000)
+      expect(killed).toContain(3000)
+      // An unrelated process that is not a descendant is never signalled.
+      expect(killed).not.toContain(4000)
+    })
+
+    it('refuses quiescence while an escapee in another group is still alive', async () => {
+      vi.useFakeTimers()
+      vi.spyOn(process, 'kill').mockImplementation(() => true)
+      stubPs((args) =>
+        args.includes('pid=,ppid=')
+          ? '2000 1234\n'
+          : // pgid 9999 is NOT the killed group: only the escapee snapshot can
+            // prove this row belongs to the tree.
+            '2000 9999 S\n'
+      )
+
+      const pending = forceTerminateProcessTree(mockProcess(1234))
+      await vi.advanceTimersByTimeAsync(2_100)
+
+      await expect(pending).resolves.toBe(false)
+    })
+  })
 })

@@ -169,7 +169,8 @@ export async function runGateForDispatch(args: {
     fallbackFiles: [],
     cwd: observed.worktreePath,
     policyVersion: gate.policyVersion,
-    commandIdentity: gate.commandIdentity
+    commandIdentity: gate.commandIdentity,
+    program: gate.program
   })
   const unprovable = hasUnprovableDependency(inputHashes)
   if (unprovable) {
@@ -211,7 +212,8 @@ export async function runGateForDispatch(args: {
         fallbackFiles: [],
         cwd: after.worktreePath,
         policyVersion: gate.policyVersion,
-        commandIdentity: gate.commandIdentity
+        commandIdentity: gate.commandIdentity,
+        program: gate.program
       })
       return JSON.stringify(afterHashes) === JSON.stringify(inputHashes)
         ? null
