@@ -249,10 +249,7 @@ export function NativeChatQuestionCard({
                 }}
                 placeholder={
                   questionHasPreviewText
-                    ? translate(
-                        'components.native-chat.question.notePlaceholder',
-                        'Add a note instead of picking'
-                      )
+                    ? translate('components.native-chat.question.notePlaceholder', 'Add a note')
                     : translate(
                         'components.native-chat.question.otherPlaceholder',
                         'Type your answer'

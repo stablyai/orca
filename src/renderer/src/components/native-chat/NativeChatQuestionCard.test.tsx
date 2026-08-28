@@ -445,10 +445,10 @@ describe('NativeChatQuestionCard', () => {
   })
 
   it('names the free-form row a note on preview questions, and an answer otherwise', () => {
-    // On a preview question the text delivers as an annotation that counts no
-    // option as selected, so the row is not the same promise as "your answer".
+    // On a preview question the text delivers as an annotation — on the picked
+    // option, or on its own — which is a different promise from "your answer".
     render(previewPrompt, vi.fn())
-    expect(container.querySelector('input')!.placeholder).toBe('Add a note instead of picking')
+    expect(container.querySelector('input')!.placeholder).toBe('Add a note')
 
     render(tabsOrSpaces, vi.fn())
     expect(container.querySelector('input')!.placeholder).toBe('Type your answer')
@@ -464,6 +464,19 @@ describe('NativeChatQuestionCard', () => {
     clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'none of these, actually' }])
+  })
+
+  it('submits a picked option together with its note', () => {
+    // The delivery layer selects the row then annotates it, so the card must
+    // carry both halves through rather than dropping either.
+    const onAnswer = vi.fn()
+    render(previewPrompt, onAnswer)
+
+    clickOption('Spaces')
+    typeAnswer('but only in JS')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: 'but only in JS' }])
   })
 
   it('submits typed text after hovering a preview option, with no option selected', () => {
