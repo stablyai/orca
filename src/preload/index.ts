@@ -3742,6 +3742,8 @@ const api = {
   ui: {
     get: () => ipcRenderer.invoke('ui:get'),
     set: (args) => ipcRenderer.invoke('ui:set', args),
+    // Same channel: the local invoke already rejects when main fails to apply.
+    setWithAck: (args) => ipcRenderer.invoke('ui:set', args),
     recordFeatureInteraction: (id) => ipcRenderer.invoke('ui:recordFeatureInteraction', id),
     onStateChanged: (callback: (ui: PersistedUIState) => void): (() => void) => {
       const listener = (_event: Electron.IpcRendererEvent, ui: PersistedUIState): void =>

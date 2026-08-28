@@ -14,11 +14,10 @@ import {
  * flip-back; on ack the patch folds into the baseline (generation-guarded: a
  * hydration during the round trip wins instead) and a debounced trailing
  * flush re-diffs the mirror — an edit made while the write was in flight,
- * which diffed empty against the pre-fold baseline, is re-sent then. On hosts
- * whose ui.set rejects on failure, a rejected write folds nothing, leaving
- * its fields dirty to re-flush on the next change (no automatic retry loop);
- * the web preload currently swallows transport failures, which void that
- * self-healing there.
+ * which diffed empty against the pre-fold baseline, is re-sent then. A
+ * rejected write folds nothing, leaving its fields dirty to re-flush on the
+ * next change (no automatic retry loop) — which is why this sends through
+ * setWithAck: the web preload's plain set swallows transport failures.
  */
 function sendPersistedUIWrite(changed: Partial<PersistedUIWriteBaseline>): void {
   const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
@@ -27,7 +26,10 @@ function sendPersistedUIWrite(changed: Partial<PersistedUIWriteBaseline>): void 
   state.notePersistedUIWriteStarted(fields)
   let request: Promise<void>
   try {
-    request = window.api.ui.set(persistedUIWriteFieldsToWireUpdate(changed))
+    // setWithAck rejects when the host did not apply the patch (web's plain set
+    // swallows transport failures); older preloads without it fall back to set.
+    const send = window.api.ui.setWithAck ?? window.api.ui.set
+    request = send(persistedUIWriteFieldsToWireUpdate(changed))
   } catch {
     // A synchronous throw (e.g. a non-cloneable value) must still settle the
     // in-flight marker, or the field stays pinned against hydration forever.

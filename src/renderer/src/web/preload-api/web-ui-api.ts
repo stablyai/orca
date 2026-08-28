@@ -61,6 +61,16 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         // Why: unpaired/offline web clients still need local UI persistence.
       }
     },
+    // Why a separate entry point: set must stay best-effort for its many fire-and-forget
+    // callers, but the diff writer must NOT fold a patch the host never received into its
+    // baseline — that write would silently never be retried (STA-5781).
+    setWithAck: async (updates) => {
+      const next = mergeWebUIState(readLocalWebUIState(), updates)
+      writeJson(UI_STORAGE_KEY, next)
+      zoomLevel = next.uiZoomLevel
+      const hostUpdates = omitPairingLocalUiFields(updates)
+      await callRuntimeResult('ui.set', hostUpdates, 15_000)
+    },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
       const current = readLocalWebUIState()
       const featureInteractions = normalizeFeatureInteractions(current.featureInteractions)
