@@ -1,0 +1,59 @@
+name: Unit tests
+
+on:
+  workflow_call:
+    inputs:
+      node_versions:
+        description: JSON array of Node.js major versions to test.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: tests node ${{ matrix.node }} ${{ matrix.shard }}/${{ matrix.shard_total }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node: ${{ fromJSON(inputs.node_versions) }}
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        shard_total: [8]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
+          node-version: ${{ matrix.node }}
+
+      - name: Install Electron package binary for tests
+        run: node config/scripts/install-electron-package-binary.mjs
+
+      - name: Test shard
+        run: |
+          pnpm exec vitest run --config config/vitest.config.ts \
+            --exclude=src/main/daemon/repro-13767-shell-ready-marker-lost-to-exec.test.ts \
+            --exclude=src/main/daemon/shell-ready.test.ts \
+            --exclude=src/main/daemon/node-pty-fd-leak.test.ts \
+            --exclude=src/main/providers/local-pty-shell-ready-zsh-launch-environment.test.ts \
+            --exclude=src/main/providers/__tests__/shell-ready-framework-example.test.ts \
+            --exclude=src/main/pty/omp-shell-wrapper.node-pty.test.ts \
+            --exclude=src/main/shell-startup-feature-channel.test.ts \
+            --exclude=src/main/terminal-history-fish-session.node-pty.test.ts \
+            --exclude=src/main/zsh-scoped-histfile.live-shell.test.ts \
+            --exclude=src/main/zsh-startup-hook-user-config-equivalence.live-shell.test.ts \
+            --exclude=src/main/zsh-wrapper-version-mismatch.live-shell.test.ts \
+            --exclude=src/renderer/src/components/terminal-pane/fish-color-scheme-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/fish-query-reply-child-stdin.node-pty.test.ts \
+            --exclude=src/shared/pty-reply-echo-shapes.node-pty.test.ts \
+            --exclude=src/shared/startup-shell-portability.live-shell.test.ts \
+            --exclude=src/shared/posix-command-path-lookup.test.ts \
+            --exclude=tests/e2e/cross-version-wire/** \
+            --shard=${{ matrix.shard }}/${{ matrix.shard_total }}

@@ -5,10 +5,10 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../../shared/github/check-types'
 import { getAttachedWorktreesForFolderWorkspace } from './folder-workspace-attached-worktrees'
 import { FolderWorkspacePrChecksRow } from './FolderWorkspacePrChecksRow'
-import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-rows'
+import type { ParentPrChecksRefreshOutcome, ParentPrChecksRow } from './parent-pr-checks-row-types'
 import {
   getParentPrChecksRefreshCandidates,
   runLimitedParentPrChecksRefreshes

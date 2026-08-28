@@ -1,8 +1,10 @@
 import { basename } from 'node:path'
-import type { GitWorktreeInfo, Worktree, WorktreeMeta } from '../../shared/types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
+import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { DEFAULT_WORKSPACE_STATUS_ID } from '../../shared/workspace-statuses'
 import { getLinkedWorkItemMetadata } from './worktree-linked-work-item-metadata'
 import { normalizeWorkspaceCreatorProvenance } from '../../shared/workspace-creator-provenance'
+import { createWorktreeIdentity } from '../../shared/worktree/identity'
 
 /**
  * Merge raw git worktree info with persisted user metadata into a full Worktree.
@@ -15,14 +17,27 @@ export function mergeWorktree(
 ): Worktree {
   const branchShort = git.branch.replace(/^refs\/heads\//, '')
   const creatorProvenance = normalizeWorkspaceCreatorProvenance(meta?.creatorProvenance)
+  const worktreeId = `${repoId}::${git.path}`
   return {
-    id: `${repoId}::${git.path}`,
+    id: worktreeId,
+    ...(meta?.instanceId && meta.hostId
+      ? {
+          identity: createWorktreeIdentity({
+            worktreeId,
+            executionHostId: meta.hostId,
+            instanceId: meta.instanceId
+          })
+        }
+      : {}),
     ...(meta?.instanceId !== undefined ? { instanceId: meta.instanceId } : {}),
     repoId,
     ...(meta?.projectId !== undefined ? { projectId: meta.projectId } : {}),
     ...(meta?.hostId !== undefined ? { hostId: meta.hostId } : {}),
     ...(meta?.projectHostSetupId !== undefined
       ? { projectHostSetupId: meta.projectHostSetupId }
+      : {}),
+    ...(meta?.ephemeralVmCheckoutMode !== undefined
+      ? { ephemeralVmCheckoutMode: meta.ephemeralVmCheckoutMode }
       : {}),
     ...(creatorProvenance ? { creatorProvenance } : {}),
     path: git.path,

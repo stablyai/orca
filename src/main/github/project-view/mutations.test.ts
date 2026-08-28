@@ -33,7 +33,7 @@ vi.mock('./internals', () => ({
   repositoryRateLimitGuard: repositoryRateLimitGuardMock,
   noteRepositoryRateLimitSpend: noteRepositoryRateLimitSpendMock,
   projectHostAuthenticationError: projectHostAuthenticationErrorMock,
-  projectGhExecOptions: (host?: string) => (host ? { host } : {}),
+  projectGhExecOptions: (host?: string) => ({ host: host ?? 'github.com' }),
   classifyProjectError: (stderr: string) => ({ type: 'unknown', message: stderr }),
   rateLimitedError: () => ({ type: 'rate_limited', message: 'rate limited' }),
   runGraphql: runGraphqlMock,
@@ -46,7 +46,8 @@ vi.mock('./internals', () => ({
       : { ok: false, error: { type: 'validation_error', message: `${name} invalid` } }
 }))
 
-import { getWorkItemDetailsBySlug, updateIssueBySlug } from './mutations'
+import { updateIssueBySlug } from './mutations'
+import { getWorkItemDetailsBySlug } from './work-item-details'
 
 describe('updateIssueBySlug', () => {
   beforeEach(() => {

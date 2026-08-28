@@ -308,6 +308,21 @@ describe('terminal clipboard paste', () => {
     })
   })
 
+  it('delegates Windows input-record newline protection without scanning text', async () => {
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('\nline two'),
+      saveClipboardImageAsTempFile: vi.fn(),
+      pasteText,
+      protectedMultilineTextPasteOptions: { windowsInputRecordNewline: 'alt-enter' }
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('\nline two', {
+      windowsInputRecordNewline: 'alt-enter'
+    })
+  })
+
   it('keeps single-line text on the ordinary paste path when Windows multi-line protection is on', async () => {
     const saveClipboardImageAsTempFile = vi.fn()
     const pasteText = vi.fn()

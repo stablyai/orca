@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { LEGACY_RUN_ID, OrchestrationDb } from './db'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 describe('OrchestrationDb Run state', () => {
   let db: OrchestrationDb | undefined
@@ -163,6 +164,30 @@ describe('OrchestrationDb Run state', () => {
       expect(replacement?.messages.map((message) => message.subject)).toEqual(['one'])
     })
 
+    it('does not move a mismatched Run through another Run Dispatch mailbox', () => {
+      const d = createDb()
+      const runA = createBoundRun(d)
+      const runB = d.createRun({
+        objective: 'Dispatch owner',
+        coordinatorHandle: 'term_other',
+        coordinatorPaneKey: 'tab_other:22222222-2222-4222-9222-222222222222'
+      })
+      const task = d.createTask({ spec: 'work', runId: runB.id })
+      const dispatch = createRootDispatch(d, task.id, 'term_worker')
+      const mismatched = d.insertMessage({
+        from: 'worker',
+        to: `dispatch:${dispatch.id}`,
+        subject: 'wrong Run',
+        runId: runA.id
+      })
+
+      expect(d.routeUnreadDispatchMailboxToRunMailbox(dispatch.id, runB.id)).toMatchObject({
+        routedCount: 0,
+        hasMore: false
+      })
+      expect(d.getMessageById(mismatched.id)?.to_handle).toBe(`dispatch:${dispatch.id}`)
+    })
+
     it('replays an outstanding batch after reopening the database', () => {
       const dir = mkdtempSync(join(tmpdir(), 'orca-delivery-'))
       const dbPath = join(dir, 'orchestration.db')
@@ -261,7 +286,7 @@ describe('OrchestrationDb Run state', () => {
         coordinatorPaneKey: 'tab_coord:11111111-1111-4111-8111-111111111111'
       })
       const task = d.createTask({ spec: 'work', runId: run.id })
-      const dispatch = d.createDispatchContext(task.id, 'term_worker')
+      const dispatch = createRootDispatch(d, task.id, 'term_worker')
       const message = d.insertMessage({
         runId: run.id,
         from: 'term_worker',

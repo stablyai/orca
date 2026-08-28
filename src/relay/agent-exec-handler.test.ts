@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ChildProcess from 'node:child_process'
 import { createFakeChild, createHandlers, requestContext } from './agent-exec-handler-test-harness'
 import { TERMINAL_GIT_CREDENTIAL_GUARD_POLICY_ENV } from '../shared/terminal-git-credential-guard'
@@ -18,10 +18,29 @@ const execFileMock = vi.mocked(execFile)
 
 type AgentExecResult = { exitCode: number | null; timedOut: boolean }
 
+const GUARD_OWNED_ENV_RE = /^(?:GIT_CONFIG_(?:COUNT|KEY_\d+|VALUE_\d+)|WSLENV)$/
+
 describe('AgentExecHandler', () => {
+  let ambientGuardEnv: Record<string, string | undefined> = {}
+
   beforeEach(() => {
     spawnMock.mockReset()
     execFileMock.mockReset()
+    // Why: the guard rewrites these, so an already-guarded runner (Orca guards
+    // its own agent terminals) would not see its ambient values passed through.
+    ambientGuardEnv = {}
+    for (const key of Object.keys(process.env).filter((name) => GUARD_OWNED_ENV_RE.test(name))) {
+      ambientGuardEnv[key] = process.env[key]
+      delete process.env[key]
+    }
+  })
+
+  afterEach(() => {
+    for (const [key, value] of Object.entries(ambientGuardEnv)) {
+      if (value !== undefined) {
+        process.env[key] = value
+      }
+    }
   })
 
   it('executes a non-interactive command with captured output and stdin', async () => {

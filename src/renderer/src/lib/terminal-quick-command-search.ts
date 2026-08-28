@@ -3,7 +3,7 @@ import {
   isTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
 import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-text'
-import type { TerminalQuickCommand } from '../../../shared/types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 type RankedCommand = {
   command: TerminalQuickCommand

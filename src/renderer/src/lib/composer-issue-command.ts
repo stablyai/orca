@@ -3,7 +3,7 @@ import {
   canUseIssueCommandForLinkedItemProvider,
   renderIssueCommandTemplate
 } from '@/lib/new-workspace'
-import type { FolderWorkspaceLinkedTask } from '../../../shared/types'
+import type { FolderWorkspaceLinkedTask } from '../../../shared/folder-workspace-types'
 
 type ComposerIssueCommandInput = {
   enabled: boolean

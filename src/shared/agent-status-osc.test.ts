@@ -17,6 +17,7 @@ describe('createAgentStatusOscProcessor', () => {
         agentType: 'codex'
       }
     ])
+    expect(result.lastPayloadCleanOffset).toBe('before'.length)
   })
 
   it('preserves parser state across split OSC 9999 chunks', () => {
@@ -32,5 +33,6 @@ describe('createAgentStatusOscProcessor', () => {
         prompt: 'ok'
       }
     ])
+    expect(result.lastPayloadCleanOffset).toBe(0)
   })
 })

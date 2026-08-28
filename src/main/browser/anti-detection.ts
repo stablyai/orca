@@ -16,44 +16,50 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
       ]
     });
   }
-  // Why: Electron webviews may not have the window.chrome object that real
-  // Chrome exposes. Turnstile checks for its presence. The csi() and
-  // loadTimes() stubs satisfy deeper probes that check for these Chrome-
-  // specific APIs beyond just chrome.runtime.
-  if (!window.chrome) {
-    window.chrome = {};
-  }
-  if (!window.chrome.runtime) {
-    window.chrome.runtime = {};
-  }
-  if (!window.chrome.csi) {
-    window.chrome.csi = function() {
-      return {
-        startE: Date.now(),
-        onloadT: Date.now(),
-        pageT: performance.now(),
-        tran: 15
+  // Why: auth hosts present Firefox, where Electron's native window.chrome is an identity mismatch.
+  if (navigator.userAgent.includes('Firefox/')) {
+    try {
+      delete window.chrome;
+      if ('chrome' in window) {
+        window.chrome = undefined;
+      }
+    } catch {}
+  } else {
+    // Why: Electron webviews may not have the window.chrome object that real
+    // Chrome exposes. Turnstile checks for its presence. The csi() and
+    // loadTimes() stubs satisfy deeper probes of Chrome-specific APIs.
+    if (!window.chrome) {
+      window.chrome = {};
+    }
+    if (!window.chrome.csi) {
+      window.chrome.csi = function() {
+        return {
+          startE: Date.now(),
+          onloadT: Date.now(),
+          pageT: performance.now(),
+          tran: 15
+        };
       };
-    };
-  }
-  if (!window.chrome.loadTimes) {
-    window.chrome.loadTimes = function() {
-      return {
-        commitLoadTime: Date.now() / 1000,
-        connectionInfo: 'h2',
-        finishDocumentLoadTime: Date.now() / 1000,
-        finishLoadTime: Date.now() / 1000,
-        firstPaintAfterLoadTime: 0,
-        firstPaintTime: Date.now() / 1000,
-        navigationType: 'Other',
-        npnNegotiatedProtocol: 'h2',
-        requestTime: Date.now() / 1000 - 0.16,
-        startLoadTime: Date.now() / 1000 - 0.3,
-        wasAlternateProtocolAvailable: false,
-        wasFetchedViaSpdy: true,
-        wasNpnNegotiated: true
+    }
+    if (!window.chrome.loadTimes) {
+      window.chrome.loadTimes = function() {
+        return {
+          commitLoadTime: Date.now() / 1000,
+          connectionInfo: 'h2',
+          finishDocumentLoadTime: Date.now() / 1000,
+          finishLoadTime: Date.now() / 1000,
+          firstPaintAfterLoadTime: 0,
+          firstPaintTime: Date.now() / 1000,
+          navigationType: 'Other',
+          npnNegotiatedProtocol: 'h2',
+          requestTime: Date.now() / 1000 - 0.16,
+          startLoadTime: Date.now() / 1000 - 0.3,
+          wasAlternateProtocolAvailable: false,
+          wasFetchedViaSpdy: true,
+          wasNpnNegotiated: true
+        };
       };
-    };
+    }
   }
   // Why: Electron's Permission API defaults to 'denied' for most permissions,
   // but real Chrome returns 'prompt' for ungranted permissions. Returning
@@ -77,16 +83,46 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
     }
   } catch {}
   const promptPerms = new Set([
-    'geolocation', 'camera', 'microphone',
-    'midi', 'idle-detection', 'storage-access'
+    'camera', 'microphone'
   ]);
   const origQuery = Permissions.prototype.query;
+  // Why: sites must receive the genuine PermissionStatus so native events, brand checks and method
+  // identity survive. Shadow only state, and resolve it lazily so existing statuses stay current.
+  function withOverriddenState(realStatus, stateProvider) {
+    Object.defineProperty(realStatus, 'state', {
+      configurable: true,
+      get: stateProvider
+    });
+    return realStatus;
+  }
+  // Why: some names the real implementation rejects outright; fall back to an EventTarget so
+  // listener registration still works instead of throwing.
+  function fallbackStatus(stateProvider) {
+    const status = new EventTarget();
+    Object.defineProperties(status, {
+      state: { configurable: true, get: stateProvider },
+      onchange: { configurable: true, value: null, writable: true }
+    });
+    return status;
+  }
+  function queryWithState(permissions, desc, stateProvider) {
+    let real;
+    try {
+      real = origQuery.call(permissions, desc);
+    } catch {
+      return Promise.resolve(fallbackStatus(stateProvider));
+    }
+    return Promise.resolve(real).then(
+      (status) => withOverriddenState(status, stateProvider),
+      () => fallbackStatus(stateProvider)
+    );
+  }
   Permissions.prototype.query = function(desc) {
     if (desc.name === 'notifications') {
-      return Promise.resolve({ state: notificationPermissionState(), onchange: null });
+      return queryWithState(this, desc, notificationPermissionState);
     }
     if (promptPerms.has(desc.name)) {
-      return Promise.resolve({ state: 'prompt', onchange: null });
+      return queryWithState(this, desc, () => 'prompt');
     }
     return origQuery.call(this, desc);
   };

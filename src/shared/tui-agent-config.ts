@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
@@ -38,10 +38,16 @@ export type TuiAgentConfig = {
   draftPromptEnvVar?: string
   /** Pre-write a trust artifact so the agent's first-launch "trust this folder?" menu doesn't consume the bracketed paste (see agent-trust-presets.ts). */
   preflightTrust?: 'cursor' | 'copilot' | 'codex'
-  /** Renderer-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
+  /** Agent-specific signal that the composer is ready for paste, stronger than the default quiet-render window. */
   draftPasteReadySignal?: DraftPasteReadySignal
+  /** Hard deadline for the agent's composer readiness signal. */
+  draftPasteReadyTimeoutMs?: number
+  /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
+  submitRetryDelayMs?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
+  /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
+  windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
   /** Ctrl+Enter encoding for agents that consume CSI-u without active kitty flags. */
   ctrlEnterEncoding?: 'csi-u'
 }
@@ -83,8 +89,11 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'codex',
     expectedProcess: 'codex',
     promptInjectionMode: 'argv',
+    windowsInputRecordPasteNewline: 'alt-enter',
     preflightTrust: 'codex',
-    draftPasteReadySignal: 'codex-composer-prompt'
+    draftPasteReadySignal: 'codex-composer-prompt',
+    draftPasteReadyTimeoutMs: 20_000,
+    submitRetryDelayMs: 1200
   },
   autohand: {
     detectCmd: 'autohand',
@@ -142,7 +151,9 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     launchCmd: 'omp',
     expectedProcess: 'omp',
     promptInjectionMode: 'argv',
-    draftPromptEnvVar: 'ORCA_OMP_PREFILL'
+    draftPromptEnvVar: 'ORCA_OMP_PREFILL',
+    // Why: OMP wraps Pi's TUI, so the bytes land in a Pi reader that decodes CSI-u (see pi above).
+    windowsShiftEnterEncoding: 'csi-u'
   },
   'prime-agent': {
     detectCmd: 'prime-agent',

@@ -8,6 +8,8 @@ type ImeAnchorCellMetrics = {
   rows: number
 }
 
+type ImeAnchorStyleProperty = 'top' | 'left' | 'height' | 'lineHeight'
+
 /**
  * Keep the OS IME candidate window anchored to the cell the user is typing in.
  *
@@ -37,9 +39,11 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
     return null
   }
   const screenElement = terminal.element.querySelector<HTMLElement>('.xterm-screen')
+  const compositionView = terminal.element.querySelector<HTMLElement>('.composition-view')
   const textarea = terminal.textarea
   let metrics: ImeAnchorCellMetrics | null = null
   let deferredApply: number | null = null
+  let cursorAgentSeen = false
 
   const measureCells = (): ImeAnchorCellMetrics | null => {
     if (!screenElement) {
@@ -57,15 +61,33 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
   // Why: xterm rewrites these between our events, so compare against the live
   // inline value — a CSSOM read, unlike getBoundingClientRect — and skip the
   // write when it already matches instead of re-invalidating layout.
-  const writeOffset = (property: 'top' | 'left', value: string): void => {
-    if (textarea.style[property] !== value) {
-      textarea.style[property] = value
+  const writeStyle = (
+    element: HTMLElement,
+    property: ImeAnchorStyleProperty,
+    value: string
+  ): void => {
+    if (element.style[property] !== value) {
+      element.style[property] = value
     }
   }
 
-  const applyAnchor = (row: number, column: number, cells: ImeAnchorCellMetrics): void => {
-    writeOffset('top', `${row * cells.cellHeight}px`)
-    writeOffset('left', `${column * cells.cellWidth}px`)
+  const applyAnchor = (
+    row: number,
+    column: number,
+    cells: ImeAnchorCellMetrics,
+    isCursorAgent: boolean
+  ): void => {
+    const top = `${row * cells.cellHeight}px`
+    const left = `${column * cells.cellWidth}px`
+    writeStyle(textarea, 'top', top)
+    writeStyle(textarea, 'left', left)
+    if (isCursorAgent && compositionView) {
+      const height = `${cells.cellHeight}px`
+      writeStyle(compositionView, 'top', top)
+      writeStyle(compositionView, 'left', left)
+      writeStyle(compositionView, 'height', height)
+      writeStyle(compositionView, 'lineHeight', height)
+    }
   }
 
   const resolveAnchor = (): { anchor: TerminalImeAnchor; isCursorAgent: boolean } => {
@@ -77,8 +99,10 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       rows: terminal.rows,
       cols: terminal.cols,
       cursorX: buf.cursorX,
-      cursorY: buf.cursorY
+      cursorY: buf.cursorY,
+      knownCursorAgent: cursorAgentSeen
     })
+    cursorAgentSeen ||= cursorAgentAnchor !== null
     return {
       anchor: cursorAgentAnchor ?? {
         row: buf.cursorY,
@@ -104,7 +128,7 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
       return
     }
     const { anchor, isCursorAgent } = resolveAnchor()
-    applyAnchor(anchor.row, anchor.column, cells)
+    applyAnchor(anchor.row, anchor.column, cells, isCursorAgent)
     // Why: xterm re-positions the textarea from a setTimeout(0) of its own after
     // each compositionupdate, so the correction has to land after that timer —
     // one pending timer per burst, re-reading the anchor when it fires.
@@ -128,8 +152,8 @@ export function installTerminalImeCandidateAnchor(terminal: Terminal): (() => vo
         metrics = measureCells()
       }
       if (metrics) {
-        const currentAnchor = resolveAnchor().anchor
-        applyAnchor(currentAnchor.row, currentAnchor.column, metrics)
+        const current = resolveAnchor()
+        applyAnchor(current.anchor.row, current.anchor.column, metrics, current.isCursorAgent)
       }
     }, 0)
   }

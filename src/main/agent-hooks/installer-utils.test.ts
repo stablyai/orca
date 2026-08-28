@@ -30,6 +30,7 @@ import {
   writeHooksJson,
   type HooksConfig
 } from './installer-utils'
+import { buildPosixAgentHookPostCommand } from './hook-post-command'
 import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
@@ -71,7 +72,10 @@ describe('readHooksJsonWithRaw', () => {
     for (const contents of [`\uFEFF\uFEFF${body}`, ` \uFEFF${body}`, `{\uFEFF"hooks": {}}`]) {
       writeFileSync(configPath, contents, 'utf-8')
 
-      expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: contents, config: null })
+      expect(readHooksJsonWithRaw(configPath)).toEqual({
+        raw: contents,
+        config: null
+      })
     }
   })
 
@@ -82,7 +86,10 @@ describe('readHooksJsonWithRaw', () => {
   it('keeps the raw bytes when the contents are not a JSON object', () => {
     writeFileSync(configPath, 'not json\n', 'utf-8')
 
-    expect(readHooksJsonWithRaw(configPath)).toEqual({ raw: 'not json\n', config: null })
+    expect(readHooksJsonWithRaw(configPath)).toEqual({
+      raw: 'not json\n',
+      config: null
+    })
   })
 })
 
@@ -95,7 +102,9 @@ describe('writeHooksJson', () => {
     writeHooksJson(configPath, { hooks: { Stop: [] } })
 
     expect(lstatSync(configPath).isSymbolicLink()).toBe(true)
-    expect(JSON.parse(readFileSync(targetPath, 'utf-8'))).toEqual({ hooks: { Stop: [] } })
+    expect(JSON.parse(readFileSync(targetPath, 'utf-8'))).toEqual({
+      hooks: { Stop: [] }
+    })
   })
 
   it('does not replace a dangling hook config symlink', () => {
@@ -182,9 +191,15 @@ describe('writeHooksJson', () => {
   })
 
   it('updates the .bak file to the previous version on each write', () => {
-    const v1: HooksConfig = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v1' }] }] } }
-    const v2: HooksConfig = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v2' }] }] } }
-    const v3: HooksConfig = { hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v3' }] }] } }
+    const v1: HooksConfig = {
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v1' }] }] }
+    }
+    const v2: HooksConfig = {
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v2' }] }] }
+    }
+    const v3: HooksConfig = {
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'v3' }] }] }
+    }
 
     writeHooksJson(configPath, v1)
     writeHooksJson(configPath, v2)
@@ -256,6 +271,16 @@ describe('createManagedCommandMatcher', () => {
     expect(match(command)).toBe(true)
   })
 
+  it('matches the pre-default-form launcher so upgrades replace it instead of duplicating', () => {
+    // Why: installs before the ${VAR-} conversion emitted bare $HOME/$SYSTEMROOT. The sweep must
+    // still recognize them, or an upgrade would leave the stale entry beside the new one.
+    expect(
+      match(
+        'if [ -z "$HOME" ]; then :; else if [ -f "$HOME/.orca/agent-hooks/claude-hook.sh" ]; then /bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"; fi; fi'
+      )
+    ).toBe(true)
+  })
+
   it('matches PowerShell and POSIX variants across Copilot platform switches', () => {
     const matchPosix = createManagedCommandMatcher('copilot-hook.sh')
     const matchPowerShell = createManagedCommandMatcher('copilot-hook.ps1')
@@ -310,7 +335,10 @@ describe('removeManagedCommands', () => {
       [
         {
           hooks: [
-            { type: 'command', command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"' },
+            {
+              type: 'command',
+              command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"'
+            },
             { type: 'command', command: 'echo keep me' }
           ]
         }
@@ -381,7 +409,14 @@ describe('hookDefinitionHasManagedCommand', () => {
     ).toBe(true)
     expect(
       hookDefinitionHasManagedCommand(
-        { hooks: [{ type: 'command', command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"' }] },
+        {
+          hooks: [
+            {
+              type: 'command',
+              command: '/bin/sh "/path/agent-hooks/copilot-hook.sh"'
+            }
+          ]
+        },
         match
       )
     ).toBe(true)
@@ -492,6 +527,37 @@ describe('wrapPosixHookCommand', () => {
     }
   )
 
+  it('emits a fallback response before draining when the caller supplies one', () => {
+    const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+    expect(cmd).toBe(
+      `if [ -f '/does/not/exist.sh' ] && [ -r '/does/not/exist.sh' ] && [ -x '/does/not/exist.sh' ]; then /bin/sh '/does/not/exist.sh'; else printf '%s\\n' '{"a":"b"}'; ${POSIX_HOOK_STDIN_DRAIN_COMMAND}; fi`
+    )
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'writes the fallback response and still drains a large stdin payload',
+    () => {
+      const cmd = wrapPosixHookCommand('/does/not/exist.sh', {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], {
+        input: Buffer.alloc(1_000_000, 'x'),
+        encoding: 'utf8'
+      })
+      expect(result.status).toBe(0)
+      expect(result.stdout).toBe('{"a":"b"}\n')
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'runs the script instead of the fallback when the script is present',
+    () => {
+      const scriptPath = join(tmpDir, 'present-hook.sh')
+      writeFileSync(scriptPath, "#!/bin/sh\nprintf 'from-script\\n'\n", { mode: 0o755 })
+      const cmd = wrapPosixHookCommand(scriptPath, {}, { fallbackStdout: '{"a":"b"}' })
+      const result = spawnSync('/bin/sh', ['-c', cmd], { encoding: 'utf8' })
+      expect(result.stdout).toBe('from-script\n')
+    }
+  )
+
   it.skipIf(process.platform === 'win32')(
     'drains stdin when a directory occupies the managed script path',
     () => {
@@ -539,7 +605,7 @@ describe('wrapPosixHookCommand', () => {
 })
 
 const qualifiedWindowsPowerShellCommand =
-  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand \S+$/
+  /^[A-Za-z]:\/[^"]*\/System32\/WindowsPowerShell\/v1\.0\/powershell\.exe -NoProfile -EncodedCommand \S+$/
 
 function decodeWindowsHookCommand(command: string): string {
   const encodedCommand = command.match(/ -EncodedCommand (\S+)$/)?.[1]
@@ -549,7 +615,10 @@ function decodeWindowsHookCommand(command: string): string {
 
 function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   const quoted = `'${scriptPath.replaceAll("'", "''")}'`
-  return `if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  // Why: the execution-policy bypass rides in the payload, not on the command
+  // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
+  // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
+  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
@@ -568,6 +637,17 @@ describe('wrapWindowsHookCommand', () => {
     })
     expect(decodeWindowsHookCommand(command)).toContain(
       "$env:ORCA_COPILOT_HOOK_EVENT = 'UserPromptSubmit'; if (Test-Path"
+    )
+  })
+
+  it('emits fallback stdout when the managed script is missing', () => {
+    const command = wrapWindowsHookCommand(
+      'C:\\hooks\\cursor-hook.cmd',
+      {},
+      { fallbackStdout: '{"permission":"allow"}' }
+    )
+    expect(decodeWindowsHookCommand(command)).toContain(
+      'Write-Output \'{"permission":"allow"}\'; exit 0'
     )
   })
 
@@ -653,11 +733,38 @@ describe('wrapRuntimeHomeHookCommand', () => {
     const command = wrapRuntimeHomeHookCommand('claude-hook')
 
     expect(command).toContain('case "${OSTYPE-}" in msys*|cygwin*|win32*)')
-    expect(command).toContain('case "$HOME" in *\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*)')
+    expect(command).toContain('case "${HOME-}" in *\\&*|*\\^*|*\\(*|*\\)*|*\\;*|*,*|*=*|*%*|*\\!*)')
     expect(command).not.toContain('uname')
-    expect(command).toContain('"$HOME/.orca/agent-hooks/claude-hook.cmd"')
-    expect(command).toContain('/bin/sh "$HOME/.orca/agent-hooks/claude-hook.sh"')
+    expect(command).toContain('"${HOME-}/.orca/agent-hooks/claude-hook.cmd"')
+    expect(command).toContain('/bin/sh "${HOME-}/.orca/agent-hooks/claude-hook.sh"')
     expect(command).not.toMatch(/[A-Z]:[\\/]|\/Users\/|\/home\//)
+  })
+
+  // Why: a static hook precheck (Grok) rejects the whole command on any bare reference it cannot
+  // resolve, including one in a branch that platform never takes.
+  it.each([
+    ['default', undefined],
+    ['neutral-json', { neutralJsonWhenMissing: true }]
+  ])(
+    'references every variable in default form (%s) so a static precheck cannot reject it',
+    (_label, options) => {
+      const command = wrapRuntimeHomeHookCommand('claude-hook', options)
+
+      expect(command).toContain('"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"')
+      expect(command).not.toMatch(/\$(?!\{)[A-Za-z_]/)
+      expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
+    }
+  )
+
+  it('hides the console on the Git Bash branch too, and still avoids the denied triple', () => {
+    // Why: this branch launches PowerShell from bash, where the parent has no
+    // console to inherit — Windows allocates a fresh one per hook event unless
+    // the switch says otherwise (#14815), and the AV verdict on the flag triple
+    // applies to the exact same string (#16003).
+    const command = wrapRuntimeHomeHookCommand('claude-hook')
+
+    expect(command).toContain('powershell.exe" -NoProfile -EncodedCommand ')
+    expect(command).not.toMatch(/-ExecutionPolicy/i)
   })
 
   it('rejects a script base name that could inject shell syntax', () => {
@@ -725,10 +832,31 @@ describe('wrapRuntimeHomeHookCommand', () => {
       process.platform === 'win32'
         ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
         : '/bin/sh'
-    const result = spawnSync(shell, ['-c', command], { input: Buffer.alloc(1_000_000, 'x') })
+    const result = spawnSync(shell, ['-c', command], {
+      input: Buffer.alloc(1_000_000, 'x')
+    })
 
     expect(result.error).toBeUndefined()
     expect(result.status).toBe(0)
+  })
+
+  it('emits neutral JSON when a lifecycle script is missing', () => {
+    const shell =
+      process.platform === 'win32'
+        ? join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Git', 'bin', 'bash.exe')
+        : '/bin/sh'
+    const result = spawnSync(
+      shell,
+      ['-c', wrapRuntimeHomeHookCommand('missing-orca-hook', { neutralJsonWhenMissing: true })],
+      {
+        env: { ...process.env, HOME: tmpDir.replaceAll('\\', '/') },
+        input: Buffer.alloc(1_000_000, 'x')
+      }
+    )
+
+    expect(result.error).toBeUndefined()
+    expect(result.status, result.stderr.toString()).toBe(0)
+    expect(JSON.parse(result.stdout.toString().trim())).toEqual({})
   })
 })
 
@@ -752,6 +880,26 @@ describe('buildWindowsAgentHookPostCommand', () => {
 
     expect(command).toMatch(/^"%SystemRoot%\\System32\\curl\.exe"/)
     expect(command).not.toMatch(/^curl\.exe\b/)
+  })
+})
+
+describe('buildPosixAgentHookPostCommand', () => {
+  it('uses raw JSON only when the listener advertises support', () => {
+    const command = buildPosixAgentHookPostCommand('claude').join('\n')
+
+    expect(command).toContain('ORCA_AGENT_HOOK_TRANSPORT:-}')
+    expect(command).toContain('raw-json-v1')
+    expect(command).toContain('command -v base64')
+    expect(command).toContain('command -v tr')
+    expect(command).toContain('Content-Type: application/json')
+    expect(command).toContain('X-Orca-Agent-Hook-Meta-Encoding: base64')
+    expect(command).toContain('X-Orca-Agent-Hook-Meta: ${orca_hook_metadata}')
+    expect(command).toContain("printf '%s\\037%s\\037%s\\037%s\\037%s\\037%s'")
+    expect(command).toContain('$ORCA_PANE_KEY')
+    expect(command).toContain('$ORCA_WORKTREE_ID')
+    expect(command).toContain('--data-binary @-')
+    expect(command).toContain('Content-Type: application/x-www-form-urlencoded')
+    expect(command).toContain('--data-urlencode "payload@-"')
   })
 })
 

@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
 

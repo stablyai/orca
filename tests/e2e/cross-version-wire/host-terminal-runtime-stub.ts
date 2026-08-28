@@ -89,9 +89,19 @@ export function createHostTerminalRuntimeStub(
     rows: number
     seq: number
     source: 'headless'
+    alternateScreen: false
+    terminalOwner: 'shell'
   }> => {
     stub.serializeCount++
-    return { data: stub.buffer, cols, rows, seq: outputSequence, source: 'headless' }
+    return {
+      data: stub.buffer,
+      cols,
+      rows,
+      seq: outputSequence,
+      source: 'headless',
+      alternateScreen: false,
+      terminalOwner: 'shell'
+    }
   }
 
   const runtime: Record<string, unknown> = {

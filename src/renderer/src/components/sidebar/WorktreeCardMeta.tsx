@@ -62,7 +62,6 @@ export function WorktreeCardDetailsHover({
   workspaceTitle,
   identityOrder = 'workspace-first',
   workspaceTitleRenameDisabled = false,
-  automationHostId,
   detailsAfter,
   openDelay = 250,
   closeDelay = 120,
@@ -314,7 +313,6 @@ export function WorktreeCardDetailsHover({
           {automationProvenance && (
             <WorktreeCardAutomationDetailSection
               provenance={automationProvenance}
-              worktreeHostId={automationHostId}
               onOpenAutomation={onOpenAutomation ? dismissAndRun(onOpenAutomation) : undefined}
               onOpenAutomationRun={
                 onOpenAutomationRun ? dismissAndRun(onOpenAutomationRun) : undefined

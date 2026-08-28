@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { selectColdParkedTerminalTabs } from './terminal-hidden-view-parking'
 
 const mocks = vi.hoisted(() => ({
   storeState: {
@@ -18,6 +19,7 @@ const mocks = vi.hoisted(() => ({
   },
   exemptTabIds: new Set<string>(),
   exemptSelectCalls: 0,
+  coldParkSelectCalls: 0,
   /** Toggled to churn the park verdict the way the crash cluster does. */
   watcherCoverage: true
 }))
@@ -25,6 +27,21 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) => selector(mocks.storeState)
 }))
+
+vi.mock('./terminal-hidden-view-parking', async (importOriginal) => {
+  const actual = await importOriginal<{
+    selectColdParkedTerminalTabs: typeof selectColdParkedTerminalTabs
+  }>()
+  return {
+    ...actual,
+    selectColdParkedTerminalTabs: (
+      args: Parameters<typeof actual.selectColdParkedTerminalTabs>[0]
+    ) => {
+      mocks.coldParkSelectCalls += 1
+      return actual.selectColdParkedTerminalTabs(args)
+    }
+  }
+})
 
 vi.mock('./terminal-eviction-exempt-tabs', () => ({
   selectEvictionExemptTerminalTabIds: (_worktreeId: string, tabs: readonly { id: string }[]) => {
@@ -58,6 +75,7 @@ import {
 } from './terminal-hidden-view-parking'
 import {
   TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
+  TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS,
   TERMINAL_TAB_PARK_FLIP_WINDOW_MS
 } from './terminal-park-verdict-flip-telemetry'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
@@ -86,6 +104,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.setSystemTime(1_000_000)
+    mocks.coldParkSelectCalls = 0
   })
 
   afterEach(() => {
@@ -203,6 +222,51 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       expect(result.current).toEqual(expected)
       unmount()
     }
+  })
+
+  it('skips parking scans for capability-equivalent status writes and scans membership changes', () => {
+    const args = hookArgs(false)
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+      ['runtime-a', { status: { capabilities: ['terminal.multiplex.v1'], runtimeId: 'peer-a' } }]
+    ])
+    const { rerender } = renderHook(
+      (props: ReturnType<typeof hookArgs>) => useTerminalTabColdParking(props),
+      { initialProps: args }
+    )
+    const initialSelectCalls = mocks.coldParkSelectCalls
+
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+      [
+        'runtime-a',
+        {
+          status: {
+            capabilities: ['terminal.multiplex.v1'],
+            runtimeId: 'peer-a-reconnected',
+            appVersion: '1.5.0'
+          }
+        }
+      ]
+    ])
+    act(() => {
+      rerender(args)
+    })
+    expect(mocks.coldParkSelectCalls).toBe(initialSelectCalls)
+
+    mocks.storeState.runtimeStatusByEnvironmentId = new Map([
+      [
+        'runtime-a',
+        {
+          status: {
+            capabilities: ['terminal.multiplex.v1', 'terminal.paired-parking.v1'],
+            runtimeId: 'peer-a-reconnected'
+          }
+        }
+      ]
+    ])
+    act(() => {
+      rerender(args)
+    })
+    expect(mocks.coldParkSelectCalls).toBe(initialSelectCalls + 1)
   })
 
   // Why: the flip-damping pin removes the tab from the parked set, and every
@@ -396,6 +460,10 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       }
     }
     act(() => {
+      // Why the clock advance: the verdict-flip burst limit is expressed per
+      // second, and fake timers freeze Date.now(), so back-to-back rerenders
+      // would read as an oscillation the damping is supposed to pin.
+      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS)
       rerender(hookArgs(false))
     })
     expect(result.current.size).toBe(0)
@@ -409,6 +477,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       }
     }
     act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS)
       rerender(hookArgs(false))
     })
     expect(result.current).toEqual(new Set(['tab-2']))

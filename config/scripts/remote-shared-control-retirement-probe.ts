@@ -5,7 +5,7 @@ import {
   resolveEnvironment,
   resolveEnvironmentPairingOffer
 } from '../../src/shared/runtime-environment-store'
-import type { MemorySnapshot } from '../../src/shared/types'
+import type { MemorySnapshot } from '../../src/shared/process-stats-types'
 import type { RuntimeStatus } from '../../src/shared/runtime-types'
 
 async function main(): Promise<void> {
@@ -190,8 +190,10 @@ function summarizeMemory(snapshot: MemorySnapshot): {
   app: MemorySnapshot['app']
   host: MemorySnapshot['host']
   processMemoryMetric: MemorySnapshot['processMemoryMetric']
+  processCommitMetric: MemorySnapshot['processCommitMetric']
   totalCpu: number
   totalMemory: number
+  totalPrivateMemory: MemorySnapshot['totalPrivateMemory']
   worktreeCount: number
   sessionCount: number
   worktreeMemory: number
@@ -208,8 +210,10 @@ function summarizeMemory(snapshot: MemorySnapshot): {
     app: snapshot.app,
     host: snapshot.host,
     processMemoryMetric: snapshot.processMemoryMetric,
+    processCommitMetric: snapshot.processCommitMetric,
     totalCpu: snapshot.totalCpu,
     totalMemory: snapshot.totalMemory,
+    totalPrivateMemory: snapshot.totalPrivateMemory,
     worktreeCount: snapshot.worktrees.length,
     sessionCount: snapshot.worktrees.reduce(
       (total, worktree) => total + worktree.sessions.length,

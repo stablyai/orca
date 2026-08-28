@@ -1,4 +1,7 @@
-import type { FolderWorkspace, ProjectGroup, Repo, Worktree } from '../../../shared/types'
+import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../shared/project-group-types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import {
   getRepoExecutionHostId,
   parseExecutionHostId,
@@ -12,7 +15,7 @@ type DetectedWorktreeListing = { worktrees: readonly WorktreeOwnerRecord[] }
 type RepoOwnerRecord = Pick<Repo, 'id' | 'connectionId' | 'executionHostId'>
 type FolderWorkspaceOwnerRecord = Pick<
   FolderWorkspace,
-  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId'
+  'id' | 'projectGroupId' | 'connectionId' | 'executionHostId' | 'diffComments'
 >
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
 
@@ -51,7 +54,7 @@ type IndexedProjectGroupOwnerResolution =
   | { kind: 'missing' }
   | { kind: 'ambiguous' }
 
-function catalogOwnerHostId(owner: {
+export function getCatalogOwnerHostId(owner: {
   connectionId?: string | null
   executionHostId?: string | null
 }): ExecutionHostId {
@@ -71,11 +74,11 @@ function buildCatalogOwnerIndex<
   const next = new Map<string, { kind: 'resolved'; owner: T } | { kind: 'ambiguous' }>()
   for (const record of records) {
     const id = record.id
-    const hostId = catalogOwnerHostId(record)
+    const hostId = getCatalogOwnerHostId(record)
     const current = next.get(id)
     if (!current) {
       next.set(id, { kind: 'resolved', owner: record })
-    } else if (current.kind === 'resolved' && catalogOwnerHostId(current.owner) !== hostId) {
+    } else if (current.kind === 'resolved' && getCatalogOwnerHostId(current.owner) !== hostId) {
       next.set(id, { kind: 'ambiguous' })
     }
     next.set(`${id}\0${hostId}`, {

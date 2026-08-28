@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 
 const mockStateValues: unknown[] = []
 let mockStateIndex = 0

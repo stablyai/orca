@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { TabCreateEntryArgs } from './tab-create-entry-action'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
 import type { TabCreateMenuOption } from './tab-create-menu-options'

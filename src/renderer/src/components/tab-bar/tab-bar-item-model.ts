@@ -1,9 +1,6 @@
-import type {
-  BrowserTab as BrowserTabState,
-  Tab,
-  TerminalTab,
-  WorkspaceVisibleTabType
-} from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
+import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { OpenFile } from '../../store/slices/editor'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'

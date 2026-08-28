@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { useAppStore } from '../../store'
@@ -25,7 +25,7 @@ type ExperimentalPaneProps = {
   settings: GlobalSettings
   updateSettings: (updates: Partial<GlobalSettings>) => void
   /** Hidden-experimental group is only rendered once the user has unlocked
-   *  it via Shift-clicking the Experimental sidebar entry. */
+   *  it via Option-clicking the Experimental page title. */
   hiddenExperimentalUnlocked?: boolean
 }
 

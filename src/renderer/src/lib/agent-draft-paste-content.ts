@@ -1,5 +1,5 @@
 import { yieldToEventLoop } from '../../../shared/event-loop-yield'
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import {
   getUtf8ByteLengthForCodePoint,
   readUtf8CodePointAt

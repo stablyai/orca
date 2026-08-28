@@ -10,6 +10,7 @@ import {
   type WorkerTerminalTailArchive
 } from '../../orchestration/worker-output-archive'
 import type { OrcaRuntimeService } from '../../orca-runtime'
+import { describeUnconfirmedAgentStop } from '../../../../shared/pty-liveness-verdict'
 import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
 
@@ -212,7 +213,19 @@ async function completeWorkerTerminalReleaseOnce(
   }
 
   try {
-    await runtime.closeTerminal(resource.terminal_handle)
+    const close = await runtime.closeTerminal(resource.terminal_handle)
+    if (!close.ptyKilled) {
+      const reason = describeUnconfirmedAgentStop(close)
+      const unknown = db.markWorkerTerminalReleaseUnknown(resource.id, reason)
+      return {
+        dispatchId,
+        state: 'release_unknown',
+        processAction: 'closed_agent_terminal',
+        archive: { source: archiveSource, status: archiveStatus },
+        lastError: unknown.release_error ?? reason,
+        recovery: `Inspect with: orca orchestration worker-show --dispatch ${dispatchId} --json — then repeat worker-release with the same --retry-request. Never substitute a broad terminal close.`
+      }
+    }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
     if (/disposed|not connected|unavailable/i.test(reason)) {

@@ -61,6 +61,22 @@ export function okFixture(id: string, result: unknown): OkFixture {
   return { id, ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
 
+/** The project read a CLI automation write makes to fence the host it lands on. */
+export function localRepoDestinationFixtures(repoId = 'repo-1'): OkFixture[] {
+  return [okFixture('req_repo_show', { repo: { id: repoId, connectionId: null } })]
+}
+
+/** A workspace selector resolves through its workspace before its project. */
+export function workspaceDestinationFixtures(
+  repoId = 'repo-1',
+  worktreePath = '/tmp/repo/feature'
+): OkFixture[] {
+  return [
+    okFixture('req_worktree_show', { worktree: { id: `${repoId}::${worktreePath}`, repoId } }),
+    ...localRepoDestinationFixtures(repoId)
+  ]
+}
+
 export function queueFixtures(mock: Mock, ...fixtures: OkFixture[]): void {
   for (const fixture of fixtures) {
     mock.mockResolvedValueOnce(fixture)

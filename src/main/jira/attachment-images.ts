@@ -1,5 +1,5 @@
-import type { JiraClientForSite } from './client'
-import { JiraApiError, apiBasePath, jiraRequestBinary } from './client'
+import type { JiraClientForSite } from './authenticated-request'
+import { JiraApiError, apiBasePath, jiraRequestBinary } from './authenticated-request'
 import type { JiraAdfMediaAttrs, JiraAdfMediaResolver } from './adf-markdown'
 import { escapeMarkdownAlt, unresolvedMediaPlaceholder } from './adf-markdown'
 import { escapeMarkdownLinkDestination } from './adf-media-destination'

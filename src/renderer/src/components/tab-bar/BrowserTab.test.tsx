@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 
 const reactHookRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
@@ -134,7 +134,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
-vi.mock('../browser-pane/browser-runtime', () => ({
+vi.mock('../browser-pane/describe-page/live-browser-url-registry', () => ({
   getLiveBrowserUrl: () => null
 }))
 

@@ -6,6 +6,8 @@ const mocks = vi.hoisted(() => ({
   installCodex: vi.fn(),
   removeClaude: vi.fn(),
   removeCodex: vi.fn(),
+  removeClaudeAsync: vi.fn(),
+  removeCodexAsync: vi.fn(),
   statusClaude: vi.fn(),
   statusCodex: vi.fn(),
   refreshClaude: vi.fn(),
@@ -25,6 +27,10 @@ vi.mock('./managed-agent-hook-registry', () => ({
     ['claude', mocks.removeClaude],
     ['codex', mocks.removeCodex]
   ],
+  MANAGED_AGENT_HOOK_ASYNC_REMOVERS: [
+    ['claude', mocks.removeClaudeAsync],
+    ['codex', mocks.removeCodexAsync]
+  ],
   MANAGED_AGENT_HOOK_STATUS_READERS: [
     ['claude', mocks.statusClaude],
     ['codex', mocks.statusCodex]
@@ -37,7 +43,9 @@ vi.mock('./managed-agent-hook-registry', () => ({
 
 import {
   applyAgentStatusHooksEnabled,
-  installManagedAgentHooks
+  installManagedAgentHooks,
+  removeManagedAgentHooksAsync,
+  shouldContinueManagedHookStartup
 } from './managed-agent-hook-controls'
 
 function status(agent: 'claude' | 'codex', state: 'installed' | 'not_installed') {
@@ -57,6 +65,8 @@ describe('managed agent hook controls', () => {
     mocks.installCodex.mockReturnValue(status('codex', 'installed'))
     mocks.removeClaude.mockReturnValue(status('claude', 'not_installed'))
     mocks.removeCodex.mockReturnValue(status('codex', 'not_installed'))
+    mocks.removeClaudeAsync.mockResolvedValue(status('claude', 'not_installed'))
+    mocks.removeCodexAsync.mockResolvedValue(status('codex', 'not_installed'))
     mocks.refreshClaude.mockResolvedValue(undefined)
     mocks.refreshCodex.mockResolvedValue(undefined)
   })
@@ -119,7 +129,10 @@ describe('managed agent hook controls', () => {
     })
 
     const install = installManagedAgentHooks({ agentCmdOverrides: {} })
-    await Promise.resolve()
+    // Why waitFor and not a fixed microtask tick: the install path awaits session reconcilers
+    // before refreshing scripts, so the number of ticks before this point is an implementation
+    // detail. The assertion below is the real contract: no CLI probe until the refresh resolves.
+    await vi.waitFor(() => expect(mocks.refreshClaude).toHaveBeenCalled())
 
     expect(mocks.detect).not.toHaveBeenCalled()
     releaseRefresh?.()
@@ -206,6 +219,29 @@ describe('managed agent hook controls', () => {
     expect(mocks.installCodex).toHaveBeenCalledTimes(1)
   })
 
+  it('does not finish a startup install after shutdown begins', async () => {
+    let releaseDetection: ((value: Record<string, { state: 'found' }>) => void) | undefined
+    mocks.detect.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          releaseDetection = resolve
+        })
+    )
+    const settings = { agentStatusHooksEnabled: true, disabledTuiAgents: [] }
+    let isQuitting = false
+
+    const install = installManagedAgentHooks(settings, {
+      shouldContinue: (agent) => shouldContinueManagedHookStartup(isQuitting, settings, agent)
+    })
+    await vi.waitFor(() => expect(mocks.detect).toHaveBeenCalledTimes(1))
+    isQuitting = true
+    releaseDetection?.({ claude: { state: 'found' }, codex: { state: 'found' } })
+    await install
+
+    expect(mocks.installClaude).not.toHaveBeenCalled()
+    expect(mocks.installCodex).not.toHaveBeenCalled()
+  })
+
   it('does not remove an agent enabled by a newer settings update', async () => {
     mocks.detect.mockResolvedValue({ codex: { state: 'found' } })
 
@@ -227,5 +263,13 @@ describe('managed agent hook controls', () => {
     expect(mocks.detect).not.toHaveBeenCalled()
     expect(mocks.removeClaude).toHaveBeenCalledTimes(1)
     expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
+  })
+
+  it('awaits only the selected asynchronous removers during quit', async () => {
+    const results = await removeManagedAgentHooksAsync({ agents: ['codex'] })
+
+    expect(mocks.removeClaudeAsync).not.toHaveBeenCalled()
+    expect(mocks.removeCodexAsync).toHaveBeenCalledTimes(1)
+    expect(results).toEqual([expect.objectContaining({ agent: 'codex', state: 'not_installed' })])
   })
 })

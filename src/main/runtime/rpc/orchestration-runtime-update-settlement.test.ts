@@ -10,6 +10,7 @@ import { OrchestrationDb } from '../orchestration/db'
 import type { RpcRequest, RpcResponse } from './core'
 import { RpcDispatcher } from './dispatcher'
 import { ORCHESTRATION_METHODS } from './methods/orchestration'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 const WORKER_HANDLE = 'term_pre_update_worker'
 const WORKER_PANE = 'tab_pre_update:33333333-3333-4333-8333-333333333333'
@@ -64,7 +65,7 @@ function createUpdateHarness(): Harness {
     spec: 'finish work across an app update',
     createdByTerminalHandle: COORDINATOR_HANDLE
   })
-  const dispatch = oldRuntimeDb.createDispatchContext(task.id, WORKER_HANDLE, WORKER_PANE)
+  const dispatch = createRootDispatch(oldRuntimeDb, task.id, WORKER_HANDLE, WORKER_PANE)
   const capability = oldRuntimeDb.mintDispatchCapability({
     dispatchId: dispatch.id,
     paneKey: WORKER_PANE,
@@ -192,7 +193,7 @@ function entityCounts(db: OrchestrationDb): Record<string, number> {
 }
 
 function resultOf(response: RpcResponse): Record<string, unknown> {
-  expect(response.ok).toBe(true)
+  expect(response.ok, JSON.stringify(response)).toBe(true)
   if (!response.ok) {
     throw new Error(response.error.message)
   }
@@ -352,6 +353,9 @@ describe('orchestration runtime update settlement', () => {
 
   it('routes ordinary mail with the same attested authority without settling work', async () => {
     const harness = createUpdateHarness()
+    expect(harness.db.getRunMailboxOwnerIdsForHandle(COORDINATOR_HANDLE)).toEqual([
+      harness.adoptedRunId
+    ])
     const response = await harness.createDispatcher().dispatch(
       request(
         'orchestration.send',

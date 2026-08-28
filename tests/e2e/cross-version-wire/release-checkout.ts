@@ -21,6 +21,7 @@ const CHECKOUT_FORMAT = 1
 const ARCHIVE_PATHS = ['src/main', 'src/shared', 'src/preload', 'src/renderer', 'src/types']
 
 const BASELINE_REF_ENV = 'ORCA_CROSS_VERSION_BASELINE_REF'
+const STABLE_DESKTOP_RELEASE_TAG = /^v\d+\.\d+\.\d+$/
 
 export type ReleaseCheckout = {
   /** The ref as requested, e.g. `v1.4.169`. */
@@ -61,7 +62,7 @@ function compareReleaseTags(a: string, b: string): number {
 
 /**
  * The version point the harness pairs current code against. An explicit
- * {@link BASELINE_REF_ENV} wins; otherwise the newest non-prerelease `v*` tag.
+ * {@link BASELINE_REF_ENV} wins; otherwise the newest stable desktop release tag.
  *
  * Throws rather than skipping: a cross-version lane that quietly runs nothing is
  * the exact failure this harness exists to prevent.
@@ -80,16 +81,24 @@ export function resolveBaselineReleaseRef(): string {
         `Run it inside a git checkout, or pin a ref with ${BASELINE_REF_ENV}.`
     )
   }
-  const releases = tags.filter((tag) => !tag.includes('-')).sort(compareReleaseTags)
-  const latest = releases.at(-1)
+  const latest = selectLatestStableReleaseTag(tags)
   if (!latest) {
     throw new Error(
-      `Cross-version harness found no release tags matching v[0-9]* (saw ${tags.length} tag(s) total). ` +
+      `Cross-version harness found no stable desktop release tags matching vX.Y.Z (saw ${tags.length} tag(s) total). ` +
         'CI checkouts default to a shallow clone with no tags: use `actions/checkout` with `fetch-depth: 0`, ' +
         `or pin a ref with ${BASELINE_REF_ENV}.`
     )
   }
   return latest
+}
+
+export function selectLatestStableReleaseTag(tags: string[]): string | null {
+  return (
+    tags
+      .filter((tag) => STABLE_DESKTOP_RELEASE_TAG.test(tag))
+      .sort(compareReleaseTags)
+      .at(-1) ?? null
+  )
 }
 
 function resolveCommit(ref: string): string {

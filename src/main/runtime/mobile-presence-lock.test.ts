@@ -10,15 +10,17 @@ vi.mock('../git/worktree', () => ({
   listWorktreesStrict: vi.fn().mockResolvedValue([])
 }))
 vi.mock('../hooks', () => ({
-  createSetupRunnerScript: vi.fn(),
   getEffectiveHooks: vi.fn().mockReturnValue(null),
   runHook: vi.fn().mockResolvedValue({ success: true, output: '' })
 }))
+vi.mock('../worktree-runner-script', () => ({ createSetupRunnerScript: vi.fn() }))
 vi.mock('../ipc/worktree-logic', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return { ...actual, computeWorktreePath: vi.fn(), ensurePathWithinWorkspace: vi.fn() }
 })
-vi.mock('../ipc/filesystem-auth', () => ({ invalidateAuthorizedRootsCache: vi.fn() }))
+vi.mock('../ipc/registered-worktree-roots-cache', () => ({
+  invalidateAuthorizedRootsCache: vi.fn()
+}))
 vi.mock('../git/repo', async (importOriginal) => {
   const actual = (await importOriginal()) as Record<string, unknown>
   return {
@@ -49,6 +51,9 @@ const store = {
   getGitHubCache: () => ({ pr: {}, issue: {} }),
   setWorktreeMeta: () => undefined as never,
   removeWorktreeMeta: () => {},
+  getRetiredWorktreeNameRegistry: () => ({ exhaustedTiers: 0, names: [] }),
+  addRetiredWorktreeName: () => {},
+  mergeRetiredWorktreeNames: () => false,
   getSettings: () => ({
     workspaceDir: '/tmp/workspaces',
     nestWorkspaces: false,
@@ -810,5 +815,44 @@ describe('mobile presence lock — issue #7588 held-modal restore convergence', 
       cols: 0,
       rows: 0
     })
+  })
+})
+
+// Why: reported against local Mac terminals — "Take back all terminals" looked like
+// a no-op. The phone stays subscribed, and its passive viewport report (forced on
+// iOS app resume and on every reconnect) silently re-took the floor.
+describe('mobile presence lock — desktop take-back survives passive viewport reports', () => {
+  beforeEach(() => vi.useFakeTimers())
+  afterEach(() => vi.useRealTimers())
+
+  it('a still-subscribed phone reporting its viewport does not undo a desktop take-back', async () => {
+    const { runtime, ptySizes, driverEvents } = createRuntime(null)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    const driverEventsBefore = driverEvents.length
+
+    await vi.advanceTimersByTimeAsync(10)
+    await expect(
+      runtime.updateMobileViewport('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    ).resolves.toEqual({ updated: true, applied: false })
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'desktop' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 150, rows: 40 })
+    expect(runtime.getTerminalFitOverride('pty-1')).toBeNull()
+    expect(driverEvents.slice(driverEventsBefore)).toEqual([])
+  })
+
+  it('a deliberate mobile gesture still re-takes the floor after a desktop take-back', async () => {
+    const { runtime, ptySizes } = createRuntime(null)
+    await runtime.handleMobileSubscribe('pty-1', 'phone-A', { cols: 40, rows: 20 })
+    expect(await runtime.reclaimTerminalForDesktop('pty-1')).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(10)
+    await runtime.mobileTookFloor('pty-1', 'phone-A')
+
+    expect(runtime.getDriver('pty-1')).toEqual({ kind: 'mobile', clientId: 'phone-A' })
+    expect(ptySizes.get('pty-1')).toEqual({ cols: 40, rows: 20 })
   })
 })

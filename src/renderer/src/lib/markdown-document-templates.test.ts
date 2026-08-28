@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { DirEntry } from '../../../shared/types'
+import type { DirEntry } from '../../../shared/filesystem-entry-types'
 import {
   applyMarkdownTemplatePlaceholders,
   getMarkdownTemplateTitleForFileName,

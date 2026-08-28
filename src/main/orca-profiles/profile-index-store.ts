@@ -9,7 +9,7 @@ import {
 import { randomUUID } from 'node:crypto'
 import { dirname } from 'node:path'
 import { bestEffortFsyncDirectorySync, fsyncFileSync } from '../../shared/secure-file'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import {
   createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,

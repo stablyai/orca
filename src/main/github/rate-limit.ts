@@ -8,8 +8,8 @@ import type {
   GetRateLimitResult,
   GitHubRateLimitBucket,
   GitHubRateLimitSnapshot
-} from '../../shared/types'
-import { isDefaultGitHubHost } from '../../shared/github-repository-identity-key'
+} from '../../shared/github/rate-limit-types'
+import { isDefaultGitHubHost } from '../../shared/github/repository-identity-key'
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { acquire, release } from './gh-utils'
 import { ghExecFileAsync } from '../git/runner'

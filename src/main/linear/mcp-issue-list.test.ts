@@ -24,10 +24,16 @@ const clientEntry = (
   client: { client: { rawRequest: request } }
 })
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire,
-  release,
-  clearToken,
+  release
+}))
+
+vi.mock('./linear-token-store', () => ({
+  clearToken
+}))
+
+vi.mock('./client', () => ({
   getClients,
   getStatus,
   isAuthError: () => false
@@ -45,17 +51,15 @@ describe('MCP-compatible Linear issue listing', () => {
     rawRequest.mockResolvedValue({
       data: {
         issues: {
-          nodes: [
-            {
-              id: 'issue-1',
-              identifier: 'ENG-1',
-              title: 'Fix auth',
-              url: 'https://linear.app/acme/issue/ENG-1',
-              labels: { nodes: [] },
-              createdAt: '2026-07-01T00:00:00.000Z',
-              updatedAt: '2026-07-20T00:00:00.000Z'
-            }
-          ],
+          nodes: Array.from({ length: 100 }, (_unused, index) => ({
+            id: `issue-${index + 1}`,
+            identifier: `ENG-${index + 1}`,
+            title: 'Fix auth',
+            url: `https://linear.app/acme/issue/ENG-${index + 1}`,
+            labels: { nodes: [] },
+            createdAt: '2026-07-01T00:00:00.000Z',
+            updatedAt: '2026-07-20T00:00:00.000Z'
+          })),
           pageInfo: { hasNextPage: true, endCursor: 'next-page' }
         }
       }
@@ -102,20 +106,23 @@ describe('MCP-compatible Linear issue listing', () => {
     expect(rawRequest.mock.calls[0]?.[1]).not.toMatchObject({
       filter: { team: { or: expect.arrayContaining([{ id: { eq: 'ENG' } }]) } }
     })
+    expect(result.truncated).toBe(true)
     expect(result.meta).toMatchObject({
       limit: 100,
-      returned: 1,
+      returned: 100,
       hasMore: true,
-      nextCursor: 'next-page',
       orderBy: 'createdAt'
     })
+    // Stops at the requested cap instead of walking on.
+    expect(rawRequest).toHaveBeenCalledTimes(1)
+    expect(result.meta.nextCursor).toMatch(/^orca\.linear\.v1\./)
     expect(result.issues[0]).toMatchObject({
       identifier: 'ENG-1',
       workspace: { id: 'workspace-1', name: 'Acme' }
     })
   })
 
-  it('uses null filters and clamps direct callers to the MCP maximum', async () => {
+  it('uses null filters and pages at the Linear per-request maximum', async () => {
     rawRequest.mockResolvedValue({
       data: { issues: { nodes: [], pageInfo: { hasNextPage: false } } }
     })
@@ -265,7 +272,7 @@ describe('MCP-compatible Linear issue listing', () => {
     await expect(listMcpIssues({ cursor: 'next' })).rejects.toMatchObject({
       code: 'linear_invalid_workspace'
     })
-    const result = await listMcpIssues({ workspaceId: 'all' })
+    const result = await listMcpIssues({ workspaceId: 'all', limit: 1 })
 
     expect(result.meta).toMatchObject({ hasMore: true, workspaceId: 'all' })
     expect(result.meta.nextCursor).toBeUndefined()

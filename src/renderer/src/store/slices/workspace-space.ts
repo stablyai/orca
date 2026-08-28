@@ -1,8 +1,11 @@
 import type { StateCreator } from 'zustand'
 import type {
   WorkspaceSpaceAnalysis,
-  WorkspaceSpaceScanProgress
+  WorkspaceSpaceScanProgress,
+  WorkspaceSpaceWorktreeMeasurement
 } from '../../../../shared/workspace-space-types'
+import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
+import { composeWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 import type { AppState } from '../types'
 
 let inFlightScan: Promise<WorkspaceSpaceAnalysis> | null = null
@@ -12,18 +15,42 @@ export type WorkspaceSpaceSlice = {
   workspaceSpaceScanProgress: WorkspaceSpaceScanProgress | null
   workspaceSpaceScanError: string | null
   workspaceSpaceScanning: boolean
+  workspaceSpaceMeasurements: WorkspaceSpaceWorktreeMeasurement[]
   applyWorkspaceSpaceProgress: (progress: WorkspaceSpaceScanProgress) => void
   cancelWorkspaceSpaceScan: () => Promise<boolean>
+  /** Stale-while-revalidate seed; true when the persisted analysis filled an empty slice. */
+  hydrateWorkspaceSpaceFromCache: () => Promise<boolean>
   refreshWorkspaceSpace: () => Promise<WorkspaceSpaceAnalysis>
-  removeWorkspaceSpaceWorktrees: (worktreeIds: readonly string[]) => void
+  removeWorkspaceSpaceWorktrees: (
+    worktreeTargets: readonly (string | WorktreeRemovalTarget)[]
+  ) => void
 }
 
 function removeDeletedWorktreesFromAnalysis(
   analysis: WorkspaceSpaceAnalysis,
-  deletedWorktreeIds: readonly string[]
+  deletedWorktreeTargets: readonly (string | WorktreeRemovalTarget)[]
 ): WorkspaceSpaceAnalysis {
-  const deletedSet = new Set(deletedWorktreeIds)
-  const worktrees = analysis.worktrees.filter((worktree) => !deletedSet.has(worktree.worktreeId))
+  const deletedIds = new Set<string>()
+  const deletedIdentities = new Set<string>()
+  for (const target of deletedWorktreeTargets) {
+    if (typeof target === 'string') {
+      deletedIds.add(target)
+    } else {
+      deletedIdentities.add(
+        composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id)
+      )
+    }
+  }
+  const worktrees = analysis.worktrees.filter(
+    (worktree) =>
+      !deletedIds.has(worktree.worktreeId) &&
+      !deletedIdentities.has(
+        composeWorktreeHostIdentity(worktree.executionHostId, worktree.worktreeId)
+      )
+  )
+  if (worktrees.length === analysis.worktrees.length) {
+    return analysis
+  }
   const rowsByRepoId = new Map<string, typeof worktrees>()
   for (const worktree of worktrees) {
     const repoRows = rowsByRepoId.get(worktree.repoId) ?? []
@@ -72,6 +99,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
   workspaceSpaceScanProgress: null,
   workspaceSpaceScanError: null,
   workspaceSpaceScanning: false,
+  workspaceSpaceMeasurements: [],
   applyWorkspaceSpaceProgress: (progress) =>
     set((state) => {
       if (
@@ -80,9 +108,14 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       ) {
         return state
       }
+      const sameScan = state.workspaceSpaceScanProgress?.scanId === progress.scanId
+      const previousMeasurements = sameScan ? state.workspaceSpaceMeasurements : []
       return {
         workspaceSpaceScanProgress: progress,
-        workspaceSpaceScanning: true
+        workspaceSpaceScanning: true,
+        workspaceSpaceMeasurements: progress.completedMeasurements?.length
+          ? [...previousMeasurements, ...progress.completedMeasurements]
+          : previousMeasurements
       }
     }),
   cancelWorkspaceSpaceScan: async () => {
@@ -105,6 +138,25 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
     }
     return cancelled
   },
+  hydrateWorkspaceSpaceFromCache: async () => {
+    const hasLiveAnalysis = (): boolean =>
+      get().workspaceSpaceAnalysis !== null || get().workspaceSpaceScanning || inFlightScan !== null
+    if (hasLiveAnalysis()) {
+      return false
+    }
+    let cached: Awaited<ReturnType<typeof window.api.workspaceSpace.getCachedAnalysis>>
+    try {
+      cached = await window.api.workspaceSpace.getCachedAnalysis()
+    } catch {
+      // Why: hydration is best-effort; a manual scan remains the recovery path.
+      return false
+    }
+    if (cached === null || hasLiveAnalysis()) {
+      return false
+    }
+    set({ workspaceSpaceAnalysis: cached })
+    return true
+  },
   refreshWorkspaceSpace: async () => {
     if (inFlightScan) {
       return inFlightScan
@@ -113,7 +165,8 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
     set({
       workspaceSpaceScanning: true,
       workspaceSpaceScanProgress: null,
-      workspaceSpaceScanError: null
+      workspaceSpaceScanError: null,
+      workspaceSpaceMeasurements: []
     })
     // Why: the compact Resource Manager card and the full Space page share
     // one manual scan result; duplicate button presses should join the same IO.
@@ -127,7 +180,8 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
         set({
           workspaceSpaceAnalysis: analysis,
           workspaceSpaceScanning: false,
-          workspaceSpaceScanProgress: null
+          workspaceSpaceScanProgress: null,
+          workspaceSpaceMeasurements: []
         })
         return analysis
       })
@@ -137,7 +191,8 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
             ? null
             : errorMessage(error),
           workspaceSpaceScanning: false,
-          workspaceSpaceScanProgress: null
+          workspaceSpaceScanProgress: null,
+          workspaceSpaceMeasurements: []
         })
         throw error
       })
@@ -146,19 +201,46 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       })
     return inFlightScan
   },
-  removeWorkspaceSpaceWorktrees: (worktreeIds) => {
-    if (worktreeIds.length > 0) {
+  removeWorkspaceSpaceWorktrees: (worktreeTargets) => {
+    if (worktreeTargets.length > 0) {
       get().recordFeatureInteraction?.('workspace-cleanup')
     }
-    set((state) =>
-      state.workspaceSpaceAnalysis
-        ? {
-            workspaceSpaceAnalysis: removeDeletedWorktreesFromAnalysis(
-              state.workspaceSpaceAnalysis,
-              worktreeIds
-            )
-          }
-        : state
-    )
+    set((state) => {
+      const deletedIds = new Set(
+        worktreeTargets.flatMap((target) => (typeof target === 'string' ? [target] : []))
+      )
+      const deletedIdentities = new Set(
+        worktreeTargets.flatMap((target) =>
+          typeof target !== 'string'
+            ? [composeWorktreeHostIdentity(target.executionHostId ?? undefined, target.id)]
+            : []
+        )
+      )
+      const nextMeasurements = state.workspaceSpaceMeasurements.filter(
+        (measurement) =>
+          !deletedIds.has(measurement.worktreeId) &&
+          !deletedIdentities.has(
+            composeWorktreeHostIdentity(measurement.executionHostId, measurement.worktreeId)
+          )
+      )
+      const nextAnalysis = state.workspaceSpaceAnalysis
+        ? removeDeletedWorktreesFromAnalysis(state.workspaceSpaceAnalysis, worktreeTargets)
+        : null
+      // Why: this runs on every worktree removal and list refresh; a no-op
+      // must not mint new identities and wake every space subscriber.
+      if (
+        nextMeasurements.length === state.workspaceSpaceMeasurements.length &&
+        nextAnalysis === state.workspaceSpaceAnalysis
+      ) {
+        return state
+      }
+      return {
+        workspaceSpaceAnalysis: nextAnalysis,
+        workspaceSpaceMeasurements:
+          nextMeasurements.length === state.workspaceSpaceMeasurements.length
+            ? state.workspaceSpaceMeasurements
+            : nextMeasurements
+      }
+    })
   }
 })

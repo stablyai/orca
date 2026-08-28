@@ -79,6 +79,14 @@ function makeDispatcher(): RpcDispatcher {
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
 }
 
+function makeFailingDispatcher(error: Error): RpcDispatcher {
+  const runtime = {
+    getRuntimeId: () => 'test-runtime',
+    listAiVaultSessions: vi.fn().mockRejectedValue(error)
+  } as unknown as OrcaRuntimeService
+  return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
+}
+
 describe('aiVault.resolveSessionTitles handler', () => {
   beforeEach(() => {
     resolveAiVaultSessionTitlesInWorker.mockReset()
@@ -227,6 +235,36 @@ describe('aiVault.listSessions handler + shared cache', () => {
     const dispatcher = makeDispatcher()
     const response = await dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
     expect(response).toMatchObject({ ok: true, result: makeResult() })
+  })
+
+  it('humanizes scanner supervision errors for remote clients', async () => {
+    const dispatcher = makeFailingDispatcher(new Error('AI Vault service restart circuit is open.'))
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    ).resolves.toMatchObject({
+      ok: false,
+      error: { message: 'Session scanning paused after repeated failures. Refresh to try again.' }
+    })
+  })
+
+  it('preserves structured runtime error metadata while humanizing its message', async () => {
+    const error = Object.assign(new Error('AI Vault service restart circuit is open.'), {
+      code: 'runtime_timeout',
+      data: { retryAfterMs: 5000 }
+    })
+    const dispatcher = makeFailingDispatcher(error)
+
+    await expect(
+      dispatcher.dispatch(makeRequest('aiVault.listSessions', { limit: 500 }))
+    ).resolves.toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_timeout',
+        message: 'Session scanning paused after repeated failures. Refresh to try again.',
+        data: { retryAfterMs: 5000 }
+      }
+    })
   })
 
   it('passes only the first 64 scopePaths to the scanner when a request exceeds the cap', async () => {

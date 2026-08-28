@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { Repo, Worktree } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import type { AppState } from '@/store/types'
 import {
   getLocalAgentPreflightContext,
@@ -483,6 +484,23 @@ describe('local preflight context', () => {
 
     expect(
       getLocalProjectExecutionRuntimeContext(state, FLOATING_TERMINAL_WORKTREE_ID, 'win32')
+    ).toBeUndefined()
+  })
+
+  it('keeps Floating on the host despite global and explicit WSL agent settings', () => {
+    const state = {
+      ...makeState({ repoPath: 'C:\\Users\\alice\\repo' }),
+      settings: {
+        terminalWindowsShell: 'wsl.exe',
+        terminalWindowsWslDistro: 'Debian',
+        localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Debian' },
+        localAgentRuntime: 'wsl',
+        localAgentWslDistro: 'Ubuntu'
+      }
+    } as AppState
+
+    expect(
+      getLocalAgentPreflightContext(state, 'win32', {}, FLOATING_TERMINAL_WORKTREE_ID)
     ).toBeUndefined()
   })
 

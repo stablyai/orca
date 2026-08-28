@@ -206,6 +206,7 @@ function readArchivedTerminalTail(
       handle: args.resource.terminal_handle,
       status: 'exited',
       tail,
+      ...(!cursor && content.draft ? { draft: content.draft } : {}),
       truncated: content.truncated,
       nextCursor,
       returnedLineCount: tail.length

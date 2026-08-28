@@ -23,7 +23,7 @@ function makeFakeStore(tombstones: RemovedSshTargetTombstone[]) {
   let current = [...tombstones]
   const store = {
     getRemovedSshTargetTombstones: () => [...current],
-    removeRemovedSshTargetTombstone: (oldTargetId: string) => {
+    releaseRemovedSshTargetTombstone: (oldTargetId: string) => {
       current = current.filter((t) => t.oldTargetId !== oldTargetId)
     },
     reassignSshTargetId: (oldTargetId: string, newTargetId: string) => {

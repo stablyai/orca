@@ -1,11 +1,10 @@
 import type { RuntimeTerminalOrphanTopology } from '../../../shared/runtime-types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../shared/tab-types'
 import type {
-  TabGroup,
-  TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../shared/types'
+} from '../../../shared/terminal-tab-types'
 import { toHostSessionTabId } from './web-terminal-surface-id'
 
 export type WebTerminalOrphanTopologyState = {

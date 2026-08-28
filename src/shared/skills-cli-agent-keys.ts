@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 /**
  * The community `skills` CLI's own `--agent` key for each agent Orca detects.

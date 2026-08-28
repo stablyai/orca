@@ -43,6 +43,7 @@ describe('WorkspaceCleanupCandidateList', () => {
       root?.render(
         <WorkspaceCleanupCandidateList
           rows={rows}
+          getRowKey={(candidate) => candidate.worktreeId}
           scrollElement={null}
           renderRow={(candidate) => {
             rendered.push(candidate.worktreeId)
@@ -68,6 +69,7 @@ describe('WorkspaceCleanupCandidateList', () => {
       root?.render(
         <WorkspaceCleanupCandidateList
           rows={rows}
+          getRowKey={(candidate) => candidate.worktreeId}
           scrollElement={scrollElement}
           renderRow={(candidate) => <div key={candidate.worktreeId} data-testid="row" />}
         />
@@ -80,6 +82,40 @@ describe('WorkspaceCleanupCandidateList', () => {
     // the plain flow used below the threshold.
     expect(mounted).toBeLessThanOrEqual(rows.length)
     expect(windowed || mounted === 0).toBe(true)
+  })
+
+  it('keys windowed rows through getRowKey, so same-id hosts stay distinct', () => {
+    // Two hosts publish the same worktreeId; only the caller knows the host, so
+    // the list must ask for the key instead of reaching for the colliding id.
+    const rows = [
+      ...makeRows(WORKSPACE_CLEANUP_VIRTUALIZE_MIN_ROWS - 2),
+      makeCandidate({ worktreeId: 'shared', executionHostId: 'local' }),
+      makeCandidate({ worktreeId: 'shared', executionHostId: 'ssh:box' })
+    ]
+    const scrollElement = document.createElement('div')
+    const asked: string[] = []
+
+    act(() => {
+      root?.render(
+        <WorkspaceCleanupCandidateList
+          rows={rows}
+          getRowKey={(candidate) => {
+            const key = `${candidate.executionHostId ?? ''}|${candidate.worktreeId}`
+            asked.push(key)
+            return key
+          }}
+          scrollElement={scrollElement}
+          renderRow={(_candidate, index) => <div key={index} data-testid="row" />}
+        />
+      )
+    })
+
+    expect(asked.length).toBeGreaterThan(0)
+    expect(asked).toContain('local|shared')
+    expect(asked).toContain('ssh:box|shared')
+    expect(new Set(asked).size).toBe(
+      new Set(rows.map((r) => `${r.executionHostId ?? ''}|${r.worktreeId}`)).size
+    )
   })
 
   it('memoizes CandidateRow so unchanged rows skip re-render', () => {

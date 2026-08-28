@@ -1,4 +1,5 @@
-import type { FolderWorkspace, Worktree } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { Worktree } from './worktree/types'
 import { folderWorkspaceKey } from './workspace-scope'
 import { parseExecutionHostId, toSshExecutionHostId } from './execution-host'
 import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
@@ -40,6 +41,7 @@ export function folderWorkspaceToWorktree(folderWorkspace: FolderWorkspace): Wor
     pendingFirstAgentMessageRename: folderWorkspace.pendingFirstAgentMessageRename,
     firstAgentMessageRenameError: folderWorkspace.firstAgentMessageRenameError,
     workspaceStatus: folderWorkspace.workspaceStatus,
+    diffComments: folderWorkspace.diffComments,
     path: folderWorkspace.folderPath,
     head: '',
     branch: '',

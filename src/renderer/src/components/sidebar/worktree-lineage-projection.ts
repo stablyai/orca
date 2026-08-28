@@ -2,7 +2,8 @@ import {
   getCyclicWorktreeLineageChildIds,
   isValidResolvedWorktreeLineageEdge
 } from '../../../../shared/resolved-worktree-lineage'
-import type { Worktree, WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 export type LineageRenderInfo =
   | { state: 'none' }

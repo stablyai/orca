@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getEffectiveLayoutForWorktree, anyMountedWorktreeHasLayout } from './split-group-mount'
-import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/types'
+import type { TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 
 function makeGroup(id: string, worktreeId: string): TabGroup {
   return { id, worktreeId, activeTabId: null, tabOrder: [] }

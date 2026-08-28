@@ -5,10 +5,10 @@ import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import {
   sendNativeChatMessage,
   sendNativeChatTypedCommand,
-  sendNativeChatMessageWithImageAttachments,
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
+import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
 import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
 import { isSlashCommandDraft } from '../../../../shared/native-chat-slash-commands'

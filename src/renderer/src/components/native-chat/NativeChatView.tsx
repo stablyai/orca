@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
+import { isNativeChatTranscriptUnsettled } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -18,21 +19,23 @@ import {
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
 import {
-  applyCommandMarkerBoundaries,
   appendPendingSendCache,
-  commandMarkersAsMessages,
-  appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
   nextNativeChatPendingSendId,
   prunePendingSends,
-  readCommandMarkerCache,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
-  type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
+  commandMarkersAsMessages,
+  readCommandMarkerCache,
+  type NativeChatCommandMarker
+} from './native-chat-command-marker'
 import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
@@ -140,7 +143,9 @@ function NativeChatResolvedView({
     terminalTabId,
     agent,
     messages: session.messages,
-    transcriptLoading: session.readPhase === 'loading'
+    // 'awaiting' counts too: adopting a prefill against a transcript that hasn't
+    // flushed would re-offer a prompt the user already submitted.
+    transcriptLoading: isNativeChatTranscriptUnsettled(session.readPhase)
   })
   // The live-session merge reconciles hooks with replayable transcript turn
   // boundaries; all working consumers must use that one lifecycle decision.

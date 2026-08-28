@@ -92,7 +92,12 @@ describe('WSL linked-worktree routing probe timeout', () => {
       ).resolves.toEqual({ stdout: 'host git recovered\n', stderr: '' })
 
       expect(statMock).toHaveBeenCalledTimes(2)
-      expect(execFileMock.mock.calls.map(([command]) => command)).toEqual(['wsl.exe', 'git'])
+      // A WSL read also warms the direct-git environment probe in the background;
+      // it is not part of the routing sequence under test.
+      const routedCommands = execFileMock.mock.calls
+        .filter(([, args]) => !String((args as string[])?.at(-1)).includes('^GIT_'))
+        .map(([command]) => command)
+      expect(routedCommands).toEqual(['wsl.exe', 'git'])
     })
   })
 })

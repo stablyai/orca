@@ -84,7 +84,9 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(onSend).toHaveBeenCalledWith(' hello')
+    // Verbatim: the send seam trims for the wire, so a rejected send can hand
+    // back the draft byte-for-byte (#14819).
+    expect(onSend).toHaveBeenCalledWith(' hello ')
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
@@ -120,7 +122,7 @@ describe('MobileNativeChatComposer', () => {
       )
     })
     await act(async () => sendButton().props.onPress())
-    expect(onSend).toHaveBeenCalledWith(' /clear is prose')
+    expect(onSend).toHaveBeenCalledWith(' /clear is prose ')
   })
 
   it('locks the option pickers while a composer send is in flight', async () => {
@@ -219,7 +221,7 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(onSend).toHaveBeenCalledWith(' hello')
+    expect(onSend).toHaveBeenCalledWith(' hello ')
     expect(onChangeText).not.toHaveBeenCalled()
   })
 

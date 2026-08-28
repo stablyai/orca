@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { applyWorktreeUpdates } from './worktree-helpers'
 
 function makeWorktree(overrides: Partial<Worktree> & { id: string; repoId: string }): Worktree {

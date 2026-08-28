@@ -4,6 +4,7 @@ import {
   isFreshNonDoneAgentStatus,
   parseAgentStatusPayload,
   normalizeAgentStatusPayload,
+  pickParsedAgentStatusPayload,
   AGENT_STATUS_JSON_STRUCTURE_LIMITS,
   AGENT_STATUS_MAX_FIELD_LENGTH,
   AGENT_STATUS_MAX_SUBAGENTS,
@@ -57,6 +58,19 @@ describe('parseAgentStatusPayload', () => {
       expect(result).not.toBeNull()
       expect(result!.state).toBe(state)
     }
+  })
+
+  it('accepts monitoring only as an optional working discriminator', () => {
+    expect(parseAgentStatusPayload('{"state":"working","workingMode":"monitoring"}')).toMatchObject(
+      { state: 'working', workingMode: 'monitoring' }
+    )
+    expect(
+      parseAgentStatusPayload('{"state":"done","workingMode":"monitoring"}')?.workingMode
+    ).toBeUndefined()
+    expect(
+      parseAgentStatusPayload('{"state":"working","workingMode":"unknown"}')?.workingMode
+    ).toBeUndefined()
+    expect(parseAgentStatusPayload('{"state":"working"}')?.workingMode).toBeUndefined()
   })
 
   it('returns null for invalid state', () => {
@@ -435,6 +449,41 @@ Fix dispatch fallback preview for normalized status prompts`
     ).toBeUndefined()
   })
 
+  it('keeps turnCompletedAt on the gated working row and its all-clear done, nowhere else', () => {
+    for (const state of ['working', 'done'] as const) {
+      expect(
+        parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
+          .turnCompletedAt
+      ).toBe(1767225601000)
+    }
+    for (const state of ['blocked', 'waiting'] as const) {
+      expect(
+        parseAgentStatusPayload(`{"state":"${state}","turnCompletedAt":1767225601000}`)!
+          .turnCompletedAt
+      ).toBeUndefined()
+    }
+    for (const raw of ['"1767225601000"', 'null', 'true']) {
+      expect(
+        parseAgentStatusPayload(`{"state":"done","turnCompletedAt":${raw}}`)!.turnCompletedAt
+      ).toBeUndefined()
+    }
+    for (const value of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(
+        normalizeAgentStatusPayload({ state: 'done', turnCompletedAt: value })!.turnCompletedAt
+      ).toBeUndefined()
+    }
+  })
+
+  it('carries turnCompletedAt through the client-visible payload projection', () => {
+    expect(
+      pickParsedAgentStatusPayload({
+        state: 'working',
+        prompt: 'run the build',
+        turnCompletedAt: 1767225601000
+      }).turnCompletedAt
+    ).toBe(1767225601000)
+  })
+
   it('requires strict boolean true for interrupted (rejects truthy non-boolean)', () => {
     // Why: parser uses `=== true`, so truthy string/number sentinels don't count.
     expect(
@@ -550,7 +599,14 @@ describe('agentSubagentsEqual', () => {
 // they used to take, including where stringify would have altered the payload.
 describe('normalizeAgentStatusPayload matches the JSON round trip', () => {
   const CASES: Record<string, unknown>[] = [
-    { state: 'working', prompt: 'p', agentType: 'grok', toolName: 'sh', toolInput: 'ls' },
+    {
+      state: 'working',
+      workingMode: 'monitoring',
+      prompt: 'p',
+      agentType: 'grok',
+      toolName: 'sh',
+      toolInput: 'ls'
+    },
     { state: 'done', prompt: '', agentType: 'devin', interrupted: true },
     // stringify DROPS undefined-valued keys; the direct path passes them through
     {

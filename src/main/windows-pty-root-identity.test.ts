@@ -1,18 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { execFileMock, powershellScanCount } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  powershellScanCount: { value: 0 }
-}))
+const getAllProcessesMock = vi.fn()
 
-vi.mock('child_process', () => ({ execFile: execFileMock }))
-
-import { resetWindowsProcessRowsSnapshotForTests } from './providers/windows-foreground-process-rows'
+import { __setWindowsProcessTreeLoaderForTests } from './windows/windows-process-table'
 import {
   classifyWindowsTreeKillTarget,
   verifyWindowsTreeKillTarget,
   WINDOWS_ROOT_IDENTITY_TIMEOUT_MS
 } from './windows-pty-root-identity'
+// A real snapshot always contains the process doing the querying; the reader
+// rejects a table without it, because that is what a blocked
+// CreateToolhelp32Snapshot looks like (an empty list, not an error).
+const SELF_PROCESS_ROW = { pid: process.pid, ppid: 0, name: 'vitest.exe', commandLine: 'vitest' }
+const withSelf = <T>(rows: readonly T[]): (T | typeof SELF_PROCESS_ROW)[] => [
+  SELF_PROCESS_ROW,
+  ...rows
+]
 
 const ORCA_PID = 5000
 
@@ -108,7 +111,7 @@ describe('verifyWindowsTreeKillTarget', () => {
     ).resolves.toBe('foreign')
   })
 
-  it('returns unknown when both Windows process probes are unavailable', async () => {
+  it('returns unknown when the Windows process table is unavailable', async () => {
     const readRows = vi.fn().mockResolvedValue(null)
     await expect(
       verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
@@ -116,7 +119,7 @@ describe('verifyWindowsTreeKillTarget', () => {
   })
 
   it('returns unknown when the process query rejects', async () => {
-    const readRows = vi.fn().mockRejectedValue(new Error('powershell missing'))
+    const readRows = vi.fn().mockRejectedValue(new Error('process table unavailable'))
     await expect(
       verifyWindowsTreeKillTarget(4242, { readRows, ownerPid: ORCA_PID, platform: 'win32' })
     ).resolves.toBe('unknown')
@@ -158,29 +161,27 @@ describe('verifyWindowsTreeKillTarget', () => {
 
 // Regression guard on the DEFAULT reader, which the cases above bypass by
 // injecting readRows: worktree delete tears down PTYs 32-wide, so a probe that
-// reads the table uncached forks 32 powershell cold-starts per delete — the
+// reads the table uncached takes 32 full process-table scans per delete — the
 // churn #6288/#6667 fixed for POSIX. Exercises the real wiring, not a fake.
 describe('verifyWindowsTreeKillTarget scan volume', () => {
-  const ROWS_JSON = JSON.stringify([
-    { ProcessId: ORCA_PID, ParentProcessId: 900, Name: 'orca.exe', CommandLine: 'orca.exe' },
-    { ProcessId: 4242, ParentProcessId: ORCA_PID, Name: 'pwsh.exe', CommandLine: 'pwsh.exe' }
-  ])
+  const NATIVE_ROWS = [
+    { pid: ORCA_PID, ppid: 900, name: 'orca.exe', commandLine: 'orca.exe' },
+    { pid: 4242, ppid: ORCA_PID, name: 'pwsh.exe', commandLine: 'pwsh.exe' }
+  ]
 
   beforeEach(() => {
-    execFileMock.mockReset()
-    powershellScanCount.value = 0
-    resetWindowsProcessRowsSnapshotForTests()
-    execFileMock.mockImplementation((cmd: string, ..._rest: unknown[]) => {
-      const cb = _rest.at(-1) as (e: unknown, r: { stdout: string; stderr: string }) => void
-      if (cmd === 'powershell.exe') {
-        powershellScanCount.value += 1
-      }
-      cb(null, { stdout: ROWS_JSON, stderr: '' })
+    getAllProcessesMock.mockReset()
+    getAllProcessesMock.mockImplementation((cb: (snapshot: unknown) => void) => {
+      cb(withSelf(NATIVE_ROWS))
     })
+    __setWindowsProcessTreeLoaderForTests(() => ({
+      ProcessDataFlag: { None: 0, Memory: 1, CommandLine: 2 },
+      getAllProcesses: getAllProcessesMock
+    }))
   })
 
   afterEach(() => {
-    resetWindowsProcessRowsSnapshotForTests()
+    __setWindowsProcessTreeLoaderForTests()
   })
 
   it('collapses a 32-wide teardown burst into a single process-table scan', async () => {
@@ -190,7 +191,7 @@ describe('verifyWindowsTreeKillTarget scan volume', () => {
       )
     )
 
-    expect(powershellScanCount.value).toBe(1)
+    expect(getAllProcessesMock.mock.calls.length).toBe(1)
     expect(new Set(verdicts)).toEqual(new Set(['own']))
   })
 })

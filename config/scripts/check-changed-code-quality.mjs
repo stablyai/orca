@@ -139,7 +139,99 @@ function diagnosticLineRange(root, filename, span) {
   return { start: startLine, end: startLine + (highlighted.match(/\n/g)?.length ?? 0) }
 }
 
-export function diagnosticTouchesAddedLines(diagnostic, rangesByFile, root = process.cwd()) {
+// Why: a file-splitting refactor makes every line of the new module an "added"
+// line, so pre-existing lint debt in code that merely MOVED starts failing the
+// changed-lines gate. The only way to satisfy it is to edit the moved code,
+// which is exactly what a behavior-preserving refactor must not do. So a
+// diagnostic is exempt when its highlighted lines already existed, verbatim and
+// contiguous, somewhere in the base revision of the files this change touches.
+function normalizeSourceLine(line) {
+  return line.replace(/\s+/g, ' ').trim()
+}
+
+export function collectBaseLineBlocks(root, comparisonBase, files = null) {
+  // Why: in a split, the moved code's base text lives in the ORIGINAL file, which is
+  // often deleted or renamed away. Deleted paths never reach the changed-file list
+  // (it filters to ACMRTUB), so read every path the diff touches, deletions included.
+  const paths =
+    files ??
+    splitNullDelimited(runGit(root, ['diff', '--name-only', '-z', comparisonBase, '--'])).filter(
+      (file) => SOURCE_FILE_PATTERN.test(file)
+    )
+  const blocks = []
+  for (const file of paths) {
+    const result = spawnSync('git', ['show', `${comparisonBase}:${file}`], {
+      cwd: root,
+      encoding: 'utf8',
+      maxBuffer: 64 * 1024 * 1024
+    })
+    if (result.status !== 0 || typeof result.stdout !== 'string') {
+      continue
+    }
+    blocks.push(
+      result.stdout
+        .split(/\r?\n/)
+        .map(normalizeSourceLine)
+        .filter((line) => line !== '')
+    )
+  }
+  return blocks
+}
+
+export function isMovedCode(highlightedLines, baseBlocks) {
+  const needle = highlightedLines.map(normalizeSourceLine).filter((line) => line !== '')
+  if (needle.length === 0) {
+    return false
+  }
+  // Why a near-match rather than an exact contiguous one: a split moves a block
+  // verbatim but a diagnostic's span often reaches past it — most commonly to a
+  // hook dependency array, which legitimately grows when closure variables become
+  // props. Requiring every line to match would report the moved body as new. So:
+  // the block must still start at the same line in the base and appear IN ORDER,
+  // and nearly all of it must be present. Genuinely new code shares neither the
+  // anchor nor the ordering, so it stays reported.
+  const MIN_COVERAGE = 0.9
+  return baseBlocks.some((rawHaystack) => {
+    const haystack = rawHaystack.map(normalizeSourceLine).filter((line) => line !== '')
+    for (let start = 0; start < haystack.length; start += 1) {
+      if (haystack[start] !== needle[0]) {
+        continue
+      }
+      let matched = 1
+      let cursor = start + 1
+      for (let index = 1; index < needle.length && cursor < haystack.length; index += 1) {
+        while (cursor < haystack.length && haystack[cursor] !== needle[index]) {
+          cursor += 1
+        }
+        if (cursor < haystack.length) {
+          matched += 1
+          cursor += 1
+        }
+      }
+      if (matched / needle.length >= MIN_COVERAGE) {
+        return true
+      }
+    }
+    return false
+  })
+}
+
+function diagnosticHighlightedLines(root, filename, span) {
+  const absolutePath = path.isAbsolute(filename) ? filename : path.join(root, filename)
+  const source = readFileSync(absolutePath, 'utf8').split(/\r?\n/)
+  const range = diagnosticLineRange(root, filename, span)
+  if (range === null) {
+    return []
+  }
+  return source.slice(range.start - 1, range.end)
+}
+
+export function diagnosticTouchesAddedLines(
+  diagnostic,
+  rangesByFile,
+  root = process.cwd(),
+  baseBlocks = []
+) {
   const file = normalizedDiagnosticPath(root, diagnostic.filename)
   const ranges = rangesByFile.get(file)
   if (!ranges) {
@@ -147,7 +239,13 @@ export function diagnosticTouchesAddedLines(diagnostic, rangesByFile, root = pro
   }
   return (diagnostic.labels ?? []).some((label) => {
     const lineRange = diagnosticLineRange(root, diagnostic.filename, label.span)
-    return lineRange !== null && overlapsAddedLines(lineRange.start, lineRange.end, ranges)
+    if (lineRange === null || !overlapsAddedLines(lineRange.start, lineRange.end, ranges)) {
+      return false
+    }
+    return !isMovedCode(
+      diagnosticHighlightedLines(root, diagnostic.filename, label.span),
+      baseBlocks
+    )
   })
 }
 
@@ -193,10 +291,12 @@ export function main(
     return 0
   }
 
+  const baseBlocks = collectBaseLineBlocks(root, comparisonBase)
+
   let failures = 0
   for (const scan of OXLINT_SCANS) {
     const diagnostics = runOxlintScan(root, scan, files).filter((diagnostic) =>
-      diagnosticTouchesAddedLines(diagnostic, rangesByFile, root)
+      diagnosticTouchesAddedLines(diagnostic, rangesByFile, root, baseBlocks)
     )
     for (const diagnostic of diagnostics) {
       printDiagnostic(diagnostic, root)
