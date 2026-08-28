@@ -64,6 +64,7 @@ export function isMatchingSelectedGitHubPr(
   )
 }
 
+/** Remote conflict is checkable against the selected review: an absent push target still qualifies. */
 export function isAllowedPushTargetRemoteConflict(
   conflictKind: 'local' | 'remote' | null,
   branchName: string,
