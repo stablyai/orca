@@ -79,7 +79,7 @@ describe('parseAskFromStatus', () => {
     expect(prompt?.questions[0]?.question).toBe('ok')
   })
 
-  it('carries each option’s preview text, dropping empty ones', () => {
+  it('surfaces preview presence and text per option, dropping empty previews', () => {
     const prompt = parseAskFromStatus(
       JSON.stringify({
         questions: [
@@ -95,10 +95,26 @@ describe('parseAskFromStatus', () => {
       })
     )
     expect(prompt?.questions[0]?.options).toEqual([
-      { label: 'A', preview: 'const x = 1' },
+      { label: 'A', hasPreview: true, preview: 'const x = 1' },
       { label: 'B' },
       { label: 'C' }
     ])
+  })
+
+  it('sets hasPreview on exactly the options it gives preview text to', () => {
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [
+          {
+            question: 'q',
+            options: [{ label: 'A', preview: 'x' }, { label: 'B' }, { label: 'C', preview: '' }]
+          }
+        ]
+      })
+    )
+    for (const option of prompt?.questions[0]?.options ?? []) {
+      expect(option.hasPreview === true).toBe(option.preview !== undefined)
+    }
   })
 
   it('keeps a multi-line preview snippet intact', () => {
@@ -218,7 +234,9 @@ const singleWithPreview = (options: string[]): AskPrompt => ({
     {
       question: 'q',
       multiSelect: false,
-      options: options.map((label, i) => (i === 0 ? { label, preview: 'snippet' } : { label }))
+      options: options.map((label, i) =>
+        i === 0 ? { label, hasPreview: true, preview: 'snippet' } : { label }
+      )
     }
   ]
 })
@@ -314,8 +332,8 @@ describe('buildAskAnswerKeys', () => {
           question: 'q1',
           multiSelect: false,
           options: [
-            { label: 'Tabs', preview: '\tindented' },
-            { label: 'Spaces', preview: '    indented' }
+            { label: 'Tabs', hasPreview: true, preview: '\tindented' },
+            { label: 'Spaces', hasPreview: true, preview: '    indented' }
           ]
         },
         { question: 'q2', multiSelect: false, options: [{ label: 'Apple' }, { label: 'Banana' }] }

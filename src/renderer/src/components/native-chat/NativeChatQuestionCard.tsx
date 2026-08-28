@@ -54,7 +54,9 @@ export function NativeChatQuestionCard({
 
   const previewIndex = highlights[index] ?? 0
   const preview = q.options[previewIndex]?.preview
-  const questionHasPreview = q.options.some((option) => (option.preview ?? '').length > 0)
+  // Gated on preview text rather than `hasPreview`: this decides whether there is
+  // anything to render, not which keystrokes the answer commits with.
+  const questionHasPreviewText = q.options.some((option) => (option.preview ?? '').length > 0)
 
   const setOther = (qi: number, value: string): void => {
     setOtherText((prev) => {
@@ -191,7 +193,7 @@ export function NativeChatQuestionCard({
             <div
               className={cn(
                 'flex flex-col',
-                questionHasPreview && '@2xl/question:flex-row @2xl/question:items-stretch'
+                questionHasPreviewText && '@2xl/question:flex-row @2xl/question:items-stretch'
               )}
             >
               {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
@@ -199,7 +201,7 @@ export function NativeChatQuestionCard({
               <div
                 className={cn(
                   'max-h-[50vh] min-w-0 divide-y divide-border/60 overflow-y-auto scrollbar-sleek',
-                  questionHasPreview && '@2xl/question:w-1/2 @2xl/question:shrink-0'
+                  questionHasPreviewText && '@2xl/question:w-1/2 @2xl/question:shrink-0'
                 )}
               >
                 {q.options.map((opt, i) => (
@@ -209,14 +211,14 @@ export function NativeChatQuestionCard({
                     label={opt.label}
                     description={opt.description}
                     selected={(selections[index] ?? []).includes(i)}
-                    highlighted={questionHasPreview && previewIndex === i}
+                    highlighted={questionHasPreviewText && previewIndex === i}
                     disabled={isSubmitting}
                     onSelect={() => pickOption(i)}
                     onHighlight={() => setHighlight(i)}
                   />
                 ))}
               </div>
-              {questionHasPreview ? <PreviewPanel preview={preview} /> : null}
+              {questionHasPreviewText ? <PreviewPanel preview={preview} /> : null}
             </div>
             <div className="flex items-center gap-3 border-t border-border/60 px-3.5 py-2.5">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">

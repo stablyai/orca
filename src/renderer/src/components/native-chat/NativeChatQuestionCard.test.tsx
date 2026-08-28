@@ -95,8 +95,8 @@ const previewPrompt: AskPrompt = {
       question: 'Do you prefer tabs or spaces?',
       multiSelect: false,
       options: [
-        { label: 'Tabs', preview: '\tindented' },
-        { label: 'Spaces', preview: '    indented' }
+        { label: 'Tabs', hasPreview: true, preview: '\tindented' },
+        { label: 'Spaces', hasPreview: true, preview: '    indented' }
       ]
     }
   ]
@@ -202,7 +202,10 @@ describe('NativeChatQuestionCard', () => {
           {
             question: 'Pick',
             multiSelect: false,
-            options: [{ label: 'Snippet', preview: 'const x = 1' }, { label: 'Bare' }]
+            options: [
+              { label: 'Snippet', hasPreview: true, preview: 'const x = 1' },
+              { label: 'Bare' }
+            ]
           }
         ]
       },
@@ -222,12 +225,12 @@ describe('NativeChatQuestionCard', () => {
           {
             question: 'First?',
             multiSelect: false,
-            options: [{ label: 'A', preview: 'first-preview' }]
+            options: [{ label: 'A', hasPreview: true, preview: 'first-preview' }]
           },
           {
             question: 'Second?',
             multiSelect: false,
-            options: [{ label: 'B', preview: 'second-preview' }]
+            options: [{ label: 'B', hasPreview: true, preview: 'second-preview' }]
           }
         ]
       },

@@ -1,9 +1,15 @@
 // Canonical AskUserQuestion prompt types consumed by the shared parser and both
 // native-chat platform UIs.
 
-/** `preview` is an example snippet (code, config, a mockup) the user reads before
- *  choosing; its presence also changes how Claude's selector commits an answer. */
-export type AskOption = { label: string; description?: string; preview?: string }
+/** `preview` is an example snippet (code, config, a mockup) rendered for the user
+ *  to read before choosing. `hasPreview` — not the presence of `preview` — is what
+ *  selects the answer keystrokes, so the two stay independent fields. */
+export type AskOption = {
+  label: string
+  description?: string
+  hasPreview?: boolean
+  preview?: string
+}
 export type AskQuestion = {
   question: string
   header?: string
