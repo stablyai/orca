@@ -132,22 +132,14 @@ function activeOrQueuedResumeClaimsProviderSession(
   return false
 }
 
-/**
- * Absolute age after which an unfinished resume record stops being a resume candidate.
- *
- * Why this exists on top of the staleness check below: that check compares two timestamps
- * captured together, so it measures how long the agent had been silent *at capture time* and
- * never how long the record has since been sitting there. A live capture writes `capturedAt`
- * from the same value as `updatedAt`, which makes the difference ~0 no matter how old the
- * record gets. Without an absolute bound, any agent that ends without a confirmable exit
- * transition — SIGKILL, force quit, host reboot, a status hook that never fires — leaves a
- * record that stays a valid resume candidate forever.
- *
- * Why a week: the surrounding intent is deliberately permissive about resuming interrupted
- * turns, and the cost of expiring too early is small — the transcript survives and the session
- * can still be resumed by hand — while the cost of never expiring is an unattended relaunch.
- */
+// Why: the staleness check below compares two timestamps stamped together, so it never sees how
+// long a record has since sat. Without an absolute bound, an agent that ends with no observable
+// exit — SIGKILL, force quit, reboot, a missed hook — stays resumable forever.
 export const RESUME_RECORD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+function isExpiredResumeRecord(record: SleepingAgentSessionRecord): boolean {
+  return record.state !== 'done' && Date.now() - record.capturedAt > RESUME_RECORD_MAX_AGE_MS
+}
 
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
@@ -155,13 +147,9 @@ function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): 
   if (!record.origin && record.state === 'done') {
     return true
   }
-  if (record.state === 'done') {
-    return false
-  }
-  if (record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS) {
-    return true
-  }
-  return Date.now() - record.capturedAt > RESUME_RECORD_MAX_AGE_MS
+  return (
+    record.state !== 'done' && record.capturedAt - record.updatedAt > AGENT_STATUS_STALE_AFTER_MS
+  )
 }
 
 function parkWorktreeResumeSweepUntilHostMirrorHydrates(
@@ -196,7 +184,12 @@ export function resumeSleepingAgentSessionsForWorktree(
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
-    (record) => !isInvalidWorktreeActivationRecord(record)
+    // Why the expiry arm: these maps decide which record owns a claim key, and the loop clears
+    // orphaned expired records anyway. Leaving one in lets it win "newest" and evict a healthy
+    // sharer — a quit or interrupted record — that would otherwise have resumed.
+    (record) =>
+      !isInvalidWorktreeActivationRecord(record) &&
+      !(isExpiredResumeRecord(record) && !recordPaneIsOwnedByPreservedPane(record, state))
   )
   const activeWorktreeRecords = validWorktreeRecords.filter(
     (record) => !isPassiveCompletedHibernationEvidence(record)
@@ -238,6 +231,13 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
+    // Why here: only an orphan expires. Running past hydration keeps an unverifiable host from
+    // losing its evidence to the clock, and running past ownership keeps a live pane's evidence
+    // even when its agent stopped reporting — the record is only dead weight once neither holds.
+    if (!isPaneOwned && isExpiredResumeRecord(record)) {
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
     if (isPassiveCompletedHibernationEvidence(record)) {
       // Why: completed-agent hibernation is passive history; activation should
       // only keep displayable evidence, never start new work from it.
