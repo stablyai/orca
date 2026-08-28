@@ -738,7 +738,7 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               code: 'task_dispatch_mismatch',
               reason: `Task ${taskId} does not belong to Dispatch ${dispatch.id}.`
             }
-          } else if (capabilityBacked) {
+          } else if (capabilityBacked && orchestrationCapability) {
             const capabilityAuthority = db.verifyDispatchCapability({
               dispatchId: dispatch.id,
               capability: orchestrationCapability,
@@ -749,6 +749,34 @@ export const ORCHESTRATION_METHODS: RpcMethod[] = [
               valid: capabilityAuthority.valid,
               code: 'dispatch_capability_invalid',
               reason: capabilityAuthority.valid ? '' : capabilityAuthority.reason
+            }
+          } else if (capabilityBacked) {
+            // A tokenless completion is authorised ONLY by attested identity.
+            //
+            // Why not `senderPaneKey`/`processIncarnation` from above: those fall
+            // back to `runtime.getTerminalPaneKey(from)`, and `from` is
+            // caller-declared routing metadata. Resolving authority through it
+            // would let any terminal pass `--from <worker>` and inherit the real
+            // worker's pane and incarnation. Attestation is the only identity the
+            // caller cannot choose.
+            //
+            // Fails closed on every missing piece: no attestation, no recorded
+            // incarnation, or any mismatch means the capability is required.
+            const attestedPane = attestedCaller?.paneKey
+            const attestedIncarnation = attestedCaller?.processIncarnation
+            authority = {
+              valid: Boolean(
+                attestedPane &&
+                attestedIncarnation &&
+                dispatch.process_incarnation &&
+                db.isDispatchProcessCurrent({
+                  dispatchId: dispatch.id,
+                  paneKey: attestedPane,
+                  processIncarnation: attestedIncarnation
+                })
+              ),
+              code: 'dispatch_capability_invalid',
+              reason: `Dispatch ${dispatch.id} was not reported from its own attested pane and process; report from that session or present its capability.`
             }
           } else if (dispatch.process_incarnation) {
             authority = {
