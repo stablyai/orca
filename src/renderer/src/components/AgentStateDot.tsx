@@ -110,7 +110,10 @@ export const AgentStateDot = React.memo(function AgentStateDot({
     )
   }
 
-  if (state === 'permission' || state === 'waiting') {
+  // Why: 'blocked' is an input/permission wait too (Pi/Copilot ask tools), not
+  // an error — share the amber question glyph with 'waiting'/'permission', the
+  // same collapse the worktree level already does via 'permission'.
+  if (state === 'permission' || state === 'waiting' || state === 'blocked') {
     return (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
@@ -130,9 +133,7 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         className={cn(
           'block rounded-full',
           inner,
-          state === 'blocked' || state === 'interrupted' || state === 'failed'
-            ? 'bg-red-500'
-            : 'bg-neutral-500/40'
+          state === 'interrupted' || state === 'failed' ? 'bg-red-500' : 'bg-neutral-500/40'
         )}
       />
     </span>

@@ -64,7 +64,7 @@ describe('AgentStateDot', () => {
     expect(markup).toContain('text-emerald-500')
   })
 
-  it.each(['permission', 'waiting'] satisfies AgentDotState[])(
+  it.each(['permission', 'waiting', 'blocked'] satisfies AgentDotState[])(
     'renders %s as the shared question glyph',
     (state) => {
       const markup = renderMarkup(state)
@@ -77,7 +77,7 @@ describe('AgentStateDot', () => {
     }
   )
 
-  it.each(['blocked', 'interrupted'] satisfies AgentDotState[])(
+  it.each(['interrupted'] satisfies AgentDotState[])(
     'renders %s as a red attention dot',
     (state) => {
       const classNames = renderDotClassNames(state)

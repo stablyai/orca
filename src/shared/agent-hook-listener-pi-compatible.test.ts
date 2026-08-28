@@ -87,6 +87,135 @@ describe('shared agent-hook-listener', () => {
     expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(questions))
   })
 
+  it('maps Pi tool_call ask_user to blocked with interactivePrompt', () => {
+    // Why: pi-ask-user extension tools are named ask_user with a
+    // {question, context, options} input; they block the TUI on a human
+    // answer exactly like ask_user_question, so the wait must not read as
+    // working.
+    const input = {
+      question: 'Merge PR #2 now?',
+      context: 'PR #2 is clean and mergeable.',
+      options: [
+        { label: 'Merge PR #2 now', description: 'Merge into main; do not deploy yet.' },
+        { label: 'Leave PR #2 open' }
+      ]
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user',
+          tool_input: input
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(input))
+  })
+
+  it('maps Pi tool_execution_start ask_user to blocked with interactivePrompt', () => {
+    const input = { question: 'Proceed?', options: ['yes', 'no'] }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_execution_start',
+          tool_name: 'ask_user',
+          tool_input: input
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user'
+    })
+    expect(blocked?.payload.interactivePrompt).toBe(JSON.stringify(input))
+  })
+
+  it('keeps Pi ask_user blocked when tool_input is missing', () => {
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        paneKey: PANE_KEY,
+        tabId: 'tab-1',
+        worktreeId: 'wt',
+        env: 'production',
+        version: '1',
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user'
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload).toMatchObject({
+      state: 'blocked',
+      agentType: 'pi',
+      toolName: 'ask_user'
+    })
+    expect(blocked?.payload.interactivePrompt).toBeUndefined()
+  })
+
+  it('clears Pi ask_user blocked once the tool_execution_end arrives', () => {
+    const base = {
+      paneKey: PANE_KEY,
+      tabId: 'tab-1',
+      worktreeId: 'wt',
+      env: 'production' as const,
+      version: '1'
+    }
+    const blocked = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_call',
+          tool_name: 'ask_user',
+          tool_input: { question: 'Ship it?', options: ['yes', 'no'] }
+        }
+      },
+      'production'
+    )
+    expect(blocked?.payload.state).toBe('blocked')
+
+    const cleared = normalizeHookPayload(
+      state,
+      'pi',
+      {
+        ...base,
+        payload: {
+          hook_event_name: 'tool_execution_end',
+          tool_name: 'ask_user'
+        }
+      },
+      'production'
+    )
+    expect(cleared?.payload.state).toBe('working')
+    expect(cleared?.payload.interactivePrompt).toBeUndefined()
+  })
+
   it('keeps Pi regular tool_call notifications as working', () => {
     const working = normalizeHookPayload(
       state,
