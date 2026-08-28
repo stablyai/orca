@@ -25,6 +25,7 @@ type EditorPanelRenderModelParams = {
   gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
+  markdownRichModeSizeOverride: StoreState['markdownRichModeSizeOverride']
   isChangesMode: boolean
   canOpenWorkspaceFileBrowser: boolean
 }
@@ -36,6 +37,7 @@ export function getEditorPanelRenderModel({
   gitStatusEntries,
   gitBranchEntries,
   markdownViewMode,
+  markdownRichModeSizeOverride,
   isChangesMode,
   canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
@@ -130,7 +132,9 @@ export function getEditorPanelRenderModel({
   const inlineMarkdownRenderMode =
     activeFile.mode === 'edit' && inlineMarkdownContent !== null
       ? getMarkdownRenderMode({
-          exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(inlineMarkdownContent),
+          exceedsRichModeSizeLimit:
+            markdownRichModeSizeOverride[activeFile.id] !== true &&
+            exceedsMarkdownRichModeSizeLimit(inlineMarkdownContent),
           hasRichModeUnsupportedContent:
             getMarkdownRichModeUnsupportedMessage(inlineMarkdownContent) !== null,
           viewMode: mdViewMode

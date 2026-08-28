@@ -1,5 +1,9 @@
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 import type { MarkdownViewMode, OpenFile } from '@/store/slices/editor'
+import { Button } from '@/components/ui/button'
+import { RICH_MARKDOWN_MAX_SIZE_BYTES } from '../../../../shared/constants'
+import { formatBytes } from '../status-bar/workspace-space-format'
 import { MarkdownPreview, RichMarkdownEditor } from './editor-lazy-views'
 import { exceedsMarkdownRichModeSizeLimit } from './markdown-rich-size-limit'
 import { extractFrontMatter, prependFrontMatter } from './markdown-frontmatter'
@@ -41,9 +45,11 @@ export function EditorMarkdownFileSurface({
   handleDirtyStateHint: (dirty: boolean) => void
   monacoEditor: React.JSX.Element
 }): React.JSX.Element {
+  const sizeOverridden = useAppStore((s) => s.markdownRichModeSizeOverride[activeFile.id] === true)
+  const setSizeOverride = useAppStore((s) => s.setMarkdownRichModeSizeOverride)
   const richModeUnsupportedMessage = getMarkdownRichModeUnsupportedMessage(currentContent)
   const renderMode = getMarkdownRenderMode({
-    exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(currentContent),
+    exceedsRichModeSizeLimit: !sizeOverridden && exceedsMarkdownRichModeSizeLimit(currentContent),
     hasRichModeUnsupportedContent: richModeUnsupportedMessage !== null,
     viewMode: mdViewMode
   })
@@ -52,13 +58,30 @@ export function EditorMarkdownFileSurface({
     return <div className="h-full min-h-0">{monacoEditor}</div>
   }
   if (renderMode === 'source' && mdViewMode === 'rich') {
+    // Why: only a size fallback is recoverable — unsupported syntax would round-trip badly, so it gets no override.
+    const isSizeFallback = richModeUnsupportedMessage === null
     const richFallbackMessage =
       richModeUnsupportedMessage ??
-      'File is too large for rich editing. Showing source mode instead.'
+      translate(
+        'editor.richMarkdown.tooLarge',
+        'File is larger than the {{limit}} rich editing limit. Showing source mode instead.',
+        { limit: formatBytes(RICH_MARKDOWN_MAX_SIZE_BYTES) }
+      )
     return (
       <div className="flex h-full min-h-0 flex-col">
-        <div className="border-b border-border/60 bg-blue-500/10 px-3 py-2 text-xs text-blue-950 dark:text-blue-100">
-          {richFallbackMessage}
+        <div className="flex items-center gap-3 border-b border-border/60 bg-blue-500/10 px-3 py-2 text-xs text-blue-950 dark:text-blue-100">
+          <span className="min-w-0 flex-1">{richFallbackMessage}</span>
+          {isSizeFallback ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              className="shrink-0"
+              onClick={() => setSizeOverride(activeFile.id, true)}
+            >
+              {translate('editor.richMarkdown.openAnyway', 'Open anyway')}
+            </Button>
+          ) : null}
         </div>
         <div className="min-h-0 flex-1 h-full">{monacoEditor}</div>
       </div>

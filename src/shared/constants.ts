@@ -83,7 +83,13 @@ export const getDefaultTerminalRightClickToPaste = (
   platform = typeof process !== 'undefined' ? process.platform : ''
 ): boolean => platform === 'win32'
 
-/** Why: ProseMirror's full-document tree lags on large files; above this, fall back to source mode (Monaco). */
+/** Why: ProseMirror renders the whole document — no virtualization — so cost is
+ *  linear in file size and every keystroke re-runs it. Measured in a packaged
+ *  build (M-series, `out/`), typing latency and the blocking mount on open:
+ *  100 KB 17 ms / 0 ms · 200 KB 46 ms / 0 ms · 300 KB 84 ms / 1.4 s ·
+ *  600 KB 265 ms / 4.2 s. 300 KB is already the knee, so this is a ceiling to
+ *  hold rather than raise; past it, fall back to source mode (Monaco) with a
+ *  per-file "Open anyway" escape hatch. Real headroom needs #7056. */
 export const RICH_MARKDOWN_MAX_SIZE_BYTES = 300 * 1024
 
 export const DEFAULT_EDITOR_AUTO_SAVE_DELAY_MS = 1000

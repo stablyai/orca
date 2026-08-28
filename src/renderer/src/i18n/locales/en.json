@@ -100,6 +100,12 @@
       "findUnavailable": "Find in page is not available while this page streams from the remote host."
     }
   },
+  "editor": {
+    "richMarkdown": {
+      "tooLarge": "File is larger than the {{limit}} rich editing limit. Showing source mode instead.",
+      "openAnyway": "Open anyway"
+    }
+  },
   "githubChecks": {
     "retrying": "Retrying…"
   },
