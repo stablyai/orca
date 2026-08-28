@@ -283,7 +283,8 @@ describe('NativeChatQuestionCard', () => {
 
   it('carries the container-query classes that drive the split layout', () => {
     // happy-dom does not evaluate container queries, so this asserts the class
-    // strings are present — not that the two-column layout renders.
+    // strings are present — not that the two-column layout renders, that the
+    // preview spans the rows, or that anything is top-aligned.
     render(previewPrompt, vi.fn())
 
     const optionsGrid = previewPanel()!.parentElement!
@@ -292,9 +293,59 @@ describe('NativeChatQuestionCard', () => {
       '@2xl/question:[&>[data-slot=question-preview]]:col-start-2'
     )
     expect(optionsGrid.className).toContain(
-      '@2xl/question:[&>[data-slot=question-preview]]:row-start-1'
+      '@2xl/question:[&>[data-slot=question-preview]]:row-span-full'
     )
+    expect(optionsGrid.className).toContain('@2xl/question:grid-rows-(--question-option-rows)')
     expect(optionsGrid.closest('.\\@container\\/question')).not.toBeNull()
+  })
+
+  it('declares one explicit row track per option so the preview can span them', () => {
+    // `row-span-full` resolves against explicit grid lines, so the track count
+    // must follow the option count. The value is a real inline style, so this
+    // part is behavior — only its container-query gating is untestable here.
+    render(previewPrompt, vi.fn())
+    expect(previewPanel()!.parentElement!.style.getPropertyValue('--question-option-rows')).toBe(
+      'repeat(2, min-content)'
+    )
+
+    render(
+      {
+        questions: [
+          {
+            question: 'Pick',
+            multiSelect: false,
+            options: [
+              { label: 'A', hasPreview: true, preview: 'a' },
+              { label: 'B' },
+              { label: 'C' }
+            ]
+          }
+        ]
+      },
+      vi.fn()
+    )
+    expect(previewPanel()!.parentElement!.style.getPropertyValue('--question-option-rows')).toBe(
+      'repeat(3, min-content)'
+    )
+  })
+
+  it('keeps option rows sized to their own content', () => {
+    // Guards the hover jiggle: rows must not stretch to the preview's height.
+    render(previewPrompt, vi.fn())
+
+    expect(previewPanel()!.parentElement!.className).toContain('auto-rows-min')
+  })
+
+  it('marks the highlighted row with the affinity border that ties it to the preview', () => {
+    render(previewPrompt, vi.fn())
+
+    expect(optionRow('Tabs').className).toContain('border-l-ring')
+    expect(optionRow('Spaces').className).not.toContain('border-l-ring')
+
+    hoverOption('Spaces')
+
+    expect(optionRow('Spaces').className).toContain('border-l-ring')
+    expect(optionRow('Tabs').className).not.toContain('border-l-ring')
   })
 
   it('keeps the preview scoped to the focused question in a multi-question prompt', () => {

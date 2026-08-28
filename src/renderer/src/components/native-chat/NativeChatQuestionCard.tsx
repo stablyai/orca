@@ -194,12 +194,23 @@ export function NativeChatQuestionCard({
             {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
                 the card's right edge instead of crowding the choices. One grid in
                 both modes: stacked, the preview is the row after its own option;
-                split, column 2 spans every row so it stays top-aligned. */}
+                split, it spans column 2 across every option row.
+
+                The row track list is explicit because `row-span-full` resolves
+                against explicit lines only — with implicit rows the span collapses
+                to one row, which then stretches to the preview's height. */}
             <div
+              style={
+                questionHasPreviewText
+                  ? ({
+                      '--question-option-rows': `repeat(${q.options.length}, min-content)`
+                    } as React.CSSProperties)
+                  : undefined
+              }
               className={cn(
-                'grid max-h-[50vh] min-w-0 grid-cols-1 overflow-y-auto scrollbar-sleek',
+                'grid max-h-[50vh] min-w-0 grid-cols-1 auto-rows-min overflow-y-auto scrollbar-sleek',
                 questionHasPreviewText &&
-                  '@2xl/question:grid-cols-2 @2xl/question:items-start @2xl/question:[&>button]:col-start-1 @2xl/question:[&>[data-slot=question-preview]]:col-start-2 @2xl/question:[&>[data-slot=question-preview]]:row-start-1 @2xl/question:[&>[data-slot=question-preview]]:row-end-[-1]'
+                  '@2xl/question:grid-cols-2 @2xl/question:grid-rows-(--question-option-rows) @2xl/question:content-start @2xl/question:[&>button]:col-start-1 @2xl/question:[&>[data-slot=question-preview]]:col-start-2 @2xl/question:[&>[data-slot=question-preview]]:row-span-full'
               )}
             >
               {q.options.map((opt, i) => (
@@ -283,7 +294,7 @@ function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
   return (
     <div
       data-slot="question-preview"
-      className="min-w-0 self-stretch px-3.5 pb-2.5 @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5"
+      className="min-w-0 self-stretch px-3.5 pb-2.5 @2xl/question:h-full @2xl/question:border-l @2xl/question:border-border/60 @2xl/question:pt-2.5"
     >
       <div className="min-w-0 overflow-hidden rounded-md border border-border/60 bg-muted/40">
         {preview ? (
@@ -341,11 +352,16 @@ function OptionRow({
       // assistive tech.
       aria-pressed={selected}
       className={cn(
-        'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
+        // The inline left border is transparent when idle so the row's text
+        // never shifts as the highlight moves.
+        'flex w-full items-start gap-3 border-l-2 border-l-transparent px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
         // Grid children cannot use the list's divide-y once the preview splits
         // into a second column.
         dividerAbove && 'border-t border-border/60',
-        selected || highlighted ? 'bg-accent' : 'hover:bg-accent'
+        selected || highlighted ? 'bg-accent' : 'hover:bg-accent',
+        // Ties the row to the preview it drives, which is otherwise a full-height
+        // cell beside the whole list.
+        highlighted && 'border-l-ring'
       )}
     >
       <span
