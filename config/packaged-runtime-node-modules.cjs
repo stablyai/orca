@@ -27,6 +27,7 @@ const PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   'qrcode',
   'ssh2',
   'tweetnacl',
+  'typescript-api',
   'ws',
   'yaml',
   'zod'
@@ -201,10 +202,19 @@ function collectPackagedRuntimePackages(electronPlatformName = process.platform)
 }
 
 function createPackagedRuntimeNodeModuleResources(electronPlatformName = process.platform) {
-  return collectPackagedRuntimePackages(electronPlatformName).map(([packageName, packageDir]) => ({
+  const packages = collectPackagedRuntimePackages(electronPlatformName)
+  const resources = packages.map(([packageName, packageDir]) => ({
     from: packageDir,
     to: join('node_modules', ...packageName.split('/'))
   }))
+  const typescriptPackage = packages.find(([packageName]) => packageName === 'typescript')
+  if (typescriptPackage) {
+    resources.push({
+      from: typescriptPackage[1],
+      to: join('node_modules', 'typescript-api')
+    })
+  }
+  return resources
 }
 
 function normalizeAsarEntryPath(entry) {
@@ -442,7 +452,21 @@ function prunePackagedRuntimeTypeDeclarations(resourcesDir) {
   if (!existsSync(nodeModulesDir)) {
     return
   }
-  pruneMatchingFiles(nodeModulesDir, (filename) => TYPE_DECLARATION_ARTIFACT_RE.test(filename))
+  const typescriptLibDirs = new Set([
+    join(nodeModulesDir, 'typescript', 'lib'),
+    join(nodeModulesDir, 'typescript-api', 'lib')
+  ])
+  pruneMatchingFiles(nodeModulesDir, (filename, filePath) => {
+    if (!TYPE_DECLARATION_ARTIFACT_RE.test(filename)) {
+      return false
+    }
+    for (const libDir of typescriptLibDirs) {
+      if (filePath.startsWith(libDir)) {
+        return false
+      }
+    }
+    return true
+  })
 }
 
 function prunePackagedSherpaOnnx(resourcesDir, electronPlatformName) {
@@ -490,7 +514,7 @@ function pruneMatchingFiles(directory, shouldPrune) {
     const entryPath = join(directory, entry.name)
     if (entry.isDirectory()) {
       pruneMatchingFiles(entryPath, shouldPrune)
-    } else if (entry.isFile() && shouldPrune(entry.name)) {
+    } else if (entry.isFile() && shouldPrune(entry.name, entryPath)) {
       rmSync(entryPath, { force: true })
     }
   }

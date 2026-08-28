@@ -102,6 +102,10 @@ import type { GetRateLimitResult } from '../shared/github/rate-limit-types'
 import type { GitHubWorkItem, ListWorkItemsResult } from '../shared/github/work-item-types'
 import type { GhosttyImportPreview } from '../shared/global-settings-types'
 import type { GitHubCreateIssueResult } from '../shared/issue-mutation-types'
+import type {
+  EditorLanguageDefinitionResult,
+  EditorLanguageRequest
+} from '../shared/editor-language-types'
 import type { JiraProjectStatusOrder } from '../shared/jira-types'
 import type { LinearProjectDetail } from '../shared/linear/project-types'
 import type {
@@ -3213,6 +3217,11 @@ const api = {
       ipcRenderer.on('ui:emulatorAutoAttach', listener)
       return () => ipcRenderer.removeListener('ui:emulatorAutoAttach', listener)
     }
+  },
+
+  editorLanguage: {
+    getDefinition: (args: EditorLanguageRequest): Promise<EditorLanguageDefinitionResult | null> =>
+      ipcRenderer.invoke('editorLanguage:getDefinition', args)
   },
 
   hooks: {
