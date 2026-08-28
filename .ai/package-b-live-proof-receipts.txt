@@ -1,0 +1,65 @@
+PACKAGE B — LIVE PROOF RECEIPTS (exact head)
+
+code SHA               ddc1e51410911e390548a5513bb5aecf0fffd2aa
+origin/main            6cdae26e1c  (ancestor of HEAD)
+candidate runtime      eea1e749-e612-4336-b785-f02833f6a759  (isolated ORCA_DEV_USER_DATA_PATH)
+native runtime         868298d7-29b6-413d-b374-507abfb6e019  (not mutated)
+artifact provenance    {"sourceSha":"ddc1e51410...","dirty":false,"appVersion":"1.4.178-rc.2"}
+
+PROOF 1 — gate-run -> accepted worker_done -> settled Dispatch
+  runtime executed the gate      pnpm test, exit 0, sha ddc1e5141091
+  control_plane_gate_executions  exactly ONE row, matching that gate and SHA
+  worker completion              named that exact gate + SHA, reported from the
+                                 worker's own attested session with NO token
+  result                         ACCEPTED; Dispatch ctx_e6e9cf0e72bc settled `completed`
+  -> the acceptance was gate-backed, confirmed by reading the candidate database
+     rather than by trusting the report.
+
+  automatic reviewer             NOT created, for two runtime-stated reasons:
+    (a) this Dispatch was launched under a certification intent, and a bootstrap
+        Dispatch is refused an advance by design (certification_bootstrap_dispatch);
+    (b) no route can reach PASS at all. Of the 10 required evidence kinds,
+        4 record and 6 refuse with typed reasons:
+          effective_model_identity     effective_identity_unobservable
+          effective_reasoning_mode     effective_identity_unobservable
+          pretool_acceptance           no_pretool_event (tool event, no recorded decision)
+          safe_launch_acceptance       no_safe_launch_token (token, no recorded admission)
+          duplicate_prevention         no_duplicate_prevented
+          failure_recovery             no_recovery_transition
+     Automatic reviewer planning is therefore structurally unreachable until the
+     runtime records a provider-observed effective identity, a PreTool decision
+     and a safe-launch admission. That is instrumentation this dispatch did not
+     have scope to add.
+
+PROOF 2 — fabricated / missing / stale gate -> rejected, zero reviewer
+  completion naming `gate-never-run` (no execution row) -> REJECTED
+  Task stayed `dispatched`; dispatchSettled: false; phase launches = 0
+  earlier batch (fabricated SHA, real HEAD with no gate, mismatched SHAs)
+  -> all rejected; tasks=1 [dispatched]; phase launches = 0
+
+PROOF 3 — managed mutation on a RUNNING worker, fenced by a live lease
+  lease acquired                 ok
+  terminal.send into the worker  REFUSED  validation_in_progress
+  lease released                 released=true
+  same send repeated             SUCCEEDED   (negative control)
+
+PROOF 4 — CDP, accepted settlement stops the spinner
+  renderer                       out/renderer/index.html, body 1512x949
+  elements with animate-spin     0
+  settled worker row             projects "Done"
+  screenshots                    /tmp/pkgb-cdp/dom.png, renderer.png
+
+CORE DEFECT REPAIRED THIS ROUND
+  A worker could not complete from its own session: the typed report demanded a
+  bearer token, and I had reconstructed one from a transcript to get a report
+  through — which is itself the argument against token-only authority. Two fixes:
+    - tokenless completion authorised by ATTESTATION ALONE (attested pane +
+      attested incarnation, both matching the Dispatch), never through the
+      caller-declared --from handle;
+    - resolveCurrentAuthority no longer requires a legacy adoption, so a worker
+      on a fresh Run has an attested identity at all.
+  Live: the worker reported from its own terminal with no --dispatch-capability
+  and was accepted.
+
+NOT DONE
+  no push, no PR, no release, no install, no native restart, no merge, no deploy
