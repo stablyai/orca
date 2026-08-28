@@ -2,8 +2,10 @@ import React from 'react'
 import Markdown, { defaultUrlTransform } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkBreaks from 'remark-breaks'
+import remarkMath from 'remark-math'
 import rehypeRaw from 'rehype-raw'
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize'
+import rehypeKatex from 'rehype-katex'
 import { cn } from '@/lib/utils'
 import {
   compactCommentMarkdownComponents,
@@ -13,10 +15,15 @@ import {
   isTrustedCompactImageSrc,
   type CommentMarkdownLinkClickHandler
 } from './comment-markdown-element-renderers'
+import {
+  normalizeBracketDelimitedMathSource,
+  remarkGitHubBacktickMath
+} from './comment-markdown-math'
 
 export type { CommentMarkdownLinkClickHandler } from './comment-markdown-element-renderers'
 
-type MarkdownPlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
+type RemarkPlugins = NonNullable<React.ComponentProps<typeof Markdown>['remarkPlugins']>
+type RehypePlugins = NonNullable<React.ComponentProps<typeof Markdown>['rehypePlugins']>
 type UrlTransform = NonNullable<React.ComponentProps<typeof Markdown>['urlTransform']>
 
 type GitHubRepoReference = {
@@ -60,7 +67,13 @@ const commentMarkdownFileUriUrlTransform: UrlTransform = (value, key, node) => {
 // plain-text renderer used whitespace-pre-wrap which preserved them. Adding
 // remark-breaks converts single newlines to <br>, keeping backward compat
 // with existing plain-text comments that rely on newline formatting.
-const remarkPlugins = [remarkGfm, remarkBreaks]
+const remarkPlugins: RemarkPlugins = [remarkGfm, remarkBreaks]
+const mathRemarkPlugins: RemarkPlugins = [
+  remarkGfm,
+  remarkMath,
+  remarkGitHubBacktickMath,
+  remarkBreaks
+]
 
 const GITHUB_REFERENCE_PATTERN = /(?:\b([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+))?#([1-9][0-9]*)\b/g
 
@@ -160,6 +173,10 @@ const commentMarkdownSanitizeSchema = {
   attributes: {
     ...defaultSchema.attributes,
     a: [...(defaultSchema.attributes?.a ?? []), 'href', 'title'],
+    code: [
+      ...(defaultSchema.attributes?.code ?? []),
+      ['className', /^language-[\w-]+$/, 'math-inline', 'math-display']
+    ],
     details: [...(defaultSchema.attributes?.details ?? []), 'open'],
     img: [...(defaultSchema.attributes?.img ?? []), 'src', 'alt', 'title', 'width', 'height'],
     input: [...(defaultSchema.attributes?.input ?? []), 'type', 'checked', 'disabled'],
@@ -177,7 +194,8 @@ const commentMarkdownSanitizeSchema = {
 
 // Why: GitHub comments often include safe raw HTML (`<sub>`, `<details>`,
 // `<br />`). Parse it, then sanitize immediately before React renders it.
-const rehypePlugins: MarkdownPlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
+const rehypePlugins: RehypePlugins = [rehypeRaw, [rehypeSanitize, commentMarkdownSanitizeSchema]]
+const mathRehypePlugins: RehypePlugins = [...rehypePlugins, rehypeKatex]
 
 type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   content: string
@@ -186,6 +204,7 @@ type CommentMarkdownProps = React.ComponentPropsWithoutRef<'div'> & {
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   expandImages?: boolean
+  enableMath?: boolean
 }
 
 // Why forwardRef + rest props: Radix's HoverCardTrigger asChild merges a ref
@@ -201,6 +220,7 @@ const CommentMarkdown = React.memo(
       onLinkClick,
       allowFileUriLinks = false,
       expandImages = false,
+      enableMath = false,
       ...rest
     },
     ref
@@ -217,9 +237,14 @@ const CommentMarkdown = React.memo(
         ? createDocumentCommentMarkdownComponents(onLinkClick)
         : createCompactCommentMarkdownComponents(onLinkClick, expandImages)
     }, [expandImages, variant, onLinkClick])
-    const activeRemarkPlugins = React.useMemo(
-      () => (githubRepo ? [...remarkPlugins, remarkGitHubReferences(githubRepo)] : remarkPlugins),
-      [githubRepo]
+    const activeRemarkPlugins = React.useMemo(() => {
+      const basePlugins = enableMath ? mathRemarkPlugins : remarkPlugins
+      return githubRepo ? [...basePlugins, remarkGitHubReferences(githubRepo)] : basePlugins
+    }, [enableMath, githubRepo])
+
+    const renderedContent = React.useMemo(
+      () => (enableMath ? normalizeBracketDelimitedMathSource(content) : content),
+      [content, enableMath]
     )
 
     return (
@@ -237,13 +262,13 @@ const CommentMarkdown = React.memo(
       >
         <Markdown
           remarkPlugins={activeRemarkPlugins}
-          rehypePlugins={rehypePlugins}
+          rehypePlugins={enableMath ? mathRehypePlugins : rehypePlugins}
           components={components}
           urlTransform={
             allowFileUriLinks ? commentMarkdownFileUriUrlTransform : commentMarkdownUrlTransform
           }
         >
-          {content}
+          {renderedContent}
         </Markdown>
       </div>
     )

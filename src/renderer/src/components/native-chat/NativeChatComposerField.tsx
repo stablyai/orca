@@ -98,9 +98,8 @@ export function NativeChatComposerField({
   sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
-    <div className="shrink-0 bg-background">
-      {/* Extra bottom padding keeps the input box off the window rim. */}
-      <div className="px-3 pt-2 pb-4 sm:px-4">
+    <div className="shrink-0 border-t border-border/70 bg-background/95 font-mono backdrop-blur">
+      <div className="px-4 py-3 sm:px-6">
         <div className="relative mx-auto w-full max-w-4xl">
           {autocomplete.mode === 'slash' || autocomplete.mode === 'skill' ? (
             <NativeChatPickerMenu
@@ -122,12 +121,9 @@ export function NativeChatComposerField({
           ) : null}
           <div
             data-native-file-drop-target={NATIVE_FILE_DROP_TARGET.composer}
+            data-native-chat-composer="terminal"
             className={cn(
-              // Why: always-on hairline (token-level border, not focus ring) —
-              // no focus/click border flash. The box is a container, not a
-              // focus target.
-              'rounded-lg border border-border p-1.5 shadow-xs',
-              'bg-muted/50 dark:bg-input/40'
+              'rounded-lg border border-border/70 bg-muted/25 px-3 py-2 shadow-sm transition-colors focus-within:border-primary/70 focus-within:bg-background focus-within:ring-2 focus-within:ring-primary/15'
             )}
           >
             {imageAttachments.length > 0 ? (
@@ -162,42 +158,50 @@ export function NativeChatComposerField({
                 ))}
               </div>
             ) : null}
-            <textarea
-              ref={textareaRef}
-              value={draft}
-              disabled={disabled}
-              rows={2}
-              onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
-              onKeyDown={onKeyDown}
-              onCompositionStart={onCompositionStart}
-              onCompositionEnd={onCompositionEnd}
-              onPaste={onPaste}
-              onSelect={(e) => onTextareaSelect(e.currentTarget)}
-              aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
-              aria-controls={
-                autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
-                  ? pickerListboxId
-                  : undefined
-              }
-              aria-activedescendant={
-                (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') &&
-                autocomplete.items.length > 0
-                  ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
-                  : undefined
-              }
-              placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // field-sizing:content grows the field with the draft; the 8lh cap (plus
-              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
-              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
-              // so re-wrap on window/pane resize is handled without a measure pass.
-              className={cn(
-                'scrollbar-sleek min-h-12 w-full resize-none bg-transparent px-2 py-1 text-sm outline-none pointer-coarse:min-h-14',
-                '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
-                'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
-              )}
-            />
-            <div className="flex flex-wrap items-center gap-2 pt-0.5">
+            <div className="flex min-w-0 items-start">
+              <span
+                aria-hidden="true"
+                className="shrink-0 select-none py-1 pr-2 font-semibold leading-6 text-primary/80"
+              >
+                ›
+              </span>
+              <textarea
+                ref={textareaRef}
+                value={draft}
+                disabled={disabled}
+                rows={1}
+                onChange={(e) => onDraftChange(e.target.value, e.currentTarget)}
+                onKeyDown={onKeyDown}
+                onCompositionStart={onCompositionStart}
+                onCompositionEnd={onCompositionEnd}
+                onPaste={onPaste}
+                onSelect={(e) => onTextareaSelect(e.currentTarget)}
+                aria-expanded={autocomplete.mode === 'slash' || autocomplete.mode === 'skill'}
+                aria-controls={
+                  autocomplete.mode === 'slash' || autocomplete.mode === 'skill'
+                    ? pickerListboxId
+                    : undefined
+                }
+                aria-activedescendant={
+                  (autocomplete.mode === 'slash' || autocomplete.mode === 'skill') &&
+                  autocomplete.items.length > 0
+                    ? `${pickerListboxId}-option-${Math.min(activeSuggestion, autocomplete.items.length - 1)}`
+                    : undefined
+                }
+                placeholder={nativeChatComposerPlaceholder(hasPty, canSend)}
+                // Why: coarse-pointer min-height follows the app's touch target convention.
+                // field-sizing:content grows the field with the draft; the 8lh cap (plus
+                // py-1) turns further growth into internal scrolling, and scrollbar-sleek
+                // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
+                // so re-wrap on window/pane resize is handled without a measure pass.
+                className={cn(
+                  'scrollbar-sleek min-h-10 w-full resize-none bg-transparent py-1 pl-0 pr-2 font-mono text-[14px] leading-6 outline-none pointer-coarse:min-h-12',
+                  '[field-sizing:content] max-h-[calc(8lh+0.5rem)]',
+                  'placeholder:text-muted-foreground/60 disabled:cursor-not-allowed disabled:opacity-50'
+                )}
+              />
+            </div>
+            <div className="flex flex-wrap items-center gap-2 border-t border-border/50 pt-2">
               <NativeChatComposerActions
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}

@@ -119,9 +119,9 @@ function TypingIndicatorRow(): React.JSX.Element {
   )
 }
 
-/** One message: its prose first, then a collapsible run folding all of the
- *  turn's tool activity. Monochrome per STYLEGUIDE: user prompts read as a
- *  lifted card, assistant prose as body copy, reasoning de-emphasized. */
+/** One message: prose first, then a collapsible run folding its tool activity.
+ *  Prompts render as terminal input lines; agent output remains chrome-free
+ *  body copy, with reasoning de-emphasized. */
 function MessageRow({
   message,
   expandSignal,
@@ -152,31 +152,34 @@ function MessageRow({
     }
   }, [onScrollMessageToTop])
 
-  // Skip rows with nothing renderable so the transcript shows no empty/ghost
-  // bubble.
-  // After all hooks, so hook order stays unconditional.
+  // Skip rows with nothing renderable so the terminal transcript shows no
+  // empty prompt or response line. After all hooks, so hook order stays
+  // unconditional.
   if (markdown.length === 0 && !hasImages && tools.length === 0) {
     return null
   }
 
   if (isUser) {
-    // Why: an optimistic echo is rendered identically to a real user turn (no
-    // muting, no "Queued" label) so that when the real transcript turn lands and
-    // replaces it, there is no visible state change — the send just appears and
-    // stays. (A distinct "queued" treatment flickered normal→queued→normal as the
-    // transcript caught up.)
+    // Prompts stay in transcript order as a terminal input line rather than a
+    // chat bubble. The source Markdown still renders identically to agent prose.
     return (
-      <div ref={rowRef} className="flex flex-col items-end gap-0.5">
-        {/* User turns get a distinct muted fill (not the card/canvas color) so
-            the prompt reads apart from the assistant's body copy. */}
-        <div className="max-w-[85%] rounded-lg rounded-tr-sm bg-muted px-3.5 py-2.5 text-sm text-foreground">
+      <div
+        ref={rowRef}
+        data-native-chat-message-role="user"
+        className="flex max-w-full items-start gap-3 rounded-lg border border-border/60 bg-muted/25 px-3 py-2.5 font-mono text-[13px] leading-6 text-foreground shadow-sm"
+      >
+        <span aria-hidden="true" className="mt-px select-none font-semibold text-primary/80">
+          ›
+        </span>
+        <div className="min-w-0 flex-1">
           {markdown ? (
             <>
               <ImageAttachmentRefs blocks={prose} />
               <CommentMarkdown
                 content={markdown}
                 variant="document"
-                className="text-sm"
+                enableMath
+                className="text-[13px] leading-6 [&_.katex-display]:my-3 [&_.katex-display]:max-w-full [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-md [&_.katex-display]:border [&_.katex-display]:border-border/60 [&_.katex-display]:bg-background/70 [&_.katex-display]:px-3 [&_.katex-display]:py-2"
                 onLinkClick={onLinkClick}
                 allowFileUriLinks={allowFileUriLinks}
               />
@@ -184,15 +187,15 @@ function MessageRow({
           ) : (
             <ImageAttachmentRefs blocks={prose} />
           )}
+          {deliveryFailed ? (
+            <div className="text-[11px] text-destructive/80">
+              {translate(
+                'components.native-chat.launchPromptNotDelivered',
+                'Not delivered — check the terminal'
+              )}
+            </div>
+          ) : null}
         </div>
-        {deliveryFailed ? (
-          <div className="max-w-[85%] text-[11px] text-destructive/80">
-            {translate(
-              'components.native-chat.launchPromptNotDelivered',
-              'Not delivered — check the terminal'
-            )}
-          </div>
-        ) : null}
       </div>
     )
   }
@@ -204,31 +207,33 @@ function MessageRow({
   return (
     <div
       ref={rowRef}
+      data-native-chat-message-role={message.role}
       className={cn(
-        'group relative max-w-full text-sm leading-relaxed text-foreground',
+        'group relative max-w-full border-l-2 border-transparent pl-4 font-sans text-[15px] leading-7 text-foreground transition-colors hover:border-border',
         // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
         isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
       )}
     >
-      {showControls ? (
-        <AgentControls
-          markdown={markdown}
-          onScrollToTop={scrollToTop}
-          className="absolute -top-8 right-0 opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
-        />
-      ) : null}
       <ImageAttachmentRefs blocks={prose} />
       {markdown ? (
         <CommentMarkdown
           content={markdown}
           variant="document"
-          className="text-sm"
+          enableMath
+          className="text-[15px] leading-7 [&_.katex]:text-[1.04em] [&_.katex-display]:my-5 [&_.katex-display]:max-w-full [&_.katex-display]:overflow-x-auto [&_.katex-display]:rounded-lg [&_.katex-display]:border [&_.katex-display]:border-border/60 [&_.katex-display]:bg-muted/35 [&_.katex-display]:px-4 [&_.katex-display]:py-3 [&_.katex-display_.katex]:text-[1.1em]"
           onLinkClick={onLinkClick}
           allowFileUriLinks={allowFileUriLinks}
         />
       ) : null}
       {tools.length > 0 ? <NativeChatToolRun blocks={tools} expandSignal={expandSignal} /> : null}
+      {showControls ? (
+        <AgentControls
+          markdown={markdown}
+          onScrollToTop={scrollToTop}
+          className="mt-2 ml-auto w-fit rounded-md border border-border/50 bg-background/90 p-0.5 shadow-sm opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100"
+        />
+      ) : null}
     </div>
   )
 }
@@ -369,16 +374,15 @@ export function NativeChatMessageList({
       <div
         ref={scrollRef}
         onScroll={handleScroll}
-        className="scrollbar-sleek h-full overflow-y-auto px-3 pt-10 pb-4 sm:px-4"
+        className="scrollbar-sleek h-full overflow-y-auto px-4 py-5 sm:px-6 sm:py-7"
       >
         <div
           ref={contentRef}
-          // Why: same max width as the composer column; horizontal inset comes
-          // from the scroll container so content aligns with the composer field.
-          className="mx-auto flex w-full max-w-4xl flex-col gap-5"
-          // Why: `zoom` scales the chat transcript's text and layout together,
-          // scoped to this container so the rest of the app is untouched. It's
-          // the desktop analog of the mobile pinch-zoom (Chromium/Electron only).
+          // Why: a bounded reading measure makes rich Markdown scan like a
+          // document while the surrounding pane stays terminal-native.
+          className="mx-auto flex w-full max-w-4xl flex-col gap-7"
+          // Why: zoom scales the rendered terminal transcript without changing
+          // the surrounding terminal-pane chrome or the Raw xterm surface.
           style={{ zoom: fontScale }}
         >
           {hasMore ? (
