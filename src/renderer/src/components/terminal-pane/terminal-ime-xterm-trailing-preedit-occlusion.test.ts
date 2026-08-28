@@ -21,7 +21,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const CELL_WIDTH_PX = 8
 const CELL_HEIGHT_PX = 16
-const THEME = { background: '#112233', foreground: '#aabbcc' }
+const THEME = { background: '#112233', foreground: '#aabbcc', red: '#7b2233' }
 
 const openTerminals: Terminal[] = []
 
@@ -161,6 +161,40 @@ describe('#12729 — the block over a trailing Korean syllable is the preedit ov
     const { background, color } = rig.compositionView.style
     expect([THEME.background, 'rgb(17, 34, 51)']).toContain(background)
     expect([THEME.foreground, 'rgb(170, 187, 204)']).toContain(color)
+  })
+
+  it('uses the cursor cell background for a trailing preedit on a styled prompt row', async () => {
+    const rig = openTerminal()
+    const promptBackground = '#1a1a1f'
+    await new Promise<void>((resolve) =>
+      rig.terminal.write(`\x1b[48;2;26;26;31m${' '.repeat(79)}\x1b[0m\r\x1b[6C`, resolve)
+    )
+
+    rig.composeStart()
+    rig.composeUpdate('라')
+    await nextEventLoop()
+
+    expect([promptBackground, 'rgb(26, 26, 31)']).toContain(rig.compositionView.style.background)
+  })
+
+  it.each([
+    ['an indexed ANSI background', '\x1b[48;5;1m', '#7b2233'],
+    ['an inverse RGB foreground', '\x1b[38;2;7;8;9m\x1b[7m', '#070809'],
+    ['the default inverse foreground', '\x1b[7m', THEME.foreground]
+  ])('resolves %s for the composition overlay', async (_label, sgr, expected) => {
+    const rig = openTerminal()
+    await new Promise<void>((resolve) =>
+      rig.terminal.write(`${sgr}${' '.repeat(79)}\x1b[0m\r\x1b[6C`, resolve)
+    )
+
+    rig.composeStart()
+    rig.composeUpdate('라')
+    await nextEventLoop()
+
+    expect([
+      expected,
+      `rgb(${Number.parseInt(expected.slice(1, 3), 16)}, ${Number.parseInt(expected.slice(3, 5), 16)}, ${Number.parseInt(expected.slice(5, 7), 16)})`
+    ]).toContain(rig.compositionView.style.background)
   })
 
   it('clears the overlay once the trailing syllable commits', async () => {

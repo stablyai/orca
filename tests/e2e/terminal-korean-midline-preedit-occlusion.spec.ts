@@ -105,6 +105,30 @@ test.describe('Terminal mid-line Korean preedit occlusion', () => {
     }
   })
 
+  test('matches an ANSI-styled prompt background while remaining opaque', async ({
+    orcaPage
+  }, testInfo) => {
+    const arena = await openTerminalImePaneArena(orcaPage)
+    let completed = false
+    try {
+      await writeToActiveTerminal(orcaPage, '\x1b[48;2;26;26;31m\x1b[2J\x1b[H안녕하세요\x1b[5G')
+      await setImeComposition(arena.session, '가')
+
+      const sample = await sampleOpenComposition(orcaPage)
+      expect(sample.cursorColumn, 'the cursor is not sitting on the styled 하 cell').toBe(4)
+      expect(sample.overlayBackgroundColor).toBe('rgb(26, 26, 31)')
+      expect(sample.overlayOpacity).toBe('1')
+      completed = true
+    } finally {
+      await closeTerminalImePaneArena(
+        arena,
+        testInfo,
+        'korean-styled-preedit-background',
+        !completed
+      )
+    }
+  })
+
   test('leaves the end-of-row composition untouched, with nothing covered to render', async ({
     orcaPage
   }, testInfo) => {

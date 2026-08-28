@@ -88,10 +88,20 @@ index 497afcf535f3eaca00889525a77e15eb633ccd96..96d499b34605f860608382114c3fbdc0
  
  export interface IBrowser {
 diff --git a/src/browser/input/CompositionHelper.ts b/src/browser/input/CompositionHelper.ts
-index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8d94e8797 100644
+index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..876f840cb2d6f5a88475ee4ac999609dd493bf13 100644
 --- a/src/browser/input/CompositionHelper.ts
 +++ b/src/browser/input/CompositionHelper.ts
-@@ -12,6 +12,28 @@ interface IPosition {
+@@ -4,14 +4,38 @@
+  */
+ 
+ import { IRenderService } from '../services/Services';
++import { DEFAULT_ANSI_COLORS } from '../Types';
+ import { IBufferService, ICoreService, IOptionsService } from '../../common/services/Services';
+ import { C0 } from '../../common/data/EscapeSequences';
++import { CellData } from '../../common/buffer/CellData';
+ 
+ interface IPosition {
+   start: number;
    end: number;
  }
  
@@ -120,7 +130,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
  /**
   * Encapsulates the logic for handling compositionstart, compositionupdate and compositionend
   * events, displaying the in-progress composition to the UI and forwarding the final composition
-@@ -24,6 +46,15 @@ export class CompositionHelper {
+@@ -24,6 +48,15 @@ export class CompositionHelper {
     */
    private _isComposing: boolean;
    public get isComposing(): boolean { return this._isComposing; }
@@ -136,7 +146,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
  
    /**
     * The position within the input textarea's value of the current composition.
-@@ -36,22 +67,63 @@ export class CompositionHelper {
+@@ -36,22 +69,66 @@ export class CompositionHelper {
     */
    private _compositionSuffix: string;
  
@@ -203,10 +213,13 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +  /** The last preedit rendered, so a row repaint can re-render without a composition event. */
 +  private _compositionViewData?: string;
 +
++  /** Scratch cell for resolving the cursor style without mutating Buffer's shared null cell. */
++  private readonly _compositionCell = new CellData();
++
    constructor(
      private readonly _textarea: HTMLTextAreaElement,
      private readonly _compositionView: HTMLElement,
-@@ -61,27 +133,61 @@ export class CompositionHelper {
+@@ -61,27 +138,61 @@ export class CompositionHelper {
      @IRenderService private readonly _renderService: IRenderService
    ) {
      this._isComposing = false;
@@ -271,7 +284,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
    }
  
    /**
-@@ -89,22 +195,90 @@ export class CompositionHelper {
+@@ -89,22 +200,90 @@ export class CompositionHelper {
     * @param ev The event.
     */
    public compositionupdate(ev: Pick<CompositionEvent, 'data'>): void {
@@ -371,7 +384,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
    }
  
    /**
-@@ -113,7 +287,19 @@ export class CompositionHelper {
+@@ -113,7 +292,19 @@ export class CompositionHelper {
     * @returns Whether the Terminal should continue processing the keydown event.
     */
    public keydown(ev: KeyboardEvent): boolean {
@@ -392,7 +405,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
        if (ev.keyCode === 20 || ev.keyCode === 229) {
          // 20 is CapsLock, 229 is Enter
          // Continue composing if the keyCode is the "composition character"
-@@ -128,6 +314,10 @@ export class CompositionHelper {
+@@ -128,6 +319,10 @@ export class CompositionHelper {
        this._finalizeComposition(false);
      }
  
@@ -403,7 +416,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
      if (ev.keyCode === 229) {
        // If the "composition character" is used but gets to this point it means a non-composition
        // character (eg. numbers and punctuation) was pressed when the IME was active.
-@@ -138,6 +328,74 @@ export class CompositionHelper {
+@@ -138,6 +333,74 @@ export class CompositionHelper {
      return true;
    }
  
@@ -478,7 +491,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
    /**
     * Finalizes the composition, resuming regular input actions. This is called when a composition
     * is ending.
-@@ -146,23 +404,52 @@ export class CompositionHelper {
+@@ -146,23 +409,52 @@ export class CompositionHelper {
     *   compositionend event is triggered, such as enter, so that the composition is sent before
     *   the command is executed.
     */
@@ -542,7 +555,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
  
        // Since composition* events happen before the changes take place in the textarea on most
        // browsers, use a setTimeout with 0ms time to allow the native compositionend event to
-@@ -172,37 +459,310 @@ export class CompositionHelper {
+@@ -172,35 +464,308 @@ export class CompositionHelper {
        // - The last compositionupdate event's data property does not always accurately describe
        //   the character, a counter example being Korean where an ending consonsant can move to
        //   the following character if the following input is a vowel.
@@ -579,12 +592,11 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +        }
 +        if (this._pendingComposition === pending) {
 +          this._sendPendingComposition(pending, true);
-         }
--      }, 0);
++        }
 +      });
-     }
-   }
- 
++    }
++  }
++
 +  private _sendPendingComposition(
 +    pending: IPendingComposition,
 +    includeFollowingInput: boolean = false
@@ -772,7 +784,8 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +          id: pending.transactionId,
 +          data: input,
 +          dataPendingReconciliation: true
-+        }
+         }
+-      }, 0);
 +      }
 +    ));
 +  }
@@ -830,7 +843,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +  private _deferPreeditResync(hadPreedit: boolean): void {
 +    if (!hadPreedit || !this._isComposing) {
 +      return;
-+    }
+     }
 +    const transactionId = this._compositionTransactionId;
 +    this._defer(() => {
 +      if (
@@ -875,12 +888,10 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +    }
 +    clearTimeout(timer);
 +    this._compositionTimers.delete(timer);
-+  }
-+
+   }
+ 
    /**
-    * Apply any changes made to the textarea after the current event chain is allowed to complete.
-    * This should be called when not currently composing but a keydown event with the "composition
-@@ -222,6 +782,9 @@ export class CompositionHelper {
+@@ -222,6 +787,9 @@ export class CompositionHelper {
  
          const diff = newValue.replace(oldValue, '');
  
@@ -890,7 +901,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
          this._dataAlreadySent = diff;
  
          if (newValue.length > oldValue.length) {
-@@ -236,6 +799,77 @@ export class CompositionHelper {
+@@ -236,6 +804,132 @@ export class CompositionHelper {
      }, 0);
    }
  
@@ -949,13 +960,13 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +  }
 +
 +  /**
-+   * The theme background with any alpha dropped. The view masks the cells it draws over, so a
-+   * see-through background would re-expose the very characters the rendered tail stands in for.
++   * Drops alpha from a CSS color. The view masks the cells it draws over, so a see-through
++   * background would re-expose the very characters the rendered tail stands in for.
 +   */
-+  private _opaqueViewBackground(): string {
-+    const value = this._optionsService.rawOptions.theme?.background?.trim();
++  private _opaqueCssColor(value: string | undefined): string | undefined {
++    value = value?.trim();
 +    if (!value) {
-+      return '#000';
++      return undefined;
 +    }
 +    const channels = /^rgba?\(([^,()]+),([^,()]+),([^,()]+)(?:,[^()]+)?\)$/.exec(value);
 +    if (channels) {
@@ -965,10 +976,65 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +    return opaqueHex ? opaqueHex[1] : value;
 +  }
 +
++  private _opaquePaletteColor(value: number): string | undefined {
++    const theme = this._optionsService.rawOptions.theme;
++    const base = [
++      theme?.black,
++      theme?.red,
++      theme?.green,
++      theme?.yellow,
++      theme?.blue,
++      theme?.magenta,
++      theme?.cyan,
++      theme?.white,
++      theme?.brightBlack,
++      theme?.brightRed,
++      theme?.brightGreen,
++      theme?.brightYellow,
++      theme?.brightBlue,
++      theme?.brightMagenta,
++      theme?.brightCyan,
++      theme?.brightWhite
++    ];
++    const configured = value < base.length ? base[value] : theme?.extendedAnsi?.[value - base.length];
++    return this._opaqueCssColor(configured ?? DEFAULT_ANSI_COLORS[value]?.css);
++  }
++
++  /**
++   * Resolves the cursor cell's effective ANSI background just like the DOM renderer. The overlay
++   * is opaque and sits above the grid, so using the terminal-wide theme background here would cut
++   * a seam through prompts that paint their own row background.
++   */
++  private _opaqueViewBackground(cursorX: number): string {
++    const theme = this._optionsService.rawOptions.theme;
++    const fallback = this._opaqueCssColor(theme?.background) ?? '#000';
++    const buffer = this._bufferService.buffer;
++    const line = buffer.lines.get(buffer.ybase + buffer.y);
++    const cell = line?.loadCell(cursorX, this._compositionCell);
++    if (!cell) {
++      return fallback;
++    }
++
++    const useForeground = !!cell.isInverse();
++    const value = useForeground ? cell.getFgColor() : cell.getBgColor();
++    const isRgb = useForeground ? cell.isFgRGB() : cell.isBgRGB();
++    if (isRgb) {
++      return `#${(value >>> 0).toString(16).padStart(6, '0')}`;
++    }
++    const isPalette = useForeground ? cell.isFgPalette() : cell.isBgPalette();
++    if (isPalette) {
++      return this._opaquePaletteColor(value) ?? fallback;
++    }
++    if (useForeground) {
++      return this._opaqueCssColor(theme?.foreground) ?? '#fff';
++    }
++    return fallback;
++  }
++
    /**
     * Positions the composition view on top of the cursor and the textarea just below it (so the
     * IME helper dialog is positioned correctly).
-@@ -243,10 +877,22 @@ export class CompositionHelper {
+@@ -243,10 +937,22 @@ export class CompositionHelper {
     *   necessary as the IME events across browsers are not consistently triggered.
     */
    public updateCompositionElements(dontRecurse?: boolean): void {
@@ -992,7 +1058,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
      if (this._bufferService.buffer.isCursorInViewport) {
        const cursorX = Math.min(this._bufferService.buffer.x, this._bufferService.cols - 1);
  
-@@ -265,10 +911,17 @@ export class CompositionHelper {
+@@ -265,10 +971,17 @@ export class CompositionHelper {
        const maxWidth = this._bufferService.cols * this._renderService.dimensions.css.cell.width - cursorLeft;
        this._compositionView.style.maxWidth = maxWidth + 'px';
        this._compositionView.style.overflow = 'hidden';
@@ -1005,7 +1071,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
 +      this._compositionView.style.direction = this._compositionRemainder ? 'ltr' : 'rtl';
 +      // Themed rather than the stock #000/#FFF, so the pushed tail reads as ordinary terminal text
 +      // and light themes keep contrast.
-+      this._compositionView.style.background = this._opaqueViewBackground();
++      this._compositionView.style.background = this._opaqueViewBackground(cursorX);
 +      this._compositionView.style.color = this._optionsService.rawOptions.theme?.foreground ?? '#FFF';
 +      // Sync the textarea to the exact position of the preedit so the IME knows where the text is,
 +      // and so candidate dialogs anchor to it rather than to the end of the rendered tail.
@@ -1014,7 +1080,7 @@ index c9ec396ab66cb966d49aa63bed09cdf9cd6c4246..808c710356fe026471467e35ad776af8
        this._textarea.style.left = cursorLeft + 'px';
        this._textarea.style.top = cursorTop + 'px';
        // Ensure the text area is at least 1x1, otherwise certain IMEs may break
-@@ -278,7 +931,8 @@ export class CompositionHelper {
+@@ -278,7 +991,8 @@ export class CompositionHelper {
      }
  
      if (!dontRecurse) {
