@@ -269,7 +269,7 @@
           "runtimeScopeForbiddenDescription": "移动端范围的配对无法使用工作区。请通过设置 → 远程 Orca 服务器 → 分享此 Orca 服务器中的浏览器访问链接重新连接。",
           "createdWithoutParentNesting": "已创建，但未嵌套在“{{value0}}”下",
           "createdWithoutParentNestingUnnamed": "已创建，但未嵌套在所选父工作树下",
-          "createdWithoutParentNestingDetail": "父工作区已不可用。您可以从工作区菜单中重新设置。"
+          "createdWithoutParentNestingDetail": "父工作树已不可用。您可以从工作区菜单中重新设置。"
         },
         "repos": {
           "2975400634": "请更新 Orca 服务器，以便在此运行时打开非 Git 文件夹。",
@@ -6194,10 +6194,9 @@
           "compareBaseBranchUpstream": "分支上游"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "占位符切换",
-          "1014ddbfaf": "今天什么也不做。保留作为隐藏实验选项的第一个插槽。",
-          "232cf83de8": "用于内部测试的未列出的切换。这里什么都不支持。",
-          "3e9e827ca5": "隐藏实验"
+          "7c4e18d2f6": "在本机启用粗体故障捕获手势：{{samplingShortcut}} 开始采样突发；{{captureShortcut}} 将窗格证据捕获到磁盘。",
+          "b09f24a51d": "终端渲染诊断",
+          "f2c81d904a": "隐藏实验设置"
         },
         "InputPane": {
           "db15068196": "在 Linux 和 macOS 上默认启用。 Linux使用系统选择剪贴板；其他平台使用私有缓冲区。",
@@ -13774,6 +13773,7 @@
           "showMore": "显示更多"
         },
         "AutomationDetail": {
+          "host": "主机",
           "007c8ad874": "提示词",
           "a1d52c2189": "使用范围",
           "449fc83bf7": "token",
@@ -13937,6 +13937,9 @@
           "b11170a008": "无法保存自动化。",
           "2a20596d6b": "自动化已保存。",
           "244727e655": "自动化已更新。",
+          "moved": "自动化已移动到 {host}。",
+          "moveOriginalKept": "已在 {host} 上创建，但无法删除原有自动化。请在原主机上删除它。",
+          "moveOriginalUnverified": "已在 {host} 上创建，但无法确认是否删除了原有自动化。重试前请检查原主机。",
           "77b81bc4ac": "Hermes 自动化创建。",
           "08efc3ae12": "Hermes 自动化已更新。",
           "e431bb85d4": "选择与此 Hermes 自动化位于同一主机上的工作区。",
@@ -14133,6 +14136,19 @@
           "filters": "筛选器",
           "clear": "清除筛选器",
           "removeFilter": "移除 {{value0}} 筛选器"
+        },
+        "createDestination": {
+          "label": "主机",
+          "placeholder": "选择主机",
+          "storedOn": "由 {authority} 存储和调度。",
+          "unselected": "选择存储和调度此自动化的主机。",
+          "orphan": "没有主机的自动化无法容纳新的自动化。请选择要在其上创建此自动化的主机。",
+          "unavailable": "该主机尚无法容纳新的自动化。请选择另一台主机来创建它。",
+          "stale": "此表单打开期间 {host} 已更改。保存前请重新选择。",
+          "projectMismatch": "该项目不在 {host} 上。请选择该主机上的项目，或选择另一台主机。",
+          "noProjects": "{host} 上未设置任何项目。请在该主机上添加一个，或选择另一台主机。",
+          "updateRequired": "更新 {hosts} 上的 Orca 服务器即可在其中存储自动化。",
+          "move": "保存后会在 {host} 上创建此自动化，并删除原有自动化及其运行历史。"
         }
       },
       "agent": {
@@ -14487,8 +14503,8 @@
       "ComposerParentWorktreePicker": {
         "label": "父工作树",
         "noParent": "无父工作树",
-        "description": "在侧边栏中将此工作区嵌套到另一个工作区下。不会更改基础分支。",
-        "searchPlaceholder": "搜索工作区...",
+        "description": "在侧边栏中将此工作区嵌套到另一个工作树下。不会更改基础分支。",
+        "searchPlaceholder": "搜索工作树...",
         "noMatches": "无匹配项。"
       }
     },

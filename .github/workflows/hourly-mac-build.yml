@@ -290,7 +290,6 @@ jobs:
           including back to Stable, works in-app from there."
           echo "tag=$TAG" >>"$GITHUB_OUTPUT"
 
-
       - name: Publish hourly macOS artifacts
         if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4

@@ -35,6 +35,13 @@ async function isTargetHydrated(page: Page, targetId: string): Promise<boolean> 
   )
 }
 
+async function readTargetSyncPhase(page: Page, targetId: string): Promise<string | undefined> {
+  return page.evaluate(
+    (id) => window.__store?.getState().remoteWorkspaceSyncStatusByTargetId[id]?.phase,
+    targetId
+  )
+}
+
 /** Poll until the worktree's tabs stop changing, so a late seed cannot slip past the sample. */
 async function waitForSettledTabIds(page: Page, worktreeId: string): Promise<string[]> {
   let latest: string[] = []
@@ -215,7 +222,7 @@ test.describe('SSH cold hydration gap tab seeding', () => {
   // restores that key from local state, so the second term is never false. A client that has never
   // held this workspace — a re-added host, a cleared profile, a second machine — is the ordinary
   // way a user reaches a host that already owns tabs with no local row for them.
-  test('still seeds one tab for a client with no local row, because hydration is marked even when adoption wrote nothing', async (// oxlint-disable-next-line no-empty-pattern -- This restart test owns every Electron launch.
+  test('does not mark hydration or seed a tab when it could not place the host tabs', async (// oxlint-disable-next-line no-empty-pattern -- This restart test owns every Electron launch.
   {}, testInfo) => {
     test.setTimeout(600_000)
     const seeding = createRestartSession(testInfo)
@@ -246,32 +253,44 @@ test.describe('SSH cold hydration gap tab seeding', () => {
       await expect
         .poll(() => waitForActiveWorktree(freshLaunch.page), { timeout: 60_000 })
         .toBe(rejoined.worktreeId)
+      // The sync point the old `hydrated === true` poll used to serve. `conflict` is what the apply
+      // publishes once it finds rows it cannot place, so it marks the same instant without pinning
+      // the defect: hydration used to be marked here regardless of what adoption wrote.
       await expect
-        .poll(() => isTargetHydrated(freshLaunch.page, rejoined.targetId), {
+        .poll(() => readTargetSyncPhase(freshLaunch.page, rejoined.targetId), {
           timeout: 120_000,
-          message: 'the fresh client never hydrated the host workspace'
+          message: 'the fresh client never reported the unplaced snapshot as a conflict'
         })
-        .toBe(true)
+        .toBe('conflict')
       const rejoinedTabIds = await waitForSettledTabIds(freshLaunch.page, rejoined.worktreeId)
+      const hydrated = await isTargetHydrated(freshLaunch.page, rejoined.targetId)
+      // Re-read after settling: a conflict verdict that a later apply flips back would re-authorise
+      // seeding, so the phase has to still hold once the tab set has stopped moving.
+      const settledPhase = await readTargetSyncPhase(freshLaunch.page, rejoined.targetId)
+      console.log(
+        `[unplaced-host-tabs] hydrated=${hydrated} phase=${settledPhase} tabs=${rejoinedTabIds.length}`
+      )
 
-      // Documents what HEAD actually does, so the spec is honest rather than red. Two facts, and
-      // the helper's own tab is switched off above so both are the product's doing:
-      //   1. the seeding predicate DOES fire with no local row — one tab is created from nothing;
-      //   2. none of the host's tabs are adopted, so that one tab replaces three.
-      // Why the host-authority gate does not prevent (1): applyDirectSshRemoteWorkspaceSnapshot
-      // calls markRemoteWorkspaceHydrated unconditionally AFTER the hydrate calls, including when
-      // they wrote nothing. So in the same tick adoption yields zero, the verdict flips
-      // unverifiable -> none, Terminal.tsx re-runs the effect, and it seeds. The gate cannot
-      // outlive the failure it guards against, because the same function that fails to adopt is
-      // the one that lifts it. Fixing that needs per-worktree resolution rather than a per-target
-      // "some apply finished" flag; until then the seeding half has no measurable effect here.
-      // (1) is the seeding path reached by its intended precondition; a restart never reaches it
-      // because local state always restores the row first. (2) is a separate defect. Expected
-      // behaviour is pinned by the fixme below.
+      // STA-3593. The host listed three tabs on paths this client cannot place. Adoption still
+      // writes nothing (the fixme below), but the client must no longer claim the host's workspace
+      // on the strength of that empty result:
+      //   1. hydration is not marked — and is revoked if an earlier clean sync had set it — so
+      //      use-app-session-persistence.ts cannot upload a `replace-session` patch built from the
+      //      incomplete picture and delete the very tabs it failed to place;
+      //   2. the phase is `conflict`, which workspace-terminal-host-authority.ts deliberately keeps
+      //      out of its `offline`/`error` floor, so authority stays `unverifiable` rather than
+      //      resolving to `none`;
+      //   3. therefore Terminal.tsx does not seed. The old behaviour was exactly one tab conjured
+      //      from nothing, replacing the host's three.
+      expect(hydrated, 'an unplaced snapshot must not leave the target marked hydrated').toBe(false)
+      expect(
+        settledPhase,
+        'the unplaced verdict has to survive settling, or authority is re-authorised to seed'
+      ).toBe('conflict')
       expect(
         rejoinedTabIds.length,
-        `a client with no local row should seed exactly one tab and adopt none of the host's ${BASELINE_TAB_COUNT}: got ${rejoinedTabIds.length}`
-      ).toBe(1)
+        `authority stays unverifiable, so no tab may be seeded: got ${rejoinedTabIds.length}`
+      ).toBe(0)
     } finally {
       if (freshApp) {
         await fresh.close(freshApp)
@@ -285,10 +304,12 @@ test.describe('SSH cold hydration gap tab seeding', () => {
     }
   })
 
-  // The behaviour the test above SHOULD assert once the drop is fixed: a client with no local row
-  // is exactly the case the host snapshot exists to serve, so it must end up holding the host's
-  // tabs rather than an empty workspace. Kept as a fixme so the gap stays visible without putting
-  // a knowingly-red spec in the lane. Suspected STA-3593 (snapshot tabs dropped when the worktree
+  // The remaining half of the gap. The hydration half above is fixed: the client no longer marks
+  // hydration, no longer overwrites the host, and no longer seeds a phantom tab. What it still does
+  // not do is ADOPT — a client with no local row is exactly the case the host snapshot exists to
+  // serve, so it should end up holding the host's tabs rather than an empty workspace. Declining to
+  // seed is a safe wait, not the destination. Kept as a fixme so the gap stays visible without
+  // putting a knowingly-red spec in the lane. STA-3593 (snapshot tabs dropped when the worktree
   // catalog resolves their paths late).
   test.fixme('a client with no local row adopts the tabs the host already owns', async (// oxlint-disable-next-line no-empty-pattern -- Placeholder for the fixed behaviour.
   {}) => {})

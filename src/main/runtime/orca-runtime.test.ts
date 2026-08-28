@@ -47634,7 +47634,8 @@ describe('OrcaRuntimeService', () => {
           updatedAt: '2026-05-22T00:00:00Z',
           author: 'alex'
         }
-      ]
+      ],
+      totalPages: 3
     })
     listGitLabTodosMock.mockResolvedValue([])
     listGitLabLabelsMock.mockResolvedValue(['bug', 'frontend'])
@@ -47679,7 +47680,7 @@ describe('OrcaRuntimeService', () => {
 
     await runtime.listGitLabRepoMRs(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
     await runtime.listGitLabRepoWorkItems(TEST_REPO_ID, 'closed', 2, 25, 'ambiguous selector')
-    const issues = await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', '@me', 50)
+    const issues = await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'opened', '@me', 50, 3)
     await runtime.listGitLabRepoTodos(TEST_REPO_ID)
     await runtime.listGitLabRepoLabels(TEST_REPO_ID)
     await runtime.createGitLabRepoIssue(TEST_REPO_ID, 'New issue', 'Body')
@@ -47734,7 +47735,9 @@ describe('OrcaRuntimeService', () => {
       'origin',
       'opened',
       '@me',
-      'ssh-1'
+      'ssh-1',
+      {},
+      3
     )
     expect(issues.items).toEqual([
       {
@@ -47750,6 +47753,7 @@ describe('OrcaRuntimeService', () => {
         repoId: TEST_REPO_ID
       }
     ])
+    expect(issues).toMatchObject({ totalPages: 3 })
     expect(listGitLabTodosMock).toHaveBeenCalledWith('/remote/repo', 'ssh-1')
     expect(listGitLabLabelsMock).toHaveBeenCalledWith('/remote/repo', 'origin', 'ssh-1')
     expect(createGitLabIssueMock).toHaveBeenCalledWith(
@@ -47920,7 +47924,8 @@ describe('OrcaRuntimeService', () => {
       'opened',
       undefined,
       null,
-      localGitOptions
+      localGitOptions,
+      1
     )
     expect(listGitLabTodosMock).toHaveBeenCalledWith(TEST_REPO_PATH, null, localGitOptions)
     expect(listGitLabLabelsMock).toHaveBeenCalledWith(
@@ -48127,9 +48132,21 @@ describe('OrcaRuntimeService', () => {
   it('normalizes runtime GitLab issue list arguments like the desktop IPC path', async () => {
     const runtime = new OrcaRuntimeService(store as never)
 
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'closed', 'someone-else' as never, 250.8)
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'all', '@me', 0.7)
-    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'unexpected' as never, '@me', Number.NaN)
+    await runtime.listGitLabRepoIssues(
+      TEST_REPO_ID,
+      'closed',
+      'someone-else' as never,
+      250.8,
+      20_000
+    )
+    await runtime.listGitLabRepoIssues(TEST_REPO_ID, 'all', '@me', 0.7, 0)
+    await runtime.listGitLabRepoIssues(
+      TEST_REPO_ID,
+      'unexpected' as never,
+      '@me',
+      Number.NaN,
+      Number.NaN
+    )
 
     expect(listGitLabIssuesMock).toHaveBeenNthCalledWith(
       1,
@@ -48138,7 +48155,9 @@ describe('OrcaRuntimeService', () => {
       undefined,
       'closed',
       undefined,
-      null
+      null,
+      {},
+      10_000
     )
     expect(listGitLabIssuesMock).toHaveBeenNthCalledWith(
       2,
@@ -48147,7 +48166,9 @@ describe('OrcaRuntimeService', () => {
       undefined,
       'all',
       '@me',
-      null
+      null,
+      {},
+      1
     )
     expect(listGitLabIssuesMock).toHaveBeenNthCalledWith(
       3,
@@ -48156,7 +48177,9 @@ describe('OrcaRuntimeService', () => {
       undefined,
       'opened',
       '@me',
-      null
+      null,
+      {},
+      1
     )
   })
 

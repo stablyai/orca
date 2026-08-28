@@ -8,6 +8,15 @@ import type {
   SkillDeleteRequest,
   SkillDeleteResult
 } from '../shared/skill-delete-contract'
+import {
+  DOC_PREVIEW_EXTERNAL_LINK_CHANNEL,
+  DOC_PREVIEW_LOAD_FAILURE_CHANNEL,
+  DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL,
+  DOC_PREVIEW_MINT_GRANT_CHANNEL,
+  DOC_PREVIEW_REVOKE_GRANT_CHANNEL,
+  type DocPreviewFailure
+} from '../shared/doc-preview-scheme'
+import type { DocPreviewGrantRequest } from './api/doc-preview-api'
 import type { AppIdentity } from '../shared/app-identity'
 import type { MacCapturedDigitRowChord } from '../shared/macos-symbolic-hotkeys'
 import type { ComputerAwakeStatus } from '../shared/computer-awake-mode'
@@ -1049,6 +1058,8 @@ const api = {
       telemetry?: { agent_kind: AgentKind; launch_source: LaunchSource; request_kind: RequestKind }
     }): Promise<{
       id: string
+      /** Which lifetime of `id` this reply named; absent when the execution host predates the field. */
+      incarnationId?: string
       launchConfig?: SleepingAgentLaunchConfig
       snapshot?: string
       snapshotCols?: number
@@ -1295,10 +1306,23 @@ const api = {
       ipcRenderer.invoke('pty:sideEffectSnapshot', { id }),
 
     onExit: (
-      callback: (data: { id: string; code: number; preserveRendererBinding?: boolean }) => void
+      callback: (data: {
+        id: string
+        code: number
+        preserveRendererBinding?: boolean
+        /** Which lifetime of `id` died; absent when the execution host predates the field. */
+        incarnationId?: string
+      }) => void
     ): (() => void) => {
-      const listener = (_event: Electron.IpcRendererEvent, data: { id: string; code: number }) =>
-        callback(data)
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        data: {
+          id: string
+          code: number
+          preserveRendererBinding?: boolean
+          incarnationId?: string
+        }
+      ) => callback(data)
       ipcRenderer.on('pty:exit', listener)
       return () => ipcRenderer.removeListener('pty:exit', listener)
     },
@@ -3321,6 +3345,27 @@ const api = {
       return () => ipcRenderer.removeListener('updater:clearDismissal', listener)
     }
   } satisfies PreloadApi['updater'],
+
+  docPreview: {
+    mintGrant: (request: DocPreviewGrantRequest): Promise<{ grantId: string; url: string }> =>
+      ipcRenderer.invoke(DOC_PREVIEW_MINT_GRANT_CHANNEL, request),
+    revokeGrant: (grantId: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_REVOKE_GRANT_CHANNEL, grantId),
+    authorizeDirectory: (grantId: string, relativePath: string): Promise<boolean> =>
+      ipcRenderer.invoke(DOC_PREVIEW_AUTHORIZE_DIRECTORY_CHANNEL, grantId, relativePath),
+    onExternalLink: (callback: (payload: { url: string }) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: { url: string }): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_EXTERNAL_LINK_CHANNEL, listener)
+    },
+    onLoadFailure: (callback: (payload: DocPreviewFailure) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, payload: DocPreviewFailure): void =>
+        callback(payload)
+      ipcRenderer.on(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+      return () => ipcRenderer.removeListener(DOC_PREVIEW_LOAD_FAILURE_CHANNEL, listener)
+    }
+  },
 
   notebook: {
     runPythonCell: (args: {

@@ -372,6 +372,23 @@ function collectAcknowledgedAgentNotificationId({
   }
 }
 
+function usableTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** Newest turn timestamp an unread check can compare against for one agent row. */
+function latestAgentTurnTimestamp(entry: {
+  stateStartedAt?: number
+  stateHistory?: { startedAt?: number }[]
+}): number {
+  let latest = usableTimestamp(entry.stateStartedAt)
+  // Why history too: Activity renders one event per stateHistory entry, each with its own unread check.
+  for (const history of entry.stateHistory ?? []) {
+    latest = Math.max(latest, usableTimestamp(history.startedAt))
+  }
+  return latest
+}
+
 function isPlainPersistedRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -1215,10 +1232,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         return s
       }
       const now = Date.now()
-      // Why: only reallocate if an ack advances; compare prev<now not !== — Date.now() ticks every ms and !== would rewrite the map every call.
+      const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
+      // Why: only reallocate if an ack advances; compare prev<stamp not !== — the stamp ticks every ms and !== would rewrite the map every call.
       let next: Record<string, number> | null = null
       for (const key of paneKeys) {
         const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        // Why not plain Date.now(): a remote/SSH execution host can stamp a turn ahead of this clock,
+        // and every unread rule is `ackAt < turnTimestamp`. A behind-the-turn ack can never clear the
+        // row, so its auto-ack effect re-fires on each new millisecond forever (React #185).
+        let stamp = now
         const liveEntry = s.agentStatusByPaneKey?.[key]
         if (liveEntry) {
           collectAcknowledgedAgentNotificationId({
@@ -1228,6 +1250,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             stateStartedAt: liveEntry.stateStartedAt,
             previousAckAt: prev
           })
+          stamp = Math.max(stamp, latestAgentTurnTimestamp(liveEntry))
         }
         const retained = s.retainedAgentsByPaneKey?.[key]
         if (retained) {
@@ -1238,12 +1261,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             stateStartedAt: retained.entry.stateStartedAt,
             previousAckAt: prev
           })
+          stamp = Math.max(stamp, latestAgentTurnTimestamp(retained.entry))
         }
-        if (prev < now) {
+        for (const unsupported of migrationUnsupported) {
+          // Why: Activity synthesizes a blocked row from this entry, stamped by the pane's host like any turn.
+          if (unsupported.paneKey === key) {
+            stamp = Math.max(stamp, usableTimestamp(unsupported.updatedAt))
+          }
+        }
+        if (prev < stamp) {
           if (next === null) {
             next = { ...s.acknowledgedAgentsByPaneKey }
           }
-          next[key] = now
+          next[key] = stamp
         }
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s

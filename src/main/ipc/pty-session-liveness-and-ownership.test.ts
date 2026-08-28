@@ -302,7 +302,7 @@ describe('registerPtyHandlers', () => {
       getProfiles: vi.fn()
     } as never)
     const sshShutdown = vi.fn(async () => undefined)
-    const store = { markSshRemotePtyLease: vi.fn() }
+    const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
     registerSshPtyProvider('ssh-1', {
       spawn: vi.fn(),
       write: vi.fn(),
@@ -367,7 +367,7 @@ describe('registerPtyHandlers', () => {
       getDefaultShell: vi.fn(),
       getProfiles: vi.fn()
     } as never)
-    const store = { markSshRemotePtyLease: vi.fn() }
+    const store = { markSshRemotePtyLease: vi.fn(), clearSshRemotePtyKillIntent: vi.fn() }
     registerPtyHandlers(
       mainWindow as never,
       undefined,
@@ -386,7 +386,8 @@ describe('registerPtyHandlers', () => {
     const store = {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     const provider = {
       spawn: vi.fn(async () => ({ id: 'remote-pty' })),

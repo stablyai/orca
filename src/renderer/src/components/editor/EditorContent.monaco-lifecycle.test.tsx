@@ -122,6 +122,9 @@ vi.mock('@/store', () => ({
     (selector: (state: Record<string, unknown>) => unknown) =>
       selector({
         worktreesByRepo: {},
+        settings: {},
+        markdownRichModeSizeOverride: {},
+        setMarkdownRichModeSizeOverride: vi.fn(),
         openFile: vi.fn(),
         openMarkdownPreview: vi.fn(),
         openConflictReviewFile: vi.fn(),

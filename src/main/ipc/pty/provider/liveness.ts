@@ -143,6 +143,10 @@ export function finishPtyShutdown(
   const incarnationId = ptyIncarnationById.get(id)
   clearProviderPtyState(id)
   if (connectionId) {
+    // Deliberately does NOT retire a recorded undelivered stop. Some callers reach here having
+    // asked the host and some having never asked it, so retiring from this one place would be a
+    // contract every call site has to know about — and the one that forgot would silently drop a
+    // kill order. Retirement is left to the replay, which only acts on host evidence.
     store?.markSshRemotePtyLease(connectionId, getRelayPtyId(connectionId, id), 'terminated')
   }
   ptyOwnership.delete(id)

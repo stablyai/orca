@@ -113,7 +113,7 @@ getting that wrong turns a skew into a false "nothing is blocked".
   unverifiable, the pane was unreadable, or the agent probe did not answer in time.
 
 A new client against an old host sees the field absent, which is why absence must read as
-*unknown* and never as *not waiting*. Collapsing absent into `null` at any hop — including a
+_unknown_ and never as _not waiting_. Collapsing absent into `null` at any hop — including a
 convenience `?? null` in an RPC handler — makes an old or unreachable peer indistinguishable
 from a healthy idle worker, which is the exact failure the field exists to remove.
 
@@ -180,7 +180,7 @@ has to be there before the first snapshot is interpreted, which is earlier than 
 renderer could wait on. Every other viewer — a second desktop, the web client, which installs no
 page renderer at all, the dashboard pop-out, which is deliberately left unstamped — keeps tracking
 the host, which is the only reason a mirrored viewer shows anything but its first snapshot
-forever. Improving what a *second* client sees still means fixing the publish, not the carve-out;
+forever. Improving what a _second_ client sees still means fixing the publish, not the carve-out;
 the carve-out no longer stands in the way of it.
 
 The two failure fields above are deliberately left on the looser `placement?.kind !== 'client'`

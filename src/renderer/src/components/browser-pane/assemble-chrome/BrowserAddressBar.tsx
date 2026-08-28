@@ -393,7 +393,9 @@ export default function BrowserAddressBar({
     // Why: min-w-11 keeps the leading globe a real hit target once the toolbar
     // squeezes the bar away — without it neighbouring buttons overlap the only
     // affordance for reopening the URL field.
-    <div ref={slotRef} className="flex min-w-11 flex-1 items-center">
+    // Why stretch: the toolbar row pins the address slot's height, and the bar must fill it rather
+    // than size itself — otherwise it and the document chip drift apart again.
+    <div ref={slotRef} className="flex min-w-11 flex-1 items-stretch">
       <Popover
         modal={false}
         open={open}

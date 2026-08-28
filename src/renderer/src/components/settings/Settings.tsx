@@ -389,7 +389,7 @@ function Settings(): React.JSX.Element {
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
-  // Why: session-only (deliberately not persisted) unlock — Shift-click the Experimental entry reveals the hidden group.
+  // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -1108,16 +1108,9 @@ function Settings(): React.JSX.Element {
   ])
 
   const scrollToSection = useCallback(
-    async (
-      sectionId: string,
-      modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
-    ): Promise<void> => {
+    async (sectionId: string): Promise<void> => {
       if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
-      }
-      // Why: Shift-click the Experimental row unlocks the hidden power-user group (session-only).
-      if (sectionId === 'experimental' && modifiers?.shiftKey) {
-        setHiddenExperimentalUnlocked((previous) => !previous)
       }
       const container = contentScrollRef.current
       if (container) {
@@ -1844,6 +1837,13 @@ function Settings(): React.JSX.Element {
                     'New features that are still taking shape. Give them a try.'
                   )}
                   searchEntries={getSectionSearchEntries('experimental')}
+                  // Why: Option-click the page title unlocks the hidden staff group
+                  // (session-only) — same idiom as Option-click on the Updates header.
+                  onTitleClick={(event) => {
+                    if (event.altKey) {
+                      setHiddenExperimentalUnlocked((previous) => !previous)
+                    }
+                  }}
                 >
                   {isSectionMounted('experimental') ? (
                     <ExperimentalPane

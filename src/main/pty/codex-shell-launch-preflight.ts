@@ -85,12 +85,17 @@ unset __orca_codex_binary
 }
 
 export function getFishCodexShellLaunchPreflight(): string {
-  return `if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
+  return `# Why captured: an unquoted (type -t codex) expands to zero words when codex is
+# absent, leaving "test = file" — fish then errors instead of failing closed.
+# Quoting in place is not the fix; fish never substitutes inside double quotes.
+set -l __orca_codex_type (type -t codex 2>/dev/null)
+if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test "$__orca_codex_type" = file
   function codex
     command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     command codex $argv
   end
-end`
+end
+set -e __orca_codex_type`
 }
 
 export function getPowerShellCodexShellLaunchPreflight(): string {

@@ -44,10 +44,12 @@ export function registerGitLabIssueHandlers(store: Store): void {
         state?: 'opened' | 'closed' | 'all'
         assignee?: string
         limit?: number
+        page?: number
       }
     ) => {
       const repo = assertRegisteredRepo(args, store)
       const limit = normalizeGitLabPositiveInteger(args.limit, 20, 100)
+      const page = normalizeGitLabPositiveInteger(args.page, 1, 10_000)
       const state = normalizeGitLabIssueListState(args.state)
       const assignee = normalizeGitLabIssueAssignee(args.assignee)
       const result = await listIssues(
@@ -57,7 +59,8 @@ export function registerGitLabIssueHandlers(store: Store): void {
         state,
         assignee,
         repoConnectionId(repo),
-        ...localGitOptionArgs(store, repo)
+        localGitOptionArgs(store, repo)[0] ?? {},
+        page
       )
       // Why: Tasks page expects GitLabWorkItem[] so it can share row
       // rendering with MRs. Map IssueInfo → WorkItem here so the renderer
@@ -74,7 +77,11 @@ export function registerGitLabIssueHandlers(store: Store): void {
         author: issue.author ?? null,
         repoId: repo.id
       }))
-      return { items: workItems, ...(result.error ? { error: result.error } : {}) }
+      return {
+        items: workItems,
+        totalPages: result.totalPages,
+        ...(result.error ? { error: result.error } : {})
+      }
     }
   )
 

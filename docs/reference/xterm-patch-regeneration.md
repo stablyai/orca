@@ -115,7 +115,7 @@ the resulting patch is silently wrong — the failure mode is a `.mjs` that is
 `forbiddenBuildScripts` in the manifest encodes this and the generator refuses
 to run a build step that names one of those scripts.
 
-The generator also builds the *unmodified* commit first and asserts that it
+The generator also builds the _unmodified_ commit first and asserts that it
 reproduces the published `lib/` byte for byte before it emits anything. A
 toolchain or build-order problem therefore surfaces as an explicit "did not
 reproduce the published bundles" error rather than as 7 MB of mystery diff.

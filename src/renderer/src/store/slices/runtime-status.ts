@@ -34,6 +34,16 @@ export type RuntimeEnvironmentStatus = {
   connectionGeneration?: number
 }
 
+export type RuntimeStatusRefreshOptions = {
+  /** Whether a failed probe is published as `null`. True (default) for a user-initiated check:
+   * the user asked and we could not reach the host. False for a caller that just watched the
+   * control transport prove the host alive — `status.get` dials its own short-lived socket with
+   * a fresh handshake, so it can fail while that transport stays healthy, and per
+   * `docs/reference/ssh-execution-boundary.md` such a failure is `unverifiable`, never `exited`.
+   * Publishing it over a live cached verdict manufactures a stuck-offline sidebar. */
+  publishUnreachable?: boolean
+}
+
 export type RuntimeStatusSlice = {
   /** Saved remote Orca servers. Host pickers use this to show user-chosen names
    * instead of opaque runtime ids. */
@@ -68,8 +78,14 @@ export type RuntimeStatusSlice = {
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   /** Drops every entry whose id is not in the saved-environments set. */
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
-  /** Probes one saved runtime and records the latest reachable/unreachable state. */
-  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
+  /** Probes one saved runtime and records the latest reachable/unreachable state.
+   * `publishUnreachable: false` records nothing when the probe fails, for callers that
+   * already hold live evidence the host is up (see the option's doc below). */
+  refreshRuntimeEnvironmentStatus: (
+    environmentId: string,
+    timeoutMs?: number,
+    options?: RuntimeStatusRefreshOptions
+  ) => Promise<boolean>
   /** Best-effort: list saved environments and probe each so the sidebar shows
    * live health at boot, before the settings pane is ever opened. */
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
@@ -312,8 +328,12 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     })
   },
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
     refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (status) => {
+      if (status === null && options?.publishUnreachable === false) {
+        // Unverifiable, not exited: leave the cached verdict for the caller's retry to settle.
+        return
+      }
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
       get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })

@@ -63,6 +63,7 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { HostDiagnosticsLink } from '../../../src/components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBanner'
 import { visibleHostRouteNotice } from '../../../src/host-route-notice'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
@@ -1090,6 +1091,17 @@ export function HostScreen({
           onRemove={() => setConfirmRemoveHost(true)}
         />
       )}
+
+      {connState !== 'connected' &&
+      !relayRecovery.pairingRejected &&
+      reconnectAttempts >= 3 &&
+      hostId ? (
+        <HostDiagnosticsLink
+          onPress={() =>
+            router.push({ pathname: '/connection-log', params: { hostId: String(hostId) } })
+          }
+        />
+      ) : null}
 
       {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
       {routeNotice && (

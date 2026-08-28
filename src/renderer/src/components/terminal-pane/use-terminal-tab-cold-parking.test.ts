@@ -75,6 +75,7 @@ import {
 } from './terminal-hidden-view-parking'
 import {
   TERMINAL_TAB_PARK_FLIP_BURST_LIMIT,
+  TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS,
   TERMINAL_TAB_PARK_FLIP_WINDOW_MS
 } from './terminal-park-verdict-flip-telemetry'
 import { useTerminalTabColdParking } from './use-terminal-tab-cold-parking'
@@ -459,6 +460,10 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       }
     }
     act(() => {
+      // Why the clock advance: the verdict-flip burst limit is expressed per
+      // second, and fake timers freeze Date.now(), so back-to-back rerenders
+      // would read as an oscillation the damping is supposed to pin.
+      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS)
       rerender(hookArgs(false))
     })
     expect(result.current.size).toBe(0)
@@ -472,6 +477,7 @@ describe('useTerminalTabColdParking measure-clock contract', () => {
       }
     }
     act(() => {
+      vi.advanceTimersByTime(TERMINAL_TAB_PARK_FLIP_BURST_WINDOW_MS)
       rerender(hookArgs(false))
     })
     expect(result.current).toEqual(new Set(['tab-2']))

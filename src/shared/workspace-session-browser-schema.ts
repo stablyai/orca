@@ -13,6 +13,17 @@ const browserLoadErrorSchema = z.object({
   validatedUrl: z.string()
 })
 
+/**
+ * Why persisted at all: this is the page's identity. A restored page re-reads the document off
+ * today's owners and mints a fresh grant for it, and the grant it had before the restart is
+ * deliberately not written anywhere — see `BrowserPageDocLocation`.
+ */
+const browserPageDocLocationSchema = z.object({
+  kind: z.literal('workspace-doc'),
+  worktreeId: z.string(),
+  filePath: z.string()
+})
+
 const browserViewportPresetIdSchema = z.enum([
   'mobile-s',
   'mobile-m',
@@ -46,7 +57,8 @@ export const browserWorkspaceSchema: z.ZodType<BrowserWorkspace> = z.object({
   canGoBack: z.boolean(),
   canGoForward: z.boolean(),
   loadError: browserLoadErrorSchema.nullable(),
-  createdAt: z.number()
+  createdAt: z.number(),
+  docLocation: browserPageDocLocationSchema.nullable().optional()
 })
 
 export const browserPageSchema = z.object({
@@ -71,7 +83,11 @@ export const browserPageSchema = z.object({
   // Why: optional+nullable so sessions persisted before viewport presets were
   // added still validate; without this, zod would strip the field during
   // restore and reset the user's chosen preset on every app restart.
-  viewportPresetId: browserViewportPresetIdSchema.nullable().optional()
+  viewportPresetId: browserViewportPresetIdSchema.nullable().optional(),
+  // Why listed here and not just typed: z.object strips what it does not name, so an unlisted
+  // docLocation restores a workspace document as a blank New Tab — the page keeps its blank url
+  // and loses the only field that said which document it was.
+  docLocation: browserPageDocLocationSchema.nullable().optional()
 })
 
 const browserHistoryEntrySchema = z.object({

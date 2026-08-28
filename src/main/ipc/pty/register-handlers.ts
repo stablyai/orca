@@ -12,6 +12,7 @@ import { localProvider } from './provider/registry'
 import { finishPtyShutdown } from './provider/liveness'
 import type { GetSelectedCodexHomePath, PrepareClaudeAuth } from './host-env/types'
 import { installPtyInspectIpcHandlers } from './ipc/inspect'
+import { installPtyKillIpcHandler } from './ipc/renderer-kill'
 import { installPtyWriteIpcHandlers } from './ipc/write'
 import { installPtySpawnIpcHandler } from './ipc/spawn'
 import { installPtyRuntimeController } from './runtime/controller'
@@ -256,7 +257,8 @@ export function registerPtyHandlers(
     clearHiddenRendererResizeOutput: session.clearHiddenRendererResizeOutput
   })
   installPtyResizeVisibilityIpc(session)
-  installPtyInspectIpcHandlers({
+  installPtyInspectIpcHandlers({ getLocalPtyProviderStartupPromise })
+  installPtyKillIpcHandler({
     store,
     runtime,
     getLocalPtyProviderStartupPromise,

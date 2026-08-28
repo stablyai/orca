@@ -2,7 +2,7 @@ import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
-  windows: [] as { webContents: MockWebContents }[],
+  windows: [] as MockBrowserWindow[],
   BrowserWindow: vi.fn(),
   finishLoads: true
 }))
@@ -50,6 +50,41 @@ vi.mock('./browser-session-registry', () => ({
 }))
 
 import { OffscreenBrowserBackend } from './offscreen-browser-backend'
+import { installDocPreviewGuestPolicy, isWorkspaceDocPageId } from './doc-preview-guest-policy'
+import { mintDocPreviewGrant } from './doc-preview-grant-registry'
+import { buildDocPreviewUrl } from '../../shared/doc-preview-scheme'
+
+/** The real door's answer, so the backend is tested against the refusal it will actually get. */
+function registerOffscreenGuestLikeBrowserManager({
+  browserPageId
+}: {
+  browserPageId: string
+}): boolean {
+  return !isWorkspaceDocPageId(browserPageId)
+}
+
+/**
+ * A page the document half of the registry really owns. Built rather than named, because the door
+ * refuses on registry membership now — a made-up id would be admitted and prove nothing.
+ */
+function registerWorkspaceDocPage(browserPageId: string): void {
+  const grant = mintDocPreviewGrant({
+    owner: { kind: 'ssh', connectionId: 'ssh-1' },
+    root: '/home/alice/docs',
+    entryRelativePath: 'index.html',
+    browserPageId
+  })
+  const guest = {
+    isFocused: () => false,
+    isDestroyed: () => false,
+    getURL: () => buildDocPreviewUrl(grant.id, grant.entryRelativePath),
+    on: vi.fn(),
+    once: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+    setWebRTCIPHandlingPolicy: vi.fn()
+  }
+  installDocPreviewGuestPolicy(guest as never, { id: 1, send: vi.fn() })
+}
 
 describe('OffscreenBrowserBackend lifecycle', () => {
   beforeEach(() => {
@@ -73,7 +108,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     vi.useFakeTimers()
     mocks.finishLoads = false
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     const backend = new OffscreenBrowserBackend(browserManager as never)
@@ -94,9 +129,36 @@ describe('OffscreenBrowserBackend lifecycle', () => {
     vi.useRealTimers()
   })
 
+  // Why the unregister assertion and not just the destroy: a refused id is one the document half
+  // of the registry owns, and the teardown hook would cancel that preview's work on the way out.
+  it('destroys a window whose registration was refused without unregistering the id', async () => {
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn()
+    }
+    const backend = new OffscreenBrowserBackend(browserManager as never)
+    registerWorkspaceDocPage('doc-page-1')
+
+    await expect(
+      backend.createTab({
+        browserPageId: 'doc-page-1',
+        url: 'https://example.com',
+        worktreeId: 'wt'
+      })
+    ).rejects.toThrow('was refused')
+
+    expect(mocks.windows[0].isDestroyed()).toBe(true)
+    expect(browserManager.unregisterGuest).not.toHaveBeenCalled()
+
+    // Why shutdown and not the map: a refused id left behind is invisible until teardown walks it
+    // and hands that id to the other authority after all.
+    await backend.destroyAll()
+    expect(browserManager.unregisterGuest).not.toHaveBeenCalled()
+  })
+
   it('unregisters a closing page before awaiting owner retirement', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     let releaseOwnerRetirement!: () => void
@@ -126,7 +188,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
   it('preserves a replacement page when the old window finishes closing', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     let releaseOwnerRetirement!: () => void
@@ -152,7 +214,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
   it('retires the helper when an offscreen renderer is destroyed unexpectedly', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     const onPageClosed = vi.fn(async () => {})
@@ -167,7 +229,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
   it('cleans every helper owner during backend shutdown', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     const onPageClosed = vi.fn(async () => {})
@@ -186,7 +248,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
   it('rejects a concurrent create while shutdown is draining owned pages', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     let releaseOwnerRetirement!: () => void
@@ -215,7 +277,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
   it('joins owner retirement started by an unexpected renderer destroy', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     let releaseOwnerRetirement!: () => void
@@ -244,7 +306,7 @@ describe('OffscreenBrowserBackend lifecycle', () => {
 
   it('bounds concurrent helper retirements during shutdown', async () => {
     const browserManager = {
-      registerOffscreenGuest: vi.fn(),
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
       unregisterGuest: vi.fn()
     }
     let activeRetirements = 0
@@ -284,7 +346,10 @@ describe('OffscreenBrowserBackend lifecycle', () => {
   })
 
   it('closes the page even when daemon retirement throws', async () => {
-    const browserManager = { registerOffscreenGuest: vi.fn(), unregisterGuest: vi.fn() }
+    const browserManager = {
+      registerOffscreenGuest: vi.fn(registerOffscreenGuestLikeBrowserManager),
+      unregisterGuest: vi.fn()
+    }
     const backend = new OffscreenBrowserBackend(browserManager as never, {
       getAgentBrowserBridge: () => ({
         onPageClosed: vi.fn(async () => {

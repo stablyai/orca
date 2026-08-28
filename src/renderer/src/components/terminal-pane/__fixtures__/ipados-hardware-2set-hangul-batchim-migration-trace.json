@@ -4,11 +4,7 @@
   "maxTouchPoints": 5,
   "typed": "gksrmfRownla",
   "expected": "한글깨쥠",
-  "observedSent": [
-    "한",
-    "글",
-    "깨쥠"
-  ],
+  "observedSent": ["한", "글", "깨쥠"],
   "events": [
     {
       "type": "keydown",

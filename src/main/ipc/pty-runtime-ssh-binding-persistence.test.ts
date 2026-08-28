@@ -156,7 +156,8 @@ describe('registerPtyHandlers', () => {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -373,7 +374,8 @@ describe('registerPtyHandlers', () => {
         throw new Error('disk full')
       }),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {
@@ -469,7 +471,8 @@ describe('registerPtyHandlers', () => {
       upsertSshRemotePtyLease: vi.fn(),
       persistPtyBinding: vi.fn(),
       removeSshRemotePtyLease: vi.fn(),
-      markSshRemotePtyLease: vi.fn()
+      markSshRemotePtyLease: vi.fn(),
+      clearSshRemotePtyKillIntent: vi.fn()
     }
     let controller: RuntimeSpawnController | null = null
     const runtime = {

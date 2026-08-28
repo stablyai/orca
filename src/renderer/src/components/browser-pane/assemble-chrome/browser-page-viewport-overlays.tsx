@@ -1,14 +1,6 @@
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react'
 import { cn } from '@/lib/utils'
-import { Copy, Globe, Image } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
+import { Globe } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { toHttpsRecoveryUrl } from '../../../../../shared/browser-url'
 import type {
@@ -19,17 +11,11 @@ import { BROWSER_GUEST_RECOVERY_ERROR_CODE } from '../host-guest/browser-page-gu
 import { BrowserLoadFailureOverlay } from '../navigate/browser-load-failure-overlay'
 import { useSshWorkspaceProbeSkipRecheck } from '../use-ssh-workspace-browser-route'
 import BrowserFind from './BrowserFind'
-import { MarkupOverlay } from '../annotate/MarkupOverlay'
+import { BrowserGuestAnnotateOverlays } from '../annotate/browser-guest-annotate-overlays'
 import type { MarkupModeController } from '../annotate/useMarkupMode'
 import type { GrabModeHook } from '../annotate/useGrabMode'
-import {
-  getBrowserOverlayAnchor,
-  type BrowserOverlayViewport
-} from '../describe-page/browser-annotation-geometry'
-import { BrowserPageAnnotationTray } from '../annotate/browser-page-annotation-tray'
-import { BrowserPageGrabToast } from '../annotate/browser-page-grab-toast'
+import type { BrowserOverlayViewport } from '../describe-page/browser-annotation-geometry'
 import { retryBrowserTabLoad, toDisplayUrl } from '../describe-page/browser-page-url-display'
-import { PendingBrowserAnnotationCard } from '../annotate/pending-browser-annotation-card'
 import type { BrowserTabPageState } from '../describe-page/browser-page-types'
 import type { useBrowserPageAnnotationSend } from '../annotate/use-browser-page-annotation-send'
 import type { useBrowserPageGrabAnnotations } from '../annotate/use-browser-page-grab-annotations'
@@ -84,42 +70,18 @@ export function BrowserPageViewportOverlays({
   grabAnnotations: ReturnType<typeof useBrowserPageGrabAnnotations>
 }): React.JSX.Element {
   const recheckSshRoute = useSshWorkspaceProbeSkipRecheck(worktreeId)
-  const {
-    pendingAnnotationPayload,
-    handleAddBrowserAnnotation,
-    handleCancelPendingBrowserAnnotation,
-    grabIntent,
-    grabMenuActionTakenRef,
-    handleGrabCopy,
-    handleGrabCopyScreenshot,
-    grabToast,
-    grabToastTimerRef,
-    dismissGrabToast,
-    setGrabToast
-  } = grabAnnotations
-  const {
-    browserAnnotations,
-    browserAnnotationTrayOpen,
-    annotationTraySendOpen,
-    handleAnnotationTraySendOpenChange,
-    activeGroupId,
-    browserAnnotationsPrompt,
-    handleBrowserAnnotationsSentToAgent,
-    handleCopyBrowserAnnotations,
-    browserAnnotationsCopied,
-    handleClearBrowserAnnotations,
-    handleDeleteBrowserAnnotation
-  } = annotationSend
   return (
     <>
-      {markup.isActive && markup.baseImage ? (
-        <MarkupOverlay
-          baseImage={markup.baseImage}
-          busy={markup.state === 'composing'}
-          onComplete={(input) => void markup.complete(input)}
-          onCancel={markup.cancel}
-        />
-      ) : null}
+      <BrowserGuestAnnotateOverlays
+        markup={markup}
+        grab={grab}
+        annotationSend={annotationSend}
+        grabAnnotations={grabAnnotations}
+        containerRef={containerRef}
+        webviewRef={webviewRef}
+        browserOverlayViewport={browserOverlayViewport}
+        worktreeId={worktreeId}
+      />
       <div
         role="status"
         aria-live="polite"
@@ -189,105 +151,6 @@ export function BrowserPageViewportOverlays({
             </div>
           </div>
         </div>
-      ) : null}
-      {pendingAnnotationPayload ? (
-        <PendingBrowserAnnotationCard
-          payload={pendingAnnotationPayload}
-          anchor={getBrowserOverlayAnchor(
-            pendingAnnotationPayload,
-            containerRef.current,
-            webviewRef.current,
-            browserOverlayViewport
-          )}
-          portalContainer={containerRef.current}
-          onAdd={handleAddBrowserAnnotation}
-          onCancel={handleCancelPendingBrowserAnnotation}
-        />
-      ) : null}
-      {browserAnnotations.length > 0 && browserAnnotationTrayOpen ? (
-        <BrowserPageAnnotationTray
-          browserAnnotations={browserAnnotations}
-          annotationTraySendOpen={annotationTraySendOpen}
-          handleAnnotationTraySendOpenChange={handleAnnotationTraySendOpenChange}
-          worktreeId={worktreeId}
-          activeGroupId={activeGroupId}
-          browserAnnotationsPrompt={browserAnnotationsPrompt}
-          handleBrowserAnnotationsSentToAgent={handleBrowserAnnotationsSentToAgent}
-          handleCopyBrowserAnnotations={handleCopyBrowserAnnotations}
-          browserAnnotationsCopied={browserAnnotationsCopied}
-          handleClearBrowserAnnotations={handleClearBrowserAnnotations}
-          handleDeleteBrowserAnnotation={handleDeleteBrowserAnnotation}
-        />
-      ) : null}
-      {/* Right-click context dropdown, positioned at the grabbed element's center. */}
-      <DropdownMenu
-        open={grab.state === 'confirming' && grab.contextMenu && grabIntent === 'copy'}
-        onOpenChange={(open) => {
-          if (!open && grab.state === 'confirming') {
-            // Why: skip rearm if a menu action already handled it — see grabMenuActionTakenRef.
-            if (grabMenuActionTakenRef.current) {
-              grabMenuActionTakenRef.current = false
-              return
-            }
-            grab.rearm()
-          }
-        }}
-      >
-        <DropdownMenuTrigger asChild>
-          <button
-            aria-hidden
-            tabIndex={-1}
-            className="pointer-events-none absolute size-px opacity-0"
-            style={(() => {
-              if (!grab.payload) {
-                return { left: 0, top: 0 }
-              }
-              const rect = grab.payload.target.rectViewport
-              const webview = webviewRef.current
-              const webviewRect = webview?.getBoundingClientRect()
-              const cRect = containerRef.current?.getBoundingClientRect()
-              const offsetX = (webviewRect?.left ?? 0) - (cRect?.left ?? 0)
-              const offsetY = (webviewRect?.top ?? 0) - (cRect?.top ?? 0)
-              return {
-                left: offsetX + rect.x + rect.width / 2,
-                top: offsetY + rect.y + rect.height / 2
-              }
-            })()}
-          />
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" sideOffset={4}>
-          <DropdownMenuItem onSelect={handleGrabCopy}>
-            <Copy className="size-3.5" />
-            {translate('auto.components.browser.pane.BrowserPane.c2ef0359b9', 'Copy Contents')}
-            <DropdownMenuShortcut>C</DropdownMenuShortcut>
-          </DropdownMenuItem>
-          {grab.payload?.screenshot?.dataUrl?.startsWith('data:image/png;base64,') ? (
-            <DropdownMenuItem onSelect={handleGrabCopyScreenshot}>
-              <Image className="size-3.5" />
-              {translate('auto.components.browser.pane.BrowserPane.1ded0d3168', 'Copy Screenshot')}
-              <DropdownMenuShortcut>S</DropdownMenuShortcut>
-            </DropdownMenuItem>
-          ) : null}
-          <DropdownMenuSeparator />
-          <DropdownMenuItem
-            onSelect={() => {
-              grabMenuActionTakenRef.current = true
-              grab.cancel()
-            }}
-          >
-            {translate('auto.components.browser.pane.BrowserPane.fa6ea61de3', 'Cancel')}
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
-
-      {/* Inline toast bubble; flips above the element when near the viewport bottom so it doesn't occlude it. */}
-      {grabToast ? (
-        <BrowserPageGrabToast
-          grabToast={grabToast}
-          grabToastTimerRef={grabToastTimerRef}
-          dismissGrabToast={dismissGrabToast}
-          setGrabToast={setGrabToast}
-        />
       ) : null}
     </>
   )

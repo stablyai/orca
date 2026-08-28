@@ -37,6 +37,10 @@ import { scanWorkspaceSpaceDirectory } from './workspace-space-scan'
 import { RipgrepUnavailableError } from '../shared/ripgrep-process-availability'
 import { RelayFilesystemWatchRegistry } from './relay-filesystem-watch-registry'
 import type { RelayWatcherProcessPool } from './relay-watcher-process-pool'
+import {
+  readAuthorizedDocPreviewFile,
+  type DocPreviewFileAccessRequest
+} from '../shared/doc-preview-file-access'
 
 export class FsHandler {
   private dispatcher: RelayDispatcher
@@ -69,6 +73,9 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.readFile', (p) => this.readFile(p))
     this.dispatcher.onRequest('fs.readFileStream', (p, c) => this.readFileStream(p, c))
     this.dispatcher.onRequest('fs.readFileRange', (p) => this.readFileRange(p))
+    this.dispatcher.onRequest('fs.readDocPreview', (p) =>
+      readAuthorizedDocPreviewFile(p as DocPreviewFileAccessRequest)
+    )
     this.dispatcher.onRequest('fs.readTerminalArtifact', (p) => this.readTerminalArtifact(p))
     this.dispatcher.onRequest('fs.tempDir', () => this.tempDir())
     this.dispatcher.onRequest('fs.writeFile', (p) => writeRelayFile(p))

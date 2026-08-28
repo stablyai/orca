@@ -31,6 +31,11 @@ export type SshLeaseStoreMock = {
   markSshRemotePtyLeasesForShutdown: Mock
   markSshRemotePtyLeasesAttachedAsync: Mock
   removeSshRemotePtyLeases: Mock
+  getSshRemotePtyKillIntents: Mock
+  pruneExpiredSshRemotePtyKillIntents: Mock
+  recordSshRemotePtyKillIntent: Mock
+  clearSshRemotePtyKillIntent: Mock
+  noteSshRemotePtyKillReplayAttempt: Mock
 }
 
 export type MockBrowserWindow = { isDestroyed: () => boolean; webContents: { send: Mock } }
@@ -102,7 +107,12 @@ export function createSshIpcHarness(mocks: SshIpcMocks): SshIpcHarness {
     markSshRemotePtyLeasesAsync: vi.fn(),
     markSshRemotePtyLeasesForShutdown: vi.fn(),
     markSshRemotePtyLeasesAttachedAsync: vi.fn(),
-    removeSshRemotePtyLeases: vi.fn()
+    removeSshRemotePtyLeases: vi.fn(),
+    getSshRemotePtyKillIntents: vi.fn().mockReturnValue([]),
+    pruneExpiredSshRemotePtyKillIntents: vi.fn(),
+    recordSshRemotePtyKillIntent: vi.fn(),
+    clearSshRemotePtyKillIntent: vi.fn(),
+    noteSshRemotePtyKillReplayAttempt: vi.fn()
   }
   const mockWindow = {
     isDestroyed: () => false,

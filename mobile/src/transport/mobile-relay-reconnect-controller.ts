@@ -46,9 +46,7 @@ export class RelayReconnectController {
     this.credentials = new RelayCredentialEligibility(dependencies.now)
   }
 
-  getFailureCount(): number {
-    return this.failureCount.current()
-  }
+  getFailureCount = (): number => this.failureCount.current()
 
   reportRecoveryTo(logical: StableLogicalRpcClient): void {
     this.failureCount.reportTo(logical.setRecoveryAttempt)
@@ -97,17 +95,17 @@ export class RelayReconnectController {
     return 'recover'
   }
 
-  handleStateFailure(logical: StableLogicalRpcClient, state: ConnectionState): void {
+  handleStateFailure(logical: StableLogicalRpcClient, state: ConnectionState): Error | null {
     if (!this.needsRecovery(state)) {
-      return
+      return null
     }
-    this.registerActiveFailure(logical)
+    const failure = this.registerActiveFailure(logical)
     this.onRetry()
+    return failure
   }
 
-  needsRecovery(state: ConnectionState): boolean {
-    return state !== 'connected' && state !== 'connecting' && state !== 'handshaking'
-  }
+  needsRecovery = (state: ConnectionState): boolean =>
+    state !== 'connected' && state !== 'connecting' && state !== 'handshaking'
 
   suspendActiveRelay(logical: StableLogicalRpcClient): void {
     if (logical.getActivePath() !== 'relay') {
@@ -207,9 +205,9 @@ export class RelayReconnectController {
 
   recordRejectedCredential = (version: number): void => this.credentials.recordRejected(version)
 
-  registerActiveFailure(logical: StableLogicalRpcClient): void {
+  registerActiveFailure(logical: StableLogicalRpcClient): Error | null {
     if (logical.getActivePath() !== 'relay') {
-      return
+      return null
     }
     const failure = this.activeSession?.getFailure()
     this.activeSession = null
@@ -219,6 +217,7 @@ export class RelayReconnectController {
     } else {
       this.activeRelayConnectedAt = null
     }
+    return failure ?? null
   }
 
   // True when the caller is still inside the cooldown window and must not

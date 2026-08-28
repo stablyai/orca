@@ -29,6 +29,7 @@ describe('ensure-native-runtime', () => {
       const binDir = join(projectDir, 'bin')
       copyFileSync(sourceScriptPath, scriptPath)
       writeFakeNativeModules(projectDir)
+      writeNodePtyPatchFile(projectDir)
       writeFakePnpm(binDir)
 
       const result = spawnSync(process.execPath, [scriptPath, '--runtime=node'], {
@@ -44,6 +45,9 @@ describe('ensure-native-runtime', () => {
       const log = readFileSync(logPath, 'utf8')
       expect(log).toContain('pnpm exec node-gyp rebuild\n')
       expect(log).toContain(join('node_modules', 'node-pty'))
+      if (process.platform === 'linux') {
+        expect(log).toMatch(/^cxxflags=(?:.*\s)?-std=gnu\+\+2a$/m)
+      }
       expect(log.split('\n').filter((line) => line.startsWith('node-pty child '))).toEqual([
         expect.stringMatching(/^node-pty child (?:conpty|pty) marker=false$/),
         expect.stringMatching(/^node-pty child (?:conpty|pty) marker=true$/)
@@ -239,6 +243,14 @@ exports.loadNativeModule = function loadNativeModule(nativeName) {
   if (!markerExists) {
     throw new Error('ABI mismatch sentinel')
   }
+  return {
+    dir: '../build/Release/',
+    module: {
+      listJobProcessIds() {},
+      terminateJob() {},
+      assignCurrentProcessToJob() {}
+    }
+  }
 }
 `
   )
@@ -336,6 +348,10 @@ appendFileSync(process.env.ORCA_NATIVE_TEST_LOG, \`cwd=\${process.cwd()}\\n\`)
 appendFileSync(
   process.env.ORCA_NATIVE_TEST_LOG,
   \`npm_config_build_from_source=\${process.env.npm_config_build_from_source || ''}\\n\`
+)
+appendFileSync(
+  process.env.ORCA_NATIVE_TEST_LOG,
+  \`cxxflags=\${process.env.CXXFLAGS || ''}\\n\`
 )
 writeFileSync(process.env.ORCA_NATIVE_TEST_MARKER, 'rebuilt')
 `

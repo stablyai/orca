@@ -29,6 +29,20 @@ import {
 } from './runtime-environment-subscription-selection'
 import type { WorktreeEventRuntime } from './worktree-event-runtime'
 
+/** Backoff for re-asking status.get after a probe that failed on its own socket. */
+const RUNTIME_STATUS_PROBE_RETRY_DELAYS_MS = [2_000, 10_000]
+
+/**
+ * Why a request carries its reason: `reconnected` must re-ask even when the cache reads
+ * reachable (a restart changes the runtimeId under an unchanged-looking status), while
+ * `recordedUnreachable` is satisfied by any answer that clears the offline verdict.
+ */
+type RuntimeStatusProbeTrigger = 'reconnected' | 'recordedUnreachable'
+
+function isRuntimeStatusRecordedUnreachable(environmentId: string): boolean {
+  return useAppStore.getState().runtimeStatusByEnvironmentId?.get(environmentId)?.status === null
+}
+
 export function registerRuntimeClientIpcBridge(
   unsubs: (() => void)[],
   worktreeRuntime: WorktreeEventRuntime
@@ -134,6 +148,107 @@ export function registerRuntimeClientIpcBridge(
       })
   }
 
+  const inFlightRuntimeStatusProbes = new Set<string>()
+  const trailingRuntimeStatusProbes = new Map<string, RuntimeStatusProbeTrigger>()
+  const runtimeStatusProbeRetryTimers = new Map<string, ReturnType<typeof setTimeout>>()
+  let runtimeStatusProbesStopped = false
+  // Why not the desired-subscription set alone: a host that is not the active environment
+  // drops out of it the moment anything records its status unreachable, so gating the
+  // retry on it cancels the retry exactly where recovery matters. Only removal
+  // (or a still-unhydrated catalog behind an active id) decides whether to keep asking,
+  // and the tombstone covers the window where settings still names a deleted host active.
+  const shouldProbeRuntimeStatus = (environmentId: string): boolean => {
+    const state = useAppStore.getState()
+    if (state.removedRuntimeEnvironmentIds?.has(environmentId)) {
+      return false
+    }
+    return (
+      (state.runtimeEnvironments ?? []).some((environment) => environment.id === environmentId) ||
+      getRuntimeClientEventEnvironmentIds(state).includes(environmentId)
+    )
+  }
+  // Why: concurrent probes resolve in arbitrary order, so a slow one can publish its
+  // stale answer over a newer one and leave the sidebar naming a superseded runtime.
+  const probeRuntimeStatus = (
+    environmentId: string,
+    attempt = 0,
+    trigger: RuntimeStatusProbeTrigger = 'reconnected'
+  ): void => {
+    if (runtimeStatusProbesStopped || !shouldProbeRuntimeStatus(environmentId)) {
+      return
+    }
+    if (inFlightRuntimeStatusProbes.has(environmentId)) {
+      // Serialize, don't drop: the in-flight answer predates this request, so a reconnect
+      // that lands mid-probe would otherwise go unasked — and a probe that succeeds
+      // schedules no retry to pick it up later. A reconnect outranks a queued
+      // recorded-unreachable request, which the in-flight answer may already settle.
+      if (trigger === 'reconnected' || !trailingRuntimeStatusProbes.has(environmentId)) {
+        trailingRuntimeStatusProbes.set(environmentId, trigger)
+      }
+      return
+    }
+    const pendingRetry = runtimeStatusProbeRetryTimers.get(environmentId)
+    if (pendingRetry !== undefined) {
+      clearTimeout(pendingRetry)
+      runtimeStatusProbeRetryTimers.delete(environmentId)
+    }
+    inFlightRuntimeStatusProbes.add(environmentId)
+    void useAppStore
+      .getState()
+      // publishUnreachable: false — the transport that just proved this host alive is not the
+      // socket status.get dials, so a failed probe here is unverifiable and must publish nothing.
+      .refreshRuntimeEnvironmentStatus(environmentId, undefined, { publishUnreachable: false })
+      .catch(() => false)
+      .then((reachable) => {
+        inFlightRuntimeStatusProbes.delete(environmentId)
+        const trailingTrigger = trailingRuntimeStatusProbes.get(environmentId)
+        if (trailingTrigger !== undefined) {
+          trailingRuntimeStatusProbes.delete(environmentId)
+          // A newer reconnect asked while this one was dialing: restart the attempt chain.
+          // A resubscribe only asked because the cache read unreachable, so skip the extra
+          // socket + E2EE handshake when this answer already cleared that.
+          if (
+            trailingTrigger === 'reconnected' ||
+            isRuntimeStatusRecordedUnreachable(environmentId)
+          ) {
+            probeRuntimeStatus(environmentId, 0, trailingTrigger)
+            return
+          }
+        }
+        // Why: status.get dials its own short-lived socket, so it can fail while the
+        // control transport that just proved the host is up stays healthy. That failure
+        // is unverifiable and publishes nothing, so no store transition, resubscribe or
+        // further trigger follows — without this bounded retry one unlucky probe leaves
+        // a host already recorded offline stranded until the next transport gap.
+        const retryDelayMs = RUNTIME_STATUS_PROBE_RETRY_DELAYS_MS[attempt]
+        if (
+          reachable ||
+          retryDelayMs === undefined ||
+          runtimeStatusProbesStopped ||
+          !shouldProbeRuntimeStatus(environmentId)
+        ) {
+          return
+        }
+        runtimeStatusProbeRetryTimers.set(
+          environmentId,
+          setTimeout(() => {
+            runtimeStatusProbeRetryTimers.delete(environmentId)
+            probeRuntimeStatus(environmentId, attempt + 1)
+          }, retryDelayMs)
+        )
+      })
+  }
+  unsubs.push(() => {
+    // The flag, not just the timers: a probe still in flight at teardown would
+    // otherwise schedule a fresh retry chain after the bridge is gone.
+    runtimeStatusProbesStopped = true
+    trailingRuntimeStatusProbes.clear()
+    for (const retryTimer of runtimeStatusProbeRetryTimers.values()) {
+      clearTimeout(retryTimer)
+    }
+    runtimeStatusProbeRetryTimers.clear()
+  })
+
   const runtimeClientEventsSync = createRuntimeClientEventsSync({
     getDesiredEnvironmentIds: () => getRuntimeClientEventEnvironmentIds(useAppStore.getState()),
     getSubscriptionKey: (environmentId) => buildRuntimeClientEventEnvironmentKey([environmentId]),
@@ -141,7 +256,7 @@ export function registerRuntimeClientIpcBridge(
       const sshGeneration = getEnvironmentSshStateGeneration(environmentId)
       const runtimeGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
       const runtimeRevision = getRuntimeEnvironmentRevision(environmentId)
-      return subscribeRuntimeClientEvents(
+      const subscription = subscribeRuntimeClientEvents(
         environmentId,
         (event) => {
           if (
@@ -156,6 +271,7 @@ export function registerRuntimeClientIpcBridge(
         () => {
           invalidateRuntimeClientEventReplay({
             getSshStateReference: () => useAppStore.getState().sshStateByEnvironment,
+            refreshRuntimeStatus: () => probeRuntimeStatus(environmentId),
             requestProjectRefresh: () => runtimeProjectRefreshScheduler.request(environmentId),
             markEnvironmentSshStateStale: () =>
               useAppStore.getState().markEnvironmentSshStateStale(environmentId),
@@ -165,6 +281,20 @@ export function registerRuntimeClientIpcBridge(
           })
         }
       )
+      // Why: only a reconnect of an already-ready transport replays with the tag above.
+      // A connection whose first ready lands after the host recovered (app started, or
+      // the env was added, while it was down) never replays, so the recorded-unreachable
+      // verdict this subscribe just disproved has to be re-asked here. Kept off the
+      // returned promise so subscription registration/teardown ordering is unchanged.
+      void subscription.then(
+        () => {
+          if (isRuntimeStatusRecordedUnreachable(environmentId)) {
+            probeRuntimeStatus(environmentId, 0, 'recordedUnreachable')
+          }
+        },
+        () => {}
+      )
+      return subscription
     },
     onEvent: handleRuntimeClientEvent
   })

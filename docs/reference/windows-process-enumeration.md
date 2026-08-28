@@ -15,7 +15,10 @@ since removed.
 table. It wraps a Toolhelp32 snapshot from `@vscode/windows-process-tree`.
 
 ```ts
-import { readWindowsProcessTable, readWindowsProcessTableFresh } from '../windows/windows-process-table'
+import {
+  readWindowsProcessTable,
+  readWindowsProcessTableFresh
+} from '../windows/windows-process-table'
 ```
 
 - `readWindowsProcessTable()` — shared TTL cache. Use for anything periodic.
@@ -31,11 +34,11 @@ survived its own teardown (#9045).
 
 Measured on Windows 11 with 1050 processes (p50 / p95):
 
-| | p50 | p95 |
-| --- | --- | --- |
-| pid + ppid + name | 15.9 ms | 17.5 ms |
-| + memory + command line | 30.6 ms | 33.7 ms |
-| `Get-CimInstance` via PowerShell | 706 ms | 723 ms |
+|                                  | p50     | p95     |
+| -------------------------------- | ------- | ------- |
+| pid + ppid + name                | 15.9 ms | 17.5 ms |
+| + memory + command line          | 30.6 ms | 33.7 ms |
+| `Get-CimInstance` via PowerShell | 706 ms  | 723 ms  |
 
 Those CIM numbers are from a 1050-process host. The scan scales with process
 count: on a 1486-process Windows SSH host it measured **1.36 s** and produced
@@ -62,7 +65,7 @@ Two guards, and they work together:
   the module refuses every further read until that read's callback fires.
 
 The wedge used to be a 30 s cooldown that let one probe through per window. That
-bounded the *rate* of new callbacks but not the total: a permanently wedged
+bounded the _rate_ of new callbacks but not the total: a permanently wedged
 reader retained one more closure every 30 s for as long as the app ran, and each
 probe also blocked its caller for the full 3 s deadline first. Gating on the
 outstanding read instead bounds retention at exactly one callback, and gives up
@@ -90,7 +93,7 @@ checked on a real Windows SSH host with 1486 processes:
 
 **Installing it normally rebuilds from source, and that build fails.** The
 tarball carries a `binding.gyp`, so npm runs `node-gyp rebuild` regardless of
-what is already compiled inside it. On a host that *already had* MSVC Build
+what is already compiled inside it. On a host that _already had_ MSVC Build
 Tools 2022 installed, that build still failed:
 
 ```
@@ -103,7 +106,7 @@ would then break outright rather than degrade: `installNativeDeps` throws on
 failure, and the toolchain-skip retry is gated to Linux.
 
 **Skipping the build and using the shipped binary returns a truncated table.**
-Contrary to what this file used to claim, the published 0.8.0 tarball *does*
+Contrary to what this file used to claim, the published 0.8.0 tarball _does_
 contain `build/Release/windows_process_tree.node` — an MSVC build directory that
 looks accidentally published (`.obj` and `.tlog` files ship with it). It is
 N-API, so it loads on any modern Node. But it predates our patch and still has
@@ -151,14 +154,14 @@ it as an optional relay artifact.
 `config/scripts/build-windows-process-tree-relay-addon.mjs` builds it from the
 source pnpm has already patched, on a Windows runner, and refuses to run if
 any patch hunk is missing — the Spectre hunk fails loudly, the 1024-process
-hunk fails *silently*, and the relative gyp path dies at configure on Windows.
+hunk fails _silently_, and the relative gyp path dies at configure on Windows.
 The source is checked rather than the install trusted. It also reads the PE
 machine field of the output, because a cross-build that quietly emitted host
 arch would ship a binary the target cannot load.
 
 Windows arm64 cross-compiles from the x64 runner — verified on real hardware,
 producing `IMAGE_FILE_MACHINE_ARM64` (0xaa64) against x64's 0x8664. It needs the
-optional *MSVC v143 ARM64 build tools* component; without it node-gyp fails with
+optional _MSVC v143 ARM64 build tools_ component; without it node-gyp fails with
 `MSB8020`, which is why the addon build runs before the long packaging step.
 `ORCA_REQUIRE_RELAY_NATIVE_ADDONS` is a per-arch list so a future arch can be
 added best-effort before it is promoted to required.
@@ -258,7 +261,7 @@ The per-PTY job deliberately does **not** set
 `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`. Measured on Windows 11: with that flag,
 releasing the handle when the shell exits also kills whatever the user left
 running, so typing `exit` in a pane reaped a `start /b` server that used to
-survive. The job exists to make an *explicit* teardown exact, not to redefine
+survive. The job exists to make an _explicit_ teardown exact, not to redefine
 what a clean exit means.
 
 Reaping a dead daemon's shells (#9195, #10415) is therefore a **second, nested
@@ -283,7 +286,7 @@ kill-on-close job on the app, which is exactly what the crash-survival
 guarantee forbids.
 
 Once the shell exits, node-pty drops its handle record and closes the job, so a
-terminated tree reports `null` rather than `[]`. Null means *unverifiable* in
+terminated tree reports `null` rather than `[]`. Null means _unverifiable_ in
 the sense of [`ssh-execution-boundary.md`](./ssh-execution-boundary.md) — no job
 support, not a ConPTY, or no longer tracked. It is never evidence that
 processes died.

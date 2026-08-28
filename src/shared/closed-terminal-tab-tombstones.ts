@@ -2,15 +2,10 @@ import { z } from 'zod'
 
 /** A client's own record that the user closed a terminal tab.
  *
- *  Why it has to exist: the direct-SSH pull merge cannot tell "the host was never told about this
- *  tab" from "the user closed it" by absence alone, so it keeps the tab (see the trade documented in
- *  remote-workspace-session-merge.ts). When the `pty.kill` RPC rejects with a transport error the
- *  close never reaches the host at all, the host keeps listing the tab, and every reconnect
- *  re-inserts it. The tombstone is the missing close signal — first-party intent that outlives the
- *  failed RPC — so the merge can drop that one tab without ever deleting a tab the host merely has
- *  not heard about yet.
- *
- *  Tab ids are uuids and reopen mints a fresh one, so a tombstoned id never legitimately returns. */
+ *  Why it must exist: absence alone cannot distinguish "the host was never told" from "the user
+ *  closed it", so the merge keeps the tab — and a `pty.kill` that died on the transport means the
+ *  host keeps listing it forever. This is the close signal that outlives the failed RPC.
+ *  Safe because tab ids are uuids: a tombstoned id never legitimately returns. */
 export type ClosedTerminalTabTombstone = {
   closedAt: number
   worktreeId: string
@@ -22,10 +17,8 @@ export type ClosedTerminalTabTombstone = {
 
 export type ClosedTerminalTabTombstonesByTabId = Record<string, ClosedTerminalTabTombstone>
 
-/** Colocated with the type so the two cannot drift. Must survive a relaunch: the whole point of a
- *  tombstone is that it outlives a `pty.kill` the transport never delivered, and a restart is the
- *  common case — it was omitted from the session schema once, and the map was silently stripped on
- *  every launch. */
+/** Colocated with the type so the two cannot drift. Must survive a relaunch — omitted from the
+ *  session schema once, and zod silently stripped the map on every launch. */
 export const closedTerminalTabTombstoneSchema = z.object({
   closedAt: z.number().int().nonnegative(),
   worktreeId: z.string().min(1),

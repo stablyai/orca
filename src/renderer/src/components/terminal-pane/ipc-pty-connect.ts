@@ -3,6 +3,9 @@ import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
   clearConsumedPreHandlerPtyExit,
+  currentPreHandlerPtySequence,
+  discardPreHandlerPtyExitFromForeignIncarnation,
+  discardPreHandlerPtyStateFromPriorIncarnation,
   hasPreHandlerPtyExit,
   isPreHandlerPtyStateDiscarded
 } from './pty-pre-handler-buffer'
@@ -68,6 +71,10 @@ export async function connectIpcPty(
     if (options.shouldContinue && !options.shouldContinue()) {
       return
     }
+    // Why read it before the request and not after: a redeployed SSH relay renumbers from pty-1, so
+    // this spawn can be handed an id a dead PTY used to own. State dated at or below this fence was
+    // recorded before we asked for a PTY, so it belongs to that earlier owner, not to us.
+    const priorIncarnationFence = currentPreHandlerPtySequence()
     const spawnResult = await spawnIpcPty(transportOptions, options, admittedSessionId)
     const retireFreshSpawn = async (): Promise<void> => {
       if (!spawnResult.isReattach && !spawnResult.coldRestore) {
@@ -87,12 +94,21 @@ export async function connectIpcPty(
       context.getCallbacks().onReattachDetermined?.()
     }
 
+    // Why unconditional: this runs on identity, not timing. Whatever we attached to — fresh,
+    // reattach or cold restore — an exit naming a different incarnation of the id is not ours, so
+    // it is safe to drop even for the reattach the fence below deliberately leaves alone.
+    discardPreHandlerPtyExitFromForeignIncarnation(spawnResult.id, spawnResult.incarnationId)
+    if (!admittedSessionId && !spawnResult.isReattach && !spawnResult.coldRestore) {
+      // Why only a fresh spawn: a reattach deliberately re-owns an id that already existed, so its
+      // buffered exit is the real thing. A fresh spawn's PTY did not exist yet.
+      discardPreHandlerPtyStateFromPriorIncarnation(spawnResult.id, priorIncarnationFence)
+    }
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
       onPtySpawn?.(spawnResult.id)
     }
     handlers.registerData(spawnResult.id)
-    const exitedBeforeAttach = handlers.registerExit(spawnResult.id)
+    const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
     if (exitedBeforeAttach) {
       return { id: spawnResult.id, exitedBeforeAttach: true }
     }
