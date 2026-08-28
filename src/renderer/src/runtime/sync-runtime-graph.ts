@@ -171,11 +171,19 @@ const EMPTY_LAYOUT_BY_WORKTREE: AppState['layoutByWorktree'] = {}
 const EMPTY_AGENT_STATUS_BY_PANE_KEY: AppState['agentStatusByPaneKey'] = {}
 const AGENT_STATUS_SYNC_UPDATED_AT_BUCKET_MS = 30_000
 const RUNTIME_GRAPH_SYNC_COALESCE_MS = 16
+// Why: a rejected publication leaves main's graph unavailable, and mobile stays
+// on an empty tab inventory until something republishes. Store activity alone is
+// not a retry: an idle desktop can sit rejected forever (STA-5523). Back off so a
+// durable rejection costs one attempt per 30s instead of one per coalesce tick.
+const RUNTIME_GRAPH_SYNC_RETRY_BASE_MS = 500
+const RUNTIME_GRAPH_SYNC_RETRY_MAX_MS = 30_000
 let syncScheduled = false
 let syncInFlight = false
 let syncPendingAfterFlight = false
 let syncEnabled = false
 let syncTimer: ReturnType<typeof setTimeout> | null = null
+let syncRetryTimer: ReturnType<typeof setTimeout> | null = null
+let consecutiveSyncFailures = 0
 let getStoreState: (() => AppState) | null = null
 let mobileSessionSnapshotVersion = 0
 // Why: main gates per-worktree mobile fanout on (publicationEpoch,
@@ -293,6 +301,7 @@ export function setRuntimeGraphSyncEnabled(enabled: boolean): void {
   syncEnabled = enabled
   if (!enabled) {
     syncPendingAfterFlight = false
+    consecutiveSyncFailures = 0
     clearScheduledRuntimeGraphSync()
     return
   }
@@ -304,11 +313,33 @@ function clearScheduledRuntimeGraphSync(): void {
     clearTimeout(syncTimer)
     syncTimer = null
   }
+  clearRuntimeGraphSyncRetry()
   syncScheduled = false
 }
 
+function clearRuntimeGraphSyncRetry(): void {
+  if (syncRetryTimer !== null) {
+    clearTimeout(syncRetryTimer)
+    syncRetryTimer = null
+  }
+}
+
+function scheduleRuntimeGraphSyncRetry(): void {
+  if (!syncEnabled || syncRetryTimer !== null) {
+    return
+  }
+  const delay = Math.min(
+    RUNTIME_GRAPH_SYNC_RETRY_BASE_MS * 2 ** (consecutiveSyncFailures - 1),
+    RUNTIME_GRAPH_SYNC_RETRY_MAX_MS
+  )
+  syncRetryTimer = setTimeout(() => {
+    syncRetryTimer = null
+    scheduleRuntimeGraphSync()
+  }, delay)
+}
+
 export function scheduleRuntimeGraphSync(): void {
-  if (!syncEnabled || syncScheduled) {
+  if (!syncEnabled || syncScheduled || syncRetryTimer !== null) {
     return
   }
   if (syncInFlight) {
@@ -890,8 +921,12 @@ async function syncRuntimeGraph(): Promise<void> {
     if (result?.mobileSessionResyncWorktrees?.length) {
       scheduleRuntimeGraphSync()
     }
+    consecutiveSyncFailures = 0
+    clearRuntimeGraphSyncRetry()
   } catch (error) {
     console.error('[runtime] Failed to sync renderer graph:', error)
+    consecutiveSyncFailures += 1
+    scheduleRuntimeGraphSyncRetry()
   }
 }
 

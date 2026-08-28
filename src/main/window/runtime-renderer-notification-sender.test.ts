@@ -43,6 +43,22 @@ describe('runtime renderer notification sender', () => {
     expect(fixture.onFailure).toHaveBeenCalledExactlyOnceWith('renderer-frame-unavailable')
   })
 
+  it('resumes after the current renderer publishes an accepted graph', () => {
+    const send = vi
+      .fn<RendererSend>()
+      .mockImplementationOnce(() => {
+        throw new Error('Render frame was disposed')
+      })
+      .mockImplementation(() => {})
+    const fixture = createSender({ send })
+
+    expect(fixture.sender.send('repos:changed')).toBe(false)
+    fixture.sender.onRendererGraphPublished()
+
+    expect(fixture.sender.send('repos:changed')).toBe(true)
+    expect(send).toHaveBeenCalledTimes(2)
+  })
+
   it('pauses during a main-frame reload and resumes only after load finishes', () => {
     const fixture = createSender()
 

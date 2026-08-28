@@ -142,6 +142,8 @@ describe('mobile session graph payload partition', () => {
 
     // Nothing changed since, but main never acknowledged it: resend, don't withhold.
     scheduleRuntimeGraphSync()
+    await vi.advanceTimersByTimeAsync(499)
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
     await flushSync()
 
     expect(syncWindowGraph).toHaveBeenCalledTimes(3)
@@ -160,6 +162,8 @@ describe('mobile session graph payload partition', () => {
     expect(publishedWorktrees(syncWindowGraph.mock.calls[0])).toHaveLength(3)
 
     scheduleRuntimeGraphSync()
+    await vi.advanceTimersByTimeAsync(499)
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
     await flushSync()
 
     expect(publishedWorktrees(syncWindowGraph.mock.calls[1])).toEqual([

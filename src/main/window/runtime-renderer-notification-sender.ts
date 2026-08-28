@@ -15,6 +15,7 @@ export function createRuntimeRendererNotificationSender(args: {
   onMainFrameReloadStarted: () => void
   onMainFrameReloadCancelled: () => void
   onMainFrameLoadFinished: () => void
+  onRendererGraphPublished: () => void
   onRendererProcessGone: () => void
   close: () => void
 } {
@@ -32,6 +33,13 @@ export function createRuntimeRendererNotificationSender(args: {
       warn(`[runtime-graph] Renderer notifications suspended: ${reason}`)
     }
     args.onFailure(reason)
+  }
+  const resume = (): void => {
+    if (closed) {
+      return
+    }
+    available = true
+    warningEmitted = false
   }
 
   return {
@@ -56,20 +64,9 @@ export function createRuntimeRendererNotificationSender(args: {
       available = false
       warningEmitted = false
     },
-    onMainFrameReloadCancelled: () => {
-      if (closed) {
-        return
-      }
-      available = true
-      warningEmitted = false
-    },
-    onMainFrameLoadFinished: () => {
-      if (closed) {
-        return
-      }
-      available = true
-      warningEmitted = false
-    },
+    onMainFrameReloadCancelled: resume,
+    onMainFrameLoadFinished: resume,
+    onRendererGraphPublished: resume,
     onRendererProcessGone: () => suspend('renderer-process-gone'),
     close: () => {
       closed = true

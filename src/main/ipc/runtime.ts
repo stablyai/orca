@@ -42,7 +42,16 @@ export function registerRuntimeHandlers(runtime: OrcaRuntimeService): void {
       if (typeof graph.rendererGeneration !== 'string' || graph.rendererGeneration.length === 0) {
         throw new Error('Runtime graph sync requires a renderer generation')
       }
-      return runtime.syncWindowGraph(window.id, graph)
+      try {
+        return runtime.syncWindowGraph(window.id, graph)
+      } catch (error) {
+        // Why: a rejected publication leaves the graph unavailable and mobile on
+        // an empty inventory, and nothing else records why (STA-5523).
+        console.warn(
+          `[runtime-graph] rejected publication from window ${window.id}: ${String(error)}`
+        )
+        throw error
+      }
     }
   )
 

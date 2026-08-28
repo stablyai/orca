@@ -208,3 +208,99 @@ describe('getRuntimeMobileSessionSyncKey scheduling inputs', () => {
     expect(runtimeMobileSessionSyncKeysEqual(baseKey, resizedKey)).toBe(false)
   })
 })
+
+describe('runtime graph publication retry', () => {
+  it('keeps store updates behind the active retry backoff', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const syncWindowGraph = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('rejected'))
+      .mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => makeState())
+
+    setRuntimeGraphSyncEnabled(true)
+    await flushRuntimeGraphSyncTimer()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
+
+    scheduleRuntimeGraphSync()
+    await vi.advanceTimersByTimeAsync(499)
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
+
+    await flushRuntimeGraphSyncTimer()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps an update received by a failing publication behind its retry backoff', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    let rejectFirstSync: (reason?: unknown) => void = () => {}
+    const firstSync = new Promise<void>((_resolve, reject) => {
+      rejectFirstSync = reject
+    })
+    const syncWindowGraph = vi.fn().mockReturnValueOnce(firstSync).mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => makeState())
+
+    setRuntimeGraphSyncEnabled(true)
+    await flushRuntimeGraphSyncTimer()
+    scheduleRuntimeGraphSync()
+    rejectFirstSync(new Error('rejected'))
+    await flushMicrotasks()
+
+    await vi.advanceTimersByTimeAsync(499)
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
+
+    await flushRuntimeGraphSyncTimer()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('republishes after main rejects a publication, with no store change to ride on', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const syncWindowGraph = vi
+      .fn()
+      .mockRejectedValueOnce(
+        new Error('Runtime graph publisher belongs to a superseded renderer generation')
+      )
+      .mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => makeState())
+
+    setRuntimeGraphSyncEnabled(true)
+    await flushRuntimeGraphSyncTimer()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(1)
+
+    await vi.advanceTimersByTimeAsync(600)
+    await flushRuntimeGraphSyncTimer()
+
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+  })
+
+  it('stops retrying once a publication is accepted', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const syncWindowGraph = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('rejected'))
+      .mockResolvedValue(undefined)
+    vi.stubGlobal('window', { api: { runtime: { syncWindowGraph } } })
+    vi.stubGlobal('HTMLElement', class HTMLElement {})
+    setRuntimeGraphStoreStateGetter(() => makeState())
+
+    setRuntimeGraphSyncEnabled(true)
+    await flushRuntimeGraphSyncTimer()
+    await vi.advanceTimersByTimeAsync(600)
+    await flushRuntimeGraphSyncTimer()
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+
+    await vi.advanceTimersByTimeAsync(120_000)
+    await flushRuntimeGraphSyncTimer()
+
+    expect(syncWindowGraph).toHaveBeenCalledTimes(2)
+  })
+})
