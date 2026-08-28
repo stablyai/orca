@@ -209,22 +209,22 @@ function questionHasPreview(q: AskQuestion): boolean {
 /** Answer a preview-layout question, whose row set and commit semantics differ
  *  from the plain selector: no "Type something" row, and a digit only highlights.
  *
- *  A note attaches to whichever row is selected, so free text alongside a pick
- *  selects that row first and annotates it; free text alone opens a note on the
- *  highlighted row and delivers with no option counted as selected. */
+ *  Notes attach to a selected option — the layout offers no selection-less note —
+ *  so an answer without a pick delivers nothing rather than fabricating a
+ *  selection or sending a sequence the selector does not accept. */
 function buildPreviewAnswerKeys(
   sel: AskAnswerSelection | undefined,
   other: string
 ): AskAnswerKeyGroup[] {
   const picked = sel?.indices[0]
+  if (picked === undefined) {
+    return []
+  }
+  const selectRow: AskAnswerKeyGroup = { raw: String(picked + 1) }
   if (other) {
-    const selectRow: AskAnswerKeyGroup[] = picked === undefined ? [] : [{ raw: String(picked + 1) }]
-    return [...selectRow, { raw: ASK_PREVIEW_NOTE }, { text: other }, { raw: ASK_ENTER }]
+    return [selectRow, { raw: ASK_PREVIEW_NOTE }, { text: other }, { raw: ASK_ENTER }]
   }
-  if (picked !== undefined) {
-    return [{ raw: String(picked + 1) }, { raw: ASK_ENTER }]
-  }
-  return []
+  return [selectRow, { raw: ASK_ENTER }]
 }
 
 /** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.

@@ -319,23 +319,24 @@ describe('buildAskAnswerKeys', () => {
     ])
   })
 
-  it('preview selector free text: opens a note with `n` — there is no "Type something" row', () => {
-    // The preview layout dropped that row (upstream anthropics/claude-code#27348,
-    // closed "not planned"). With no pick to attach to, `n` annotates the
-    // highlighted row and delivers with no option counted as selected.
-    expect(
-      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
-    ).toEqual([{ raw: 'n' }, { text: 'Zebra' }, { raw: '\r' }])
-  })
-
   it('preview selector option plus free text: selects the row, then annotates it', () => {
-    // The note attaches to the selected row, so the digit comes first and the
-    // answer delivers as that option carrying its annotation.
+    // The preview layout has no "Type something" row (upstream
+    // anthropics/claude-code#27348, closed "not planned"); `n` opens a note on
+    // the selected row, so the digit comes first and the answer delivers as that
+    // option carrying its annotation.
     expect(
       buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
         { indices: [1], other: 'but only in JS' }
       ])
     ).toEqual([{ raw: '2' }, { raw: 'n' }, { text: 'but only in JS' }, { raw: '\r' }])
+  })
+
+  it('preview selector free text with no pick: emits nothing', () => {
+    // Notes attach to a selected option, so there is no keystroke sequence for
+    // this input. The card prevents it; the builder refuses to invent a pick.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([])
   })
 
   it('preview selector: an unanswered lone question emits nothing', () => {
