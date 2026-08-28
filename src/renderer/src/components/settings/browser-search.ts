@@ -283,6 +283,21 @@ export function getBrowserPaneSearchEntries(
           'network'
         )
       ]
+    },
+    {
+      title: translate('auto.components.settings.browser.search.7f3c1a9e5d', 'Open Links Beside'),
+      description: translate(
+        'auto.components.settings.browser.search.2b8d4f6c01',
+        'Open in-app links in the pane beside the one you clicked from, splitting to the right when there is no pane there yet.'
+      ),
+      keywords: [
+        ...translateSearchKeyword('auto.components.settings.browser.search.2d2d995c58', 'browser'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.6f1b2c3d4e', 'links'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.8c2d1e4b5a', 'pane'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.5a9b3c7d2e', 'split'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.4e8f2a1c6b', 'side'),
+        ...translateSearchKeyword('auto.components.settings.browser.search.9d3e5f7a8c', 'beside')
+      ]
     }
   ]
 }
