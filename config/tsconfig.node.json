@@ -9,8 +9,7 @@
     "../src/preload/**/*",
     "../src/shared/**/*",
     "../src/relay/**/*",
-    "../src/types/**/*",
-    "../tests/e2e/helpers/local-https-test-certificate.ts"
+    "../src/types/**/*"
   ],
   "compilerOptions": {
     "composite": true,

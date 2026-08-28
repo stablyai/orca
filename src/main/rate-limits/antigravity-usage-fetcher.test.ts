@@ -12,7 +12,7 @@ import { getAntigravityCliLogDirectory } from './antigravity-loopback-client'
 import {
   LOCAL_HTTPS_TEST_CERTIFICATE,
   LOCAL_HTTPS_TEST_PRIVATE_KEY
-} from '../../../tests/e2e/helpers/local-https-test-certificate'
+} from '../browser/browser-local-https-test-certificate'
 
 const quotaSummary = {
   response: {
@@ -216,6 +216,39 @@ describe('Antigravity language-server discovery', () => {
   it('reports unavailable when no local runtime can be discovered', async () => {
     const homePath = await mkdtemp(join(tmpdir(), 'orca-antigravity-missing-'))
     try {
+      await expect(
+        fetchAntigravityRateLimits({
+          homePath,
+          appDataPath: join(homePath, 'app-data')
+        })
+      ).resolves.toMatchObject({
+        provider: 'antigravity',
+        status: 'unavailable',
+        usageMetadata: { failureKind: 'cli-unavailable' }
+      })
+    } finally {
+      await rm(homePath, { recursive: true, force: true })
+    }
+  })
+
+  it('reports unavailable when only a stale listener announcement remains', async () => {
+    const homePath = await mkdtemp(join(tmpdir(), 'orca-antigravity-stale-listener-'))
+    const logDirectory = getAntigravityCliLogDirectory(homePath)
+    const server = createServer()
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const address = server.address()
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected a TCP listener')
+    }
+    await new Promise<void>((resolve) => server.close(() => resolve()))
+
+    try {
+      await mkdir(logDirectory, { recursive: true })
+      await writeFile(
+        join(logDirectory, 'cli-20260714_123131.log'),
+        `Language server listening on random port at ${address.port} for HTTP`
+      )
+
       await expect(
         fetchAntigravityRateLimits({
           homePath,

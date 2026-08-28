@@ -206,7 +206,9 @@ export async function fetchAntigravityRateLimits(
       return desktopAttempt.limits
     }
     controller.signal.throwIfAborted()
-    return cliAttempt.discovered || desktopAttempt.discovered
+    // Why: listener announcements outlive their processes; only a runtime that
+    // completed a response should keep a stopped desktop/CLI surfaced as an error.
+    return desktopAttempt.answered
       ? emptyResult('error', 'Antigravity model quota summary is unavailable', 'usage-unavailable')
       : emptyResult(
           'unavailable',
