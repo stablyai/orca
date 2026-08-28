@@ -298,7 +298,10 @@ export function admitRoute(request: AdmissionRequest): RouteAdmission {
 /** Every currently admissible route for a requirement, as a SET. Deterministic
  *  ordering is by route key so output is stable, never a preference. */
 export function listAdmissibleRoutes(
-  request: Omit<AdmissionRequest, 'requested' | 'effective'>
+  // Why the exclusion: a bootstrap is authorised per route by one verified
+  // single-use intent. Honouring it on a LISTING would make every UNTESTED route
+  // in the registry admissible at once, with no intent and no consumption.
+  request: Omit<AdmissionRequest, 'requested' | 'effective' | 'bootstrapUncertified'>
 ): RouteRow[] {
   return request.registry
     .filter((route) => {
@@ -325,7 +328,7 @@ export type RouteSelection =
  *  the first currently-admissible one. Orca contributes no preference: with no
  *  candidate order it refuses rather than picking. */
 export function selectRoute(
-  request: Omit<AdmissionRequest, 'requested' | 'effective'> & {
+  request: Omit<AdmissionRequest, 'requested' | 'effective' | 'bootstrapUncertified'> & {
     candidates: readonly RouteIdentity[]
   }
 ): RouteSelection {

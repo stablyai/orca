@@ -108,7 +108,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           : await runtime.showManagedTerminalWorkspace(requestedWorktree)
       // Why before any effect: an uncertified route or a worktree under a live
       // validation lease must fail admission, not fail halfway through creation.
-      assertWorkerStartAdmitted({
+      const admitted = assertWorkerStartAdmitted({
         handle: db,
         runId: run.id,
         taskId: task.id,
@@ -149,7 +149,11 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       })
       const started = createDispatchUnderCertificationIntent({
         handle: db,
-        intentId: params.certificationIntent,
+        // Only when the bootstrap was actually exercised: an intent supplied for
+        // a route that turned out to be certified already was never used, and
+        // consuming it would mark ordinary delivered work as a bootstrap
+        // Dispatch, which can never advance.
+        intentId: admitted.bootstrapUsed ? params.certificationIntent : undefined,
         claimId: `claim:${orchestrationMutation?.requestId ?? runtime.getRuntimeId()}:${task.id}`,
         create: () =>
           db.createStartingWorkerDispatch({

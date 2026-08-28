@@ -53,7 +53,7 @@ export function assertWorkerStartRouteAdmitted(args: {
     taskId: string
     worktreeId: string | null
   }
-}): void {
+}): { bootstrapUsed: boolean } {
   if (args.agent && isExcludedWorkerAgent(args.agent)) {
     throw new OrchestrationError(
       'route_excluded',
@@ -82,7 +82,7 @@ export function assertWorkerStartRouteAdmitted(args: {
   const store = new ControlPlaneStore(args.handle)
   const binding = resolveOutcomeBinding(store, args.runId)
   if (binding.kind === 'legacy_unbound') {
-    return
+    return { bootstrapUsed: false }
   }
   if (!args.agent) {
     throw new OrchestrationError(
@@ -143,6 +143,11 @@ export function assertWorkerStartRouteAdmitted(args: {
       { routeKey: admission.error.routeKey, state: admission.error.state }
     )
   }
+  // Why report this back: an intent supplied for a route that turned out to be
+  // certified already was never USED, and consuming it would mark ordinary
+  // delivered work as a bootstrap Dispatch — which can never advance. Only the
+  // launch the exception actually authorised may be marked.
+  return { bootstrapUsed: admission.bootstrap === true }
 }
 
 /** The outcome policy's quota opt-in, or false when the Run has no policy yet. */
@@ -243,7 +248,7 @@ export function assertWorkerStartAdmitted(args: {
   /** Set when the start re-engages an existing worker session instead of
    *  creating one. Its worktree is fenced the same way a new one is. */
   terminalHandle?: string
-}): void {
+}): { bootstrapUsed: boolean } {
   // Why before the route check: an outcome an operator serialized against a
   // live one must not start work at all, whatever route it would have used.
   assertOutcomeNotSerialized(args.handle, args.runId)
@@ -256,7 +261,7 @@ export function assertWorkerStartAdmitted(args: {
       'A certification intent cannot authorise a retained re-engagement; that session already launched.'
     )
   }
-  assertWorkerStartRouteAdmitted({
+  const admitted = assertWorkerStartRouteAdmitted({
     ...args,
     role: planned.role,
     sessionMode: planned.sessionMode,
@@ -272,6 +277,7 @@ export function assertWorkerStartAdmitted(args: {
   if (worktreeId) {
     assertWorktreeMutationAllowed({ handle: args.handle, worktreeId })
   }
+  return admitted
 }
 
 /** The worktree an existing worker terminal is bound to, from the runtime's own
