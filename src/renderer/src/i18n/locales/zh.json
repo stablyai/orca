@@ -601,10 +601,10 @@
           "unavailable": "无法检查文件夹"
         },
         "description": {
-          "missing": "Orca 找不到 {{path}}。请移除并重新导入此文件夹工作区。",
+          "missing": "Orca 找不到 {{path}}。请恢复该文件夹或更新其位置。",
           "notDirectory": "{{path}} 存在，但它不是文件夹。",
           "ambiguousConnection": "Orca 无法判断哪个 SSH 连接拥有此文件夹范围。",
-          "unavailable": "Orca 现在无法验证此文件夹。请检查运行时或 SSH 连接，然后重试。"
+          "unavailable": "Orca 现在无法验证此文件夹。请检查磁盘或主机连接，然后重试。"
         },
         "createError": {
           "title": {

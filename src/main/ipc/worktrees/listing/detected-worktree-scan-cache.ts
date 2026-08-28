@@ -4,6 +4,7 @@ import type { Repo } from '../../../../shared/repo-types'
 import { getLocalProjectWorktreeGitOptions } from '../../../project-runtime-git-options'
 import { isFolderRepo } from '../../../../shared/repo-kind'
 import { listRepoWorktrees } from '../../../repo-worktrees'
+import { listWorktreesStrict } from '../../../git/worktree'
 import { registerWorktreeRootsForRepo } from '../../registered-worktree-roots-cache'
 
 // Why: absorb renderer polling bursts while bounding external worktree-change lag to one short refresh window.
@@ -77,6 +78,11 @@ export async function listDetectedGitWorktrees(
     }
   }
 
+  const scanLocalWorktrees = (): Promise<GitWorktreeInfo[]> =>
+    localWorktreeGitOptions.wslDistro
+      ? listWorktreesStrict(repo.path, localWorktreeGitOptions)
+      : listWorktreesStrict(repo.path)
+
   const cacheKey = getDetectedWorktreeScanCacheKey(repo.id, localWorktreeGitOptions)
   const cached = detectedWorktreeScanCache.get(cacheKey)
   if (cached && cached.expiresAt > Date.now()) {
@@ -90,7 +96,9 @@ export async function listDetectedGitWorktrees(
 
   const scan: DetectedWorktreeScan = {
     invalidated: false,
-    promise: listRepoWorktrees(repo, localWorktreeGitOptions)
+    // Why: deletion is destructive downstream; a transient mount failure must stay
+    // non-authoritative instead of becoming a successful empty worktree list.
+    promise: scanLocalWorktrees()
   }
   detectedWorktreeScanInFlight.set(cacheKey, scan)
   try {

@@ -9,6 +9,10 @@ import type { FolderWorkspace } from '../../shared/folder-workspace-types'
 import type { ProjectGroup } from '../../shared/project-group-types'
 import type { Repo } from '../../shared/repo-types'
 import type { IFilesystemProvider } from '../providers/types'
+import type { Store } from '../persistence'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
+import { getLocalWorktreePathAccess } from '../local-worktree-filesystem'
 
 type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
@@ -137,6 +141,44 @@ async function statFolderPath(
   }
 }
 
+async function statRepoPath(
+  store: FolderWorkspacePathStatusStore,
+  request: Extract<FolderWorkspacePathStatusRequest, { scope: 'repo' }>,
+  deps: FolderWorkspacePathStatusDeps
+): Promise<FolderWorkspacePathStatus> {
+  const repo = store
+    .getRepos()
+    .find(
+      (candidate) =>
+        candidate.id === request.repoId &&
+        getRepoExecutionHostId(candidate) === request.executionHostId
+    )
+  if (!repo) {
+    throw new Error('folder_workspace_path_scope_not_found')
+  }
+  if (repo.connectionId) {
+    return statFolderPath(repo.path, { kind: 'ssh', connectionId: repo.connectionId }, deps)
+  }
+  let wslDistro: string | undefined
+  try {
+    wslDistro = getLocalProjectWorktreeGitOptions(store as Store, repo).wslDistro
+  } catch {
+    return { path: repo.path, exists: false, reason: 'unavailable' }
+  }
+  if (!wslDistro) {
+    return statFolderPath(repo.path, { kind: 'local' }, deps)
+  }
+  try {
+    const stats = await getLocalWorktreePathAccess({ wslDistro }).statPath(repo.path)
+    const type = (stats as { type?: unknown } | null)?.type
+    return type === 'directory'
+      ? { path: repo.path, exists: true }
+      : { path: repo.path, exists: false, reason: 'not-directory' }
+  } catch (error) {
+    return { path: repo.path, exists: false, reason: pathStatErrorReason(error) }
+  }
+}
+
 export async function getFolderWorkspacePathStatusForPath(
   args: {
     folderPath: string
@@ -153,7 +195,7 @@ export async function getFolderWorkspacePathStatusForPath(
 
 export function resolveFolderWorkspaceStatusPath(args: {
   store: FolderWorkspacePathStatusStore
-  request: FolderWorkspacePathStatusRequest
+  request: Exclude<FolderWorkspacePathStatusRequest, { scope: 'repo' }>
 }): { folderPath: string; projectGroupId: string | null; connectionId?: string | null } {
   const { request } = args
   if (request.scope === 'project-group') {
@@ -199,6 +241,9 @@ export async function getFolderWorkspacePathStatus(
   request: FolderWorkspacePathStatusRequest,
   deps: FolderWorkspacePathStatusDeps
 ): Promise<FolderWorkspacePathStatus> {
+  if (request.scope === 'repo') {
+    return statRepoPath(store, request, deps)
+  }
   const scope = resolveFolderWorkspaceStatusPath({ store, request })
   return getFolderWorkspacePathStatusForPath(
     {

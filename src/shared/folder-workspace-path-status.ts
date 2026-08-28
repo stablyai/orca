@@ -1,3 +1,5 @@
+import type { ExecutionHostId } from './execution-host'
+
 export type FolderWorkspacePathStatusReason =
   | 'missing'
   | 'not-directory'
@@ -10,6 +12,7 @@ export type FolderWorkspacePathStatusRequest =
   | { scope: 'folder-workspace'; folderWorkspaceId: string }
   | { scope: 'project-group'; projectGroupId: string }
   | { scope: 'path'; path: string; connectionId?: string | null }
+  | { scope: 'repo'; repoId: string; executionHostId: ExecutionHostId }
 
 export type FolderWorkspacePathStatus = {
   path: string

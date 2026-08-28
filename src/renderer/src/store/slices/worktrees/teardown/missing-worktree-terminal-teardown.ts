@@ -2,11 +2,12 @@ import { callRuntimeRpc, getActiveRuntimeTarget } from '../../../../runtime/runt
 import type { AppState } from '../../../types'
 import type { DetectedWorktreeListResult } from '../../../../../../shared/worktree/types'
 import { isRuntimeMethodNotFoundError } from '../listing/runtime-worktree-rpc-errors'
+import type { MissingWorktreeTerminalTeardownResult } from '../../../../../../shared/worktree/missing-terminal-teardown'
 
 // Why: teardown cannot ride the scan's coalescing (each caller has its own known-id
 // snapshot), so dedupe on the request it actually produces — identical fan-out
 // requests share one host sweep instead of re-scanning per caller.
-const missingWorktreeTeardownsInFlight = new Map<string, Promise<void>>()
+const missingWorktreeTeardownsInFlight = new Map<string, Promise<boolean>>()
 
 export async function teardownMissingWorktreeTerminalsBestEffort(
   settings: AppState['settings'],
@@ -16,14 +17,14 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
   // "nothing to reconcile", never "purge everything".
   knownWorktreeIds: readonly string[] | undefined,
   detected: DetectedWorktreeListResult
-): Promise<void> {
+): Promise<boolean> {
   if (!detected.authoritative || !knownWorktreeIds || knownWorktreeIds.length === 0) {
-    return
+    return true
   }
   const detectedIds = new Set(detected.worktrees.map((worktree) => worktree.id))
   const missingIds = knownWorktreeIds.filter((worktreeId) => !detectedIds.has(worktreeId))
   if (missingIds.length === 0) {
-    return
+    return true
   }
   const target = getActiveRuntimeTarget(settings)
   const normalizedConnectionId = connectionId ?? null
@@ -39,21 +40,28 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
   }
   const teardown = (async () => {
     try {
-      await callRuntimeRpc(
+      const result = await callRuntimeRpc<MissingWorktreeTerminalTeardownResult>(
         target,
         'worktree.teardownMissingTerminals',
         { repo: repoId, worktreeIds: missingIds, connectionId: normalizedConnectionId },
         { timeoutMs: 30_000 }
       )
+      // Why: absence means a legacy host, not proof of exit; mixed versions must fail closed.
+      if (!Array.isArray(result.verifiedStoppedWorktreeIds)) {
+        return false
+      }
+      const verifiedIds = new Set(result.verifiedStoppedWorktreeIds)
+      return missingIds.every((worktreeId) => verifiedIds.has(worktreeId))
     } catch (error) {
       if (!isRuntimeMethodNotFoundError(error)) {
         console.warn(`Failed to stop terminals for missing worktrees in repo ${repoId}:`, error)
       }
+      return false
     }
   })()
   missingWorktreeTeardownsInFlight.set(key, teardown)
   try {
-    await teardown
+    return await teardown
   } finally {
     if (missingWorktreeTeardownsInFlight.get(key) === teardown) {
       missingWorktreeTeardownsInFlight.delete(key)

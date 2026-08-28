@@ -807,10 +807,10 @@
           "unrecognized": "Folder is not usable"
         },
         "description": {
-          "missing": "Orca cannot find {{path}}. Remove and re-import this folder workspace.",
+          "missing": "Orca cannot find {{path}}. Restore the folder or update its location.",
           "notDirectory": "{{path}} exists, but it is not a folder.",
           "ambiguousConnection": "Orca cannot tell which SSH connection owns this folder scope.",
-          "unavailable": "Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.",
+          "unavailable": "Orca cannot verify this folder right now. Check the drive or host connection and try again.",
           "unrecognized": "Orca cannot use {{path}}, and this version does not recognize the reason. Update Orca to see the details."
         },
         "createError": {

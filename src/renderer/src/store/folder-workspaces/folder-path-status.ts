@@ -6,6 +6,7 @@ import type {
 } from '../../../../shared/folder-workspace-path-status'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
 import { isPathInsideOrEqual } from '../../../../shared/cross-platform-path'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { FolderWorkspacePathStatusCacheEntry } from '../repos/repo-state'
 
 export function getFolderWorkspaceStatusRequestSnapshot(
@@ -41,6 +42,28 @@ export function getFolderWorkspaceStatusRequestSnapshot(
     return [request.path, '', request.connectionId ?? '', sshFingerprint, repoFingerprint].join(
       '\0'
     )
+  }
+
+  if (request.scope === 'repo') {
+    const repo = state.repos.find(
+      (candidate) =>
+        candidate.id === request.repoId &&
+        getRepoExecutionHostId(candidate) === request.executionHostId
+    )
+    if (!repo) {
+      return null
+    }
+    const sshFingerprint = repo.connectionId
+      ? `${repo.connectionId}:${state.sshConnectionStates.get(repo.connectionId)?.status ?? 'missing'}`
+      : ''
+    return [
+      repo.path,
+      repo.id,
+      request.executionHostId,
+      repo.projectGroupId ?? '',
+      repo.connectionId ?? '',
+      sshFingerprint
+    ].join('\0')
   }
 
   const scope =

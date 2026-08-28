@@ -14,6 +14,9 @@ export function getFolderWorkspacePathStatusScopeKey(
   if (request.scope === 'path') {
     return `path:${request.connectionId ?? ''}:${request.path}`
   }
+  if (request.scope === 'repo') {
+    return `repo:${request.executionHostId}:${request.repoId}`
+  }
   return `folder-workspace:${request.folderWorkspaceId}`
 }
 

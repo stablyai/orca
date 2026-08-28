@@ -73,7 +73,7 @@ export function getFolderWorkspacePathStatusDescription(
     case 'missing':
       return translate(
         'auto.lib.folderWorkspacePathStatus.description.missing',
-        'Orca cannot find {{path}}. Remove and re-import this folder workspace.',
+        'Orca cannot find {{path}}. Restore the folder or update its location.',
         { path: status.path }
       )
     case 'not-directory':
@@ -91,7 +91,7 @@ export function getFolderWorkspacePathStatusDescription(
     case 'unavailable':
       return translate(
         'auto.lib.folderWorkspacePathStatus.description.unavailable',
-        'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
+        'Orca cannot verify this folder right now. Check the drive or host connection and try again.'
       )
   }
 }

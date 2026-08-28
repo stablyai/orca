@@ -4,6 +4,7 @@ import { splitWorktreeId } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { killAllProcessesForWorktree } from './worktree-teardown'
+import type { MissingWorktreeTerminalTeardownResult } from '../../shared/worktree/missing-terminal-teardown'
 
 const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 
@@ -12,9 +13,7 @@ const MISSING_WORKTREE_TEARDOWN_CONCURRENCY = 4
 // deletes N workspaces costs N full host enumerations — O(N) relay round-trips
 // carrying O(N^2) rows, which is minutes of stalled teardown on a remote host.
 //
-// Safe only because this sweep is best-effort. Do NOT reuse this wrapper on a
-// `requirePhysicalStop` path: that re-lists *after* shutdown to prove a PTY
-// exited, and a pre-shutdown snapshot would make the proof read stale rows.
+// A physical-stop caller must verify against the uncached provider, never this snapshot.
 function withSharedProcessSnapshot(provider: IPtyProvider): IPtyProvider {
   let snapshot: Promise<Awaited<ReturnType<IPtyProvider['listProcesses']>>> | null = null
   return new Proxy(provider, {
@@ -70,7 +69,7 @@ export async function stopMissingWorktreeTerminals(
   knownWorktreeIds: readonly string[],
   detectedWorktreeIds: readonly string[],
   deps: MissingWorktreeTerminalReconciliationDeps
-): Promise<{ stoppedWorktreeIds: string[] }> {
+): Promise<Required<MissingWorktreeTerminalTeardownResult>> {
   const detectedIds = new Set(detectedWorktreeIds)
   const missingIds = [
     ...new Set(
@@ -81,7 +80,7 @@ export async function stopMissingWorktreeTerminals(
     )
   ]
   if (missingIds.length === 0) {
-    return { stoppedWorktreeIds: [] }
+    return { stoppedWorktreeIds: [], verifiedStoppedWorktreeIds: [] }
   }
 
   const ownedProvider = repo.connectionId
@@ -103,7 +102,7 @@ export async function stopMissingWorktreeTerminals(
         }
       )
     ).filter((worktreeId): worktreeId is string => worktreeId !== null)
-    return { stoppedWorktreeIds }
+    return { stoppedWorktreeIds, verifiedStoppedWorktreeIds: [] }
   }
 
   const stoppedWorktreeIds = (
@@ -116,10 +115,9 @@ export async function stopMissingWorktreeTerminals(
             runtime: deps.runtime,
             ...hostFence(repo, worktreeId),
             localProvider: provider,
+            verificationProvider: ownedProvider ?? undefined,
             onPtyStopped: deps.onPtyStopped,
-            // Why: the shared process snapshot is only valid while nothing needs a
-            // post-shutdown re-list, so this sweep stays explicitly best-effort.
-            requirePhysicalStop: false,
+            requirePhysicalStop: true,
             ...(repo.connectionId ? { includeLocalRegistry: false } : {})
           })
           return worktreeId
@@ -131,5 +129,5 @@ export async function stopMissingWorktreeTerminals(
     )
   ).filter((worktreeId): worktreeId is string => worktreeId !== null)
 
-  return { stoppedWorktreeIds }
+  return { stoppedWorktreeIds, verifiedStoppedWorktreeIds: stoppedWorktreeIds }
 }

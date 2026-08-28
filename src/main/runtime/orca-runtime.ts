@@ -1225,6 +1225,7 @@ import {
 } from './terminal-view-attribute-store'
 import { killAllProcessesForWorktree, teardownRpcDeadline } from './worktree-teardown'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
+import type { MissingWorktreeTerminalTeardownResult } from '../../shared/worktree/missing-terminal-teardown'
 import {
   MobileNotificationReplayBuffer,
   type ReplayableMobileNotification
@@ -24353,7 +24354,7 @@ export class OrcaRuntimeService {
     repoSelector: string,
     knownWorktreeIds: readonly string[],
     connectionId?: string | null
-  ): Promise<{ stoppedWorktreeIds: string[] }> {
+  ): Promise<Required<MissingWorktreeTerminalTeardownResult>> {
     const repo = await this.resolveRepoSelectorForConnection(repoSelector, connectionId)
     // Why: killing PTYs must be proven against the host right now — a cached scan
     // (30s TTL) can still list a directory git already dropped, and the renderer
@@ -24364,7 +24365,7 @@ export class OrcaRuntimeService {
     // even though the caller's selector was unique — losing the sweep entirely.
     const detected = await this.listDetectedWorktreesForResolvedRepo(repo)
     if (!detected.authoritative) {
-      return { stoppedWorktreeIds: [] }
+      return { stoppedWorktreeIds: [], verifiedStoppedWorktreeIds: [] }
     }
     return stopMissingWorktreeTerminals(
       repo,

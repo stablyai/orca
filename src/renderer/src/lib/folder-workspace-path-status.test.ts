@@ -50,10 +50,10 @@ describe('getFolderWorkspacePathStatusTitle', () => {
 describe('getFolderWorkspacePathStatusDescription', () => {
   it('keeps the declared reasons on their own copy', () => {
     expect(getFolderWorkspacePathStatusDescription(wireStatus('missing'))).toBe(
-      'Orca cannot find /srv/scans. Remove and re-import this folder workspace.'
+      'Orca cannot find /srv/scans. Restore the folder or update its location.'
     )
     expect(getFolderWorkspacePathStatusDescription(wireStatus(undefined))).toBe(
-      'Orca cannot verify this folder right now. Check the runtime or SSH connection and try again.'
+      'Orca cannot verify this folder right now. Check the drive or host connection and try again.'
     )
   })
 
@@ -71,7 +71,7 @@ describe('getFolderWorkspacePathStatusDescription', () => {
     expect(typeof description).toBe('string')
     expect(description).not.toBe('')
     expect(description).not.toBe(
-      'Orca cannot find /srv/scans. Remove and re-import this folder workspace.'
+      'Orca cannot find /srv/scans. Restore the folder or update its location.'
     )
   })
 })

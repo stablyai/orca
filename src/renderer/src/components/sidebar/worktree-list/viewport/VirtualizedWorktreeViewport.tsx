@@ -78,6 +78,10 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
       ),
     [projectGroups]
   )
+  const visibleRepoIdsForPathStatus = useMemo(
+    () => [...new Set(props.worktrees.map((worktree) => worktree.repoId))],
+    [props.worktrees]
+  )
 
   const headerDrag = useWorktreeSidebarHeaderDrag({
     rows,
@@ -117,7 +121,7 @@ export const VirtualizedWorktreeViewport = React.memo(function VirtualizedWorktr
   })
 
   const getCachedFolderWorkspacePathStatus = useFolderWorkspacePathStatusRows({
-    allRepoIds: props.allRepoIds,
+    repoIds: visibleRepoIdsForPathStatus,
     repoMap,
     projectGroups,
     folderWorkspaces: props.folderWorkspaces,

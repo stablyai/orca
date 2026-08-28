@@ -100,11 +100,16 @@ export const mockApi = {
     call: runtimeEnvironmentTransportCall
   },
   runtime: {
-    call: stubMock().mockResolvedValue({
-      id: 'runtime-call',
-      ok: true,
-      result: { stoppedWorktreeIds: [] }
-    })
+    call: stubMock<[{ params?: { worktreeIds?: string[] } }]>().mockImplementation(
+      async ({ params }) => ({
+        id: 'runtime-call',
+        ok: true,
+        result: {
+          stoppedWorktreeIds: params?.worktreeIds ?? [],
+          verifiedStoppedWorktreeIds: params?.worktreeIds ?? []
+        }
+      })
+    )
   },
   ephemeralVm: {
     cancelProvision: stubMock().mockResolvedValue({ cancelled: true }),

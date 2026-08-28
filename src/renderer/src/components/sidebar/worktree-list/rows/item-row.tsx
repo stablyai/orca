@@ -2,7 +2,9 @@ import React from 'react'
 import { cn } from '@/lib/utils'
 import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
 import type { Worktree } from '../../../../../../shared/worktree/types'
+import type { FolderWorkspacePathStatus } from '../../../../../../shared/folder-workspace-path-status'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -24,6 +26,7 @@ import { stopNestedWorktreeCardBubble } from './header-event-guards'
 import type { WorktreeItemRow } from '../listing/renderable-rows'
 import { getWorktreeOptionId } from './option-dom'
 import type { WorktreePointerDrag, WorktreeRowDragState } from '../drag/row-state'
+import { FolderPathStatusIndicator } from './FolderPathStatusIndicator'
 
 export type WorktreeItemRowContext = {
   settings: AppState['settings']
@@ -41,6 +44,11 @@ export type WorktreeItemRowContext = {
   highlightedRevealRowKey: string | null
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
+  getCachedRepoPathStatus: (request: {
+    scope: 'repo'
+    repoId: string
+    executionHostId: ExecutionHostId
+  }) => FolderWorkspacePathStatus | null
   getActiveSurfaceVariant: (row: WorktreeItemRow) => ActiveSurfaceVariant
   getLineageToggleHandler: (groupKey: string) => LineageToggleHandler
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
@@ -147,6 +155,13 @@ export function renderWorktreeItemRow(
     (!ctx.activeWorkspaceExecutionHostId ||
       worktreeIdentity ===
         composeWorktreeHostIdentity(ctx.activeWorkspaceExecutionHostId, itemRow.worktree.id))
+  const repoPathStatus = itemRow.repo
+    ? ctx.getCachedRepoPathStatus({
+        scope: 'repo',
+        repoId: itemRow.repo.id,
+        executionHostId: getRepoExecutionHostId(itemRow.repo)
+      })
+    : null
   return (
     <div
       key={itemRow.rowKey}
@@ -225,6 +240,9 @@ export function renderWorktreeItemRow(
           itemRow.lineageGroupKey ? ctx.getLineageToggleHandler(itemRow.lineageGroupKey) : undefined
         }
       />
+      <div className="pointer-events-auto absolute right-3 top-1.5">
+        <FolderPathStatusIndicator status={repoPathStatus} />
+      </div>
     </div>
   )
 }

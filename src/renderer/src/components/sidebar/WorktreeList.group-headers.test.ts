@@ -145,6 +145,36 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain('-rotate-90')
   })
 
+  it('marks local folder repo cards when their folder is missing', async () => {
+    setLineageFixtureState('repo')
+    const repos = (mockStore.state.repos as Repo[]).map((repo) => ({
+      ...repo,
+      kind: 'folder' as const
+    }))
+    mockStore.state = {
+      ...mockStore.state,
+      repos,
+      detectedWorktreesByRepo: {
+        'repo-1': {
+          repoId: 'repo-1',
+          authoritative: false,
+          source: 'metadata-fallback',
+          worktrees: []
+        }
+      },
+      getFreshFolderWorkspacePathStatus: vi.fn(
+        (request: { scope?: string; executionHostId?: string }) =>
+          request.scope === 'repo' && request.executionHostId === 'local'
+            ? { path: '/tmp/lineage-order', exists: false, reason: 'missing' }
+            : null
+      )
+    }
+
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('aria-label="Folder not found"')
+  })
+
   it('does not render the project collapse affordance on flat section headers', async () => {
     setLineageFixtureState('none')
     const markup = await renderWorktreeListMarkup()

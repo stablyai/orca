@@ -48,7 +48,10 @@ describe('stopMissingWorktreeTerminals', () => {
       }
     )
 
-    expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
+    expect(result).toEqual({
+      stoppedWorktreeIds: [deletedId],
+      verifiedStoppedWorktreeIds: [deletedId]
+    })
     expect(provider.shutdown).toHaveBeenCalledWith(
       `${deletedId}@@deleted-session`,
       expect.objectContaining({ immediate: true })
@@ -103,7 +106,10 @@ describe('stopMissingWorktreeTerminals', () => {
       }
     )
 
-    expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
+    expect(result).toEqual({
+      stoppedWorktreeIds: [deletedId],
+      verifiedStoppedWorktreeIds: []
+    })
     // The graph fallback still names the owning connection: this repo's inventory must not
     // stop a same-id workspace's terminals on another host.
     expect(runtime.stopTerminalsForWorktree).toHaveBeenCalledWith(deletedId, {
@@ -220,5 +226,25 @@ describe('stopMissingWorktreeTerminals', () => {
       `${ids[1]}@@session`,
       expect.objectContaining({ immediate: true })
     )
+  })
+
+  it('does not report a worktree stopped while its terminal is still live', async () => {
+    const worktreeId = 'repo-1::/workspace/live'
+    const session = { id: `${worktreeId}@@codex`, cwd: '/workspace/live', title: 'codex' }
+    const provider = {
+      listProcesses: vi.fn(async () => [session]),
+      shutdown: vi.fn(async () => {
+        throw new Error('kill failed')
+      })
+    } as unknown as IPtyProvider
+
+    const result = await stopMissingWorktreeTerminals(localRepo, [worktreeId], [], {
+      runtime: createRuntime(),
+      getLocalProvider: () => provider,
+      getSshProvider: () => undefined
+    })
+
+    expect(result).toEqual({ stoppedWorktreeIds: [], verifiedStoppedWorktreeIds: [] })
+    expect(provider.listProcesses).toHaveBeenCalledTimes(2)
   })
 })

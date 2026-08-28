@@ -7,6 +7,7 @@ import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-i
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { DiffCommentSchema } from '../../../../shared/diff-comment-schema'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 
 const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -70,6 +71,11 @@ const FolderWorkspaceSelector = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id')
 })
 
+const ExecutionHostIdSchema = z.custom<ExecutionHostId>(
+  (value) => typeof value === 'string' && parseExecutionHostId(value) !== null,
+  'Invalid execution host id'
+)
+
 const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
   z.object({
     scope: z.literal('folder-workspace'),
@@ -83,6 +89,11 @@ const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
     scope: z.literal('path'),
     path: requiredString('Missing folder path'),
     connectionId: OptionalString.nullable().optional()
+  }),
+  z.object({
+    scope: z.literal('repo'),
+    repoId: requiredString('Missing repo id'),
+    executionHostId: ExecutionHostIdSchema
   })
 ])
 

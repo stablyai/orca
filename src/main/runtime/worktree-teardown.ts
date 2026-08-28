@@ -31,6 +31,8 @@ export type WorktreeTeardownDeps = {
   /** Runtime environment owning a mirrored `resolvedWorktreeId`. */
   resolvedRuntimeEnvironmentId?: string
   localProvider: IPtyProvider
+  /** Uncached owning-host provider used to verify failed stop attempts. */
+  verificationProvider?: IPtyProvider
   onPtyStopped?: (ptyId: string) => void
   timeoutMs?: number
   requirePhysicalStop?: boolean
@@ -232,7 +234,7 @@ export async function killAllProcessesForWorktree(
     const failedPtyIds = stopResults.filter(([, stopped]) => !stopped).map(([ptyId]) => ptyId)
     const verdict = await resolveUnstoppedPtyVerdict(
       failedPtyIds,
-      deps.localProvider,
+      deps.verificationProvider ?? deps.localProvider,
       sweepBudgetMs,
       deps.includeProviderInventory !== false ||
         (deps.resolvedConnectionId === undefined &&

@@ -181,6 +181,14 @@ export const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
     scope: z.literal('path'),
     path: z.string().min(1),
     connectionId: z.string().min(1).nullable().optional()
+  }),
+  z.object({
+    scope: z.literal('repo'),
+    repoId: z.string().min(1),
+    executionHostId: z
+      .string()
+      .min(1)
+      .refine((value) => normalizeExecutionHostId(value) !== null)
   })
 ])
 

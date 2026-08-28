@@ -125,6 +125,7 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       highlightedRevealRowKey: reveal.highlightedRevealRowKey,
       selectedWorktreeIds: props.selectedWorktreeIds,
       selectedWorktrees: props.selectedWorktrees,
+      getCachedRepoPathStatus: args.getCachedFolderWorkspacePathStatus,
       getActiveSurfaceVariant: primaryActive.getActiveSurfaceVariant,
       getLineageToggleHandler: args.getLineageToggleHandler,
       onSelectionGesture: props.onSelectionGesture,

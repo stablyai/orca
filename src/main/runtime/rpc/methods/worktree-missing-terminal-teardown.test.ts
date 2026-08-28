@@ -7,9 +7,10 @@ describe('worktree missing-terminal teardown RPC', () => {
   it('routes the connection-scoped request through the runtime owner', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      teardownMissingManagedWorktreeTerminals: vi
-        .fn()
-        .mockResolvedValue({ stoppedWorktreeIds: ['repo-1::/workspace/deleted'] })
+      teardownMissingManagedWorktreeTerminals: vi.fn().mockResolvedValue({
+        stoppedWorktreeIds: ['repo-1::/workspace/deleted'],
+        verifiedStoppedWorktreeIds: ['repo-1::/workspace/deleted']
+      })
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
 

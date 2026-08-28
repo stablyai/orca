@@ -223,7 +223,10 @@ describe('fetchWorktrees', () => {
             resolve({
               id: 'teardown',
               ok: true,
-              result: { stoppedWorktreeIds: [deleted.id] }
+              result: {
+                stoppedWorktreeIds: [deleted.id],
+                verifiedStoppedWorktreeIds: [deleted.id]
+              }
             })
         })
     )
@@ -263,6 +266,89 @@ describe('fetchWorktrees', () => {
     await refresh
 
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
+  })
+
+  it('preserves renderer state when missing-worktree terminal teardown is unverifiable', async () => {
+    const store = createTestStore()
+    const missing = makeWorktree({
+      id: 'repo1::/path/missing',
+      repoId: 'repo1',
+      path: '/path/missing'
+    })
+    const surviving = makeWorktree({
+      id: 'repo1::/path/surviving',
+      repoId: 'repo1',
+      path: '/path/surviving'
+    })
+    mockApi.runtime.call.mockResolvedValueOnce({
+      id: 'teardown',
+      ok: true,
+      result: { stoppedWorktreeIds: [], verifiedStoppedWorktreeIds: [] }
+    })
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo1', [surviving]))
+    )
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { repo1: [missing, surviving] },
+      detectedWorktreesByRepo: {
+        repo1: makeDetectedResult('repo1', [missing, surviving])
+      },
+      tabsByWorktree: {
+        [missing.id]: [{ id: 'tab-missing', worktreeId: missing.id }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([missing, surviving])
+    expect(store.getState().tabsByWorktree[missing.id]).toBeDefined()
+  })
+
+  it('preserves renderer state when an older host reports stops without verification proof', async () => {
+    const store = createTestStore()
+    const missing = makeWorktree({
+      id: 'repo1::/path/missing-old-host',
+      repoId: 'repo1',
+      path: '/path/missing-old-host'
+    })
+    mockApi.runtime.call.mockResolvedValueOnce({
+      id: 'teardown',
+      ok: true,
+      result: { stoppedWorktreeIds: [missing.id] }
+    })
+    mockApi.worktrees.listDetected.mockImplementationOnce(async (args) =>
+      qualifyDetectedResult(args, makeDetectedResult('repo1', []))
+    )
+    store.setState({
+      repos: [
+        {
+          id: 'repo1',
+          path: '/path/repo1',
+          displayName: 'Repo 1',
+          badgeColor: '#000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { repo1: [missing] },
+      detectedWorktreesByRepo: { repo1: makeDetectedResult('repo1', [missing]) },
+      tabsByWorktree: {
+        [missing.id]: [{ id: 'tab-missing-old-host', worktreeId: missing.id }]
+      }
+    } as unknown as Partial<AppState>)
+
+    await store.getState().fetchWorktrees('repo1')
+
+    expect(store.getState().worktreesByRepo.repo1).toEqual([missing])
+    expect(store.getState().tabsByWorktree[missing.id]).toBeDefined()
   })
 
   it('clears a hidden dismissal across hydrated fetch-all delete and recreation', async () => {

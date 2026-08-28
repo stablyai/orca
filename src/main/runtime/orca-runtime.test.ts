@@ -42607,7 +42607,10 @@ describe('OrcaRuntimeService', () => {
       survivingId
     ])
 
-    expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
+    expect(result).toEqual({
+      stoppedWorktreeIds: [deletedId],
+      verifiedStoppedWorktreeIds: [deletedId]
+    })
     expect(localProvider.shutdown).toHaveBeenCalledWith(
       `${deletedId}@@deleted-session`,
       expect.objectContaining({ immediate: true })
@@ -42646,7 +42649,10 @@ describe('OrcaRuntimeService', () => {
       deletedId
     ])
 
-    expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
+    expect(result).toEqual({
+      stoppedWorktreeIds: [deletedId],
+      verifiedStoppedWorktreeIds: [deletedId]
+    })
     expect(localProvider.shutdown).toHaveBeenCalledWith(
       `${deletedId}@@deleted-session`,
       expect.objectContaining({ immediate: true })
@@ -42712,7 +42718,10 @@ describe('OrcaRuntimeService', () => {
       null
     )
 
-    expect(result).toEqual({ stoppedWorktreeIds: [deletedId] })
+    expect(result).toEqual({
+      stoppedWorktreeIds: [deletedId],
+      verifiedStoppedWorktreeIds: [deletedId]
+    })
     expect(localProvider.shutdown).toHaveBeenCalledWith(
       `${deletedId}@@deleted-session`,
       expect.objectContaining({ immediate: true })

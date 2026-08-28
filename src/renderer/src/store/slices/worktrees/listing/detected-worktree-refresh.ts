@@ -164,13 +164,16 @@ export async function listDetectedWorktreesForRepoCoalesced(
       // Why (#10562): the scan coalesces, but teardown must not — each caller carries
       // its own known-id snapshot and purges its own state, so a caller that joined
       // an in-flight scan would otherwise purge without ever stopping those terminals.
-      await teardownMissingWorktreeTerminalsBestEffort(
+      const teardownConfirmed = await teardownMissingWorktreeTerminalsBestEffort(
         settings,
         repoId,
         options.connectionId,
         options.knownWorktreeIds,
         result
       )
+      if (!teardownConfirmed) {
+        throw new Error('missing_worktree_terminal_teardown_unverifiable')
+      }
       return {
         status: 'admitted',
         result,
@@ -218,13 +221,16 @@ export async function listDetectedWorktreesForRepoCoalesced(
       directSshAuthority: options.directSshAuthority
     }
   }
-  await teardownMissingWorktreeTerminalsBestEffort(
+  const teardownConfirmed = await teardownMissingWorktreeTerminalsBestEffort(
     settings,
     repoId,
     options.connectionId,
     options.knownWorktreeIds,
     providerResult.result
   )
+  if (!teardownConfirmed) {
+    throw new Error('missing_worktree_terminal_teardown_unverifiable')
+  }
   return {
     status: 'admitted',
     result: providerResult.result,
