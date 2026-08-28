@@ -319,6 +319,45 @@ describe('buildAskAnswerKeys', () => {
     ])
   })
 
+  it('preview selector free text: commits the "Type something" row before typing', () => {
+    // The digit only highlights that row, so without this Enter the text is typed
+    // at a selector that still has an option highlighted, and that option is what
+    // gets submitted.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([{ raw: '3' }, { raw: '\r' }, { text: 'Zebra' }, { raw: '\r' }])
+  })
+
+  it('preview selector multi-select free text: commits the row before typing', () => {
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [
+            { label: 'A', hasPreview: true, preview: 'a' },
+            { label: 'B', hasPreview: true, preview: 'b' }
+          ]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'Zebra' }])).toEqual([
+      { raw: '1' },
+      { raw: '3' },
+      { raw: '\r' },
+      { text: 'Zebra' },
+      { raw: '\r' },
+      { raw: '\x1b[C' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('plain selector free text: no extra Enter before the text', () => {
+    expect(
+      buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
+    ).toEqual([{ raw: '3' }, { text: 'Zebra' }, { raw: '\r' }])
+  })
+
   it('single-question plain selector: unchanged, no Enter appended', () => {
     expect(buildAskAnswerKeys(single(['Tabs', 'Spaces']), [{ indices: [1] }])).toEqual([
       { raw: '2' }

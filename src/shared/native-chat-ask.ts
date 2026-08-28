@@ -226,13 +226,18 @@ export function buildAskAnswerKeys(
     const sel = selections[qi]
     const other = (sel?.other ?? '').trim()
     const typeSomething = String(q.options.length + 1)
+    // In the preview layout a digit only moves the highlight, so opening a row —
+    // including the "Type something" row — takes an Enter of its own before that
+    // row accepts input.
+    const openRow = (row: string): AskAnswerKeyGroup[] =>
+      questionHasPreview(q) ? [{ raw: row }, { raw: ASK_ENTER }] : [{ raw: row }]
 
     if (q.multiSelect) {
       for (const i of sel?.indices ?? []) {
         groups.push({ raw: String(i + 1) })
       }
       if (other) {
-        groups.push({ raw: typeSomething }, { text: other }, { raw: ASK_ENTER })
+        groups.push(...openRow(typeSomething), { text: other }, { raw: ASK_ENTER })
       }
       // A multi-select never auto-advances; step to the next tab (the Submit tab
       // when this is the last question).
@@ -241,7 +246,7 @@ export function buildAskAnswerKeys(
       // Single-select can only carry one value, so route any answer that
       // includes free text through the "Type something" row as one string.
       groups.push(
-        { raw: typeSomething },
+        ...openRow(typeSomething),
         { text: answerLabels(q, sel).join(', ') },
         { raw: ASK_ENTER }
       )
