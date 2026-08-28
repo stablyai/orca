@@ -42,6 +42,7 @@ export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
 
 export type ConnectionDiagnosticCode =
+  | 'client-session-started'
   | 'app-resumed'
   | 'network-changed'
   | 'connect-timeout'
@@ -53,6 +54,7 @@ export type ConnectionDiagnosticCode =
   | 'relay-dial-failed'
   | 'relay-session-failed'
   | 'relay-connected'
+  | 'direct-connected'
   | 'relay-credential-unavailable'
   | 'host-open-failed'
 

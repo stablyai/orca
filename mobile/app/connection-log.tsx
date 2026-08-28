@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
 import { View, Text, StyleSheet, Pressable, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
@@ -9,18 +9,24 @@ import { colors, spacing, typography } from '../src/theme/mobile-theme'
 import { ConnectionLog } from '../src/components/ConnectionLog'
 import { loadHosts } from '../src/transport/host-store'
 import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
-import { useHostClient } from '../src/transport/client-context'
+import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
 import {
   useConnectionPathStatus,
-  useLastConnectedAt,
   useReconnectAttempt
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
-import { diagnoseConnection } from '../src/diagnostics/connection-diagnostics-analysis'
+import {
+  diagnoseConnection,
+  getReportableConnectionIncidentId
+} from '../src/diagnostics/connection-diagnostics-analysis'
 import { submitConnectionDiagnostics } from '../src/diagnostics/connection-diagnostics-submission'
 import {
   readHydratedConnectionLog,
-  selectDiagnosticsHostId
+  readConnectionDiagnosticsSnapshot,
+  resolveDiagnosticsHostId,
+  getDiagnosticsSubmissionState,
+  updateDiagnosticsSubmissionState,
+  type DiagnosticsSubmissionStates
 } from '../src/diagnostics/connection-diagnostics-screen-data'
 import { useHostStatusGates } from '../src/transport/host-status-gates'
 import { loadHostAppVersion } from '../src/transport/host-app-version-store'
@@ -34,15 +40,19 @@ const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 // screen also *acquires* the host client — opening it kicks a dial and the
 // log fills live instead of showing a stale tail.
 export default function ConnectionLogScreen() {
+  const clientContext = useRpcClientContext()
   const router = useRouter()
   const params = useLocalSearchParams<{ hostId?: string }>()
   const insets = useSafeAreaInsets()
+  const routeKey = useMemo(() => ({}), [params.hostId])
   const [hosts, setHosts] = useState<HostProfile[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [submissionState, setSubmissionState] = useState<'idle' | 'sending' | 'sent' | 'failed'>(
-    'idle'
-  )
+  const [manualSelection, setManualSelection] = useState<{
+    hostId: string
+    requestedHostId: string | undefined
+    routeKey: object
+  } | null>(null)
+  const [copiedHostId, setCopiedHostId] = useState<string | null>(null)
+  const [submissionStates, setSubmissionStates] = useState<DiagnosticsSubmissionStates>({})
 
   useEffect(() => {
     let stale = false
@@ -51,13 +61,13 @@ export default function ConnectionLogScreen() {
         return
       }
       setHosts(loaded)
-      setSelectedId((prev) => selectDiagnosticsHostId(loaded, params.hostId, prev))
     })
     return () => {
       stale = true
     }
-  }, [params.hostId])
+  }, [])
 
+  const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
   const selected = hosts.find((h) => h.id === selectedId) ?? null
   const { client, state } = useHostClient(selected?.id)
   const { desktopAppVersion: liveDesktopAppVersion } = useHostStatusGates({
@@ -66,12 +76,11 @@ export default function ConnectionLogScreen() {
     connState: state
   })
   const reconnectAttempts = useReconnectAttempt(selected?.id)
-  const lastConnectedAt = useLastConnectedAt(selected?.id)
   const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
 
   useEffect(() => {
     if (selectedId) {
-      void connectionLogStore.hydrate(selectedId).catch(() => {})
+      void readHydratedConnectionLog(connectionLogStore, selectedId)
     }
   }, [selectedId])
 
@@ -88,74 +97,90 @@ export default function ConnectionLogScreen() {
   const diagnosis = selected
     ? diagnoseConnection({ endpoint: selected.endpoint, state, activePath, pendingPath, entries })
     : null
+  const incidentId = selected
+    ? getReportableConnectionIncidentId({
+        endpoint: selected.endpoint,
+        state,
+        activePath,
+        pendingPath,
+        entries
+      })
+    : null
+  const submissionKey = selected && incidentId ? `${selected.id}:${incidentId}` : null
+  const submissionState = getDiagnosticsSubmissionState(submissionStates, submissionKey)
+  const copied = copiedHostId === selectedId
 
   const copyDiagnostics = useCallback(async () => {
     if (!selected) {
       return
     }
     const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
-    const hydratedEntries = await readHydratedConnectionLog(connectionLogStore, selected.id)
+    const snapshot = await readConnectionDiagnosticsSnapshot(
+      clientContext,
+      connectionLogStore,
+      selected.id
+    )
     const report = buildConnectionDiagnosticsReport({
       hostName: selected.name,
       endpoint: selected.endpoint,
-      state,
-      reconnectAttempts,
-      lastConnectedAt,
+      state: snapshot.state,
+      reconnectAttempts: snapshot.reconnectAttempts,
+      lastConnectedAt: snapshot.lastConnectedAt,
       platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
       appVersion: Constants.expoConfig?.version ?? 'unknown',
       desktopAppVersion,
-      entries: hydratedEntries,
-      activePath,
-      pendingPath
+      entries: snapshot.entries,
+      activePath: snapshot.activePath,
+      pendingPath: snapshot.pendingPath
     })
     await Clipboard.setStringAsync(report)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [
-    selected,
-    state,
-    reconnectAttempts,
-    lastConnectedAt,
-    activePath,
-    pendingPath,
-    liveDesktopAppVersion
-  ])
+    setCopiedHostId(selected.id)
+    setTimeout(() => setCopiedHostId((hostId) => (hostId === selected.id ? null : hostId)), 2000)
+  }, [selected, liveDesktopAppVersion, clientContext])
 
   const sendDiagnostics = useCallback(async () => {
-    if (!selected || submissionState === 'sending' || diagnosis?.reportability !== 'orca-relay') {
+    if (!selected || !submissionKey || submissionState === 'sending') {
       return
     }
-    setSubmissionState('sending')
+    const startedKey = submissionKey
+    setSubmissionStates((states) => updateDiagnosticsSubmissionState(states, startedKey, 'sending'))
     const appVersion = Constants.expoConfig?.version ?? 'unknown'
     const platform = `${Platform.OS} ${Platform.Version ?? ''}`.trim()
     const desktopAppVersion = liveDesktopAppVersion ?? (await loadHostAppVersion(selected.id))
-    const hydratedEntries = await readHydratedConnectionLog(connectionLogStore, selected.id)
+    const snapshot = await readConnectionDiagnosticsSnapshot(
+      clientContext,
+      connectionLogStore,
+      selected.id
+    )
+    const currentIncidentId = getReportableConnectionIncidentId({
+      endpoint: selected.endpoint,
+      state: snapshot.state,
+      activePath: snapshot.activePath,
+      pendingPath: snapshot.pendingPath,
+      entries: snapshot.entries
+    })
+    if (`${selected.id}:${currentIncidentId ?? ''}` !== startedKey) {
+      setSubmissionStates((states) => updateDiagnosticsSubmissionState(states, startedKey, null))
+      return
+    }
     const report = buildConnectionDiagnosticsReport({
       hostName: selected.name,
       endpoint: selected.endpoint,
-      state,
-      reconnectAttempts,
-      lastConnectedAt,
+      state: snapshot.state,
+      reconnectAttempts: snapshot.reconnectAttempts,
+      lastConnectedAt: snapshot.lastConnectedAt,
       platform,
       appVersion,
       desktopAppVersion,
-      entries: hydratedEntries,
-      activePath,
-      pendingPath
+      entries: snapshot.entries,
+      activePath: snapshot.activePath,
+      pendingPath: snapshot.pendingPath
     })
     const result = await submitConnectionDiagnostics({ report, appVersion, platform })
-    setSubmissionState(result.ok ? 'sent' : 'failed')
-  }, [
-    selected,
-    submissionState,
-    state,
-    reconnectAttempts,
-    lastConnectedAt,
-    activePath,
-    pendingPath,
-    liveDesktopAppVersion,
-    diagnosis
-  ])
+    setSubmissionStates((states) =>
+      updateDiagnosticsSubmissionState(states, startedKey, result.ok ? 'sent' : 'failed')
+    )
+  }, [selected, submissionKey, submissionState, liveDesktopAppVersion, clientContext])
 
   return (
     <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
@@ -172,7 +197,9 @@ export default function ConnectionLogScreen() {
             <Pressable
               key={host.id}
               style={[styles.hostChip, host.id === selectedId && styles.hostChipActive]}
-              onPress={() => setSelectedId(host.id)}
+              onPress={() =>
+                setManualSelection({ hostId: host.id, requestedHostId: params.hostId, routeKey })
+              }
             >
               <Text
                 style={[styles.hostChipText, host.id === selectedId && styles.hostChipTextActive]}

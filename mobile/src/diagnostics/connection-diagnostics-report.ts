@@ -9,6 +9,9 @@ import { formatEndpoint } from './host-reachability'
 import { diagnoseConnection } from './connection-diagnostics-analysis'
 import { redactConnectionLogEntry, redactConnectionLogText } from './connection-log-redaction'
 
+const MAX_EVENT_LINE_BYTES = 2 * 1024
+const EVENT_TRUNCATION_MARKER = ' … [truncated]'
+
 // Why: one shareable text blob answering everything we historically had to
 // ask reporters one message at a time (endpoint type, state, attempt count,
 // last-connected, versions, and the reconnect lifecycle log).
@@ -68,11 +71,33 @@ export function buildConnectionDiagnosticsReport(args: {
       const detail = entry.detail ? ` — ${entry.detail}` : ''
       const evidence = [entry.code, entry.path].filter(Boolean).join(' · ')
       lines.push(
-        `${new Date(entry.ts).toISOString()} [${entry.level}]${evidence ? ` [${evidence}]` : ''} ${entry.message}${detail}`
+        truncateUtf8WithMarker(
+          `${new Date(entry.ts).toISOString()} [${entry.level}]${evidence ? ` [${evidence}]` : ''} ${entry.message}${detail}`,
+          MAX_EVENT_LINE_BYTES,
+          EVENT_TRUNCATION_MARKER
+        )
       )
     }
   }
   return lines.join('\n')
+}
+
+function truncateUtf8WithMarker(value: string, maxBytes: number, marker: string): string {
+  if (new TextEncoder().encode(value).byteLength <= maxBytes) {
+    return value
+  }
+  const markerBytes = new TextEncoder().encode(marker).byteLength
+  const characters: string[] = []
+  let bytes = 0
+  for (const character of value) {
+    const characterBytes = new TextEncoder().encode(character).byteLength
+    if (bytes + characterBytes + markerBytes > maxBytes) {
+      break
+    }
+    characters.push(character)
+    bytes += characterBytes
+  }
+  return `${characters.join('')}${marker}`
 }
 
 function formatAgo(ms: number): string {

@@ -88,4 +88,58 @@ describe('buildConnectionDiagnosticsReport', () => {
     expect(report).toContain('resumeToken=[redacted]')
     expect(report).not.toContain('secret-resume-token')
   })
+
+  it('redacts quoted JSON credentials and never echoes an invalid endpoint', () => {
+    const report = buildConnectionDiagnosticsReport({
+      hostName: 'Host 4',
+      endpoint: 'not-a-url?token=endpoint-secret',
+      state: 'reconnecting',
+      reconnectAttempts: 1,
+      lastConnectedAt: null,
+      platform: 'android 36',
+      appVersion: '0.0.47',
+      entries: [
+        {
+          id: 'json-secret',
+          ts: NOW,
+          level: 'error',
+          message: 'Relay failed',
+          detail: '{"resumeToken":"json-secret","authorization":"Bearer bearer-secret"}'
+        }
+      ],
+      nowMs: NOW
+    })
+
+    expect(report).toContain('Endpoint: invalid endpoint')
+    expect(report).not.toContain('endpoint-secret')
+    expect(report).not.toContain('json-secret')
+    expect(report).not.toContain('bearer-secret')
+  })
+
+  it('bounds a single event line before submission while preserving its identity', () => {
+    const report = buildConnectionDiagnosticsReport({
+      hostName: 'Host 5',
+      endpoint: 'ws://192.168.1.2:6768',
+      state: 'reconnecting',
+      reconnectAttempts: 1,
+      lastConnectedAt: null,
+      platform: 'android 36',
+      appVersion: '0.0.47',
+      entries: [
+        {
+          id: 'oversized',
+          ts: NOW,
+          level: 'error',
+          message: `newest oversized ${'😀'.repeat(2_000)}`
+        }
+      ],
+      nowMs: NOW
+    })
+
+    expect(report).toContain('newest oversized')
+    expect(report).toContain('[truncated]')
+    expect(new TextEncoder().encode(report.split('\n').at(-1)!).byteLength).toBeLessThanOrEqual(
+      2048
+    )
+  })
 })

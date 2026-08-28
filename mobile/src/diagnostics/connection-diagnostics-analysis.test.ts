@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { diagnoseConnection } from './connection-diagnostics-analysis'
+import {
+  diagnoseConnection,
+  getReportableConnectionIncidentId
+} from './connection-diagnostics-analysis'
 import type { ConnectionLogEntry } from '../transport/types'
 
 function event(message: string, detail?: string): ConnectionLogEntry {
@@ -162,5 +165,76 @@ describe('diagnoseConnection', () => {
         entries: [event('active relay session failed')]
       }).reportability
     ).toBe('none')
+  })
+
+  it('ignores failures from before the current app resume boundary', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://192.168.1.2:6768',
+        state: 'connecting',
+        activePath: 'lan',
+        entries: [
+          {
+            ...event('Relay health check failed'),
+            code: 'liveness-timeout',
+            path: 'relay'
+          },
+          {
+            ...event('App returned to foreground'),
+            id: 'resume',
+            ts: 2,
+            code: 'app-resumed'
+          },
+          { ...event('WebSocket closed'), id: 'closed', ts: 3, code: 'socket-closed' }
+        ]
+      }).reportability
+    ).toBe('none')
+  })
+
+  it('uses a structured direct liveness path ahead of the current active path', () => {
+    expect(
+      diagnoseConnection({
+        endpoint: 'ws://192.168.1.2:6768',
+        state: 'reconnecting',
+        activePath: 'relay',
+        entries: [
+          {
+            ...event('Connection health check failed'),
+            code: 'liveness-timeout',
+            path: 'lan'
+          }
+        ]
+      })
+    ).toEqual({
+      likelyCause: 'The connected host stopped answering authenticated health checks.',
+      nextStep: 'Orca closed the stale session and started recovery.',
+      reportability: 'none'
+    })
+  })
+
+  it('keys reportability to the current structured incident', () => {
+    const args = {
+      endpoint: 'ws://192.168.1.2:6768',
+      state: 'reconnecting' as const,
+      activePath: 'relay' as const,
+      entries: [
+        { ...event('Authenticated'), code: 'direct-connected' as const, path: 'lan' as const },
+        {
+          ...event('Relay health check failed'),
+          id: 'current-relay-failure',
+          ts: 2,
+          code: 'liveness-timeout' as const,
+          path: 'relay' as const
+        }
+      ]
+    }
+
+    expect(getReportableConnectionIncidentId(args)).toBe('current-relay-failure')
+    expect(
+      getReportableConnectionIncidentId({
+        ...args,
+        entries: [...args.entries, { ...event('Network changed'), ts: 3, code: 'network-changed' }]
+      })
+    ).toBeNull()
   })
 })

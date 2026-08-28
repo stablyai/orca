@@ -1,4 +1,7 @@
-import { connectionLogStore } from './persisted-connection-log-store'
+import {
+  connectionLogStore,
+  recordConnectionClientSessionStart
+} from './persisted-connection-log-store'
 import { loadHosts } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
@@ -99,6 +102,7 @@ export async function openHostClientEntry(
 
     let client: RpcClient
     try {
+      recordConnectionClientSessionStart(hostId)
       client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
     } catch {
       failCurrentOpen('client-construction')

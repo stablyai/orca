@@ -3,6 +3,8 @@ import { createConnectionLogStore } from './connection-log-buffer'
 import type { ConnectionLogEntry } from './types'
 
 const STORAGE_PREFIX = 'orca.mobile.connection-log.v1.'
+const clientSessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`
+const sessionStartedHosts = new Set<string>()
 
 export const connectionLogStore = createConnectionLogStore(200, {
   async load(hostId) {
@@ -34,6 +36,21 @@ export function recordConnectionRevival(
     code: reason === 'app-resume' ? 'app-resumed' : 'network-changed',
     message: reason === 'app-resume' ? 'App returned to foreground' : 'Network changed',
     detail: 'Connection recovery notified'
+  })
+}
+
+export function recordConnectionClientSessionStart(hostId: string): void {
+  if (sessionStartedHosts.has(hostId)) {
+    return
+  }
+  sessionStartedHosts.add(hostId)
+  const now = Date.now()
+  connectionLogStore.append(hostId, {
+    id: `client-session-${clientSessionId}-${now}`,
+    ts: now,
+    level: 'info',
+    code: 'client-session-started',
+    message: 'Mobile client session started'
   })
 }
 

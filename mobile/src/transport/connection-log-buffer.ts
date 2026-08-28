@@ -29,6 +29,7 @@ export function createConnectionLogStore(
   const entriesByHost = new Map<string, ConnectionLogEntry[]>()
   const listenersByHost = new Map<string, Set<() => void>>()
   const hydratedHosts = new Set<string>()
+  const hydrationFailedHosts = new Set<string>()
   const hydrationByHost = new Map<string, Promise<void>>()
   const saveByHost = new Map<string, Promise<void>>()
   // Why: useSyncExternalStore compares snapshots by reference — getSnapshot
@@ -61,18 +62,27 @@ export function createConnectionLogStore(
     const previous = saveByHost.get(hostId) ?? Promise.resolve()
     const pending = previous
       .catch(() => {})
-      .then(() => persistence.save(hostId, snapshot))
+      .then(async () => {
+        try {
+          await persistence.save(hostId, snapshot)
+        } catch {
+          await persistence.save(hostId, snapshot)
+        }
+      })
       .catch(() => {})
     saveByHost.set(hostId, pending)
   }
 
-  const hydrate = async (hostId: string): Promise<void> => {
+  const hydrateHost = async (hostId: string, retryAfterFailure: boolean): Promise<void> => {
     if (!persistence || hydratedHosts.has(hostId)) {
       return
     }
     const existing = hydrationByHost.get(hostId)
     if (existing) {
       return existing
+    }
+    if (!retryAfterFailure && hydrationFailedHosts.has(hostId)) {
+      return
     }
     const pending = persistence
       .load(hostId)
@@ -92,8 +102,13 @@ export function createConnectionLogStore(
         trim(merged)
         entriesByHost.set(hostId, merged)
         hydratedHosts.add(hostId)
+        hydrationFailedHosts.delete(hostId)
         notify(hostId)
         persist(hostId)
+      })
+      .catch((error: unknown) => {
+        hydrationFailedHosts.add(hostId)
+        throw error
       })
       .finally(() => hydrationByHost.delete(hostId))
     hydrationByHost.set(hostId, pending)
@@ -110,7 +125,7 @@ export function createConnectionLogStore(
       entries.push(redactConnectionLogEntry(entry))
       trim(entries)
       notify(hostId)
-      void hydrate(hostId)
+      void hydrateHost(hostId, false)
         .then(() => persist(hostId))
         .catch(() => {})
     },
@@ -129,7 +144,7 @@ export function createConnectionLogStore(
       return snapshot
     },
 
-    hydrate,
+    hydrate: (hostId) => hydrateHost(hostId, true),
 
     subscribe(hostId, listener) {
       let listeners = listenersByHost.get(hostId)

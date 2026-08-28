@@ -90,6 +90,64 @@ describe('connection log buffer', () => {
     expect(JSON.stringify(save.mock.calls)).not.toContain('also-secret')
   })
 
+  it('redacts quoted credential values when the object key is unquoted', async () => {
+    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+
+    store.append('host-a', {
+      ...entry(1),
+      detail: `resumeToken: 'secret-one' deviceToken="secret-two"`
+    })
+    await store.hydrate('host-a')
+
+    expect(store.get('host-a')[0]?.detail).toBe(
+      `resumeToken: '[redacted]' deviceToken="[redacted]"`
+    )
+  })
+
+  it('redacts the full quoted credential when its value contains an escaped quote', async () => {
+    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+
+    store.append('host-a', {
+      ...entry(1),
+      detail: String.raw`{"token":"secret\"tail"} token: 'secret\'tail'`
+    })
+    await store.hydrate('host-a')
+
+    expect(store.get('host-a')[0]?.detail).toBe(`{"token":"[redacted]"} token: '[redacted]'`)
+  })
+
+  it('redacts unterminated quoted credentials', async () => {
+    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+
+    store.append('host-a', {
+      ...entry(1),
+      message: 'token="secret',
+      detail: '{"authorization":"Bearer also-secret'
+    })
+    await store.hydrate('host-a')
+
+    expect(store.get('host-a')[0]).toMatchObject({
+      message: 'token="[redacted]',
+      detail: '{"authorization":"[redacted]'
+    })
+  })
+
+  it('redacts URL userinfo through the last authority separator', async () => {
+    const store = createConnectionLogStore(3, { load: async () => [], save: async () => {} })
+
+    store.append('host-a', {
+      ...entry(1),
+      message: 'wss://user:p@ss@example.com/x',
+      detail: 'https://user:pass@example.com/x'
+    })
+    await store.hydrate('host-a')
+
+    expect(store.get('host-a')[0]).toMatchObject({
+      message: 'wss://[redacted]@example.com/x',
+      detail: 'https://[redacted]@example.com/x'
+    })
+  })
+
   it('does not overwrite persisted history when hydration fails and retries later', async () => {
     const load = vi
       .fn<() => Promise<readonly ConnectionLogEntry[]>>()
@@ -115,5 +173,34 @@ describe('connection log buffer', () => {
     await store.hydrate('host-a')
 
     expect(store.get('host-a').map((value) => value.message)).toEqual(['event 1', 'event 2'])
+  })
+
+  it('retries one transient persistence failure without requiring another append', async () => {
+    const save = vi.fn().mockResolvedValue(undefined)
+    const store = createConnectionLogStore(3, { load: async () => [], save })
+
+    await store.hydrate('host-a')
+    await vi.waitFor(() => expect(save).toHaveBeenCalled())
+    save.mockReset()
+    save.mockRejectedValueOnce(new Error('storage unavailable')).mockResolvedValueOnce(undefined)
+    store.append('host-a', entry(1))
+
+    await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2))
+    expect(save).toHaveBeenLastCalledWith('host-a', [entry(1)])
+  })
+
+  it('does not retry failed automatic hydration for every appended event', async () => {
+    const load = vi.fn().mockRejectedValue(new Error('storage unavailable'))
+    const store = createConnectionLogStore(3, { load, save: async () => {} })
+
+    store.append('host-a', entry(1))
+    await expect(store.hydrate('host-a')).rejects.toThrow('storage unavailable')
+    store.append('host-a', entry(2))
+    store.append('host-a', entry(3))
+    await Promise.resolve()
+
+    expect(load).toHaveBeenCalledTimes(1)
+    await expect(store.hydrate('host-a')).rejects.toThrow('storage unavailable')
+    expect(load).toHaveBeenCalledTimes(2)
   })
 })

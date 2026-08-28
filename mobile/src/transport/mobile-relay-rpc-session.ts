@@ -16,6 +16,7 @@ import type { ConnectionLogSink, ConnectionState, RpcResponse } from './types'
 const RELAY_PROBE_TIMEOUT_MS = 4_000
 const RELAY_MISSED_PROBE_LIMIT = 2
 const RELAY_FOREGROUND_PROBE_MIN_INTERVAL_MS = 10_000
+let relayRpcSessionSequence = 0
 
 type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -55,6 +56,7 @@ export function connectMobileRelayRpcSession(args: {
   let failure: Error | null = null
   let closed = false
   let logSequence = 0
+  const logSessionId = `${Date.now().toString(36)}-${(++relayRpcSessionSequence).toString(36)}`
   const livenessIdentity = {}
   const streams = new MobileRelayRpcStreams({
     nextId,
@@ -149,7 +151,7 @@ export function connectMobileRelayRpcSession(args: {
       state === 'connected' && sendFrame({ id: nextId(), method: 'status.get', params: undefined }),
     onTimeout: (evidence) => {
       args.onLog?.({
-        id: `relay-liveness-${++logSequence}-${Date.now()}`,
+        id: `relay-liveness-${logSessionId}-${++logSequence}`,
         ts: Date.now(),
         level: 'error',
         code: 'liveness-timeout',

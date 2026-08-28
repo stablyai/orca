@@ -129,6 +129,28 @@ describe('mobile relay RPC session liveness', () => {
     )
   })
 
+  it('uses distinct liveness evidence IDs for sessions created in the same millisecond', async () => {
+    vi.setSystemTime(1_000)
+    const firstLog = vi.fn<ConnectionLogSink>()
+    const first = await authenticateSession(firstLog)
+    first.notifyForeground('focus')
+    await vi.advanceTimersByTimeAsync(8_000)
+    const firstId = firstLog.mock.calls[0]?.[0].id
+
+    vi.clearAllMocks()
+    fakes.sendText.mockReturnValue(true)
+    vi.setSystemTime(1_000)
+    const secondLog = vi.fn<ConnectionLogSink>()
+    const second = await authenticateSession(secondLog)
+    second.notifyForeground('focus')
+    await vi.advanceTimersByTimeAsync(8_000)
+    const secondId = secondLog.mock.calls[0]?.[0].id
+
+    expect(firstId).toBeTruthy()
+    expect(secondId).toBeTruthy()
+    expect(secondId).not.toBe(firstId)
+  })
+
   it('rate-limits foreground sequences without suppressing a retry', async () => {
     const session = await authenticateSession()
     session.notifyForeground('focus')

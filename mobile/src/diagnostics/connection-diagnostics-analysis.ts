@@ -11,13 +11,15 @@ export type ConnectionDiagnosis = {
   reportability: 'none' | 'orca-relay'
 }
 
-export function diagnoseConnection(args: {
+type DiagnoseConnectionArgs = {
   endpoint: string
   state: ConnectionState
   activePath?: MobileConnectionDiagnosticPath
   pendingPath?: MobileConnectionDiagnosticPath | null
   entries: readonly ConnectionLogEntry[]
-}): ConnectionDiagnosis {
+}
+
+export function diagnoseConnection(args: DiagnoseConnectionArgs): ConnectionDiagnosis {
   if (args.state === 'connected') {
     return {
       likelyCause: `Connection is healthy${args.activePath ? ` via ${formatPath(args.activePath)}` : ''}.`,
@@ -25,7 +27,7 @@ export function diagnoseConnection(args: {
       reportability: 'none'
     }
   }
-  const failure = args.entries.toReversed().find(isDiagnosticFailure)
+  const failure = findCurrentDiagnosticFailure(args.entries)
   const evidence = failure ? `${failure.code ?? ''} ${failure.message} ${failure.detail ?? ''}` : ''
 
   if (/relay director resolve failed \(401\)/i.test(evidence)) {
@@ -47,7 +49,13 @@ export function diagnoseConnection(args: {
 
   if (/liveness-timeout|liveness timeout|connection health check failed/i.test(evidence)) {
     const relayLiveness = failure?.code === 'liveness-timeout' && failure.path === 'relay'
-    const path = relayLiveness || args.activePath === 'relay' ? 'Relay' : 'The connected host'
+    const structuredDirectLiveness =
+      failure?.code === 'liveness-timeout' &&
+      (failure.path === 'lan' || failure.path === 'tailscale')
+    const path =
+      relayLiveness || (!structuredDirectLiveness && args.activePath === 'relay')
+        ? 'Relay'
+        : 'The connected host'
     return {
       likelyCause: `${path} stopped answering authenticated health checks.`,
       nextStep: 'Orca closed the stale session and started recovery.',
@@ -106,6 +114,34 @@ export function diagnoseConnection(args: {
     nextStep: 'Run diagnostics and copy the report again after the next connection attempt.',
     reportability: 'none'
   }
+}
+
+export function getReportableConnectionIncidentId(args: DiagnoseConnectionArgs): string | null {
+  if (diagnoseConnection(args).reportability !== 'orca-relay') {
+    return null
+  }
+  return findCurrentDiagnosticFailure(args.entries)?.id ?? null
+}
+
+function findCurrentDiagnosticFailure(
+  entries: readonly ConnectionLogEntry[]
+): ConnectionLogEntry | undefined {
+  const boundaryIndex = entries.findLastIndex(isDiagnosticBoundary)
+  return entries
+    .slice(boundaryIndex + 1)
+    .toReversed()
+    .find(isDiagnosticFailure)
+}
+
+function isDiagnosticBoundary(entry: ConnectionLogEntry): boolean {
+  return (
+    entry.code === 'client-session-started' ||
+    entry.code === 'app-resumed' ||
+    entry.code === 'network-changed' ||
+    entry.code === 'relay-connected' ||
+    entry.code === 'direct-connected' ||
+    entry.message === 'Authenticated'
+  )
 }
 
 function isDiagnosticFailure(entry: ConnectionLogEntry): boolean {

@@ -72,7 +72,29 @@ export function boundConnectionDiagnosticsReport(
     }
     kept = candidateEvents
   }
+  if (kept.length === 0 && events.length > 0) {
+    return formatReportWithTruncatedNewestEvent(header, events, maxBytes)
+  }
   return truncateUtf8(formatBoundedReport(header, kept, events.length), maxBytes)
+}
+
+function formatReportWithTruncatedNewestEvent(
+  header: string[],
+  events: string[],
+  maxBytes: number
+): string {
+  const history = `Recent connection history (1 newest event; ${events.length - 1} older omitted):`
+  const prefix = [...header, history].join('\n') + '\n'
+  const availableBytes = maxBytes - utf8Bytes(prefix)
+  if (availableBytes <= 0) {
+    return truncateUtf8(prefix, maxBytes)
+  }
+  const marker = ' … [truncated]'
+  const markerBytes = utf8Bytes(marker)
+  if (availableBytes <= markerBytes) {
+    return truncateUtf8(prefix, maxBytes)
+  }
+  return `${prefix}${truncateUtf8(events.at(-1)!, availableBytes - markerBytes)}${marker}`
 }
 
 function formatBoundedReport(header: string[], events: string[], totalEvents: number): string {

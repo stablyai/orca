@@ -233,7 +233,9 @@ export class DirectRpcClient implements RpcClient {
     this.reconnect.authenticated()
     this.authenticationRetry.accepted()
     this.connectionState.publish('connected')
-    this.connectionLog.emit('success', 'Authenticated', 'Channel ready for RPC')
+    this.connectionLog.emit('success', 'Authenticated', 'Channel ready for RPC', {
+      code: 'direct-connected'
+    })
     this.streams.replayAfterAuthentication()
   }
 
