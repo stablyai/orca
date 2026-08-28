@@ -15,6 +15,11 @@ import {
   getAgentStatusHooksTitle
 } from './agent-status-hooks-copy'
 import { getAgentCacheTimerSearchEntries } from './agent-cache-timer-search'
+import {
+  getAgentWslSessionScanDescription,
+  getAgentWslSessionScanSearchKeywords,
+  getAgentWslSessionScanTitle
+} from './agent-wsl-session-scan-copy'
 import { translate } from '@/i18n/i18n'
 import { searchKeywords, translateSearchKeyword, uniqueKeywords } from './settings-search-keywords'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -62,10 +67,12 @@ function expandAgentSearchText(value: string): string[] {
 type AgentsPaneSearchOptions = {
   includeAgentAwake?: boolean
   includeAgentRuntime?: boolean
+  includeWslSessionScan?: boolean
 }
 
 const AGENT_AWAKE_SEARCH_ENTRY_ID = 'agent-awake'
 const AGENT_RUNTIME_SEARCH_ENTRY_ID = 'agent-runtime'
+const AGENT_WSL_SESSION_SCAN_SEARCH_ENTRY_ID = 'agent-wsl-session-scan'
 
 const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
   {
@@ -102,6 +109,12 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
       ),
       ...translateSearchKeyword('auto.components.settings.agents.search.719f53350c', 'path')
     ]
+  },
+  {
+    title: getAgentWslSessionScanTitle(),
+    id: AGENT_WSL_SESSION_SCAN_SEARCH_ENTRY_ID,
+    description: getAgentWslSessionScanDescription(),
+    keywords: getAgentWslSessionScanSearchKeywords()
   },
   {
     title: getAgentStatusHooksTitle(),
@@ -145,12 +158,16 @@ const getAllAgentsPaneSearchEntries = createLocalizedCatalog(() => [
 
 export function getAgentsPaneSearchEntries({
   includeAgentAwake = true,
-  includeAgentRuntime = true
+  includeAgentRuntime = true,
+  includeWslSessionScan = true
 }: AgentsPaneSearchOptions = {}) {
   const entries = getAllAgentsPaneSearchEntries()
   return entries.filter(
     (entry) =>
       (!('id' in entry) || entry.id !== AGENT_RUNTIME_SEARCH_ENTRY_ID || includeAgentRuntime) &&
-      (!('id' in entry) || entry.id !== AGENT_AWAKE_SEARCH_ENTRY_ID || includeAgentAwake)
+      (!('id' in entry) || entry.id !== AGENT_AWAKE_SEARCH_ENTRY_ID || includeAgentAwake) &&
+      (!('id' in entry) ||
+        entry.id !== AGENT_WSL_SESSION_SCAN_SEARCH_ENTRY_ID ||
+        includeWslSessionScan)
   )
 }

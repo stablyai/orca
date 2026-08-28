@@ -15,6 +15,10 @@ import {
 } from './agent-generated-tab-title-copy'
 import { getAgentStatusHooksDescription, getAgentStatusHooksTitle } from './agent-status-hooks-copy'
 import {
+  getAgentWslSessionScanDescription,
+  getAgentWslSessionScanTitle
+} from './agent-wsl-session-scan-copy'
+import {
   SettingsSegmentedControl,
   SettingsSubsectionHeader,
   SettingsSwitchRow
@@ -254,6 +258,9 @@ export function AgentsPane({
         wslDistros={wslDistros}
         wslCapabilitiesLoading={wslCapabilitiesLoading}
       />
+      {wslSupportedPlatform ? (
+        <AgentWslSessionScanSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
       <AgentStatusHooksSetting settings={settings} updateSettings={updateSettings} />
       <AgentGeneratedTabTitlesSetting settings={settings} updateSettings={updateSettings} />
       {!isPairedWebClientWindow() ? (
@@ -278,6 +285,23 @@ export function AgentsPane({
         getRowProps={getRowProps}
       />
     </div>
+  )
+}
+
+// Why: sits under Agent runtime because it is the same decision seen from the
+// history side — whether WSL is part of this machine's agent surface at all.
+export function AgentWslSessionScanSetting({ settings, updateSettings }: AgentsPaneProps) {
+  const enabled = settings.aiVaultScanWslDistros !== false
+  return (
+    <section className="space-y-3" id="agents-wsl-session-scan">
+      <SettingsSwitchRow
+        label={getAgentWslSessionScanTitle()}
+        description={getAgentWslSessionScanDescription()}
+        checked={enabled}
+        onChange={() => updateSettings({ aiVaultScanWslDistros: !enabled })}
+        ariaLabel={getAgentWslSessionScanTitle()}
+      />
+    </section>
   )
 }
 

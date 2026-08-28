@@ -175,7 +175,8 @@ export function buildSettingsNavigationMetadata({
       icon: Bot,
       searchEntries: getAgentsPaneSearchEntries({
         includeAgentAwake: !isWebClient,
-        includeAgentRuntime: isLocalWindowsHost
+        includeAgentRuntime: isLocalWindowsHost,
+        includeWslSessionScan: isLocalWindowsHost
       }),
       group: 'capabilities'
     },
@@ -616,7 +617,7 @@ export function buildSettingsNavigationMetadata({
               'Low-level compatibility settings for troubleshooting.'
             ),
             icon: Wrench,
-            searchEntries: getAdvancedPaneSearchEntries({ isWindows: isLocalWindowsHost }),
+            searchEntries: getAdvancedPaneSearchEntries(),
             group: 'advanced'
           }
         ]
