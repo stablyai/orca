@@ -1010,11 +1010,14 @@ export type UISlice = {
   persistedUIWriteBaseline: PersistedUIWriteBaseline | null
   /** Fields with a ui.set round-trip in flight; hydration keeps the mirror's value for them so an echo of the in-flight write can't revert a newer flip-back. */
   persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
+  /** Bumped whenever hydration replaces the baseline; an ack whose write predates the bump must not fold, or it would erase a remote write that landed during the round trip. */
+  persistedUIWriteBaselineGeneration: number
   notePersistedUIWriteStarted: (fields: readonly (keyof PersistedUIWriteBaseline)[]) => void
   /** Settle an in-flight write: fold the acked patch into the baseline (null = rejected, leaving the fields dirty so the next change re-flushes them). */
   notePersistedUIWriteSettled: (
     fields: readonly (keyof PersistedUIWriteBaseline)[],
-    flushed: Partial<PersistedUIWriteBaseline> | null
+    flushed: Partial<PersistedUIWriteBaseline> | null,
+    options?: { sentAtGeneration: number }
   ) => void
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
@@ -2470,7 +2473,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       }
       return { persistedUIWriteInFlightCounts: counts }
     }),
-  notePersistedUIWriteSettled: (fields, flushed) =>
+  persistedUIWriteBaselineGeneration: 0,
+  notePersistedUIWriteSettled: (fields, flushed, options) =>
     set((s) => {
       const counts = { ...s.persistedUIWriteInFlightCounts }
       for (const field of fields) {
@@ -2481,10 +2485,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
           delete counts[field]
         }
       }
+      // Why the generation guard: a hydration during the round trip made the
+      // baseline authoritative for state NEWER than this write; folding the
+      // sent values over it would blank the mirror-vs-baseline diff and leave
+      // mirror and authority divergent with nothing left to reconcile them.
+      // Skipping the fold keeps the diff alive so the trailing flush re-sends.
+      const foldable =
+        flushed &&
+        s.persistedUIWriteBaseline &&
+        (options === undefined || options.sentAtGeneration === s.persistedUIWriteBaselineGeneration)
       return {
         persistedUIWriteInFlightCounts: counts,
-        ...(flushed && s.persistedUIWriteBaseline
-          ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline, ...flushed } }
+        ...(foldable
+          ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline!, ...flushed } }
           : {})
       }
     }),
@@ -2731,10 +2744,21 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         }
       }
       // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
-      if (hydratedUIPartialMatchesState(s, hydrated)) {
+      // The baseline must be compared too: when the overlays pin the only differing field (a remote
+      // same-field write during an in-flight ack), the visible state matches but the baseline moved —
+      // discarding it would blank the writer's diff and strand mirror and authority apart.
+      if (
+        hydratedUIPartialMatchesState(s, hydrated) &&
+        (!previousBaseline ||
+          Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length === 0)
+      ) {
         return s
       }
-      return { ...hydrated, persistedUIWriteBaseline: nextWriteBaseline }
+      return {
+        ...hydrated,
+        persistedUIWriteBaseline: nextWriteBaseline,
+        persistedUIWriteBaselineGeneration: s.persistedUIWriteBaselineGeneration + 1
+      }
     }),
 
   updateStatus: { state: 'idle' },

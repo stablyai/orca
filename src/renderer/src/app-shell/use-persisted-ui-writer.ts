@@ -11,34 +11,64 @@ import {
 /**
  * Send one field patch and settle it against the baseline. Fields are marked
  * in flight so a hydration during the round-trip can't revert a newer local
- * flip-back; on ack the patch folds into the baseline and the mirror is
- * re-diffed — an edit made while the write was in flight (which diffed empty
- * against the pre-fold baseline) is flushed immediately as a trailing write.
- * A rejected write folds nothing, leaving its fields dirty to re-flush on the
- * next change (no automatic retry loop).
+ * flip-back; on ack the patch folds into the baseline (generation-guarded: a
+ * hydration during the round trip wins instead) and a debounced trailing
+ * flush re-diffs the mirror — an edit made while the write was in flight,
+ * which diffed empty against the pre-fold baseline, is re-sent then. On hosts
+ * whose ui.set rejects on failure, a rejected write folds nothing, leaving
+ * its fields dirty to re-flush on the next change (no automatic retry loop);
+ * the web preload currently swallows transport failures, which void that
+ * self-healing there.
  */
 function sendPersistedUIWrite(changed: Partial<PersistedUIWriteBaseline>): void {
   const fields = Object.keys(changed) as (keyof PersistedUIWriteBaseline)[]
-  useAppStore.getState().notePersistedUIWriteStarted(fields)
-  window.api.ui
-    .set(persistedUIWriteFieldsToWireUpdate(changed))
-    .then(() => {
-      const state = useAppStore.getState()
-      state.notePersistedUIWriteSettled(fields, changed)
-      const settled = useAppStore.getState()
-      const baseline = settled.persistedUIWriteBaseline
-      if (!baseline) {
-        return
-      }
-      const trailing = diffPersistedUIWriteFields(
-        capturePersistedUIWriteBaseline(settled),
-        baseline
-      )
-      if (Object.keys(trailing).length > 0) {
-        sendPersistedUIWrite(trailing)
-      }
-    })
-    .catch(() => useAppStore.getState().notePersistedUIWriteSettled(fields, null))
+  const state = useAppStore.getState()
+  const sentAtGeneration = state.persistedUIWriteBaselineGeneration
+  state.notePersistedUIWriteStarted(fields)
+  let request: Promise<void>
+  try {
+    request = window.api.ui.set(persistedUIWriteFieldsToWireUpdate(changed))
+  } catch {
+    // A synchronous throw (e.g. a non-cloneable value) must still settle the
+    // in-flight marker, or the field stays pinned against hydration forever.
+    useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+    return
+  }
+  // Two-arg then: the rejection handler must not catch throws from the ack
+  // handler, which would double-settle these fields and leak the trailing ones.
+  request.then(
+    () => {
+      useAppStore.getState().notePersistedUIWriteSettled(fields, changed, { sentAtGeneration })
+      scheduleTrailingPersistedUIFlush()
+    },
+    () => useAppStore.getState().notePersistedUIWriteSettled(fields, null)
+  )
+}
+
+/**
+ * Debounced (never inline at ack rate — one in-flight write must not turn a
+ * drag into one ui.set per IPC round trip) re-diff of the mirror against the
+ * settled baseline. Skips while any write is still in flight: that write's
+ * own ack schedules the next pass, so overlapping timers can't double-send.
+ * Termination invariant: each acked write folds exactly the values it diffed
+ * (or a hydration advances the baseline), so the trailing diff shrinks to
+ * empty; without the fold this would loop.
+ */
+function scheduleTrailingPersistedUIFlush(): void {
+  window.setTimeout(() => {
+    const state = useAppStore.getState()
+    if (Object.keys(state.persistedUIWriteInFlightCounts).length > 0) {
+      return
+    }
+    const baseline = state.persistedUIWriteBaseline
+    if (!baseline) {
+      return
+    }
+    const trailing = diffPersistedUIWriteFields(capturePersistedUIWriteBaseline(state), baseline)
+    if (Object.keys(trailing).length > 0) {
+      sendPersistedUIWrite(trailing)
+    }
+  }, 150)
 }
 
 /**

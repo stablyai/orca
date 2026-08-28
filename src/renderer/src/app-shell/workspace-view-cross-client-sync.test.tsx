@@ -193,6 +193,8 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
   let container: HTMLDivElement
   let pendingBroadcasts: PersistedUIState[]
   let holdAcks: boolean
+  let rejectSets: boolean
+  let setCallCount: number
   let pendingAcks: (() => void)[]
 
   async function resolveAcks() {
@@ -243,10 +245,17 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     store = createUIStore()
     storeRef.current = store as unknown as typeof storeRef.current
     holdAcks = false
+    rejectSets = false
+    setCallCount = 0
     pendingAcks = []
     ;(window as unknown as { api: unknown }).api = {
       ui: {
         set: (updates: Partial<PersistedUIState>) => {
+          setCallCount += 1
+          // rejectSets models transport failure: nothing reaches the host.
+          if (rejectSets) {
+            return Promise.reject(new Error('transport failure'))
+          }
           // Like the real IPC: main applies the update before the renderer's
           // promise resolves; holdAcks models the in-flight round-trip window.
           authority.set(updates)
@@ -411,6 +420,111 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
     deliverBroadcasts()
     expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
+  })
+
+  it('edits made during the ack window flush at debounce rate, not ack rate', async () => {
+    // Round-3 review: the trailing re-diff must not bypass the 150ms debounce,
+    // or one in-flight write turns a drag into one ui.set per IPC round trip.
+    holdAcks = true
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    await flushDesktopDebounce()
+    const sendsAfterFirstFlush = setCallCount
+
+    // Rapid edits while the first write's ack is in flight.
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+    act(() => {
+      store.getState().setHideDetachedHeadWorkspaces(true)
+    })
+    act(() => {
+      store.getState().setHideAutomationGeneratedWorkspaces(true)
+    })
+
+    // The ack lands: nothing may be sent inline — only a debounced flush later.
+    await resolveAcks()
+    expect(setCallCount).toBe(sendsAfterFirstFlush)
+
+    // One debounce window later, the three edits coalesce into a single write.
+    await flushDesktopDebounce()
+    expect(setCallCount).toBe(sendsAfterFirstFlush + 1)
+    await resolveAcks()
+    await flushDesktopDebounce()
+    await resolveAcks()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
+    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
+    expect(authority.get().hideDetachedHeadWorkspaces).toBe(true)
+    expect(authority.get().hideAutomationGeneratedWorkspaces).toBe(true)
+  })
+
+  it('converges when a remote client writes the same field during the ack window', async () => {
+    // Round-3 review: the ack must not fold the sent value over a baseline a
+    // hydration advanced past, or the mirror and authority diverge with no
+    // further traffic to reconcile them (the reset then reappears later).
+    holdAcks = true
+    const mobile = createMobileClient(authority)
+    mobile.sync()
+
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    await flushDesktopDebounce()
+
+    // Mobile writes the SAME field at the authority after us; both broadcasts
+    // (our echo, then mobile's) land before our ack does.
+    mobile.tap({ hideDefaultBranch: false })
+    deliverBroadcasts()
+    await resolveAcks()
+
+    await flushDesktopDebounce()
+    await resolveAcks()
+    deliverBroadcasts()
+    await flushDesktopDebounce()
+    await resolveAcks()
+    deliverBroadcasts()
+
+    // Either side may win a same-field conflict, but mirror and authority
+    // must agree once traffic settles.
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(
+      authority.get().hideDefaultBranchWorkspace
+    )
+  })
+
+  it('a rejected write folds nothing and re-flushes with the next change', async () => {
+    rejectSets = true
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    await flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
+    // The rejection must settle the in-flight marker, not leak it.
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
+
+    // Transport recovers; the next edit re-flushes the dirty field too.
+    rejectSets = false
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+    await flushDesktopDebounce()
+    await flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
+    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
+  })
+
+  it('overlapping in-flight writes on one field decrement, not clear, the marker', () => {
+    // Unit-pins the count semantics: ack #1 of two overlapping writes must not
+    // un-pin the field while write #2 is still out.
+    const s = store.getState()
+    s.notePersistedUIWriteStarted(['hideDefaultBranchWorkspace'])
+    s.notePersistedUIWriteStarted(['hideDefaultBranchWorkspace'])
+    store.getState().notePersistedUIWriteSettled(['hideDefaultBranchWorkspace'], null)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({
+      hideDefaultBranchWorkspace: 1
+    })
+    store.getState().notePersistedUIWriteSettled(['hideDefaultBranchWorkspace'], null)
+    expect(store.getState().persistedUIWriteInFlightCounts).toEqual({})
   })
 
   it('desktop and mobile changing the same field converges on the newest write', async () => {
