@@ -145,6 +145,7 @@ export type {
   RuntimeTerminalAgentStatus,
   RuntimeTerminalAgentStatusState,
   RuntimeTerminalClose,
+  RuntimeTerminalCloseOptions,
   RuntimeTerminalCreate,
   RuntimeTerminalCreateRequestPayload,
   RuntimeTerminalFocus,

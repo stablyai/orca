@@ -9,7 +9,8 @@ import type { PtyRuntimeControllerDeps } from './controller-deps'
 
 export function killPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
-  ptyId: string
+  ptyId: string,
+  opts?: { expectedIncarnationId?: string }
 ): boolean {
   const {
     runtime,
@@ -22,6 +23,10 @@ export function killPtyFromRuntimeController(
     retiredRejectedPtyIds,
     reversibleStopOwnersByPtyId
   } = deps
+  const expectedIncarnationId = opts?.expectedIncarnationId
+  if (expectedIncarnationId && ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+    return false
+  }
   runtime?.markPtyStopRequested?.(ptyId)
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
@@ -36,6 +41,9 @@ export function killPtyFromRuntimeController(
     })
   }
   const killWithCurrentProvider = (): boolean => {
+    if (expectedIncarnationId && ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+      return false
+    }
     let provider: IPtyProvider
     try {
       provider = connectionId ? getProvider(connectionId) : getProviderForPty(ptyId)
@@ -59,7 +67,7 @@ export function killPtyFromRuntimeController(
       }
       return false
     }
-    // Why: controller is synchronous, but keep ownership until async shutdown proves whether the provider emitted an exit.
+    // Why: keep ownership until async shutdown proves whether the provider emitted an exit.
     void shutdownProviderAndDetectExit(provider, ptyId, { immediate: false })
       .then((providerExitObserved) => {
         const retired = retiredRejectedPtyIds.has(ptyId)
@@ -219,7 +227,7 @@ export function markReversibleStopsFromRuntimeController(
 export async function stopAndWaitPtyFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   ptyId: string,
-  opts?: { keepHistory?: boolean; deadlineMs?: number }
+  opts?: { keepHistory?: boolean; deadlineMs?: number; expectedIncarnationId?: string }
 ): Promise<boolean> {
   const {
     runtime,
@@ -230,18 +238,19 @@ export async function stopAndWaitPtyFromRuntimeController(
     sendPtyExitToRenderer,
     finishPtyShutdown
   } = deps
+  const expectedIncarnationId = opts?.expectedIncarnationId
+  if (expectedIncarnationId && ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+    return false
+  }
   runtime?.markPtyStopRequested?.(ptyId)
   let connectionId: string | null | undefined = ptyOwnership.get(ptyId)
   const parsedSshId = connectionId === undefined ? parseAppSshPtyId(ptyId) : null
   connectionId ??= parsedSshId?.connectionId
-  // Why: destructive teardown threads one absolute deadline through every await
-  // below; each RPC leaf converts it to the remaining time when it issues, so
-  // sequential RPCs share the budget and cannot overrun the sweep deadline.
+  // Why: one absolute deadline bounds every awaited RPC during destructive teardown.
   const deadlineMs = opts?.deadlineMs
   const startupPromise = getLocalPtyProviderStartupPromise(connectionId)
   if (startupPromise) {
-    // Why: exact-stop must resolve the provider after daemon startup just
-    // like renderer kills, or the fallback can falsely confirm teardown.
+    // Why: resolve exact-stop provider after daemon startup to avoid false fallback confirmation.
     if (deadlineMs !== undefined) {
       // Why: bound the cold-start await by the teardown deadline instead of the
       // 60s startup fail-open cap; fail closed so the sweep records the miss.
@@ -260,6 +269,9 @@ export async function stopAndWaitPtyFromRuntimeController(
     } else {
       await startupPromise
     }
+  }
+  if (expectedIncarnationId && ptyIncarnationById.get(ptyId) !== expectedIncarnationId) {
+    return false
   }
   let provider: IPtyProvider
   try {

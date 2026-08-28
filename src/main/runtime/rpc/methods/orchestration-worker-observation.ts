@@ -9,6 +9,14 @@ import type {
   WorkerDispatchRow
 } from '../../orchestration/types'
 
+export type WorkerTerminalObservationStatus =
+  | 'unattached'
+  | 'missing'
+  | 'identity_changed'
+  | 'live'
+  | 'exited'
+  | 'unverifiable'
+
 export async function inspectWorkerTerminal(
   runtime: OrcaRuntimeService,
   db: OrchestrationDb,
@@ -16,7 +24,7 @@ export async function inspectWorkerTerminal(
 ): Promise<{
   terminal: Awaited<ReturnType<OrcaRuntimeService['showTerminal']>> | null
   exact: boolean
-  status: 'unattached' | 'missing' | 'identity_changed' | 'live' | 'exited' | 'unverifiable'
+  status: WorkerTerminalObservationStatus
   /** Set with `unverifiable`; names what we lost contact with. */
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */

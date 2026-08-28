@@ -14,6 +14,7 @@ import { inspectWorkerTerminal } from './orchestration-worker-observation'
 import { orchestrationTimestampToMs } from './orchestration-worker-output'
 import {
   closeAndSettleWorkerTerminalRelease,
+  summarizeWorkerTerminalArchive,
   type WorkerReleaseReceipt
 } from './orchestration-worker-release-settlement'
 import { workerTerminalLeaseIsCurrent } from './orchestration-worker-terminal-lease'
@@ -67,10 +68,7 @@ export function archiveSummary(
   if (!resource) {
     return null
   }
-  if (!resource.archive_source && !resource.archive_status) {
-    return null
-  }
-  return { source: resource.archive_source, status: resource.archive_status }
+  return summarizeWorkerTerminalArchive(resource)
 }
 
 // Completes a durably requested release: re-prove exact identity, freeze output, close only the

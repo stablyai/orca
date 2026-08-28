@@ -6,7 +6,10 @@ import type {
   WorkerTerminalRetainedReason
 } from '../../orchestration/worker-terminal-ownership'
 import type { OrcaRuntimeService } from '../../orca-runtime'
-import { recheckProcessLiveness } from './orchestration-worker-observation'
+import {
+  recheckProcessLiveness,
+  type WorkerTerminalObservationStatus
+} from './orchestration-worker-observation'
 import { workerTerminalLeaseIsCurrent } from './orchestration-worker-terminal-lease'
 
 export type WorkerReleaseReceipt = {
@@ -24,7 +27,7 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
   db: OrchestrationDb
   dispatchId: string
   resource: WorkerTerminalResourceRow
-  observationStatus: string
+  observationStatus: WorkerTerminalObservationStatus
   archiveSource: 'transcript' | 'terminal' | null
   archiveStatus: WorkerTerminalArchiveStatus | null
 }): Promise<WorkerReleaseReceipt> {
@@ -34,8 +37,26 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
   // clean up a tab that the user already removed. Freeze the exact process verdict first.
   const exactProcessWasAlreadyExited =
     observationStatus === 'exited' && (await recheckProcessLiveness(runtime, resource)) === 'exited'
+  // The liveness query above yields. Re-prove the lease in the same synchronous turn that enters
+  // closeTerminal so a replacement incarnation cannot be closed with the stale worker's handle.
+  if (
+    !workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, observationStatus === 'exited')
+  ) {
+    return retainWorkerTerminalRelease(db, dispatchId, resource)
+  }
   try {
-    const close = await runtime.closeTerminal(resource.terminal_handle)
+    const close = await runtime.closeTerminal(
+      resource.terminal_handle,
+      resource.process_incarnation
+        ? { expectedProcessIncarnation: resource.process_incarnation }
+        : {}
+    )
+    if (
+      close.closeRefusedReason === 'incarnation_replaced' ||
+      !workerTerminalLeaseIsCurrent(runtime, db, dispatchId, resource, true)
+    ) {
+      return retainWorkerTerminalRelease(db, dispatchId, resource)
+    }
     if (!close.ptyKilled) {
       const settled = exactProcessWasAlreadyExited
         ? settleExitedWorkerTerminalRelease({
@@ -105,7 +126,7 @@ export async function closeAndSettleWorkerTerminalRelease(args: {
     state: 'released',
     processAction:
       observationStatus === 'exited' ? 'closed_exited_terminal' : 'closed_agent_terminal',
-    archive: summarizeArchive(released)
+    archive: summarizeWorkerTerminalArchive(released)
   }
 }
 
@@ -123,14 +144,34 @@ function settleExitedWorkerTerminalRelease(args: {
   }
   const released = db.settleWorkerTerminalRelease(resource.id)
   runtime.notifyMessageArrived(`dispatch:${dispatchId}`, 'status')
-  return { dispatchId, state: 'released', processAction, archive: summarizeArchive(released) }
+  return {
+    dispatchId,
+    state: 'released',
+    processAction,
+    archive: summarizeWorkerTerminalArchive(released)
+  }
 }
 
-function summarizeArchive(resource: WorkerTerminalResourceRow) {
+export function summarizeWorkerTerminalArchive(resource: WorkerTerminalResourceRow) {
   if (!resource.archive_source && !resource.archive_status) {
     return null
   }
   return { source: resource.archive_source, status: resource.archive_status }
+}
+
+function retainWorkerTerminalRelease(
+  db: OrchestrationDb,
+  dispatchId: string,
+  resource: WorkerTerminalResourceRow
+): WorkerReleaseReceipt {
+  const retained = db.revertWorkerTerminalReleaseToRetained(resource.id, 'identity_unproven')
+  return {
+    dispatchId,
+    state: 'retained',
+    reason: 'identity_unproven',
+    processAction: 'none',
+    archive: summarizeWorkerTerminalArchive(retained)
+  }
 }
 
 function inspectRecovery(dispatchId: string): string {

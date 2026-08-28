@@ -9,60 +9,136 @@ describe('orchestration worker release after its tab was already closed', () => 
     {
       processLiveness: 'exited' as const,
       postCloseProcessLiveness: 'exited' as const,
+      incarnationChangesDuringLiveness: false,
       incarnationChangesOnClose: false,
       closeError: null,
+      closeRefusedReason: null,
       expectedState: 'released',
-      settles: true
+      expectedProcessAction: 'closed_exited_terminal',
+      settles: true,
+      expectedCloseAttempts: 1,
+      marksUnknown: false
     },
     {
       processLiveness: 'live' as const,
       postCloseProcessLiveness: 'live' as const,
+      incarnationChangesDuringLiveness: false,
       incarnationChangesOnClose: false,
       closeError: null,
+      closeRefusedReason: null,
       expectedState: 'release_unknown',
-      settles: false
+      expectedProcessAction: 'closed_agent_terminal',
+      settles: false,
+      expectedCloseAttempts: 1,
+      marksUnknown: true
     },
     {
       processLiveness: 'unverifiable' as const,
       postCloseProcessLiveness: 'unverifiable' as const,
+      incarnationChangesDuringLiveness: false,
       incarnationChangesOnClose: false,
       closeError: null,
+      closeRefusedReason: null,
       expectedState: 'release_unknown',
-      settles: false
+      expectedProcessAction: 'closed_agent_terminal',
+      settles: false,
+      expectedCloseAttempts: 1,
+      marksUnknown: true
     },
     {
       processLiveness: 'exited' as const,
       postCloseProcessLiveness: 'exited' as const,
+      incarnationChangesDuringLiveness: false,
       incarnationChangesOnClose: true,
       closeError: null,
-      expectedState: 'release_unknown',
-      settles: false
+      closeRefusedReason: null,
+      expectedState: 'retained',
+      expectedProcessAction: 'none',
+      settles: false,
+      expectedCloseAttempts: 1,
+      marksUnknown: false
     },
     {
       processLiveness: 'exited' as const,
       postCloseProcessLiveness: 'exited' as const,
+      incarnationChangesDuringLiveness: true,
+      incarnationChangesOnClose: false,
+      closeError: null,
+      closeRefusedReason: null,
+      expectedState: 'retained',
+      expectedProcessAction: 'none',
+      settles: false,
+      expectedCloseAttempts: 0,
+      marksUnknown: false
+    },
+    {
+      processLiveness: 'exited' as const,
+      postCloseProcessLiveness: 'exited' as const,
+      incarnationChangesDuringLiveness: false,
       incarnationChangesOnClose: false,
       closeError: 'tab_not_found',
+      closeRefusedReason: null,
       expectedState: 'released',
-      settles: true
+      expectedProcessAction: 'none',
+      settles: true,
+      expectedCloseAttempts: 1,
+      marksUnknown: false
     },
     {
       processLiveness: 'exited' as const,
       postCloseProcessLiveness: 'live' as const,
+      incarnationChangesDuringLiveness: false,
       incarnationChangesOnClose: false,
       closeError: 'tab_not_found',
+      closeRefusedReason: null,
       expectedState: 'release_unknown',
-      settles: false
+      expectedProcessAction: 'none',
+      settles: false,
+      expectedCloseAttempts: 1,
+      marksUnknown: true
+    },
+    {
+      processLiveness: 'exited' as const,
+      postCloseProcessLiveness: 'exited' as const,
+      incarnationChangesDuringLiveness: false,
+      incarnationChangesOnClose: false,
+      closeError: null,
+      closeRefusedReason: 'incarnation_replaced' as const,
+      expectedState: 'retained',
+      expectedProcessAction: 'none',
+      settles: false,
+      expectedCloseAttempts: 1,
+      marksUnknown: false
+    },
+    {
+      processLiveness: 'exited' as const,
+      postCloseProcessLiveness: 'exited' as const,
+      incarnationChangesDuringLiveness: false,
+      incarnationChangesOnClose: true,
+      closeError: null,
+      closeRefusedReason: null,
+      closePtyKilled: true,
+      expectedState: 'retained',
+      expectedProcessAction: 'none',
+      settles: false,
+      expectedCloseAttempts: 1,
+      marksUnknown: false
     }
   ])(
-    'settles only when the exact process is $processLiveness before an unconfirmed close',
+    'handles process=$processLiveness postClose=$postCloseProcessLiveness close=$closeError refusal=$closeRefusedReason killed=$closePtyKilled changeDuringCheck=$incarnationChangesDuringLiveness changeOnClose=$incarnationChangesOnClose',
     async ({
       processLiveness,
       postCloseProcessLiveness,
+      incarnationChangesDuringLiveness,
       incarnationChangesOnClose,
       closeError,
+      closeRefusedReason,
+      closePtyKilled = false,
       expectedState,
-      settles
+      expectedProcessAction,
+      settles,
+      expectedCloseAttempts,
+      marksUnknown
     }) => {
       const resource = {
         id: 'resource-1',
@@ -75,18 +151,21 @@ describe('orchestration worker release after its tab was already closed', () => 
         release_state: 'requested'
       } as WorkerTerminalResourceRow
       let closeAttempted = false
+      let processLivenessChecked = false
       const runtime = {
         showTerminal: vi.fn(async () => ({ handle: 'term_worker', connected: false })),
         getTerminalPaneKey: vi.fn(() => 'tab-worker:leaf-worker'),
         getTerminalProcessIncarnation: vi.fn(() =>
-          closeAttempted && incarnationChangesOnClose
+          (processLivenessChecked && incarnationChangesDuringLiveness) ||
+          (closeAttempted && incarnationChangesOnClose)
             ? 'pty-worker:incarnation-2'
             : 'pty-worker:incarnation-1'
         ),
         getTerminalLivenessVerdict: vi.fn(() => ({ status: 'exited' as const })),
-        inspectTerminalProcessIncarnationLiveness: vi.fn(async () =>
-          closeAttempted ? postCloseProcessLiveness : processLiveness
-        ),
+        inspectTerminalProcessIncarnationLiveness: vi.fn(async () => {
+          processLivenessChecked = true
+          return closeAttempted ? postCloseProcessLiveness : processLiveness
+        }),
         getOrchestrationDispatchAuthority: vi.fn(() => null),
         closeTerminal: vi.fn(async () => {
           closeAttempted = true
@@ -96,7 +175,8 @@ describe('orchestration worker release after its tab was already closed', () => 
           return {
             handle: 'term_worker',
             tabId: 'tab-worker',
-            ptyKilled: false
+            ptyKilled: closePtyKilled,
+            ...(closeRefusedReason ? { closeRefusedReason } : {})
           }
         }),
         notifyMessageArrived: vi.fn()
@@ -146,6 +226,7 @@ describe('orchestration worker release after its tab was already closed', () => 
         })
       ).resolves.toMatchObject({
         state: expectedState,
+        processAction: expectedProcessAction,
         archive: { source: 'terminal', status: 'captured' }
       })
       expect(runtime.inspectTerminalProcessIncarnationLiveness).toHaveBeenCalledWith(
@@ -155,12 +236,18 @@ describe('orchestration worker release after its tab was already closed', () => 
       expect(runtime.inspectTerminalProcessIncarnationLiveness).toHaveBeenCalledTimes(
         closeError ? 2 : 1
       )
+      expect(runtime.closeTerminal).toHaveBeenCalledTimes(expectedCloseAttempts)
+      if (expectedCloseAttempts > 0) {
+        expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker', {
+          expectedProcessIncarnation: 'pty-worker:incarnation-1'
+        })
+      }
       if (settles) {
         expect(settleWorkerTerminalRelease).toHaveBeenCalledWith('resource-1')
         expect(markWorkerTerminalReleaseUnknown).not.toHaveBeenCalled()
       } else {
         expect(settleWorkerTerminalRelease).not.toHaveBeenCalled()
-        expect(markWorkerTerminalReleaseUnknown).toHaveBeenCalledTimes(1)
+        expect(markWorkerTerminalReleaseUnknown).toHaveBeenCalledTimes(marksUnknown ? 1 : 0)
       }
     }
   )

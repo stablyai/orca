@@ -25,8 +25,10 @@ describe('orchestration worker release', () => {
 
   const coordinatorPaneKey = 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const workerPaneKey = 'tab_worker:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
+  const closeOptions = { expectedProcessIncarnation: 'runtime_test:term_worker:1' }
 
   function setup(): void {
+    let closeAttempted = false
     db = new OrchestrationDb(':memory:')
     dbOpen = true
     runtime = new OrcaRuntimeService()
@@ -48,7 +50,7 @@ describe('orchestration worker release', () => {
       handle === 'term_worker' || handle === 'term_reminted' ? 'runtime_test:term_worker:1' : null
     )
     vi.spyOn(runtime, 'getOrchestrationDispatchAuthority').mockImplementation((handle) =>
-      handle === 'term_worker' || handle === 'term_reminted'
+      !closeAttempted && (handle === 'term_worker' || handle === 'term_reminted')
         ? ({
             terminalHandle: handle,
             paneKey: workerPaneKey,
@@ -91,11 +93,10 @@ describe('orchestration worker release', () => {
       truncated: false,
       nextCursor: '2'
     })
-    vi.spyOn(runtime, 'closeTerminal').mockResolvedValue({
-      handle: 'term_worker',
-      tabId: 'tab-worker',
-      ptyKilled: true
-    } as never)
+    vi.spyOn(runtime, 'closeTerminal').mockImplementation(async (handle) => {
+      closeAttempted = true
+      return { handle, tabId: 'tab-worker', ptyKilled: true }
+    })
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     activeRunId = db.createRun({
       objective: 'Release test Run',
@@ -188,8 +189,7 @@ describe('orchestration worker release', () => {
       processAction: 'closed_agent_terminal',
       archive: { source: 'terminal', status: 'captured' }
     })
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
-    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker')
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_worker', closeOptions)
     const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
     expect(resource?.release_state).toBe('released')
     expect(resource?.ownership_state).toBe('released')
@@ -725,8 +725,7 @@ describe('orchestration worker release', () => {
       dispatch: second.dispatchId
     })) as { state: string }
     expect(newRelease.state).toBe('released')
-    expect(runtime.closeTerminal).toHaveBeenCalledTimes(1)
-    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_reminted')
+    expect(runtime.closeTerminal).toHaveBeenCalledWith('term_reminted', closeOptions)
   })
 
   it('reconciles dead transferred ownership after the current owner settles', async () => {
