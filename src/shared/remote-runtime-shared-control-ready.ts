@@ -1,4 +1,5 @@
 import WebSocket from 'ws'
+import { abortSignalReason } from './abort-signal-reason'
 import { RemoteRuntimeClientError } from './remote-runtime-client-error'
 import { REMOTE_RUNTIME_MAX_READY_WAITERS } from './remote-runtime-memory-limits'
 import { remoteRuntimeUnavailableError } from './remote-runtime-request-frames'
@@ -19,7 +20,11 @@ export function waitForSharedControlReadyWithTimeout(args: {
   readyWaiters: SharedControlReadyWaiter[]
   timeoutMs: number
   open: () => void
+  signal?: AbortSignal
 }): Promise<void> {
+  if (args.signal?.aborted) {
+    return Promise.reject(abortSignalReason(args.signal))
+  }
   if (args.readyWaiters.length >= REMOTE_RUNTIME_MAX_READY_WAITERS) {
     return Promise.reject(
       new RemoteRuntimeClientError(
@@ -40,8 +45,21 @@ export function waitForSharedControlReadyWithTimeout(args: {
       if (index !== -1) {
         args.readyWaiters.splice(index, 1)
       }
+      args.signal?.removeEventListener('abort', onAbort)
       reject(remoteRuntimeUnavailableError())
     }, args.timeoutMs)
+    const onAbort = (): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      clearTimeout(timeout)
+      const index = args.readyWaiters.indexOf(waiter)
+      if (index !== -1) {
+        args.readyWaiters.splice(index, 1)
+      }
+      reject(abortSignalReason(args.signal!))
+    }
     waiter = {
       resolve: () => {
         if (settled) {
@@ -49,6 +67,7 @@ export function waitForSharedControlReadyWithTimeout(args: {
         }
         settled = true
         clearTimeout(timeout)
+        args.signal?.removeEventListener('abort', onAbort)
         resolve()
       },
       reject: (error) => {
@@ -57,10 +76,16 @@ export function waitForSharedControlReadyWithTimeout(args: {
         }
         settled = true
         clearTimeout(timeout)
+        args.signal?.removeEventListener('abort', onAbort)
         reject(error)
       }
     }
     args.readyWaiters.push(waiter)
+    args.signal?.addEventListener('abort', onAbort, { once: true })
+    if (args.signal?.aborted) {
+      onAbort()
+      return
+    }
     try {
       args.open()
     } catch (error) {

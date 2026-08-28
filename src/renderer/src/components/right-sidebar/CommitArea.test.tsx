@@ -13,9 +13,10 @@ import {
   resolveCommitAreaPrimaryAction,
   type PrimaryActionInputs
 } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from './source-control-dropdown-item-types'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { deriveSourceControlPushRecovery } from './source-control-push-recovery'
+import { deriveSourceControlPushRecovery } from './source-control/sync/push-recovery'
 
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,

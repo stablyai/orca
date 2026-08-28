@@ -16,6 +16,11 @@ import {
 import { reconcileCatalogRows } from './repo-identity-reconcile'
 import { createRuntimeStatusHydration } from './runtime-status-hydration'
 import { refreshRuntimeEnvironmentStatus } from './runtime-status-refresh'
+import { replayClientHostedBrowserCloseIntents } from '@/runtime/client-hosted-browser-close-intent-replay'
+import {
+  ensureBrowserClientHostForRestartedRuntime,
+  ensureBrowserClientHostsForRestoredPages
+} from '@/runtime/restored-client-hosted-browser-host-attach'
 
 /** Live status for one saved runtime environment, as last observed by the
  * renderer. `status === null` records a probe that failed or timed out so the
@@ -27,6 +32,16 @@ export type RuntimeEnvironmentStatus = {
    * is dropped rather than rewritten, so this is not a probe-freshness clock. */
   checkedAt: number
   connectionGeneration?: number
+}
+
+export type RuntimeStatusRefreshOptions = {
+  /** Whether a failed probe is published as `null`. True (default) for a user-initiated check:
+   * the user asked and we could not reach the host. False for a caller that just watched the
+   * control transport prove the host alive — `status.get` dials its own short-lived socket with
+   * a fresh handshake, so it can fail while that transport stays healthy, and per
+   * `docs/reference/ssh-execution-boundary.md` such a failure is `unverifiable`, never `exited`.
+   * Publishing it over a live cached verdict manufactures a stuck-offline sidebar. */
+  publishUnreachable?: boolean
 }
 
 export type RuntimeStatusSlice = {
@@ -63,8 +78,14 @@ export type RuntimeStatusSlice = {
   clearRuntimeEnvironmentStatus: (environmentId: string) => void
   /** Drops every entry whose id is not in the saved-environments set. */
   retainRuntimeEnvironmentStatuses: (environmentIds: Iterable<string>) => void
-  /** Probes one saved runtime and records the latest reachable/unreachable state. */
-  refreshRuntimeEnvironmentStatus: (environmentId: string, timeoutMs?: number) => Promise<boolean>
+  /** Probes one saved runtime and records the latest reachable/unreachable state.
+   * `publishUnreachable: false` records nothing when the probe fails, for callers that
+   * already hold live evidence the host is up (see the option's doc below). */
+  refreshRuntimeEnvironmentStatus: (
+    environmentId: string,
+    timeoutMs?: number,
+    options?: RuntimeStatusRefreshOptions
+  ) => Promise<boolean>
   /** Best-effort: list saved environments and probe each so the sidebar shows
    * live health at boot, before the settings pane is ever opened. */
   hydrateRuntimeEnvironmentStatuses: () => Promise<void>
@@ -78,6 +99,13 @@ export function getRuntimeEnvironmentConnectionGeneration(environmentId: string)
 
 export const clearRuntimeEnvironmentConnectionGenerationsForTests = (): void =>
   connectionGenerationByEnvironment.clear()
+
+export const setRuntimeEnvironmentConnectionGenerationForTests = (
+  environmentId: string,
+  generation: number
+): void => {
+  connectionGenerationByEnvironment.set(environmentId, generation)
+}
 
 function advanceRuntimeEnvironmentConnectionGeneration(environmentId: string): number {
   const next = getRuntimeEnvironmentConnectionGeneration(environmentId) + 1
@@ -200,6 +228,13 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
   setRuntimeEnvironmentStatus: (environmentId, status, options) => {
     const previous = get().runtimeStatusByEnvironmentId.get(environmentId)
     const pairedDeviceId = status.status?.pairedDeviceId?.trim()
+    // A new runtime id under a known previous one is a restart, not a first connect: the guests are
+    // still ours to host, but only a fresh attach hands them back to the replacement runtime.
+    const runtimeRestarted = Boolean(
+      status.status !== null &&
+      previous?.status != null &&
+      previous.status.runtimeId !== status.status.runtimeId
+    )
     // Why: a non-null status proves the runtime just answered, so drop any stale
     // "offline" compat failure before this online transition fires the
     // reuse-flagged background refetches — a recovered host must re-probe.
@@ -248,6 +283,9 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         ...(environmentsChanged ? { runtimeEnvironments } : {})
       }
     })
+    if (runtimeRestarted) {
+      void ensureBrowserClientHostForRestartedRuntime(get(), environmentId)
+    }
     if (options?.suppressDisconnectToast) {
       dismissRuntimeDisconnectedToast(environmentId)
     } else if (previous?.status === null && status.status !== null) {
@@ -290,11 +328,24 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
     })
   },
 
-  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000) =>
+  refreshRuntimeEnvironmentStatus: (environmentId, timeoutMs = 10_000, options) =>
     refreshRuntimeEnvironmentStatus(environmentId, timeoutMs, (status) => {
+      if (status === null && options?.publishUnreachable === false) {
+        // Unverifiable, not exited: leave the cached verdict for the caller's retry to settle.
+        return
+      }
       // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null
       // (reachable) status, so a recovered host's reuse-flagged refetches re-probe.
       get().setRuntimeEnvironmentStatus(environmentId, { status, checkedAt: Date.now() })
+      if (status) {
+        // Why here: hydration can ask before the environment is reachable, and a restored
+        // client-hosted page only comes back once this desktop attaches as its host.
+        void ensureBrowserClientHostsForRestoredPages(get())
+        // Why alongside: the same restart that hands those rows back also restores rows the user
+        // already closed while this environment was down, so the closes it never heard have to be
+        // replayed before its persisted records can put them on screen again.
+        void replayClientHostedBrowserCloseIntents(environmentId, get())
+      }
     }),
 
   hydrateRuntimeEnvironmentStatuses: createRuntimeStatusHydration({

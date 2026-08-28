@@ -4,8 +4,11 @@ import { describe, expect, it } from 'vitest'
 const mobilePageCss = fs.readFileSync(new URL('./mobile-page.css', import.meta.url), 'utf8')
 
 describe('mobile page QR grid layout (#9700)', () => {
-  it('defines a shared large-QR size token used by the box and grid tracks', () => {
+  it('defines separate install and adaptive pairing QR tracks', () => {
     expect(mobilePageCss).toMatch(/--mp-qr-large-size:\s*184px/)
+    expect(mobilePageCss).toMatch(
+      /--mp-pairing-qr-frame-size:\s*calc\(var\(--mp-pairing-qr-image-size\) \+ 20px\)/
+    )
     expect(mobilePageCss).toMatch(
       /\.mobile-page-root \.mp-qr-large\s*{[^}]*width:\s*var\(--mp-qr-large-size\)/s
     )
@@ -18,7 +21,7 @@ describe('mobile page QR grid layout (#9700)', () => {
       /\.mobile-page-root \.mp-step2-layout\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--mp-qr-large-size\)/s
     )
     expect(mobilePageCss).toMatch(
-      /\.mobile-page-root \.mp-pairing-layout\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--mp-qr-large-size\)/s
+      /\.mobile-page-root \.mp-pairing-layout\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+var\(--mp-pairing-qr-frame-size\)/s
     )
     expect(mobilePageCss).not.toMatch(
       /\.mobile-page-root \.mp-(?:step2|pairing)-layout\s*{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)\s+auto/s

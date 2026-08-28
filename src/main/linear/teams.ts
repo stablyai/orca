@@ -7,7 +7,9 @@ import type {
   LinearWorkspaceError,
   LinearWorkspaceSelection
 } from '../../shared/linear/workspace-types'
-import { acquire, release, getClients, isAuthError, clearToken } from './client'
+import { acquire, release } from './linear-request-concurrency'
+import { clearToken } from './linear-token-store'
+import { getClients, isAuthError } from './client'
 import {
   fetchAllTeamLabels,
   fetchAllTeamMembers,

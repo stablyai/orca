@@ -6,10 +6,8 @@ import {
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import {
-  getProjectHeaderRevealTarget,
-  type ProjectGroupingModel
-} from '../sidebar/worktree-list-groups'
+import { getProjectHeaderRevealTarget } from '../sidebar/worktree-list/grouping/project-grouping'
+import type { ProjectGroupingModel } from '../sidebar/worktree-list/grouping/project-grouping'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 import { buildPaletteFilterOptionSearchText } from './palette-filter-option-list'
 

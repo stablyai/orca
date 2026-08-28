@@ -228,8 +228,16 @@ export type GlobalSettings = {
   artifactsEnabled?: boolean
   /** Capability gate for agent-driven publishing; off until granted, enforced in main, not just the UI. */
   artifactSharingEnabled?: boolean
+  /** Capability gate for agent/CLI skill publishing; manual reviewed publishing remains available. */
+  agentSkillSharingEnabled?: boolean
+  /** How deep dispatched workers may nest. 1 = workers cannot dispatch sub-workers.
+   *  Renderer-writable only: omitted from the SettingsUpdate RPC schema so a worker
+   *  cannot raise its own cap via `orca settings update`. */
+  nestedWorkerMaxDepth?: number
   /** Only toggles the sidebar shortcut; Artifacts stay reachable from Settings. */
   showArtifactsButton?: boolean
+  /** Only toggles the sidebar shortcut; Skills stay reachable from Settings. */
+  showSkillsButton?: boolean
   /** Only toggles the sidebar shortcut; Orca Mobile stays reachable from Settings. */
   showMobileButton?: boolean
   /** Pinned workspaces show in one sidebar location by default; opt in to also show them in their natural groups. */
@@ -240,6 +248,14 @@ export type GlobalSettings = {
   terminalShortcutPolicy?: TerminalShortcutPolicy
   /** Floating Workspace: global surface for terminal/browser/markdown tabs outside repo/worktree context. */
   floatingTerminalEnabled: boolean
+  /** Main-side new-page kill switch for paired Electron client-hosted browser placement. */
+  browserClientHostedRemoteEnabled?: boolean
+  /** Routes SSH-workspace browser pages through the workspace's SSH host; off = plain local browsing. */
+  browserSshWorkspaceRoutingEnabled?: boolean
+  /** Per-target opt-outs recorded from the routing error card's "Browse from this device instead". */
+  browserSshWorkspaceRoutingDisabledTargetIds?: string[]
+  /** Targets whose forwarding preflight the user overrode via "Try anyway" (e.g. PermitOpen allows their sites); skips the probe, never changes egress. */
+  browserSshWorkspaceRoutingProbeSkippedTargetIds?: string[]
   /** One-shot migration flag for the floating-workspace default-on rollout; after migration an explicit off sticks. */
   floatingTerminalDefaultedForAllUsers?: boolean
   /** Start dir for new floating-workspace terminal tabs; empty or '~' = home dir. */
@@ -270,7 +286,8 @@ export type GlobalSettings = {
   claudeManagedAccounts: ClaudeManagedAccount[]
   activeClaudeManagedAccountId: string | null
   activeClaudeManagedAccountIdsByRuntime?: ClaudeManagedAccountRuntimeSelection
-  /** Per-worktree shell history file so ArrowUp doesn't surface other worktrees' commands. Defaults to true. */
+  /** Per-worktree shell history so ArrowUp doesn't surface other worktrees' commands (a HISTFILE for
+   *  bash/zsh, a `fish_history` session name for fish). Defaults to true. */
   terminalScopeHistoryByWorktree: boolean
   /** Kill switch for hidden terminal view parking: unmount long-hidden panes while a pane-less watcher keeps PTY side effects alive. */
   terminalHiddenViewParking?: boolean

@@ -59,7 +59,10 @@ vi.mock('@/lib/browser-uuid', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn(() => false),
+  activateAndRevealWorktree: vi.fn(() => false)
+}))
+
+vi.mock('@/lib/worktree-initial-terminal-seeding', () => ({
   ensureWorktreeHasInitialTerminal: vi.fn()
 }))
 
@@ -82,10 +85,8 @@ vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({
 }))
 
 import { toast } from 'sonner'
-import {
-  activateAndRevealWorktree,
-  ensureWorktreeHasInitialTerminal
-} from '@/lib/worktree-activation'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import {
   beginBackgroundWorktreePreparation,

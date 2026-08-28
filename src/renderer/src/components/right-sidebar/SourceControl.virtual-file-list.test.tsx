@@ -10,7 +10,7 @@ import {
   SOURCE_CONTROL_FILE_ROW_HEIGHT_PX,
   SOURCE_CONTROL_FILE_ROW_OVERSCAN,
   SOURCE_CONTROL_VIRTUALIZE_MIN_ROWS
-} from './source-control-virtual-file-list'
+} from './source-control/listing/virtual-file-list'
 
 const mocks = vi.hoisted(() => {
   const activeRepo = {

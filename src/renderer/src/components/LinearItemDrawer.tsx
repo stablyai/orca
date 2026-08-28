@@ -36,11 +36,9 @@ import {
   getCommentBodySubmitState,
   hasBoundedCommentBodyText
 } from '@/lib/comment-body-submit-state'
-import {
-  findLinearIssueWorkspaceAttachment,
-  getLinearIssueWorkspaceAttachmentLabel
-} from '@/lib/linear-issue-workspace-attachment'
+import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
 import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-open'
+import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { useAppStore } from '@/store'
 import { useAllWorktrees } from '@/store/selectors'
@@ -64,7 +62,7 @@ import {
   linearGetIssue,
   linearIssueComments,
   linearUpdateIssue
-} from '@/runtime/runtime-linear-client'
+} from '@/runtime/runtime-linear-issue-mutations'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 
@@ -1384,7 +1382,7 @@ export default function LinearItemDrawer({
     [attachmentWorkspaces, displayed]
   )
   const attachedWorkspaceLabel = attachedWorkspace
-    ? getLinearIssueWorkspaceAttachmentLabel(attachedWorkspace)
+    ? getWorktreeAttachmentLabel(attachedWorkspace)
     : null
 
   const handleOpenOrUseIssue = useCallback((): void => {

@@ -1,9 +1,13 @@
-import { connectionLogStore } from './connection-log-buffer'
+import {
+  connectionLogStore,
+  recordConnectionClientSessionStart
+} from './persisted-connection-log-store'
 import { loadHosts } from './host-store'
 import { openHostLogicalClient } from './host-logical-client'
 import type { HostClientOpenRegistry } from './host-client-open-registry'
 import type { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import type { RpcClient } from './rpc-client'
+import type { StableLogicalRpcClient } from './stable-logical-rpc-client'
 import type { ConnectionState, HostProfile } from './types'
 
 export type HostClientStoreEntry = {
@@ -11,6 +15,7 @@ export type HostClientStoreEntry = {
   state: ConnectionState
   refCount: number
   unsubState: () => void
+  unsubConnectionPath: () => void
 }
 
 type HostEntryOpenerState = {
@@ -63,6 +68,7 @@ export async function openHostClientEntry(
       id: `host-open-${ticket.generation}-${Date.now()}`,
       ts: Date.now(),
       level: 'error',
+      code: 'host-open-failed',
       message: 'Host client open failed',
       detail: `${category}; retry ${retry.nextDelayMs}ms (failure ${retry.failureCount})`
     })
@@ -96,6 +102,7 @@ export async function openHostClientEntry(
 
     let client: RpcClient
     try {
+      recordConnectionClientSessionStart(hostId)
       client = openHostLogicalClient(host, (entry) => connectionLogStore.append(hostId, entry))
     } catch {
       failCurrentOpen('client-construction')
@@ -113,11 +120,20 @@ export async function openHostClientEntry(
       current.state = next
       state.notifyHostState(hostId, next)
     })
+    const logical = client as Partial<StableLogicalRpcClient>
+    const unsubConnectionPath =
+      logical.onConnectionPathChange?.(() => {
+        const current = state.store.get(hostId)
+        if (current) {
+          state.notifyHostState(hostId, current.state)
+        }
+      }) ?? (() => {})
     const entry: HostClientStoreEntry = {
       client,
       state: client.getState(),
       refCount: state.pendingAcquisitions.get(hostId) ?? 0,
-      unsubState
+      unsubState,
+      unsubConnectionPath
     }
     state.pendingAcquisitions.delete(hostId)
     state.store.set(hostId, entry)

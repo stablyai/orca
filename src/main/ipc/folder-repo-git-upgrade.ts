@@ -11,8 +11,8 @@ import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-p
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { getGitRepoRoot, isGitRepo } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
-import { invalidateAuthorizedRootsCache } from './filesystem-auth'
-import { notifyReposChanged } from './repos'
+import { invalidateAuthorizedRootsCache } from './registered-worktree-roots-cache'
+import { notifyReposChanged } from './repos/repos-changed-notification'
 import { notifyWorktreesChanged } from './worktree-remote'
 import { setFolderRepoGitUpgradeWakeListener } from './folder-repo-git-upgrade-wake'
 import {

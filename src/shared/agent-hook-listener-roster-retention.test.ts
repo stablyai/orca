@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   createHookListenerState,
-  normalizeHookPayload,
   type HookListenerState
-} from './agent-hook-listener'
+} from './agent-hook-listener/listener-state'
+import { normalizeHookPayload } from './agent-hook-listener'
 import { MAX_AGENT_HOOK_STATUS_CACHE_PANES } from './agent-hook-status-cache'
 import { makePaneKey } from './stable-pane-id'
 

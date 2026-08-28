@@ -14,7 +14,9 @@ import {
   dismissTccPromptNotice,
   releasePendingTccPromptNotice
 } from '../macos-tcc-prompt-notice'
-import { registerRepoHandlers, setRepoRemoteClientNotifier } from '../ipc/repos'
+import { registerRepoHandlers } from '../ipc/repos'
+import { setRepoRemoteClientNotifier } from '../ipc/repos/repos-changed-notification'
+import { setWorktreeCatalogRemoteClientNotifier } from '../ipc/watched-worktree-catalog-notification'
 import { registerWorktreeHandlers } from '../ipc/worktrees'
 import { registerWorkspaceCleanupHandlers } from '../ipc/workspace-cleanup'
 import {
@@ -56,6 +58,7 @@ import type { RuntimeMobileSessionTabMove } from '../../shared/runtime-types'
 import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import { isNativeFileDropPayload, type NativeFileDropPayload } from '../../shared/native-file-drop'
 import { requestMobileMarkdownFromRenderer } from './mobile-markdown-request-relay'
+import { requestSessionTabCloseFromRenderer } from './session-tab-close-request-relay'
 import { requestTerminalTabCloseFromRenderer } from './terminal-tab-close-request-relay'
 import type { ClaudeAccountSelectionTarget } from '../claude-accounts/runtime-selection'
 import { runWorktreeChangeInvalidators } from '../ipc/worktree-change-invalidators'
@@ -110,6 +113,7 @@ export function attachMainWindowServices(
   registerRepoHandlers(mainWindow, store)
   // Why: repo IPC mutations must also invalidate paired clients' catalogs (#11994).
   setRepoRemoteClientNotifier(runtime)
+  setWorktreeCatalogRemoteClientNotifier(runtime)
   registerWorktreeHandlers(mainWindow, store, runtime, {
     onWorktreeLifecycle: options?.onWorktreeLifecycle
   })
@@ -340,6 +344,7 @@ function registerRuntimeWindowLifecycle(
     worktreeBaseStatus: (event) => send('worktree:baseStatus', event),
     worktreeRemoteBranchConflict: (event) => send('worktree:remoteBranchConflict', event),
     reposChanged: () => send('repos:changed'),
+    automationsChanged: (payload) => send('automations:changed', payload),
     activateWorktree: (
       repoId,
       worktreeId,
@@ -457,7 +462,8 @@ function registerRuntimeWindowLifecycle(
     focusTerminal: (tabId, worktreeId, leafId) =>
       send('ui:focusTerminal', { tabId, worktreeId, leafId }),
     focusEditorTab: (tabId, worktreeId) => send('ui:focusEditorTab', { tabId, worktreeId }),
-    closeSessionTab: (tabId, worktreeId) => send('ui:closeSessionTab', { tabId, worktreeId }),
+    closeSessionTab: (tabId, worktreeId) =>
+      requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
     openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?) =>
@@ -490,7 +496,8 @@ function registerRuntimeWindowLifecycle(
         content
       }) as Promise<RuntimeMarkdownSaveTabResult>,
     closeTerminal: (tabId, paneRuntimeId) => send('ui:closeTerminal', { tabId, paneRuntimeId }),
-    closeTerminalTab: (tabId) => requestTerminalTabCloseFromRenderer(mainWindow, tabId),
+    closeTerminalTab: (tabId, options) =>
+      requestTerminalTabCloseFromRenderer(mainWindow, tabId, options),
     sleepWorktree: (worktreeId) => send('ui:sleepWorktree', { worktreeId }),
     resumeSleepingAgents: (worktreeId) => send('ui:resumeSleepingAgents', { worktreeId }),
     terminalFitOverrideChanged: (ptyId, mode, cols, rows) =>
@@ -500,7 +507,10 @@ function registerRuntimeWindowLifecycle(
     nativeChatLaunchDraftResolved: (tabId, resolution) =>
       send('runtime:nativeChatLaunchDraftResolved', { tabId, ...resolution }),
     browserDriverChanged: (browserPageId, driver) =>
-      send('runtime:browserDriverChanged', { browserPageId, driver })
+      send('runtime:browserDriverChanged', { browserPageId, driver }),
+    browserRemoteViewersChanged: (browserPageId, hasRemoteViewers) =>
+      send('runtime:browserRemoteViewersChanged', { browserPageId, hasRemoteViewers }),
+    clientHostedBrowserRowsChanged: (event) => send('runtime:clientHostedBrowserRowsChanged', event)
   })
   registerRendererDocumentNavigation(mainWebContents, () => {
     rendererNotifications.onMainFrameReloadStarted()

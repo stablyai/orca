@@ -4,17 +4,29 @@ import {
   type RetiredNameRegistry
 } from '../../shared/worktree/retired-name-registry'
 import { getRemoteRetirementNamespaceKey } from '../worktree-name-retirement'
+import { retirementNamespaceKeysToRead } from '../worktree-retirement-namespace'
 import type { TransferProfileState } from './profile-project-state-file'
 
 export function extractRetiredNameRegistriesByNamespace(
   sourceState: TransferProfileState,
   sourceRepo: Repo
 ): Record<string, RetiredNameRegistry> {
-  const namespaceKey = getRemoteRetirementNamespaceKey(sourceRepo, sourceState.settings)
-  const registry = namespaceKey
-    ? sourceState.retiredWorktreeNamesByNamespace?.[namespaceKey]
-    : undefined
-  return namespaceKey && registry ? { [namespaceKey]: registry } : {}
+  const lookup = (targetId: string) =>
+    sourceState.sshTargets.find((target) => target.id === targetId)
+  const namespaceKey = getRemoteRetirementNamespaceKey(sourceRepo, sourceState.settings, lookup)
+  if (!namespaceKey) {
+    return {}
+  }
+  // Pre-identity keys travel too, folded onto the canonical one so the target profile holds a
+  // single up-to-date entry.
+  let merged: RetiredNameRegistry | null = null
+  for (const key of retirementNamespaceKeysToRead(sourceRepo, namespaceKey, lookup)) {
+    const registry = sourceState.retiredWorktreeNamesByNamespace?.[key]
+    if (registry) {
+      merged = merged ? mergeRetiredNameRegistries(merged, registry) : registry
+    }
+  }
+  return merged ? { [namespaceKey]: merged } : {}
 }
 
 export function mergeRetiredNameRegistryMaps(

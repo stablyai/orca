@@ -22,7 +22,10 @@ import {
   resolveFloatingTerminalCwd
 } from './floating-workspace-directory'
 import { isMarkdownDocumentName, markdownDocumentFromFilePath } from './markdown-documents'
+import { registerMacSymbolicHotkeysProbeHandler } from './macos-symbolic-hotkeys-probe'
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
+import { readMacKeyboardLayoutSnapshot } from './macos-keyboard-layout-snapshot'
+import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-layout-change-notifications'
 
 const KEYBOARD_INPUT_SOURCE_TIMEOUT_MS = 500
 const MAC_HITOOLBOX_DOMAIN = 'com.apple.HIToolbox'
@@ -243,6 +246,7 @@ async function readKeyboardInputSourceId(): Promise<string | null> {
 
 export function registerAppHandlers(store: Store, options: RegisterAppHandlersOptions = {}): void {
   registerRendererShutdownCheckpointHandler(store)
+  registerMacKeyboardLayoutChangeNotifications()
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
 
@@ -282,6 +286,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     }
   })
 
+  ipcMain.handle('app:getKeyboardLayoutSnapshot', () => readMacKeyboardLayoutSnapshot())
+
   ipcMain.handle('app:relaunch', async () => {
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
@@ -301,6 +307,8 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
       app.quit()
     }, 150)
   })
+
+  registerMacSymbolicHotkeysProbeHandler(readCommandStdout)
 
   ipcMain.handle('app:setUnreadDockBadgeCount', (_event, count: number) => {
     setUnreadDockBadgeCount(Number.isFinite(count) ? count : 0)

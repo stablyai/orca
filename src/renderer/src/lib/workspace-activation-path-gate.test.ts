@@ -135,12 +135,15 @@ describe('Cmd/Ctrl+1-9 folder-workspace path gate (#10716)', () => {
   // Why: the guard only helps if the IPC handler actually calls it. Pin the source
   // so re-pointing the handler back at the unguarded activateAndRevealWorktree fails.
   it('wires onJumpToWorktreeIndex to the guarded workspace activator', async () => {
-    const source = await readFile(new URL('../hooks/useIpcEvents.ts', import.meta.url), 'utf8')
+    const source = await readFile(
+      new URL('../hooks/ipc-events/workspace-shortcut-ipc-bridge.ts', import.meta.url),
+      'utf8'
+    )
     const handler = source.slice(
       source.indexOf('onJumpToWorktreeIndex('),
       source.indexOf('onJumpToTabIndex(')
     )
-    expect(handler).toContain('activateAndRevealWorkspace(visibleIds[index])')
-    expect(handler).not.toContain('activateAndRevealWorktree(visibleIds[index])')
+    expect(handler).toContain('activateAndRevealWorkspace(target.id')
+    expect(handler).not.toContain('activateAndRevealWorktree(target.id')
   })
 })

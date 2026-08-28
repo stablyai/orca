@@ -8,6 +8,8 @@ export type WatcherProcessSubscribeOptions = {
   ignore?: string[]
   ignoreGlobs?: string[]
   backend?: string
+  mode?: 'recursive' | 'shallow'
+  include?: string[]
 }
 
 export type WatcherProcessDeliveryOptions = {

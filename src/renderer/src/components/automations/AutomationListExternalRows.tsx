@@ -23,6 +23,7 @@ import type {
 } from '../../../../shared/automations-types'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
+import type { ExternalAutomationScope } from './external-automation-scope-client'
 import {
   formatExternalDate,
   getExternalProviderLabel,
@@ -30,12 +31,13 @@ import {
 } from './external-automation-display'
 import { getExternalAutomationScheduleDisplay } from './external-automation-schedule-display'
 import { getExternalAutomationActionDisabledMessage } from './external-automation-source-availability'
+import { AUTOMATIONS_TABLE_GRID_CLASS } from './automations-table-layout'
 import {
-  AUTOMATIONS_TABLE_GRID_CLASS,
-  AUTOMATIONS_TABLE_ROW_CLASS,
-  AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
-} from './automations-table-layout'
-import { isPortaledRowMenuClick, isRowActivationKey } from './automation-list-row-interaction'
+  LIST_TABLE_ROW_CLASS,
+  LIST_TABLE_ROW_SELECTED_CLASS,
+  LIST_TABLE_STICKY_ROW_CELL_CLASS
+} from '@/lib/list-table-layout'
+import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { getExternalAutomationLastRunSnapshot } from './automation-list-last-run'
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
@@ -60,9 +62,14 @@ export function AutomationListExternalRows({
   onRequestAction: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    action: ExternalAutomationAction
+    action: ExternalAutomationAction,
+    scope: ExternalAutomationScope
   ) => void
-  onEdit: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
+  onEdit: (
+    manager: ExternalAutomationManager,
+    job: ExternalAutomationJob,
+    scope: ExternalAutomationScope
+  ) => void
 }): React.JSX.Element {
   return (
     <>
@@ -83,7 +90,8 @@ export function AutomationListExternalRows({
         })
         const actionDisabled = disabledMessage !== null
         const scheduleLabel = getExternalAutomationScheduleDisplay(entry.manager, entry.job).label
-        const projectLabel = `${providerLabel} / ${entry.manager.targetLabel}`
+        const hostLabel = entry.manager.targetLabel || entry.manager.label || 'Local'
+        const projectLabel = entry.job.workdir ?? providerLabel
         const nextRunLabel = entry.job.enabled
           ? formatExternalDate(entry.job.nextRunAt, relativeNow)
           : translate('auto.components.automations.AutomationsPage.paused', 'Paused')
@@ -113,16 +121,21 @@ export function AutomationListExternalRows({
                 }}
                 className={cn(
                   AUTOMATIONS_TABLE_GRID_CLASS,
-                  AUTOMATIONS_TABLE_ROW_CLASS,
-                  isSelected && AUTOMATIONS_TABLE_ROW_SELECTED_CLASS
+                  LIST_TABLE_ROW_CLASS,
+                  isSelected && LIST_TABLE_ROW_SELECTED_CLASS
                 )}
               >
-                <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
+                <span className={LIST_TABLE_STICKY_ROW_CELL_CLASS}>
+                  <span className="min-w-0 truncate font-medium">{entry.job.name}</span>
+                </span>
                 <span className="min-w-0 truncate text-muted-foreground" title={scheduleLabel}>
                   {scheduleLabel}
                 </span>
                 <span className="min-w-0 truncate text-muted-foreground" title={projectLabel}>
                   {projectLabel}
+                </span>
+                <span className="min-w-0 truncate text-muted-foreground" title={hostLabel}>
+                  {hostLabel}
                 </span>
                 <span className="min-w-0 truncate text-muted-foreground" title={nextRunLabel}>
                   {nextRunLabel}
@@ -151,7 +164,7 @@ export function AutomationListExternalRows({
                   <DropdownMenuContent align="end" className="w-48">
                     <DropdownMenuItem
                       disabled={actionDisabled}
-                      onSelect={() => onRequestAction(entry.manager, entry.job, 'run')}
+                      onSelect={() => onRequestAction(entry.manager, entry.job, 'run', entry.scope)}
                     >
                       <Play className="size-3.5" />
                       <span className="min-w-0 truncate">
@@ -165,7 +178,7 @@ export function AutomationListExternalRows({
                     {entry.manager.provider === 'hermes' ? (
                       <DropdownMenuItem
                         disabled={!entry.manager.canManage || externalActionKey !== null}
-                        onSelect={() => onEdit(entry.manager, entry.job)}
+                        onSelect={() => onEdit(entry.manager, entry.job, entry.scope)}
                       >
                         <Pencil className="size-3.5" />
                         {translate(
@@ -180,7 +193,8 @@ export function AutomationListExternalRows({
                         onRequestAction(
                           entry.manager,
                           entry.job,
-                          entry.job.enabled ? 'pause' : 'resume'
+                          entry.job.enabled ? 'pause' : 'resume',
+                          entry.scope
                         )
                       }
                     >
@@ -203,7 +217,9 @@ export function AutomationListExternalRows({
                     <DropdownMenuItem
                       variant="destructive"
                       disabled={actionDisabled}
-                      onSelect={() => onRequestAction(entry.manager, entry.job, 'delete')}
+                      onSelect={() =>
+                        onRequestAction(entry.manager, entry.job, 'delete', entry.scope)
+                      }
                     >
                       <Trash2 className="size-3.5" />
                       {translate(
@@ -218,7 +234,7 @@ export function AutomationListExternalRows({
             <ContextMenuContent className="w-48">
               <ContextMenuItem
                 disabled={actionDisabled}
-                onSelect={() => onRequestAction(entry.manager, entry.job, 'run')}
+                onSelect={() => onRequestAction(entry.manager, entry.job, 'run', entry.scope)}
               >
                 <Play className="size-3.5" />
                 <span className="min-w-0 truncate">
@@ -229,7 +245,7 @@ export function AutomationListExternalRows({
               {entry.manager.provider === 'hermes' ? (
                 <ContextMenuItem
                   disabled={!entry.manager.canManage || externalActionKey !== null}
-                  onSelect={() => onEdit(entry.manager, entry.job)}
+                  onSelect={() => onEdit(entry.manager, entry.job, entry.scope)}
                 >
                   <Pencil className="size-3.5" />
                   {translate('auto.components.automations.AutomationsPage.f4612e3f78', 'Edit')}
@@ -238,7 +254,12 @@ export function AutomationListExternalRows({
               <ContextMenuItem
                 disabled={actionDisabled}
                 onSelect={() =>
-                  onRequestAction(entry.manager, entry.job, entry.job.enabled ? 'pause' : 'resume')
+                  onRequestAction(
+                    entry.manager,
+                    entry.job,
+                    entry.job.enabled ? 'pause' : 'resume',
+                    entry.scope
+                  )
                 }
               >
                 {entry.job.enabled ? <Pause className="size-3.5" /> : <Play className="size-3.5" />}
@@ -250,7 +271,7 @@ export function AutomationListExternalRows({
               <ContextMenuItem
                 variant="destructive"
                 disabled={actionDisabled}
-                onSelect={() => onRequestAction(entry.manager, entry.job, 'delete')}
+                onSelect={() => onRequestAction(entry.manager, entry.job, 'delete', entry.scope)}
               >
                 <Trash2 className="size-3.5" />
                 {translate('auto.components.automations.AutomationsPage.15e0bfb13b', 'Delete')}

@@ -1,6 +1,8 @@
 import type { Store } from '../persistence'
 import type { IGitProvider } from '../providers/types'
 import { isFolderRepo } from '../../shared/repo-kind'
+import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import type { Repo } from '../../shared/repo-types'
 import type { GitWorktreeInfo, Worktree } from '../../shared/worktree/types'
 import { mergeWorktree } from './worktree-logic'
@@ -43,6 +45,7 @@ import {
   getTargetWorktreeIdsByRepo,
   hasTargetedWorkspaceCleanupScan
 } from './workspace-cleanup-scan-targets'
+import { isWorktreeMetaOwnedByRepo } from '../worktree-metadata-ownership'
 
 const WORKTREE_SCAN_CONCURRENCY = 3
 // Why: SSH repos pay a worktree-list round trip each; strictly serial repos
@@ -66,10 +69,15 @@ export async function scanWorkspaceCleanup(
   if (hasTargetedWorkspaceCleanupScan(args) && targetWorktreeIdsByRepo.size === 0) {
     return { scannedAt, candidates: [], errors: [] }
   }
+  const allRepos = store.getRepos()
   const repos =
     targetWorktreeIdsByRepo.size > 0
-      ? store.getRepos().filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
-      : store.getRepos()
+      ? allRepos.filter((repo) => targetWorktreeIdsByRepo.has(repo.id))
+      : allRepos
+  const repoOwnerCountById = new Map<string, number>()
+  for (const repo of allRepos) {
+    repoOwnerCountById.set(repo.id, (repoOwnerCountById.get(repo.id) ?? 0) + 1)
+  }
   const progress = createWorkspaceCleanupProgressEmitter(args.scanId, scannedAt, options)
   const errors: WorkspaceCleanupScanResult['errors'] = []
   const candidates: WorkspaceCleanupCandidate[] = []
@@ -83,6 +91,7 @@ export async function scanWorkspaceCleanup(
         return scanRepoWorkspaces({
           store,
           repo,
+          repoOwnerCount: repoOwnerCountById.get(repo.id) ?? 1,
           scannedAt,
           targetWorktreeIds: targetWorktreeIdsByRepo.get(repo.id),
           refreshTargetActivity: args.worktreeId !== undefined || args.refreshActivity === true,
@@ -109,6 +118,7 @@ async function scanRepoWorkspaces(
   args: {
     store: Store
     repo: Repo
+    repoOwnerCount: number
     scannedAt: number
     targetWorktreeIds?: ReadonlySet<string>
     refreshTargetActivity: boolean
@@ -120,6 +130,7 @@ async function scanRepoWorkspaces(
   const {
     store,
     repo,
+    repoOwnerCount,
     scannedAt,
     targetWorktreeIds,
     refreshTargetActivity,
@@ -161,6 +172,7 @@ async function scanRepoWorkspaces(
             store,
             repo,
             scannedAt,
+            repoOwnerCount,
             targetWorktreeIds,
             includeAllWorkspaces
           )
@@ -174,11 +186,15 @@ async function scanRepoWorkspaces(
 
   const mergedWorktrees =
     repoIsFolder && includeAllWorkspaces
-      ? listWorkspaceCleanupFolderWorkspaces(store, repo)
+      ? listWorkspaceCleanupFolderWorkspaces(store, repo, repoOwnerCount)
       : gitWorktrees.map((gitWorktree) => {
           const worktreeId = `${repo.id}::${gitWorktree.path}`
+          // Host-qualified first: the same repoId::path is a different checkout on each host.
+          const hostMeta = readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo))
           const meta = store.getWorktreeMeta(worktreeId)
-          return mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
+          const ownedMeta =
+            hostMeta ?? (isWorktreeMetaOwnedByRepo(repo, meta, repoOwnerCount) ? meta : undefined)
+          return mergeWorktree(repo.id, gitWorktree, ownedMeta, repo.displayName)
         })
   // Why: with includeAllWorkspaces the browser shows every workspace and lets
   // filters narrow it; an age threshold here would hide rows from all views.
@@ -241,8 +257,8 @@ async function scanRepoWorkspaces(
         worktree: worktreeWithActivity,
         scannedAt,
         provider,
-        // Why: a row with no inactivity reason can never be queued or selected,
-        // so full-fleet scans stream it now and let a focused scan read git later.
+        // Why: full-fleet scans defer git for recently active rows; removal preflight
+        // forces a fresh read before any selected row can be deleted.
         skipGit: skipGitWorktreeIds.has(worktreeWithActivity.id) || !isInactive,
         forceGitCheck: Boolean(targetWorktreeIds),
         signal

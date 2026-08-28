@@ -15,6 +15,8 @@ describe('OrchestrationDb reset scopes', () => {
     })
     const task = db.createTask({ spec: 'work', runId: run.id })
     const started = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: { worktree: 'current' },
       runtimeEpoch: 'runtime_1',
@@ -37,6 +39,12 @@ describe('OrchestrationDb reset scopes', () => {
       to: `run:${run.id}`,
       subject: 'status'
     })
+    const localQuestion = db.createQuestion({
+      runId: run.id,
+      dispatchId: started.dispatch.id,
+      askerHandle: 'worker',
+      question: 'Continue?'
+    })
     db.enqueueFederationRelay({
       dispatchId: started.dispatch.id,
       direction: 'to_home',
@@ -45,7 +53,7 @@ describe('OrchestrationDb reset scopes', () => {
       messageId: 'question_1',
       remoteQuestion: true
     })
-    return { run, task, started, message }
+    return { run, task, started, message, localQuestion }
   }
 
   it('resetAll clears Runs, worker/federation state, and messages', () => {
@@ -83,6 +91,19 @@ describe('OrchestrationDb reset scopes', () => {
     expect(db!.getWorkerDispatch(state.started.dispatch.id)).toBeUndefined()
     expect(db!.getFederatedDispatch(state.started.dispatch.id)).toBeUndefined()
     expect(db!.getRemoteQuestion('question_1')).toBeUndefined()
+    expect(db!.getMessageById(state.localQuestion.message.id)).toBeDefined()
+    expect(db!.getQuestion(state.localQuestion.message.id)).toMatchObject({
+      status: 'closed',
+      closed_at: expect.any(String)
+    })
+    expect(() =>
+      db!.answerQuestion({
+        messageId: state.localQuestion.message.id,
+        runId: state.run.id,
+        consumerGeneration: state.run.consumer_generation,
+        body: 'Yes'
+      })
+    ).toThrowError(expect.objectContaining({ code: 'dispatch_inactive' }))
   })
 
   it('resetMessages preserves active relay cursors while clearing the Run inbox', () => {

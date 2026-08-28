@@ -10,7 +10,7 @@ import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/wor
 import {
   LINEAGE_CHILDREN_INLINE_OFFSET,
   getLineageChildrenInlineStyle
-} from '@/components/sidebar/worktree-list-indentation'
+} from '@/components/sidebar/worktree-list/rows/indentation'
 
 type MockStoreState = {
   activeWorktreeId: string | null

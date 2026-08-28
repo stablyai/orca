@@ -4,7 +4,7 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type {
   ListAssignableUsersBySlugResult,
   ListLabelsBySlugResult
-} from '../../../shared/github/project-types'
+} from '../../../shared/github/project-result-types'
 import { clearMetadataRequestStore, createMetadataRequestStore } from './metadata-request-cache'
 import { githubRepoIdentityKey } from '../../../shared/github/repository-identity-key'
 import { githubProjectHost } from '../../../shared/github/project-identity'

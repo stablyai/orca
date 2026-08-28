@@ -1,5 +1,6 @@
 import { join } from 'node:path'
 import {
+  clearAiVaultBackgroundRestartCircuit,
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './session-scanner-background'
@@ -56,6 +57,9 @@ export async function listAiVaultSessions(
   const depth = requestedAiVaultSessionDepth(args)
   const scanKey = JSON.stringify({ key, depth })
   const now = Date.now()
+  if (args?.force === true) {
+    clearAiVaultBackgroundRestartCircuit()
+  }
   // Why: opening this panel repeatedly should not re-parse hundreds of JSONL
   // transcripts; explicit refreshes bypass the cache and preempt stale scans.
   if (

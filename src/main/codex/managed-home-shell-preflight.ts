@@ -77,12 +77,20 @@ export function resolveManagedCodexShellPreflightHome(
   return resolveAccountManagedHome(codexHome, userDataPath)
 }
 
-export function prepareManagedCodexHomeBeforeShellLaunch(args: {
+/**
+ * Shell-startup preflight for a managed CODEX_HOME.
+ *
+ * Async because the Codex install awaits an app-server trust-grant session
+ * in-process. The old lane forked that session through spawnSync purely to
+ * borrow an event loop; the CLI already has one, so awaiting here removes a
+ * whole ELECTRON_RUN_AS_NODE process from every managed-home shell launch.
+ */
+export async function prepareManagedCodexHomeBeforeShellLaunch(args: {
   env?: ShellPreflightEnvironment
   userDataPath: string
   hooksEnabled: boolean
-  install?: (runtimeHomePath: string) => AgentHookInstallStatus
-}): AgentHookInstallStatus | null {
+  install?: (runtimeHomePath: string) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
+}): Promise<AgentHookInstallStatus | null> {
   if (!args.hooksEnabled) {
     return null
   }

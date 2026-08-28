@@ -13,10 +13,10 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAppStore } from '@/store'
 import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
 import { translate } from '@/i18n/i18n'
+import { getAgentAwakeModeLabel, getAgentAwakeTitle } from '../settings/agent-awake-copy'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
-  type ComputerAwakeMode,
   type ComputerAwakeStatus
 } from '../../../../shared/computer-awake-mode'
 import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-policy'
@@ -24,16 +24,6 @@ import { STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS } from './status-bar-context-menu-
 const INACTIVE_STATUS: ComputerAwakeStatus = {
   mode: 'off',
   active: false
-}
-
-function modeLabel(mode: ComputerAwakeMode): string {
-  if (mode === 'on') {
-    return translate('auto.components.status.bar.CaffeinateStatusSegment.on', 'On')
-  }
-  if (mode === 'auto') {
-    return translate('auto.components.status.bar.CaffeinateStatusSegment.auto', 'Agent')
-  }
-  return translate('auto.components.status.bar.CaffeinateStatusSegment.off', 'Off')
 }
 
 function activityLabel(active: boolean): string {
@@ -83,11 +73,12 @@ export function CaffeinateStatusSegment({
   const mode = serviceStatus.mode === configuredMode ? serviceStatus.mode : configuredMode
   const active =
     serviceStatus.mode === configuredMode ? serviceStatus.active : configuredMode === 'on'
-  const statusText = `${modeLabel(mode)} · ${activityLabel(active)}`
+  const title = getAgentAwakeTitle()
+  const statusText = `${getAgentAwakeModeLabel(mode)} · ${activityLabel(active)}`
   const ariaLabel = translate(
     'auto.components.status.bar.CaffeinateStatusSegment.ariaLabel',
-    'Caffeinate, {{status}}',
-    { status: statusText }
+    '{{title}}, {{status}}',
+    { title, status: statusText }
   )
 
   const setMode = (nextMode: string): void => {
@@ -107,7 +98,7 @@ export function CaffeinateStatusSegment({
             >
               <Coffee className={`size-3 ${active ? 'text-foreground' : ''}`} />
               {!iconOnly ? (
-                <span className="text-[11px] font-medium">{modeLabel(mode)}</span>
+                <span className="text-[11px] font-medium">{getAgentAwakeModeLabel(mode)}</span>
               ) : null}
               <span
                 aria-hidden
@@ -130,16 +121,14 @@ export function CaffeinateStatusSegment({
         className="w-64"
       >
         <DropdownMenuLabel className="flex items-center justify-between gap-3">
-          <span>
-            {translate('auto.components.status.bar.CaffeinateStatusSegment.title', 'Caffeinate')}
-          </span>
+          <span>{title}</span>
           <span className="font-normal text-muted-foreground">{statusText}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuRadioGroup value={mode} onValueChange={setMode}>
           <DropdownMenuRadioItem value="on" className="py-1.5">
             <span className="flex flex-col">
-              <span>{modeLabel('on')}</span>
+              <span>{getAgentAwakeModeLabel('on')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
                 {translate(
                   'auto.components.status.bar.CaffeinateStatusSegment.onDescription',
@@ -150,7 +139,7 @@ export function CaffeinateStatusSegment({
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="auto" className="py-1.5">
             <span className="flex flex-col">
-              <span>{modeLabel('auto')}</span>
+              <span>{getAgentAwakeModeLabel('auto')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
                 {translate(
                   'auto.components.status.bar.CaffeinateStatusSegment.autoDescription',
@@ -161,7 +150,7 @@ export function CaffeinateStatusSegment({
           </DropdownMenuRadioItem>
           <DropdownMenuRadioItem value="off" className="py-1.5">
             <span className="flex flex-col">
-              <span>{modeLabel('off')}</span>
+              <span>{getAgentAwakeModeLabel('off')}</span>
               <span className="text-[11px] font-normal text-muted-foreground">
                 {translate(
                   'auto.components.status.bar.CaffeinateStatusSegment.offDescription',

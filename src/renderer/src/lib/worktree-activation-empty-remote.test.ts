@@ -5,7 +5,7 @@ import type { Worktree } from '../../../shared/worktree/types'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
 import { useAppStore } from '@/store'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from './worktree-activation'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
 
 const initialAppStoreState = useAppStore.getState()
 const WORKTREE_PATH = path.join('workspace', 'feature')

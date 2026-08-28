@@ -20,14 +20,35 @@ import {
 } from './orchestration-worker-setup-gate'
 import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
+import { resolveDispatchCreator } from './orchestration-dispatch-creator'
+import { resolveOrchestrationCaller } from './orchestration-run-scope'
+import {
+  isWorkerStartTimeoutWithinTimerLimit,
+  resolveWorkerStartReadinessTimeoutMs
+} from '../../../../shared/orchestration-timing-budgets'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.workerStart',
     params: WorkerStartParams,
-    handler: async (params, { runtime, orchestrationMutation }) => {
+    handler: async (
+      params,
+      { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
+    ) => {
+      if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          `--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.`
+        )
+      }
+      const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(params.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      const coordinatorPane = runtime.getTerminalPaneKey(params.from)
+      // Why: worker-start was the only Run-scoped verb that skipped this, so a
+      // declared --from could name someone else's pane and inherit their depth.
+      const coordinatorPane = resolveOrchestrationCaller(runtime, {
+        callerTerminalHandle: params.from,
+        callerEvidence: orchestrationCompatibilityEvidence
+      })
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
       if (!run || (params.run && params.run !== run.id)) {
         throw new OrchestrationError(
@@ -101,7 +122,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         terminal: params.terminal ?? null,
         agent: agent ?? null,
         launch: launch.receipt,
-        timeoutMs: params.timeoutMs ?? 60_000,
+        timeoutMs: readinessTimeoutMs,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         setupSource: createsWorktree
           ? params.setup
@@ -110,6 +131,8 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           : 'existing_worktree'
       }
       const started = db.createStartingWorkerDispatch({
+        creator: resolveDispatchCreator(runtime, params.from),
+        maxDepth: runtime.getNestedWorkerMaxDepth(),
         taskId: task.id,
         retryOf: params.retryOf,
         startOptions,
@@ -196,7 +219,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
-          timeoutMs: params.timeoutMs ?? 60_000
+          timeoutMs: readinessTimeoutMs
         })
         persistWorkerSetupWaitOutcome({ ...setupStage, wait })
         if (!wait.satisfied) {
@@ -222,6 +245,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
 
         failedStage = 'dispatch_input'
         const preamble = buildDispatchPreamble({
+          canDispatchSubWorkers: started.dispatch.depth < runtime.getNestedWorkerMaxDepth(),
           taskId: task.id,
           dispatchId: started.dispatch.id,
           taskSpec: task.spec,
@@ -255,7 +279,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           stage: worker.stage,
           setup: setupReceipt,
           launch: launch.receipt,
-          timeoutMs: params.timeoutMs ?? 60_000,
+          timeoutMs: readinessTimeoutMs,
           effects,
           residualResources: [],
           ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})

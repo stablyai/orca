@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function fixtureSubprocess(): SubprocessHandle {
   let onExit: ((code: number) => void) | null = null
@@ -15,6 +15,7 @@ function fixtureSubprocess(): SubprocessHandle {
     write: () => {},
     resize: () => {},
     kill: () => queueMicrotask(() => onExit?.(0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: () => queueMicrotask(() => onExit?.(137)),
     signal: () => {},
     onData: () => {},

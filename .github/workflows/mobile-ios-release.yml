@@ -32,6 +32,14 @@ jobs:
     runs-on: macos-26
     # Archive + upload is ~30–40m when healthy; 90m leaves margin for setup.
     timeout-minutes: 90
+
+    env:
+      # Why: this job and ios-distribute resolve gems ~25 minutes apart, so both
+      # must install the committed Gemfile.lock exactly. Frozen turns a lockfile
+      # drift into a setup failure instead of two different fastlane versions in
+      # one release.
+      BUNDLE_FROZEN: 'true'
+
     outputs:
       release_version: ${{ steps.release_metadata.outputs.version }}
       build_number: ${{ steps.release_metadata.outputs.build_number }}
@@ -148,6 +156,10 @@ jobs:
     # Fastlane's processing wait fails after 20m; this outer bound leaves setup
     # margin without allowing App Store Connect polling to hang for hours.
     timeout-minutes: 30
+
+    env:
+      # Same fastlane as ios-build, or fail before touching App Store Connect.
+      BUNDLE_FROZEN: 'true'
 
     defaults:
       run:

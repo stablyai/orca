@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import {
   accessSync,
   chmodSync,
@@ -196,37 +196,37 @@ export async function execServeSimCommand(
     finalArgs.push('-q')
   }
 
-  return new Promise((resolve, reject) => {
-    execFile(
-      executable.command,
-      [...executable.baseArgs, ...finalArgs],
-      { timeout, maxBuffer: 10 * 1024 * 1024, env: getServeSimEnv(executable) },
-      (error, stdout, stderr) => {
-        if (error) {
-          const message =
-            stdout.toString() || stderr.toString() || error.message || 'serve-sim command failed'
-          if (/no serve-sim server|not running/i.test(message)) {
-            reject(
-              new EmulatorError(
-                'emulator_no_active',
-                'No active emulator for this worktree — use orca emulator list/attach or open the pane'
-              )
-            )
-            return
-          }
-          reject(new EmulatorError('emulator_error', message))
-          return
-        }
-        if (options?.json) {
-          try {
-            resolve(JSON.parse(stdout.toString()))
-          } catch {
-            resolve(stdout.toString().trim())
-          }
-          return
-        }
-        resolve(stdout.toString().trim())
-      }
+  let result
+  try {
+    result = await runProcess({
+      program: executable.command,
+      args: [...executable.baseArgs, ...finalArgs],
+      env: getServeSimEnv(executable),
+      maxOutputBytes: 10 * 1024 * 1024,
+      timeoutMs: timeout
+    })
+  } catch (error) {
+    throw new EmulatorError(
+      'emulator_error',
+      error instanceof Error ? error.message : 'serve-sim command failed'
     )
-  })
+  }
+  if (result.code !== 0 || result.timedOut) {
+    const message = result.stdout || result.stderr || 'serve-sim command failed'
+    if (/no serve-sim server|not running/i.test(message)) {
+      throw new EmulatorError(
+        'emulator_no_active',
+        'No active emulator for this worktree — use orca emulator list/attach or open the pane'
+      )
+    }
+    throw new EmulatorError('emulator_error', message)
+  }
+  if (options?.json) {
+    try {
+      return JSON.parse(result.stdout)
+    } catch {
+      return result.stdout.trim()
+    }
+  }
+  return result.stdout.trim()
 }

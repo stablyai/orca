@@ -76,7 +76,7 @@ a long time, or need the user at the keyboard. Never create an Orca workspace or
    - **Coding-agent CLI + account:** which agent runs in the VM (`codex`, `claude`, …) and that the user
      has an account for it — it gets logged in during the Phase-3 auth snapshot (§4).
    - **Git auth:** the token source for cloning a private repo (`GH_TOKEN`/`GITHUB_TOKEN` or `gh auth
-     token`; §5).
+token`; §5).
 3. **Check prerequisites (§2)** — detect the provider CLI + auth and confirm the items above are in
    place before any paid step.
 4. **Scaffold scripts + state file** from §7 (worked Vercel example: §7f; SSH host: §7g; Docker SSH:
@@ -221,9 +221,9 @@ reserve stdout for the final JSON and log progress to stderr. Include a shared `
 
 - **Local-side** (`create`/`suspend`/`resume`/`destroy` + the base-snapshot/auth scripts the user
   invokes) runs **on the user's desktop**, so it must run on their OS. macOS/Linux: `#!/usr/bin/env
-  bash`, `set -euo pipefail`, quoted paths. **Windows:** a bare `.sh` won't run — scaffold `.ps1`/`.cmd`
+bash`, `set -euo pipefail`, quoted paths. **Windows:** a bare `.sh` won't run — scaffold `.ps1`/`.cmd`
   or require WSL/Git-Bash and point `orca.yaml` at the right launcher.
-- **Remote-side** (commands you `exec` *inside* the Linux VM) always runs in the VM's Linux shell, so
+- **Remote-side** (commands you `exec` _inside_ the Linux VM) always runs in the VM's Linux shell, so
   bash is fine there regardless of the user's OS.
 
 ### 7a. Base-snapshot (`<provider>-base-snapshot.sh`) — Phase 2
@@ -303,7 +303,11 @@ There is **no `--host` flag**. `--project-root` must be an absolute directory on
 keeps serving:
 
 ```json
-{ "schemaVersion": 1, "pairingCode": "<orca pairing URL>", "projectRoot": "<the --project-root you passed>" }
+{
+  "schemaVersion": 1,
+  "pairingCode": "<orca pairing URL>",
+  "projectRoot": "<the --project-root you passed>"
+}
 ```
 
 `pairingCode` is the pairing URL, already pointing at whatever you passed as `--pairing-address` — so set
@@ -498,7 +502,7 @@ git checkout -B "$ORCA_REPO_BRANCH" "$ORCA_REPO_REF_HEAD"
 
 Fail if the requested schema is not `2`; do not silently fall back to the ordinary recipe shape.
 
-**Networking → which `target` fields to set** (how *your desktop* reaches the box — there is no
+**Networking → which `target` fields to set** (how _your desktop_ reaches the box — there is no
 `orca serve` URL in SSH mode):
 
 - Public IP / DNS, or a Tailscale/VPN address → `host`; SSH port → `port` (usually 22).
@@ -511,7 +515,7 @@ Fail if the requested schema is not `2`; do not silently fall back to the ordina
   reconnect grace window.
 
 **Toolchain & agent auth on a persistent (no-snapshot) host — do this ONCE, by hand, before wiring the
-recipe** (there's no base image to bake; the host *is* the base). Run the §7f Phase-2 install steps and
+recipe** (there's no base image to bake; the host _is_ the base). Run the §7f Phase-2 install steps and
 the §7f Phase-3 `<agent> login --device-auth` **directly over SSH on the host** (interactive, e.g.
 `ssh -t user@host '<agent> login --device-auth'`). After that the host stays ready across workspaces.
 
@@ -615,7 +619,7 @@ $ErrorActionPreference = 'Stop'
 # progress/errors → Write-Error / the error stream, never stdout.
 ```
 
-The remote-side commands you run *inside* the Linux VM stay bash regardless of the desktop OS.
+The remote-side commands you run _inside_ the Linux VM stay bash regardless of the desktop OS.
 
 ---
 
@@ -702,10 +706,10 @@ each stage so you can self-diagnose without asking the user to relay logs:
 ```json
 {
   "ok": false,
-  "checks": [ { "id": "recipe.provision", "status": "fail", "message": "…" } ],
+  "checks": [{ "id": "recipe.provision", "status": "fail", "message": "…" }],
   "provisionTranscript": {
     "provision": { "exitCode": 0, "signal": null, "stdout": "…", "stderr": "…", "parseError": "…" },
-    "destroy":   { "exitCode": 0, "signal": null, "stdout": "…", "stderr": "…" }
+    "destroy": { "exitCode": 0, "signal": null, "stdout": "…", "stderr": "…" }
   }
 }
 ```
@@ -743,7 +747,7 @@ startup-only `docker run` before the full clone/install path.
 - **Agent verified as "not logged in" despite a good login.** `codex login status` (and similar) print
   "Logged in …" to **stderr**; an stdout-only `grep` misses it. Prefer the status **exit code**; if you
   grep, fold stderr first (`status 2>&1 | grep …`) and match the exact success line — not `grep -qi
-  'logged in'`, which also matches "not logged in".
+'logged in'`, which also matches "not logged in".
 - **Headless agent login hangs.** Plain OAuth `login` starts a loopback callback server on a VM/container
   port the host browser can't reach. Use the **device-auth** flow (`login --device-auth`) — it prints a
   URL + code the user opens on the host.

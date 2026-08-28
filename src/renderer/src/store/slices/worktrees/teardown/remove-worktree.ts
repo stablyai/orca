@@ -4,65 +4,82 @@ import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/cre
 import { getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
-import { cleanupEphemeralVmRuntimesForDeleted } from '@/lib/ephemeral-vm-runtime-cleanup'
-import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../components/terminal-pane/terminal-parked-watcher-registry'
-import { callRuntimeRpc, getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
-import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-selector'
-import { requestVirtualizedScrollAnchorRecord } from '@/hooks/requestVirtualizedScrollAnchorRecord'
-import { forgetForegroundTerminalTabs } from '@/lib/foreground-terminal-tabs'
-import { forgetAgentStartupDeliveriesForTabs } from '@/lib/agent-startup-delivery-guards'
+import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
-import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {
-  resolveWorktreeOperationRoute,
   resolveWorktreeOperationRouteResult,
+  resolveWorktreeOperationRouteResultForHost,
   settingsForWorktreeOperationRoute
 } from '@/lib/worktree-operation-route'
-import { captureWorktreeOperationGenerationGuard } from '@/lib/worktree-operation-generation'
+import {
+  beginHostQualifiedRemoval,
+  completeSameIdHostScopedRemoval,
+  findWorktreeOnConfirmedHost,
+  prepareHostScopedRemovalCompletion,
+  refuseUnprovableRemoteHostRouting
+} from './host-qualified-worktree-removal'
+import { resolveSameIdSurvivingHostId } from './host-qualified-worktree-row-removal'
 import {
   classifyWorktreeForceDeleteReason,
   getLockedWorktreeRemovalReason,
   isLockedWorktreeRemovalError
 } from '../../../../../../shared/worktree/removal'
 import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
-import { WORKTREE_REMOVAL_AMBIGUOUS_ERROR } from '../listing/worktree-slice-constants'
-import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
+import { composeWorktreeHostIdentity } from '../../../../../../shared/worktree/host-qualified-identity'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
 import { rememberAuthoritativelyRemovedWorktrees } from '../listing/authoritative-worktree-removal-memory'
-import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
 import { preservedBranchRuntimeTargetByCleanupKey } from './preserved-branch-cleanup-target'
 import {
   isRuntimeRepoNotFoundError,
   isRuntimeSelectorNotFoundError
 } from '../listing/runtime-worktree-rpc-errors'
-import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
+import { recordRemovedWorktreeSnapshotPrune } from './removed-worktree-snapshot-prune'
+import { clearSessionCommitDraftForWorktree } from '@/lib/source-control-commit-draft-session'
+import { dispatchWorktreeRemoval } from './dispatch-worktree-removal'
+import { tearDownRemovedWorktreeRendererState } from './removed-worktree-renderer-teardown'
 
 export function createRemoveWorktree(
   set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['removeWorktree'] {
-  return async (worktreeId, force, options) => {
+  return async (removalTarget, force, options) => {
+    const worktreeId = removalTarget.id
     const forgetLocalOnly = options?.mode === 'forget-local'
-    const removalRoute = resolveWorktreeOperationRoute(get(), worktreeId)
-    if (!forgetLocalOnly && !removalRoute) {
-      return { ok: false, error: WORKTREE_REMOVAL_AMBIGUOUS_ERROR }
+    // Why (STA-4343): this is the ONE chokepoint every delete entry point shares,
+    // so host qualification is enforced here rather than at any single caller — a
+    // guard bolted onto the sidebar would drift from the cleanup dialog's. The
+    // caller confirmed ONE host's row; route at that host instead of the active
+    // workspace's, which owns the same id elsewhere.
+    const requiredExecutionHostId = removalTarget.executionHostId
+    const start = beginHostQualifiedRemoval(
+      get,
+      worktreeId,
+      requiredExecutionHostId,
+      forgetLocalOnly,
+      options?.ignoreWorkspaceCleanupScanSurvivors === true
+    )
+    if (!start.ok) {
+      return { ok: false, error: start.error }
     }
-    const hostId = removalRoute?.executionHostId ?? undefined
-    const removalGenerationGuard = removalRoute
-      ? captureWorktreeOperationGenerationGuard(
-          get,
-          worktreeId,
-          removalRoute,
-          () => new Error(WORKTREE_REMOVAL_AMBIGUOUS_ERROR)
-        )
-      : null
+    const {
+      removalRoute,
+      hostId,
+      removalGenerationGuard,
+      sameIdSurvivingHostId: catalogSameIdSurvivingHostId
+    } = start
+    const sameIdSurvivingHostId =
+      catalogSameIdSurvivingHostId ?? options?.sameIdSurvivingHostId ?? null
+    const deleteStateKey = requiredExecutionHostId
+      ? composeWorktreeHostIdentity(requiredExecutionHostId, worktreeId)
+      : worktreeId
     set((s) => ({
       deleteStateByWorktreeId: {
         ...s.deleteStateByWorktreeId,
-        [worktreeId]: {
+        [deleteStateKey]: {
           isDeleting: true,
           phase: 'deleting',
+          ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
           error: null,
           canForceDelete: false,
           forceDeleteReason: null
@@ -82,9 +99,11 @@ export function createRemoveWorktree(
             removalRoute?.runtimeEnvironmentId
           )) === 'skip'
 
-      const worktreeBeforeRemoval = get()
-        .allWorktrees()
-        .find((entry) => entry.id === worktreeId)
+      const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
+        get,
+        worktreeId,
+        requiredExecutionHostId
+      )
       const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
         (tab) => get().ptyIdsByTabId[tab.id] ?? []
       )
@@ -99,42 +118,25 @@ export function createRemoveWorktree(
             ? { ...get().settings, activeRuntimeEnvironmentId: null }
             : { activeRuntimeEnvironmentId: null }
       )
+      const unprovableRemoteRouting = forgetLocalOnly
+        ? null
+        : refuseUnprovableRemoteHostRouting(get, worktreeId, target.kind)
+      if (unprovableRemoteRouting) {
+        throw new Error(unprovableRemoteRouting)
+      }
       let removalResult: RemoveWorktreeResult
       let snapshotPruneHandledByLocalMain = forgetLocalOnly || target.kind === 'local'
       try {
-        removalResult = await (forgetLocalOnly
-          ? window.api.worktrees.forgetLocal({
-              worktreeId,
-              hostId,
-              ...(options?.snapshotPruneBatchId
-                ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
-                : {})
-            })
-          : target.kind === 'local'
-            ? (removalGenerationGuard?.assertCurrent(),
-              window.api.worktrees.remove({
-                worktreeId,
-                hostId,
-                force,
-                allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
-                skipArchive,
-                ...(options?.snapshotPruneBatchId
-                  ? { snapshotPruneBatchId: options.snapshotPruneBatchId }
-                  : {})
-              }))
-            : (removalGenerationGuard?.assertCurrent(),
-              callRuntimeRpc<RemoveWorktreeResult>(
-                target,
-                'worktree.rm',
-                {
-                  worktree: toRuntimeWorktreeSelector(worktreeId),
-                  ...(hostId ? { hostId } : {}),
-                  force,
-                  allowUnverifiedPtyStop: options?.allowUnverifiedPtyStop === true,
-                  runHooks: !skipArchive
-                },
-                { timeoutMs: 60_000 }
-              )))
+        removalResult = await dispatchWorktreeRemoval({
+          worktreeId,
+          hostId,
+          force,
+          skipArchive,
+          forgetLocalOnly,
+          target,
+          options,
+          assertCurrent: () => removalGenerationGuard?.assertCurrent()
+        })
       } catch (error) {
         if (
           !forgetLocalOnly &&
@@ -142,7 +144,9 @@ export function createRemoveWorktree(
           (isRuntimeRepoNotFoundError(error) || isRuntimeSelectorNotFoundError(error))
         ) {
           // Missing means stale mirror; ambiguous or changed ownership must fail closed.
-          const currentResolution = resolveWorktreeOperationRouteResult(get(), worktreeId)
+          const currentResolution = requiredExecutionHostId
+            ? resolveWorktreeOperationRouteResultForHost(get(), worktreeId, requiredExecutionHostId)
+            : resolveWorktreeOperationRouteResult(get(), worktreeId)
           if (currentResolution.kind === 'ambiguous') {
             throw error
           }
@@ -171,19 +175,48 @@ export function createRemoveWorktree(
       }
 
       if (!snapshotPruneHandledByLocalMain) {
-        try {
-          await window.api.workspaceCleanup?.recordRemovalSnapshotPrune?.({
-            // Why: a single (unbatched) remote delete must still drop the row
-            // from the local persisted snapshots or it resurrects from cache;
-            // an unknown batch id degrades to an immediate one-off prune. The
-            // id must stay bounded — main rejects batch ids over 128 chars,
-            // so it cannot embed the unbounded worktreeId.
-            batchId: options?.snapshotPruneBatchId ?? `single-removal:${crypto.randomUUID()}`,
+        await recordRemovedWorktreeSnapshotPrune({
+          worktreeId,
+          hostId,
+          snapshotPruneBatchId: options?.snapshotPruneBatchId
+        })
+      }
+
+      // Why (STA-4343): another host still owns this id, so the shared renderer
+      // state (tabs, terminals, browsers) belongs to that live workspace — drop
+      // only the confirmed host's row instead of tearing all of it down.
+      //
+      // The ephemeral VM is the exception — see completeSameIdHostScopedRemoval.
+      if (requiredExecutionHostId) {
+        const currentSameIdSurvivingHostId = resolveSameIdSurvivingHostId(
+          get(),
+          worktreeId,
+          requiredExecutionHostId,
+          options?.ignoreWorkspaceCleanupScanSurvivors === true
+        )
+        const confirmedSurvivingHostId = currentSameIdSurvivingHostId ?? sameIdSurvivingHostId
+        if (confirmedSurvivingHostId) {
+          const sameIdStillSurvives = prepareHostScopedRemovalCompletion(
+            set,
             worktreeId,
-            ...(hostId ? { executionHostId: hostId } : {})
-          })
-        } catch (error) {
-          console.warn('Failed to record workspace cleanup snapshot prune:', error)
+            requiredExecutionHostId,
+            confirmedSurvivingHostId,
+            options?.ignoreWorkspaceCleanupScanSurvivors === true
+          )
+          if (sameIdStillSurvives) {
+            return completeSameIdHostScopedRemoval({
+              set,
+              get,
+              worktreeId,
+              requiredExecutionHostId,
+              removalResult,
+              removalRoute,
+              target,
+              worktreeBeforeRemoval,
+              suppressPreservedBranchToast: options?.suppressPreservedBranchToast === true,
+              rowAlreadyDropped: true
+            })
+          }
         }
       }
 
@@ -208,44 +241,14 @@ export function createRemoveWorktree(
         }
       }
 
-      // Why: renderer state follows the successful backend result, so blocked dirty deletes keep their terminals intact.
-      // Why browsers first: unregister Chromium guests before other teardown can intercept them (avoids a browser-state race).
-      await get().shutdownWorktreeBrowsers(worktreeId)
-      await get().shutdownWorktreeTerminals(worktreeId, {
-        shutdownReason: 'remove-worktree',
-        // The backend removal above already killed the workspace's PTYs.
-        backendOwnsPtyTeardown: true
+      await tearDownRemovedWorktreeRendererState({
+        set,
+        get,
+        worktreeId,
+        hostId,
+        requiredExecutionHostId,
+        terminalPtyIdsBeforeRemoval
       })
-      // Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
-      const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted({
-        workspaceIds: [worktreeId]
-      })
-      // Remove the orphaned project for the destroyed SSH target so it can't surface as a dead project in the composer.
-      await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
-      const tabs = get().tabsByWorktree[worktreeId] ?? []
-      const tabIds = new Set(tabs.map((t) => t.id))
-
-      // Why: this path deletes tabsByWorktree wholesale (not via closeTab), so purge the module-level tab maps here too.
-      detachedHeadAutoDerivedDisplayNames.delete(worktreeId)
-      forgetForegroundTerminalTabs(tabIds)
-      forgetAgentStartupDeliveriesForTabs(tabIds)
-
-      // Why: snapshot the sidebar top-row anchor in the same tick we remove the row; recording at click time goes stale across the await.
-      requestVirtualizedScrollAnchorRecord('[data-worktree-sidebar]')
-
-      // Why: dispose parked terminal watchers only on explicit deletion; identity migration/remounts must keep buffered PTY state.
-      disposeRemovedWorktreeParkedTerminalWatchers(worktreeId, terminalPtyIdsBeforeRemoval)
-      applyRemoveWorktreeSuccessState(set, worktreeId, tabIds)
-      get().removeWorkspaceSpaceWorktrees?.([worktreeId])
-      // Why: PR/commit-message generation records are keyed by worktree; prune to the surviving set so they don't leak.
-      const liveWorktreeKeys = new Set(
-        get()
-          .allWorktrees()
-          .map((w) => w.id)
-      )
-      // Optional-chained: minimal store assemblies (some unit tests) omit the generation slices.
-      get().prunePullRequestGenerationRecords?.(liveWorktreeKeys)
-      get().pruneCommitMessageGenerationRecords?.(liveWorktreeKeys)
       // Why: Source Control may be unmounted during deletion, so it can't be the only stale-draft cleanup path.
       clearSessionCommitDraftForWorktree(worktreeId)
       const preservedBranch = removalResult?.preservedBranch
@@ -302,8 +305,9 @@ export function createRemoveWorktree(
       set((s) => ({
         deleteStateByWorktreeId: {
           ...s.deleteStateByWorktreeId,
-          [worktreeId]: {
+          [deleteStateKey]: {
             isDeleting: false,
+            ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
             error,
             canForceDelete: forceDeleteReason !== null,
             forceDeleteReason,

@@ -76,6 +76,10 @@ function count(text: string, marker: string): number {
   return text.split(marker).length - 1
 }
 
+function isTransientPtyLivenessError(error: unknown): boolean {
+  return error instanceof Error && error.message.includes('terminal_liveness_unavailable')
+}
+
 async function expectSingleOwningPty(
   page: Page,
   worktreeId: string,
@@ -83,15 +87,31 @@ async function expectSingleOwningPty(
   terminal: string,
   ptyId: string
 ): Promise<void> {
-  const listed = await callStartupExecRuntime<RuntimeTerminalListResult>(page, 'terminal.list', {
-    worktree: `id:${worktreeId}`,
-    requireFreshPtyLiveness: true
-  })
-  expect(
-    listed.terminals
-      .filter((candidate) => candidate.tabId === tabId)
-      .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
-  ).toEqual([{ handle: terminal, ptyId }])
+  await expect
+    .poll(
+      async () => {
+        try {
+          const listed = await callStartupExecRuntime<RuntimeTerminalListResult>(
+            page,
+            'terminal.list',
+            {
+              worktree: `id:${worktreeId}`,
+              requireFreshPtyLiveness: true
+            }
+          )
+          return listed.terminals
+            .filter((candidate) => candidate.tabId === tabId)
+            .map((candidate) => ({ handle: candidate.handle, ptyId: candidate.ptyId }))
+        } catch (error) {
+          if (isTransientPtyLivenessError(error)) {
+            return []
+          }
+          throw error
+        }
+      },
+      { timeout: 30_000 }
+    )
+    .toEqual([{ handle: terminal, ptyId }])
 }
 
 export async function callStartupExecRuntime<TResult>(

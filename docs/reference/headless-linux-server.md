@@ -838,7 +838,7 @@ refuse to run there and print the command to run on the machine you want.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
 - Journal shows `Another Orca instance is already running for this userData
-  profile` and the unit exits `3`: another process already owns the profile, so
+profile` and the unit exits `3`: another process already owns the profile, so
   `RestartPreventExitStatus=3` leaves the unit `failed` on purpose. Find the
   owner with `systemctl status orca-serve` and `pgrep -af orca`. Stop it (or
   keep it and leave the unit down), then run

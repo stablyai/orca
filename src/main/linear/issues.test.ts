@@ -7,12 +7,18 @@ const getClients = vi.fn()
 const clearToken = vi.fn()
 const isAuthError = vi.fn()
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
-  getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: (...args: unknown[]) => isAuthError(...args),
+  release: vi.fn()
+}))
+
+vi.mock('./linear-token-store', () => ({
   clearToken: (...args: unknown[]) => clearToken(...args)
+}))
+
+vi.mock('./client', () => ({
+  getClients: (...args: unknown[]) => getClients(...args),
+  isAuthError: (...args: unknown[]) => isAuthError(...args)
 }))
 
 function makeEntry(options?: {
@@ -98,7 +104,7 @@ describe('Linear issue queries', () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1')] } }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
       items: [
@@ -125,7 +131,7 @@ describe('Linear issue queries', () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1', undefined, 'team/lin-1-fix')] } }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 10, 'workspace-1')).resolves.toMatchObject({
       items: [{ branchName: 'team/lin-1-fix' }]
@@ -161,7 +167,7 @@ describe('Linear issue queries', () => {
         }
       }
     })
-    const { getIssueComments } = await import('./issues')
+    const { getIssueComments } = await import('./linear-issue-comments')
 
     await expect(getIssueComments('issue-uuid', 'workspace-1')).resolves.toEqual([
       {
@@ -188,7 +194,7 @@ describe('Linear issue queries', () => {
 
   it('returns an empty comment list when no Linear client is configured', async () => {
     getClients.mockReturnValue([])
-    const { getIssueComments } = await import('./issues')
+    const { getIssueComments } = await import('./linear-issue-comments')
 
     await expect(getIssueComments('issue-uuid', 'workspace-1')).resolves.toEqual([])
     expect(rawRequest).not.toHaveBeenCalled()
@@ -198,7 +204,7 @@ describe('Linear issue queries', () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(
       listIssues('open', 10, 'workspace-1', { teamId: 'team-1' })
@@ -220,7 +226,7 @@ describe('Linear issue queries', () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: false } } }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(
       listIssues('all', 10, 'workspace-1', {
@@ -244,7 +250,7 @@ describe('Linear issue queries', () => {
   })
 
   it('rejects non-empty attribute filters when workspace scope is all', async () => {
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
     await expect(
       listIssues('all', 10, 'all', {
         attributeFilter: {
@@ -269,7 +275,7 @@ describe('Linear issue queries', () => {
         }
       }
     })
-    const { searchIssues } = await import('./issues')
+    const { searchIssues } = await import('./linear-issue-lookups')
 
     await expect(searchIssues('bug', 36, 'workspace-1')).resolves.toMatchObject([
       { id: 'LIN-OLD' },
@@ -296,7 +302,7 @@ describe('Linear issue queries', () => {
         }
       }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
       items: [
@@ -314,7 +320,9 @@ describe('Linear issue queries', () => {
     getClients.mockImplementation(() => {
       throw error
     })
-    const { createIssue, listIssues, searchIssues } = await import('./issues')
+    const { createIssue } = await import('./linear-issue-mutations')
+    const { listIssues } = await import('./linear-issue-listing')
+    const { searchIssues } = await import('./linear-issue-lookups')
 
     await expect(searchIssues('bug', 20, 'workspace-1')).rejects.toThrow(error.message)
     await expect(listIssues('all', 20, 'workspace-1')).rejects.toThrow(error.message)
@@ -327,7 +335,7 @@ describe('Linear issue queries', () => {
     rawRequest.mockResolvedValueOnce({
       data: { issues: { nodes: [rawIssue('LIN-1')], pageInfo: { hasNextPage: true } } }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 36, 'workspace-1')).resolves.toMatchObject({
       items: [{ id: 'LIN-1' }],
@@ -349,7 +357,7 @@ describe('Linear issue queries', () => {
           { hasNextPage: false, endCursor: null }
         )
       )
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     const result = await listIssues('all', 72, 'workspace-1')
 
@@ -387,7 +395,7 @@ describe('Linear issue queries', () => {
           }
         }
       })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 1, 'all')).resolves.toMatchObject({
       items: [{ id: 'LIN-NEW' }],
@@ -413,7 +421,7 @@ describe('Linear issue queries', () => {
         }
       }
     })
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 10, 'all')).resolves.toMatchObject({
       items: [{ id: 'LIN-OK' }],
@@ -430,7 +438,7 @@ describe('Linear issue queries', () => {
 
   it('keeps workspace errors on single-workspace lists', async () => {
     rawRequest.mockRejectedValueOnce(new Error('fetch failed'))
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     await expect(listIssues('all', 10, 'workspace-1')).resolves.toMatchObject({
       items: [],
@@ -476,7 +484,7 @@ describe('Linear issue queries', () => {
         endCursor: 'workspace-2-cursor-50'
       })
     )
-    const { listIssues } = await import('./issues')
+    const { listIssues } = await import('./linear-issue-listing')
 
     const result = await listIssues('all', 72, 'all')
 
@@ -514,7 +522,7 @@ describe('Linear issue queries', () => {
         }
       }
     ])
-    const { updateIssue: updateLinearIssue } = await import('./issues')
+    const { updateIssue: updateLinearIssue } = await import('./linear-issue-mutations')
 
     await expect(updateLinearIssue('issue-1', { estimate: 5 }, 'workspace-1')).resolves.toEqual({
       ok: true
@@ -526,7 +534,7 @@ describe('Linear issue queries', () => {
   it('sends due date updates through to Linear', async () => {
     const updateIssue = vi.fn().mockResolvedValue({ success: true })
     getClients.mockReturnValue([{ ...makeEntry(), client: { updateIssue } }])
-    const { updateIssue: updateLinearIssue } = await import('./issues')
+    const { updateIssue: updateLinearIssue } = await import('./linear-issue-mutations')
 
     await expect(
       updateLinearIssue('issue-1', { dueDate: '2026-06-30' }, 'workspace-1')
@@ -557,7 +565,7 @@ describe('Linear issue queries', () => {
         client: { updateIssue, client: { rawRequest } }
       }
     ])
-    const { updateIssueForAgent } = await import('./issues')
+    const { updateIssueForAgent } = await import('./linear-issue-mutations')
 
     await expect(
       updateIssueForAgent('issue-1', { stateId: 'state-review' }, 'workspace-1')
@@ -591,7 +599,7 @@ describe('Linear issue queries', () => {
     getClients.mockReturnValue([
       { ...makeEntry(), client: { updateIssue, client: { rawRequest } } }
     ])
-    const { updateIssueForAgent } = await import('./issues')
+    const { updateIssueForAgent } = await import('./linear-issue-mutations')
 
     await expect(
       updateIssueForAgent(
@@ -618,7 +626,7 @@ describe('Linear issue queries', () => {
         client: { updateIssue, client: { rawRequest } }
       }
     ])
-    const { updateIssueForAgent } = await import('./issues')
+    const { updateIssueForAgent } = await import('./linear-issue-mutations')
 
     await expect(
       updateIssueForAgent('issue-1', { stateId: 'state-review' }, 'workspace-1')
@@ -638,7 +646,7 @@ describe('Linear issue queries', () => {
       )
     getClients.mockReturnValue([{ ...makeEntry(), client: { client: { rawRequest } } }])
     const { getIssueByUuidForAgent, getCommentByUuidForAgent, getAttachmentByUuidForAgent } =
-      await import('./issues')
+      await import('./linear-issue-lookups')
 
     await expect(getIssueByUuidForAgent('missing-issue', 'workspace-1')).resolves.toBeNull()
     await expect(getCommentByUuidForAgent('missing-comment', 'workspace-1')).resolves.toBeNull()
@@ -659,7 +667,7 @@ describe('Linear issue queries', () => {
         client: { createComment }
       }
     ])
-    const { addIssueComment } = await import('./issues')
+    const { addIssueComment } = await import('./linear-issue-comments')
 
     await expect(
       addIssueComment('issue-1', 'hello', 'workspace-1', {
@@ -697,7 +705,7 @@ describe('Linear issue queries', () => {
         client: { createAttachment, client: { rawRequest } }
       }
     ])
-    const { createIssueAttachment } = await import('./issues')
+    const { createIssueAttachment } = await import('./linear-issue-comments')
 
     await expect(
       createIssueAttachment(
@@ -731,7 +739,7 @@ describe('Linear issue queries', () => {
         client: { createAttachment, client: { rawRequest } }
       }
     ])
-    const { createIssueAttachment } = await import('./issues')
+    const { createIssueAttachment } = await import('./linear-issue-comments')
 
     await expect(
       createIssueAttachment(
@@ -770,7 +778,7 @@ describe('Linear issue queries', () => {
         client: { createIssue, client: { rawRequest } }
       }
     ])
-    const { createIssueForAgent } = await import('./issues')
+    const { createIssueForAgent } = await import('./linear-issue-mutations')
 
     await expect(
       createIssueForAgent('team-1', 'Follow up', 'Details', 'workspace-1', {
@@ -807,7 +815,7 @@ describe('Linear issue queries', () => {
         client: { createIssue, client: { rawRequest } }
       }
     ])
-    const { createIssueForAgent } = await import('./issues')
+    const { createIssueForAgent } = await import('./linear-issue-mutations')
 
     await expect(
       createIssueForAgent('team-1', 'Follow up', 'Details', 'workspace-1', {
@@ -830,7 +838,7 @@ describe('Linear issue queries', () => {
         client: { createIssue, client: { rawRequest } }
       }
     ])
-    const { createIssueForAgent } = await import('./issues')
+    const { createIssueForAgent } = await import('./linear-issue-mutations')
 
     await expect(
       createIssueForAgent('team-1', 'Follow up', 'Details', 'workspace-1', {
@@ -852,7 +860,7 @@ describe('Linear issue queries', () => {
         }
       }
     })
-    const { getIssueCommentThreadRoot } = await import('./issues')
+    const { getIssueCommentThreadRoot } = await import('./linear-issue-lookups')
 
     await expect(getIssueCommentThreadRoot('issue-1', 'reply-1', 'workspace-1')).resolves.toEqual({
       id: 'root-1',

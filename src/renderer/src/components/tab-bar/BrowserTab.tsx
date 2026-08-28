@@ -23,7 +23,7 @@ import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
-import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
+import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -40,7 +40,7 @@ import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
 import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
 import { cn } from '@/lib/utils'
 
-function formatBrowserTabUrlLabel(url: string): string {
+export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
     return 'New Tab'
   }
@@ -198,6 +198,7 @@ export default function BrowserTab({
     <div
       ref={setNodeRef}
       data-tab-id={tab.id}
+      data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}

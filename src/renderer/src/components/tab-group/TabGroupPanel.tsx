@@ -19,8 +19,14 @@ import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { translate } from '@/i18n/i18n'
+import type { TabGroup } from '../../../../shared/tab-types'
+import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const EMPTY_GROUPS: readonly TabGroup[] = []
+const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
 export default function TabGroupPanel({
   groupId,
@@ -60,6 +66,17 @@ export default function TabGroupPanel({
 
   const model = useTabGroupWorkspaceModel({ groupId, worktreeId })
   const { activeTab, browserItems, commands, editorItems, tabBarOrder, terminalTabs } = model
+  // Why: one strip owns the worktree's client-hosted rows, or every split repeats them.
+  const ownsClientHostedRows = useAppStore(
+    (state) =>
+      resolveClientHostedBrowserRowStripGroupId(
+        state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
+      ) === groupId
+  )
+  const worktreeClientHostedRows = useClientHostedBrowserRows(worktreeId)
+  const clientHostedRows = ownsClientHostedRows
+    ? worktreeClientHostedRows
+    : EMPTY_CLIENT_HOSTED_ROWS
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -124,6 +141,8 @@ export default function TabGroupPanel({
       onTogglePaneExpand={commands.toggleTerminalPaneExpand}
       editorFiles={editorItems}
       browserTabs={browserItems}
+      clientHostedBrowserRows={clientHostedRows}
+      groupActiveTabId={activeTab?.id ?? null}
       activeFileId={
         activeTab?.contentType === 'terminal' ||
         activeTab?.contentType === 'browser' ||

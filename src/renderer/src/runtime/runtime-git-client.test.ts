@@ -22,6 +22,7 @@ import {
   type RuntimeEnvironmentCallRequest
 } from './runtime-compatibility-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from './runtime-rpc-client'
+import { REBASE_FROM_BASE_RPC_TIMEOUT_MS } from '../../../shared/git-rebase-source'
 
 const gitStatus = vi.fn()
 const gitCancelStatus = vi.fn()
@@ -616,7 +617,7 @@ describe('runtime git client', () => {
       selector: 'env-1',
       method: 'git.rebaseFromBase',
       params: { worktree: 'id:wt-1', baseRef: 'origin/main' },
-      timeoutMs: 30_000
+      timeoutMs: REBASE_FROM_BASE_RPC_TIMEOUT_MS
     })
   })
 

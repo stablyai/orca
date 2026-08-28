@@ -116,6 +116,76 @@ describe('federation relay parsing', () => {
       parseRelayedMessage(JSON.stringify({ subject: 'bad', body: 'Blocked', type: 'invented' }))
     ).toThrowError('Federated relay message type invented is not supported.')
   })
+
+  it.each(['escalation', 'decision_gate'] as const)(
+    'binds an old remote %s payload to the imported Dispatch',
+    async (type) => {
+      const db = new OrchestrationDb(':memory:')
+      const run = db.createRun({
+        objective: 'Federated mutation binding',
+        coordinatorHandle: 'term_coordinator',
+        coordinatorPaneKey: 'tab_coordinator:11111111-1111-4111-8111-111111111111'
+      })
+      const task = db.createTask({ spec: 'Remote work', runId: run.id })
+      const { dispatch } = db.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
+        taskId: task.id,
+        startOptions: {},
+        federation: {
+          environmentId: 'environment_windows',
+          environmentName: 'windows',
+          peerFingerprint: 'windows_peer_fingerprint',
+          protocolVersion: 3
+        }
+      })
+      db.recordWorkerStage({ dispatchId: dispatch.id, stage: 'ready', state: 'ready' })
+      const runtime = new OrcaRuntimeService()
+      runtime.setOrchestrationDb(db)
+      vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
+        peerFingerprint: 'windows_peer_fingerprint'
+      } as never)
+      vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
+        async (_environmentId, method) => {
+          if (method === 'orchestration.federationPull') {
+            return {
+              runtimeEpoch: 'remote_epoch_1',
+              items: [
+                {
+                  dispatch_id: dispatch.id,
+                  direction: 'to_home',
+                  sequence: 1,
+                  message_id: `msg_remote_${type}`,
+                  kind: type,
+                  payload: JSON.stringify({
+                    subject: 'Remote control mutation',
+                    body: '',
+                    type,
+                    payload: JSON.stringify({
+                      taskId: task.id,
+                      ...(type === 'decision_gate' ? { question: 'Proceed?' } : {})
+                    })
+                  })
+                }
+              ]
+            }
+          }
+          if (method === 'orchestration.federationAck') {
+            return { acknowledgedThrough: 1 }
+          }
+          throw new Error(`Unexpected method ${method}`)
+        }
+      )
+
+      await syncFederatedDispatch(runtime, dispatch.id)
+
+      expect(JSON.parse(db.getMessageById(`msg_remote_${type}`)!.payload!)).toMatchObject({
+        taskId: task.id,
+        dispatchId: dispatch.id
+      })
+      db.close()
+    }
+  )
 })
 
 describe('federation relay acknowledgments', () => {
@@ -128,6 +198,8 @@ describe('federation relay acknowledgments', () => {
     })
     const task = db.createTask({ spec: 'Remote work', runId: run.id })
     const { dispatch } = db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER,
       taskId: task.id,
       startOptions: {},
       federation: {

@@ -4,18 +4,18 @@ import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
   getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
   getLegacyGitHubPRCacheKey
 } from '@/store/slices/github-cache-key'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   buildParentPrChecksProjection,
-  getParentPrChecksRefreshIdentity,
-  type ParentPrChecksRefreshOutcome
+  getParentPrChecksRefreshIdentity
 } from './parent-pr-checks-rows'
+import type { ParentPrChecksRefreshOutcome } from './parent-pr-checks-row-types'
 
 const settings = null as never
 

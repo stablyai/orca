@@ -3,7 +3,7 @@ import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-sli
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { applyWorktreeUpdates, getRepoIdFromWorktreeId } from '../../worktree-helpers'
 import { branchName } from '@/lib/git-utils'
-import { refreshHostedReviewCard } from '../../hosted-review'
+import { refreshHostedReviewCard } from '../../hosted-review-card-refresh'
 import {
   applyDetectedWorktreeUpdates,
   findKnownWorktreeById

@@ -64,7 +64,9 @@ export function useWorktreeCardWorkspaceActions({
           })
           return
         }
-        runWorktreeDelete(worktree.id)
+        // Why the host (STA-4343): this row is one of possibly two for the same
+        // `repoId::path`, so it has to name its own or the delete lands on the other.
+        runWorktreeDelete(worktree.id, worktree.hostId ? { expectedHostId: worktree.hostId } : {})
       }
     },
     [
@@ -72,6 +74,7 @@ export function useWorktreeCardWorkspaceActions({
       folderWorkspaceId,
       setActiveWorktree,
       showDeleteQuickAction,
+      worktree.hostId,
       worktree.id
     ]
   )

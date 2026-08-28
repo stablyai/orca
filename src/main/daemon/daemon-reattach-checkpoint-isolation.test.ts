@@ -8,7 +8,7 @@ import { getDaemonSocketPath } from './daemon-spawner'
 import type { DaemonFileLog } from './daemon-file-log'
 import { HistoryReader } from './history-reader'
 import type { HistoryCheckpointResult } from './terminal-history-manager-options'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import type { TerminalSnapshot } from './types'
 
 const REATTACH_BUDGET_MS = 2_000
@@ -25,6 +25,7 @@ function createMockSubprocess(): SubprocessHandle & { emitData: (data: string) =
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExit?.(0), 1)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExit?.(137)),
     signal: vi.fn(),
     onData(callback) {

@@ -30,6 +30,7 @@ import {
   parseIssueLinkInput,
   type IssueLinkProvider
 } from '../../../../shared/issue-link-input'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 
 function resizeCommentTextarea(textarea: HTMLTextAreaElement): void {
@@ -56,6 +57,10 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
   const isOpen = isEditMeta
 
   const worktreeId = typeof modalData.worktreeId === 'string' ? modalData.worktreeId : ''
+  const executionHostId =
+    typeof modalData.executionHostId === 'string'
+      ? (parseExecutionHostId(modalData.executionHostId)?.id ?? undefined)
+      : undefined
   const currentDisplayName =
     typeof modalData.currentDisplayName === 'string' ? modalData.currentDisplayName : ''
   const currentComment =
@@ -224,7 +229,9 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     try {
       const updates = buildWorktreeMetaUpdates(draft, snapshot, liveLinks)
 
-      const result = await updateWorktreeMeta(worktreeId, updates)
+      const result = executionHostId
+        ? await updateWorktreeMeta(worktreeId, updates, { executionHostId })
+        : await updateWorktreeMeta(worktreeId, updates)
       // Why: a failed save refetches and reverts the optimistic write. Closing
       // here would report success for an edit that silently undid itself, and
       // would discard the name, comment and PR changes in the same payload.
@@ -249,6 +256,7 @@ const WorktreeMetaDialog = React.memo(function WorktreeMetaDialog() {
     }
   }, [
     worktreeId,
+    executionHostId,
     canSave,
     draft,
     snapshot,

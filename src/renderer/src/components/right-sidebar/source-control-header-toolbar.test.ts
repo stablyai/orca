@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   getNextSourceControlViewMode,
   shouldShowSourceControlCompareUnavailableCard
-} from './source-control-header-toolbar'
+} from './source-control/panel/header-toolbar'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 
 const readySummary: GitBranchCompareSummary = {

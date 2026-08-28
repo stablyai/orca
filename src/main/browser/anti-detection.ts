@@ -86,12 +86,43 @@ export const ANTI_DETECTION_SCRIPT = `(function() {
     'camera', 'microphone'
   ]);
   const origQuery = Permissions.prototype.query;
+  // Why: sites must receive the genuine PermissionStatus so native events, brand checks and method
+  // identity survive. Shadow only state, and resolve it lazily so existing statuses stay current.
+  function withOverriddenState(realStatus, stateProvider) {
+    Object.defineProperty(realStatus, 'state', {
+      configurable: true,
+      get: stateProvider
+    });
+    return realStatus;
+  }
+  // Why: some names the real implementation rejects outright; fall back to an EventTarget so
+  // listener registration still works instead of throwing.
+  function fallbackStatus(stateProvider) {
+    const status = new EventTarget();
+    Object.defineProperties(status, {
+      state: { configurable: true, get: stateProvider },
+      onchange: { configurable: true, value: null, writable: true }
+    });
+    return status;
+  }
+  function queryWithState(permissions, desc, stateProvider) {
+    let real;
+    try {
+      real = origQuery.call(permissions, desc);
+    } catch {
+      return Promise.resolve(fallbackStatus(stateProvider));
+    }
+    return Promise.resolve(real).then(
+      (status) => withOverriddenState(status, stateProvider),
+      () => fallbackStatus(stateProvider)
+    );
+  }
   Permissions.prototype.query = function(desc) {
     if (desc.name === 'notifications') {
-      return Promise.resolve({ state: notificationPermissionState(), onchange: null });
+      return queryWithState(this, desc, notificationPermissionState);
     }
     if (promptPerms.has(desc.name)) {
-      return Promise.resolve({ state: 'prompt', onchange: null });
+      return queryWithState(this, desc, () => 'prompt');
     }
     return origQuery.call(this, desc);
   };

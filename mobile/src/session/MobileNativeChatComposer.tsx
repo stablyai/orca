@@ -151,7 +151,9 @@ export function MobileNativeChatComposer({
     sendingRef.current = true
     setSending(true)
     try {
-      const accepted = await onSend(value.trimEnd())
+      // Raw, not trimmed: the send seam owns the wire trim, and a rejection has
+      // to hand the user back exactly what they typed (#14819).
+      const accepted = await onSend(value)
       if (accepted) {
         setCursor(0)
       }

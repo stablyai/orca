@@ -93,6 +93,24 @@ describe('matchSearchNavigate', () => {
 })
 
 describe('resolveTerminalKeyboardShortcutAction', () => {
+  it('routes native Option dead keys to consume-only release tracking', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Dead', altKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => 2,
+        undefined,
+        () => 'alt-enter',
+        () => false
+      )
+    ).toEqual({ type: 'trackNativeOptionDeadKey' })
+  })
+
   it('routes macOS Shift+Enter with the active Windows PTY host bytes', () => {
     expect(
       resolveTerminalKeyboardShortcutAction(
@@ -121,7 +139,7 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
         true,
         undefined,
         () => true,
-        () => false,
+        () => 0,
         undefined,
         () => 'alt-enter',
         () => true,

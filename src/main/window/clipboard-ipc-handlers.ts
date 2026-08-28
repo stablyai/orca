@@ -9,7 +9,8 @@ import {
 import { spawn } from 'node:child_process'
 import { open, stat } from 'node:fs/promises'
 import type { Store } from '../persistence'
-import { isENOENT, PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { PATH_ACCESS_DENIED_MESSAGE, resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { isENOENT } from '../ipc/filesystem-path-containment'
 import {
   assertClipboardTextWriteWithinLimitWithYield,
   assertClipboardTextWithinLimitWithYield,

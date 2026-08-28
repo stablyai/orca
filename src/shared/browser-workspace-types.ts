@@ -52,10 +52,23 @@ export type BrowserViewportOverride = {
   mobile: boolean
 }
 
+/**
+ * A page that shows a workspace document rather than a URL. The document is the identity: the grant
+ * and the `orca-preview://` URL it is served over are minted when the page mounts and replaced on a
+ * hard reload, so neither may be stored, persisted or published — this is what is, and `url` stays
+ * the blank URL for the whole life of such a page.
+ */
+export type BrowserPageDocLocation = {
+  kind: 'workspace-doc'
+  worktreeId: string
+  filePath: string
+}
+
 export type BrowserPage = {
   id: string
   workspaceId: string
   worktreeId: string
+  /** Blank for a page whose `docLocation` is set; a live grant URL is never written here. */
   url: string
   title: string
   loading: boolean
@@ -67,8 +80,15 @@ export type BrowserPage = {
   // Why: remote-owned worktrees can still host client-local fallback browser
   // pages until headless remote runtimes support real browser panes.
   browserRuntimeEnvironmentId?: string | null
+  // Why: the runtime page id lives only in the in-memory handle map, so without persisting it a
+  // relaunch cannot reclaim the host's page and falls through to creating a blank one.
+  remoteBrowserPageId?: string | null
+  /** The remote page was hosted by this desktop, not the runtime; it must not restore as streamed. */
+  remoteBrowserPageClientHosted?: boolean
   /** Active CDP viewport emulation preset. null = default (fill pane, no CDP override) */
   viewportPresetId?: BrowserViewportPresetId | null
+  /** Set on a page that shows a workspace document; absent on every page that shows a URL. */
+  docLocation?: BrowserPageDocLocation | null
 }
 
 export type BrowserWorkspace = {
@@ -101,6 +121,8 @@ export type BrowserWorkspace = {
   canGoForward: boolean
   loadError: BrowserLoadError | null
   createdAt: number
+  /** Mirrored from the active page, like the fields above it. */
+  docLocation?: BrowserPageDocLocation | null
 }
 
 export type BrowserTab = BrowserWorkspace
@@ -142,12 +164,25 @@ export type BrowserCookieImportSummary = {
   importedCookies: number
   skippedCookies: number
   googleCookiesSkipped?: number
+  // Why (STA-4300): cookies whose source partition identity could not be read faithfully are
+  // skipped rather than written unpartitioned, and a skip is only honest if it is reported.
+  partitionSkippedCookies?: number
   domains: string[]
-  warning?: {
-    code: 'restart-fallback-unavailable'
-    loadedCookies: number
-    failedCookies: number
-  }
+  warning?:
+    | {
+        code: 'restart-fallback-unavailable'
+        loadedCookies: number
+        failedCookies: number
+      }
+    | {
+        // Why: a row that will not decrypt is indistinguishable from a corrupt one by the time
+        // decrypt returns null, so the cause is captured at the point of failure and reported
+        // here. Without this an undecryptable profile is reported as a successful empty import.
+        code: 'cookies-undecryptable'
+        failedCookies: number
+        otherFailedCookies?: number
+        reason: 'app-bound-encryption' | 'linux-keyring-unavailable' | 'unknown'
+      }
 }
 
 export type BrowserCookieImportResult =

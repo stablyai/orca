@@ -112,23 +112,23 @@ function runCleanupActions(...actions: (() => void)[]): void {
 
 type RunningFixture = {
   session: Session
-  subprocess: ReturnType<typeof createPtySubprocess>
+  subprocess: Awaited<ReturnType<typeof createPtySubprocess>>
   output: () => string
   readStarted: () => boolean
   subscribe: (settle: () => void) => void
   cleanup: () => Promise<void>
 }
 
-function startFixture(
+async function startFixture(
   fixture: ShellFixture,
   startupContent: string,
   extraFiles: Record<string, string> = {}
-): RunningFixture {
+): Promise<RunningFixture> {
   const tempHome = mkdtempSync(join(tmpdir(), 'orca-shell-ready-exec-'))
   const previousHome = process.env.HOME
   const previousZdotdir = process.env.ZDOTDIR
   const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
-  let subprocess: ReturnType<typeof createPtySubprocess> | undefined
+  let subprocess: Awaited<ReturnType<typeof createPtySubprocess>> | undefined
   let session: Session | undefined
   let consoleWarnSpy: { mockRestore: () => void } | undefined
   try {
@@ -141,7 +141,7 @@ function startFixture(
     delete process.env.ORCA_ORIG_ZDOTDIR
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    subprocess = createPtySubprocess({
+    subprocess = await createPtySubprocess({
       sessionId: `repro-13767-${fixture.startupFile}`,
       cols: 80,
       rows: 24,
@@ -233,7 +233,7 @@ function setEnvironmentValue(key: string, value: string | undefined): void {
 }
 
 async function runExecOracle(fixture: ShellFixture): Promise<void> {
-  const running = startFixture(
+  const running = await startFixture(
     fixture,
     `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
@@ -253,7 +253,7 @@ fi
 }
 
 async function runReadOracle(fixture: ShellFixture, child: boolean): Promise<void> {
-  const running = startFixture(fixture, child ? fixture.childRead : fixture.secretRead)
+  const running = await startFixture(fixture, child ? fixture.childRead : fixture.secretRead)
   try {
     await waitForCondition(running.readStarted)
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -309,7 +309,7 @@ describePosix('#13767 shell-ready marker loss across exec', () => {
   zshTest(
     'keeps queued input out of a zle-line-init read after exec',
     async () => {
-      const running = startFixture(
+      const running = await startFixture(
         zshFixture,
         `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
@@ -357,7 +357,7 @@ zle -N zle-line-init
   sqliteTest(
     'does not treat an exec-replaced readline program as the shell prompt',
     async () => {
-      const running = startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
+      const running = await startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -373,7 +373,7 @@ zle -N zle-line-init
   sqliteTest(
     'does not trust a non-shell executable renamed to the shell basename',
     async () => {
-      const running = startFixture(
+      const running = await startFixture(
         zshFixture,
         'ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh"\n'
       )
@@ -392,7 +392,7 @@ zle -N zle-line-init
   zshTest(
     'retains the timeout backstop when zsh disables bracketed paste',
     async () => {
-      const running = startFixture(
+      const running = await startFixture(
         zshFixture,
         `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1

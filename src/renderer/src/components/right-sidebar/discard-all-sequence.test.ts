@@ -7,7 +7,7 @@ import {
   isSubmoduleWorktreeOnlyChange,
   runDiscardAllForArea,
   type DiscardAllArea
-} from './discard-all-sequence'
+} from './source-control/commit/discard-all-sequence'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
 
 function entry(partial: Partial<GitStatusEntry> & { path: string }): GitStatusEntry {

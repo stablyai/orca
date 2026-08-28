@@ -58,6 +58,7 @@ import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
 import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
+import { ShareSkillsSettingsPane } from './ShareSkillsSettingsPane'
 import { AutomationsSettingsPane } from './AutomationsSettingsPane'
 import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
@@ -309,7 +310,6 @@ function Settings(): React.JSX.Element {
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
   const settingsProjectSetupSelection = useAppStore((s) => s.settingsProjectSetupSelection)
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
-  const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
@@ -389,7 +389,7 @@ function Settings(): React.JSX.Element {
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
-  // Why: session-only (deliberately not persisted) unlock — Shift-click the Experimental entry reveals the hidden group.
+  // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -1108,16 +1108,9 @@ function Settings(): React.JSX.Element {
   ])
 
   const scrollToSection = useCallback(
-    async (
-      sectionId: string,
-      modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
-    ): Promise<void> => {
+    async (sectionId: string): Promise<void> => {
       if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
-      }
-      // Why: Shift-click the Experimental row unlocks the hidden power-user group (session-only).
-      if (sectionId === 'experimental' && modifiers?.shiftKey) {
-        setHiddenExperimentalUnlocked((previous) => !previous)
       }
       const container = contentScrollRef.current
       if (container) {
@@ -1205,12 +1198,10 @@ function Settings(): React.JSX.Element {
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
-        searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
         // Why: deep-links open panes/modals that own focus; plain entry lands in search.
         searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
-        onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
       />
 
@@ -1299,7 +1290,9 @@ function Settings(): React.JSX.Element {
                   )}
                   searchEntries={getSectionSearchEntries('orchestration')}
                 >
-                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                  {isSectionMounted('orchestration') ? (
+                    <OrchestrationPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 {linearConnected ? (
@@ -1458,6 +1451,19 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('artifacts') ? (
                     <ArtifactsSettingsPane settings={settings} updateSettings={updateSettings} />
                   ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="share-skills"
+                  title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.shareSkills.description',
+                    'Share your skills with an unlisted link. Anyone who has it can install them.'
+                  )}
+                  searchEntries={getSectionSearchEntries('share-skills')}
+                >
+                  {isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
                 </SettingsSection>
 
                 <SettingsSection
@@ -1831,6 +1837,13 @@ function Settings(): React.JSX.Element {
                     'New features that are still taking shape. Give them a try.'
                   )}
                   searchEntries={getSectionSearchEntries('experimental')}
+                  // Why: Option-click the page title unlocks the hidden staff group
+                  // (session-only) — same idiom as Option-click on the Updates header.
+                  onTitleClick={(event) => {
+                    if (event.altKey) {
+                      setHiddenExperimentalUnlocked((previous) => !previous)
+                    }
+                  }}
                 >
                   {isSectionMounted('experimental') ? (
                     <ExperimentalPane

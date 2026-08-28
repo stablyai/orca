@@ -13,13 +13,20 @@ import {
   formatAutomationTokens,
   getAutomationUsageStatusLabel
 } from './automation-usage-model'
+import { automationRunOccurrenceLabel } from './automation-run-occurrences'
 import { getAutomationRunWorkspaceDisplay } from './automation-run-workspace-display'
+import { AutomationOwnerConflictNotice } from './AutomationOwnerConflictNotice'
+import type { AutomationActionNotice } from './automation-row-action-dispatch'
+import type { AutomationHostRecoveryAction } from './automation-host-status-descriptors'
 import { translate } from '@/i18n/i18n'
 
 type AutomationRunHistoryProps = {
   runs: AutomationRun[]
   automationId: string
   worktreeMap: ReadonlyMap<string, Worktree>
+  /** Set when the history read failed; the runs below are unknown, not zero. */
+  notice?: AutomationActionNotice | null
+  onRecoverHistory?: (action: AutomationHostRecoveryAction) => void
   onOpenRun: (run: AutomationRun) => void
 }
 
@@ -27,6 +34,8 @@ export function AutomationRunHistory({
   runs,
   automationId,
   worktreeMap,
+  notice,
+  onRecoverHistory,
   onOpenRun
 }: AutomationRunHistoryProps): React.JSX.Element {
   const [selectedRunState, setSelectedRunState] = useState<{
@@ -51,7 +60,8 @@ export function AutomationRunHistory({
         <div className="text-sm font-medium">
           {translate('auto.components.automations.AutomationRunHistory.53fc5f07ab', 'Run history')}
         </div>
-        <div className="text-xs text-muted-foreground">{runCountLabel}</div>
+        {/* A failed read knows no counts; "0 runs" would answer a question nobody asked the host. */}
+        {notice ? null : <div className="text-xs text-muted-foreground">{runCountLabel}</div>}
       </div>
       <div className="min-h-[18rem] min-w-0">
         <div className="grid grid-cols-[minmax(9rem,1fr)_minmax(10rem,1.1fr)_minmax(5rem,.55fr)_minmax(5rem,.55fr)_minmax(6rem,auto)] gap-3 border-b border-border/50 px-3 py-1.5 text-[11px] font-medium uppercase text-muted-foreground">
@@ -79,6 +89,7 @@ export function AutomationRunHistory({
               worktree: runWorktree
             })
             const usageLabel = getAutomationUsageStatusLabel(run.usage)
+            const occurrenceLabel = automationRunOccurrenceLabel(run)
             return (
               <button
                 key={run.id}
@@ -95,6 +106,15 @@ export function AutomationRunHistory({
               >
                 <div className="min-w-0">
                   <div>{formatAutomationDateTime(run.scheduledFor)}</div>
+                  {/* The row's own date is the first occurrence; only this line says it recurred. */}
+                  {occurrenceLabel ? (
+                    <div
+                      data-testid="automation-run-occurrences"
+                      className="mt-1 truncate text-xs text-foreground"
+                    >
+                      {occurrenceLabel}
+                    </div>
+                  ) : null}
                   <div className="mt-1 truncate text-xs text-muted-foreground">
                     {workspaceLabel.detailLabel}
                   </div>
@@ -142,7 +162,17 @@ export function AutomationRunHistory({
               </button>
             )
           })}
-          {runs.length === 0 ? (
+          {notice ? (
+            <div className="grid gap-2 px-3 py-6" data-testid="automation-run-history-failure">
+              <p className="text-center text-sm text-foreground">
+                {translate(
+                  'auto.components.automations.AutomationRunHistory.historyUnavailable',
+                  'Run history could not be loaded for this automation.'
+                )}
+              </p>
+              <AutomationOwnerConflictNotice notice={notice} onRecover={onRecoverHistory} />
+            </div>
+          ) : runs.length === 0 ? (
             <div className="px-3 py-6 text-center text-sm text-muted-foreground">
               {translate(
                 'auto.components.automations.AutomationRunHistory.402651bfb6',

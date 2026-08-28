@@ -5,9 +5,11 @@ import {
   clearConsumedPreHandlerPtyExit,
   clearPreHandlerPtyState,
   consumePreHandlerPtyState,
+  currentPreHandlerPtySequence,
   drainPreHandlerPtyData,
   drainPreHandlerPtyExit,
   discardPreHandlerPtyState,
+  discardPreHandlerPtyStateFromPriorIncarnation,
   hasPreHandlerPtyExit,
   replayPreHandlerPtyData
 } from './pty-pre-handler-buffer'
@@ -16,6 +18,7 @@ const RESCAN_PTY_ID = 'pty-pre-handler-rescan'
 const TRIM_PTY_ID = 'pty-pre-handler-trim'
 const EXIT_PTY_ID = 'pty-pre-handler-exit'
 const CAPPED_EXIT_PTY_IDS = Array.from({ length: 65 }, (_, index) => `pty-capped-exit-${index}`)
+const RECYCLED_PTY_ID = 'ssh:target@@pty-2'
 
 describe('pre-handler PTY buffer', () => {
   afterEach(() => {
@@ -25,6 +28,7 @@ describe('pre-handler PTY buffer', () => {
     for (const ptyId of CAPPED_EXIT_PTY_IDS) {
       clearPreHandlerPtyState(ptyId)
     }
+    clearPreHandlerPtyState(RECYCLED_PTY_ID)
   })
 
   it('does not rescan historical chunks while buffering small startup output', () => {
@@ -186,5 +190,52 @@ describe('pre-handler PTY buffer', () => {
     expect(exits).toHaveLength(64)
     expect(exits).not.toContain(0)
     expect(exits).toContain(64)
+  })
+
+  // A redeployed SSH relay renumbers from pty-1, so a fresh spawn is handed an id whose dead owner
+  // left an exit here. Applying it reports the brand-new shell as already exited and the pane never
+  // binds a PTY at all — the tab comes up blank forever.
+  it("drops a recycled id's exit recorded before the fresh spawn was requested", () => {
+    bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 0)
+    bufferPreHandlerPtyData(RECYCLED_PTY_ID, 'output from the dead shell')
+
+    const fence = currentPreHandlerPtySequence()
+    discardPreHandlerPtyStateFromPriorIncarnation(RECYCLED_PTY_ID, fence)
+
+    const exit = vi.fn()
+    const data = vi.fn()
+    expect(hasPreHandlerPtyExit(RECYCLED_PTY_ID)).toBe(false)
+    drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
+    drainPreHandlerPtyData(RECYCLED_PTY_ID, data)
+    expect(exit).not.toHaveBeenCalled()
+    expect(data).not.toHaveBeenCalled()
+  })
+
+  it('keeps state recorded after the fence, so a shell that dies instantly still reports its exit', () => {
+    const fence = currentPreHandlerPtySequence()
+    bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 1)
+    bufferPreHandlerPtyData(RECYCLED_PTY_ID, 'startup bytes')
+
+    discardPreHandlerPtyStateFromPriorIncarnation(RECYCLED_PTY_ID, fence)
+
+    const exit = vi.fn()
+    const data = vi.fn()
+    expect(hasPreHandlerPtyExit(RECYCLED_PTY_ID)).toBe(true)
+    // Data first: draining the exit transfers ownership and clears the buffered bytes with it.
+    drainPreHandlerPtyData(RECYCLED_PTY_ID, data)
+    drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
+    expect(exit).toHaveBeenCalledWith(1)
+    expect(data).toHaveBeenCalledWith('startup bytes', undefined)
+  })
+
+  it('re-admits exits for a recycled id whose prior incarnation was consumed', () => {
+    consumePreHandlerPtyState(RECYCLED_PTY_ID)
+
+    discardPreHandlerPtyStateFromPriorIncarnation(RECYCLED_PTY_ID, currentPreHandlerPtySequence())
+    bufferPreHandlerPtyExit(RECYCLED_PTY_ID, 3)
+
+    const exit = vi.fn()
+    drainPreHandlerPtyExit(RECYCLED_PTY_ID, exit)
+    expect(exit).toHaveBeenCalledWith(3)
   })
 })

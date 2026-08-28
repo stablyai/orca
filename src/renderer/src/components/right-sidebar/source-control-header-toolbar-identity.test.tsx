@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import { SourceControlHeaderToolbar } from './source-control-header-toolbar'
+import { SourceControlHeaderToolbar } from './source-control/panel/header-toolbar'
 import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
 import type { GitBranchLineTotal } from '../../../../shared/git-status-types'
 import type { WorktreeGitIdentityDisplay } from '@/lib/worktree-git-identity-display'
@@ -13,7 +13,7 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
-vi.mock('./source-control-header-overflow-menu', () => ({
+vi.mock('./source-control/panel/header-overflow-menu', () => ({
   SourceControlHeaderOverflowMenu: () => <button type="button">More actions</button>
 }))
 

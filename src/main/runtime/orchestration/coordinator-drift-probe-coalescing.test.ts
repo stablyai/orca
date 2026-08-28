@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Coordinator, DISPATCH_STALE_THRESHOLD, type CoordinatorRuntime } from './coordinator'
+import { Coordinator } from './coordinator'
+import type { CoordinatorRuntime } from './coordinator-runtime-contract'
+import { DISPATCH_STALE_THRESHOLD } from './coordinator-stale-base-flag'
 import { OrchestrationDb } from './db'
 
 describe('Coordinator drift probe coalescing', () => {

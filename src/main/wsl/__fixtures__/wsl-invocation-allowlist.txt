@@ -1,0 +1,35 @@
+# Files that spawn wsl.exe directly instead of through src/main/wsl/wsl-runner.ts.
+#
+# Enforced by ../wsl-invocation-boundary.test.ts. This list only shrinks for a
+# MIGRATION -- its length is the W3 goalpost.
+#
+# It may grow when the scanner learns to see a spawn it was blind to. That has
+# happened once: pty-subprocess.ts, local-pty-provider.ts and claude-pty.ts
+# bind 'wsl.exe' to a variable and spawn it later, which the old neighbourhood
+# scan could not follow. They were recorded in a prose comment instead, so the
+# count was wrong by three in the direction that hides offenders. Adding them
+# is the guard getting honest, not the boundary regressing.
+#
+# Remaining entries need a runner mode that does not exist: a long-lived
+# streaming child (OAuth logins, the hook relay, the browser network relay), a
+# synchronous caller, or a host-level flag like --status / --list that the
+# guest-command API cannot express because it always prepends --exec.
+main/agent-hooks/wsl-hook-relay-launch.ts
+main/browser/wsl-browser-network-relay-launch.ts
+main/claude-accounts/claude-command-process.ts
+main/codex-accounts/runtime-home-service.ts
+main/codex-accounts/service.ts
+main/codex/codex-state-db-backfill-recovery.ts
+main/codex/codex-trust-grant-host.ts
+main/codex/codex-wsl-hook-install-plan.ts
+main/git/command-runner/wsl-command-resolution.ts
+main/git/wsl-git-read-environment.ts
+main/ipc/filesystem-watcher-wsl.ts
+main/local-worktree-filesystem.ts
+main/providers/local-pty-provider.ts
+main/rate-limits/claude-pty.ts
+main/rate-limits/codex-fetcher.ts
+main/wsl-availability.ts
+main/wsl-unc-delete.ts
+main/wsl.ts
+renderer/src/components/settings/TerminalWindowsShellSection.tsx

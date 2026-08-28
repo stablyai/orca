@@ -1,14 +1,10 @@
 import { existsSync } from 'node:fs'
-import { access } from 'node:fs/promises'
 import { isAbsolute } from 'node:path'
 import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from '../../shared/wsl-paths'
 import { WSL_CODEX_RUNTIME_HOME_SEGMENTS } from '../pty/codex-home-wsl-env'
 import { getWslHomeAsync, listWslDistrosAsync } from '../wsl'
-import {
-  runWslTranscriptFsTask,
-  wslTranscriptFsRefusal,
-  type WslTranscriptFsError
-} from './wsl-transcript-fs-gate'
+import { wslGatedAccess } from './wsl-transcript-fs-access'
+import { WslTranscriptFsError, wslTranscriptFsRefusal } from './wsl-transcript-fs-gate'
 
 /**
  * True for guest-absolute Linux paths that Win32 cannot open as-is.
@@ -50,15 +46,18 @@ async function pathExistsAsync(path: string, signal?: AbortSignal): Promise<bool
   if (!isWslUncPath(path)) {
     return existsSync(path)
   }
-  const probe = async (): Promise<boolean> => {
-    try {
-      await access(path)
-      return true
-    } catch {
-      return false
+  try {
+    return await wslGatedAccess(path, 'exact', signal)
+  } catch (error) {
+    if (error instanceof WslTranscriptFsError) {
+      throw error
     }
+    // A caller abort stays authoritative — it must never read as "missing".
+    if (signal?.aborted) {
+      throw error
+    }
+    return false
   }
-  return runWslTranscriptFsTask({ operation: 'access', path, priority: 'exact', signal }, probe)
 }
 
 // Why: resolveSessionFilePath runs on a 500ms–5s poll loop. listWslDistrosAsync
@@ -73,6 +72,13 @@ const WSL_HOME_DIRS_TTL_MS = 5 * 60_000
 let cachedWslHomeDirs: string[] | null = null
 let cachedWslHomeDirsExpiresAt = 0
 let inflightWslHomeDirs: Promise<string[]> | null = null
+let getAdditionalCodexHomePaths: (() => readonly string[]) | undefined
+
+export function configureHostReadableTranscriptPathSources(options: {
+  getAdditionalCodexHomePaths?: () => readonly string[]
+}): void {
+  getAdditionalCodexHomePaths = options.getAdditionalCodexHomePaths
+}
 
 async function defaultListWslHomeDirs(): Promise<string[]> {
   const homes = await Promise.all(
@@ -104,6 +110,7 @@ export function resetHostReadableTranscriptPathCacheForTests(): void {
   cachedWslHomeDirs = null
   cachedWslHomeDirsExpiresAt = 0
   inflightWslHomeDirs = null
+  getAdditionalCodexHomePaths = undefined
 }
 
 /**
@@ -190,10 +197,16 @@ export async function wslCodexSessionsDirs(
     return []
   }
   const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
-  return homeDirs.flatMap((home) => [
+  const dirs = homeDirs.flatMap((home) => [
     joinUnderWslHome(home, ...WSL_CODEX_RUNTIME_HOME_SEGMENTS, 'sessions'),
     joinUnderWslHome(home, '.codex', 'sessions')
   ])
+  for (const home of getAdditionalCodexHomePaths?.() ?? []) {
+    if (parseWslUncPath(home)) {
+      dirs.push(joinUnderWslHome(home, 'sessions'))
+    }
+  }
+  return dirs.filter((dir, index) => dirs.indexOf(dir) === index)
 }
 
 // Why: node:path.join is posix-flavoured off Windows and would mangle the

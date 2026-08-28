@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import Database from '../../sqlite/sync-database'
 import { OrchestrationDb } from './db'
+import { SCHEMA_VERSION } from './db/contract-constants'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
 
 const MUTATION_RECEIPT_MAX_ROWS = 10_000
 
@@ -154,6 +156,8 @@ describe('OrchestrationDb bounded mutation receipts', () => {
 
     expect(() =>
       db!.createStartingWorkerDispatch({
+        creator: { kind: 'system' },
+        maxDepth: Number.MAX_SAFE_INTEGER,
         taskId: task.id,
         startOptions: {},
         mutationReceipt: {
@@ -223,7 +227,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
     const dbPath = join(tempDir, 'orchestration.db')
     db = new OrchestrationDb(dbPath)
     const task = db.createTask({ spec: 'indexed lookup' })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
     db.close()
     db = undefined
 
@@ -240,7 +244,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(28)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.getDispatchContextById(dispatch.id)).toMatchObject({ assignee_handle: 'term_worker' })
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: null,
@@ -277,7 +281,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(28)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.getDispatchContextById(dispatch.id)).toBeDefined()
   })
 
@@ -298,7 +302,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
       createdByProcessIncarnation: 'pty_creator:incarnation-a',
       createdByRunGeneration: run.consumer_generation
     })
-    const dispatch = db.createDispatchContext(task.id, 'term_worker')
+    const dispatch = createRootDispatch(db, task.id, 'term_worker')
     db.close()
     db = undefined
 
@@ -309,7 +313,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db = new OrchestrationDb(dbPath)
     const sqlite = sqliteFor(db)
-    expect(sqlite.pragma('user_version', { simple: true })).toBe(28)
+    expect(sqlite.pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.getTask(task.id)).toMatchObject({
       created_by_pane_key: 'tab_creator:leaf_creator',
       created_by_process_incarnation: 'pty_creator:incarnation-a',
@@ -328,7 +332,7 @@ describe('OrchestrationDb dispatch assignee index migration', () => {
 
     db.close()
     db = new OrchestrationDb(dbPath)
-    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(28)
+    expect(sqliteFor(db).pragma('user_version', { simple: true })).toBe(SCHEMA_VERSION)
     expect(db.getTask(task.id)?.created_by_process_incarnation).toBe('pty_creator:incarnation-a')
   })
 })

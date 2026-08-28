@@ -53,10 +53,18 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Durable registration incarnation. Advances on create / re-create / explicit
+   *  re-adopt only, so automations fenced on an old registration cannot run on a
+   *  later target that happens to reuse the id. Never advanced by connect state. */
+  generation?: number
 }
 
+/** Renderer-authored target fields; registration generations are allocated and owned by main. */
+export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
+export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
+
 /** Public target identity safe to mirror to a paired client. */
-export type SshTargetSummary = Pick<SshTarget, 'id' | 'label'>
+export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'>
 
 /** Identity of a removed SSH target, recorded so that re-adding the same host
  *  can re-point orphaned repos/worktrees from the old (deleted) target id to

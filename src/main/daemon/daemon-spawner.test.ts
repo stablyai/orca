@@ -22,7 +22,7 @@ import {
 import { probeSocketConnect } from './daemon-endpoint-probe'
 import { startDaemon, type DaemonHandle } from './daemon-main'
 import { DaemonClient } from './client'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import { PROTOCOL_VERSION } from './types'
 
 function createTestDir(): string {
@@ -37,6 +37,7 @@ function createMockSubprocess(): SubprocessHandle {
     write: vi.fn(),
     resize: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExitCb?.(0), 5)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => setTimeout(() => onExitCb?.(137), 5)),
     signal: vi.fn(),
     onData(_cb: (data: string) => void) {},

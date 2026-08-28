@@ -7,6 +7,11 @@ settings:
 overrides:
   xcode>uuid: 11.1.1
 
+patchedDependencies:
+  react-native@0.83.9:
+    hash: 44876634a8efbb0f2c3f66cd4332be170ec821d1cbfc0264ac80680983e8513d
+    path: patches/react-native@0.83.9.patch
+
 importers:
 
   .:

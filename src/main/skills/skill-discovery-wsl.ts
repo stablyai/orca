@@ -1,4 +1,3 @@
-import { execFile } from 'node:child_process'
 import { posix as pathPosix } from 'node:path'
 import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
 import type {
@@ -6,7 +5,8 @@ import type {
   SkillDiscoveryResult,
   SkillDiscoverySource
 } from '../../shared/skills'
-import { buildEncodedWslBashCommand, quoteBashString } from '../wsl-bash-command'
+import { quoteBashString } from '../wsl-bash-command'
+import { runWslProcess } from '../wsl/wsl-runner'
 import {
   buildSkillDiscoverySources,
   compareSkills,
@@ -16,10 +16,13 @@ import {
   type SkillScanRoot
 } from './skill-discovery-sources'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
+import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
 const WSL_SCAN_TIMEOUT_MS = 10_000
-const WSL_SCAN_MAX_BUFFER_BYTES = 128 * 1024 * 1024
+const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 
 export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): string {
   const lines = [
@@ -41,36 +44,36 @@ export function buildWslSkillDiscoveryCommand(roots: readonly SkillScanRoot[]): 
     `    printf '%s\\0%s\\0%s\\0%s\\0%s\\0' S "$root_index" "$skill_file" "$canonical_path" "$updated_at"`,
     `    printf '%s' "$encoded_markdown"`,
     `    printf '\\0'`,
-    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" -type f -name 'SKILL.md' -print0 2>/dev/null)`,
+    `  done < <(find -L "$root_path" -mindepth 1 -maxdepth "$max_depth" \\( -name '${SKILL_STAGING_GLOB}' -prune \\) -o \\( -type f -name 'SKILL.md' -print0 \\) 2>/dev/null)`,
     '}'
   ]
   roots.forEach((root, index) => {
-    const maxDepth = root.sourceKind === 'plugin' ? 10 : 5
+    const maxDepth = skillFileMaxDepth(root.sourceKind)
     lines.push(`scan_root ${index} ${quoteBashString(root.path)} ${maxDepth}`)
   })
-  return buildEncodedWslBashCommand(lines.join('\n'))
+  return lines.join('\n')
 }
 
-function executeWslSkillDiscovery(distro: string, command: string): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      'wsl.exe',
-      ['-d', distro, '--', 'bash', '-c', command],
-      {
-        encoding: 'utf8',
-        maxBuffer: WSL_SCAN_MAX_BUFFER_BYTES,
-        timeout: WSL_SCAN_TIMEOUT_MS,
-        windowsHide: true
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(stdout)
-      }
-    )
+async function executeWslSkillDiscovery(distro: string, script: string): Promise<string> {
+  // Why bash: the scan uses process substitution (`done < <(find ...)`), which
+  // dash rejects with `Syntax error: word unexpected` (#14292).
+  const result = await runWslProcess({
+    distro,
+    // 'none': find/base64/head/printf/stat over $HOME roots, no bare tool.
+    loginPath: 'none',
+    script,
+    shell: 'bash',
+
+    timeoutMs: WSL_SCAN_TIMEOUT_MS,
+    maxOutputBytes: WSL_SCAN_MAX_OUTPUT_BYTES
   })
+  // Why throw: runWslProcess resolves on a non-zero exit, and an empty stdout
+  // parses into a valid "zero skills" result -- which reads as "nothing is
+  // installed" and re-offers installs for skills that are present.
+  if (result.code !== 0 || result.timedOut) {
+    throw new Error('skill-discovery-wsl-scan-failed')
+  }
+  return result.stdout
 }
 
 function readProtocolField(fields: string[], index: number): string {
@@ -171,6 +174,7 @@ export async function discoverSkillsInWsl(args: {
   distro: string
   homeDir: string
   cwd: string
+  providerRootOverrides?: SkillProviderRootOverrides
 }): Promise<SkillDiscoveryResult> {
   // Plugin roots are resolved (in JS) from metadata this first wsl.exe call
   // reads, then fed to the scan's own wsl.exe call below — two sequential
@@ -192,7 +196,8 @@ export async function discoverSkillsInWsl(args: {
       homeDir: args.homeDir,
       cwd: args.cwd,
       repos: [],
-      pathApi: pathPosix
+      pathApi: pathPosix,
+      providerRootOverrides: args.providerRootOverrides
     }),
     ...pluginRoots
   ]

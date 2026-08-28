@@ -1,4 +1,5 @@
 import type { WorktreeSlice } from '../../worktree-helpers'
+import { parseExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
@@ -43,17 +44,36 @@ export function createForceDeletePreservedBranch(
       if ((options?.hostId || options?.runtimeEnvironmentId) && !retainedTarget) {
         throw new Error(`No preserved branch cleanup is pending for "${branchName}".`)
       }
+      // Ambiguous route: deleting against the active runtime could hit the wrong host's branch.
+      // Localized because it surfaces in the toast below; the throw above mirrors a main-process
+      // message verbatim (orca-runtime.ts, ipc/worktrees.ts) and must stay in sync with it.
+      if (!retainedTarget && matchingRetainedTargets.length > 1) {
+        throw new Error(
+          translate(
+            'auto.store.slices.worktrees.preservedBranchCleanupHostAmbiguous',
+            'Multiple preserved branch cleanups are pending for "{{value0}}"; specify the host.',
+            { value0: branchName }
+          )
+        )
+      }
       const cleanupHostId = options?.hostId ?? retainedTarget?.cleanup.hostId
       // Why: the removed row no longer records its nested HUB owner, so retain the deletion-time route.
       const target =
         retainedTarget?.target ??
         getActiveRuntimeTarget(settingsForWorktreeOwner(get(), worktreeId))
+      const parsedCleanupHost = parseExecutionHostId(cleanupHostId)
+      const effectiveHostId =
+        target.kind === 'environment' &&
+        parsedCleanupHost?.kind === 'runtime' &&
+        parsedCleanupHost.environmentId === target.environmentId
+          ? undefined
+          : cleanupHostId
       const result = await (target.kind === 'local'
         ? window.api.worktrees.forceDeletePreservedBranch({
             worktreeId,
             branchName,
             expectedHead,
-            ...(cleanupHostId ? { hostId: cleanupHostId } : {})
+            ...(effectiveHostId ? { hostId: effectiveHostId } : {})
           })
         : callRuntimeRpc<ForceDeleteWorktreeBranchResult>(
             target,
@@ -62,7 +82,7 @@ export function createForceDeletePreservedBranch(
               worktree: toRuntimeWorktreeSelector(worktreeId),
               branchName,
               expectedHead,
-              ...(cleanupHostId ? { hostId: cleanupHostId } : {})
+              ...(effectiveHostId ? { hostId: effectiveHostId } : {})
             },
             { timeoutMs: 15_000 }
           ))

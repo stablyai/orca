@@ -33,3 +33,8 @@ export type DiffContent = GitDiffResult & {
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
 }
+
+export type InFlightContentRead<T> = {
+  externalEventGeneration?: number
+  promise: Promise<T>
+}

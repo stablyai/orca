@@ -83,6 +83,19 @@ describe('exact orchestration worker output', () => {
     expect(readTerminal).not.toHaveBeenCalled()
   })
 
+  it('reports unverifiable liveness without claiming the terminal is running', async () => {
+    const result = await read({
+      terminalStatus: 'unknown',
+      terminalLiveness: 'unverifiable'
+    })
+
+    expect(result.status).toEqual({
+      worker: 'ready',
+      terminal: 'unknown',
+      liveness: 'unverifiable'
+    })
+  })
+
   it('reads Grok through the shared Native Chat transcript decoder', async () => {
     await writeFile(
       transcriptA,
@@ -139,6 +152,31 @@ describe('exact orchestration worker output', () => {
       source: 'terminal',
       fallbackReason: 'provider_unsupported',
       terminal: { tail: ['opencode --dispatch-capability [dispatch capability redacted]'] },
+      warnings: ['Dispatch capability tokens were redacted from terminal output.']
+    })
+    expect(JSON.stringify(result)).not.toContain(capability)
+  })
+
+  it('redacts dispatch capabilities from terminal composer drafts', async () => {
+    const capability = `dcap_${'A'.repeat(43)}`
+    readTerminal.mockResolvedValue({
+      handle: 'term_worker',
+      status: 'running',
+      tail: ['safe output'],
+      draft: `send --dispatch-capability ${capability}`,
+      truncated: false,
+      nextCursor: '9'
+    })
+    providerSession = null
+
+    const result = await read()
+
+    expect(result).toMatchObject({
+      source: 'terminal',
+      terminal: {
+        tail: ['safe output'],
+        draft: 'send --dispatch-capability [dispatch capability redacted]'
+      },
       warnings: ['Dispatch capability tokens were redacted from terminal output.']
     })
     expect(JSON.stringify(result)).not.toContain(capability)

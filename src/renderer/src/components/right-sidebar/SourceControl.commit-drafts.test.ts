@@ -8,7 +8,7 @@ import {
   shouldRenderCommitArea,
   writeCommitDraftForWorktree
 } from './SourceControl'
-import { getNextSourceControlViewMode } from './source-control-header-toolbar'
+import { getNextSourceControlViewMode } from './source-control/panel/header-toolbar'
 import {
   loadSessionCommitDrafts,
   saveSessionCommitDrafts

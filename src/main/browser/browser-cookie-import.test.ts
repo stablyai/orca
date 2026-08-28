@@ -8,7 +8,8 @@ const {
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
-  clearPendingCookieImportMock
+  clearPendingCookieImportMock,
+  writeCookieIdentityMock
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   copyFileSyncMock: vi.fn(),
@@ -16,7 +17,8 @@ const {
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
-  clearPendingCookieImportMock: vi.fn()
+  clearPendingCookieImportMock: vi.fn(),
+  writeCookieIdentityMock: vi.fn()
 }))
 
 vi.mock('./browser-session-registry', () => ({
@@ -56,6 +58,10 @@ vi.mock('./browser-cookie-clear-store', () => ({
     snapshotClearIdentities: async (items: { cookie: Record<string, unknown>; url: string }[]) =>
       items.map(({ cookie, url }) => ({ url, ...cookie })),
     restoreClearIdentities: async () => undefined,
+    // Why (STA-4300): the import writes land here, not on cookies.set. A store mock missing this
+    // method would throw a TypeError the per-cookie catch swallows, quietly turning every write
+    // into a "rejected cookie" while the suite still looked green.
+    writeCookieIdentity: writeCookieIdentityMock,
     dispose: () => undefined
   })
 }))
@@ -96,6 +102,15 @@ function chromeBrowser(cookiesPath: string): DetectedBrowser {
     selectedProfile: 'Default'
   }
 }
+
+// Why (STA-4300): cookies.set() silently drops partitionKey, so no user cookie may reach it. Only
+// the __init probe — which writes no user data — is allowed through; anything else is the
+// downgrade returning, and it must fail the test rather than quietly succeed.
+const unreachableCookieSet = vi.fn(async (details: { name: string }) => {
+  if (details.name !== '__init') {
+    throw new Error(`cookies.set was called for user cookie ${details.name}`)
+  }
+})
 
 const LARGE_SAFARI_COOKIE_COUNT = 150_000
 
@@ -176,19 +191,21 @@ describe('importCookiesFromFile', () => {
   let tmpDir: string
   let cookiesGetMock: ReturnType<typeof vi.fn>
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
-  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookieWriteMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-cookie-test-'))
     cookiesGetMock = vi.fn().mockResolvedValue([])
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
-    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookieWriteMock = writeCookieIdentityMock
+    cookieWriteMock.mockReset()
+    cookieWriteMock.mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
         get: cookiesGetMock,
         remove: cookiesRemoveMock,
-        set: cookiesSetMock
+        set: unreachableCookieSet
       }
     })
   })
@@ -237,8 +254,8 @@ describe('importCookiesFromFile', () => {
     expect(result.summary.domains).toContain('github.com')
     expect(result.summary.domains).toContain('example.com')
 
-    expect(cookiesSetMock).toHaveBeenCalledTimes(2)
-    const firstCall = cookiesSetMock.mock.calls[0][0]
+    expect(cookieWriteMock).toHaveBeenCalledTimes(2)
+    const firstCall = cookieWriteMock.mock.calls[0][0]
     expect(firstCall.name).toBe('_gh_sess')
     expect(firstCall.domain).toBe('.github.com')
     expect(firstCall.secure).toBe(true)
@@ -262,14 +279,18 @@ describe('importCookiesFromFile', () => {
     const result = await importCookiesFromFile(filePath, 'persist:test')
     expect(result.ok).toBe(true)
 
-    const hostCall = cookiesSetMock.mock.calls
+    const hostCall = cookieWriteMock.mock.calls
       .map((c) => c[0])
       .find((c) => c.name === '__Host-user_session_same_site')
-    // __Host- prefix requires no Domain attribute and path=/, or Chromium drops it.
-    expect(hostCall).not.toHaveProperty('domain')
+    // __Host- prefix requires no Domain attribute and path=/, or Chromium drops it. hostOnly is how
+    // the identity says "omit domain"; cdpSetCookieParamsFromIdentity drops it on the wire.
+    expect(hostCall.hostOnly).toBe(true)
     expect(hostCall.path).toBe('/')
 
-    const normalCall = cookiesSetMock.mock.calls.map((c) => c[0]).find((c) => c.name === '_gh_sess')
+    const normalCall = cookieWriteMock.mock.calls
+      .map((c) => c[0])
+      .find((c) => c.name === '_gh_sess')
+    expect(normalCall.hostOnly).toBe(false)
     expect(normalCall.domain).toBe('.github.com')
     expect(normalCall.path).toBe('/settings')
   })
@@ -363,11 +384,11 @@ describe('importCookiesFromFile', () => {
 
     await importCookiesFromFile(filePath, 'persist:test')
 
-    expect(cookiesSetMock.mock.calls[0][0].sameSite).toBe('no_restriction')
-    expect(cookiesSetMock.mock.calls[1][0].sameSite).toBe('lax')
-    expect(cookiesSetMock.mock.calls[2][0].sameSite).toBe('strict')
-    expect(cookiesSetMock.mock.calls[3][0].sameSite).toBe('unspecified')
-    expect(cookiesSetMock.mock.calls[4][0].sameSite).toBe('unspecified')
+    expect(cookieWriteMock.mock.calls[0][0].sameSite).toBe('no_restriction')
+    expect(cookieWriteMock.mock.calls[1][0].sameSite).toBe('lax')
+    expect(cookieWriteMock.mock.calls[2][0].sameSite).toBe('strict')
+    expect(cookieWriteMock.mock.calls[3][0].sameSite).toBe('unspecified')
+    expect(cookieWriteMock.mock.calls[4][0].sameSite).toBe('unspecified')
   })
 
   it('derives correct URL from domain and secure flag', async () => {
@@ -379,13 +400,13 @@ describe('importCookiesFromFile', () => {
 
     await importCookiesFromFile(filePath, 'persist:test')
 
-    expect(cookiesSetMock.mock.calls[0][0].url).toBe('https://secure.com/')
-    expect(cookiesSetMock.mock.calls[1][0].url).toBe('http://insecure.com/')
-    expect(cookiesSetMock.mock.calls[2][0].url).toBe('http://nodot.com/')
+    expect(cookieWriteMock.mock.calls[0][0].url).toBe('https://secure.com/')
+    expect(cookieWriteMock.mock.calls[1][0].url).toBe('http://insecure.com/')
+    expect(cookieWriteMock.mock.calls[2][0].url).toBe('http://nodot.com/')
   })
 
   it('rolls back replacement when a cookie fails to set', async () => {
-    cookiesSetMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('set failed'))
+    cookieWriteMock.mockResolvedValueOnce(undefined).mockRejectedValueOnce(new Error('set failed'))
 
     const filePath = writeCookieFile([
       { domain: '.a.com', name: 'ok', value: '1' },
@@ -400,14 +421,16 @@ describe('importCookiesFromFile', () => {
 
 describe('importCookiesFromBrowser Safari', () => {
   let tmpDir: string
-  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookieWriteMock: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-safari-cookie-test-'))
-    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookieWriteMock = writeCookieIdentityMock
+    cookieWriteMock.mockReset()
+    cookieWriteMock.mockResolvedValue(undefined)
     sessionFromPartitionMock.mockReset()
     sessionFromPartitionMock.mockReturnValue({
-      cookies: { set: cookiesSetMock }
+      cookies: { set: unreachableCookieSet }
     })
   })
 
@@ -429,13 +452,13 @@ describe('importCookiesFromBrowser Safari', () => {
     const result = await importCookiesFromBrowser(browser, 'persist:test')
 
     expect(result).toEqual({ ok: false, reason: 'All Safari cookies are expired.' })
-    expect(cookiesSetMock).not.toHaveBeenCalled()
+    expect(cookieWriteMock).not.toHaveBeenCalled()
   })
 })
 
 describe('importCookiesFromBrowser Chromium', () => {
   let tmpDir: string
-  let cookiesSetMock: ReturnType<typeof vi.fn>
+  let cookieWriteMock: ReturnType<typeof vi.fn>
   let cookiesRemoveMock: ReturnType<typeof vi.fn>
   let cookiesFlushStoreMock: ReturnType<typeof vi.fn>
   let clearDataMock: ReturnType<typeof vi.fn>
@@ -443,7 +466,9 @@ describe('importCookiesFromBrowser Chromium', () => {
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'orca-chromium-cookie-test-'))
-    cookiesSetMock = vi.fn().mockResolvedValue(undefined)
+    cookieWriteMock = writeCookieIdentityMock
+    cookieWriteMock.mockReset()
+    cookieWriteMock.mockResolvedValue(undefined)
     cookiesRemoveMock = vi.fn().mockResolvedValue(undefined)
     cookiesFlushStoreMock = vi.fn().mockResolvedValue(undefined)
     clearDataMock = vi.fn().mockResolvedValue(undefined)
@@ -461,19 +486,19 @@ describe('importCookiesFromBrowser Chromium', () => {
     sessionFromPartitionMock.mockReturnValue({
       cookies: {
         get: vi.fn().mockResolvedValue([]),
-        set: cookiesSetMock,
+        set: unreachableCookieSet,
         remove: cookiesRemoveMock,
         flushStore: cookiesFlushStoreMock
       },
       clearData: clearDataMock,
-      setUserAgent: setUserAgentMock
+      setUserAgent: setUserAgentMock,
+      getStoragePath: () => join(tmpDir, 'userData', 'Partitions', 'test')
     })
   })
 
   afterEach(() => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
-
   it('imports from a live Chromium source DB into a Network/Cookies target profile', async () => {
     const sourceCookiesPath = join(tmpDir, 'Chrome', 'Default', 'Network', 'Cookies')
     const targetCookiesPath = join(tmpDir, 'userData', 'Partitions', 'test', 'Network', 'Cookies')
@@ -507,7 +532,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({
           domain: '.example.com',
           name: 'sid',
@@ -568,7 +593,7 @@ describe('importCookiesFromBrowser Chromium', () => {
         expect.any(Array),
         expect.any(Object)
       )
-      expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'sid', value: 'encrypted-value' })
       )
     } finally {
@@ -623,7 +648,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'sid', value: 'source-value' })
       )
       // The partial staging file is still discarded, so no stale DB replays on cold start.
@@ -653,7 +678,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'sid', value: 'source-value' })
       )
       // The summary counts importable cookies, not staged rows.
@@ -675,7 +700,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     mkdirSync(dirname(targetCookiesPath), { recursive: true })
     writeFileSync(targetCookiesPath, 'not a sqlite database')
     // Forces the restart fallback to be the only way these cookies could ever land.
-    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     try {
@@ -717,7 +742,7 @@ describe('importCookiesFromBrowser Chromium', () => {
     targetDb.close()
     // Why: without a memory failure, memoryFailed === 0 would suppress registration on its own and
     // the assertion below would pass even if the insert failure never disabled staging.
-    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     try {
@@ -727,7 +752,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(cookiesSetMock).toHaveBeenCalledWith(
+      expect(cookieWriteMock).toHaveBeenCalledWith(
         expect.objectContaining({ name: 'sid', value: 'source-value' })
       )
       expect(setPendingCookieImportMock).not.toHaveBeenCalled()
@@ -773,7 +798,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       { name: 'sid', value: 'source-value' }
     ]).close()
     createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    cookiesSetMock.mockRejectedValue(new Error('cookie rejected'))
+    cookieWriteMock.mockRejectedValue(new Error('cookie rejected'))
 
     const platformSpy = vi.spyOn(process, 'platform', 'get').mockReturnValue('darwin')
     try {

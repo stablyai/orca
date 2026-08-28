@@ -47,6 +47,22 @@ describe('settings navigation metadata', () => {
     ])
   })
 
+  it('owns nested worker depth under Orchestration on desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const agents = sections.find((section) => section.id === 'agents')
+    const orchestration = sections.find((section) => section.id === 'orchestration')
+
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
+      'Nested worker depth'
+    )
+  })
+
   it('adds the Linear capability section right after Orchestration only when connected', () => {
     expect(ids()).not.toContain('linear')
 
@@ -79,7 +95,7 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
-  it('places Automations and Artifacts first under Workflows', () => {
+  it('places Automations, Artifacts, and Share Skills first under Workflows', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -88,6 +104,7 @@ describe('settings navigation metadata', () => {
     })
     const automations = sections.find((section) => section.id === 'automations')
     const artifacts = sections.find((section) => section.id === 'artifacts')
+    const shareSkills = sections.find((section) => section.id === 'share-skills')
     const workflowIds = sections
       .filter((section) => section.group === 'workflows')
       .map((section) => section.id)
@@ -99,7 +116,9 @@ describe('settings navigation metadata', () => {
     expect(artifacts?.description).toBe(
       'Share HTML and Markdown files with your team and manage their public links.'
     )
-    expect(workflowIds.slice(0, 2)).toEqual(['automations', 'artifacts'])
+    expect(shareSkills).toMatchObject({ group: 'workflows', badge: 'Beta' })
+    expect(shareSkills?.searchEntries[0]?.title).toBe('Unlisted skill links')
+    expect(workflowIds.slice(0, 3)).toEqual(['automations', 'artifacts', 'share-skills'])
   })
 
   it('places the Orca account in Set Up on desktop only', () => {
@@ -153,6 +172,12 @@ describe('settings navigation metadata', () => {
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
       'New mobile emulator tab'
+    )
+    const agents = webSections.find((section) => section.id === 'agents')
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    const orchestration = webSections.find((section) => section.id === 'orchestration')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'Nested worker depth'
     )
   })
 

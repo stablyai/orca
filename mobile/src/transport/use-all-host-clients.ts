@@ -3,7 +3,7 @@ import type { RpcClient } from './rpc-client'
 import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 import { useRpcClientContext } from './client-context'
-import type { HostClientAcquisition } from './client-context'
+import type { HostClientAcquisition } from './host-client-acquisition-registry'
 
 type UseAllHostClientsOptions = {
   autoConnectHostIds?: readonly string[]
@@ -136,10 +136,21 @@ export function useAllHostClients(hostIds: string[], options?: UseAllHostClients
       client: RpcClient
       state: ConnectionState
       path: MobileConnectionPath
+      pendingPath: MobileConnectionPath | null
+      pairingRejected: boolean
     }>((hostId) => {
       const client = clientsByHostId.get(hostId)
       return client
-        ? [{ hostId, client, state: ctx.getState(hostId), path: ctx.getActivePath(hostId) }]
+        ? [
+            {
+              hostId,
+              client,
+              state: ctx.getState(hostId),
+              path: ctx.getActivePath(hostId),
+              pendingPath: ctx.getPendingPath(hostId),
+              pairingRejected: ctx.isPairingRejected(hostId)
+            }
+          ]
         : []
     })
   }, [ctx, hostIds, tick])
