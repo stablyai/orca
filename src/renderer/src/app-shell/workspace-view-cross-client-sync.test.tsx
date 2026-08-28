@@ -1,0 +1,397 @@
+// @vitest-environment happy-dom
+// STA-5781: workspace sidebar filter settings intermittently reset across clients.
+//
+// Topology under test (all shipping code except where pinned):
+//   desktop renderer  = real usePersistedUIWriter + real UI slice (createUIStore)
+//   authority (main)  = real updatePersistedUI/getPersistedUI merge
+//   broadcast         = controlled queue modeling the async ui:stateChanged IPC send
+//   mobile client     = mobile/src/worktree/workspace-view-settings mapping; the ui.set
+//                       payload uses the shipping buildWorkspaceViewSettingsUpdate when
+//                       exported, else the legacy whole-snapshot shape — the source-pin
+//                       test asserts index.tsx matches whichever path is active, so the
+//                       model stays tethered to shipping code on baseline and candidate.
+//
+// Invariant: when two independently identified clients change DISJOINT workspace-view
+// fields concurrently or across stale-mirror windows, both changes survive and all
+// mirrors converge; no client may restore a stale sibling field.
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { act, createElement } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StoreApi } from 'zustand/vanilla'
+import { getDefaultUIState } from '../../../shared/constants'
+import { omitPairingLocalUiFields } from '../../../shared/pairing-local-ui-fields'
+import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
+import type { PersistedState } from '../../../shared/persisted-state-types'
+import { getPersistedUI } from '../../../main/persistence/applying-settings/ui-state-read'
+import {
+  updatePersistedUI,
+  type UIUpdateOperations
+} from '../../../main/persistence/applying-settings/ui-state-update'
+import type { AppState } from '../store/types'
+import { createUIStore } from '../store/slices/ui-slice-test-harness'
+import { usePersistedUIWriter } from './use-persisted-ui-writer'
+
+const storeRef = vi.hoisted(() => ({
+  current: null as unknown as StoreApi<unknown>
+}))
+
+vi.mock('../store', async () => {
+  const { useStore } = await import('zustand')
+  const useAppStore = (selector: (s: unknown) => unknown) => useStore(storeRef.current, selector)
+  useAppStore.getState = () => storeRef.current.getState()
+  useAppStore.setState = (partial: never) => storeRef.current.setState(partial)
+  useAppStore.subscribe = (listener: never) => storeRef.current.subscribe(listener)
+  return { useAppStore }
+})
+
+/** The main-process authority: the real ui.set merge over a real PersistedState. */
+function createAuthority() {
+  const state = { ui: { ...getDefaultUIState() } } as PersistedState
+  let activeView: PersistedState['ui']['activeView'] = 'terminal'
+  const listeners = new Set<(ui: PersistedUIState) => void>()
+  const operations: UIUpdateOperations = {
+    state,
+    removeRetainedBlob: () => {},
+    setActiveView: (next) => {
+      if (next === undefined || next === activeView) {
+        return false
+      }
+      activeView = next
+      return true
+    },
+    getUI: () => getPersistedUI(state, activeView),
+    scheduleSave: () => {},
+    notifyUIChanged: () => {
+      const ui = getPersistedUI(state, activeView)
+      for (const listener of listeners) {
+        listener(ui)
+      }
+    }
+  }
+  return {
+    set: (updates: Partial<PersistedUIState>) => updatePersistedUI(operations, updates),
+    get: () => getPersistedUI(state, activeView),
+    onChanged: (listener: (ui: PersistedUIState) => void) => listeners.add(listener)
+  }
+}
+
+type Authority = ReturnType<typeof createAuthority>
+
+// Local model of mobile/src/worktree/workspace-view-settings.ts (the desktop test
+// runner cannot transform Expo-configured sources). The source-pin test at the
+// bottom fails if the shipping module stops matching this model.
+type MobileViewState = {
+  groupMode: 'none' | 'workspaceStatus' | 'repo' | 'prStatus'
+  sortMode: 'smart' | 'name' | 'recent' | 'repo' | 'manual'
+  hideSleeping: boolean
+  hideDefaultBranch: boolean
+  alwaysShowDefaultBranch: boolean
+  filterRepoIds: string[]
+  collapsedGroups: string[]
+}
+
+function mobileHasPatchOnlyBuilder(): boolean {
+  return readMobileViewSettingsSource().includes('export function buildWorkspaceViewSettingsUpdate')
+}
+
+/** Mirrors buildWorkspaceViewSettingsUpdate (candidate) — only touched fields. */
+function patchOnlyUpdate(
+  patch: Partial<MobileViewState>,
+  next: MobileViewState
+): Partial<PersistedUIState> {
+  const update: Partial<PersistedUIState> = {}
+  if ('groupMode' in patch) {
+    update.groupBy = next.groupMode === 'workspaceStatus' ? 'workspace-status' : 'repo'
+  }
+  if ('sortMode' in patch) {
+    update.sortBy = next.sortMode
+  }
+  if ('hideSleeping' in patch) {
+    update.hideSleepingWorkspaces = next.hideSleeping
+  }
+  if ('hideDefaultBranch' in patch) {
+    update.hideDefaultBranchWorkspace = next.hideDefaultBranch
+  }
+  if ('filterRepoIds' in patch) {
+    update.filterRepoIds = next.filterRepoIds
+  }
+  if ('collapsedGroups' in patch) {
+    update.collapsedGroups = next.collapsedGroups
+  }
+  return update
+}
+
+/** Mirrors the pre-fix persistViewSettings payload — the full snapshot on every tap. */
+function legacyWholeSnapshotUpdate(next: MobileViewState): Partial<PersistedUIState> {
+  return {
+    groupBy: next.groupMode === 'workspaceStatus' ? 'workspace-status' : 'repo',
+    sortBy: next.sortMode,
+    hideSleepingWorkspaces: next.hideSleeping,
+    hideDefaultBranchWorkspace: next.hideDefaultBranch,
+    filterRepoIds: next.filterRepoIds,
+    collapsedGroups: next.collapsedGroups
+  }
+}
+
+/** Model of the mobile host screen's view-settings client (persistViewSettings et al.). */
+function createMobileClient(authority: Authority) {
+  let view: MobileViewState = {
+    groupMode: 'repo',
+    sortMode: 'recent',
+    hideSleeping: false,
+    hideDefaultBranch: false,
+    alwaysShowDefaultBranch: true,
+    filterRepoIds: [],
+    collapsedGroups: []
+  }
+  return {
+    get view() {
+      return view
+    },
+    /** ui.get on connect/focus: merge the shared state onto the local mirror
+     *  (mirrors applyDesktopViewSettings' ??-per-field semantics). */
+    sync() {
+      const ui = omitPairingLocalUiFields(authority.get())
+      view = {
+        ...view,
+        hideSleeping: ui.hideSleepingWorkspaces ?? view.hideSleeping,
+        hideDefaultBranch: ui.hideDefaultBranchWorkspace ?? view.hideDefaultBranch,
+        alwaysShowDefaultBranch:
+          ui.alwaysShowDefaultBranchWorkspace ?? view.alwaysShowDefaultBranch,
+        filterRepoIds: ui.filterRepoIds ?? view.filterRepoIds,
+        collapsedGroups: ui.collapsedGroups ?? view.collapsedGroups
+      }
+    },
+    /** A user tap: apply locally, then push through the shipping payload shape. */
+    tap(patch: Partial<MobileViewState>) {
+      view = { ...view, ...patch }
+      const payload = mobileHasPatchOnlyBuilder()
+        ? patchOnlyUpdate(patch, view)
+        : legacyWholeSnapshotUpdate(view)
+      authority.set(omitPairingLocalUiFields(payload) as Partial<PersistedUIState>)
+    }
+  }
+}
+
+function readMobileHostScreenSource(): string {
+  return readFileSync(join(__dirname, '../../../../mobile/app/h/[hostId]/index.tsx'), 'utf-8')
+}
+
+function readMobileViewSettingsSource(): string {
+  return readFileSync(
+    join(__dirname, '../../../../mobile/src/worktree/workspace-view-settings.ts'),
+    'utf-8'
+  )
+}
+
+describe('workspace view preferences: cross-client persistence (STA-5781)', () => {
+  let authority: Authority
+  let store: StoreApi<AppState>
+  let root: Root
+  let container: HTMLDivElement
+  let pendingBroadcasts: PersistedUIState[]
+
+  function deliverBroadcasts() {
+    // Models the async ui:stateChanged IPC delivery to the desktop renderer.
+    const queued = pendingBroadcasts.splice(0)
+    for (const ui of queued) {
+      act(() => {
+        store.getState().hydratePersistedUI(ui, 'sync')
+      })
+    }
+  }
+
+  function mountDesktopWriter() {
+    function Probe() {
+      usePersistedUIWriter()
+      return null
+    }
+    act(() => {
+      root.render(createElement(Probe))
+    })
+  }
+
+  function flushDesktopDebounce() {
+    act(() => {
+      vi.advanceTimersByTime(200)
+    })
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers()
+    authority = createAuthority()
+    pendingBroadcasts = []
+    authority.onChanged((ui) => pendingBroadcasts.push(ui))
+    store = createUIStore()
+    storeRef.current = store as unknown as typeof storeRef.current
+    ;(window as unknown as { api: unknown }).api = {
+      ui: {
+        set: (updates: Partial<PersistedUIState>) => {
+          authority.set(updates)
+          return Promise.resolve()
+        }
+      }
+    }
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    // Startup: desktop hydrates from the authority before the writer arms.
+    act(() => {
+      store.getState().hydratePersistedUI(authority.get(), 'startup')
+    })
+    mountDesktopWriter()
+  })
+
+  afterEach(() => {
+    act(() => {
+      root.unmount()
+    })
+    container.remove()
+    vi.useRealTimers()
+  })
+
+  it('desktop restart alone does not rewrite the authority (control)', () => {
+    const before = authority.get()
+    flushDesktopDebounce()
+    const after = authority.get()
+    expect(after.hideSleepingWorkspaces).toBe(before.hideSleepingWorkspaces)
+    expect(after.hideDefaultBranchWorkspace).toBe(before.hideDefaultBranchWorkspace)
+    expect(after.hideCliCreatedWorkspaces).toBe(before.hideCliCreatedWorkspaces)
+  })
+
+  it('a mobile tap must not revert a desktop change the mobile mirror has not seen', () => {
+    const mobile = createMobileClient(authority)
+    mobile.sync()
+
+    // Desktop turns on "hide default branch"; the write lands and broadcasts.
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
+    deliverBroadcasts()
+
+    // Mobile (mirror stale since its last ui.get) toggles the DISJOINT
+    // "hide sleeping" filter.
+    mobile.tap({ hideSleeping: true })
+
+    // Both changes must survive.
+    expect(authority.get().hideSleepingWorkspaces).toBe(true)
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(true)
+
+    // And the desktop mirror must not be reverted by the echoed broadcast.
+    deliverBroadcasts()
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(true)
+  })
+
+  it('the desktop debounced writer must not revert a concurrent mobile change', () => {
+    const mobile = createMobileClient(authority)
+    mobile.sync()
+
+    // t=0: desktop toggles a desktop-only filter (disjoint from mobile fields).
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+
+    // t<150ms: mobile turns on "hide sleeping". The authority applies it, but the
+    // ui:stateChanged broadcast is still in flight to the desktop renderer.
+    act(() => {
+      vi.advanceTimersByTime(100)
+    })
+    mobile.tap({ hideSleeping: true })
+    expect(authority.get().hideSleepingWorkspaces).toBe(true)
+
+    // t=150ms: the desktop debounce fires from its (not yet re-hydrated) mirror.
+    flushDesktopDebounce()
+
+    // Both disjoint changes must survive.
+    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
+    expect(authority.get().hideSleepingWorkspaces).toBe(true)
+
+    // After full delivery and a mobile re-sync, every mirror converges on both.
+    deliverBroadcasts()
+    mobile.sync()
+    expect(store.getState().showSleepingWorkspaces).toBe(false)
+    expect(store.getState().hideCliCreatedWorkspaces).toBe(true)
+    expect(mobile.view.hideSleeping).toBe(true)
+  })
+
+  it('a broadcast landing inside the debounce window must not revert the pending desktop toggle', () => {
+    const mobile = createMobileClient(authority)
+    mobile.sync()
+
+    // t=0: desktop toggles a filter; its write is pending in the 150ms debounce.
+    act(() => {
+      store.getState().setHideCliCreatedWorkspaces(true)
+    })
+
+    // t<150ms: mobile changes a disjoint field AND its broadcast is delivered
+    // before the desktop debounce fires. The broadcast still carries the OLD
+    // value of the desktop's pending toggle.
+    mobile.tap({ hideSleeping: true })
+    deliverBroadcasts()
+
+    // The hydration must not wipe the user's pending toggle from the mirror.
+    expect(store.getState().hideCliCreatedWorkspaces).toBe(true)
+    // The remote change must land in the mirror.
+    expect(store.getState().showSleepingWorkspaces).toBe(false)
+
+    flushDesktopDebounce()
+
+    // Both disjoint changes survive at the authority.
+    expect(authority.get().hideCliCreatedWorkspaces).toBe(true)
+    expect(authority.get().hideSleepingWorkspaces).toBe(true)
+  })
+
+  it('desktop and mobile changing the same field converges on the newest write', () => {
+    const mobile = createMobileClient(authority)
+    mobile.sync()
+
+    act(() => {
+      store.getState().setHideDefaultBranchWorkspace(true)
+    })
+    flushDesktopDebounce()
+    deliverBroadcasts()
+
+    // Mobile flips the SAME field afterwards; last writer wins everywhere.
+    mobile.tap({ hideDefaultBranch: false })
+    deliverBroadcasts()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
+    flushDesktopDebounce()
+    expect(authority.get().hideDefaultBranchWorkspace).toBe(false)
+    expect(store.getState().hideDefaultBranchWorkspace).toBe(false)
+  })
+
+  it('pins the modeled mobile ui.set payload to the shipping source', () => {
+    const source = readMobileHostScreenSource()
+    if (mobileHasPatchOnlyBuilder()) {
+      // Candidate: index.tsx must push through the patch-only builder this model uses.
+      expect(source).toContain('buildWorkspaceViewSettingsUpdate(patch, next)')
+      const builderSource = readMobileViewSettingsSource()
+      for (const guard of [
+        "if ('groupMode' in patch)",
+        "if ('sortMode' in patch)",
+        "if ('hideSleeping' in patch)",
+        "if ('hideDefaultBranch' in patch)",
+        "if ('filterRepoIds' in patch)",
+        "if ('collapsedGroups' in patch)"
+      ]) {
+        expect(builderSource).toContain(guard)
+      }
+    } else {
+      // Baseline: persistViewSettings pushes exactly this whole-snapshot payload.
+      for (const key of [
+        'groupBy: groupModeToDesktop(next.groupMode)',
+        'sortBy: next.sortMode',
+        'hideSleepingWorkspaces: next.hideSleeping',
+        'hideDefaultBranchWorkspace: next.hideDefaultBranch',
+        'filterRepoIds: next.filterRepoIds',
+        'collapsedGroups: next.collapsedGroups'
+      ]) {
+        expect(source).toContain(key)
+      }
+    }
+  })
+})

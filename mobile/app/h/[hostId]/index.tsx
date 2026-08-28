@@ -82,7 +82,7 @@ import {
 } from '../../../src/host-route-action-state'
 import {
   applyDesktopViewSettings,
-  groupModeToDesktop,
+  buildWorkspaceViewSettingsUpdate,
   type MobileGroupMode,
   type MobileSortMode,
   type MobileViewState,
@@ -248,7 +248,7 @@ export function HostScreen({
     })
   }, [])
 
-  // Apply the change locally, then push full settings to the desktop's shared store (ui.set) so both apps stay in sync.
+  // Apply the change locally, then patch the desktop's shared store (ui.set) so both apps stay in sync.
   const persistViewSettings = useCallback(
     (patch: Partial<MobileViewState>) => {
       const next: MobileViewState = { ...viewStateRef.current, ...patch }
@@ -256,16 +256,12 @@ export function HostScreen({
       if (!client) {
         return
       }
-      // alwaysShowDefaultBranchWorkspace is deliberately absent: mobile reads it
-      // but has no toggle, so echoing its local default would silently revert a
-      // desktop opt-out on the first filter tap before ui.get lands (#8873).
-      const payload: WorkspaceViewSettings = {
-        groupBy: groupModeToDesktop(next.groupMode),
-        sortBy: next.sortMode,
-        hideSleepingWorkspaces: next.hideSleeping,
-        hideDefaultBranchWorkspace: next.hideDefaultBranch,
-        filterRepoIds: next.filterRepoIds,
-        collapsedGroups: next.collapsedGroups
+      // Send only the touched fields: the host merges partial updates, so a stale
+      // mirror can no longer revert sibling settings another client just changed
+      // (STA-5781; supersedes the #8873 whole-payload special case).
+      const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next)
+      if (Object.keys(payload).length === 0) {
+        return
       }
       void client.sendRequest('ui.set', payload).catch(() => {
         // Best-effort: view settings are a convenience preference.

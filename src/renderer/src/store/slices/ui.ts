@@ -140,6 +140,11 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import {
+  capturePersistedUIWriteBaseline,
+  diffPersistedUIWriteFields,
+  type PersistedUIWriteBaseline
+} from './persisted-ui-write-baseline'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
@@ -1001,6 +1006,10 @@ export type UISlice = {
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
   persistedUIReady: boolean
+  /** Writer-owned fields as last hydrated from main or flushed by the writer; the debounced writer diffs against this so it only persists fields this client changed (STA-5781). */
+  persistedUIWriteBaseline: PersistedUIWriteBaseline | null
+  /** Fold a flushed ui.set patch into the baseline so those fields stop diffing. */
+  markPersistedUIWriteFlushed: (fields: Partial<PersistedUIWriteBaseline>) => void
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
@@ -2445,6 +2454,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   scrollToDiffCommentId: null,
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
+  persistedUIWriteBaseline: null,
+  markPersistedUIWriteFlushed: (fields) =>
+    set((s) =>
+      s.persistedUIWriteBaseline
+        ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline, ...fields } }
+        : s
+    ),
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
   editorFontZoomLevel: 0,
@@ -2662,8 +2678,24 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             : s.activeView,
         persistedUIReady: true
       }
+      // The incoming payload is authoritative for the writer-owned fields, so it becomes the
+      // writer's new diff baseline — but fields with an unflushed local edit (mirror diverged
+      // from the previous baseline) keep the local value so a broadcast arriving inside the
+      // writer's debounce window can't silently revert what the user just toggled (STA-5781).
+      const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
+      const previousBaseline = s.persistedUIWriteBaseline
+      if (previousBaseline) {
+        const pendingLocalEdits = diffPersistedUIWriteFields(
+          capturePersistedUIWriteBaseline(s),
+          previousBaseline
+        )
+        Object.assign(hydrated, pendingLocalEdits)
+      }
       // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
-      return hydratedUIPartialMatchesState(s, hydrated) ? s : hydrated
+      if (hydratedUIPartialMatchesState(s, hydrated)) {
+        return s
+      }
+      return { ...hydrated, persistedUIWriteBaseline: nextWriteBaseline }
     }),
 
   updateStatus: { state: 'idle' },
