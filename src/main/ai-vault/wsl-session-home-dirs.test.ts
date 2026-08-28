@@ -135,4 +135,25 @@ describe('listWslSessionHomeDirsCached', () => {
     await expect(listWslSessionHomeDirsCached()).resolves.toEqual([])
     expect(wslMocks.listWslDistrosAsync).toHaveBeenCalledTimes(1)
   })
+
+  // The probe spawns wsl.exe and takes seconds; a flip landing mid-probe must
+  // not be undone when that probe finally resolves.
+  it('does not let a probe that started before clear repopulate the cache', async () => {
+    onWindows()
+    let resolveDistros: (distros: string[]) => void = () => {}
+    wslMocks.listWslDistrosAsync.mockReturnValueOnce(
+      new Promise<string[]>((resolve) => {
+        resolveDistros = resolve
+      })
+    )
+    const inFlight = listWslSessionHomeDirsCached()
+    configureWslSessionHomeDirs({ isEnabled: () => false })
+    clearWslSessionHomeDirsCache()
+    resolveDistros(['Ubuntu'])
+    // The caller that started before the flip still gets its own answer.
+    await expect(inFlight).resolves.toEqual([UBUNTU_HOME])
+    // The next tick sees the disabled state, not the stale write-back.
+    await expect(listWslSessionHomeDirsCached()).resolves.toEqual([])
+    expect(wslMocks.listWslDistrosAsync).toHaveBeenCalledTimes(1)
+  })
 })

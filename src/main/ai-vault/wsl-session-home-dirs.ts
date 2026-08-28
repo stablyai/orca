@@ -46,6 +46,10 @@ const WSL_HOME_DIRS_TTL_MS = 5 * 60_000
 let cachedWslHomeDirs: string[] | null = null
 let cachedWslHomeDirsExpiresAt = 0
 let inflightWslHomeDirs: Promise<string[]> | null = null
+// Why: a probe that started before the setting flipped off must not write its
+// pre-flip homes back once clear() has run — the toggle would be undone for a
+// full TTL. Each clear bumps the generation; a probe only publishes its own.
+let cacheGeneration = 0
 
 /** TTL-cached twin of listWslSessionHomeDirs for the transcript poll loops.
  *  `load` lets tests stand in for the probe; the cache applies either way. */
@@ -58,20 +62,27 @@ export function listWslSessionHomeDirsCached(
   if (inflightWslHomeDirs) {
     return inflightWslHomeDirs
   }
-  inflightWslHomeDirs = load()
+  const generation = cacheGeneration
+  const probe = load()
     .catch(() => [] as string[])
     .then((dirs) => {
+      if (generation !== cacheGeneration) {
+        // Superseded by a clear: hand the caller its answer, keep the cache empty.
+        return dirs
+      }
       cachedWslHomeDirs = dirs
       cachedWslHomeDirsExpiresAt =
         Date.now() + (dirs.length > 0 ? WSL_HOME_DIRS_TTL_MS : WSL_HOME_DIRS_EMPTY_RETRY_MS)
       inflightWslHomeDirs = null
       return dirs
     })
-  return inflightWslHomeDirs
+  inflightWslHomeDirs = probe
+  return probe
 }
 
 /** Drops the TTL cache so a settings flip takes effect on the next poll tick. */
 export function clearWslSessionHomeDirsCache(): void {
+  cacheGeneration += 1
   cachedWslHomeDirs = null
   cachedWslHomeDirsExpiresAt = 0
   inflightWslHomeDirs = null
