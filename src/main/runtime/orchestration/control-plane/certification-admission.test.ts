@@ -125,6 +125,42 @@ describe('correction 2: live certification cannot be fabricated', () => {
     })
   })
 
+  it('certifies the route the PROVIDER was observed running, not the alias in the receipt', () => {
+    const database = open()
+    // The receipt still holds the requested alias, as it does until the provider
+    // has been observed. Certifying the observed route used to be refused here,
+    // and the only way to trigger the observation was a call that failed.
+    const dispatch = launchedDispatch(database, {
+      agent: 'claude',
+      model: 'opus',
+      reasoning: 'high'
+    })
+    const source = {
+      observedEffectiveIdentity: () => IDENTITY,
+      agentStatusSnapshot: () => []
+    }
+    expect(
+      admitCertificationEvidence({
+        db: database,
+        request: request({ dispatchId: dispatch }),
+        stamp: STAMP,
+        source
+      }).ok
+    ).toBe(true)
+    // The alias is still refused: only what the provider stated may be certified.
+    expect(
+      admitCertificationEvidence({
+        db: database,
+        request: request({
+          dispatchId: dispatch,
+          identity: { agent: 'claude', model: 'opus', reasoning: 'high' }
+        }),
+        stamp: STAMP,
+        source
+      })
+    ).toMatchObject({ ok: false, code: 'identity_mismatch' })
+  })
+
   it('accepts FAIL and UNSUPPORTED without any launch, because they only restrict', () => {
     const database = open()
     for (const outcome of ['FAIL', 'UNSUPPORTED'] as const) {

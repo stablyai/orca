@@ -29,8 +29,9 @@ import {
  *   - the Dispatch exists;
  *   - it carries a `process_incarnation`, which only the terminal-authority
  *     path writes after a real agent pane became ready;
- *   - the route the Dispatch actually launched on (read from the persisted
- *     launch receipt) matches the claimed identity exactly.
+ *   - the route the Dispatch actually launched on (what the provider was
+ *     observed running, else the persisted launch receipt) matches the claimed
+ *     identity exactly.
  *  A synthetic unit test has no process incarnation and no launch receipt, so
  *  it can exercise every rejection path but can never mint PASS.
  *
@@ -126,7 +127,7 @@ export function admitCertificationEvidence(args: {
         reason: `Evidence claims commit ${request.commitSha}, but this runtime was built from ${args.stamp.commitSha}.`
       }
     }
-    const guard = requireRealLaunch(args.db, request)
+    const guard = requireRealLaunch(args.db, request, args.source)
     if (guard) {
       return guard
     }
@@ -172,7 +173,8 @@ export function admitCertificationEvidence(args: {
 
 function requireRealLaunch(
   db: OrchestrationDb,
-  request: CertificationRequest
+  request: CertificationRequest,
+  source?: CertificationObservationSource
 ): CertificationAdmission | null {
   if (!request.dispatchId) {
     return {
@@ -196,7 +198,12 @@ function requireRealLaunch(
       reason: `Dispatch ${request.dispatchId} has no recorded process incarnation, so no real launch happened.`
     }
   }
-  const launched = readDispatchRouteIdentity(db, request.dispatchId)
+  // Why observed first: until the provider is observed the receipt still holds
+  // the REQUESTED alias, so the route that actually ran was refused here before
+  // the observation it depends on could ever run.
+  const launched =
+    source?.observedEffectiveIdentity(request.dispatchId) ??
+    readDispatchRouteIdentity(db, request.dispatchId)
   if (!launched) {
     return {
       ok: false,
