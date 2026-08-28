@@ -188,6 +188,10 @@ export function RepositoryPane({
     translate('auto.components.settings.repository.search.443d127b5a', 'Worktree Location'),
     translate('auto.components.settings.repository.search.externalWorktrees', 'External worktrees'),
     translate('auto.components.settings.repository.search.projectRuntime', 'Project Runtime'),
+    translate(
+      'auto.components.settings.repository.search.showSubmoduleChanges',
+      'Show Submodule Changes'
+    ),
     translate('auto.components.settings.repository.search.c5266c2c9d', 'Remove Project')
   ])
   const identityEntries = allEntries.filter((entry) => identityEntryTitles.has(entry.title))

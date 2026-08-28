@@ -18,16 +18,20 @@ export function RepositorySubmoduleChangesSection({
   updateRepo,
   forceVisible
 }: RepositorySubmoduleChangesSectionProps): React.JSX.Element {
+  // Why: SearchableSetting matches on this text but never renders it, so the visible copy is
+  // the searchable copy — terms like `ignore = all` must not live in only one of them.
+  const description = translate(
+    'auto.components.settings.RepositorySubmoduleChangesSection.longDescription',
+    'A repo whose .gitmodules sets ignore = all reports no submodule changes at all, so Source Control stays empty while you work inside a submodule. Turn this on to list them anyway. Each changed submodule adds one row you can expand for its per-file changes, including submodules whose recorded commit simply moved.'
+  )
+
   return (
     <SearchableSetting
       title={translate(
         'auto.components.settings.RepositorySubmoduleChangesSection.title',
         'Show Submodule Changes'
       )}
-      description={translate(
-        'auto.components.settings.RepositorySubmoduleChangesSection.description',
-        'Read submodule changes in Source Control even when this repo hides them.'
-      )}
+      description={description}
       keywords={searchKeywords([
         repo.displayName,
         { key: 'auto.components.settings.repository.search.submodule', fallback: 'submodule' },
@@ -43,10 +47,7 @@ export function RepositorySubmoduleChangesSection({
           'auto.components.settings.RepositorySubmoduleChangesSection.title',
           'Show Submodule Changes'
         )}
-        description={translate(
-          'auto.components.settings.RepositorySubmoduleChangesSection.longDescription',
-          'A repo whose .gitmodules sets ignore = all reports no submodule changes at all, so Source Control stays empty while you work inside a submodule. Turn this on to list them anyway. Each changed submodule adds one row you can expand for its per-file changes, including submodules whose recorded commit simply moved.'
-        )}
+        description={description}
         checked={repo.showSubmoduleChanges === true}
         onChange={() =>
           updateRepo(repo.id, { showSubmoduleChanges: repo.showSubmoduleChanges !== true })
