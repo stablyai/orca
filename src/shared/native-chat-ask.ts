@@ -47,6 +47,9 @@ function parseQuestionsShape(input: unknown): AskPrompt | null {
   return questions.length > 0 ? { questions } : null
 }
 
+/** Tolerant parse of raw tool-input options: bare strings become label-only
+ *  options, malformed entries are dropped, and an empty-string preview counts
+ *  as no preview. */
 function parseOptions(raw: unknown): AskOption[] {
   if (!Array.isArray(raw)) {
     return []
