@@ -388,6 +388,16 @@ export function runProcess(spec: ProcessSpec): Promise<ProcessResult> {
         resolveBarrierIfSafe()
         return
       }
+      if (spec.terminationBarrier) {
+        // The root exited on its own, but the barrier promises that NO
+        // descendant outlived it. A clean exit code proves nothing about the
+        // tree, so prove quiescence before the caller may act on the result.
+        void forceBarrierTree().then((verified) => {
+          barrierTerminationVerified = verified
+          resolveFromClose(code, signal)
+        })
+        return
+      }
       resolveFromClose(code, signal)
     })
 
