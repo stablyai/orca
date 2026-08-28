@@ -8,7 +8,7 @@ import {
 } from './typing-latency-echo-instrumentation'
 
 function emptyEntry(): InstrumentedPane {
-  return { pane: {}, pending: [], disposables: [], restoreWrite: null }
+  return { pane: {}, pending: [], disposables: [], restoreWrite: null, lastEchoCoalescing: 0 }
 }
 
 type FakeTerminal = {
@@ -60,23 +60,23 @@ function fakeTerminal(): {
 describe('recordKeystroke', () => {
   it('queues keystrokes rather than overwriting a single slot', () => {
     const entry = emptyEntry()
-    expect(recordKeystroke(entry, 0)).toBe(0)
-    expect(recordKeystroke(entry, 5)).toBe(0)
+    expect(recordKeystroke(entry, 0, 'direct')).toBe(0)
+    expect(recordKeystroke(entry, 5, 'direct')).toBe(0)
     expect(entry.pending.map((pending) => pending.t0)).toEqual([0, 5])
   })
 
   it('counts keystrokes whose echo never parsed as dropped', () => {
     const entry = emptyEntry()
-    recordKeystroke(entry, 0)
-    recordKeystroke(entry, 1)
-    expect(recordKeystroke(entry, 5000)).toBe(2)
+    recordKeystroke(entry, 0, 'direct')
+    recordKeystroke(entry, 1, 'direct')
+    expect(recordKeystroke(entry, 5000, 'direct')).toBe(2)
     expect(entry.pending).toHaveLength(1)
   })
 
   it('bounds the queue so sustained typing cannot grow memory', () => {
     const entry = emptyEntry()
     for (let index = 0; index < 200; index += 1) {
-      recordKeystroke(entry, index)
+      recordKeystroke(entry, index, 'direct')
     }
     expect(entry.pending.length).toBeLessThanOrEqual(64)
   })
@@ -88,7 +88,7 @@ describe('instrumentPaneEcho', () => {
     const samples: EchoSample[] = []
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (sample) => samples.push(sample))
 
-    recordKeystroke(entry, performance.now())
+    recordKeystroke(entry, performance.now(), 'direct')
     fake.terminal.write('a'.repeat(230))
     fake.terminal.write(new Uint8Array(6))
     fake.emitParsed()
@@ -103,12 +103,33 @@ describe('instrumentPaneEcho', () => {
     expect(fake.writtenPayloads).toHaveLength(2)
   })
 
+  it('credits one coalesced redraw to every keystroke it made visible', () => {
+    const fake = fakeTerminal()
+    const samples: EchoSample[] = []
+    const entry = instrumentPaneEcho({ terminal: fake.terminal }, (sample) => samples.push(sample))
+
+    // Typing faster than the TUI's frame clock: three keystrokes, one redraw.
+    recordKeystroke(entry, performance.now(), 'direct')
+    recordKeystroke(entry, performance.now(), 'direct')
+    recordKeystroke(entry, performance.now(), 'ime')
+    fake.terminal.write('x'.repeat(90))
+    fake.emitParsed()
+    fake.emitRender()
+
+    expect(samples).toHaveLength(3)
+    // Every keystroke reports the redraw that showed it, so the two divide.
+    expect(samples.map((sample) => sample.coalescing)).toEqual([3, 3, 3])
+    expect(samples.map((sample) => sample.bytes)).toEqual([90, 90, 90])
+    expect(samples.map((sample) => sample.writes)).toEqual([1, 1, 1])
+    expect(samples.map((sample) => sample.source)).toEqual(['direct', 'direct', 'ime'])
+  })
+
   it('holds an unparsed keystroke across a render instead of discarding it', () => {
     const fake = fakeTerminal()
     const samples: EchoSample[] = []
     const entry = instrumentPaneEcho({ terminal: fake.terminal }, (sample) => samples.push(sample))
 
-    recordKeystroke(entry, performance.now())
+    recordKeystroke(entry, performance.now(), 'direct')
     fake.emitRender()
     expect(samples).toHaveLength(0)
 

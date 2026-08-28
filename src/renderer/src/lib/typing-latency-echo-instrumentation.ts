@@ -17,6 +17,7 @@ type TerminalLike = {
   element?: HTMLElement | null
   buffer?: { active?: { type?: string; length?: number } }
   write?: (data: string | Uint8Array, callback?: () => void) => void
+  onData?: (listener: (data: string) => void) => Disposable
   onWriteParsed?: (listener: () => void) => Disposable
   onRender?: (listener: () => void) => Disposable
 }
@@ -28,10 +29,16 @@ export type ProbePane = {
   leafId?: string
 }
 
+/** 'ime' is a composed commit (compositionend); 'direct' is a plain keydown. */
+export type KeystrokeSource = 'ime' | 'direct'
+
 type PendingKeystroke = {
   t0: number
+  source: KeystrokeSource
   bytes: number
   writes: number
+  /** When xterm emitted the bytes toward the pty; null if it never did. */
+  dispatchedAt: number | null
   parsedAt: number | null
 }
 
@@ -40,6 +47,15 @@ export type EchoSample = {
   paintMs: number
   bytes: number
   writes: number
+  source: KeystrokeSource
+  /** How many keystrokes the echoing write resolved at once. */
+  coalescing: number
+  /**
+   * Keystroke to the moment xterm handed the bytes toward the pty, so the rest
+   * of the wait can be attributed to the host round trip rather than to the
+   * renderer. -1 when no dispatch was seen (a preedit jamo sends nothing).
+   */
+  dispatchMs: number
 }
 
 export type InstrumentedPane = {
@@ -47,6 +63,7 @@ export type InstrumentedPane = {
   pending: PendingKeystroke[]
   disposables: Disposable[]
   restoreWrite: (() => void) | null
+  lastEchoCoalescing: number
 }
 
 /** An echo that has not parsed within this window is counted as unmatched, never as a sample. */
@@ -79,12 +96,35 @@ export function findPaneOwningFocus<T extends { pane: ProbePane }>(
   return entries.find((entry) => paneRootElement(entry.pane)?.contains(focused) === true) ?? null
 }
 
-function oldestUnparsed(entry: InstrumentedPane): PendingKeystroke | null {
-  return entry.pending.find((pending) => pending.parsedAt === null) ?? null
+/**
+ * Every keystroke still waiting for an echo.
+ *
+ * Why the whole set and not just the oldest: a TUI redraws on its own frame
+ * clock, so typing faster than that clock puts several keystrokes into one
+ * redraw. That redraw is what makes each of them visible, so it is their echo
+ * and their byte cost alike. Crediting only the oldest left the rest pending
+ * forever — the probe dropped most of a fast burst and kept exactly the entries
+ * that had waited longest, reporting a p50 biased upward.
+ */
+function pendingAwaitingEcho(entry: InstrumentedPane): PendingKeystroke[] {
+  return entry.pending.filter((pending) => pending.parsedAt === null)
+}
+
+/** Marks the whole waiting set echoed, returning how many one write resolved. */
+function markPendingEcho(entry: InstrumentedPane, at: number): number {
+  const waiting = pendingAwaitingEcho(entry)
+  for (const pending of waiting) {
+    pending.parsedAt = at
+  }
+  return waiting.length
 }
 
 /** Returns how many pending keystrokes were dropped without an echo. */
-export function recordKeystroke(entry: InstrumentedPane, now: number): number {
+export function recordKeystroke(
+  entry: InstrumentedPane,
+  now: number,
+  source: KeystrokeSource
+): number {
   let dropped = 0
   while (entry.pending.length > 0 && now - (entry.pending[0]?.t0 ?? now) > ECHO_TIMEOUT_MS) {
     entry.pending.shift()
@@ -94,7 +134,7 @@ export function recordKeystroke(entry: InstrumentedPane, now: number): number {
     entry.pending.shift()
     dropped += 1
   }
-  entry.pending.push({ t0: now, bytes: 0, writes: 0, parsedAt: null })
+  entry.pending.push({ t0: now, source, bytes: 0, writes: 0, dispatchedAt: null, parsedAt: null })
   return dropped
 }
 
@@ -102,22 +142,30 @@ export function instrumentPaneEcho(
   pane: ProbePane,
   onSample: (sample: EchoSample) => void
 ): InstrumentedPane {
-  const entry: InstrumentedPane = { pane, pending: [], disposables: [], restoreWrite: null }
+  const entry: InstrumentedPane = {
+    pane,
+    pending: [],
+    disposables: [],
+    restoreWrite: null,
+    lastEchoCoalescing: 0
+  }
   const terminal = pane.terminal
   if (!terminal) {
     return entry
   }
 
   // Why: xterm exposes no per-write byte counter, so the probe wraps write() for
-  // the duration of sampling — this is how per-keystroke output volume (Codex
+  // the duration of sampling — this is how per-echo output volume (Codex
   // ~230-306 bytes vs grok ~66) becomes visible without a build change.
   const originalWrite = terminal.write
   if (typeof originalWrite === 'function') {
     const wrapped = (data: string | Uint8Array, callback?: () => void): void => {
-      const pending = oldestUnparsed(entry)
-      if (pending) {
+      const size = typeof data === 'string' ? data.length : data.byteLength
+      // Coalesced keystrokes each report the whole echoing write; `coalescing`
+      // on the sample says how many shared it, so the two divide.
+      for (const pending of pendingAwaitingEcho(entry)) {
         pending.writes += 1
-        pending.bytes += typeof data === 'string' ? data.length : data.byteLength
+        pending.bytes += size
       }
       originalWrite.call(terminal, data, callback)
     }
@@ -129,12 +177,25 @@ export function instrumentPaneEcho(
     }
   }
 
+  // Why: an IME commit reaches the pty through terminal.input(), which lands on
+  // this same emitter, so it stamps the moment the renderer is done with the
+  // keystroke. Everything after it is host round trip, not renderer work.
+  if (typeof terminal.onData === 'function') {
+    entry.disposables.push(
+      terminal.onData(() => {
+        const now = performance.now()
+        for (const pending of pendingAwaitingEcho(entry)) {
+          pending.dispatchedAt ??= now
+        }
+      })
+    )
+  }
   if (typeof terminal.onWriteParsed === 'function') {
     entry.disposables.push(
       terminal.onWriteParsed(() => {
-        const pending = oldestUnparsed(entry)
-        if (pending) {
-          pending.parsedAt = performance.now()
+        const resolved = markPendingEcho(entry, performance.now())
+        if (resolved > 0) {
+          entry.lastEchoCoalescing = resolved
         }
       })
     )
@@ -152,7 +213,10 @@ export function instrumentPaneEcho(
             parseMs: pending.parsedAt - pending.t0,
             paintMs: now - pending.t0,
             bytes: pending.bytes,
-            writes: pending.writes
+            writes: pending.writes,
+            source: pending.source,
+            coalescing: entry.lastEchoCoalescing,
+            dispatchMs: pending.dispatchedAt === null ? -1 : pending.dispatchedAt - pending.t0
           })
         }
       })

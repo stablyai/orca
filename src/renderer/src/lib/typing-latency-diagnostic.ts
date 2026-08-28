@@ -32,6 +32,17 @@ import {
   type LatencyPercentiles,
   type TypingScaleCensus
 } from './typing-latency-diagnostic-summary'
+import {
+  createInputSourceTally,
+  emptyInputSourceBreakdown,
+  type InputSourceBreakdown,
+  type InputSourceTally
+} from './typing-latency-input-source'
+import {
+  watchMainThreadBlocking,
+  type MainThreadBlockingCensus,
+  type MainThreadBlockingWatch
+} from './typing-latency-main-thread-blocking'
 
 /** Bounds memory during sustained typing: percentiles only need a rolling window. */
 const MAX_SAMPLES = 2000
@@ -47,6 +58,8 @@ type ProbeState = {
   keystrokesWithoutTerminalFocus: number
   panes: InstrumentedPane[]
   detachKeydown: () => void
+  blocking: MainThreadBlockingWatch
+  bySource: InputSourceTally
 }
 
 let active: ProbeState | null = null
@@ -74,6 +87,10 @@ export type TypingLatencyReport = {
   echoPaintMs: LatencyPercentiles
   bytesPerKeystroke: LatencyPercentiles
   writesPerKeystroke: LatencyPercentiles
+  /** Same latencies split by IME commit vs plain keypress. */
+  byInputSource: InputSourceBreakdown
+  /** How much of the sampling window the renderer had no free main thread. */
+  mainThreadBlocking: MainThreadBlockingCensus
   census: TypingScaleCensus
 }
 
@@ -92,6 +109,17 @@ function buildReport(state: ProbeState | null, running: boolean): TypingLatencyR
     echoPaintMs: summarizeLatencySamples(state?.paintLatencies ?? []),
     bytesPerKeystroke: summarizeLatencySamples(state?.keystrokeBytes ?? []),
     writesPerKeystroke: summarizeLatencySamples(state?.keystrokeWrites ?? []),
+    byInputSource: state?.bySource.breakdown() ?? emptyInputSourceBreakdown(),
+    mainThreadBlocking: state?.blocking.census() ?? {
+      supported: false,
+      windowMs: 0,
+      taskCount: 0,
+      blockedMs: 0,
+      blockedPercent: 0,
+      longestTaskMs: 0,
+      p50TaskMs: 0,
+      p95TaskMs: 0
+    },
     census: summarizeTypingScaleCensus({
       state: readProbeStoreState(),
       appVersion: cachedAppVersion,
@@ -113,8 +141,15 @@ function cacheAppVersion(): void {
     .catch(() => undefined)
 }
 
-/** Modifier-only presses produce no echo and would poison the pending queue. */
+/**
+ * Modifier-only presses produce no echo and would poison the pending queue.
+ * IME keydowns are excluded too: a composing jamo sends nothing to the pty, so
+ * the commit (compositionend) is what carries the echo — see startProbe.
+ */
 function isEchoingKey(event: KeyboardEvent): boolean {
+  if (event.isComposing || event.key === 'Process') {
+    return false
+  }
   return event.key.length === 1 || event.key === 'Enter' || event.key === 'Backspace'
 }
 
@@ -134,7 +169,9 @@ function startProbe(): string {
     unmatchedKeystrokes: 0,
     keystrokesWithoutTerminalFocus: 0,
     panes: [],
-    detachKeydown: () => undefined
+    detachKeydown: () => undefined,
+    blocking: watchMainThreadBlocking(),
+    bySource: createInputSourceTally()
   }
   state.panes = listProbePanes().map((pane) =>
     instrumentPaneEcho(pane, (sample) => {
@@ -142,6 +179,7 @@ function startProbe(): string {
       push(state.paintLatencies, sample.paintMs)
       push(state.keystrokeBytes, sample.bytes)
       push(state.keystrokeWrites, sample.writes)
+      state.bySource.add(sample)
     })
   )
 
@@ -154,10 +192,29 @@ function startProbe(): string {
       state.keystrokesWithoutTerminalFocus += 1
       return
     }
-    state.unmatchedKeystrokes += recordKeystroke(target, performance.now())
+    state.unmatchedKeystrokes += recordKeystroke(target, performance.now(), 'direct')
+  }
+  // Why: a CJK IME sends nothing to the pty per jamo, so the composed commit is
+  // the keystroke whose echo can be timed. Without this the probe reports zero
+  // samples for Hangul typing and the percentiles read as "no latency".
+  const onCompositionEnd = (event: CompositionEvent): void => {
+    if (event.data.length === 0) {
+      return
+    }
+    const target = findPaneOwningFocus(state.panes)
+    if (!target) {
+      state.keystrokesWithoutTerminalFocus += 1
+      return
+    }
+    state.bySource.addCommitChars(event.data.length)
+    state.unmatchedKeystrokes += recordKeystroke(target, performance.now(), 'ime')
   }
   window.addEventListener('keydown', onKeydown, { capture: true })
-  state.detachKeydown = () => window.removeEventListener('keydown', onKeydown, { capture: true })
+  window.addEventListener('compositionend', onCompositionEnd, { capture: true })
+  state.detachKeydown = () => {
+    window.removeEventListener('keydown', onKeydown, { capture: true })
+    window.removeEventListener('compositionend', onCompositionEnd, { capture: true })
+  }
 
   active = state
   lastState = state
@@ -171,6 +228,7 @@ function stopProbe(): string {
   }
   active = null
   state.detachKeydown()
+  state.blocking.stop()
   for (const entry of state.panes) {
     detachPaneEcho(entry)
   }

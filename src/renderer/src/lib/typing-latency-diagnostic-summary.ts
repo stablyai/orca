@@ -39,6 +39,38 @@ export function summarizeLatencySamples(values: readonly number[]): LatencyPerce
   }
 }
 
+/**
+ * Fixed latency buckets, in milliseconds.
+ *
+ * Why fixed and not derived: the question a typing probe answers is which
+ * scheduling path a keystroke took, and those paths sit at known delays (a
+ * ~16-32ms fast release vs a 250ms hold-safety fallback vs a 1s coalesce). A
+ * bimodal histogram over stable buckets shows that split; percentiles alone
+ * average the two paths into one number that matches neither.
+ */
+const LATENCY_BUCKET_EDGES = [16, 32, 64, 128, 256, 512, 1024] as const
+
+export type LatencyHistogram = Record<string, number>
+
+export function histogramLatencySamples(values: readonly number[]): LatencyHistogram {
+  const histogram: LatencyHistogram = {}
+  let previous = 0
+  for (const edge of LATENCY_BUCKET_EDGES) {
+    histogram[`<${edge}`] = 0
+    previous = edge
+  }
+  histogram[`>=${previous}`] = 0
+  for (const value of values) {
+    if (!Number.isFinite(value)) {
+      continue
+    }
+    const edge = LATENCY_BUCKET_EDGES.find((candidate) => value < candidate)
+    const key = edge === undefined ? `>=${previous}` : `<${edge}`
+    histogram[key] = (histogram[key] ?? 0) + 1
+  }
+  return histogram
+}
+
 export type WorktreeNestingCensus = {
   maxDepth: number
   nestedWorktrees: number
