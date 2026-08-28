@@ -12,18 +12,34 @@ const IMAGE_PROMPT_MARKER_AT_END = /\[Image #\d+\][^\S\r\n]*$/
 const HORIZONTAL_WHITESPACE_START = /^[^\S\r\n]+/
 const HORIZONTAL_WHITESPACE_END = /[^\S\r\n]+$/
 
-function soleText(message: NativeChatMessage): string | null {
-  return message.blocks.length === 1 && isTextBlock(message.blocks[0])
-    ? message.blocks[0].text
-    : null
-}
-
 export function imageSourcePathFromText(text: string): string | null {
   return text.match(IMAGE_SOURCE_MARKER)?.[1]?.trim() ?? null
 }
 
+// Why: Claude writes one record per SEND, not per image, so an N-image send arrives as a single
+// turn carrying N marker text blocks. Requiring a sole block matched only the one-image case and
+// dropped every other send's attachments. Empty unless EVERY block is a marker — a turn that also
+// carries prose is the user's own message and must not be rewritten into image refs.
+function imageSourcePaths(message: NativeChatMessage): string[] {
+  if (message.blocks.length === 0) {
+    return []
+  }
+  const paths: string[] = []
+  for (const block of message.blocks) {
+    if (!isTextBlock(block)) {
+      return []
+    }
+    const path = imageSourcePathFromText(block.text)
+    if (!path) {
+      return []
+    }
+    paths.push(path)
+  }
+  return paths
+}
+
 export function isImageSourceUserTurn(message: NativeChatMessage): boolean {
-  return message.role === 'user' && imageSourcePathFromText(soleText(message) ?? '') !== null
+  return message.role === 'user' && imageSourcePaths(message).length > 0
 }
 
 export function stripImagePromptMarker(text: string): string {
@@ -107,18 +123,22 @@ export function normalizeImageTranscriptMessages(
       normalized?.push(message)
       continue
     }
-    const imagePath = imageSourcePathFromText(soleText(message) ?? '')
-    if (imagePath) {
+    const messagePaths = imageSourcePaths(message)
+    if (messagePaths.length > 0) {
       normalized ??= messages.slice(0, index)
-      const imagePaths = [imagePath]
+      const imagePaths = [...messagePaths]
       let nextIndex = index + 1
       while (nextIndex < messages.length) {
         const candidate = messages[nextIndex]!
-        const candidatePath = imageSourcePathFromText(soleText(candidate) ?? '')
-        if (candidate.role !== 'user' || candidate.source !== message.source || !candidatePath) {
+        const candidatePaths = imageSourcePaths(candidate)
+        if (
+          candidate.role !== 'user' ||
+          candidate.source !== message.source ||
+          candidatePaths.length === 0
+        ) {
           break
         }
-        imagePaths.push(candidatePath)
+        imagePaths.push(...candidatePaths)
         nextIndex += 1
       }
       const prompt = messages[nextIndex]
@@ -137,9 +157,11 @@ export function normalizeImageTranscriptMessages(
         index = nextIndex
         continue
       }
+      // Why: only this turn's own paths — `index` is not advanced past the run here, so any
+      // following marker turns are emitted by their own iteration.
       normalized.push({
         ...message,
-        blocks: [{ type: 'image-ref', path: imagePath }]
+        blocks: messagePaths.map((path) => ({ type: 'image-ref', path }))
       })
       continue
     }
