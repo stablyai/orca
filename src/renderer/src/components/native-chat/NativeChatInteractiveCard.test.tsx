@@ -37,6 +37,7 @@ import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 const mocks = {
   sendAnswer: vi.fn<NativeChatInteractiveSend['sendAnswer']>(),
   sendRaw: vi.fn<NativeChatInteractiveSend['sendRaw']>(),
+  sendChatText: vi.fn<NativeChatInteractiveSend['sendChatText']>(),
   cancelPending: vi.fn<NativeChatInteractiveSend['cancelPending']>(),
   cancel: vi.fn<NativeChatInteractiveSend['cancel']>()
 }
@@ -61,6 +62,7 @@ function cardElement(
       send={{
         sendAnswer: mocks.sendAnswer,
         sendRaw: mocks.sendRaw,
+        sendChatText: mocks.sendChatText,
         cancelPending: mocks.cancelPending,
         cancel: mocks.cancel
       }}
@@ -294,5 +296,126 @@ describe('NativeChatInteractiveCard transcript fallback', () => {
     render(cardElement(true, trimmed))
 
     expect(screen.queryByText('Tabs or spaces?')).not.toBeInTheDocument()
+  })
+})
+
+describe('NativeChatInteractiveCard escape-to-chat routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = INITIAL_PROMPT
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].state = undefined
+  })
+
+  afterEach(() => {
+    cleanup()
+  })
+
+  function typeReply(text: string): void {
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: text } })
+  }
+
+  it('rejects the prompt and replies in chat when nothing is picked', () => {
+    renderCard()
+
+    typeReply('neither, use whatever the file already uses')
+    fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+    // No selector answer exists for unattached words, so the question is
+    // rejected the way "Chat about this" does and the text follows.
+    expect(mocks.sendAnswer).not.toHaveBeenCalled()
+    expect(mocks.cancel).toHaveBeenCalledTimes(1)
+    expect(mocks.sendChatText).toHaveBeenCalledWith('neither, use whatever the file already uses')
+    expect(mocks.cancel.mock.invocationCallOrder[0]!).toBeLessThan(
+      mocks.sendChatText.mock.invocationCallOrder[0]!
+    )
+  })
+
+  it('delivers a pick with its note through the selector, with no chat message', () => {
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
+    renderCard()
+
+    typeReply('but only in JS')
+    chooseSpacesAndSubmit()
+
+    expect(mocks.sendAnswer).toHaveBeenCalledTimes(1)
+    expect(mocks.sendAnswer.mock.calls[0]![1]).toEqual([{ indices: [1], other: 'but only in JS' }])
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendChatText).not.toHaveBeenCalled()
+  })
+
+  it('holds the chat message until the selector answer has settled', () => {
+    vi.useFakeTimers()
+    try {
+      mocks.sendAnswer.mockReturnValue({ settleAfterMs: 5_000, waitsForVerifiedDelivery: false })
+      renderCard()
+
+      chooseSpacesAndSubmit()
+
+      // The selector write is still pacing out; nothing may reach chat yet.
+      expect(mocks.sendChatText).not.toHaveBeenCalled()
+      act(() => {
+        vi.advanceTimersByTime(5_000)
+      })
+      // This prompt had no stranded text, so settling sends nothing — the point
+      // is that the send decision waits for the settle callback.
+      expect(mocks.sendChatText).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('does not reject the prompt when a pick exists', () => {
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 0, waitsForVerifiedDelivery: false })
+    renderCard()
+
+    chooseSpacesAndSubmit()
+
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendChatText).not.toHaveBeenCalled()
+  })
+
+  it('submits the picked question and sends the stranded one to chat', () => {
+    storeState.agentStatusByPaneKey['tab-1:leaf-1'].interactivePrompt = JSON.stringify({
+      questions: [
+        { question: 'Indent?', multiSelect: false, options: [{ label: 'Tabs' }] },
+        { question: 'Quotes?', multiSelect: false, options: [{ label: 'Single' }] }
+      ]
+    })
+    mocks.sendAnswer.mockReturnValue({ settleAfterMs: 1_000, waitsForVerifiedDelivery: false })
+    vi.useFakeTimers()
+    try {
+      renderCard()
+
+      fireEvent.click(screen.getByRole('button', { name: /Tabs/ }))
+      fireEvent.click(screen.getByRole('button', { name: 'Next' }))
+      typeReply('whichever the linter wants')
+      fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
+
+      // The chat message must not overtake the selector keystrokes.
+      expect(mocks.sendChatText).not.toHaveBeenCalled()
+      act(() => {
+        vi.advanceTimersByTime(1_000)
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+
+    // Q1's pick still goes through the selector; Q2's unattached words do not.
+    expect(mocks.cancel).not.toHaveBeenCalled()
+    expect(mocks.sendAnswer.mock.calls[0]![1]).toEqual([
+      { indices: [0], other: '' },
+      { indices: [], other: '' }
+    ])
+    expect(mocks.sendChatText).toHaveBeenCalledWith('Quotes?\nwhichever the linter wants')
+  })
+
+  it('leaves Skip alone when nothing was entered anywhere', () => {
+    renderCard()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skip' }))
+
+    expect(mocks.sendAnswer).not.toHaveBeenCalled()
+    expect(mocks.sendChatText).not.toHaveBeenCalled()
+    expect(mocks.cancel).toHaveBeenCalledTimes(1)
   })
 })

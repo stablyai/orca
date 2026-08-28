@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '../../store'
-import { resolveNativeChatAsk } from '../../../../shared/native-chat-ask'
+import { resolveNativeChatAsk, routeAskAnswer } from '../../../../shared/native-chat-ask'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { parseInteractivePrompt } from './native-chat-interactive-prompt'
 import { nativeChatCardDismissKey } from './native-chat-dismiss-key'
@@ -57,7 +57,7 @@ export function NativeChatInteractiveCard({
   // Thread the sibling `toolName` from the same status entry so the question
   // parser can dispatch through the tool's registered parser (mobile parity).
   const interactiveToolName = useAppStore((s) => s.agentStatusByPaneKey[paneKey]?.toolName ?? null)
-  const { sendAnswer, sendRaw, cancelPending, cancel } = send
+  const { sendAnswer, sendRaw, sendChatText, cancelPending, cancel } = send
 
   const card = useMemo(() => {
     const statusCard = parseInteractivePrompt(interactivePrompt, interactiveToolName ?? undefined)
@@ -139,9 +139,30 @@ export function NativeChatInteractiveCard({
             submittingRef.current = false
             setSubmitting(false)
           }
-          const result = sendAnswer(card.prompt, selections, (delivered) => {
+          // Picks travel through the selector carrying their notes; words with no
+          // pick to attach to have no selector representation and follow as chat.
+          const routing = routeAskAnswer(card.prompt, selections)
+          const sendStrandedText = (): void => {
+            if (routing.chatText) {
+              sendChatText(routing.chatText)
+            }
+          }
+
+          if (routing.rejectsPrompt) {
+            // Nothing picked anywhere: reject the question the way the TUI's own
+            // "Chat about this" does, then reply in chat. ESC is a single
+            // immediate write, so queueing the message after it preserves order.
+            clearDismissTimer()
+            setDismissedKey(cardKey)
+            cancel()
+            sendStrandedText()
+            return
+          }
+
+          const result = sendAnswer(card.prompt, routing.selectorSelections, (delivered) => {
             if (delivered) {
               dismissAnsweredCard()
+              sendStrandedText()
             } else {
               keepRejectedAnswerVisible()
             }
@@ -164,6 +185,7 @@ export function NativeChatInteractiveCard({
           dismissTimerRef.current = setTimeout(() => {
             cancelPending()
             dismissAnsweredCard()
+            sendStrandedText()
           }, result.settleAfterMs)
         }}
         onCancel={() => {

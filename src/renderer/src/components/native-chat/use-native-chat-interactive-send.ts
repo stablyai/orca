@@ -36,6 +36,9 @@ export type NativeChatInteractiveSend = {
   ) => { settleAfterMs: number; waitsForVerifiedDelivery: boolean }
   /** Send a raw control string (e.g. an approval option number or ESC) as-is. */
   sendRaw: (raw: string) => void
+  /** Send ordinary chat text, as the composer would. Used to escape a question
+   *  to chat when the user's words have no option to attach to. */
+  sendChatText: (text: string) => void
   /** Stop delayed writes without interrupting the agent. */
   cancelPending: () => void
   /** Send ESC to interrupt — cancels a question / denies an approval. */
@@ -157,5 +160,19 @@ export function useNativeChatInteractiveSend(
     sendRaw(ESC)
   }, [cancelInFlight, sendRaw])
 
-  return { sendAnswer, sendRaw, cancelPending: cancelInFlight, cancel }
+  const sendChatText = useCallback(
+    (text: string) => {
+      if (!targetPtyId || !text.trim()) {
+        return
+      }
+      sendNativeChatMessage(
+        getSettingsForAgentTabRuntimeOwner(terminalTabId),
+        targetPtyId,
+        text.trim()
+      )
+    },
+    [terminalTabId, targetPtyId]
+  )
+
+  return { sendAnswer, sendRaw, sendChatText, cancelPending: cancelInFlight, cancel }
 }
