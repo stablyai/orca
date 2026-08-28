@@ -8,6 +8,7 @@ import { cn } from '@/lib/utils'
 import { getAgentDotState } from './worktree-card-agent-summary'
 import { translate } from '@/i18n/i18n'
 import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
+import { formatAgentRowLabel, labelNamesModel } from '@/lib/agent-row-model-label'
 import { formatAgentToolPreview } from '@/lib/agent-row-tool-preview'
 import { useAgentRowConversationName } from '@/components/dashboard/use-agent-row-conversation-name'
 import { lastEnteredDoneAt } from '@/components/dashboard/agent-finished-timestamp'
@@ -33,8 +34,12 @@ function getCompactAgentPrimary(
   agent: DashboardAgentRowData,
   conversationName: string | null
 ): string {
+  // Why: name the model first, then the feature ("Sol: Inspect scraper pipeline"). The
+  // feature name keeps Orca's existing precedence — orchestration label, subagent
+  // description, generated conversation name, then the state label.
   const prompt = conversationName ?? getAgentRowPrimaryText(agent.entry)
-  return prompt || agentStateLabel(getAgentDotState(agent))
+  const feature = prompt || agentStateLabel(getAgentDotState(agent))
+  return formatAgentRowLabel({ model: agent.entry.model, feature })
 }
 
 export function getCompactAgentSecondary(agent: DashboardAgentRowData): string {
@@ -129,6 +134,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
     dotState === 'monitoring' ? (primary === secondary ? '' : primary) : secondary
   const rowTitle = `${leadingText}${trailingText ? ` - ${trailingText}` : ''}`
   const model = agent.entry.model?.trim() ?? ''
+  // Why: the combined primary already names the model, so the trailing raw-model chip
+  // would only repeat it. Keep the chip for rows whose label could not name it.
+  const showModelChip = model !== '' && !labelNamesModel(primary, model)
   const shortTime = getCompactAgentTime(agent, now)
   const cacheTimer = usePromptCacheCountdownForPane(agent.paneKey, cacheTimerActive)
 
@@ -219,7 +227,7 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
           </span>
         )}
       </span>
-      {model && (
+      {showModelChip && (
         <span
           className={cn(
             'min-w-0 max-w-24 truncate font-mono text-[10px]',
