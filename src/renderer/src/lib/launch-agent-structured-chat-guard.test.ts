@@ -5,6 +5,7 @@ const mockSetTabViewMode = vi.fn()
 const mockWaitForAgentReady = vi.fn()
 const mockPasteDraftWhenAgentReady = vi.fn()
 const mockMarkNativeChatLaunchPromptFailed = vi.fn()
+const mockLaunchStructuredCodexSession = vi.fn()
 
 const store = {
   activeRepoId: 'repo-1',
@@ -61,6 +62,9 @@ vi.mock('@/runtime/web-runtime-session', () => ({
   isWebRuntimeSessionActive: vi.fn(() => false),
   isWebTerminalSurfaceTabId: vi.fn(() => false)
 }))
+vi.mock('@/lib/launch-structured-codex-session', () => ({
+  launchStructuredCodexSession: mockLaunchStructuredCodexSession
+}))
 
 /** Structured adoption creates the tab in terminal mode and flips it to chat once
  *  Codex is ready; the bridge stamps `viewMode: 'chat'` on the tab up front. That
@@ -73,24 +77,25 @@ describe('structured chat adoption guard on the launch path', () => {
     mockCreateTab.mockReturnValue({ id: 'tab-1' })
     mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+    mockLaunchStructuredCodexSession.mockResolvedValue('codex-session-1')
   })
 
-  it('adopts a local Codex tab into the structured stack', async () => {
+  it('honors the persisted chat default by launching Codex directly as a structured session', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    const result = launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
-    expect(mockCreateTab).toHaveBeenCalledWith('wt-1', undefined, undefined, {
-      launchAgent: 'codex'
-    })
-    await vi.waitFor(() => expect(mockSetTabViewMode).toHaveBeenCalledWith('tab-1', 'chat'))
+    expect(result).toMatchObject({ tabId: null, pasteDraftAfterLaunch: false })
+    expect(mockLaunchStructuredCodexSession).toHaveBeenCalledWith('wt-1')
+    expect(mockCreateTab).not.toHaveBeenCalled()
+    expect(mockWaitForAgentReady).not.toHaveBeenCalled()
   })
 
   it('stays in terminal view when Codex never became ready', async () => {
     mockWaitForAgentReady.mockResolvedValue({ ready: false, reason: 'timeout' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
+    launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1', prompt: 'start this task' })
 
     await vi.waitFor(() => expect(mockWaitForAgentReady).toHaveBeenCalled())
     // Let every continuation the ready wait could have queued run before asserting it did not flip.

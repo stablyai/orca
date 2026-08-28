@@ -21,6 +21,7 @@ export class StructuredAgentSessionHostRuntimeState {
     this.leaseRenewer = new StructuredAgentSessionLeaseRenewer({
       store: deps.store,
       probe: (record) => this.probeRecord(record),
+      ...(deps.probeOwners ? { probeMany: deps.probeOwners } : {}),
       now: () => deps.now?.() ?? Date.now(),
       ...(onLeaseRenewed ? { onRenewed: onLeaseRenewed } : {}),
       ...(onDeadTuiOwner ? { onDeadTuiOwner } : {}),

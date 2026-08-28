@@ -321,11 +321,10 @@ describe('openCodexAppServerConnection', () => {
     await vi.advanceTimersByTimeAsync(2_000)
     await closing
 
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
   })
 
   it('reports unproven close when forced termination did not produce an exit event', async () => {
-    vi.useFakeTimers()
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
     answerInitialize(child)
     const connection = await openCodexAppServerConnection(
@@ -334,11 +333,8 @@ describe('openCodexAppServerConnection', () => {
       spawnImpl
     )
 
-    const closing = connection.close()
-    await vi.advanceTimersByTimeAsync(2_600)
-
-    await expect(closing).resolves.toBe(false)
-  })
+    await expect(connection.close()).resolves.toBe(false)
+  }, 10_000)
 
   it('ends the connection rather than buffering an oversized line', async () => {
     const { child, spawnImpl } = stubChild({ exitOnStdinEnd: false })
@@ -398,7 +394,7 @@ describe('openCodexAppServerConnection', () => {
     expect((await inFlight).message).toContain('structured sink failed')
     expect(exits).toEqual([expect.stringContaining('structured sink failed')])
     expect(connection.closed).toBe(true)
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
     await connection.close()
   })
 
@@ -447,7 +443,7 @@ describe('openCodexAppServerConnection', () => {
     // A child nobody can write to is not a live session: the owner must see the
     // connection as gone rather than keep issuing calls that can only time out.
     expect(connection.closed).toBe(true)
-    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    await vi.waitFor(() => expect(child.kill).toHaveBeenCalledWith('SIGKILL'))
     expect((await rejection(connection.request('turn/start'))).message).toContain('EPIPE')
     await connection.close()
   })

@@ -99,7 +99,7 @@ describe('structured session RPC transport', () => {
     expect(auth).toEqual({
       type: 'e2ee_auth',
       deviceToken: 'token',
-      clientCapabilities: ['agent-session.structured.v1']
+      clientCapabilities: ['agent-session.structured.v1', 'agent-session.structured.hold.v1']
     })
     client.close()
   })

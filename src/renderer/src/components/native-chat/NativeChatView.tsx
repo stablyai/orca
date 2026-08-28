@@ -53,6 +53,7 @@ import type { NativeChatResolvedViewProps, NativeChatViewProps } from './native-
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
 import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
@@ -73,7 +74,8 @@ function NativeChatBridgeView({
   resolvedAgent,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions
+  contextMenuActions,
+  orchestrationDispatchStatus
 }: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
   const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
     terminalTabId,
@@ -99,6 +101,7 @@ function NativeChatBridgeView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
+          orchestrationDispatchStatus={orchestrationDispatchStatus}
         />
       )}
     </NativeChatSessionGate>
@@ -115,7 +118,8 @@ function NativeChatResolvedView({
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions
+  contextMenuActions,
+  orchestrationDispatchStatus
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
@@ -394,6 +398,7 @@ function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
+      <NativeChatOrchestrationPausedNotice dispatchStatus={orchestrationDispatchStatus} />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />

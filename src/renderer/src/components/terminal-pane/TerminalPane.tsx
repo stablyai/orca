@@ -534,6 +534,11 @@ function TerminalPane(
   )
   const nativeChatEnabled = useAppStore((store) => store.settings?.experimentalNativeChat === true)
   const effectiveChatViewMode = nativeChatEnabled && isChatViewMode
+  const chatPaneDispatchStatus = useAppStore((store) =>
+    chatLeafId
+      ? store.agentStatusByPaneKey[makePaneKey(tabId, chatLeafId)]?.orchestration?.dispatchStatus
+      : undefined
+  )
   const unifiedTabLabel = useAppStore(
     (store) =>
       getCachedUnifiedTerminalTabForWorktree(store.unifiedTabsByWorktree, worktreeId, tabId)?.label
@@ -3170,8 +3175,10 @@ function TerminalPane(
                   tabId={unifiedTabId ?? tabId}
                   sessionId={structuredSessionId}
                   agent="codex"
+                  isVisible={isRendererVisible}
                   target={{ kind: 'local' }}
                   allowFileUriLinks
+                  orchestrationDispatchStatus={chatPaneDispatchStatus}
                   onSwitchToTerminal={switchNativeChatToTerminal}
                 />
               ) : (
@@ -3213,6 +3220,7 @@ function TerminalPane(
                     canClosePane: managedPanes.length > 1,
                     onClosePane: () => contextMenu.runForPane(chatPane.id, contextMenu.onClosePane)
                   }}
+                  orchestrationDispatchStatus={chatPaneDispatchStatus}
                 />
               )}
             </div>,

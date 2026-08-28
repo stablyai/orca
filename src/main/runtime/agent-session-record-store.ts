@@ -26,10 +26,13 @@ import {
   commitAgentSessionProcessIdentity,
   evictAgentSessionOwner,
   proveAgentSessionOwner,
-  renewAgentSessionLease,
   setAgentSessionJournalCheckpoint,
   type AgentSessionProcessIdentityCommit
 } from './agent-session-lease-transitions'
+import {
+  renewAgentSessionLeases,
+  type AgentSessionLeaseRenewal
+} from './agent-session-lease-renewal'
 import { applyAgentSessionRestartAdjudication } from './agent-session-restart-lease-transitions'
 import { agentSessionReconciliationTargetMatches } from './agent-session-reconciliation-target'
 import { replaceAgentSessionRecordOptions } from './agent-session-record-options'
@@ -198,21 +201,14 @@ export class AgentSessionRecordStore {
     })
   }
 
-  async renewLease(args: {
-    sessionId: string
-    fence: number
-    childProbe: AgentSessionOwnerProbe
-    now: number
-    leaseTtlMs?: number
-  }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) =>
-      renewAgentSessionLease({
-        record,
-        fence: args.fence,
-        childProbe: args.childProbe,
-        now: args.now,
-        leaseTtlMs: args.leaseTtlMs ?? AGENT_SESSION_LEASE_TTL_MS
-      })
+  async renewLease(args: AgentSessionLeaseRenewal): Promise<AgentSessionRecord> {
+    const [renewed] = await this.renewLeases([args])
+    return renewed
+  }
+
+  async renewLeases(renewals: readonly AgentSessionLeaseRenewal[]): Promise<AgentSessionRecord[]> {
+    return this.transact(() =>
+      renewAgentSessionLeases(this.state, renewals, AGENT_SESSION_LEASE_TTL_MS)
     )
   }
 

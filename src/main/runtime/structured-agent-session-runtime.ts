@@ -20,6 +20,7 @@ import type { StructuredAgentSessionHandoffTransport } from '../native-chat/agen
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { AgentSessionRecordStore } from './agent-session-record-store'
 import {
+  probeAgentSessionProcessIdentities,
   probeAgentSessionProcessIdentity,
   probeAgentSessionReservation
 } from './agent-session-process-identity-probe'
@@ -120,6 +121,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       journalRoot: deps.stateDirectory,
       claimKeyId: deps.claimKeyId,
       probeOwner: createStructuredAgentSessionOwnerProbe(deps.hostId),
+      probeOwners: createStructuredAgentSessionOwnerProbes(deps.hostId),
       onEventSinkError: ({ sessionId, error }) =>
         deps.onError?.({ scope: `structured-agent-session-journal:${sessionId}`, error }),
       ...(deps.handoffTransport ? { handoffTransport: deps.handoffTransport } : {})
@@ -184,6 +186,38 @@ export function createStructuredAgentSessionOwnerProbe(
       identity: owner,
       deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
     })
+  }
+}
+
+export function createStructuredAgentSessionOwnerProbes(
+  hostId: string
+): (records: readonly AgentSessionRecord[]) => Promise<Map<string, AgentSessionOwnerProbe>> {
+  const probeOne = createStructuredAgentSessionOwnerProbe(hostId)
+  return async (records) => {
+    const results = new Map<string, AgentSessionOwnerProbe>()
+    const localOwners: {
+      record: AgentSessionRecord
+      owner: NonNullable<AgentSessionRecord['lease']['ownerProcess']>
+    }[] = []
+    for (const record of records) {
+      const owner = record.lease.ownerProcess
+      if (owner?.hostId === hostId) {
+        localOwners.push({ record, owner })
+      } else {
+        results.set(record.sessionId, await probeOne(record))
+      }
+    }
+    const probes = await probeAgentSessionProcessIdentities({
+      identities: localOwners.map(({ owner }) => owner),
+      deps: { readEchoedSpawnToken: readEchoedAgentSessionSpawnToken }
+    })
+    for (const [index, { record }] of localOwners.entries()) {
+      results.set(
+        record.sessionId,
+        probes[index] ?? { outcome: 'indeterminate', reason: 'owner probe returned no result' }
+      )
+    }
+    return results
   }
 }
 

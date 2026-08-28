@@ -76,6 +76,39 @@ async function readDarwinProcessStartTimeMs(pid: number): Promise<number | null>
   }
 }
 
+async function readDarwinProcessStartTimesMs(
+  pids: readonly number[]
+): Promise<Map<number, number | null>> {
+  const observed = new Map<number, number | null>()
+  if (pids.length === 0) {
+    return observed
+  }
+  try {
+    const result = await runProcess({
+      program: 'ps',
+      args: ['-o', 'pid=,lstart=', '-p', pids.join(',')],
+      timeoutMs: PROCESS_START_TIME_TIMEOUT_MS
+    })
+    if (result.timedOut || result.code !== 0) {
+      return observed
+    }
+    for (const line of result.stdout.split('\n')) {
+      const match = /^\s*(\d+)\s+(.+?)\s*$/.exec(line)
+      if (!match) {
+        continue
+      }
+      const pid = Number(match[1])
+      const parsed = Date.parse(match[2])
+      if (Number.isSafeInteger(pid) && Number.isFinite(parsed)) {
+        observed.set(pid, parsed)
+      }
+    }
+  } catch {
+    // A missing process table is unknown, never evidence that every owner exited.
+  }
+  return observed
+}
+
 async function readWindowsProcessStartTimeMs(pid: number): Promise<number | null> {
   try {
     const script =
@@ -114,6 +147,57 @@ export async function readProcessStartTimeMs(
     return readWindowsProcessStartTimeMs(pid)
   }
   return null
+}
+
+export async function readProcessStartTimesMs(
+  pids: readonly number[],
+  platform: NodeJS.Platform = process.platform
+): Promise<Map<number, number | null>> {
+  const uniquePids = [...new Set(pids)]
+  if (platform === 'darwin') {
+    const table = await readDarwinProcessStartTimesMs(uniquePids)
+    return new Map(uniquePids.map((pid) => [pid, table.get(pid) ?? null]))
+  }
+  return new Map(
+    await Promise.all(
+      uniquePids.map(async (pid) => [pid, await readProcessStartTimeMs(pid, platform)] as const)
+    )
+  )
+}
+
+export type AgentSessionProcessBatchProbeDeps = Omit<
+  AgentSessionProcessProbeDeps,
+  'readProcessStartTimeMs'
+> & {
+  readProcessStartTimesMs?: (
+    pids: readonly number[],
+    platform?: NodeJS.Platform
+  ) => Promise<Map<number, number | null>>
+}
+
+export async function probeAgentSessionProcessIdentities(args: {
+  identities: readonly AgentSessionProcessIdentity[]
+  deps?: AgentSessionProcessBatchProbeDeps
+}): Promise<AgentSessionOwnerProbe[]> {
+  const deps = args.deps ?? {}
+  const platform = deps.platform ?? process.platform
+  const pids = args.identities
+    .filter((identity) => identity.processStartTimeMs !== null)
+    .map((identity) => identity.pid)
+  const readStartTimes = deps.readProcessStartTimesMs ?? readProcessStartTimesMs
+  const startTimes = await readStartTimes(pids, platform).catch(() => new Map())
+  return Promise.all(
+    args.identities.map((identity) =>
+      probeAgentSessionProcessIdentity({
+        identity,
+        deps: {
+          ...deps,
+          platform,
+          readProcessStartTimeMs: async (pid) => startTimes.get(pid) ?? null
+        }
+      })
+    )
+  )
 }
 
 /**

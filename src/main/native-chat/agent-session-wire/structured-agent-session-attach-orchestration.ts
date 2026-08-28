@@ -12,6 +12,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { performAttach } from './structured-agent-session-attach-flow'
+import { pinnedAgentSessionLaunchEnv } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 
@@ -42,7 +43,8 @@ export function attachStructuredAgentSession(
         spawnToken: context.deps.mintSpawnToken?.() ?? randomUUID(),
         claimKeyId: context.deps.claimKeyId,
         handoffOperationId: params.envelope.clientOperationId,
-        probe: await context.runtimeState.probeOwner(sessionId)
+        probe: await context.runtimeState.probeOwner(sessionId),
+        ...(await pinnedAgentSessionLaunchEnv(context.deps.resolveLaunchEnv, params))
       },
       callerKey,
       params,
@@ -50,7 +52,12 @@ export function attachStructuredAgentSession(
       onAttached: (attached) => {
         const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
         const previousFence = context.sessions.get(sessionId)?.fence
-        context.sessions.set(sessionId, { journal: attached.journal, params, fence })
+        context.sessions.set(sessionId, {
+          journal: attached.journal,
+          params,
+          fence,
+          hasProviderChild: true
+        })
         if (attached.recovery) {
           context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)
         } else if (previousFence !== undefined && previousFence !== fence) {

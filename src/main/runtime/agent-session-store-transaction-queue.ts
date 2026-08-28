@@ -116,7 +116,9 @@ export class AgentSessionStoreTransactionQueue {
           ) {
             return result
           }
-          await saveAgentSessionStore(this.filePath, this.state)
+          await saveAgentSessionStore(this.filePath, this.state, {
+            primaryStatus: this.diskStoreFound && !recovering ? 'validated' : 'unusable-or-absent'
+          })
           this.state.schemaVersion = AGENT_SESSION_STORE_SCHEMA_VERSION
           this.diskRevision = agentSessionStoreRevision(this.state)
           this.diskRecoveredFromBackup = false

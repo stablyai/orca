@@ -106,6 +106,7 @@ describe('NativeChatStructuredSession', () => {
   it('wires local structured file links through the native chat opener', () => {
     render(
       <NativeChatStructuredSession
+        isVisible
         tabId="structured-tab-1"
         sessionId="session-1"
         target={{ kind: 'local' }}
@@ -121,6 +122,7 @@ describe('NativeChatStructuredSession', () => {
   it('routes a bare model command to the native option picker', async () => {
     render(
       <NativeChatStructuredSession
+        isVisible
         tabId="structured-tab-1"
         sessionId="session-1"
         target={{ kind: 'local' }}

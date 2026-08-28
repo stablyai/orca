@@ -55,6 +55,8 @@ describe('structured session cold restoration', () => {
 
   it('normalizes a restored tab id and removes it when closed', async () => {
     const runtime = new OrcaRuntimeService()
+    const closeSessionTab = vi.fn(async () => undefined)
+    runtime.setNotifier({ closeSessionTab } as never)
     const internal = runtime as unknown as {
       getKnownWorkspaceSessionWorktreeIds(): Set<string>
       hydrateHeadlessMobileSessionTabsFromWorkspaceSession(): Set<string>
@@ -146,11 +148,38 @@ describe('structured session cold restoration', () => {
       reason: 'user'
     })
 
+    expect(closeSessionTab).toHaveBeenCalledWith(
+      'structured-agent-session-restored-session',
+      'workspace-1'
+    )
+
     const closed = await runtime.listMobileSessionTabs('id:workspace-1')
     expect(closed.tabs.map((tab) => tab.id)).toEqual([
       'terminal-tab::leaf-1',
       'terminal-tab::leaf-2'
     ])
     expect(closed.tabGroups?.[0]?.tabOrder).toEqual(['terminal-tab'])
+  })
+
+  it('commits the host close when the renderer already removed the structured tab', async () => {
+    const runtime = new OrcaRuntimeService()
+    runtime.setNotifier({
+      closeSessionTab: vi.fn(async () => {
+        throw new Error('session_tab_not_found')
+      })
+    } as never)
+    runtime.publishStructuredAgentSessionTab({
+      workspaceId: 'workspace-1',
+      sessionId: 'session-1',
+      agent: 'codex',
+      activate: true
+    })
+
+    await runtime.closeMobileSessionTab('id:workspace-1', 'agent-session:session-1', {
+      reason: 'user'
+    })
+
+    const snapshot = await runtime.listMobileSessionTabs('id:workspace-1')
+    expect(snapshot.tabs).toEqual([])
   })
 })

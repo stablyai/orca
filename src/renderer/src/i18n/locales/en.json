@@ -16109,7 +16109,13 @@
         "allow": "Allow",
         "deny": "Deny"
       },
-      "launchPromptNotDelivered": "Not delivered — check the terminal"
+      "launchPromptNotDelivered": "Not delivered — check the terminal",
+      "orchestrationPaused": {
+        "label": "Orchestration paused",
+        "message": "Structured Chat blocks terminal prompts and sends. Orchestration messages remain queued; switch to Terminal, then check the Orca inbox with"
+      },
+      "structuredSessionCloseFailed": "Could not close this Codex chat",
+      "structuredSessionLaunchFailed": "Could not open Codex chat"
     },
     "tab": {
       "bar": {

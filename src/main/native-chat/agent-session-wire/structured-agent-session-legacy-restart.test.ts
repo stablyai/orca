@@ -4,6 +4,7 @@ import {
   LEGACY_AGENT_SESSION_ID
 } from '../../../shared/agent-session-record-legacy.test-fixture'
 import { loadAgentSessionRecord } from '../../../shared/agent-session-record-load'
+import { isResumableStructuredAgentSessionRecord } from './structured-agent-session-resume-eligibility'
 import { restoreStructuredAgentSessionsOnRestart } from './structured-agent-session-restart-restore'
 
 describe('legacy structured session restart', () => {
@@ -12,7 +13,7 @@ describe('legacy structured session restart', () => {
     if (loaded.status !== 'upgraded') {
       throw new Error(`expected upgrade, got ${loaded.status}`)
     }
-    const resume = vi.fn(async () => true)
+    const serialize = vi.fn(async <T>(_sessionId: string, task: () => Promise<T>) => task())
 
     await restoreStructuredAgentSessionsOnRestart({
       store: { getRecord: () => loaded.record } as never,
@@ -20,9 +21,7 @@ describe('legacy structured session restart', () => {
       records: [loaded.record],
       reconcile: async () => null,
       resolveRecovery: async () => 'not-applicable',
-      operationId: () => 'legacy-upgrade-operation',
-      resume,
-      serialize: async () => undefined as never,
+      serialize: serialize as never,
       hasSession: () => false,
       onReadable: vi.fn(),
       restoreHandoff: vi.fn(async () => undefined)
@@ -32,6 +31,8 @@ describe('legacy structured session restart', () => {
       sessionId: LEGACY_AGENT_SESSION_ID,
       lease: { claimStatus: 'conflicted', handoffStage: 'manual-recovery' }
     })
-    expect(resume).not.toHaveBeenCalled()
+    // Restart no longer resumes ANYTHING, so the guard that matters now is the one a surface hits:
+    // a conflicted record under manual recovery is not a record a hold may acquire.
+    expect(isResumableStructuredAgentSessionRecord(loaded.record)).toBe(false)
   })
 })

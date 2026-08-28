@@ -20,6 +20,7 @@ export type RestoredStructuredAgentSessionRead = {
   journal: AgentSessionJournal
   params: AgentSessionAttachParams
   fence: number
+  hasProviderChild: false
 }
 
 export async function restoreStructuredAgentSessionRead(
@@ -47,7 +48,8 @@ export async function restoreStructuredAgentSessionRead(
     identity: journalIdentityFor(record, params),
     journalDir
   })
-  return { journal, params, fence: record.lease.runtimeFence }
+  // Read restore opens the journal and nothing else: no adapter call, so no provider child.
+  return { journal, params, fence: record.lease.runtimeFence, hasProviderChild: false }
 }
 
 export function attachParamsForRecord(

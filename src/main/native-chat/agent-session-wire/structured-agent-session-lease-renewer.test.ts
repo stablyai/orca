@@ -2,6 +2,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../shared/agent-session-record.test-fixture'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { StructuredAgentSessionLeaseRenewer } from './structured-agent-session-lease-renewer'
 
@@ -66,6 +70,50 @@ afterEach(async () => {
 })
 
 describe('structured agent-session lease renewal', () => {
+  it('commits one store transaction for the whole live-record sweep', async () => {
+    const records = ['a', 'b'].map((suffix, index) => {
+      const sessionId = `session-${suffix}`
+      return agentSessionRecordFixture(
+        agentSessionLeaseFixture({
+          sessionId,
+          runtimeKind: 'native',
+          runtimeFence: index + 1,
+          ownerProcess: {
+            hostId: 'local',
+            pid: 4200 + index,
+            processStartTimeMs: NOW - 1_000,
+            spawnToken: `spawn-${suffix}`
+          },
+          reservedSpawnToken: `spawn-${suffix}`,
+          lastRenewedAt: NOW,
+          leaseDeadlineAt: NOW + 30_000
+        })
+      )
+    })
+    const renewLeases = vi.fn(async (_renewals: readonly unknown[]) => records)
+    const probeMany = vi.fn(
+      async () =>
+        new Map(
+          records.map((record) => [
+            record.sessionId,
+            { outcome: 'identity-matched', matchedOn: ['spawn-token'] } as const
+          ])
+        )
+    )
+    const renewer = new StructuredAgentSessionLeaseRenewer({
+      store: { listRecords: () => records, renewLeases } as unknown as AgentSessionRecordStore,
+      probe: vi.fn(),
+      probeMany,
+      now: () => NOW + 10_000
+    })
+
+    await renewer.renewNow()
+
+    expect(probeMany).toHaveBeenCalledOnce()
+    expect(renewLeases).toHaveBeenCalledOnce()
+    expect(renewLeases.mock.calls[0]?.[0]).toHaveLength(2)
+  })
+
   it('drives renewal on the production interval', async () => {
     vi.useFakeTimers()
     const store = await liveStore()

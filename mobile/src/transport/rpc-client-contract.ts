@@ -36,6 +36,10 @@ export type RpcClient = {
   getState: () => ConnectionState
   getReconnectAttempt: () => number
   getLastConnectedAt: () => number | null
+  // Wall-clock stamp of the last inbound frame on the current session, or null when the
+  // transport can't vouch for one. Optional so older/foreign RpcClient shapes stay valid;
+  // callers must treat absent/null as "unknown" and fall back to a safe bound.
+  getLastInboundAt?: () => number | null
   onStateChange: (listener: (state: ConnectionState) => void) => () => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
   restartAfterStructuredBackground?: () => void

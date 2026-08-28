@@ -183,6 +183,13 @@ export const SetOptionParams = z
 
 export const OptionsParams = z.object({ sessionId: SessionId }).strict()
 
+/** One surface's claim on one session. The id names the surface, not the client: a chat tab and a
+ *  paired phone looking at the same session are two holders, and either leaving must not release
+ *  the other's. */
+export const HoldParams = z
+  .object({ sessionId: SessionId, holderId: Identifier('Invalid holder id') })
+  .strict()
+
 export const HistoryParams = z
   .object({
     sessionId: SessionId,

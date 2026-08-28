@@ -64,7 +64,13 @@ async function adopt(
     journalRoot: input.deps.journalRoot,
     adapter: input.deps.adapter
   })
-  const session = { journal: attached.journal, params, fence: record.lease.runtimeFence }
+  // The TUI owns the process here; this host publishes the journal only.
+  const session = {
+    journal: attached.journal,
+    params,
+    fence: record.lease.runtimeFence,
+    hasProviderChild: false
+  }
   input.publish(sessionId, session)
   input.retain(sessionId, owner)
   input.snapshot(sessionId, session)

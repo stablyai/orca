@@ -299,4 +299,27 @@ describe('structured session handoff options', () => {
     expect(launchedOptions).toEqual([])
     expect(store.getRecord(SESSION)?.lease.runtimeKind).toBe('native')
   })
+
+  // Closing a chat used to leave its provider child resident for the whole app session: the host's
+  // session map had no delete and the only teardown was app quit.
+  it('stops the provider child and forgets the session when the chat closes', async () => {
+    const adapterCloseSession = (host as unknown as { deps: { adapter: { closeSession: Mock } } })
+      .deps.adapter.closeSession
+    expect(host.hasSession(SESSION)).toBe(true)
+
+    await host.close(SESSION)
+
+    expect(adapterCloseSession).toHaveBeenCalledWith(SESSION)
+    expect(host.hasSession(SESSION)).toBe(false)
+  })
+
+  it('is a no-op for a session it does not hold', async () => {
+    await host.close(SESSION)
+    const adapterCloseSession = (host as unknown as { deps: { adapter: { closeSession: Mock } } })
+      .deps.adapter.closeSession
+    adapterCloseSession.mockClear()
+
+    await expect(host.close(SESSION)).resolves.toBeUndefined()
+    expect(adapterCloseSession).not.toHaveBeenCalled()
+  })
 })

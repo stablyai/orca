@@ -21,6 +21,17 @@ describe('Codex TUI rollout proof', () => {
     expect(parseCodexTuiStatusSessionId('Session: not-a-session')).toBeNull()
   })
 
+  it('parses the Codex 0.148 status screen and semantic thread labels', () => {
+    const status = [
+      '\u001b[2m│  >_ OpenAI Codex (v0.148.0)                                                  │',
+      '│  Model:                       gpt-5.6-sol (reasoning high, summaries auto)   │',
+      `│  Session:                     \u001b[22m${THREAD}\u001b[2m           │`
+    ].join('\n')
+
+    expect(parseCodexTuiStatusSessionId(status)).toBe(THREAD)
+    expect(parseCodexTuiStatusSessionId(`Thread ID: ${OTHER_THREAD}`)).toBe(OTHER_THREAD)
+  })
+
   it('uses Kitty Enter only while the TUI negotiated Kitty input', () => {
     expect(codexTuiStatusProbeInput(0)).toEqual({
       command: '\u001b[200~/status\u001b[201~',
@@ -148,6 +159,35 @@ describe('Codex TUI rollout proof', () => {
     expect(write.mock.calls.map(([data]) => data)).toEqual([
       '\u001b[200~/status\u001b[201~',
       '\r',
+      '\u001b'
+    ])
+  })
+
+  it('accepts a proven blank Codex 0.148 session before its lazy rollout exists', async () => {
+    let reads = 0
+    const write = vi.fn((_data: string) => true)
+    const resolveRollout = vi.fn(async () => null)
+
+    await expect(
+      resolveLiveCodexTuiRollout({
+        codexHome: '/pinned',
+        kittyKeyboardFlags: 1,
+        readOutput: () => ({
+          text:
+            reads++ > 0
+              ? `│  >_ OpenAI Codex (v0.148.0) │\n│  Session: \u001b[22m${THREAD}\u001b[2m │`
+              : '',
+          lastOutputAt: reads > 1 ? 2 : 1
+        }),
+        write,
+        resolveRollout,
+        delay: async () => undefined
+      })
+    ).resolves.toEqual({ threadId: THREAD })
+    expect(resolveRollout).toHaveBeenCalledTimes(5)
+    expect(write.mock.calls.map(([data]) => data)).toEqual([
+      '\u001b[200~/status\u001b[201~',
+      '\u001b[13u',
       '\u001b'
     ])
   })

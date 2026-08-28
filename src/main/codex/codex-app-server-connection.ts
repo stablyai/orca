@@ -1,12 +1,14 @@
 import { spawnProcess } from '../../shared/child-process/run-process'
 import { buildCodexAppServerExitError } from './codex-app-server-exit-error'
 import { isAppServerRecord, parseCodexAppServerJsonLine } from './codex-app-server-jsonl'
+import { terminateCodexAppServerProcessTree } from './codex-app-server-process-teardown'
+import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CODEX_SPAWN_TOKEN_ENV } from './codex-structured-owner-identity'
 import { waitForProcessExitUntil } from './codex-process-exit-deadline'
 import {
   CodexAppServerTimeoutError,
   CodexAppServerUnsupportedError,
-  isCodexMethodNotFoundError,
-  killCodexAppServerProcessTree
+  isCodexMethodNotFoundError
 } from './codex-app-server-session'
 import type {
   CodexAppServerConnection,
@@ -18,26 +20,13 @@ export type {
   CodexAppServerConnectionHandlers,
   CodexAppServerServerRequest
 } from './codex-app-server-connection-types'
+export {
+  CodexAppServerRequestError,
+  isCodexAppServerRequestError
+} from './codex-app-server-request-error'
 
 // Structured chat needs a persistent bidirectional child and per-request deadlines;
 // the request-scoped app-server runner cannot carry approvals or streamed turns.
-
-/** Codex answered the call and refused it. Distinct from a timeout or a dead
- *  child, which leave the call unsettled rather than declined. */
-export class CodexAppServerRequestError extends Error {
-  constructor(
-    readonly method: string,
-    readonly code: number | null,
-    message: string
-  ) {
-    super(message)
-    this.name = 'CodexAppServerRequestError'
-  }
-}
-
-export function isCodexAppServerRequestError(error: unknown): error is CodexAppServerRequestError {
-  return error instanceof Error && error.name === 'CodexAppServerRequestError'
-}
 
 export type CodexAppServerLaunch = {
   command: string
@@ -82,6 +71,7 @@ export async function openCodexAppServerConnection(
     env: childEnv,
     cwd: process.cwd()
   })
+  const spawnToken = launch.env?.[CODEX_SPAWN_TOKEN_ENV]
 
   const pending = new Map<number, PendingRequest>()
   let stderrTail = ''
@@ -150,7 +140,7 @@ export async function openCodexAppServerConnection(
       failPending(error)
       return
     }
-    killCodexAppServerProcessTree(child)
+    void terminateCodexAppServerProcessTree(child, spawnToken)
     handleUnexpectedEnd(error)
   })
 
@@ -206,7 +196,7 @@ export async function openCodexAppServerConnection(
     stdoutBuffer += chunk
     if (Buffer.byteLength(stdoutBuffer) > STDOUT_LINE_MAX_BYTES) {
       child.stdout.destroy()
-      killCodexAppServerProcessTree(child)
+      void terminateCodexAppServerProcessTree(child, spawnToken)
       handleUnexpectedEnd(new Error('codex app-server emitted an oversized JSONL line'))
       return
     }
@@ -226,7 +216,7 @@ export async function openCodexAppServerConnection(
         dispatchMessage(parsed)
       } catch (error) {
         child.stdout.destroy()
-        killCodexAppServerProcessTree(child)
+        void terminateCodexAppServerProcessTree(child, spawnToken)
         handleUnexpectedEnd(error instanceof Error ? error : new Error(String(error)))
         return
       }
@@ -306,7 +296,11 @@ export async function openCodexAppServerConnection(
     if (!exited) {
       await waitForProcessExitUntil(exitPromise, GRACEFUL_EXIT_MS)
       if (!exited) {
-        killCodexAppServerProcessTree(child)
+        const treeExited = await terminateCodexAppServerProcessTree(child, spawnToken)
+        if (!treeExited) {
+          failPending(new Error('codex app-server process-tree exit was not proven'))
+          return false
+        }
         await waitForProcessExitUntil(exitPromise, FORCED_EXIT_MS)
       }
     }

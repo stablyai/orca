@@ -49,12 +49,23 @@ function createReconnectScheduler(args: { shouldStop: () => boolean; reconnect: 
 export function useStructuredAgentSessionRead(args: {
   sessionId: string
   target: RuntimeClientTarget
+  isVisible?: boolean
 }) {
-  const { sessionId, target } = args
+  const { sessionId, target, isVisible = true } = args
   const [state, dispatch] = useReducer(reduceStructuredAgentSession, EMPTY_STRUCTURED_AGENT_SESSION)
   const stateRef = useRef(state)
   const resumeCursorRef = useRef(state.cursor)
   const [loadingOlder, setLoadingOlder] = useState(false)
+  const refreshOnFocusRef = useRef<() => void>(() => {})
+
+  useEffect(() => {
+    if (!isVisible) {
+      return
+    }
+    const refresh = (): void => refreshOnFocusRef.current()
+    window.addEventListener('focus', refresh)
+    return () => window.removeEventListener('focus', refresh)
+  }, [isVisible])
 
   useEffect(() => {
     stateRef.current = state
@@ -198,7 +209,7 @@ export function useStructuredAgentSessionRead(args: {
           }
         })
     }
-    window.addEventListener('focus', refreshOnFocus)
+    refreshOnFocusRef.current = refreshOnFocus
     void refreshTail()
       .then(() => open())
       .catch((error) => {
@@ -207,7 +218,9 @@ export function useStructuredAgentSessionRead(args: {
       })
     return () => {
       stopped = true
-      window.removeEventListener('focus', refreshOnFocus)
+      if (refreshOnFocusRef.current === refreshOnFocus) {
+        refreshOnFocusRef.current = () => {}
+      }
       reconnectScheduler.dispose()
       coalescer.dispose()
       unsubscribe()

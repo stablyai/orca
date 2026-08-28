@@ -17,6 +17,8 @@ import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useStructuredAgentSession } from './use-structured-agent-session'
 import { translate } from '@/i18n/i18n'
+import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
+import type { AgentStatusOrchestrationContext } from '../../../../shared/agent-status-types'
 
 function encodeQuestionAnswer(questionId: string, answer: string): string {
   return `${encodeURIComponent(questionId)}:${encodeURIComponent(answer)}`
@@ -27,8 +29,10 @@ export function NativeChatStructuredSession(props: {
   sessionId: string
   target: RuntimeClientTarget
   agent: AgentType
+  isVisible: boolean
   allowFileUriLinks: boolean
   onSwitchToTerminal?: () => void
+  orchestrationDispatchStatus?: AgentStatusOrchestrationContext['dispatchStatus']
 }): React.JSX.Element {
   const controller = useStructuredAgentSession(props)
   const [composerError, setComposerError] = useState<string | null>(null)
@@ -117,6 +121,7 @@ export function NativeChatStructuredSession(props: {
       tabIndex={-1}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
+      <NativeChatOrchestrationPausedNotice dispatchStatus={props.orchestrationDispatchStatus} />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />

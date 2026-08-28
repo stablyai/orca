@@ -709,7 +709,7 @@ describe('restart', () => {
     expect(listRecords).toHaveBeenCalledTimes(restoreReads)
   })
 
-  it('clears stale TUI recovery when restart successfully reacquires the native owner', async () => {
+  it('clears stale TUI recovery at restart, and reacquires the native owner when a surface holds it', async () => {
     await attach()
     await store.transitionHandoff(SESSION, (record) => ({
       ...record,
@@ -723,6 +723,9 @@ describe('restart', () => {
     acquire.mockClear()
 
     await host.restoreReadableSessions()
+    // The recovery stage clears on evidence at startup; the child comes back only once a surface
+    // holds the session (see structured-agent-session-surface-lifetime.test.ts).
+    await host.hold(SESSION, 'surface-1')
 
     expect(acquire).toHaveBeenCalledOnce()
     expect(store.getRecord(SESSION)?.lease).toMatchObject({

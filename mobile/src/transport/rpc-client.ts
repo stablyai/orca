@@ -46,7 +46,10 @@ import {
 } from './rpc-session-liveness-watchdog'
 import { isStaleForegroundDial } from './rpc-stale-dial'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import {
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../../src/shared/protocol-version'
 import type { RpcClient, SendRequestOptions, SubscribeOptions } from './rpc-client-contract'
 
 export type { RpcClient, SendRequestOptions } from './rpc-client-contract'
@@ -374,7 +377,10 @@ export function connect(
             sendEncrypted({
               type: 'e2ee_auth',
               deviceToken,
-              clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+              clientCapabilities: [
+                STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+                STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY
+              ]
             })
             return
           }

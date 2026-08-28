@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
-import { act, renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem
@@ -77,6 +77,8 @@ function page(
 }
 
 describe('useStructuredAgentSessionRead history window', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
@@ -154,5 +156,37 @@ describe('useStructuredAgentSessionRead history window', () => {
     })
     expect(result.current.state.items).toHaveLength(301)
     expect(result.current.state.items[0]?.itemId).toBe('oldest')
+  })
+
+  it('refreshes only visible structured sessions when the app regains focus', async () => {
+    const hasFocus = vi.spyOn(document, 'hasFocus').mockReturnValue(true)
+    mocks.call.mockResolvedValue({ ok: true, page: page('tail', [], false) })
+    const visible = renderHook(() =>
+      useStructuredAgentSessionRead({
+        sessionId: 'session-visible',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+    const hidden = renderHook(() =>
+      useStructuredAgentSessionRead({
+        sessionId: 'session-hidden',
+        target: LOCAL_TARGET,
+        isVisible: false
+      })
+    )
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+
+    act(() => window.dispatchEvent(new Event('focus')))
+
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
+    expect(mocks.call).toHaveBeenLastCalledWith(LOCAL_TARGET, 'agentSession.history', {
+      sessionId: 'session-visible',
+      direction: 'tail',
+      limit: AGENT_SESSION_HISTORY_MAX_LIMIT
+    })
+    visible.unmount()
+    hidden.unmount()
+    hasFocus.mockRestore()
   })
 })

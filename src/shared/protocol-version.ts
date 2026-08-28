@@ -106,6 +106,13 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // can neither display nor drive. The host also refuses every agentSession.*
 // method from a connection that does not advertise this.
 export const STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY = 'agent-session.structured.v1' as const
+// Why: a client that advertises this takes an explicit hold on every session surface it opens, so
+// the host knows when the last surface is gone and may stop the provider child. A client WITHOUT it
+// (every paired build that shipped before holds existed) is held for the life of its subscription
+// instead, and that subscription is what resumes its session — which is how those builds keep being
+// able to send after the host stopped resuming every record at launch.
+export const STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY =
+  'agent-session.structured.hold.v1' as const
 // Why: the first structured mobile client hardcoded Codex rendering, so hosts may publish Claude tabs only after this narrower capability is negotiated.
 export const CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY =
   'agent-session.structured.claude.v1' as const
@@ -157,6 +164,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
   CLAUDE_STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,

@@ -94,6 +94,7 @@ import {
   type StructuredTuiOwner
 } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
+import { SESSION_TAB_NOT_FOUND_ERROR } from '../../shared/session-tab-close'
 import {
   agentSessionOwnerBindingsEqual,
   cloneAgentSessionOwnerBinding,
@@ -9471,7 +9472,19 @@ export class OrcaRuntimeService {
       // snapshot so paired clients stop showing it.
       await this.closeHeadlessMobileBrowserTab(worktreeId, snapshot, tab)
     } else if (tab.type === 'agent-session') {
-      this.notifier?.closeSessionTab?.(tab.id, worktreeId)
+      if (this.notifier?.closeSessionTab) {
+        try {
+          await this.notifier.closeSessionTab(
+            structuredAgentSessionTabId(tab.sessionId),
+            worktreeId
+          )
+        } catch (error) {
+          // The renderer already having removed the tab is an idempotent close, not a veto.
+          if (!(error instanceof Error && error.message === SESSION_TAB_NOT_FOUND_ERROR)) {
+            throw error
+          }
+        }
+      }
       this.closeStructuredAgentSessionTab(worktreeId, snapshot, tab)
     } else {
       if (!this.notifier?.closeSessionTab) {
@@ -11616,7 +11629,7 @@ export class OrcaRuntimeService {
           spawnToken
         }) ?? false
     }
-    let transcriptPath: string
+    let transcriptPath: string | undefined
     if (threadId) {
       const proof = await proveCodexTuiRollout({ ...proofInput, threadId })
       transcriptPath = proof.transcriptPath
@@ -11651,7 +11664,7 @@ export class OrcaRuntimeService {
         fence,
         observedAt: Date.now()
       }),
-      transcriptPath,
+      ...(transcriptPath ? { transcriptPath } : {}),
       historySource: 'provider-resume',
       adoptedTerminal: true
     }

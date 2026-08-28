@@ -4,11 +4,17 @@
 // handoff restore, and no manual recovery can move, so the chat behind it never opens again. The
 // contract is that loading the record under this build makes it usable WITHOUT losing the
 // conversation — the journal, the provider handle chain, and the recorded evidence all survive.
+//
+// "Usable" means ACQUIRABLE, not acquired. Startup no longer resumes a provider child for a record
+// nobody is looking at; a surface taking a hold is what spawns one. So the migration's job is to
+// leave the lease in a state a hold can claim, and these tests prove that by adjudicating it rather
+// than by reading fields off it.
 
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { evaluateAgentSessionAcquisition } from '../../../shared/agent-session-lease-adjudication'
 import type {
   AgentSessionClaimStatus,
   AgentSessionHandoffStage,
@@ -156,6 +162,18 @@ afterEach(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
+/** The property that matters: a hold taken now would be granted a lease. */
+function isAcquirable(lease: NonNullable<ReturnType<typeof store.getRecord>>['lease']): boolean {
+  return (
+    evaluateAgentSessionAcquisition({
+      lease,
+      expectedFence: lease.runtimeFence,
+      handoffOperationId: null,
+      probe: { outcome: 'reservation-unused' }
+    }).decision === 'granted'
+  )
+}
+
 describe('already-wedged profiles become usable on load', () => {
   it('re-adjudicates a conflicted manual-recovery record whose owner is provably gone', async () => {
     // The v1 -> v2 record upgrade stamps every migrated row `conflicted` + `manual-recovery`, and
@@ -172,8 +190,9 @@ describe('already-wedged profiles become usable on load', () => {
 
     await host.restoreReadableSessions()
 
-    const lease = store.getRecord(SESSION)?.lease
-    expect(lease).toMatchObject({ claimStatus: 'live', handoffStage: null })
+    const lease = store.getRecord(SESSION)!.lease
+    expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
+    expect(isAcquirable(lease)).toBe(true)
     // A real re-adjudication, not a no-op: the eviction minted a new generation.
     expect(lease?.runtimeFence).toBeGreaterThan(13)
     // The conversation survived: the codex thread was resumed, not recreated.
@@ -181,7 +200,9 @@ describe('already-wedged profiles become usable on load', () => {
       linkId: 'codex-13-link',
       handle: { threadId: THREAD }
     })
-    expect(acquire).toHaveBeenCalledTimes(1)
+    // Why NOT acquired here: startup spawning a provider child for every recovered record is the
+    // accumulation this stack removed. Unlatching is the migration's job; spawning is a hold's.
+    expect(acquire).not.toHaveBeenCalled()
   })
 
   it('leaves a conflicted record alone while its owner cannot be proven gone', async () => {
@@ -213,10 +234,9 @@ describe('already-wedged profiles become usable on load', () => {
 
     await host.restoreReadableSessions()
 
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      handoffStage: null
-    })
+    const lease = store.getRecord(SESSION)!.lease
+    expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
+    expect(isAcquirable(lease)).toBe(true)
   })
 
   it('exits a TUI reservation that crashed before its identity was committed', async () => {
@@ -247,10 +267,9 @@ describe('already-wedged profiles become usable on load', () => {
 
     await host.restoreReadableSessions()
 
-    expect(store.getRecord(SESSION)?.lease).toMatchObject({
-      claimStatus: 'live',
-      handoffStage: null
-    })
+    const lease = store.getRecord(SESSION)!.lease
+    expect(lease).toMatchObject({ handoffStage: null, unreconciled: false })
+    expect(isAcquirable(lease)).toBe(true)
   })
 
   it("stops a child carrying a lost record's spawn token before recovery respawns", async () => {
@@ -289,6 +308,11 @@ describe('already-wedged profiles become usable on load', () => {
     })
 
     await host.restoreReadableSessions()
+    // Startup only reaps now; a hold is what asks for a child. The ordering property is unchanged
+    // and still the point: the orphan holding the lost token must be gone BEFORE anything is
+    // granted a new owner for that provider session, or two children race one conversation.
+    expect(order).toEqual(['stop:31337'])
+    await host.hold(SESSION, 'holder-1')
 
     expect(order).toEqual(['stop:31337', 'acquire'])
   })

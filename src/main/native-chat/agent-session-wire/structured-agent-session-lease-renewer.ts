@@ -18,6 +18,9 @@ export class StructuredAgentSessionLeaseRenewer {
     private readonly input: {
       store: AgentSessionRecordStore
       probe: (record: AgentSessionRecord) => Promise<AgentSessionOwnerProbe>
+      probeMany?: (
+        records: readonly AgentSessionRecord[]
+      ) => Promise<Map<string, AgentSessionOwnerProbe>>
       now: () => number
       onRenewed?: (record: AgentSessionRecord) => Promise<void>
       onDeadTuiOwner?: (record: AgentSessionRecord, probe: AgentSessionOwnerProbe) => Promise<void>
@@ -47,49 +50,87 @@ export class StructuredAgentSessionLeaseRenewer {
     }
     this.running = true
     try {
-      await Promise.all(
-        this.input.store
-          .listRecords()
-          .filter(
-            (record) =>
-              !record.lease.unreconciled &&
-              record.lease.claimStatus === 'live' &&
-              record.lease.ownerProcess !== null &&
-              // A native record parked in recovery has no transport the host can vouch
-              // for; renewing it keeps an orphan pid's lease reading as a healthy owner.
-              !(
-                record.lease.runtimeKind === 'native' &&
-                (record.lease.handoffStage === 'recovering' ||
-                  record.lease.handoffStage === 'manual-recovery')
-              )
+      const records = this.input.store.listRecords().filter(
+        (record) =>
+          !record.lease.unreconciled &&
+          record.lease.claimStatus === 'live' &&
+          record.lease.ownerProcess !== null &&
+          // A native record parked in recovery has no transport the host can vouch
+          // for; renewing it keeps an orphan pid's lease reading as a healthy owner.
+          !(
+            record.lease.runtimeKind === 'native' &&
+            (record.lease.handoffStage === 'recovering' ||
+              record.lease.handoffStage === 'manual-recovery')
           )
-          .map((record) => this.renewRecord(record))
       )
+      const probes = await this.probe(records)
+      const renewals: {
+        sessionId: string
+        fence: number
+        childProbe: AgentSessionOwnerProbe
+        now: number
+      }[] = []
+      const now = this.input.now()
+      for (const record of records) {
+        const probe = probes.get(record.sessionId)
+        if (!probe) {
+          continue
+        }
+        if (
+          record.lease.runtimeKind === 'tui' &&
+          isProvenDeadProbe(probe) &&
+          this.input.onDeadTuiOwner
+        ) {
+          try {
+            await this.input.onDeadTuiOwner(record, probe)
+          } catch (error) {
+            this.input.onError?.({ sessionId: record.sessionId, error })
+          }
+          continue
+        }
+        renewals.push({
+          sessionId: record.sessionId,
+          fence: record.lease.runtimeFence,
+          childProbe: probe,
+          now
+        })
+      }
+      try {
+        const renewed = await this.input.store.renewLeases(renewals)
+        await Promise.all(renewed.map((record) => this.input.onRenewed?.(record)))
+      } catch (error) {
+        for (const renewal of renewals) {
+          this.input.onError?.({ sessionId: renewal.sessionId, error })
+        }
+      }
     } finally {
       this.running = false
     }
   }
 
-  private async renewRecord(record: AgentSessionRecord): Promise<void> {
+  private async probe(
+    records: readonly AgentSessionRecord[]
+  ): Promise<Map<string, AgentSessionOwnerProbe>> {
     try {
-      const probe = await this.input.probe(record)
-      if (
-        record.lease.runtimeKind === 'tui' &&
-        isProvenDeadProbe(probe) &&
-        this.input.onDeadTuiOwner
-      ) {
-        await this.input.onDeadTuiOwner(record, probe)
-        return
+      if (this.input.probeMany) {
+        return await this.input.probeMany(records)
       }
-      const renewed = await this.input.store.renewLease({
-        sessionId: record.sessionId,
-        fence: record.lease.runtimeFence,
-        childProbe: probe,
-        now: this.input.now()
-      })
-      await this.input.onRenewed?.(renewed)
+      const settled = await Promise.allSettled(records.map((record) => this.input.probe(record)))
+      const probes = new Map<string, AgentSessionOwnerProbe>()
+      for (const [index, result] of settled.entries()) {
+        const record = records[index]
+        if (result.status === 'fulfilled') {
+          probes.set(record.sessionId, result.value)
+        } else {
+          this.input.onError?.({ sessionId: record.sessionId, error: result.reason })
+        }
+      }
+      return probes
     } catch (error) {
-      this.input.onError?.({ sessionId: record.sessionId, error })
+      for (const record of records) {
+        this.input.onError?.({ sessionId: record.sessionId, error })
+      }
+      return new Map()
     }
   }
 }

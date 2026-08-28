@@ -9,6 +9,16 @@ const IDENTITY = { sessionId: SESSION_ID } as Parameters<
   ReturnType<typeof createCodexStructuredLaunchResolver>
 >[0]['identity']
 
+async function withPlatform<T>(platform: NodeJS.Platform, run: () => Promise<T>): Promise<T> {
+  const original = process.platform
+  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  try {
+    return await run()
+  } finally {
+    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+  }
+}
+
 function record(overrides: Partial<AgentSessionRecord> = {}): AgentSessionRecord {
   return {
     sessionId: SESSION_ID,
@@ -48,6 +58,23 @@ describe('codex structured launch resolution', () => {
       cwd: '/repos/workspace-1',
       codexHome: '/home/work/.codex',
       resumeThreadId: null
+    })
+  })
+
+  it('passes a Windows .cmd path containing cmd syntax directly to the safe spawn layer', async () => {
+    const command = String.raw`C:\Users\r&d\npm-prefix\codex.cmd`
+
+    await withPlatform('win32', async () => {
+      const resolveLaunch = createCodexStructuredLaunchResolver({
+        store: { getRecord: () => record() } as unknown as AgentSessionRecordStore,
+        resolveWorkspacePath: async () => String.raw`C:\workspaces\orca`,
+        resolveCommand: () => command
+      })
+
+      await expect(resolveLaunch({ identity: IDENTITY })).resolves.toMatchObject({
+        command,
+        args: ['app-server']
+      })
     })
   })
 

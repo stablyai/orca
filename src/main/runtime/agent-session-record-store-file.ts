@@ -309,7 +309,8 @@ function serializeState(state: AgentSessionStoreState): string {
 
 /**
  * Commit the whole state. The live path is never absent: the new content is made durable in a temp
- * file first, the old content is COPIED to the backup, and only then does the rename publish it.
+ * file first, a validated primary is COPIED to the backup, and only then does the rename publish it.
+ * Backup recovery keeps the known-good backup in place while publishing the repaired primary.
  *
  * The old ordering renamed the live file aside before writing the new one, so a death in that
  * window left the profile with a backup and no primary — which is exactly the state that wedged a
@@ -317,7 +318,8 @@ function serializeState(state: AgentSessionStoreState): string {
  */
 export async function saveAgentSessionStore(
   filePath: string,
-  state: AgentSessionStoreState
+  state: AgentSessionStoreState,
+  options: { primaryStatus: 'validated' | 'unusable-or-absent' }
 ): Promise<void> {
   const directory = dirname(filePath)
   await mkdir(directory, { recursive: true, mode: 0o700 })
@@ -325,9 +327,11 @@ export async function saveAgentSessionStore(
   const tmpPath = durableWriteTempPath(filePath)
   try {
     await writeTempFileDurable(tmpPath, serializeState(state), 0o600)
-    // A failed rotation aborts the save. Recovery's fence floor assumes the backup is at most one
-    // committed generation behind; letting the primary advance past a stale backup breaks that.
-    await copyFileDurable(filePath, backupPath(filePath))
+    // Only a primary parsed under the transaction lock may replace the backup. During recovery the
+    // primary is corrupt or absent, so the known-good backup must survive until publication.
+    if (options.primaryStatus === 'validated') {
+      await copyFileDurable(filePath, backupPath(filePath))
+    }
     await renameDurable(tmpPath, filePath)
   } catch (error) {
     await rm(tmpPath, { force: true }).catch(() => {})

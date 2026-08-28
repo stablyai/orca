@@ -380,6 +380,7 @@ export default function TabGroupPanel({
               tabId={activeTab.id}
               sessionId={activeTab.entityId}
               agent={activeTab.agentSessionAgent ?? 'codex'}
+              isVisible={isVisible}
               target={structuredRuntimeTarget}
               allowFileUriLinks={structuredFileLinksEnabled}
             />

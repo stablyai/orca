@@ -76,7 +76,10 @@ function installProofPty(
         ptysById: Map<string, { tailBuffer: string[]; lastOutputAt: number }>
       }
       const pty = record.ptysById.get(PTY_ID)!
-      pty.tailBuffer = [`Session ID: ${threadId}`]
+      pty.tailBuffer = [
+        '\u001b[2m│  >_ OpenAI Codex (v0.148.0) │',
+        `│  Session:                     \u001b[22m${threadId}\u001b[2m │`
+      ]
       pty.lastOutputAt = ptyRecord.lastOutputAt + 1_000
     }
     return true
@@ -234,6 +237,21 @@ describe('structured Codex adoption against the real PTY write gate', () => {
     expect(rig.refusedWrites).toEqual([])
     expect(rig.store.getRecord(SESSION_ID)).toMatchObject({
       providerHandleChain: [{ origin: 'adopted', handle: { threadId: THREAD_ID } }]
+    })
+  }, 20_000)
+
+  it('adopts a blank Codex 0.148 session before the lazy rollout exists', async () => {
+    await rm(join(rig.codexHome, 'sessions'), { recursive: true, force: true })
+
+    const result = await rig.runtime.adoptStructuredAgentSessionTerminal(adoptInput(), {
+      callerKey: 'renderer-1'
+    })
+
+    expect(result).toMatchObject({ ok: true })
+    expect(rig.refusedWrites).toEqual([])
+    expect(rig.store.getRecord(SESSION_ID)).toMatchObject({
+      providerHandleChain: [{ origin: 'adopted', handle: { threadId: THREAD_ID } }],
+      lease: { runtimeKind: 'tui', claimStatus: 'live' }
     })
   }, 20_000)
 

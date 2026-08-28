@@ -99,7 +99,12 @@ async function createCatchupFixture() {
 function createCatchup(input: Awaited<ReturnType<typeof createCatchupFixture>>) {
   return new StructuredTuiTranscriptCatchup({
     store,
-    session: () => ({ journal: input.journal, params: {} as never, fence: input.fence }),
+    session: () => ({
+      hasProviderChild: false,
+      journal: input.journal,
+      params: {} as never,
+      fence: input.fence
+    }),
     schedule: async (_sessionId, task) => task(),
     publish: vi.fn(),
     reset: vi.fn()

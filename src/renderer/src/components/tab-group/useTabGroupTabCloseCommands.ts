@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { toast } from 'sonner'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
 import { destroyWorkspaceWebviews } from '../../store/slices/browser-webview-cleanup'
@@ -12,6 +13,17 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { browserWorkspaceHasRemoteOwner } from '@/runtime/remote-browser-tab-ownership'
 import { callRuntimeRpc, getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
+import { translate } from '@/i18n/i18n'
+
+function reportStructuredSessionCloseError(error: unknown): void {
+  toast.error(
+    translate(
+      'components.native-chat.structuredSessionCloseFailed',
+      'Could not close this Codex chat'
+    ),
+    { description: error instanceof Error ? error.message : String(error) }
+  )
+}
 
 export function useTabGroupTabCloseCommands({
   worktreeId,
@@ -87,10 +99,13 @@ export function useTabGroupTabCloseCommands({
           tabId: `agent-session:${item.entityId}`,
           reason: 'user'
         })
-        closeUnifiedTab(item.id)
-        if (!opts?.skipEmptyCheck) {
-          leaveWorktreeIfEmpty()
-        }
+          .then(() => {
+            closeUnifiedTab(item.id)
+            if (!opts?.skipEmptyCheck) {
+              leaveWorktreeIfEmpty()
+            }
+          })
+          .catch(reportStructuredSessionCloseError)
         return
       }
       if (item.contentType === 'terminal') {
@@ -164,7 +179,8 @@ export function useTabGroupTabCloseCommands({
             tabId: `agent-session:${item.entityId}`,
             reason: 'user'
           })
-          closeUnifiedTab(item.id)
+            .then(() => closeUnifiedTab(item.id))
+            .catch(reportStructuredSessionCloseError)
           continue
         }
         if (item.contentType === 'terminal' && isWebRuntimeSessionActive(runtimeEnvironmentId)) {

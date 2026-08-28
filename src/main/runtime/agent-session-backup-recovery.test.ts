@@ -142,7 +142,11 @@ describe('crash-safe store writes', () => {
     const { mkdir } = await import('node:fs/promises')
     await mkdir(`${storePath}.bak`)
 
-    await expect(saveAgentSessionStore(storePath, loaded.state)).rejects.toBeTruthy()
+    await expect(
+      saveAgentSessionStore(storePath, loaded.state, {
+        primaryStatus: 'validated'
+      })
+    ).rejects.toBeTruthy()
     expect(await readFile(storePath, 'utf-8')).toBe(committed)
     expect((await stat(`${storePath}.bak`)).isDirectory()).toBe(true)
   })

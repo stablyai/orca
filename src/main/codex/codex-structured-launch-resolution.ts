@@ -11,7 +11,6 @@ import { agentSessionProviderHandleChainHead } from '../../shared/agent-session-
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
 import { resolveCodexCommand } from '../codex-cli/command'
 import type { AgentSessionRecordStore } from '../runtime/agent-session-record-store'
-import { getSpawnArgsForWindows } from '../win32-utils'
 import type { CodexStructuredLaunch } from './codex-structured-session-adapter'
 import { resolvePinnedCodexRolloutProof } from './codex-tui-rollout-proof'
 
@@ -59,12 +58,11 @@ export function createCodexStructuredLaunchResolver(
       pathEnv,
       ...(homePath ? { homePath } : {})
     })
-    const { spawnCmd, spawnArgs } = getSpawnArgsForWindows(command, CODEX_APP_SERVER_ARGS)
     const head = agentSessionProviderHandleChainHead(record.providerHandleChain)
     const resumeThreadId = head?.handle.provider === 'codex' ? head.handle.threadId : null
     return {
-      command: spawnCmd,
-      args: spawnArgs,
+      command,
+      args: CODEX_APP_SERVER_ARGS,
       cwd: await deps.resolveWorkspacePath(location.workspaceId),
       codexHome: accountHome.path,
       ...(environment ? { env: { ...environment } as Record<string, string> } : {}),

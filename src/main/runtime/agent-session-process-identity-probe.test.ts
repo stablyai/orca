@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionProcessIdentity } from '../../shared/agent-session-record'
 import {
   PROCESS_START_TIME_TOLERANCE_MS,
+  probeAgentSessionProcessIdentities,
   probeAgentSessionProcessIdentity,
   probeAgentSessionReservation,
   readProcessStartTimeMs,
@@ -28,6 +29,32 @@ function deps(overrides: AgentSessionProcessProbeDeps = {}): AgentSessionProcess
 }
 
 describe('owner identity probe', () => {
+  it('shares one process-table read across a batch without weakening identity checks', async () => {
+    const readProcessStartTimes = vi.fn(
+      async () =>
+        new Map([
+          [4242, START_TIME],
+          [4243, START_TIME + PROCESS_START_TIME_TOLERANCE_MS + 1]
+        ])
+    )
+    const probes = await probeAgentSessionProcessIdentities({
+      identities: [IDENTITY, { ...IDENTITY, pid: 4243, spawnToken: 'spawn-b' }],
+      deps: {
+        isPidPresent: () => true,
+        readEchoedSpawnToken: async () => null,
+        readProcessStartTimesMs: readProcessStartTimes,
+        platform: 'darwin'
+      }
+    })
+
+    expect(readProcessStartTimes).toHaveBeenCalledOnce()
+    expect(readProcessStartTimes).toHaveBeenCalledWith([4242, 4243], 'darwin')
+    expect(probes).toEqual([
+      { outcome: 'identity-matched', matchedOn: ['process-start-time'] },
+      { outcome: 'identity-mismatch', field: 'process-start-time' }
+    ])
+  })
+
   it('reports an observed exit without touching the host', () => {
     return expect(
       probeAgentSessionProcessIdentity({

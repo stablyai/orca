@@ -1,9 +1,20 @@
+// What a restart owes a persisted session, and what it does NOT.
+//
+// It owes reconciliation — every lease loaded from disk names an owner from a process generation
+// that no longer exists, and adjudicating that is startup's job. It owes an exit from any recovery
+// stage the evidence now permits. And it owes a READABLE session: the journal open, history
+// answerable, the tab restorable.
+//
+// It does not owe a provider child. This used to resume every record whose lease was `released`
+// with no handoff in flight, which is the normal end state of a chat the user closed cleanly — so a
+// healthy profile started an app-server per session it had ever used, in parallel, at every launch,
+// with no client attached and nothing on screen. A child now exists because a surface asked for the
+// session (see `structured-agent-session-holds`), not because a record survived on disk.
+
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import {
-  attachParamsForRecord,
   restoreStructuredAgentSessionRead,
   type RestoredStructuredAgentSessionRead
 } from './structured-agent-session-read-restore'
@@ -14,8 +25,6 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
   records: AgentSessionRecord[]
   reconcile: (sessionId: string) => Promise<AgentSessionWireRefusal | null>
   resolveRecovery: (sessionId: string) => Promise<unknown>
-  operationId: () => string
-  resume: (params: AgentSessionAttachParams) => Promise<boolean>
   serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
   hasSession: (sessionId: string) => boolean
   onReadable: (sessionId: string, restored: RestoredStructuredAgentSessionRead) => void
@@ -28,23 +37,9 @@ export async function restoreStructuredAgentSessionsOnRestart(input: {
         // A session latched in recovery exits here at startup, without waiting for a client.
         await input.resolveRecovery(sessionId)
       }
-      const current = input.store.getRecord(sessionId)
-      if (
-        !unreconciled &&
-        current?.lease.claimStatus === 'released' &&
-        current.lease.handoffStage === null &&
-        (await input.resume(
-          attachParamsForRecord(current, {
-            clientOperationId: input.operationId(),
-            expectedRuntimeFence: current.lease.runtimeFence,
-            runtimeKind: 'native'
-          })
-        ))
-      ) {
-        return
-      }
       await input.serialize(sessionId, async () => {
         if (input.hasSession(sessionId)) {
+          // A surface that took a hold mid-restore already attached this one.
           await input.restoreHandoff(sessionId)
           return
         }

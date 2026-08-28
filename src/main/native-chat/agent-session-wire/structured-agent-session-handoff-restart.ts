@@ -99,6 +99,18 @@ export async function restoreStructuredAgentSessionHandoff(
 }
 
 async function restoreOnce(input: RestartAccess, record: AgentSessionRecord): Promise<void> {
+  if (
+    record.lease.handoffStage === null &&
+    record.lease.claimStatus === 'released' &&
+    record.lease.ownerProcess === null
+  ) {
+    // Reconcile already proved the owner gone: no transfer is in flight and there is no process to
+    // recover, whatever kind the last owner was. Falling through would latch manual recovery on a
+    // host with no TUI transport — a state a user then has to clear by hand, for nothing. (Startup
+    // used to reach this path only for sessions it had not eagerly resumed, which is why removing
+    // that resume is what made it visible.)
+    return
+  }
   if (canRestoreLiveTuiOwner(record)) {
     await restoreRecoverableLiveTui(input, record)
     return

@@ -5,7 +5,10 @@ import { relativePathInsideRoot } from '../../shared/cross-platform-path'
 import { listCodexSessionJsonlFilesIncrementally } from './codex-session-file-listing'
 
 const SESSION_ID_PATTERN = '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}'
-const STATUS_SESSION_RE = new RegExp(`\\bSession(?: ID)?\\s*:\\s*(${SESSION_ID_PATTERN})\\b`, 'gi')
+const STATUS_SESSION_RE = new RegExp(
+  `\\b(?:Session|Thread)(?:\\s+ID)?\\s*:\\s*(${SESSION_ID_PATTERN})\\b`,
+  'gi'
+)
 const ROLLOUT_READ_LIMIT = 64 * 1024
 const STATUS_COMMAND_PASTE = '\u001b[200~/status\u001b[201~'
 const KITTY_ENTER = '\u001b[13u'
@@ -125,7 +128,7 @@ export async function resolveLiveCodexTuiRollout(input: {
   timeoutMs?: number
   resolveRollout?: (codexHome: string, threadId: string) => Promise<string | null>
   delay?: (ms: number) => Promise<void>
-}): Promise<{ threadId: string; transcriptPath: string }> {
+}): Promise<{ threadId: string; transcriptPath?: string }> {
   const baselineOutputAt = input.readOutput().lastOutputAt
   const probe = codexTuiStatusProbeInput(input.kittyKeyboardFlags)
   if (!input.write(probe.command)) {
@@ -144,14 +147,19 @@ export async function resolveLiveCodexTuiRollout(input: {
       const threadId = parseCodexTuiStatusSessionId(output.text)
       if (threadId) {
         const resolveRollout = input.resolveRollout ?? resolvePinnedCodexRolloutProof
-        const transcriptPath = await resolveRollout(input.codexHome, threadId)
+        let transcriptPath: string | null = null
+        // Codex 0.148 allocates a session before it writes a rollout; give a just-written
+        // file a short visibility window without rejecting a genuinely blank conversation.
+        for (let attempt = 0; attempt < 5 && !transcriptPath; attempt += 1) {
+          transcriptPath = await resolveRollout(input.codexHome, threadId)
+          if (!transcriptPath && attempt < 4) {
+            await delay(100)
+          }
+        }
         if (!input.write('\u001b')) {
           throw new Error('The agent terminal could not finish Codex session verification.')
         }
-        if (!transcriptPath) {
-          throw new Error('Could not find the rollout for this Codex conversation.')
-        }
-        return { threadId, transcriptPath }
+        return { threadId, ...(transcriptPath ? { transcriptPath } : {}) }
       }
     }
     await delay(100)
@@ -178,12 +186,20 @@ async function readCodexRolloutSessionMetaId(filePath: string): Promise<string |
     const record = JSON.parse(firstLine) as {
       type?: unknown
       id?: unknown
-      payload?: { id?: unknown }
+      session_id?: unknown
+      thread_id?: unknown
+      payload?: { id?: unknown; session_id?: unknown; thread_id?: unknown }
     }
     if (record.type !== 'session_meta') {
       return null
     }
-    const id = record.payload?.id ?? record.id
+    const id =
+      record.payload?.id ??
+      record.payload?.session_id ??
+      record.payload?.thread_id ??
+      record.id ??
+      record.session_id ??
+      record.thread_id
     return typeof id === 'string' && id.length > 0 ? id : null
   } catch {
     return null
