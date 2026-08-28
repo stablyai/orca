@@ -1,10 +1,12 @@
 import { useAppStore } from '@/store'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { hasPtySerializer } from '../pty-buffer-serializer'
 import { writeTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 import { STARTUP_CWD_FALLBACK_NOTICE } from './startup-cwd-fallback-notice'
 import { pendingSpawnByPaneKey, pendingSpawnGenerationByPaneKey } from './pty-connect-limits'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { shouldStayColdForDeliberateSleep } from '../deliberate-sleep-cold-start'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { toProcessExitStartup } from './process-exit-startup'
 import type {
@@ -21,6 +23,17 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
     startupOverride?: PendingStartupCommand | null,
     options: FreshSpawnOptions = {}
   ): Promise<string | null> => {
+    if (
+      shouldStayColdForDeliberateSleep({
+        hasQueuedStartup: session.paneStartup !== null,
+        isPaneVisible: session.deps.isVisibleRef.current === true,
+        hasSleepIntent: hasWorktreeSleepIntent(session.deps.worktreeId),
+        activeWorktreeId: useAppStore.getState().activeWorktreeId,
+        worktreeId: session.deps.worktreeId
+      })
+    ) {
+      return Promise.resolve(null)
+    }
     if (session.isLegacyWorkerAutomaticResumeBlocked()) {
       return Promise.resolve(null)
     }

@@ -37,18 +37,6 @@ type RemoteSleepOracle = {
   worktreePsHasAttachedPty: boolean
 }
 
-async function sleepWorktreeTerminals(page: Page, worktreeId: string): Promise<void> {
-  await page.evaluate(async (id) => {
-    const store = window.__store
-    if (!store) {
-      throw new Error('store unavailable')
-    }
-    const state = store.getState()
-    await state.shutdownWorktreeBrowsers(id)
-    await state.shutdownWorktreeTerminals(id, { keepIdentifiers: true })
-  }, worktreeId)
-}
-
 async function readLivePtyCountForWorktree(page: Page, worktreeId: string): Promise<number> {
   return page.evaluate((id) => {
     const store = window.__store
@@ -182,11 +170,12 @@ function writeSleepWakePayloadScript(scriptPath: string, payload: string): void 
 }
 
 test.describe('Terminal sleep wake restore', () => {
-  test('restores slept terminal output and accepts fresh input after wake', async ({
+  test('keeps a context-menu slept workspace cold until explicit wake @headful', async ({
     orcaPage,
     testRepoPath
-  }) => {
+  }, testInfo) => {
     await waitForSessionReady(orcaPage)
+    await orcaPage.evaluate(() => window.__store?.getState().setShowSleepingWorkspaces(true))
     const firstWorktreeId = await waitForActiveWorktree(orcaPage)
     const secondWorktreeId = (await getAllWorktreeIds(orcaPage)).find(
       (id) => id !== firstWorktreeId
@@ -213,9 +202,16 @@ test.describe('Terminal sleep wake restore', () => {
       for (const marker of expectedMarkers) {
         expect(await mainSnapshotContains(orcaPage, ptyId, marker)).toBe(true)
       }
+      await orcaPage.screenshot({
+        path: testInfo.outputPath('pr-13343-before-sleep.png'),
+        fullPage: true
+      })
 
-      await switchToWorktree(orcaPage, firstWorktreeId)
-      await sleepWorktreeTerminals(orcaPage, secondWorktreeId)
+      const sleptWorktreeRow = orcaPage
+        .locator(`[role="option"][data-worktree-id=${JSON.stringify(secondWorktreeId)}]`)
+        .first()
+      await sleptWorktreeRow.click({ button: 'right' })
+      await orcaPage.getByRole('menuitem', { name: 'Sleep', exact: true }).click()
       const afterSleepDebug = await readSleepWakeTerminalDebug(orcaPage, secondWorktreeId)
       await expect
         .poll(() => readLivePtyCountForWorktree(orcaPage, secondWorktreeId), {
@@ -234,7 +230,27 @@ test.describe('Terminal sleep wake restore', () => {
           worktreePsHasAttachedPty: false
         })
 
-      await switchToWorktree(orcaPage, secondWorktreeId)
+      // Activating another workspace caused the ambient deferred connect in #10205.
+      await orcaPage
+        .locator(`[role="option"][data-worktree-id=${JSON.stringify(firstWorktreeId)}]`)
+        .first()
+        .click()
+      await expect
+        .poll(() => readRemoteSleepOracle(orcaPage, secondWorktreeId), {
+          timeout: 10_000,
+          message: 'activating an unrelated workspace respawned the slept PTY'
+        })
+        .toEqual({
+          terminalListTotalCount: 0,
+          worktreePsLiveTerminalCount: 0,
+          worktreePsHasAttachedPty: false
+        })
+      await orcaPage.screenshot({
+        path: testInfo.outputPath('pr-13343-sleep-sticks.png'),
+        fullPage: true
+      })
+
+      await sleptWorktreeRow.click()
       await ensureTerminalVisible(orcaPage)
       await waitForActiveTerminalManager(orcaPage, 30_000)
       const awakePtyId = await waitForActivePanePtyId(orcaPage)
@@ -262,6 +278,10 @@ test.describe('Terminal sleep wake restore', () => {
       await waitForTerminalOutput(orcaPage, restoreMarker, 15_000, 20_000)
       await sendToTerminal(orcaPage, awakePtyId, `printf '\\n${freshMarker}\\n'\r`)
       await waitForTerminalOutput(orcaPage, freshMarker, 10_000, 20_000)
+      await orcaPage.screenshot({
+        path: testInfo.outputPath('pr-13343-explicit-wake.png'),
+        fullPage: true
+      })
     } finally {
       rmSync(scriptPath, { force: true })
     }

@@ -101,13 +101,26 @@ describe('runSleepWorktree', () => {
     await runSleepWorktree('wt-1')
 
     expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
-    expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
     const markCall = mocks.markWorktreeSleepIntent.mock.invocationCallOrder[0]
     const activeClear = mocks.state.setActiveWorktree.mock.invocationCallOrder[0]
-    const terminalShutdown = mocks.state.shutdownWorktreeTerminals.mock.invocationCallOrder[0]
-    const clearCall = mocks.clearWorktreeSleepIntent.mock.invocationCallOrder[0]
     expect(markCall).toBeLessThan(activeClear)
-    expect(terminalShutdown).toBeLessThan(clearCall)
+  })
+
+  it('keeps the sleep intent after a successful sleep so mounted panes stay cold', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.clearWorktreeSleepIntent).not.toHaveBeenCalled()
+  })
+
+  it('releases the sleep intent when teardown fails so the workspace stays usable', async () => {
+    mocks.state.activeWorktreeId = 'wt-1'
+    mocks.state.shutdownWorktreeTerminals.mockRejectedValueOnce(new Error('kill failed'))
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.clearWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
   })
 
   it('preserves active row position through section-scoped sidebar row ids', async () => {
@@ -188,7 +201,14 @@ describe('runSleepWorktree', () => {
 
     expect(mocks.state.setActiveWorktree).not.toHaveBeenCalled()
     expect(mocks.state.suppressPtyExit).not.toHaveBeenCalled()
-    expect(mocks.markWorktreeSleepIntent).not.toHaveBeenCalled()
+  })
+
+  it('marks sleep intent for a background worktree so its mounted panes stay cold', async () => {
+    mocks.state.activeWorktreeId = 'wt-other'
+
+    await runSleepWorktree('wt-1')
+
+    expect(mocks.markWorktreeSleepIntent).toHaveBeenCalledWith('wt-1')
   })
 
   it('surfaces a toast and skips terminals when browsers throws', async () => {

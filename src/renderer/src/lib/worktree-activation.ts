@@ -15,6 +15,7 @@ import {
   setWorktreeNavViewActivator
 } from '@/store/slices/worktree-nav-history'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
+import { clearWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { folderWorkspaceKey, parseWorkspaceKey } from '../../../shared/workspace-scope'
 import {
@@ -120,6 +121,8 @@ export function activateAndRevealFolderWorkspace(
   if (!state.isNavigatingHistory) {
     state.recordWorktreeVisit(workspaceKey)
   }
+  // Why: an explicit activation is the user asking for this workspace back (#10205).
+  clearWorktreeSleepIntent(workspaceKey)
   resumeSleepingAgentSessionsForWorktree(workspaceKey)
   const primaryTabId = ensureFolderWorkspaceInitialTerminal(
     folderWorkspace,
@@ -208,6 +211,8 @@ export function activateAndRevealWorktree(
   // Why: sleeping destroys the local PTY but preserves the provider session id, so waking should restore those CLI sessions automatically.
   // Ordering is load-bearing: resuming synchronously creates the session's tab first, so the
   // seeding below sees a renderable surface and doesn't add a bare shell next to it.
+  // Why: an explicit activation is the user asking for this workspace back (#10205).
+  clearWorktreeSleepIntent(worktreeId)
   resumeSleepingAgentSessionsForWorktree(worktreeId)
 
   // 4. Ensure a focusable surface exists for externally-created worktrees

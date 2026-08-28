@@ -35,6 +35,8 @@ vi.mock('./sleeping-agent-pane-ownership', () => ({
 
 let sleepingRecords: Record<string, { worktreeId: string; paneKey: string; tabId?: string }> = {}
 let terminalTabsByWorktree: Record<string, { id: string }[]> = {}
+let activeTerminalTabIdsByWorktree: Record<string, string | null> = {}
+const remountTerminalTabForRecovery = vi.fn(() => true)
 const clearSleepingAgentSessionsByPaneKey = vi.fn((paneKeys: readonly string[]) => {
   for (const paneKey of paneKeys) {
     delete sleepingRecords[paneKey]
@@ -45,6 +47,8 @@ vi.mock('@/store', () => ({
     getState: () => ({
       sleepingAgentSessionsByPaneKey: sleepingRecords,
       tabsByWorktree: terminalTabsByWorktree,
+      activeTabIdByWorktree: activeTerminalTabIdsByWorktree,
+      remountTerminalTabForRecovery,
       clearSleepingAgentSessionsByPaneKey
     })
   }
@@ -92,6 +96,8 @@ function recordEvents(): RecordedEvents {
 beforeEach(() => {
   sleepingRecords = {}
   terminalTabsByWorktree = {}
+  activeTerminalTabIdsByWorktree = {}
+  remountTerminalTabForRecovery.mockClear()
   clearSleepingAgentSessionsByPaneKey.mockClear()
   isPassiveSpy.mockReset()
   resumeSpy.mockReset()
@@ -135,6 +141,29 @@ describe('createBackgroundSleepingAgentWakeDispatcher', () => {
 })
 
 describe('wakeSleepingAgentsForWorktreeInBackground', () => {
+  it('remounts the selected tab for a slept workspace that has no sleeping-agent record', async () => {
+    // Why: a workspace slept with only plain shells has no record, so the no-work
+    // return is reached — but the mark still has to go, or its panes stay cold and
+    // the client's open gesture becomes a permanent no-op.
+    const { hasWorktreeSleepIntent, markWorktreeSleepIntent, clearWorktreeSleepIntent } =
+      await import('./worktree-sleep-intent')
+    sleepingRecords = {}
+    terminalTabsByWorktree = { 'wt-1': [{ id: 'tab-shell' }] }
+    activeTerminalTabIdsByWorktree = { 'wt-1': 'tab-shell' }
+    const rec = recordEvents()
+    markWorktreeSleepIntent('wt-1')
+    try {
+      wakeSleepingAgentsForWorktreeInBackground('wt-1')
+
+      expect(hasWorktreeSleepIntent('wt-1')).toBe(false)
+      expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-shell')
+      expect(rec.mountDetails).toEqual([{ worktreeId: 'wt-1', tabIds: ['tab-shell'] }])
+    } finally {
+      rec.stop()
+      clearWorktreeSleepIntent('wt-1')
+    }
+  })
+
   it('fires wake, targeted background-mount, then resume when a passive record exists', () => {
     sleepingRecords = { k1: { worktreeId: 'wt-1', paneKey: 'tab-a:leaf-1', tabId: 'tab-a' } }
     isPassiveSpy.mockReturnValue(true)

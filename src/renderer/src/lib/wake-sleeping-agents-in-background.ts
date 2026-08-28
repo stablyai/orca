@@ -7,6 +7,7 @@ import { useAppStore } from '@/store'
 import type { SleepingAgentSessionRecord } from '../../../shared/agent-session-resume'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { resumeSleepingAgentSessionsForWorktree } from './resume-sleeping-agent-session'
+import { clearWorktreeSleepIntent, hasWorktreeSleepIntent } from './worktree-sleep-intent'
 import {
   getProviderSessionClaimKey,
   isPassiveCompletedHibernationEvidence,
@@ -165,13 +166,29 @@ function getCanonicalPassiveWakeRecords(
  * spawn is awaited.
  */
 export function wakeSleepingAgentsForWorktreeInBackground(worktreeId: string): void {
-  const worktreeRecords = Object.values(
-    useAppStore.getState().sleepingAgentSessionsByPaneKey
-  ).filter((record) => record.worktreeId === worktreeId)
-  // Why: nothing is slept here, so there is no wake work. Skipping is what keeps
-  // a phone browsing many worktrees from permanently background-mounting each one
-  // (and reattaching its PTYs) on the desktop host it is paired to.
+  const hadSleepIntent = hasWorktreeSleepIntent(worktreeId)
+  // Why: a client opening the workspace is an explicit wake, so it releases the
+  // deliberate-sleep mark its panes are otherwise held cold by (#10205). This runs
+  // before the no-records return: a workspace slept with only plain shells has no
+  // sleeping-agent record, and leaving it marked would keep its panes cold forever.
+  clearWorktreeSleepIntent(worktreeId)
+  const state = useAppStore.getState()
+  const worktreeRecords = Object.values(state.sleepingAgentSessionsByPaneKey).filter(
+    (record) => record.worktreeId === worktreeId
+  )
+  // Why: only a deliberate sleep needs a plain-shell remount. Ordinary phone
+  // browsing still avoids permanently mounting every workspace on the host.
   if (worktreeRecords.length === 0) {
+    if (hadSleepIntent) {
+      const tabId =
+        state.activeTabIdByWorktree[worktreeId] ?? state.tabsByWorktree[worktreeId]?.[0]?.id
+      if (tabId) {
+        // Why: the sleep marker is intentionally non-reactive; remount the selected
+        // plain-shell tab so this explicit wake actually starts its PTY.
+        state.remountTerminalTabForRecovery(tabId)
+        requestBackgroundTerminalWorktreeMount({ worktreeId, tabIds: [tabId] })
+      }
+    }
     return
   }
 

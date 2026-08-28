@@ -234,6 +234,111 @@ describe('connectPanePty', () => {
     expect(transport.connect).toHaveBeenCalled()
   })
 
+  it('does not spawn a PTY for a deliberately slept workspace while another is active', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { markWorktreeSleepIntent, clearWorktreeSleepIntent } =
+      await import('@/lib/worktree-sleep-intent')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      activeWorktreeId: 'wt-2',
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-sleep-skip-spawn', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-sleep-skip-spawn': [] }
+    }
+    markWorktreeSleepIntent('wt-1')
+
+    try {
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({
+          tabId: 'tab-sleep-skip-spawn',
+          isVisibleRef: { current: false },
+          isActiveRef: { current: false }
+        }) as never
+      )
+      await flushAsyncTicks()
+
+      // The #10205 respawn: this connect is what woke the workspace the user slept.
+      expect(transport.connect).not.toHaveBeenCalled()
+    } finally {
+      clearWorktreeSleepIntent('wt-1')
+    }
+  })
+
+  it('spawns a PTY for a hidden pane whose workspace was never slept', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    mockStoreState = {
+      ...mockStoreState,
+      activeWorktreeId: 'wt-2',
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-sleep-control-spawn', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-sleep-control-spawn': [] }
+    }
+
+    connectPanePty(
+      createPane(1) as never,
+      createManager(1) as never,
+      createDeps({
+        tabId: 'tab-sleep-control-spawn',
+        isVisibleRef: { current: false },
+        isActiveRef: { current: false }
+      }) as never
+    )
+    await flushAsyncTicks()
+
+    expect(transport.connect).toHaveBeenCalled()
+  })
+
+  it('retires a fresh PTY whose spawn loses a race with deliberate sleep', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const { markWorktreeSleepIntent, clearWorktreeSleepIntent } =
+      await import('@/lib/worktree-sleep-intent')
+    const transport = createMockTransport()
+    transport.getPtyId.mockReturnValue('pty-late-sleep')
+    transportFactoryQueue.push(transport)
+    let resolveSpawn!: (ptyId: string) => void
+    transport.connect.mockImplementation(
+      () =>
+        new Promise<string>((resolve) => {
+          resolveSpawn = resolve
+        })
+    )
+    mockStoreState = {
+      ...mockStoreState,
+      activeWorktreeId: 'wt-2',
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-late-sleep', ptyId: null }] },
+      ptyIdsByTabId: { 'tab-late-sleep': [] }
+    }
+
+    try {
+      connectPanePty(
+        createPane(1) as never,
+        createManager(1) as never,
+        createDeps({
+          tabId: 'tab-late-sleep',
+          isVisibleRef: { current: false },
+          isActiveRef: { current: false }
+        }) as never
+      )
+      await flushAsyncTicks()
+      markWorktreeSleepIntent('wt-1')
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as
+        | ((ptyId: string) => void)
+        | undefined
+      onPtySpawn?.('pty-late-sleep')
+      await flushAsyncTicks()
+
+      expect(transport.disconnect).toHaveBeenCalledOnce()
+    } finally {
+      resolveSpawn('pty-late-sleep')
+      clearWorktreeSleepIntent('wt-1')
+      await flushAsyncTicks()
+    }
+  })
+
   // Why: a doomed pane (or a child pane whose parent worktree is being removed,
   // which startFreshSpawn's own-worktree skip cannot see) can still race a spawn
   // that main fences. reportError must swallow that fence so the tab never flashes

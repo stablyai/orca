@@ -1,5 +1,7 @@
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 // Why: a restored pane's stale-account prompt can only be raised once a PTY is
 // actually attached — nothing is inspectable while the session hydrates.
 import { notifyCodexPaneBoundForStaleSweep } from '@/lib/codex-stale-pane-sweep'
@@ -14,6 +16,7 @@ import {
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { shouldStayColdForDeliberateSleep } from '../deliberate-sleep-cold-start'
 
 /** PTY visibility reporting, active-PTY binding, and the spawn/rebind/bell handlers that follow it. */
 export function installPanePtyVisibilityBind(session: ConnectPanePtySession): void {
@@ -104,6 +107,39 @@ export function installPanePtyVisibilityBind(session: ConnectPanePtySession): vo
   }
 
   session.onPtySpawn = (ptyId: string): void => {
+    if (
+      shouldStayColdForDeliberateSleep({
+        hasQueuedStartup: session.paneStartup !== null,
+        isPaneVisible: session.deps.isVisibleRef.current === true,
+        hasSleepIntent: hasWorktreeSleepIntent(session.deps.worktreeId),
+        activeWorktreeId: useAppStore.getState().activeWorktreeId,
+        worktreeId: session.deps.worktreeId
+      })
+    ) {
+      // Why: sleep can win after connect starts but before the host publishes its PTY.
+      queueMicrotask(() => {
+        const remotePty = parseRemoteRuntimePtyId(ptyId)
+        if (remotePty) {
+          void useAppStore
+            .getState()
+            .shutdownWorktreeTerminals(session.deps.worktreeId, {
+              keepIdentifiers: true,
+              expectedRuntimePtyIds: [remotePty.handle]
+            })
+            .catch((error) => {
+              console.error('[sleep-worktree] late remote PTY shutdown failed', {
+                worktreeId: session.deps.worktreeId,
+                ptyId,
+                error
+              })
+            })
+          session.transport.disconnect()
+        } else if (session.transport.getPtyId() === ptyId) {
+          session.transport.disconnect()
+        }
+      })
+      return
+    }
     if (!session.claimCapturedDirectSshRetryPty(ptyId)) {
       // Why: this callback proves a fresh process was created, so rejecting its obsolete lease must also retire it.
       queueMicrotask(() => {

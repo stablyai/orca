@@ -1,7 +1,9 @@
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { isWebTerminalSurfaceTabId } from '@/runtime/web-terminal-surface-id'
 import { getEagerPtyBufferHandle } from '../pty-dispatcher'
+import { shouldStayColdForDeliberateSleep } from '../deliberate-sleep-cold-start'
 
 import {
   pendingSpawnByPaneKey,
@@ -216,6 +218,19 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
         .catch((err) => {
           session.reportError(err instanceof Error ? err.message : String(err))
         })
+    } else if (
+      shouldStayColdForDeliberateSleep({
+        hasQueuedStartup: session.paneStartup !== null,
+        isPaneVisible: session.deps.isVisibleRef.current === true,
+        hasSleepIntent: hasWorktreeSleepIntent(session.deps.worktreeId),
+        activeWorktreeId: storeSnapshot.activeWorktreeId,
+        worktreeId: session.deps.worktreeId
+      })
+    ) {
+      // Why: an ambient remount must not restart a workspace the user deliberately slept.
+      recordPtyConnectDiagnostic(
+        `pane=${session.pane.id} -> SKIP SPAWN (deliberate sleep)`
+      )
     } else {
       recordPtyConnectDiagnostic(`pane=${session.pane.id} -> FRESH SPAWN`)
       if (sleptRemoteColdRestoreStartup || hasSleepingAgentSession) {
