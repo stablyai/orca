@@ -281,7 +281,11 @@ describe('PR Checks skip wiring', () => {
     expect(prWorkflow.jobs.test_native_cache.if).toBe(
       "needs.code_paths.outputs.native_cache_changed == 'true'"
     )
-    expect(prWorkflow.jobs.test_native_cache.strategy.matrix.node).toEqual(['24', '26'])
+    expect(prWorkflow.jobs.test_native_cache.strategy).toBeUndefined()
+    const primerInstall = prWorkflow.jobs.test_native_cache.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    expect(primerInstall.with['node-version']).toBe('24')
   })
 
   it('skips e2e detection on docs-only PRs without dropping the draft gate', () => {
