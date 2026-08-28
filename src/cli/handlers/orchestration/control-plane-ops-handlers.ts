@@ -85,6 +85,8 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
 
   'orchestration route-truth': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<{
+      schemaVersion: number
+      build: { id: string; commitSha: string | null; provenanceSource: string }
       agent: string
       model: string | null
       verdict: string
@@ -98,7 +100,10 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     printResult(result, json, (value) =>
       [
         `${value.agent}${value.model ? `/${value.model}` : ''} -> ${value.verdict}`,
-        value.reason
+        value.reason,
+        // An external policy has to know which contract answered and which build
+        // answered it, or it will keep the answer past the build that gave it.
+        `contract v${value.schemaVersion} from build ${value.build.id} (${value.build.provenanceSource})`
       ].join('\n')
     )
   },

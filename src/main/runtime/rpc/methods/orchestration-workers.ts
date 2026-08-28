@@ -96,6 +96,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       // validation lease must fail admission, not fail halfway through creation.
       const admitted = assertWorkerStartAdmitted({
         handle: db,
+        runtimeBuildIdentity: runtime.getBuildIdentity(),
         runId: run.id,
         taskId: task.id,
         agent,

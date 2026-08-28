@@ -20,13 +20,13 @@ import {
 import { orchestrationMigrationFence } from './orchestration-contract-fence'
 import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import { OrchestrationLegacyCompatibility } from './orchestration-legacy-compatibility'
-import type { RpcDispatchStreamingOptions } from './dispatcher-stream-options'
+import type { RpcDispatchOptions, RpcDispatchStreamingOptions } from './dispatcher-stream-options'
 import { mapDispatcherError } from './dispatcher-error-response'
 import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
-import { assertNotFencedByValidationLease } from './validation-lease-fence'
+import { assertRequestAdmissible } from './request-admission'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -43,10 +43,7 @@ export class RpcDispatcher {
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }
 
-  async dispatch(
-    request: RpcRequest,
-    options?: { signal?: AbortSignal; authenticatedCallerFingerprint?: string }
-  ): Promise<RpcResponse> {
+  async dispatch(request: RpcRequest, options?: RpcDispatchOptions): Promise<RpcResponse> {
     const meta = this.meta()
     const method = this.registry.get(request.method)
     if (!method) {
@@ -105,7 +102,7 @@ export class RpcDispatcher {
         return successResponse(request.id, meta, compatibility.result)
       }
       const effectiveParams = compatibility.params ?? parsedParams.value
-      await assertNotFencedByValidationLease(this.runtime, request.method, effectiveParams)
+      await assertRequestAdmissible(this.runtime, request, effectiveParams, options?.transport)
       const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
         request,
         compatibility.legacyCoordinatorAuthority
@@ -215,7 +212,7 @@ export class RpcDispatcher {
           return
         }
         const effectiveParams = compatibility.params ?? parsedParams.value
-        await assertNotFencedByValidationLease(this.runtime, request.method, effectiveParams)
+        await assertRequestAdmissible(this.runtime, request, effectiveParams, options?.transport)
         const legacyCoordinator = this.legacyOrchestration.createCoordinatorInvocation(
           request,
           compatibility.legacyCoordinatorAuthority

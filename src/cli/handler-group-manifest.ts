@@ -137,6 +137,7 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
       'orchestration state',
       'orchestration await',
       'orchestration pretool-receipt',
+      'orchestration mutation-verdict',
       'orchestration gate-run',
       'orchestration certification-intent',
       'orchestration outcome-admit',

@@ -146,7 +146,13 @@ export class RuntimeClient {
     const metadata = readMetadata(this.userDataPath)
     let response
     try {
-      response = await sendRequest<TResult>(metadata, method, params, effectiveTimeoutMs, envelope)
+      response = await sendRequest<TResult>(
+        metadata,
+        method,
+        this.withRuntimeTarget(params),
+        effectiveTimeoutMs,
+        envelope
+      )
     } catch (error) {
       throw attachMutationRecovery(error, orchestrationRequestId, originalCommand)
     }
@@ -158,6 +164,24 @@ export class RuntimeClient {
       )
     }
     return response
+  }
+
+  /** Stamps the state root this invocation actually resolved onto the request,
+   *  so the runtime can refuse before mutating anything if it is not the runtime
+   *  that root belongs to. A candidate-scoped command that fell through to the
+   *  packaged app's directory is exactly what this catches, and it catches it
+   *  without the operator having to remember to declare anything.
+   *
+   *  Local transport only: a remote pairing targets another host's state root,
+   *  where this path means nothing. */
+  private withRuntimeTarget(params?: unknown): unknown {
+    if (params !== undefined && (typeof params !== 'object' || params === null)) {
+      return params
+    }
+    return {
+      ...(params as Record<string, unknown> | undefined),
+      expectUserDataPath: this.userDataPath
+    }
   }
 
   // Why: centralises the per-method timeout policy. Long-poll inner waiter

@@ -167,3 +167,33 @@ export function resolveCandidateCommitSha(
   }
   return [...shas][0] as string
 }
+
+/** Correction — one build identity per process, pinned at construction.
+ *
+ *  Resolving on demand re-read the checkout on every call, so the runtime's own
+ *  identity moved whenever the tree moved: evidence recorded at the start of a
+ *  certification run no longer matched the runtime that recorded it by the end.
+ *  The identity of a RUNNING PROCESS cannot change, so it is computed once and
+ *  frozen. A restarted process computes a new one and, because evidence is
+ *  stamped with `id`, refuses the previous build's evidence exactly as before.
+ */
+let pinnedBuildIdentity: RuntimeBuildIdentity | null = null
+
+/** Called at OrcaRuntime construction so the pin is taken before any RPC can
+ *  read it. Idempotent: later callers get the identity the process started with,
+ *  never a recomputation.
+ *
+ *  This is the construction seam ONLY. Consumers must read the pinned object
+ *  from `OrcaRuntimeService.getBuildIdentity()`: a module-global reader is a
+ *  second authority that can be reached from a context the runtime never
+ *  constructed, which is how two answers to "what build is this" get back in. */
+export function pinRuntimeBuildIdentity(entryPath = process.argv[1]): RuntimeBuildIdentity {
+  pinnedBuildIdentity ??= Object.freeze(resolveRuntimeBuildIdentity(entryPath))
+  return pinnedBuildIdentity
+}
+
+/** Test-only: simulate a process restart. Production code must never call this —
+ *  a build whose identity can be reset mid-process is not an identity. */
+export function resetPinnedRuntimeBuildIdentityForTest(): void {
+  pinnedBuildIdentity = null
+}

@@ -65,7 +65,12 @@ describe('FEDERATED_START_BYPASSES_THE_FENCES', () => {
   it('refuses a federated start on an outcome serialized against a live one', () => {
     const { runs } = serializedPair()
     expect(() =>
-      assertFederatedWorkerStartAdmitted({ handle: db!, runId: runs[1], agent: 'codex' })
+      assertFederatedWorkerStartAdmitted({
+        handle: db!,
+        runtimeBuildIdentity: { id: 'build_test' },
+        runId: runs[1],
+        agent: 'codex'
+      })
     ).toThrow(/serialized against/)
   })
 
@@ -75,7 +80,12 @@ describe('FEDERATED_START_BYPASSES_THE_FENCES', () => {
     // It now fails on the ROUTE instead, which is the proof that it got past
     // the serialization fence rather than that the fence was never applied.
     expect(() =>
-      assertFederatedWorkerStartAdmitted({ handle: db!, runId: runs[1], agent: 'codex' })
+      assertFederatedWorkerStartAdmitted({
+        handle: db!,
+        runtimeBuildIdentity: { id: 'build_test' },
+        runId: runs[1],
+        agent: 'codex'
+      })
     ).toThrow(/is not in the registry/)
   })
 
@@ -84,8 +94,20 @@ describe('FEDERATED_START_BYPASSES_THE_FENCES', () => {
     const task = db!.createTask({ spec: 'work', runId: runs[1] })
     for (const start of [
       () =>
-        assertWorkerStartAdmitted({ handle: db!, runId: runs[1], taskId: task.id, agent: 'codex' }),
-      () => assertFederatedWorkerStartAdmitted({ handle: db!, runId: runs[1], agent: 'codex' })
+        assertWorkerStartAdmitted({
+          handle: db!,
+          runtimeBuildIdentity: { id: 'build_test' },
+          runId: runs[1],
+          taskId: task.id,
+          agent: 'codex'
+        }),
+      () =>
+        assertFederatedWorkerStartAdmitted({
+          handle: db!,
+          runtimeBuildIdentity: { id: 'build_test' },
+          runId: runs[1],
+          agent: 'codex'
+        })
     ]) {
       expect(start).toThrow(/serialized against/)
     }

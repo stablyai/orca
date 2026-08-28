@@ -26,7 +26,7 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(52)
+    expect(registry.size).toBe(53)
     expect(registry.has('orchestration.state')).toBe(true)
     // The typed first-certification authorisation; a boolean on worker-start
     // would have been a caller-declared claim rather than runtime authority.
@@ -36,6 +36,9 @@ describe('orchestration RPC methods', () => {
     expect(registry.has('orchestration.gateRun')).toBe(true)
     // Records the PreTool policy's own decision; Orca consumes it, never makes it.
     expect(registry.has('orchestration.pretoolReceipt')).toBe(true)
+    // The read the PreTool policy makes BEFORE a tool runs: the one path that
+    // reaches a worker already running in a leased worktree.
+    expect(registry.has('orchestration.mutationVerdict')).toBe(true)
     expect(registry.has('orchestration.await')).toBe(true)
     expect(registry.has('orchestration.outcomeAdmit')).toBe(true)
     expect(registry.has('orchestration.outcomeIntake')).toBe(true)

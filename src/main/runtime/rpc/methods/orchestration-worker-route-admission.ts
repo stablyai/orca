@@ -11,7 +11,6 @@ import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { admitRoute } from '../../orchestration/control-plane/role-route-registry'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
-import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 import type {
   RouteRole,
   SessionMode,
@@ -43,7 +42,10 @@ export function assertWorkerStartRouteAdmitted(args: {
   taskCapabilities?: readonly TaskCapability[]
   nowMs?: number
   /** Injectable only so tests can pin a build; production resolves its own. */
-  runtimeBuildIdentity?: { id: string; commitSha?: string | null }
+  /** The receiving runtime's pinned build identity. Required, and never
+   *  resolved here: a module that resolves its own is a second authority that
+   *  can disagree with the one the process was constructed with. */
+  runtimeBuildIdentity: { id: string; commitSha?: string | null }
   /** A typed, single-use certification intent the runtime minted and will match
    *  field-by-field against this launch. Never a caller-declared boolean. */
   certificationIntent?: string
@@ -98,7 +100,7 @@ export function assertWorkerStartRouteAdmitted(args: {
     reasoning: args.effort ?? null
   }
   const evidence = registryStore.listRouteEvidence()
-  const build = args.runtimeBuildIdentity ?? resolveRuntimeBuildIdentity()
+  const build = args.runtimeBuildIdentity
   const admission = admitRoute({
     registry: registryStore.listRoutes(),
     evidence,
@@ -181,14 +183,9 @@ export function assertWorktreeMutationAllowed(args: {
   const store = new ControlPlaneStore(args.handle)
   const scopeKey = validationScopeKeyForWorktree(args.worktreeId)
   const nowMs = args.nowMs ?? Date.now()
-  const lease = args.dispatchId
-    ? store.findValidationLeaseByOwner(args.dispatchId, new Date(nowMs).toISOString())
-    : undefined
-  const guard = assertMutationAllowed(store, {
-    scopeKey,
-    nowMs,
-    holderLeaseId: lease?.scope_key === scopeKey ? lease.lease_id : undefined
-  })
+  // No holder exemption: re-engaging the very Dispatch that took the lease is
+  // re-engaging the one whose gate is reading this tree right now.
+  const guard = assertMutationAllowed(store, { scopeKey, nowMs })
   if (!guard.allowed) {
     throw new OrchestrationError('validation_in_progress', guard.reason, {
       scopeKey,
@@ -239,6 +236,7 @@ export function resolveWorkerStartRole(
  *  validation lease. Both run before any effect is created. */
 export function assertWorkerStartAdmitted(args: {
   handle: ControlPlaneDatabaseHandle
+  runtimeBuildIdentity: { id: string; commitSha?: string | null }
   runId: string
   taskId: string
   agent: TuiAgent | undefined
@@ -335,6 +333,7 @@ function assertOutcomeNotSerialized(handle: ControlPlaneDatabaseHandle, runId: s
  *  does not change whether it is allowed to start. */
 export function assertFederatedWorkerStartAdmitted(args: {
   handle: ControlPlaneDatabaseHandle
+  runtimeBuildIdentity: { id: string; commitSha?: string | null }
   runId: string
   agent?: string
   model?: string

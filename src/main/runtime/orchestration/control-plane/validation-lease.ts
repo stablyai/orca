@@ -33,6 +33,17 @@ export type ValidationLease = {
 export type LeaseAcquisition =
   | { ok: true; lease: ValidationLease; duplicate: boolean; reclaimed: boolean }
   | {
+      /** A retry of an already-held lease whose offline fence could not be
+       *  re-established. The existing row is deliberately left ACTIVE — tearing
+       *  down a protection already in force because a retry's bookkeeping failed
+       *  would unfence a tree mid-gate — but the retry itself must not read as
+       *  acquired, or a caller proceeds certified on a half-armed fence. */
+      ok: false
+      code: 'fence_refresh_failed'
+      lease: ValidationLease
+      reason: string
+    }
+  | {
       ok: false
       code: 'held_by_other_owner'
       lease: ValidationLease
@@ -68,6 +79,15 @@ export function acquireValidationLease(
     idempotencyKey: string
     nowMs: number
     ttlMs?: number
+    /** Runs INSIDE the acquisition transaction, before the row is committed.
+     *
+     *  Why inside: the durable offline fence and the database row have to become
+     *  true together. Committing first left a window where a crash — or a failed
+     *  write — produced an active lease with no marker, so a disconnected worker
+     *  saw an unfenced workspace the database said was protected. Throwing here
+     *  rolls the row back, and the reverse order can only ever over-deny until
+     *  the marker expires, which is the safe direction. */
+    establishFence?: (lease: ValidationLease) => void
   }
 ): LeaseAcquisition {
   const ttl = args.ttlMs ?? DEFAULT_VALIDATION_LEASE_TTL_MS
@@ -101,14 +121,36 @@ function acquireInsideTransaction(
     owner: string
     idempotencyKey: string
     nowMs: number
+    establishFence?: (lease: ValidationLease) => void
   },
   ttl: number
 ): LeaseAcquisition {
   const existing = store.getValidationLease(args.scopeKey)
   if (existing && isActive(existing, args.nowMs)) {
     store.db.exec('COMMIT')
-    if (existing.idempotency_key === args.idempotencyKey) {
-      return { ok: true, lease: toLease(existing), duplicate: true, reclaimed: false }
+    // Why all three and not the key alone: an idempotency key is caller-chosen,
+    // so a DIFFERENT Dispatch that happened to reuse one was handed the lease
+    // someone else was holding. A replay is the SAME acquirer asking again.
+    if (
+      existing.idempotency_key === args.idempotencyKey &&
+      existing.owner === args.owner &&
+      existing.lease_id === args.leaseId
+    ) {
+      const lease = toLease(existing)
+      // A retry of an already-held lease. Refresh its marker if we can, but never
+      // release: the protection is already in force and tearing it down because
+      // a retry's bookkeeping failed would unfence a tree mid-gate.
+      try {
+        args.establishFence?.(lease)
+      } catch (error) {
+        return {
+          ok: false,
+          code: 'fence_refresh_failed',
+          lease,
+          reason: `Validation lease ${lease.leaseId} is still held on ${args.scopeKey}, but its offline fence could not be re-established, so this retry is not certified. ${String(error)}`
+        }
+      }
+      return { ok: true, lease, duplicate: true, reclaimed: false }
     }
     return {
       ok: false,
@@ -127,6 +169,9 @@ function acquireInsideTransaction(
     released_at: null
   }
   store.putValidationLease(row)
+  // Before COMMIT, so a marker failure rolls the row back and no active lease
+  // can exist without its offline half.
+  args.establishFence?.(toLease(row))
   store.db.exec('COMMIT')
   return {
     ok: true,
@@ -138,12 +183,14 @@ function acquireInsideTransaction(
 
 export function releaseValidationLease(
   store: ControlPlaneStore,
-  args: { scopeKey: string; leaseId: string; nowMs: number; owner?: string }
+  args: { scopeKey: string; leaseId: string; nowMs: number; owner: string }
 ): { released: boolean } {
   const existing = store.getValidationLease(args.scopeKey)
-  // Why owner as well as lease id: the lease id travels in receipts and logs,
-  // so id alone would let any reader of a receipt release someone else's lease.
-  if (args.owner !== undefined && existing?.owner !== args.owner) {
+  // Why owner as well as lease id, and why REQUIRED: the lease id travels in
+  // receipts and logs, so id alone lets any reader of a receipt release someone
+  // else's lease. An optional owner meant a caller that simply omitted it got
+  // exactly that power, which is the same hole with an extra step.
+  if (!args.owner || existing?.owner !== args.owner) {
     return { released: false }
   }
   if (!existing || existing.lease_id !== args.leaseId || existing.released_at) {
@@ -169,16 +216,19 @@ export type MutationGuard =
 /** Blocks a source mutation while a validation lease is active on the same
  *  worktree. A baseline reproduction must either wait or run in its own
  *  worktree/process — it must never edit under a running gate. */
+/** Blocks a source mutation while a validation lease is active on the same
+ *  worktree — INCLUDING the holder's own.
+ *
+ *  There is deliberately no holder exemption. Owning a lease is authority to
+ *  RELEASE it, never authority to mutate under it: the holder is precisely the
+ *  Dispatch whose gate child process is reading the tree right now, so its own
+ *  edits are the contamination the lease exists to prevent. */
 export function assertMutationAllowed(
   store: ControlPlaneStore,
-  args: { scopeKey: string; nowMs: number; holderLeaseId?: string }
+  args: { scopeKey: string; nowMs: number }
 ): MutationGuard {
   const existing = store.getValidationLease(args.scopeKey)
   if (!existing || !isActive(existing, args.nowMs)) {
-    return { allowed: true }
-  }
-  if (args.holderLeaseId && existing.lease_id === args.holderLeaseId) {
-    // Why: the lease holder itself is the process running the gate.
     return { allowed: true }
   }
   return {

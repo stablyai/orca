@@ -2,6 +2,7 @@
 restart, teardown); the "swap the provider atomically" invariant keeps restart + singletons co-located. */
 import { randomUUID } from 'node:crypto'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { buildDaemonForkArgs } from './daemon-fork-args'
 import { readFileSync, unlinkSync } from 'node:fs'
 import { fork, type ChildProcess } from 'node:child_process'
 import {
@@ -586,24 +587,18 @@ function createOutOfProcessLauncher(
       const forkEntryPath = relocatedHost ? relocatedHost.entryPath : entryPath
       const child = fork(
         forkEntryPath,
-        [
-          '--socket',
+        buildDaemonForkArgs({
           socketPath,
-          '--token',
           tokenPath,
-          '--pid-record',
           pidPath,
-          '--launch-nonce',
           launchNonce,
-          '--entry-path',
           entryPath,
-          '--app-version',
-          getAppEnvironment().getVersion(),
-          '--spawner-exec-path',
-          process.execPath,
-          ...(macosLoginSessionWatch ? ['--login-session-watch'] : []),
-          ...daemonLogArgs()
-        ],
+          appVersion: getAppEnvironment().getVersion(),
+          spawnerExecPath: process.execPath,
+          macosLoginSessionWatch,
+          logArgs: daemonLogArgs(),
+          ownerPid: process.pid
+        }),
         {
           // Why: detached daemons outlive dev worktrees; userData keeps process.cwd() valid after a repo/worktree is deleted.
           cwd: userDataPath,

@@ -2,8 +2,8 @@ import { z } from 'zod'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { recordPretoolReceipt } from '../../orchestration/control-plane/pretool-receipt'
 import { readDispatchLaunchRoutes } from '../../orchestration/control-plane/route-runtime-events'
-import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import { resolveWorkerMutationVerdict } from '../../orchestration/control-plane/worker-mutation-verdict'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalString, requiredString } from '../schemas'
 
@@ -57,7 +57,7 @@ export const PRETOOL_RECEIPT_METHOD: RpcMethod = defineMethod({
         processIncarnation: dispatch.process_incarnation,
         requestedRoute: launch.requested,
         effectiveRoute: launch.effective,
-        buildId: resolveRuntimeBuildIdentity().id
+        buildId: runtime.getBuildIdentity().id
       },
       claim: {
         decision: params.decision,
@@ -69,5 +69,47 @@ export const PRETOOL_RECEIPT_METHOD: RpcMethod = defineMethod({
       observedAt: new Date().toISOString()
     })
     return { receipt }
+  }
+})
+
+/** The question the PreTool policy cannot answer for itself.
+ *
+ *  Orca decides no policy here and adds no allowlist. It reports one fact it
+ *  alone owns — whether the workspace this attested session occupies is under
+ *  someone else's validation lease right now — so the single existing policy can
+ *  deny a tool call that would edit a tree a gate is running on.
+ *
+ *  This is the path the dispatcher fence cannot reach. A worker that is already
+ *  running does not mutate through `files.write` or `terminal.send`; it uses its
+ *  own Bash and Edit inside a shell that predates the lease, which is exactly
+ *  how two certification workers committed to the Package B branch mid-gate.
+ *
+ *  Read-only by construction: it writes nothing, so asking can never manufacture
+ *  the acceptance receipt that `pretool_acceptance` requires.
+ */
+export const MUTATION_VERDICT_METHOD: RpcMethod = defineMethod({
+  name: 'orchestration.mutationVerdict',
+  params: z.object({ tool: OptionalString, from: OptionalString }),
+  handler: (_params, { runtime, orchestrationCompatibilityEvidence }) => {
+    const evidence = orchestrationCompatibilityEvidence
+    // Attested identity only, and ONE placement record for it. A pane key a
+    // caller could state is a pane key it could borrow; resolving the terminal,
+    // the workspace and the exact provider session together from the runtime's
+    // own record is what makes the answer about this session rather than about
+    // whoever occupied this pane last.
+    const paneKey = evidence?.paneKey
+    const placement = paneKey ? runtime.resolveAttestedPanePlacement(paneKey) : null
+    return {
+      verdict: resolveWorkerMutationVerdict({
+        db: runtime.getOrchestrationDb(),
+        session: {
+          terminalHandle: placement?.terminalHandle ?? evidence?.terminalHandle,
+          paneKey,
+          processIncarnation: placement?.processIncarnation,
+          worktreeId: placement?.worktreeId
+        },
+        nowMs: Date.now()
+      })
+    }
   }
 })

@@ -1,3 +1,7 @@
+import { mkdtempSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { agentHookServer } from '../../../agent-hooks/server'
 import { afterEach, describe, expect, it } from 'vitest'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
@@ -245,9 +249,22 @@ describe('correction 2: bounded control-plane operations', () => {
   })
 
   it('acquires, checks and releases the validation lease through the typed operation', async () => {
+    // A lease is refused outright on a runtime with no agent-hook endpoint,
+    // because its offline fence would have nowhere to live.
+    await agentHookServer.start({
+      env: 'production',
+      userDataPath: mkdtempSync(join(tmpdir(), 'orca-lease-endpoint-'))
+    })
     const state = harness.setup()
     // Why a real Dispatch: the owner field decides who may later release the
     // lease, so it must name a Dispatch that actually exists on this Run.
+    // A lease is part of the outcome-admitted validation contract, so the Run
+    // must have one before it can be protected.
+    await harness.call(
+      'orchestration.outcomeAdmit',
+      { from: 'term_coord', outcomeId: 'out_lease', title: 'Validate' },
+      state.ctx
+    )
     const task = state.db.createTask({ spec: 'validate' })
     const owner = state.db.createStartingWorkerDispatch({
       taskId: task.id,
@@ -255,14 +272,29 @@ describe('correction 2: bounded control-plane operations', () => {
       maxDepth: Number.MAX_SAFE_INTEGER,
       startOptions: { agent: 'codex' }
     }).dispatch.id
+    // The lease scope comes from the owner Dispatch's own worktree, so it has to
+    // actually be placed in one — a lease with no workspace could not be
+    // enforced against anything.
+    state.db.prepareStartingWorkerAuthority({
+      dispatchId: owner,
+      handle: 'term_validator',
+      paneKey: 'tab-v:leaf-v',
+      processIncarnation: 'pty:term_validator',
+      launchTokenHash: 'hash',
+      worktreeId: 'repo_a::/work/validated',
+      effects: [],
+      setupState: 'not_applicable',
+      terminalOwnership: 'external'
+    })
+    state.db.markWorkerDispatchReady(owner, [])
     const acquired = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'acquire', dispatch: owner },
+      { from: 'term_coord', action: 'acquire', dispatch: owner, task: task.id },
       state.ctx
     )) as { scopeKey: string; lease: { leaseId: string } }
     const blocked = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'check' },
+      { from: 'term_coord', action: 'check', dispatch: owner, task: task.id },
       state.ctx
     )) as { guard: { allowed: boolean } }
     expect(blocked.guard.allowed).toBe(false)
@@ -271,7 +303,7 @@ describe('correction 2: bounded control-plane operations', () => {
     await expect(
       harness.call(
         'orchestration.validationLease',
-        { from: 'term_coord', action: 'release', leaseId: acquired.lease.leaseId },
+        { from: 'term_coord', action: 'release', leaseId: acquired.lease.leaseId, task: task.id },
         state.ctx
       )
     ).rejects.toMatchObject({ code: 'invalid_argument' })
@@ -282,7 +314,8 @@ describe('correction 2: bounded control-plane operations', () => {
           from: 'term_coord',
           action: 'release',
           leaseId: acquired.lease.leaseId,
-          dispatch: 'ctx_impostor'
+          dispatch: 'ctx_impostor',
+          task: task.id
         },
         state.ctx
       )
@@ -295,14 +328,16 @@ describe('correction 2: bounded control-plane operations', () => {
         from: 'term_coord',
         action: 'release',
         leaseId: acquired.lease.leaseId,
-        dispatch: owner
+        dispatch: owner,
+        task: task.id
       },
       state.ctx
     )) as { released: boolean }
     expect(released.released).toBe(true)
+    await agentHookServer.stop?.()
     const free = (await harness.call(
       'orchestration.validationLease',
-      { from: 'term_coord', action: 'check' },
+      { from: 'term_coord', action: 'check', dispatch: owner, task: task.id },
       state.ctx
     )) as { guard: { allowed: boolean } }
     expect(free.guard.allowed).toBe(true)
@@ -331,7 +366,10 @@ describe('B9 correction 2: worker-start refuses a worktree under an active suite
     ).not.toThrow()
   })
 
-  it('lets the lease holder itself keep mutating the scope it owns', () => {
+  it('NEGATIVE CONTROL: the lease HOLDER cannot re-engage into the scope it owns', () => {
+    // Reversed deliberately. Owning a lease is authority to release it, never
+    // authority to mutate under it: re-engaging the very Dispatch that took the
+    // lease is re-engaging the one whose gate is reading this tree right now.
     const state = harness.setup()
     const store = new ControlPlaneStore(state.db)
     acquireValidationLease(store, {
@@ -347,6 +385,6 @@ describe('B9 correction 2: worker-start refuses a worktree under an active suite
         worktreeId: 'wt_1',
         dispatchId: 'ctx_suite'
       })
-    ).not.toThrow()
+    ).toThrow(/would contaminate it/)
   })
 })

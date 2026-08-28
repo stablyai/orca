@@ -8,15 +8,18 @@ import {
   findRegistryDrift
 } from '../../orchestration/control-plane/route-registry-discovery'
 import { readObservedLaunchIdentity } from '../../orchestration/control-plane/certification-event-source'
-import { PRETOOL_RECEIPT_METHOD } from './orchestration-pretool-receipt'
+import { MUTATION_VERDICT_METHOD, PRETOOL_RECEIPT_METHOD } from './orchestration-pretool-receipt'
 import { mintCertificationIntent } from '../../orchestration/control-plane/certification-intent'
 import { readPretoolVerdict } from '../../orchestration/control-plane/pretool-receipt'
 import { observeAndPersistProviderIdentity } from '../../orchestration/control-plane/provider-session-identity'
 import { readSafeLaunchAdmission } from '../../orchestration/control-plane/route-runtime-events'
 import { requireCallerOwnedRunTask } from './orchestration-run-scope'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
-import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
-import { classifyNativeRoute } from '../../../../shared/native-route-contract'
+import { assertDisposableCertificationWorkspace } from '../../orchestration/control-plane/certification-workspace-isolation'
+import {
+  classifyNativeRoute,
+  ROUTE_TRUTH_SCHEMA_VERSION
+} from '../../../../shared/native-route-contract'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { RouteRegistryStore } from '../../orchestration/control-plane/route-registry-store'
@@ -115,12 +118,13 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
   }),
 
   PRETOOL_RECEIPT_METHOD,
+  MUTATION_VERDICT_METHOD,
   defineMethod({
     name: 'orchestration.certify',
     params: CertifyParams,
     handler: (params, { runtime }) => {
       const db = runtime.getOrchestrationDb()
-      const build = resolveRuntimeBuildIdentity()
+      const build = runtime.getBuildIdentity()
       const admission = admitCertificationEvidence({
         db,
         request: {
@@ -181,7 +185,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.routeTruth',
     params: RouteTruthParams,
-    handler: (params) => {
+    handler: (params, { runtime }) => {
       if (!isTuiAgent(params.agent)) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -197,7 +201,20 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
         model: params.model ?? null,
         reasoning: params.reasoning ?? null
       })
+      // Why the envelope: a consumer outside this repo — the SCL PreTool policy,
+      // the safe launcher — has to know WHICH contract it is reading and WHICH
+      // build answered, or it will keep a stale answer past the build that
+      // produced it. Both are runtime-owned; neither can be asserted by a caller.
+      const build = runtime.getBuildIdentity()
       return {
+        schemaVersion: ROUTE_TRUTH_SCHEMA_VERSION,
+        build: {
+          id: build.id,
+          version: build.version,
+          buildHash: build.buildHash,
+          commitSha: build.commitSha,
+          provenanceSource: build.provenanceSource
+        },
         agent: params.agent,
         model: params.model ?? null,
         reasoning: params.reasoning ?? null,
@@ -225,8 +242,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
       const store = new ControlPlaneStore(db)
       // Naming an admitted Run is not authority over it. The mint requires the
       // same ownership worker-start requires: the caller's own pane must be the
-      // coordinator currently bound to this Run, the Task must belong to it, and
-      // the worktree must be the one that terminal actually sits in.
+      // coordinator currently bound to this Run, and the Task must belong to it.
       const { run } = requireCallerOwnedRunTask(runtime, db, {
         from: params.from,
         run: params.run,
@@ -234,15 +250,27 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
         callerEvidence: orchestrationCompatibilityEvidence,
         verb: 'Minting a certification intent'
       })
+      // This used to require the named worktree to BE the coordinator's own
+      // checkout. That is what put certification workers in the implementation
+      // worktree, where two of them committed to the source branch and destroyed
+      // the principal's uncommitted work. The requirement is now the opposite: a
+      // real workspace this runtime knows, and never the coordinator's own.
+      const namedWorkspace = await runtime
+        .showManagedTerminalWorkspace(params.worktree)
+        .catch(() => null)
+      if (!namedWorkspace) {
+        throw new OrchestrationError(
+          'worktree_not_found',
+          `Worktree ${params.worktree} is not a workspace this Orca knows, so no certification worker can be placed in it.`
+        )
+      }
       const callerWorktree = run.coordinator_handle
         ? await runtime.showTerminal(run.coordinator_handle).catch(() => null)
         : null
-      if (!callerWorktree || callerWorktree.worktreeId !== params.worktree) {
-        throw new OrchestrationError(
-          'worktree_not_owned',
-          `Worktree ${params.worktree} is not the worktree this Run's coordinator terminal occupies.`
-        )
-      }
+      assertDisposableCertificationWorkspace({
+        intentWorktreeId: namedWorkspace.id,
+        coordinatorWorktreeId: callerWorktree?.worktreeId ?? null
+      })
       const outcome = store.getOutcomeByRun(params.run)
       if (!outcome) {
         throw new OrchestrationError(
@@ -264,7 +292,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
             model: params.model ?? null,
             reasoning: params.reasoning ?? null
           },
-          buildId: resolveRuntimeBuildIdentity().id,
+          buildId: runtime.getBuildIdentity().id,
           retryOfDispatchId: params.retryOf ?? null
         },
         new Date().toISOString()
@@ -290,7 +318,7 @@ export const ORCHESTRATION_REGISTRY_OPS_METHODS: RpcMethod[] = [
           // identity (version+buildHash+commit). Comparing against the bare
           // version means no evidence ever matches the runtime that recorded it,
           // so a fully certified route reads STALE forever.
-          currentRuntimeVersion: resolveRuntimeBuildIdentity().id
+          currentRuntimeVersion: runtime.getBuildIdentity().id
         })
       }
     }

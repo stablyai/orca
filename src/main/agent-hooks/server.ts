@@ -1,6 +1,12 @@
 /* eslint-disable max-lines -- Why: this file owns the loopback HTTP adapter, the on-disk last-status persistence layer (hydrate, sanitize, TTL, atomic write, drop), and the relay ingest path in one place so the cache lifecycle (set → schedule → drain) lives next to the surfaces that mutate it. Splitting would force mutual `private` accessor scaffolding for a single class. */
 // Why: this main-process adapter keeps listener internals in shared/ (`src/shared/agent-hook-listener.ts`) so the relay can host the same pipeline without Electron; parsing that drifts back into this file stops applying to SSH panes.
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http'
+import {
+  buildPretoolGateResponse,
+  readPretoolGateRequest,
+  type PretoolGateRequest,
+  type PretoolMutationVerdict
+} from './pretool-gate'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { chmodSync, mkdirSync, readFileSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -702,6 +708,10 @@ export class AgentHookServer {
   private env = 'production'
   private onAgentStatus: ((payload: EnrichedAgentHookEventPayload) => void) | null = null
   private onClaudeStatusLine: ((event: ClaudeStatusLineRateLimits) => void) | null = null
+  // Why injected: the gate's answer is orchestration state, and this adapter
+  // must not reach into the control plane. Absent resolver = today's behaviour.
+  private resolvePretoolMutation: ((request: PretoolGateRequest) => PretoolMutationVerdict) | null =
+    null
   private onPaneStatusCleared: PaneStatusClearListener | null = null
   private paneStatusClearListeners = new Set<PaneStatusClearListener>()
   private statusChangeListeners = new Set<StatusChangeListener>()
@@ -787,6 +797,20 @@ export class AgentHookServer {
     listener: ((event: ClaudeStatusLineRateLimits) => void) | null
   ): void {
     this.onClaudeStatusLine = listener
+  }
+
+  /** Where the managed scripts source their endpoint from. The durable fence
+   *  sentinel lives beside it, so a hook that can find one can find the other. */
+  getEndpointFilePath(): string | null {
+    return this.endpointFilePathCache
+  }
+
+  /** Installs the pre-tool mutation gate. Called by the runtime, which owns the
+   *  lease state; without it every hook keeps answering 204 exactly as before. */
+  setPretoolMutationResolver(
+    resolve: ((request: PretoolGateRequest) => PretoolMutationVerdict) | null
+  ): void {
+    this.resolvePretoolMutation = resolve
   }
 
   subscribeStatusChanges(listener: StatusChangeListener): () => void {
@@ -2633,6 +2657,22 @@ export class AgentHookServer {
               launchToken: normalized.event.launchToken
             })
           : 'suppress'
+        // Why before the status write and before the 204: this is the only
+        // moment the tool has not run yet. A worker already running in a leased
+        // worktree edits through its own Bash/Edit, never through an Orca RPC,
+        // so if it is not stopped here it is not stopped at all.
+        const gateRequest = this.resolvePretoolMutation
+          ? readPretoolGateRequest(source, aliasedBody)
+          : null
+        const gate =
+          gateRequest && this.resolvePretoolMutation
+            ? buildPretoolGateResponse(gateRequest, this.resolvePretoolMutation)
+            : null
+        if (gate) {
+          res.writeHead(gate.status, { 'Content-Type': gate.contentType })
+          res.end(gate.body)
+          return
+        }
         if (normalized.event && statusDisposition !== 'suppress') {
           const event =
             statusDisposition === 'restart'

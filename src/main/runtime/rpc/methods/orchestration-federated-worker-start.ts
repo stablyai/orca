@@ -49,6 +49,7 @@ export async function startFederatedWorker(args: {
   // worktree. Before any effect, as locally.
   assertFederatedWorkerStartAdmitted({
     handle: db,
+    runtimeBuildIdentity: runtime.getBuildIdentity(),
     runId,
     agent: params.agent,
     model: params.model,

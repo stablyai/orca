@@ -46,12 +46,17 @@ describe('B9 validation lease protects an in-flight gate', () => {
     expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW })).toEqual({ allowed: true })
   })
 
-  it('lets the lease holder itself keep working in the scope it owns', () => {
+  it('NEGATIVE CONTROL: the lease HOLDER is blocked too', () => {
+    // Reversed deliberately. Owning a lease is authority to release it, never
+    // authority to mutate under it: the holder is exactly the Dispatch whose
+    // gate child process is reading the tree right now, so its own edits are
+    // the contamination the lease exists to prevent.
     const cp = store()
     acquire(cp)
-    expect(
-      assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW, holderLeaseId: 'lease_1' })
-    ).toEqual({ allowed: true })
+    expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW })).toMatchObject({
+      allowed: false,
+      code: 'validation_in_progress'
+    })
   })
 
   it('refuses a second owner while the first lease is live', () => {
@@ -62,12 +67,34 @@ describe('B9 validation lease protects an in-flight gate', () => {
     ).toMatchObject({ ok: false, code: 'held_by_other_owner' })
   })
 
-  it('is idempotent for a retried acquire with the same idempotency key', () => {
+  it('is idempotent for the SAME acquirer retrying', () => {
     const cp = store()
     acquire(cp)
-    const retry = acquire(cp, { leaseId: 'lease_retry' })
+    const retry = acquire(cp)
     expect(retry).toMatchObject({ ok: true, duplicate: true })
     expect(retry.ok && retry.lease.leaseId).toBe('lease_1')
+  })
+
+  it('NEGATIVE CONTROL: another owner reusing the idempotency key is refused', () => {
+    // An idempotency key is caller-chosen, so matching on it alone handed a
+    // DIFFERENT Dispatch the lease someone else was holding. A replay is the
+    // same acquirer asking again, not anyone who guessed the key.
+    const cp = store()
+    acquire(cp)
+    expect(acquire(cp, { owner: 'ctx_other', leaseId: 'lease_other' })).toMatchObject({
+      ok: false,
+      code: 'held_by_other_owner'
+    })
+    expect(cp.getValidationLease('wt_1')?.owner).toBe('ctx_1')
+  })
+
+  it('NEGATIVE CONTROL: the same owner naming a different lease id is refused', () => {
+    const cp = store()
+    acquire(cp)
+    expect(acquire(cp, { leaseId: 'lease_retry' })).toMatchObject({
+      ok: false,
+      code: 'held_by_other_owner'
+    })
   })
 
   it('reclaims a lease whose owner crashed once it expires', () => {
@@ -91,13 +118,23 @@ describe('B9 validation lease protects an in-flight gate', () => {
     const cp = store()
     acquire(cp)
     expect(
-      releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_1', nowMs: NOW + 5 })
+      releaseValidationLease(cp, {
+        scopeKey: 'wt_1',
+        leaseId: 'lease_1',
+        nowMs: NOW + 5,
+        owner: 'ctx_1'
+      })
     ).toEqual({ released: true })
     expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW + 6 })).toEqual({
       allowed: true
     })
     expect(
-      releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_1', nowMs: NOW + 7 })
+      releaseValidationLease(cp, {
+        scopeKey: 'wt_1',
+        leaseId: 'lease_1',
+        nowMs: NOW + 7,
+        owner: 'ctx_1'
+      })
     ).toEqual({ released: false })
   })
 
@@ -105,7 +142,42 @@ describe('B9 validation lease protects an in-flight gate', () => {
     const cp = store()
     acquire(cp)
     expect(
-      releaseValidationLease(cp, { scopeKey: 'wt_1', leaseId: 'lease_other', nowMs: NOW + 5 })
+      releaseValidationLease(cp, {
+        scopeKey: 'wt_1',
+        leaseId: 'lease_other',
+        nowMs: NOW + 5,
+        owner: 'ctx_1'
+      })
+    ).toEqual({ released: false })
+    expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW + 6 }).allowed).toBe(false)
+  })
+
+  it('NEGATIVE CONTROL: a release naming no owner is refused', () => {
+    // An optional owner meant a caller that simply omitted it could release
+    // anyone's lease — the lease id travels in receipts and logs.
+    const cp = store()
+    acquire(cp)
+    expect(
+      releaseValidationLease(cp, {
+        scopeKey: 'wt_1',
+        leaseId: 'lease_1',
+        nowMs: NOW + 5,
+        owner: ''
+      })
+    ).toEqual({ released: false })
+    expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW + 6 }).allowed).toBe(false)
+  })
+
+  it('NEGATIVE CONTROL: a release from the wrong owner is refused', () => {
+    const cp = store()
+    acquire(cp)
+    expect(
+      releaseValidationLease(cp, {
+        scopeKey: 'wt_1',
+        leaseId: 'lease_1',
+        nowMs: NOW + 5,
+        owner: 'ctx_impostor'
+      })
     ).toEqual({ released: false })
     expect(assertMutationAllowed(cp, { scopeKey: 'wt_1', nowMs: NOW + 6 }).allowed).toBe(false)
   })

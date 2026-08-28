@@ -63,6 +63,17 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'mutation-verdict'],
+    summary: 'Ask whether this session may mutate its workspace right now',
+    usage: 'orca orchestration mutation-verdict [--tool <name>] [--from <handle>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'tool', 'from'],
+    notes: [
+      'Read-only, and it decides no policy. It reports one fact only Orca owns: whether the workspace this attested session occupies is under another validation lease right now. The existing PreTool policy is still the single enforcement point and denies on the answer.',
+      'This is the path the RPC fence cannot reach. A worker that is already running mutates through its own Bash and Edit inside a shell that predates the lease, never through files.write or terminal.send, so fencing those fences the channel Orca talks to the worker on and not the worker.',
+      "Everything is resolved from the attested session: a caller states no pane, no Dispatch and no workspace, so it cannot borrow another session's answer. Asking writes nothing, so it can never manufacture a pretool_acceptance receipt."
+    ]
+  },
+  {
     path: ['orchestration', 'gate-run'],
     summary: 'Have the RUNTIME execute a gate and record what actually happened',
     usage:

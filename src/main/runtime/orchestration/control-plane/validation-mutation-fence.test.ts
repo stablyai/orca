@@ -64,6 +64,7 @@ describe('VALIDATION_MUTATION_FENCE', () => {
     // The re-engagement names only the terminal — no worktree in the request.
     expect(() =>
       assertWorkerStartAdmitted({
+        runtimeBuildIdentity: { id: 'build_test' },
         handle: db!,
         runId,
         taskId,
@@ -79,6 +80,7 @@ describe('VALIDATION_MUTATION_FENCE', () => {
     let thrown: unknown
     try {
       assertWorkerStartAdmitted({
+        runtimeBuildIdentity: { id: 'build_test' },
         handle: db!,
         runId,
         taskId,
@@ -115,6 +117,7 @@ describe('VALIDATION_MUTATION_FENCE', () => {
     ).toBe(true)
     expect(() =>
       assertWorkerStartAdmitted({
+        runtimeBuildIdentity: { id: 'build_test' },
         handle: db!,
         runId,
         taskId,

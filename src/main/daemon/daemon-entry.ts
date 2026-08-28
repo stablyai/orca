@@ -21,6 +21,7 @@ import {
   prepareMacosTccLoginShell,
   probeMacosLoginSessionAlive
 } from '../providers/macos-tcc-login-shell'
+import { DisposableOwnerDeathWatch } from './disposable-owner-death-watch'
 import { MacosLoginSessionDeathWatch } from './macos-login-session-death-watch'
 import { readCurrentProcessMacSystemResolverHealth } from '../network/macos-system-resolver-health'
 import { readCurrentDaemonReadyIdentity } from './daemon-ready-identity'
@@ -36,6 +37,10 @@ export type ParsedDaemonArgs = {
   spawnerExecPath?: string
   /** GUI-spawned daemons only — headless serve/SSH daemons must survive session loss. */
   loginSessionWatch?: boolean
+  /** Set only for a throwaway state root: retire when this owner pid is gone.
+   *  A disposable profile has nothing to reattach to, so surviving its owner
+   *  leaves an unreachable daemon holding live sessions. */
+  retireWithOwnerPid?: number
   /** Optional — absent for adopted old daemons and tests, which log nothing. */
   logFilePath?: string
 }
@@ -50,6 +55,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
   let appVersion = ''
   let spawnerExecPath = ''
   let loginSessionWatch = false
+  let retireWithOwnerPid = 0
 
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === '--socket' && argv[i + 1]) {
@@ -78,6 +84,12 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
       i++
     } else if (argv[i] === '--login-session-watch') {
       loginSessionWatch = true
+    } else if (argv[i] === '--retire-with-owner' && argv[i + 1]) {
+      const parsed = Number.parseInt(argv[i + 1], 10)
+      // A non-positive or unparsable owner pid would retire on the first probe,
+      // so an unusable value is simply no watch rather than an instant suicide.
+      retireWithOwnerPid = Number.isInteger(parsed) && parsed > 1 ? parsed : 0
+      i++
     }
   }
 
@@ -97,6 +109,7 @@ export function parseArgs(argv: string[]): ParsedDaemonArgs {
     ...(appVersion ? { appVersion } : {}),
     ...(spawnerExecPath ? { spawnerExecPath } : {}),
     ...(loginSessionWatch ? { loginSessionWatch } : {}),
+    ...(retireWithOwnerPid ? { retireWithOwnerPid } : {}),
     ...(logFilePath ? { logFilePath } : {})
   }
 }
@@ -118,6 +131,7 @@ async function main(): Promise<void> {
     appVersion,
     spawnerExecPath,
     loginSessionWatch,
+    retireWithOwnerPid,
     logFilePath
   } = parseArgs(process.argv.slice(2))
   const startedAtMs = Date.now() - process.uptime() * 1000
@@ -169,6 +183,7 @@ async function main(): Promise<void> {
 
   let daemon: DaemonHandle | null = null
   let deathWatch: MacosLoginSessionDeathWatch | null = null
+  let ownerWatch: DisposableOwnerDeathWatch | null = null
   let shuttingDown = false
   // Bound the wait so a wedged native shutdown can't leave the daemon running
   // forever on SIGTERM/SIGINT (it would then survive a real quit, not just updates).
@@ -181,6 +196,7 @@ async function main(): Promise<void> {
     }
     shuttingDown = true
     deathWatch?.stop()
+    ownerWatch?.stop()
     daemonLog.log('shutdown', { reason })
     try {
       if (daemon) {
@@ -203,6 +219,17 @@ async function main(): Promise<void> {
 
   process.on('SIGTERM', () => void shutdown('SIGTERM'))
   process.on('SIGINT', () => void shutdown('SIGINT'))
+
+  // Why here and not in the owner's quit path: the owner may be SIGKILLed and
+  // never run one. `daemon.shutdown()` kills every supervised session, so this
+  // takes the descendants down with it rather than orphaning them.
+  if (retireWithOwnerPid) {
+    ownerWatch = new DisposableOwnerDeathWatch({
+      ownerPid: retireWithOwnerPid,
+      onRetire: ({ ownerPid }) => void shutdown(`disposable-owner-exited:${ownerPid}`)
+    })
+    ownerWatch.start()
+  }
 
   // Why: a dead macOS login session cannot be fabricated without root (PAM owns
   // audit-session teardown), so e2e drives the oracles from a verdict file:

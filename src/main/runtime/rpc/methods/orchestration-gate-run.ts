@@ -2,7 +2,6 @@ import { z } from 'zod'
 import { ControlPlaneStore } from '../../orchestration/control-plane/control-plane-store'
 import type { OrchestrationDb } from '../../orchestration/db'
 import { resolveOutcomeBinding } from '../../orchestration/control-plane/outcome-identity'
-import { resolveRuntimeBuildIdentity } from '../../orchestration/control-plane/runtime-build-identity'
 import { runGate } from '../../orchestration/control-plane/runtime-gate-execution'
 import { observeCompletion } from '../../orchestration/control-plane/runtime-observed-completion'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -35,6 +34,10 @@ export function runGateForDispatch(args: {
   program: string
   args?: string
   timeoutMs?: number
+  /** The receiving runtime's pinned build identity. Passed in, never resolved
+   *  here: one process must have exactly one build identity, and a module that
+   *  resolves its own is a second authority that can disagree with it. */
+  buildId: string
 }): {
   gate: string
   sha: string
@@ -63,7 +66,7 @@ export function runGateForDispatch(args: {
     program: args.program,
     args: args.args ? args.args.split(' ').filter(Boolean) : [],
     cwd: observed.worktreePath,
-    buildId: resolveRuntimeBuildIdentity().id,
+    buildId: args.buildId,
     ...(args.timeoutMs === undefined ? {} : { timeoutMs: args.timeoutMs })
   })
   return {

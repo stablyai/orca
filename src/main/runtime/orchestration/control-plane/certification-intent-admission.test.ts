@@ -100,6 +100,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
 
   function admit(args: { runId: string; taskId: string; intentId?: string; retryOf?: string }) {
     return assertWorkerStartAdmitted({
+      runtimeBuildIdentity: resolveRuntimeBuildIdentity(),
       handle: db!,
       runId: args.runId,
       taskId: args.taskId,
@@ -140,6 +141,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
     const { runId, task, intentId } = world({ certified: false })
     expect(() =>
       assertWorkerStartAdmitted({
+        runtimeBuildIdentity: resolveRuntimeBuildIdentity(),
         handle: db!,
         runId,
         taskId: task.id,
@@ -156,6 +158,7 @@ describe('CERTIFICATION_INTENT_AT_THE_ADMISSION_BOUNDARY', () => {
     const { runId, intentId } = world({ certified: false })
     expect(() =>
       assertFederatedWorkerStartAdmitted({
+        runtimeBuildIdentity: resolveRuntimeBuildIdentity(),
         handle: db!,
         runId,
         agent: 'claude',

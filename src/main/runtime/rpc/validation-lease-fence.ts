@@ -91,8 +91,11 @@ async function targetWorktreeId(
       return (await runtime.showTerminal(params.terminal)).worktreeId ?? null
     }
   } catch {
-    // Why not a throw: an unresolvable selector is the handler's error to
-    // report, and turning it into a fence error would mask it.
+    // Null, not a throw: an unresolvable selector is the handler's error to
+    // report, and turning it into a fence error would mask it. The CALLER
+    // decides what null means — and while a lease is active it means refuse,
+    // because a mutation whose target cannot be named cannot be shown to land
+    // outside the leased tree.
     return null
   }
   return null
@@ -113,14 +116,25 @@ export async function assertNotFencedByValidationLease(
   if (!LEASE_FENCED_METHODS.has(method) || !params || typeof params !== 'object') {
     return
   }
-  // A runtime with no orchestration database holds no leases, so there is
-  // nothing to fence. This is the only fail-open: everything past it either
-  // proves the tree is unleased or refuses.
+  // Three outcomes, and only two of them are a pass.
+  //
+  //   no orchestration surface at all -> nothing here can hold a lease
+  //   a getter that returns null      -> the absence is PROVEN
+  //   a getter that THROWS            -> nothing is proven; refuse
+  //
+  // The third used to be folded into the first. That made every control-plane
+  // failure a pass on a path whose entire job is to refuse when it cannot tell.
+  if (typeof runtime.getOrchestrationDb !== 'function') {
+    return
+  }
   let db: ControlPlaneDatabaseHandle | null
   try {
     db = runtime.getOrchestrationDb()
-  } catch {
-    return
+  } catch (error) {
+    throw new ValidationLeaseFenced(
+      `${method} cannot proceed: Orca could not read its orchestration state, so it cannot tell whether this worktree is under a validation lease.`,
+      { method, reason: String(error) }
+    )
   }
   if (!db) {
     return
@@ -135,7 +149,13 @@ export async function assertNotFencedByValidationLease(
   }
   const worktreeId = await targetWorktreeId(runtime, params as FenceableParams)
   if (!worktreeId) {
-    return
+    // Some lease IS active and this mutation's exact target cannot be resolved.
+    // Letting it through is a bet that it lands somewhere unleased, and the
+    // whole package exists because that bet was being made silently.
+    throw new ValidationLeaseFenced(
+      `${method} cannot proceed: a validation lease is active and Orca cannot resolve which worktree this request would mutate.`,
+      { method, remedies: ['name_the_worktree', 'wait_for_lease_completion'] }
+    )
   }
   const guard = assertMutationAllowed(store, {
     scopeKey: validationScopeKeyForWorktree(worktreeId),

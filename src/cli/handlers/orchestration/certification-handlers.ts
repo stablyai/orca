@@ -40,6 +40,21 @@ export const ORCHESTRATION_CERTIFICATION_HANDLERS: Record<string, CommandHandler
     )
   },
 
+  'orchestration mutation-verdict': async ({ flags, client, cwd, json }) => {
+    const result = await callOrchestrationMutation<{
+      verdict: { decision: 'allow' | 'deny'; code?: string; reason: string }
+    }>(client, flags, 'orchestration.mutationVerdict', {
+      tool: getOptionalStringFlag(flags, 'tool'),
+      from: await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
+    })
+    printResult(
+      result,
+      json,
+      (value) =>
+        `${value.verdict.decision}${value.verdict.code ? ` (${value.verdict.code})` : ''}: ${value.verdict.reason}`
+    )
+  },
+
   'orchestration gate-run': async ({ flags, client, cwd, json }) => {
     const result = await callOrchestrationMutation<{
       gate: string

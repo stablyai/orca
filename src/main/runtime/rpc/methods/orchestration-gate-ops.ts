@@ -16,18 +16,14 @@ import {
 } from '../../orchestration/control-plane/outcome-identity'
 import { OutcomePolicyStore } from '../../orchestration/control-plane/outcome-policy'
 import type { RouteIdentity } from '../../orchestration/control-plane/route-registry-types'
-import {
-  acquireValidationLease,
-  assertMutationAllowed,
-  releaseValidationLease
-} from '../../orchestration/control-plane/validation-lease'
+import { VALIDATION_LEASE_METHOD } from './validation-lease-method'
+import { requireRunId } from './validation-lease-sentinel'
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
-import { resolveValidationScopeKey } from '../../orchestration/control-plane/validation-scope'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
 import { GateRunParams, runGateForDispatch } from './orchestration-gate-run'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
-import { OptionalBoolean, OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { OptionalBoolean, OptionalString, requiredString } from '../schemas'
 
 function splitCsv(value: string | undefined): string[] {
   return (value ?? '')
@@ -52,19 +48,6 @@ function parseIdentityList(raw: string | undefined): RouteIdentity[] {
 /** Gates whose receipt proves something about the commit itself, so it must
  *  never be reused across a SHA no matter what their inputs look like. */
 const EXACT_HEAD_GATE = /(publish|publication|release|review)/i
-
-function requireRunId(
-  runtime: Parameters<RpcMethod['handler']>[1]['runtime'],
-  from?: string
-): string {
-  const db = runtime.getOrchestrationDb()
-  const paneKey = from ? runtime.getTerminalPaneKey(from) : null
-  const run = paneKey ? db.getCurrentRunForPane(paneKey) : undefined
-  if (!run) {
-    throw new OrchestrationError('run_not_bound', 'This operation requires a bound Run.')
-  }
-  return run.id
-}
 
 const OutcomeAdmitParams = z.object({
   from: OptionalString,
@@ -98,16 +81,6 @@ const PhaseLaunchParams = z.object({
   from: OptionalString,
   run: OptionalString,
   drive: OptionalBoolean
-})
-
-const ValidationLeaseParams = z.object({
-  from: OptionalString,
-  run: OptionalString,
-  action: z.enum(['acquire', 'release', 'check']),
-  dispatch: OptionalString,
-  leaseId: OptionalString,
-  idempotencyKey: OptionalString,
-  ttlMs: OptionalFiniteNumber
 })
 
 /** B2/B8/B9 (correction 2) — the typed operations that put outcome policy, gate
@@ -170,6 +143,7 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
         gateId: params.gate,
         program: params.program,
         args: params.args,
+        buildId: runtime.getBuildIdentity().id,
         ...(params.timeoutMs === undefined ? {} : { timeoutMs: params.timeoutMs })
       })
   }),
@@ -240,82 +214,5 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
     }
   }),
 
-  defineMethod({
-    name: 'orchestration.validationLease',
-    params: ValidationLeaseParams,
-    handler: async (params, { runtime }) => {
-      const db = runtime.getOrchestrationDb()
-      const runId = params.run ?? requireRunId(runtime, params.from)
-      const store = new ControlPlaneStore(db)
-      const nowMs = Date.now()
-      const scopeKey = await resolveValidationScopeKey({
-        runtime,
-        terminalHandle: params.from,
-        runId
-      })
-      if (params.action === 'check') {
-        return { scopeKey, guard: assertMutationAllowed(store, { scopeKey, nowMs }) }
-      }
-      if (params.action === 'release') {
-        if (!params.leaseId) {
-          throw new OrchestrationError('invalid_argument', 'release requires --lease-id.')
-        }
-        // Why the owner too: the lease id appears in receipts and logs, so id
-        // alone would let anyone who read one release someone else's lease.
-        if (!params.dispatch) {
-          throw new OrchestrationError(
-            'invalid_argument',
-            'release requires --dispatch: only the Dispatch that holds a lease may release it.'
-          )
-        }
-        const releasing = db.getDispatchContextById(params.dispatch)
-        if (!releasing || releasing.run_id !== runId) {
-          throw new OrchestrationError(
-            'invalid_argument',
-            `--dispatch ${params.dispatch} is not a Dispatch on Run ${runId}.`
-          )
-        }
-        return {
-          scopeKey,
-          ...releaseValidationLease(store, {
-            scopeKey,
-            leaseId: params.leaseId,
-            nowMs,
-            owner: params.dispatch
-          })
-        }
-      }
-      const dispatchId = params.dispatch
-      if (!dispatchId) {
-        throw new OrchestrationError('invalid_argument', 'acquire requires --dispatch.')
-      }
-      // Why verify: the owner field gates who may later release the lease, so a
-      // caller-supplied string that names nothing would let anyone claim and
-      // release ownership of a protected worktree.
-      const ownerDispatch = db.getDispatchContextById(dispatchId)
-      if (!ownerDispatch || ownerDispatch.run_id !== runId) {
-        throw new OrchestrationError(
-          'invalid_argument',
-          `--dispatch ${dispatchId} is not a Dispatch on Run ${runId}, so it cannot own a lease here.`
-        )
-      }
-      const idempotencyKey = params.idempotencyKey ?? `${dispatchId}:${params.leaseId ?? 'default'}`
-      const acquisition = acquireValidationLease(store, {
-        scopeKey,
-        leaseId: params.leaseId ?? `lease_${dispatchId}`,
-        owner: dispatchId,
-        idempotencyKey,
-        nowMs,
-        ttlMs: params.ttlMs
-      })
-      if (!acquisition.ok) {
-        throw new OrchestrationError(
-          acquisition.code,
-          acquisition.reason,
-          acquisition.code === 'held_by_other_owner' ? { lease: acquisition.lease } : undefined
-        )
-      }
-      return { scopeKey, ...acquisition }
-    }
-  })
+  VALIDATION_LEASE_METHOD
 ]

@@ -19,6 +19,14 @@ import { TUI_AGENT_CONFIG } from './tui-agent-config'
  *  because the catalog already proves the capability exists.
  */
 
+/** The version of the route-truth contract external consumers pin against.
+ *
+ *  Bump ONLY when the meaning of an existing verdict or capability field
+ *  changes. A consumer that reads a schemaVersion it does not know must refuse
+ *  to decide rather than guess: an out-of-date launcher policy silently
+ *  reinterpreting a verdict is the drift this whole module exists to remove. */
+export const ROUTE_TRUTH_SCHEMA_VERSION = 1
+
 export type NativeRouteVerdict =
   /** Native Orca can launch this exact route today. */
   | 'NATIVE_ROUTE_SUPPORTED'

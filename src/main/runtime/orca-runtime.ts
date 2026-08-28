@@ -139,6 +139,10 @@ import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import type { LivenessSignalSource as OrchestrationLivenessSignalSource } from './orchestration/control-plane/liveness-sweep'
 import {
+  pinRuntimeBuildIdentity,
+  type RuntimeBuildIdentity
+} from './orchestration/control-plane/runtime-build-identity'
+import {
   classifyWorkerTerminalProcessIncarnation,
   parseWorkerTerminalHostScope,
   type WorkerTerminalHostScope
@@ -3153,6 +3157,16 @@ const APPROVED_WAIT_HORIZON_MS = 10 * 60 * 1000
 
 export class OrcaRuntimeService {
   private readonly runtimeId = randomUUID()
+  // Why here: the build identity of a running process cannot change, so it is
+  // pinned before any RPC can read it rather than re-resolved per call.
+  private readonly buildIdentity = pinRuntimeBuildIdentity()
+
+  /** The one build identity this process has. Every Package B consumer reads
+   *  it from here rather than resolving its own, so a checkout that moves
+   *  under a running certification run cannot change what the runtime IS. */
+  getBuildIdentity(): RuntimeBuildIdentity {
+    return this.buildIdentity
+  }
   private readonly startedAt = Date.now()
   private readonly store: RuntimeStore | null
   private managedHookReconciliationGeneration = 0
@@ -18942,6 +18956,31 @@ export class OrcaRuntimeService {
   // dispatch still works for handles without a resolvable pane.
   getTerminalPaneKey(handle: string): string | null {
     return this.getPaneKeyForTerminalHandle(handle)
+  }
+
+  /** Where an ATTESTED pane actually is, as this runtime records it.
+   *
+   *  The pre-tool gate is keyed on this rather than on anything the hook body
+   *  states. A pane key has already been authenticated against the session's
+   *  launch token by the time the gate runs, so resolving the rest here — the
+   *  terminal, the exact process incarnation in it, and the workspace it sits in
+   *  — leaves a worker with nothing about its own identity it can assert. */
+  resolveAttestedPanePlacement(paneKey: string): {
+    terminalHandle: string | null
+    processIncarnation: string | null
+    worktreeId: string | null
+  } | null {
+    for (const [handle, record] of this.handles) {
+      if (this.getPaneKeyForTerminalHandle(handle) !== paneKey) {
+        continue
+      }
+      return {
+        terminalHandle: handle,
+        processIncarnation: this.getTerminalProcessIncarnation(handle),
+        worktreeId: record.worktreeId ?? null
+      }
+    }
+    return null
   }
 
   getLiveTerminalPaneKey(handle: string): string | null {

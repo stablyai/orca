@@ -144,11 +144,15 @@ describe('the lease fence fails open only when there is nothing to fence', () =>
     expect(fenced(await dispatcherWith(() => null).dispatch(request))).toBe(false)
   })
 
-  it('skips the fence when asking for the database throws', async () => {
+  it('NEGATIVE CONTROL: a database getter that THROWS is not a pass', async () => {
+    // Reversed deliberately. A getter that throws has proven nothing about
+    // leases, and folding it into "there is no database" made every
+    // control-plane failure a pass on the one path whose job is to refuse when
+    // it cannot tell. The proven-absent case is a separate test below.
     const dispatcher = dispatcherWith(() => {
       throw new Error('orchestration disabled')
     })
-    expect(fenced(await dispatcher.dispatch(request))).toBe(false)
+    expect(fenced(await dispatcher.dispatch(request))).toBe(true)
   })
 
   it('does NOT wave the mutation through when the lease probe itself fails', async () => {
