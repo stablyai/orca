@@ -114,7 +114,13 @@ describe('sleeping-agent resume across the direct-SSH hydration gap', () => {
     expect(launched, 'the deferred agent never woke after the host answered').toBe(1)
     const state = useAppStore.getState()
     expect(state.tabsByWorktree[WORKTREE_ID]?.[0]?.launchAgent).toBe('claude')
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    // The wake only queues the startup; the record is retained until a fresh PTY spawn
+    // consumes it, so a launch that never spawns stays retryable.
+    const resumedTabId = state.tabsByWorktree[WORKTREE_ID]?.[0]?.id
+    expect(state.pendingStartupByTabId[resumedTabId!]?.sleepingAgentResumeIdentity?.paneKey).toBe(
+      record.paneKey
+    )
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeDefined()
   })
 
   it('leaves a purely local workspace resuming with no added latency', () => {

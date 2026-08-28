@@ -140,7 +140,6 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
     // claims the session. Asserting only the record would pass for a replay
     // that cleared it and launched nothing.
     const replayed = useAppStore.getState()
-    expect(replayed.sleepingAgentSessionsByPaneKey[backgroundPaneKey]).toBeUndefined()
     const backgroundTabIds = tabIds(BG_WT)
     expect(backgroundTabIds).toHaveLength(1)
     expect(backgroundTabIds[0]).not.toBe(BG_MIRROR_TAB_ID)
@@ -148,6 +147,8 @@ describe('mirrored-pane resume deferral against real stream frames', () => {
       launchAgent: 'codex',
       providerSession: { key: 'session_id', id: 'codex-session-bg-1' }
     })
+    expect(replayed.sleepingAgentSessionsByPaneKey[backgroundPaneKey]).toBeDefined()
+    expectReplayedResume(backgroundPaneKey, BG_WT, 'codex-session-bg-1')
   })
 
   // The three tests below pin the remaining release sites one frame at a time:

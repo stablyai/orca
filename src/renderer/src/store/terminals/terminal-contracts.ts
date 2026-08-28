@@ -9,6 +9,8 @@ export type AutomaticAgentResumeClaim = {
   worktreeId: string
   launchAgent: TuiAgent
   providerSession: AgentProviderSessionMetadata
+  /** Stable identity of the sleeping record that created this claim. */
+  sleepingAgentResumeIdentity?: { paneKey: string; capturedAt: number }
 }
 
 export type CodexRestartNotice = {

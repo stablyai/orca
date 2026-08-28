@@ -51,7 +51,7 @@ describe('remote sleeping-agent compatibility', () => {
     setRemoteSleepRecord(value)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBe(value)
   })
 
   it('preserves legacy automatic wake when host authority is not known', () => {
@@ -59,6 +59,6 @@ describe('remote sleeping-agent compatibility', () => {
     setRemoteSleepRecord(value)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBeUndefined()
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[value.paneKey]).toBe(value)
   })
 })

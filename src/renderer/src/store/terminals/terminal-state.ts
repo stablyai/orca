@@ -57,6 +57,8 @@ export type TerminalState = {
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
       resumeProviderSession?: AgentProviderSessionMetadata
+      /** Stable identity of the sleeping record held until a fresh resume PTY spawns. */
+      sleepingAgentResumeIdentity?: { paneKey: string; capturedAt: number }
       launchToken?: string
       launchAgent?: TuiAgent
       agentArgsOverride?: string | null

@@ -56,6 +56,6 @@ describe('Pi session wake', () => {
     expect(state.pendingStartupByTabId[resumedTab!.id]?.resumeProviderSession).toEqual(
       providerSession
     )
-    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBeUndefined()
+    expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 })

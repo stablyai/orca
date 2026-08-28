@@ -490,6 +490,22 @@ export function paneOwnsQueuedStartup(
   return queuedStartup != null && paneStartup === queuedStartup
 }
 
+export type SleepingAgentResumeIdentity = { paneKey: string; capturedAt: number }
+
+export function consumeQueuedStartupAndClearSleepingRecord(
+  tabId: string,
+  consume: (tabId: string) => { sleepingAgentResumeIdentity?: SleepingAgentResumeIdentity } | null,
+  getRecord: (paneKey: string) => { capturedAt: number } | undefined,
+  clearRecord: (paneKey: string) => void
+): void {
+  const consumed = consume(tabId)
+  const identity = consumed?.sleepingAgentResumeIdentity
+  const record = identity ? getRecord(identity.paneKey) : undefined
+  if (identity && record?.capturedAt === identity.capturedAt) {
+    clearRecord(identity.paneKey)
+  }
+}
+
 /**
  * The callback that spends the tab's queued startup command, or `undefined` when this pane does
  * not own it.
@@ -1368,7 +1384,15 @@ export function useTerminalPaneLifecycle({
         const onQueuedStartupSpawned = createQueuedStartupConsumer(
           ptyDeps.startup,
           startupWithSetupSplitWait,
-          () => useAppStore.getState().consumeTabStartupCommand(tabId),
+          () => {
+            const state = useAppStore.getState()
+            consumeQueuedStartupAndClearSleepingRecord(
+              tabId,
+              state.consumeTabStartupCommand,
+              (paneKey) => state.sleepingAgentSessionsByPaneKey[paneKey],
+              state.clearSleepingAgentSession
+            )
+          },
           // Why `startup` and not startupWithSetupSplitWait: setup-split hands the pane a copy, so only
           // the raw prop still matches the object the store holds. Read and consume run in one
           // synchronous step, so nothing can queue in between.

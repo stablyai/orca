@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 import { resetStaleDocumentVisibilityForTesting } from '@/components/terminal-pane/stale-document-visibility'
+import { consumeQueuedStartupAndClearSleepingRecord } from '@/components/terminal-pane/use-terminal-pane-lifecycle'
 import { useAppStore, type AppState } from '@/store'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
@@ -159,7 +160,6 @@ export function tabIds(worktreeId: string): string[] {
  *  consumed the record launched nothing. */
 export function expectReplayedResume(paneKey: string, worktreeId: string, sessionId: string): void {
   const state = useAppStore.getState()
-  expect(state.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
   const claimedTabIds = Object.keys(state.automaticAgentResumeClaimsByTabId)
   expect(claimedTabIds).toHaveLength(1)
   const replacementTabId = claimedTabIds[0]!
@@ -169,6 +169,18 @@ export function expectReplayedResume(paneKey: string, worktreeId: string, sessio
     launchAgent: 'codex',
     providerSession: { key: 'session_id', id: sessionId }
   })
+
+  // The mirror verdict only justifies the replacement launch. The sleeping
+  // record remains retryable until the replacement's first PTY spawn consumes
+  // its queued startup; model that concrete execution-host boundary here.
+  expect(state.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
+  consumeQueuedStartupAndClearSleepingRecord(
+    replacementTabId,
+    state.consumeTabStartupCommand,
+    (identityPaneKey) => useAppStore.getState().sleepingAgentSessionsByPaneKey[identityPaneKey],
+    useAppStore.getState().clearSleepingAgentSession
+  )
+  expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
 }
 
 /** Registers the shared harness reset for the receipt-era describe blocks. */

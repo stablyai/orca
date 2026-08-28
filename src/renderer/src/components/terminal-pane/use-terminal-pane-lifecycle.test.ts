@@ -3,6 +3,7 @@ import {
   applyTerminalPaneCloseRequest,
   applyTerminalScrollbackRowsToMountedPanes,
   clearQueuedInitialCwdAfterFirstPane,
+  consumeQueuedStartupAndClearSleepingRecord,
   createQueuedStartupConsumer,
   getPreviousVisibleForTerminalPane,
   isTerminalPaneVisibilityResume,
@@ -297,6 +298,49 @@ describe('createQueuedStartupConsumer', () => {
     consumer?.()
 
     expect(consume).not.toHaveBeenCalled()
+  })
+})
+
+describe('consumeQueuedStartupAndClearSleepingRecord', () => {
+  it('clears the matching record once after fresh-spawn startup consumption', () => {
+    const identity = { paneKey: 'old-tab:leaf-1', capturedAt: 42 }
+    let consumed = true
+    const clearRecord = vi.fn()
+
+    const consume = (): { sleepingAgentResumeIdentity: typeof identity } | null => {
+      if (!consumed) {
+        return null
+      }
+      consumed = false
+      return { sleepingAgentResumeIdentity: identity }
+    }
+
+    consumeQueuedStartupAndClearSleepingRecord(
+      'tab-1',
+      consume,
+      () => ({ capturedAt: 42 }),
+      clearRecord
+    )
+    consumeQueuedStartupAndClearSleepingRecord(
+      'tab-1',
+      consume,
+      () => ({ capturedAt: 42 }),
+      clearRecord
+    )
+
+    expect(clearRecord).toHaveBeenCalledOnce()
+    expect(clearRecord).toHaveBeenCalledWith(identity.paneKey)
+  })
+
+  it('does not clear a replacement capture on the same pane key', () => {
+    const clearRecord = vi.fn()
+    consumeQueuedStartupAndClearSleepingRecord(
+      'tab-1',
+      () => ({ sleepingAgentResumeIdentity: { paneKey: 'tab-1:leaf-1', capturedAt: 41 } }),
+      () => ({ capturedAt: 42 }),
+      clearRecord
+    )
+    expect(clearRecord).not.toHaveBeenCalled()
   })
 })
 
