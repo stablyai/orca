@@ -6,6 +6,7 @@ import {
   emitNativeChatSendClassified
 } from '@/lib/native-chat-telemetry'
 import { sendNativeChatMessage, sendNativeChatTypedCommand } from './native-chat-runtime-send'
+import { reportNativeChatCommand } from './native-chat-send-settlement'
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
@@ -23,7 +24,7 @@ export function useNativeChatPickerCommandDispatch(args: {
   disabled: boolean
   isDispatchingSessionOption: boolean
   resolveTarget: () => NativeChatResolvedTarget | null
-  onSlashCommand?: (command: string) => void
+  onSlashCommand?: (command: string, settled?: Promise<void>, cancelled?: () => boolean) => void
   sessionOptionsSurface: NativeChatPtySessionOptionsSurface | null
   trackPendingSend: NativeChatSendLifecycle['trackPendingSend']
   setHistory: Dispatch<SetStateAction<HistoryState>>
@@ -57,17 +58,17 @@ export function useNativeChatPickerCommandDispatch(args: {
       if (!target || disabled || isDispatchingSessionOption) {
         return
       }
-      trackPendingSend(
+      const pendingHandle =
         agent === 'codex'
           ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
           : sendNativeChatMessage(target.settings, target.ptyId, text)
-      )
+      trackPendingSend(pendingHandle)
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
       // Why: picker dispatch is a catalog-verified command send; it must leave
       // the same telemetry and composer state as the typed path — including
       // disarming attachments, or a stale image rides the next prompt.
       emitNativeChatSendClassified({ agent, outcome: 'command' })
-      onSlashCommand?.(text)
+      reportNativeChatCommand(onSlashCommand, text, target.ptyId, pendingHandle)
       sessionOptionsSurface?.recordOutgoingCommand(text)
       emitNativeChatMessageSent({
         agent,

@@ -18,13 +18,17 @@ vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn
 
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
 
-function renderDispatch(agent: 'codex' | 'claude' | 'openclaude') {
+function renderDispatch(
+  agent: 'codex' | 'claude' | 'openclaude',
+  onSlashCommand?: (command: string, settled?: Promise<void>) => void
+) {
   return renderHook(() =>
     useNativeChatSessionOptionCommand({
       agent,
       disabled: false,
       resolveTarget: () => ({ settings: {}, ptyId: 'pty-1' }),
-      setHistory: vi.fn()
+      setHistory: vi.fn(),
+      ...(onSlashCommand ? { onSlashCommand } : {})
     })
   )
 }
@@ -60,5 +64,25 @@ describe('useNativeChatSessionOptionCommand', () => {
       expect.any(AbortSignal)
     )
     expect(typeNativeChatCommand).not.toHaveBeenCalled()
+  })
+
+  it('hands the report a settle signal that is still unresolved when it fires', async () => {
+    // A handler that switches views unmounts this composer. Reporting a signal
+    // that has already settled would be the same as reporting none, and the
+    // unmount would land while the model-switch observer is still awaited.
+    let race: string | null = null
+    const onSlashCommand = vi.fn((_command: string, settled?: Promise<void>) => {
+      // An already-resolved sentinel wins the race unless `settled` is resolved too.
+      void Promise.race([settled!.then(() => 'settled'), Promise.resolve('pending')]).then(
+        (winner) => {
+          race = winner
+        }
+      )
+    })
+    const hook = renderDispatch('claude', onSlashCommand)
+    await act(() => hook.result.current.dispatch('/model sonnet'))
+
+    expect(onSlashCommand).toHaveBeenCalledWith('/model sonnet', expect.any(Promise))
+    expect(race).toBe('pending')
   })
 })

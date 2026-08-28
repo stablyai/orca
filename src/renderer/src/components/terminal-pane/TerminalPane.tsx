@@ -14,6 +14,8 @@ import { createPortal } from 'react-dom'
 import type { CSSProperties } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { useAppStore } from '../../store'
+import { emitNativeChatToggled } from '@/lib/native-chat-telemetry'
+import type { AgentType } from '../../../../shared/agent-status-types'
 import { useLinkRoutingPreferenceDialog } from '@/components/link-routing-preference-dialog'
 import { DaemonActionDialog, useDaemonActions } from '@/components/shared/useDaemonActions'
 import {
@@ -700,11 +702,25 @@ function TerminalPane(
   }, [toggleNativeChatForLeaf])
   // Stable identity: this reaches the session-option surface's useMemo deps, so an
   // inline arrow would rebuild the surface on every TerminalPane render.
-  const switchNativeChatToTerminal = useCallback(() => {
-    if (chatLeafId) {
-      toggleNativeChatForLeaf(chatLeafId)
-    }
-  }, [chatLeafId, toggleNativeChatForLeaf])
+  //
+  // Absolute, not the toggle: callers fire it after an async send settles, from a
+  // callback captured before the wait. A user (or the leaf's own exit route) who
+  // reached the terminal meanwhile would be flipped back into chat by a stale
+  // toggle — hiding the picker the caller meant to reveal (STA-4617).
+  const switchNativeChatToTerminal = useCallback(
+    (agent: AgentType) => {
+      if (!unifiedTabId) {
+        return
+      }
+      const tab = useAppStore.getState().getTab(unifiedTabId)
+      if (tab?.viewMode === 'chat') {
+        emitNativeChatToggled({ from: 'chat', to: 'terminal', agent })
+      }
+      setChatLeafId(null)
+      setTabViewMode(unifiedTabId, 'terminal')
+    },
+    [setTabViewMode, unifiedTabId]
+  )
   const readNativeChatTerminalScreen = useCallback((): string | null => {
     if (!chatLeafId) {
       return null

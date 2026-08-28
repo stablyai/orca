@@ -8,6 +8,7 @@ import {
 } from '@/runtime/runtime-terminal-inspection'
 import type { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
 import type { AskAnswerKeyGroup } from './native-chat-interactive-prompt'
+import type { NativeChatSendHandle } from './native-chat-send-handle'
 import { AGENT_TUI_CLEAR_INPUT_MAX } from '../../../../shared/agent-tui-input-clear'
 import {
   NATIVE_CHAT_ADVANCE_BUFFER_MS,
@@ -28,6 +29,7 @@ import {
 
 export { NATIVE_CHAT_ADVANCE_BUFFER_MS, NATIVE_CHAT_QUESTION_STEP_MS, NATIVE_CHAT_SUBMIT_DELAY_MS }
 export { resetNativeChatPtySendQueuesForTests }
+export type { NativeChatSendHandle } from './native-chat-send-handle'
 
 // Why: agent TUI composers treat Ctrl+U as kill-to-start-of-line. Chat sends
 // start from an empty line so a prior cancelled paste cannot glue onto the next
@@ -53,16 +55,6 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
-}
-
-/** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
- *  later question bodies/Enters). Safe to call after the send completes. */
-export type NativeChatSendHandle = {
-  cancel: () => void
-  /** Time after which every scheduled write has fired and the handle can drop. */
-  settleAfterMs: number
-  /** Actual completion, which can outlive the nominal schedule if the renderer stalls. */
-  settled?: Promise<void>
 }
 
 type RuntimeSettings = ReturnType<typeof getSettingsForAgentTabRuntimeOwner>

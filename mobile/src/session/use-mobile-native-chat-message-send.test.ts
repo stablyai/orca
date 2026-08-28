@@ -43,6 +43,7 @@ describe('useMobileNativeChatMessageSend', () => {
   const restoreRejectedDraft = vi.fn()
   const holdUnconfirmedSend = vi.fn()
   const onCommandSend = vi.fn()
+  const onAgentPicker = vi.fn()
   const commandSendRef = { current: onCommandSend }
   const agentRef = { current: null as string | null }
   let onSendError = vi.fn()
@@ -66,7 +67,8 @@ describe('useMobileNativeChatMessageSend', () => {
         restoreRejectedDraft,
         acceptSend,
         holdUnconfirmedSend,
-        onSendError
+        onSendError,
+        onAgentPicker
       })
       return null
     }
@@ -99,6 +101,7 @@ describe('useMobileNativeChatMessageSend', () => {
     restoreRejectedDraft.mockReset()
     holdUnconfirmedSend.mockReset()
     onCommandSend.mockReset()
+    onAgentPicker.mockReset()
     commandSendRef.current = onCommandSend
     onSendError = vi.fn()
     resetMobileNativeChatTerminalWritesForTests()
@@ -443,5 +446,105 @@ describe('useMobileNativeChatMessageSend', () => {
 
     expect(sendWithOutcome).not.toHaveBeenCalled()
     expect(restoreRejectedDraft.mock.calls[0]![1]).toBe(draft)
+  })
+})
+
+describe('useMobileNativeChatMessageSend agent-picker commands', () => {
+  // STA-4617: `/resume` is answered by Claude's own picker, drawn in the TUI.
+  // The chat view cannot render it, so without surfacing the terminal the send
+  // looks like it did nothing and resume stays unreachable from the phone.
+  let renderer: ReactTestRenderer | null = null
+  let api: Send | null = null
+  const onAgentPicker = vi.fn()
+  const agentRef = { current: 'claude' as string | null }
+
+  const mount = (agent: string | null = 'claude'): void => {
+    agentRef.current = agent
+    function Probe(): null {
+      api = useMobileNativeChatMessageSend({
+        client: { sendRequest: vi.fn() } as never,
+        enabled: true,
+        handleRef: { current: 'term' },
+        deviceTokenRef: { current: 'device' },
+        agentRef,
+        commandSendRef: { current: vi.fn() },
+        captureSendOrigin: vi.fn(() => ({ draftKey: 'k', pendingKey: 'p' }) as never),
+        readSeededLaunchDraftSeed: () => null,
+        clearDraftForSend: vi.fn(),
+        restoreRejectedDraft: vi.fn(),
+        acceptSend: vi.fn(),
+        holdUnconfirmedSend: vi.fn(),
+        onSendError: vi.fn(),
+        onAgentPicker
+      })
+      return null
+    }
+    act(() => {
+      renderer = create(createElement(Probe))
+    })
+  }
+
+  beforeEach(() => {
+    sendWithOutcome.mockReset()
+    sendWithOutcome.mockResolvedValue('accepted')
+    clearInputWrite.mockReset()
+    clearInputWrite.mockResolvedValue(true)
+    typeCommandWithOutcome.mockReset()
+    typeCommandWithOutcome.mockResolvedValue('accepted')
+    onAgentPicker.mockReset()
+    resetMobileNativeChatTerminalWritesForTests()
+  })
+  afterEach(() => {
+    act(() => {
+      renderer?.unmount()
+    })
+    renderer = null
+    api = null
+  })
+
+  it('surfaces the picker when the ack was lost, since the send usually landed', async () => {
+    sendWithOutcome.mockResolvedValue('unknown')
+    mount('claude')
+    await act(async () => {
+      await api!.send('/resume')
+    })
+    expect(onAgentPicker).toHaveBeenCalledTimes(1)
+  })
+
+  it('surfaces the picker after an accepted Claude /resume', async () => {
+    mount('claude')
+    await act(async () => {
+      await api!.send('/resume')
+    })
+    expect(sendWithOutcome).toHaveBeenCalledTimes(1)
+    expect(onAgentPicker).toHaveBeenCalledTimes(1)
+  })
+
+  it('leaves the chat view alone for an ordinary prompt and an inline command', async () => {
+    mount('claude')
+    await act(async () => {
+      await api!.send('resume the refactor')
+      await api!.send('/clear')
+    })
+    expect(onAgentPicker).not.toHaveBeenCalled()
+  })
+
+  it('does not surface the picker when the write was rejected', async () => {
+    // Nothing reached the TUI, so no picker is open to switch to.
+    sendWithOutcome.mockResolvedValue('rejected')
+    mount('claude')
+    await act(async () => {
+      await api!.send('/resume')
+    })
+    expect(onAgentPicker).not.toHaveBeenCalled()
+  })
+
+  it('does not surface the picker for a session-option dispatch', async () => {
+    // The options controller owns that surfacing decision via its own catalog.
+    mount('claude')
+    await act(async () => {
+      await api!.dispatchCommand('/resume')
+    })
+    expect(onAgentPicker).not.toHaveBeenCalled()
   })
 })

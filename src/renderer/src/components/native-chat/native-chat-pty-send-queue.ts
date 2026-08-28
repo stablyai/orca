@@ -8,6 +8,8 @@
 
 export type NativeChatPtySendQueueHandle = {
   cancel: () => void
+  /** Whether this sequence was cancelled before it submitted. */
+  cancelled: () => boolean
   settleAfterMs: number
   settled: Promise<void>
   bodyStarted: () => boolean
@@ -62,11 +64,23 @@ export function cancelNativeChatPtySends(ptyId: string): void {
 
 /** Wait until every chat sequence on this PTY has finished or been cancelled. */
 export async function waitForNativeChatPtyIdle(ptyId: string): Promise<void> {
-  const state = ptyQueues.get(ptyId)
-  if (!state) {
+  while (true) {
+    const state = ptyQueues.get(ptyId)
+    if (!state) {
+      return
+    }
+    const tail = state.tail
+    await tail
+    const current = ptyQueues.get(ptyId)
+    if (!current) {
+      return
+    }
+    // A send may append while the captured tail drains; include its replacement.
+    if (current !== state || current.tail !== tail) {
+      continue
+    }
     return
   }
-  await state.tail
 }
 
 /**
@@ -180,6 +194,7 @@ export function enqueueNativeChatPtySend(
         options?.onCancelUnsubmitted?.()
       }
     },
+    cancelled: () => cancelled,
     settleAfterMs,
     settled,
     bodyStarted: () => bodyStarted,

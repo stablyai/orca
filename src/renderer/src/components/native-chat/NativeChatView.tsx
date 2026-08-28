@@ -30,7 +30,6 @@ import {
   type NativeChatPendingSend
 } from './native-chat-pending'
 import {
-  appendCommandMarkerCache,
   applyCommandMarkerBoundaries,
   commandMarkersAsMessages,
   readCommandMarkerCache,
@@ -49,6 +48,7 @@ import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
+import { useNativeChatSlashCommandDispatched } from './use-native-chat-slash-command-dispatched'
 import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
@@ -159,6 +159,10 @@ function NativeChatResolvedView({
     (s) => s.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
   )
   const canSend = useNativeChatCanSend(targetPtyId)
+  const switchToTerminal = useCallback(
+    () => onSwitchToTerminal?.(agent),
+    [agent, onSwitchToTerminal]
+  )
   // Reuse the verified composer send path for interactive cards and composer
   // stop (Stop sends ESC, the agent-TUI interrupt key).
   const interactiveSend = useNativeChatInteractiveSend(terminalTabId, paneKey, targetPtyId, agent)
@@ -181,7 +185,7 @@ function NativeChatResolvedView({
   })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
-    onSwitchToTerminal,
+    onSwitchToTerminal: switchToTerminal,
     actions: {
       onPaste: pasteClipboardIntoComposer,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
@@ -257,12 +261,12 @@ function NativeChatResolvedView({
     },
     [pendingScope]
   )
-  const onSlashCommand = useCallback(
-    (command: string) => {
-      setCommandMarkers(appendCommandMarkerCache(commandMarkerScope, command))
-    },
-    [commandMarkerScope]
-  )
+  const onSlashCommand = useNativeChatSlashCommandDispatched({
+    agent,
+    commandMarkerScope,
+    setCommandMarkers,
+    onSwitchToTerminal
+  })
 
   const launchPromptMessage = useMemo(
     () => launchPromptAsMessage(paneLaunchPrompt, session.messages),
@@ -447,7 +451,7 @@ function NativeChatResolvedView({
           onOptimisticSend={onOptimisticSend}
           onOptimisticSendCanceled={onOptimisticSendCanceled}
           onSlashCommand={onSlashCommand}
-          onSwitchToTerminal={onSwitchToTerminal}
+          onSwitchToTerminal={switchToTerminal}
           readTerminalScreen={readTerminalScreen}
           {...launchDraftSignal}
         />

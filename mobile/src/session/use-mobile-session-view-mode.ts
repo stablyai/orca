@@ -42,6 +42,8 @@ export type MobileSessionViewModeController = {
   /** Whether a tab's effective view is chat (per-tab override, else the default). */
   isTabChatView: (tabId: string) => boolean
   toggleTabChatView: (tabId: string) => void
+  /** Reveal the tab's terminal. Idempotent — safe from a stale-snapshot caller. */
+  showTabTerminalView: (tabId: string) => void
 }
 
 /** Resolves each tab's terminal/chat view: a per-device default (reloaded on focus
@@ -139,8 +141,11 @@ export function useMobileSessionViewMode(args: {
     [defaultView, hostId, viewOverridesState, worktreeId]
   )
 
-  const toggleTabChatView = useCallback(
-    (tabId: string) => {
+  /** Write a tab's view, resolving the target from the LIVE override state (the
+   *  ref, not a render snapshot). Callers pass how to derive it so a toggle and
+   *  an absolute set cannot disagree about what "currently chat" means. */
+  const applyTabView = useCallback(
+    (tabId: string, resolveNext: (currentlyChat: boolean) => MobileSessionView) => {
       const current = viewOverridesStateRef.current
       const currentScope = isOverrideScope(current, hostId, worktreeId)
         ? current
@@ -155,7 +160,12 @@ export function useMobileSessionViewMode(args: {
       // a tab following a chat default can still be pinned back to terminal.
       const fallbackView = currentScope.loaded ? defaultViewRef.current : 'terminal'
       const currentlyChat = (overrides.get(tabId) ?? fallbackView) === 'chat'
-      const nextView = currentlyChat ? 'terminal' : 'chat'
+      const nextView = resolveNext(currentlyChat)
+      // Why: an absolute set that already holds must not re-persist the override
+      // (a toggle never lands here — its target is the opposite by construction).
+      if (currentlyChat === (nextView === 'chat')) {
+        return
+      }
       overrides.set(tabId, nextView)
       const next = { ...currentScope, overrides }
       viewOverridesStateRef.current = next
@@ -204,5 +214,19 @@ export function useMobileSessionViewMode(args: {
     [ensureViewOverridesRuntime, hostId, worktreeId]
   )
 
-  return { isTabChatView, toggleTabChatView }
+  const toggleTabChatView = useCallback(
+    (tabId: string) =>
+      applyTabView(tabId, (currentlyChat) => (currentlyChat ? 'terminal' : 'chat')),
+    [applyTabView]
+  )
+
+  // Idempotent, unlike the toggle: a caller holding a stale view snapshot (an
+  // in-flight send that resolves after the user switched views themselves)
+  // cannot flip a terminal tab back into chat and hide what it just revealed.
+  const showTabTerminalView = useCallback(
+    (tabId: string) => applyTabView(tabId, () => 'terminal'),
+    [applyTabView]
+  )
+
+  return { isTabChatView, toggleTabChatView, showTabTerminalView }
 }

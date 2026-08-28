@@ -10,6 +10,7 @@ import {
 } from '../../../src/shared/native-chat-agent-profiles'
 import {
   classifyNativeChatSend,
+  nativeChatSlashCommandOpensAgentPicker,
   type NativeChatSendClassification
 } from '../../../src/shared/native-chat-slash-commands'
 
@@ -31,4 +32,15 @@ export function classifyMobileNativeChatSend(
     null,
     profile?.skillPrefix ?? null
   )
+}
+
+/** Whether this send dispatches a command the agent answers with its own TUI
+ *  picker (`/resume`). Mobile's chat view cannot render one, so the caller has to
+ *  bring the terminal view forward — otherwise the command looks like it did
+ *  nothing at all (STA-4617). */
+export function mobileNativeChatSendOpensAgentPicker(agent: string | null, text: string): boolean {
+  if (!agent) {
+    return false
+  }
+  return nativeChatSlashCommandOpensAgentPicker(text, getVerifiedNativeChatCommands(agent))
 }

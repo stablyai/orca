@@ -10,7 +10,10 @@ import {
 import type { CatalogCommandDelivery } from '../../../src/shared/agent-session-option-catalog'
 import { isSlashCommandDraft } from '../../../src/shared/native-chat-slash-commands'
 import { healMobileNativeChatStaleInput } from './mobile-native-chat-stale-input'
-import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
+import {
+  classifyMobileNativeChatSend,
+  mobileNativeChatSendOpensAgentPicker
+} from './mobile-native-chat-send-classification'
 import {
   acquireMobileNativeChatTerminalWrite,
   releaseMobileNativeChatTerminalWrite
@@ -69,6 +72,10 @@ export function useMobileNativeChatMessageSend(args: {
     onUnconfirmed: () => void
   ) => void
   onSendError: (message: string) => void
+  /** Called after a dispatched command whose answer is the agent's own TUI picker
+   *  (`/resume`), so the terminal view can come forward — the chat view cannot
+   *  render one, and mobile has no other way to reach it (STA-4617). */
+  onAgentPicker?: () => void
 }): MobileNativeChatMessageSend {
   const {
     client,
@@ -83,7 +90,8 @@ export function useMobileNativeChatMessageSend(args: {
     restoreRejectedDraft,
     acceptSend,
     holdUnconfirmedSend,
-    onSendError
+    onSendError,
+    onAgentPicker
   } = args
 
   const sendMessage = useCallback(
@@ -136,6 +144,12 @@ export function useMobileNativeChatMessageSend(args: {
       }
       const seededLaunchDraft = readSeededLaunchDraftSeed()
       const classification = classifyMobileNativeChatSend(agent, text)
+      // Why the agent captured at send start, not the live ref: a tab switch
+      // during the write must not judge this command against the new tab's
+      // catalog, exactly as `recordCommand` is captured above. Session-option
+      // dispatches (`recordControlSend` false) keep their own picker decision.
+      const revealsAgentPicker =
+        recordControlSend && mobileNativeChatSendOpensAgentPicker(agent, text)
       const typesCodexCommand =
         agent === 'codex' &&
         classification !== 'chat' &&
@@ -192,6 +206,13 @@ export function useMobileNativeChatMessageSend(args: {
       // turn, so an optimistic bubble would never reconcile and the
       // unconfirmed hold could never observe a landing.
       if (outcome === 'unknown') {
+        // Why reveal on an ack-lost send: it usually WAS delivered (the comment
+        // above), so the picker is probably already open on the host. Revealing is
+        // self-correcting — the user sees the picker or their untouched prompt —
+        // while staying put reproduces this bug on the flakiest links.
+        if (revealsAgentPicker) {
+          onAgentPicker?.()
+        }
         if (classification === 'chat') {
           // Why: an ack-lost send usually WAS delivered (issue seen on cellular
           // relay) — verify via the transcript echo instead of a false "not sent".
@@ -216,6 +237,9 @@ export function useMobileNativeChatMessageSend(args: {
         // The session-option catalog can recognize controls omitted from the
         // autocomplete catalog (for example Claude `/model` and `/fast`).
         recordCommand(text.trim())
+        if (revealsAgentPicker) {
+          onAgentPicker?.()
+        }
       }
       return 'accepted'
     },
@@ -230,6 +254,7 @@ export function useMobileNativeChatMessageSend(args: {
       enabled,
       handleRef,
       holdUnconfirmedSend,
+      onAgentPicker,
       onSendError,
       readSeededLaunchDraftSeed,
       restoreRejectedDraft

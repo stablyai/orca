@@ -17,7 +17,7 @@ import type { NativeChatSessionOptionDispatchCommand } from './native-chat-sessi
 export function useNativeChatSessionOptionCommand(args: {
   agent: AgentType
   disabled: boolean
-  onSlashCommand?: (command: string) => void
+  onSlashCommand?: (command: string, settled?: Promise<void>) => void
   resolveTarget: () => NativeChatResolvedTarget | null
   setHistory: Dispatch<SetStateAction<HistoryState>>
 }): { dispatch: NativeChatSessionOptionDispatchCommand; isDispatching: boolean } {
@@ -59,6 +59,10 @@ export function useNativeChatSessionOptionCommand(args: {
       // Why: block composer chat sends for the whole drain+observe+verify window.
       setIsDispatching(true)
       let observer: ClaudeModelSwitchConfirmationObserver | null = null
+      let finishDispatch = (): void => {}
+      const dispatchSettled = new Promise<void>((resolve) => {
+        finishDispatch = resolve
+      })
       try {
         // Why: chat sends keep a delayed Enter for 500ms. Drain them *before*
         // arming the model-switch observer so (a) that Enter cannot hit Claude's
@@ -107,7 +111,9 @@ export function useNativeChatSessionOptionCommand(args: {
         // has been accepted, so SSH/remote send latency doesn't eat the window
         // before the agent has responded.
         observer?.startDetection()
-        onSlashCommand?.(command.trim())
+        // Why the settle signal: a handler that switches views unmounts this
+        // composer, and the observer below is still being awaited.
+        onSlashCommand?.(command.trim(), dispatchSettled)
         emitNativeChatMessageSent({
           agent,
           runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
@@ -116,6 +122,7 @@ export function useNativeChatSessionOptionCommand(args: {
         const outcome = observer ? await observer.result : undefined
         return { outcome }
       } finally {
+        finishDispatch()
         activeSendsRef.current.delete(sendController)
         setIsDispatching(activeSendsRef.current.size > 0)
         if (observer) {

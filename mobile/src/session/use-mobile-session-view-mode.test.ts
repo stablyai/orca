@@ -143,6 +143,32 @@ describe('useMobileSessionViewMode', () => {
     expect(controller?.isTabChatView('t1')).toBe(true)
   })
 
+  it('reveals the terminal from chat and persists it', async () => {
+    await mount({ defaultView: 'chat' })
+
+    await act(async () => {
+      controller?.showTabTerminalView('t1')
+      await Promise.resolve()
+    })
+
+    expect(updateSessionViewOverride).toHaveBeenLastCalledWith('h', 'w', 't1', 'terminal')
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
+  it('is a no-op on a tab already showing the terminal, unlike the toggle', async () => {
+    // STA-4617: the reveal runs after an async send, so a caller that resolves
+    // late must never flip a terminal tab back into chat — nor re-persist it.
+    await mount({ defaultView: 'terminal' })
+
+    await act(async () => {
+      controller?.showTabTerminalView('t1')
+      await Promise.resolve()
+    })
+
+    expect(updateSessionViewOverride).not.toHaveBeenCalled()
+    expect(controller?.isTabChatView('t1')).toBe(false)
+  })
+
   it('does not expose overrides from the previous host while the next scope loads', async () => {
     const nextScopeLoad = deferred<Map<string, MobileSessionView>>()
     vi.mocked(readSessionViewOverridesPreference).mockImplementation((hostId) =>

@@ -7,6 +7,7 @@ import {
   sendNativeChatTypedCommand,
   submitNativeChatPrompt
 } from './native-chat-runtime-send'
+import { reportNativeChatCommand, trackNativeSend } from './native-chat-send-settlement'
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
@@ -242,9 +243,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       if ((text.trim() === '' && imagePaths.length === 0) || disabled) {
         return
       }
-      // Why: block a normal send while a session-option command (e.g. /model) is
-      // still writing its body+delayed-Enter to the same pty, so the two write
-      // sequences can't interleave on one input line.
+      // Keep option writes serialized with normal sends.
       if (isDispatchingSessionOption) {
         return
       }
@@ -261,9 +260,7 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         readScreen: () => readTerminalScreen?.()
       })
       let pendingHandle: NativeChatSendHandle | null = null
-      // Why: image attachments take the attachment send path even for a
-      // command/unknown send, otherwise `clearImageAttachments()` below drops
-      // them silently when the text starts with the agent's slash/skill prefix.
+      // Preserve attachments for command-like sends.
       if (classification !== 'chat' && imagePaths.length === 0) {
         pendingHandle =
           agent === 'codex' && isSlashCommandDraft(text)
@@ -283,23 +280,15 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
         submitNativeChatPrompt(target.settings, target.ptyId)
       }
       if (classification !== 'chat') {
-        if (pendingHandle) {
-          trackPendingSend(pendingHandle)
-        }
-        // Why: only verified catalog commands can truthfully claim they ran or
-        // mutate session-option state; unknown slash-like text has no such proof.
+        trackNativeSend(pendingHandle, trackPendingSend)
         if (classification === 'command') {
-          onSlashCommand?.(text.trim())
+          reportNativeChatCommand(onSlashCommand, text.trim(), target.ptyId, pendingHandle)
           sessionOptionsSurface?.recordOutgoingCommand(text.trim())
         }
       } else {
         const pendingId = onOptimisticSend?.(text, imagePaths)
-        if (pendingHandle) {
-          trackPendingSend(pendingHandle, pendingId)
-        }
+        trackNativeSend(pendingHandle, trackPendingSend, pendingId)
       }
-      // Why: U10 telemetry — record adoption + local-vs-remote runtime split. The
-      // agent prop is the loose AgentType; the emitter narrows unknowns to 'other'.
       emitNativeChatMessageSent({
         agent,
         runtime: nativeChatComposerTargetIsRemote(target.ptyId) ? 'remote' : 'local'
@@ -332,7 +321,6 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       trackPendingSend,
       setDraft
     ])
-
     const interrupt = useCallback(() => {
       cancelPendingSends()
       if (isWorking && onStop) {
@@ -362,7 +350,6 @@ export const NativeChatComposer = forwardRef<NativeChatComposerHandle, NativeCha
       clearImageAttachments,
       setNotice
     })
-
     const handleKeyDown = useNativeChatComposerKeyDown({
       autocomplete,
       activeSuggestion,

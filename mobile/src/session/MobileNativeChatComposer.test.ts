@@ -363,6 +363,30 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).not.toContain('/cost')
   })
 
+  it('offers Claude /resume in the rendered `/` menu', async () => {
+    // STA-4617: the menu is the only place a phone user can discover it, and it
+    // read as "resume unavailable" while the Claude catalog omitted the command.
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/res',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          agent: 'claude'
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts).toContain('/resume')
+    expect(texts).toContain('Resume a previous conversation')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()

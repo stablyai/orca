@@ -11,6 +11,10 @@ export type SlashCommandSuggestion = {
   name: string
   /** Optional one-line description for the suggestion row. */
   description?: string
+  /** The TUI answers this command with its own interactive picker, which a chat
+   *  view cannot render — dispatching it has to surface the terminal or the
+   *  command looks dead (mobile `/resume`, STA-4617). */
+  opensAgentPicker?: true
 }
 
 // Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
@@ -26,6 +30,7 @@ const CLAUDE_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear conversation history' },
   { name: 'compact', description: 'Summarize and compact the conversation' },
   { name: 'init', description: 'Initialize a CLAUDE.md' },
+  { name: 'resume', description: 'Resume a previous conversation', opensAgentPicker: true },
   { name: 'review', description: 'Review the current changes' },
   { name: 'help', description: 'Show available commands' }
 ]
@@ -47,7 +52,7 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'new', description: 'Start a new chat' },
   { name: 'archive', description: 'Archive this session and exit' },
   { name: 'delete', description: 'Delete this session and exit' },
-  { name: 'resume', description: 'Resume a saved chat' },
+  { name: 'resume', description: 'Resume a saved chat', opensAgentPicker: true },
   { name: 'fork', description: 'Fork the current chat' },
   { name: 'app', description: 'Continue in Codex Desktop' },
   { name: 'init', description: 'Create an AGENTS.md file' },
@@ -120,6 +125,20 @@ export function applySlashSuggestion(command: SlashCommandSuggestion): string {
  *  space, because the TUI dispatches the command on Enter. */
 export function slashCommandDispatchText(command: SlashCommandSuggestion): string {
   return `/${command.name}`
+}
+
+/** Whether this draft dispatches a catalog command whose answer is the agent's
+ *  own interactive picker. Matched on the leading token only, for the same reason
+ *  `classifyNativeChatSend` does: the TUIs dispatch line-leading tokens, so
+ *  `/resume` with leading whitespace is prose and opens nothing. */
+export function nativeChatSlashCommandOpensAgentPicker(
+  draft: string,
+  commands: readonly SlashCommandSuggestion[]
+): boolean {
+  const firstToken = draft.split(/\s/, 1)[0] ?? ''
+  return commands.some(
+    (command) => command.opensAgentPicker === true && firstToken === `/${command.name}`
+  )
 }
 
 export type NativeChatSendClassification = 'chat' | 'command' | 'unknown-token'

@@ -16,7 +16,7 @@ export type NativeChatViewProps = {
   /** Trusted title/foreground fallback for manually-started agents. */
   resolvedAgent?: TuiAgent | null
   /** Return this pane to the hosted terminal surface. */
-  onSwitchToTerminal?: () => void
+  onSwitchToTerminal?: (agent: NativeChatSession['agent']) => void
   /** Current xterm screen reader used to recover agent-reported session state. */
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
@@ -30,7 +30,7 @@ export type NativeChatResolvedViewProps = {
   isVisible: boolean
   targetPtyId: string | null
   terminalTabId: string
-  onSwitchToTerminal?: () => void
+  onSwitchToTerminal?: (agent: NativeChatSession['agent']) => void
   readTerminalScreen?: () => string | null
   contextMenuActions?: Omit<NativeChatContextMenuActions, 'onPaste'>
 }

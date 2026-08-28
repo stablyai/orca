@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { classifyMobileNativeChatSend } from './mobile-native-chat-send-classification'
+import {
+  classifyMobileNativeChatSend,
+  mobileNativeChatSendOpensAgentPicker
+} from './mobile-native-chat-send-classification'
 
 describe('classifyMobileNativeChatSend', () => {
   it('classifies catalog commands per agent', () => {
@@ -7,6 +10,12 @@ describe('classifyMobileNativeChatSend', () => {
     expect(classifyMobileNativeChatSend('claude', '/compact')).toBe('command')
     expect(classifyMobileNativeChatSend('codex', '/model')).toBe('command')
     expect(classifyMobileNativeChatSend('codex', '/permissions')).toBe('command')
+  })
+
+  it('recognizes Claude /resume as a command, not an unknown token', () => {
+    // STA-4617: it was absent from the Claude catalog, so the `/` menu never
+    // offered it and a typed one could not claim a command ran.
+    expect(classifyMobileNativeChatSend('claude', '/resume')).toBe('command')
   })
 
   it('treats slash tokens outside the agent catalog as unknown, never chat', () => {
@@ -32,5 +41,23 @@ describe('classifyMobileNativeChatSend', () => {
 
   it('defaults to chat when no agent is resolved', () => {
     expect(classifyMobileNativeChatSend(null, '/clear')).toBe('chat')
+  })
+})
+
+describe('mobileNativeChatSendOpensAgentPicker', () => {
+  it('is true for a command the agent answers with its own TUI picker', () => {
+    expect(mobileNativeChatSendOpensAgentPicker('claude', '/resume')).toBe(true)
+    expect(mobileNativeChatSendOpensAgentPicker('codex', '/resume')).toBe(true)
+  })
+
+  it('is false for chat prose and for commands answered inline', () => {
+    expect(mobileNativeChatSendOpensAgentPicker('claude', '/clear')).toBe(false)
+    expect(mobileNativeChatSendOpensAgentPicker('claude', 'resume the refactor')).toBe(false)
+    expect(mobileNativeChatSendOpensAgentPicker('claude', ' /resume')).toBe(false)
+  })
+
+  it('is false without a resolved agent, and for an agent with no catalog', () => {
+    expect(mobileNativeChatSendOpensAgentPicker(null, '/resume')).toBe(false)
+    expect(mobileNativeChatSendOpensAgentPicker('grok', '/resume')).toBe(false)
   })
 })
