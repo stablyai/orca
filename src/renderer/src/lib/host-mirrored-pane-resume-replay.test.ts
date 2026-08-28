@@ -10,6 +10,9 @@ import {
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 // Deferring a mirrored pane's resume is only half the fix: whatever settles the
 // mirror must replay the parked sweep, or the aug20 duplicate-launch defect is

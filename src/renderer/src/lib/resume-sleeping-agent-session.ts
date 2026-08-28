@@ -133,6 +133,15 @@ function activeOrQueuedResumeClaimsProviderSession(
   return false
 }
 
+// Why: the staleness check below compares two timestamps stamped together, so it never sees how
+// long a record has since sat. Without an absolute bound, an agent that ends with no observable
+// exit — SIGKILL, force quit, reboot, a missed hook — stays resumable forever.
+export const RESUME_RECORD_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000
+
+function isExpiredResumeRecord(record: SleepingAgentSessionRecord): boolean {
+  return record.state !== 'done' && Date.now() - record.capturedAt > RESUME_RECORD_MAX_AGE_MS
+}
+
 // Why: an interrupted turn is still resumable — `claude --resume` reopens the transcript at the
 // prompt — so discarding those records only stranded the session across wake and restart.
 function isInvalidWorktreeActivationRecord(record: SleepingAgentSessionRecord): boolean {
@@ -184,7 +193,12 @@ export function resumeSleepingAgentSessionsForWorktree(
     .filter((record) => record.worktreeId === worktreeId)
     .sort((a, b) => a.capturedAt - b.capturedAt || a.updatedAt - b.updatedAt)
   const validWorktreeRecords = worktreeRecords.filter(
-    (record) => !isInvalidWorktreeActivationRecord(record)
+    // Why the expiry arm: these maps decide which record owns a claim key, and the loop clears
+    // orphaned expired records anyway. Leaving one in lets it win "newest" and evict a healthy
+    // sharer — a quit or interrupted record — that would otherwise have resumed.
+    (record) =>
+      !isInvalidWorktreeActivationRecord(record) &&
+      !(isExpiredResumeRecord(record) && !recordPaneIsOwnedByPreservedPane(record, state))
   )
   const activeWorktreeRecords = validWorktreeRecords.filter(
     (record) => !isPassiveCompletedHibernationEvidence(record)
@@ -226,6 +240,13 @@ export function resumeSleepingAgentSessionsForWorktree(
       continue
     }
     const isPaneOwned = recordPaneIsOwnedByPreservedPane(record, currentState)
+    // Why here: only an orphan expires. Running past hydration keeps an unverifiable host from
+    // losing its evidence to the clock, and running past ownership keeps a live pane's evidence
+    // even when its agent stopped reporting — the record is only dead weight once neither holds.
+    if (!isPaneOwned && isExpiredResumeRecord(record)) {
+      state.clearSleepingAgentSession(record.paneKey)
+      continue
+    }
     if (isPassiveCompletedHibernationEvidence(record)) {
       // Why: completed-agent hibernation is passive history; activation should
       // only keep displayable evidence, never start new work from it.

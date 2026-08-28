@@ -31,6 +31,9 @@ import {
   shouldBypassSingleInstanceLock,
   shouldSkipSingleInstanceLock
 } from '../../../main/startup/single-instance-lock'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 const WORKTREE_ID = 'wt-serve-promotion'
 const AGENT_PANES = [

@@ -10,6 +10,9 @@ import {
   markHostSessionMirrorHydrated,
   resetHostSessionMirrorHydrationForTests
 } from '@/runtime/host-session-mirror-hydration'
+import { pinResumeRecordClock } from './resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 // Pins the activation contract behind the run6-review-pr-11959 incident shape:
 // a persisted (husk) tab whose pane cannot resume in place gets ONE appended

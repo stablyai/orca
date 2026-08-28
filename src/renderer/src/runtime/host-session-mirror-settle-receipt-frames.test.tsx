@@ -75,6 +75,9 @@ import {
   WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS
 } from './web-session-tabs-sync'
 import { WINDOW_VISIBILITY_SUBSCRIPTION_PARK_DELAY_MS } from './window-visibility-subscription-parking'
+import { pinResumeRecordClock } from '@/lib/resume-record-clock-test-fixture'
+
+pinResumeRecordClock()
 
 /**
  * The receipt era of the same seam: a settle exists only as the proof of a
