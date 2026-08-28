@@ -15,9 +15,15 @@ import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 const MAX_HISTORY = 50
 
 // Why: entries may be page sentinels, not just worktree IDs; names keep the "worktree" prefix for call-site stability.
-export type WorktreeNavHistorySimpleViewEntry = 'tasks' | 'automations' | 'artifacts' | 'skills'
+export type WorktreeNavHistorySimpleViewEntry =
+  | 'tasks'
+  | 'worklog'
+  | 'automations'
+  | 'artifacts'
+  | 'skills'
 const SIMPLE_VIEW_ENTRIES: readonly WorktreeNavHistorySimpleViewEntry[] = [
   'tasks',
+  'worklog',
   'automations',
   'artifacts',
   'skills'

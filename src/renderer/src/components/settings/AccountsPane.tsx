@@ -53,6 +53,7 @@ import {
   getAccountsPaneSearchEntries
 } from './accounts-search'
 import { GrokAccountsSection } from './GrokAccountsSection'
+import { AgentCliAccountsSections } from './AgentCliAccountsSections'
 import { getRemoteAccountsPaneScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { SearchableSetting } from './SearchableSetting'
@@ -365,6 +366,7 @@ export function AccountsPane({
   const codexRateLimitTarget = useAppStore((s) => s.rateLimits.codexTarget)
   const miniMaxRateLimits = useAppStore((s) => s.rateLimits.minimax)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const fetchSettings = useAppStore((s) => s.fetchSettings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const recordedOpenCodeSettingEditsRef = useRef<Set<'cookie' | 'workspaceId'>>(new Set())
@@ -1610,6 +1612,7 @@ export function AccountsPane({
         </SearchableSetting>
       </section>
     ) : null,
+    ...AgentCliAccountsSections({ searchQuery, onOpenAgents: openSettingsPage }),
     matchesSettingsSearch(searchQuery, getAccountsOpencodeSearchEntries()) ? (
       <section key="opencode-go" id="accounts-opencode-go" className="space-y-4 scroll-mt-6">
         <div className="space-y-1">

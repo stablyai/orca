@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Github, Gitlab } from 'lucide-react'
+import { ClipboardList, Cloud, Github, Gitlab, Ticket } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
 import {
@@ -89,6 +89,21 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  'azure-devops': {
+    label: 'Azure DevOps work items',
+    description: 'Browse Azure DevOps work items and start linked workspaces.',
+    Icon: ({ className }) => <Cloud className={className} />
+  },
+  planner: {
+    label: 'Microsoft Planner',
+    description: 'Browse your Planner tasks and start linked workspaces.',
+    Icon: ({ className }) => <ClipboardList className={className} />
+  },
+  ninjaone: {
+    label: 'NinjaOne tickets',
+    description: 'Browse NinjaOne tickets and start linked workspaces.',
+    Icon: ({ className }) => <Ticket className={className} />
   }
 }
 

@@ -33,6 +33,7 @@ describe('right sidebar visibility helpers', () => {
     for (const view of [
       'settings',
       'tasks',
+      'worklog',
       'activity',
       'automations',
       'space',

@@ -1,6 +1,21 @@
-export type TaskProvider = 'github' | 'gitlab' | 'linear' | 'jira'
+export type TaskProvider =
+  | 'github'
+  | 'gitlab'
+  | 'linear'
+  | 'jira'
+  | 'azure-devops'
+  | 'planner'
+  | 'ninjaone'
 
-export const TASK_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+export const TASK_PROVIDERS: readonly TaskProvider[] = [
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'azure-devops',
+  'planner',
+  'ninjaone'
+]
 
 const TASK_PROVIDER_SET = new Set<TaskProvider>(TASK_PROVIDERS)
 
@@ -55,6 +70,9 @@ export function normalizeVisibleTaskProviders(value: unknown): TaskProvider[] {
 export type TaskProviderAvailability = {
   gitlabInstalled: boolean
   linearConnected: boolean
+  azureDevOpsConnected?: boolean
+  plannerConnected?: boolean
+  ninjaOneConnected?: boolean
 }
 
 export function filterAvailableTaskProviders(
@@ -105,7 +123,16 @@ function isTaskProviderAvailable(
   if (provider === 'jira') {
     return true
   }
-  return availability.linearConnected
+  if (provider === 'linear') {
+    return availability.linearConnected
+  }
+  if (provider === 'azure-devops') {
+    return availability.azureDevOpsConnected === true
+  }
+  if (provider === 'planner') {
+    return availability.plannerConnected === true
+  }
+  return availability.ninjaOneConnected === true
 }
 
 export function resolveVisibleTaskProvider(

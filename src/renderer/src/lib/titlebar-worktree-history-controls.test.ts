@@ -5,6 +5,7 @@ describe('shouldShowWorktreeHistoryControls', () => {
   it('shows controls wherever worktree history navigation is supported', () => {
     expect(shouldShowWorktreeHistoryControls('terminal')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('tasks')).toBe(true)
+    expect(shouldShowWorktreeHistoryControls('worklog')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('automations')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('artifacts')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('skills')).toBe(true)

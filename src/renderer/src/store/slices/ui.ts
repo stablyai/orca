@@ -14,6 +14,7 @@ import type { PersistedTrustedOrcaHooks } from '../../../../shared/orca-yaml-hoo
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import type { CustomPet } from '../../../../shared/pet-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
+import type { WorkLogEntry, WorkLogProvider } from '../../../../shared/work-log-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentActivityDisplayMode,
@@ -90,6 +91,12 @@ import {
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import {
+  ALL_AUTOMATION_HOSTS_FILTER,
+  parsePersistedAutomationHostFilter,
+  toPersistedAutomationHostFilter,
+  type AutomationHostFilter
+} from '../../../../shared/automation-host-filter'
+import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
@@ -109,7 +116,7 @@ import type { OrcaHookScriptKind } from '../../lib/orca-hook-trust'
 import {
   isSettingsNavigationTarget,
   type SettingsNavigationTarget
-} from '@/lib/settings-navigation-types'
+} from '../../lib/settings-navigation-types'
 import {
   filterSetupScriptPromptDismissalsToValidRepos,
   getSetupScriptPromptDismissalKey,
@@ -592,6 +599,76 @@ function sanitizeTaskResumeState(value: unknown): TaskResumeState | undefined {
   return Object.keys(next).length > 0 ? next : undefined
 }
 
+const VALID_WORK_LOG_PROVIDERS = new Set<WorkLogProvider>([
+  'activity',
+  'github',
+  'gitlab',
+  'linear',
+  'jira',
+  'azure-devops',
+  'ninjaone',
+  'planner'
+])
+
+function isWorkLogProvider(value: unknown): value is WorkLogProvider {
+  return typeof value === 'string' && VALID_WORK_LOG_PROVIDERS.has(value as WorkLogProvider)
+}
+
+function createLocalDateKey(date = new Date()): string {
+  const year = date.getFullYear()
+  const month = `${date.getMonth() + 1}`.padStart(2, '0')
+  const day = `${date.getDate()}`.padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+function sanitizeWorkLogSelectedDate(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return null
+  }
+  return value
+}
+
+function sanitizeWorkLogEntry(value: unknown): WorkLogEntry | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null
+  }
+  const input = value as Record<string, unknown>
+  if (
+    typeof input.id !== 'string' ||
+    input.id.length === 0 ||
+    typeof input.startAt !== 'number' ||
+    !Number.isFinite(input.startAt) ||
+    typeof input.endAt !== 'number' ||
+    !Number.isFinite(input.endAt) ||
+    input.endAt <= input.startAt ||
+    typeof input.title !== 'string' ||
+    input.title.trim().length === 0 ||
+    !isWorkLogProvider(input.provider)
+  ) {
+    return null
+  }
+  return {
+    id: input.id,
+    startAt: input.startAt,
+    endAt: input.endAt,
+    title: input.title.trim(),
+    provider: input.provider,
+    reference: typeof input.reference === 'string' && input.reference.trim().length > 0 ? input.reference.trim() : null,
+    notes: typeof input.notes === 'string' && input.notes.trim().length > 0 ? input.notes.trim() : null,
+    badgeDerived: input.badgeDerived === true
+  }
+}
+
+function sanitizeWorkLogEntries(value: unknown): WorkLogEntry[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  return value
+    .map((entry) => sanitizeWorkLogEntry(entry))
+    .filter((entry): entry is WorkLogEntry => entry !== null)
+    .sort((left, right) => left.startAt - right.startAt)
+}
+
 export type UISlice = {
   sidebarOpen: boolean
   sidebarWidth: number
@@ -615,6 +692,17 @@ export type UISlice = {
   previousViewBeforeTasks:
     | 'terminal'
     | 'settings'
+    | 'worklog'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'artifacts'
+    | 'mobile'
+  previousViewBeforeWorkLog:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
     | 'activity'
     | 'automations'
     | 'space'
@@ -624,6 +712,7 @@ export type UISlice = {
   previousViewBeforeSettings:
     | 'terminal'
     | 'tasks'
+    | 'worklog'
     | 'activity'
     | 'automations'
     | 'space'
@@ -634,6 +723,7 @@ export type UISlice = {
     | 'terminal'
     | 'settings'
     | 'tasks'
+    | 'worklog'
     | 'automations'
     | 'space'
     | 'skills'
@@ -643,6 +733,7 @@ export type UISlice = {
     | 'terminal'
     | 'settings'
     | 'tasks'
+    | 'worklog'
     | 'activity'
     | 'space'
     | 'skills'
@@ -652,6 +743,7 @@ export type UISlice = {
     | 'terminal'
     | 'settings'
     | 'tasks'
+    | 'worklog'
     | 'activity'
     | 'automations'
     | 'skills'
@@ -661,6 +753,7 @@ export type UISlice = {
     | 'terminal'
     | 'settings'
     | 'tasks'
+    | 'worklog'
     | 'activity'
     | 'automations'
     | 'space'
@@ -670,6 +763,7 @@ export type UISlice = {
     | 'terminal'
     | 'settings'
     | 'tasks'
+    | 'worklog'
     | 'activity'
     | 'automations'
     | 'space'
@@ -679,6 +773,7 @@ export type UISlice = {
     | 'terminal'
     | 'settings'
     | 'tasks'
+    | 'worklog'
     | 'activity'
     | 'automations'
     | 'space'
@@ -700,6 +795,11 @@ export type UISlice = {
     openJiraSourceContext?: TaskSourceContext | null
   }
   taskResumeState: TaskResumeState | undefined
+  workLogEntries: WorkLogEntry[]
+  workLogSelectedDate: string | null
+  setWorkLogSelectedDate: (date: string) => void
+  addWorkLogEntry: (entry: Omit<WorkLogEntry, 'id'> & { id?: string }) => void
+  deleteWorkLogEntry: (entryId: string) => void
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
   taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
   setTaskListPosition: (position: UISlice['taskListPosition']) => void
@@ -717,7 +817,14 @@ export type UISlice = {
     note: string
     attachments: string[]
     linkedWorkItem: {
-      provider?: 'github' | 'gitlab' | 'linear' | 'jira'
+      provider?:
+        | 'github'
+        | 'gitlab'
+        | 'linear'
+        | 'jira'
+        | 'azure-devops'
+        | 'ninjaone'
+        | 'planner'
       type: 'issue' | 'pr' | 'mr'
       number: number
       title: string
@@ -725,6 +832,7 @@ export type UISlice = {
       linearIdentifier?: string
       linearBranchName?: string
       jiraIdentifier?: string
+      externalIdentifier?: string
       repoId?: string
     } | null
     /** Preserve where provider data came from, separately from the host chosen to run the workspace. */
@@ -746,6 +854,8 @@ export type UISlice = {
     options?: { recordTasksInteraction?: boolean }
   ) => void
   closeTaskPage: () => void
+  openWorkLogPage: () => void
+  closeWorkLogPage: () => void
   openActivityPage: () => void
   closeActivityPage: () => void
   selectedAutomationId: string | null
@@ -897,6 +1007,9 @@ export type UISlice = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
+  /** Automations page host filter, in stable form. Never written from an unhydrated catalog. */
+  automationHostFilter: AutomationHostFilter
+  setAutomationHostFilter: (filter: AutomationHostFilter) => void
   manualRepoOrder: ManualRepoOrderEntry[]
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
@@ -1263,6 +1376,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
 
   activeView: 'terminal',
   previousViewBeforeTasks: 'terminal',
+  previousViewBeforeWorkLog: 'terminal',
   previousViewBeforeSettings: 'terminal',
   previousViewBeforeActivity: 'terminal',
   previousViewBeforeAutomations: 'terminal',
@@ -1275,9 +1389,54 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  workLogEntries: [],
+  workLogSelectedDate: null,
   taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
+  setWorkLogSelectedDate: (date) =>
+    set({
+      workLogSelectedDate: sanitizeWorkLogSelectedDate(date) ?? createLocalDateKey()
+    }),
+  addWorkLogEntry: (entry) =>
+    set((state) => {
+      const nextEntry: WorkLogEntry = {
+        id: entry.id ?? `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        startAt: entry.startAt,
+        endAt: entry.endAt,
+        title: entry.title.trim(),
+        provider: entry.provider,
+        reference: entry.reference?.trim() ? entry.reference.trim() : null,
+        notes: entry.notes?.trim() ? entry.notes.trim() : null,
+        badgeDerived: entry.badgeDerived
+      }
+      const nextEntries = [...state.workLogEntries, nextEntry].sort((left, right) => {
+        if (left.startAt !== right.startAt) {
+          return left.startAt - right.startAt
+        }
+        return left.id.localeCompare(right.id)
+      })
+      const nextSelectedDate = state.workLogSelectedDate ?? createLocalDateKey(new Date(nextEntry.startAt))
+      void window.api.ui
+        .set({
+          workLogEntries: nextEntries,
+          workLogSelectedDate: nextSelectedDate
+        })
+        .catch(console.error)
+      return {
+        workLogEntries: nextEntries,
+        workLogSelectedDate: nextSelectedDate
+      }
+    }),
+  deleteWorkLogEntry: (entryId) =>
+    set((state) => {
+      const nextEntries = state.workLogEntries.filter((entry) => entry.id !== entryId)
+      if (nextEntries.length === state.workLogEntries.length) {
+        return state
+      }
+      void window.api.ui.set({ workLogEntries: nextEntries }).catch(console.error)
+      return { workLogEntries: nextEntries }
+    }),
   openTaskPage: (data = {}, options = {}) => {
     if (options.recordTasksInteraction !== false) {
       const wasTasksPreviouslyInteracted = hasFeatureInteraction(get().featureInteractions, 'tasks')
@@ -1455,6 +1614,20 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         worktreeNavHistoryIndex: nextHistoryIndex
       }
     }),
+  openWorkLogPage: () => {
+    get().recordViewVisit('worklog')
+    set((state) => ({
+      activeView: 'worklog',
+      previousViewBeforeWorkLog:
+        state.activeView === 'worklog' ? state.previousViewBeforeWorkLog : state.activeView,
+      workLogSelectedDate: state.workLogSelectedDate ?? createLocalDateKey()
+    }))
+  },
+  closeWorkLogPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeWorkLog,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'worklog')
+    })),
   openActivityPage: () => {
     if (get().settings?.experimentalActivity !== true) {
       return
@@ -2116,6 +2289,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceHostOrder })
     window.api.ui.set({ workspaceHostOrder }).catch(console.error)
   },
+  automationHostFilter: ALL_AUTOMATION_HOSTS_FILTER,
+  setAutomationHostFilter: (filter) => {
+    window.api.ui
+      .set({ automationHostFilter: toPersistedAutomationHostFilter(filter) })
+      .catch(console.error)
+    set({ automationHostFilter: filter })
+  },
   manualRepoOrder: [],
 
   hideDefaultBranchWorkspace: false,
@@ -2530,6 +2710,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
+        // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
+        automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
         manualRepoOrder,
         // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
         repos: orderedRepos,
@@ -2592,6 +2774,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         browserDefaultSearchEngine: ui.browserDefaultSearchEngine ?? null,
         browserDefaultZoomLevel: normalizeBrowserPageZoomLevel(ui.browserDefaultZoomLevel),
         browserKagiSessionLink: normalizeKagiSessionLink(ui.browserKagiSessionLink ?? ''),
+        workLogEntries: sanitizeWorkLogEntries(ui.workLogEntries),
+        workLogSelectedDate: sanitizeWorkLogSelectedDate(ui.workLogSelectedDate),
         taskResumeState: sanitizeTaskResumeState(ui.taskResumeState),
         featureTipsSeenIds: normalizeFeatureTipIds(ui.featureTipsSeenIds),
         featureInteractions: normalizeFeatureInteractions(ui.featureInteractions),

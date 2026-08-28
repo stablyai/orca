@@ -46,6 +46,7 @@ function createHistoryStore(worktreeIds: string[] = []): StoreApi<MinimalState> 
 
 const viewCases: { entry: WorktreeNavHistorySimpleViewEntry; label: string }[] = [
   { entry: 'tasks', label: 'Tasks' },
+  { entry: 'worklog', label: 'Work Log' },
   { entry: 'automations', label: 'Automations' },
   { entry: 'artifacts', label: 'Artifacts' },
   { entry: 'skills', label: 'Skills' }

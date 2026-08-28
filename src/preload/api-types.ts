@@ -23,6 +23,7 @@ import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
 import type { EmulatorApi } from './api/emulator-api'
+import type { ExternalTaskApi } from './api/external-task-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
 import type { ExportApi, FilesystemApi } from './api/filesystem-api'
 import type { GitInspectionApi } from './api/git-inspection-api'
@@ -118,6 +119,7 @@ export type PreloadApi = {
   pet: PetApi
   browser: BrowserApi
   emulator: EmulatorApi
+  externalTasks: ExternalTaskApi
   hooks: HooksApi
   ephemeralVm: EphemeralVmApi
   cache: WorkspaceSessionApi['cache']

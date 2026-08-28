@@ -171,6 +171,7 @@ const TopLevelViewSchema = z.enum([
   'terminal',
   'settings',
   'tasks',
+  'worklog',
   'activity',
   'automations',
   'space',
@@ -286,6 +287,32 @@ const UiUpdateFields = z
     customSidekicks: UnknownRecordArray.optional(),
     sidekickSize: z.number().finite().optional(),
     taskResumeState: TaskResumeState.optional(),
+    workLogEntries: z
+      .array(
+        z
+          .object({
+            id: z.string(),
+            startAt: z.number().finite(),
+            endAt: z.number().finite(),
+            title: z.string(),
+            provider: z.enum([
+              'activity',
+              'github',
+              'gitlab',
+              'linear',
+              'jira',
+              'azure-devops',
+              'ninjaone',
+              'planner'
+            ]),
+            reference: NullableString,
+            notes: NullableString,
+            badgeDerived: z.boolean()
+          })
+          .strict()
+      )
+      .optional(),
+    workLogSelectedDate: z.string().optional(),
     workspaceCleanup: WorkspaceCleanup.optional(),
     featureTipsSeenIds: FeatureTipIds.optional(),
     featureInteractions: FeatureInteractions.optional(),

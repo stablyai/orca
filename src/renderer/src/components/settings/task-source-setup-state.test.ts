@@ -26,7 +26,10 @@ function buildReadiness(
       skillChecking: false,
       visible: true
     },
-    jira: { connected: true, checking: false, visible: true }
+    jira: { connected: true, checking: false, visible: true },
+    'azure-devops': { connected: false, checking: false, visible: false },
+    planner: { connected: false, checking: false, visible: false },
+    ninjaone: { connected: false, checking: false, visible: false }
   }
   for (const provider of ORDER) {
     Object.assign(base[provider], overrides[provider])

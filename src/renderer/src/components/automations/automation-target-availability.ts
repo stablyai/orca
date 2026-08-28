@@ -262,6 +262,12 @@ function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider'
       return 'Linear'
     case 'jira':
       return 'Jira'
+    case 'azure-devops':
+      return 'Azure DevOps'
+    case 'planner':
+      return 'Microsoft Planner'
+    case 'ninjaone':
+      return 'NinjaOne'
   }
 }
 

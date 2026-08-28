@@ -32,6 +32,8 @@ export function usePersistedUIWriter(): void {
       alwaysShowDefaultBranchWorkspace: s.alwaysShowDefaultBranchWorkspace,
       showDotfilesByWorktree: s.showDotfilesByWorktree,
       filterRepoIds: s.filterRepoIds,
+      workLogEntries: s.workLogEntries,
+      workLogSelectedDate: s.workLogSelectedDate,
       // Why: rides the same debounced save so dashboard auto-acks (which fire on focus/
       // visibility) and the in-memory ack cleanup paths in agent-status.ts (close/dismiss)
       // both flow to disk through map identity changes. Without persisting, agent rows that
@@ -48,6 +50,7 @@ export function usePersistedUIWriter(): void {
     const timer = window.setTimeout(() => {
       void window.api.ui.set({
         ...ui,
+        workLogSelectedDate: ui.workLogSelectedDate ?? undefined,
         showActiveOnly: false,
         hideSleepingWorkspaces: !ui.showSleepingWorkspaces,
         // Why: the store keeps this readonly for identity stability, but PersistedUI crosses to

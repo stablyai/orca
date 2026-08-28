@@ -127,6 +127,22 @@ export const getAccountsGeminiSearchEntries = createLocalizedCatalog(() => [
   }
 ])
 
+export const getAccountsKimiSearchEntries = createLocalizedCatalog(() => [
+  {
+    title: 'Kimi',
+    description: 'Use the local Kimi CLI login for Orca sessions.',
+    keywords: ['kimi', 'account', 'cli', 'login', 'auth']
+  }
+])
+
+export const getAccountsAntigravitySearchEntries = createLocalizedCatalog(() => [
+  {
+    title: 'Antigravity',
+    description: 'Use the local Antigravity CLI login for Orca sessions.',
+    keywords: ['antigravity', 'gemini', 'account', 'cli', 'login', 'auth']
+  }
+])
+
 export const getAccountsOpencodeSearchEntries = createLocalizedCatalog(() => [
   {
     title: translate(
@@ -217,6 +233,8 @@ export const getAccountsPaneSearchEntries = createLocalizedCatalog((): SettingsS
   ...getAccountsClaudeSearchEntries(),
   ...getAccountsCodexSearchEntries(),
   ...getAccountsGeminiSearchEntries(),
+  ...getAccountsKimiSearchEntries(),
+  ...getAccountsAntigravitySearchEntries(),
   ...getAccountsOpencodeSearchEntries(),
   ...getAccountsMiniMaxSearchEntries(),
   ...getAccountsGrokSearchEntries()

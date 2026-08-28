@@ -35,7 +35,7 @@ export function CodeHostSetupSteps(
       )
     : translate(
         'auto.components.settings.TasksPane.connectCodeHostDescription',
-        'Install and authenticate the CLI under Integrations so Orca can load issues.'
+        'Connect this provider under Integrations so Orca can load work items.'
       )
 
   return (

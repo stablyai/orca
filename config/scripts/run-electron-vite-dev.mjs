@@ -43,6 +43,17 @@ if (useStableElectronName) {
   process.env.ORCA_DEV_STABLE_NAME = '1'
 }
 
+function loadProjectEnv() {
+  const envPath = path.join(repoRoot, '.env')
+  if (!existsSync(envPath)) return
+  for (const line of readFileSync(envPath, 'utf8').split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)\s*$/)
+    if (!match || match[2].startsWith('#')) continue
+    const value = match[2].replace(/^['"]|['"]$/g, '')
+    if (!(match[1] in process.env)) process.env[match[1]] = value
+  }
+}
+
 function readGitValue(args) {
   try {
     const value = execFileSync('git', ['-C', repoRoot, ...args], {
@@ -457,6 +468,8 @@ function getDevUserDataPath() {
 
 function prepareDevCliWrapper() {
   const userDataPath = getDevUserDataPath()
+  // Keep a shell-launched dev build isolated from a parent Orca terminal's profile.
+  process.env.ORCA_USER_DATA_PATH = userDataPath
   const { binDir } = prepareDevCliTerminalWrappers({
     repoRoot,
     userDataPath,
@@ -478,6 +491,7 @@ if (process.env.ORCA_SKIP_DEV_CLI_PREPARE !== '1') {
   prepareDevCliWrapper()
 }
 
+loadProjectEnv()
 seedDevInstanceIdentityEnv()
 if (!useStableElectronName && process.env.ORCA_SKIP_DEV_ELECTRON_APP_PREPARE !== '1') {
   prepareMacDevElectronApp()

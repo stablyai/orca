@@ -310,6 +310,44 @@ describe('createUISlice settings navigation', () => {
   })
 })
 
+describe('createUISlice work log navigation', () => {
+  it('records and rewinds Work Log visits on close', () => {
+    const store = createUIStore()
+    const now = new Date('2026-08-27T14:15:00.000Z')
+    vi.useFakeTimers()
+    vi.setSystemTime(now)
+
+    try {
+      store.getState().openWorkLogPage()
+
+      expect(store.getState().activeView).toBe('worklog')
+      expect(store.getState().worktreeNavHistory).toEqual(['worklog'])
+      expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+      expect(store.getState().workLogSelectedDate).toBe('2026-08-27')
+
+      store.getState().closeWorkLogPage()
+
+      expect(store.getState().activeView).toBe('terminal')
+      expect(store.getState().worktreeNavHistoryIndex).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('returns to the prior surface after opening Work Log from Tasks', () => {
+    const store = createUIStore()
+
+    store.getState().openTaskPage()
+    store.getState().openWorkLogPage()
+
+    expect(store.getState().previousViewBeforeWorkLog).toBe('tasks')
+
+    store.getState().closeWorkLogPage()
+
+    expect(store.getState().activeView).toBe('tasks')
+  })
+})
+
 describe('createUISlice page navigation history', () => {
   it('records and rewinds Tasks visits on close', () => {
     const store = createUIStore()

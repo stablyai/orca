@@ -257,6 +257,42 @@ describe('createUISlice hydratePersistedUI', () => {
     expect(store.getState().statusBarUsageMode).toBe('verbose')
   })
 
+  it('restores work log entries and the selected date from persisted UI state', () => {
+    const store = createUIStore()
+
+    store.getState().hydratePersistedUI(
+      makePersistedUI({
+        workLogEntries: [
+          {
+            id: 'entry-1',
+            startAt: 1_849_987_800_000,
+            endAt: 1_849_991_400_000,
+            title: 'Review Planner items',
+            provider: 'planner',
+            reference: 'PL-12',
+            notes: 'Follow up with the team',
+            badgeDerived: false
+          }
+        ],
+        workLogSelectedDate: '2026-08-27'
+      })
+    )
+
+    expect(store.getState().workLogEntries).toEqual([
+      {
+        id: 'entry-1',
+        startAt: 1_849_987_800_000,
+        endAt: 1_849_991_400_000,
+        title: 'Review Planner items',
+        provider: 'planner',
+        reference: 'PL-12',
+        notes: 'Follow up with the team',
+        badgeDerived: false
+      }
+    ])
+    expect(store.getState().workLogSelectedDate).toBe('2026-08-27')
+  })
+
   it('clamps persisted workspace board column width', () => {
     const store = createUIStore()
 

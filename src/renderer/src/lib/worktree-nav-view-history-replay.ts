@@ -3,7 +3,12 @@ import type { WorktreeNavHistoryViewEntry } from '@/store/slices/worktree-nav-hi
 
 // Why: page entries replay via setActiveView (not open*Page) so back/forward doesn't mutate previousViewBefore* or duplicate history (see navigateToIndex).
 export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): void {
-  if (entry === 'automations' || entry === 'artifacts' || entry === 'skills') {
+  if (
+    entry === 'automations' ||
+    entry === 'artifacts' ||
+    entry === 'skills' ||
+    entry === 'worklog'
+  ) {
     useAppStore.getState().setActiveView(entry)
     return
   }
@@ -24,6 +29,9 @@ export function applyWorktreeNavViewEntry(entry: WorktreeNavHistoryViewEntry): v
         openJiraSourceContext: undefined
       }
     }))
+    return
+  }
+  if (typeof entry === 'string') {
     return
   }
   if (entry.source === 'github') {

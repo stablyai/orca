@@ -22,6 +22,8 @@ import type {
   WorktreeCardProperty
 } from './ui-chrome-types'
 import type { WorkspaceStatusDefinition } from './worktree/types'
+import type { PersistedAutomationHostFilter } from './automation-host-filter'
+import type { WorkLogEntry } from './work-log-types'
 
 export type PersistedUIState = {
   lastActiveRepoId: string | null
@@ -49,6 +51,8 @@ export type PersistedUIState = {
   visibleWorkspaceHostIds?: VisibleWorkspaceHostIds
   /** User-defined sidebar order for host sections; missing/new hosts append in discovered order. */
   workspaceHostOrder?: WorkspaceHostOrder
+  /** Automations page host filter. Stores only a canonical host key; invalid values degrade to all hosts. */
+  automationHostFilter?: PersistedAutomationHostFilter
   /** Desktop-owned all-host repo order; host-qualified identities keep a manual cross-host interleaving while each host owns its local permutation. */
   manualRepoOrder?: ManualRepoOrderEntry[]
   /** Deprecated legacy positive-form setting. Ignored on hydration. */
@@ -192,6 +196,10 @@ export type PersistedUIState = {
   sidekickSize?: number
   /** Page-position state for Tasks: only transient tabs/searches (source/repo/team/project selections use their own settings paths). */
   taskResumeState?: TaskResumeState
+  /** Persisted daily work-log rows, sorted newest-last. */
+  workLogEntries?: WorkLogEntry[]
+  /** The date the work-log page last focused, in local YYYY-MM-DD form. */
+  workLogSelectedDate?: string
   workspaceCleanup?: WorkspaceCleanupUIState
   /** Feature tips already surfaced; startup opens the tips modal only when a current tip id is missing here. */
   featureTipsSeenIds?: FeatureTipId[]

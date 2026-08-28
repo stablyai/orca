@@ -89,6 +89,21 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      'azure-devops': {
+        connected: false,
+        checking: false,
+        visible: visible.has('azure-devops')
+      },
+      planner: {
+        connected: false,
+        checking: false,
+        visible: visible.has('planner')
+      },
+      ninjaone: {
+        connected: false,
+        checking: false,
+        visible: visible.has('ninjaone')
       }
     }
   }, [

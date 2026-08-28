@@ -3,8 +3,8 @@ import { resolveHookCommandSourcePolicy } from '../../../shared/hook-command-sou
 import type { SetupScriptImportCandidate } from '../../../shared/setup-script-imports'
 import type { RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { Repo } from '../../../shared/repo-types'
-import type { HookCheckResult } from '@/runtime/runtime-hooks-client'
-import { isRuntimeScopeForbiddenError } from '@/runtime/runtime-rpc-client'
+import type { HookCheckResult } from '../runtime/runtime-hooks-client'
+import { isRuntimeScopeForbiddenError } from '../runtime/runtime-rpc-client'
 import { hasEffectiveSetupCommand } from './setup-script-status'
 
 const SETUP_SCRIPT_PROMPT_DISMISSAL_PREFIX = 'generation-v1:'

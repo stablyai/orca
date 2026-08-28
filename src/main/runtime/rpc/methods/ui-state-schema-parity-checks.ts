@@ -9,6 +9,9 @@ import type { AssertNoMissingKeys, AssertNoMissingValues } from './ui-state-sche
 // strict schema is deliberate — but it must stay deliberate rather than
 // forgotten, which is what the parity assertion below enforces.
 type MainOwnedUIState =
+  // Why: persisted as a stable host-key shape while the renderer keeps the
+  // richer resolved host ref in memory; this parity check only compares keys.
+  | 'automationHostFilter'
   | 'trayMinimizeNoticeShown'
   | 'dashboardPopoutBounds'
   | '_expandedWorktreeCardPropertiesDefaulted'

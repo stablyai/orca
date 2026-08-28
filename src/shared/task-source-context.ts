@@ -22,6 +22,9 @@ export type {
   GitLabTaskProviderIdentity,
   JiraTaskProviderIdentity,
   LinearTaskProviderIdentity,
+  AzureDevOpsTaskProviderIdentity,
+  PlannerTaskProviderIdentity,
+  NinjaOneTaskProviderIdentity,
   TaskProviderIdentity
 } from './task-provider-identity'
 export type { TaskProvider } from './task-providers'
@@ -208,6 +211,10 @@ function normalizeTaskProvider(value: unknown): TaskProvider | null {
     case 'gitlab':
     case 'linear':
     case 'jira':
+      return value
+    case 'azure-devops':
+    case 'planner':
+    case 'ninjaone':
       return value
     default:
       return null

@@ -67,6 +67,8 @@ import {
   LinearViewsHost,
   type LinearViewsHostProps
 } from '@/components/task-page/linear/linear-views-host'
+import { ExternalTaskList } from '@/components/task-page/external-task-list'
+import type { ExternalTask, ExternalTaskProvider } from '../../../../shared/external-task-types'
 import type { GitLabTodo } from '../../../../shared/gitlab-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TaskProvider } from '../../../../shared/task-providers'
@@ -97,6 +99,7 @@ export function TaskPageLayout({
   newLinearProject,
   newLinearIssue,
   newJiraIssue,
+  externalTaskList,
   connectDialogs
 }: {
   taskPageListChromeHidden: boolean
@@ -124,6 +127,10 @@ export function TaskPageLayout({
   newLinearProject: NewLinearProjectDialogProps
   newLinearIssue: NewLinearIssueDialogProps
   newJiraIssue: NewJiraIssueDialogProps
+  externalTaskList: {
+    provider: ExternalTaskProvider
+    onUseTask: (task: ExternalTask) => void
+  } | null
   connectDialogs: TaskPageConnectDialogsProps
 }): React.JSX.Element {
   return (
@@ -170,6 +177,8 @@ export function TaskPageLayout({
             <JiraIssueListHost {...jiraList} />
           ) : taskSource === 'linear' ? (
             <LinearViewsHost {...linearViews} />
+          ) : externalTaskList ? (
+            <ExternalTaskList {...externalTaskList} />
           ) : null}
         </div>
       </div>

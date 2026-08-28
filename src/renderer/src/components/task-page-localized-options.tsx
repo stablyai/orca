@@ -1,5 +1,5 @@
 import React from 'react'
-import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
+import { ClipboardList, Cloud, Github, Gitlab, LayoutGrid, List, Ticket } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
@@ -131,6 +131,21 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'jira',
     label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'azure-devops',
+    label: 'Azure DevOps work items',
+    Icon: ({ className }) => <Cloud className={className} />
+  },
+  {
+    id: 'planner',
+    label: 'Microsoft Planner',
+    Icon: ({ className }) => <ClipboardList className={className} />
+  },
+  {
+    id: 'ninjaone',
+    label: 'NinjaOne tickets',
+    Icon: ({ className }) => <Ticket className={className} />
   }
 ])
 

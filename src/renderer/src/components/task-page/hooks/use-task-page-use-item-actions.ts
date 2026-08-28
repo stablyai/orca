@@ -15,6 +15,7 @@ import type { GitHubWorkItem } from '../../../../../shared/github/work-item-type
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
 import type { Repo } from '../../../../../shared/repo-types'
 import type { AppState } from '@/store/types'
+import type { ExternalTask } from '../../../../../shared/external-task-types'
 
 export function useTaskPageUseItemActions({
   openModal,
@@ -120,11 +121,31 @@ export function useTaskPageUseItemActions({
     [openComposerForGitLabItem]
   )
 
+  const handleUseExternalTask = useCallback(
+    (item: ExternalTask): void => {
+      const linkedWorkItem: LinkedWorkItemSummary = {
+        provider: item.provider,
+        type: 'issue',
+        number: 0,
+        title: item.title,
+        url: item.url,
+        externalIdentifier: item.identifier
+      }
+      openModal('new-workspace-composer', {
+        linkedWorkItem,
+        prefilledName: item.identifier ? `${item.identifier} ${item.title}` : item.title,
+        telemetrySource: 'sidebar'
+      })
+    },
+    [openModal]
+  )
+
   return {
     openComposerForItem,
     handleUseWorkItem,
     handleOpenOrUseGitHubWorkItem,
     openComposerForGitLabItem,
-    handleUseGitLabItem
+    handleUseGitLabItem,
+    handleUseExternalTask
   }
 }

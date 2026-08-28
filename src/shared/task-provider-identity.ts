@@ -29,11 +29,34 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type AzureDevOpsTaskProviderIdentity = {
+  provider: 'azure-devops'
+  organization?: string | null
+  project?: string | null
+  baseUrl?: string | null
+}
+
+export type PlannerTaskProviderIdentity = {
+  provider: 'planner'
+  tenantId?: string | null
+  planId?: string | null
+  planName?: string | null
+}
+
+export type NinjaOneTaskProviderIdentity = {
+  provider: 'ninjaone'
+  instanceUrl?: string | null
+  organizationId?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | AzureDevOpsTaskProviderIdentity
+  | PlannerTaskProviderIdentity
+  | NinjaOneTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +102,26 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'azure-devops':
+      return {
+        provider,
+        organization: normalizeNonEmptyString(raw.organization),
+        project: normalizeNonEmptyString(raw.project),
+        baseUrl: normalizeNonEmptyString(raw.baseUrl)
+      }
+    case 'planner':
+      return {
+        provider,
+        tenantId: normalizeNonEmptyString(raw.tenantId),
+        planId: normalizeNonEmptyString(raw.planId),
+        planName: normalizeNonEmptyString(raw.planName)
+      }
+    case 'ninjaone':
+      return {
+        provider,
+        instanceUrl: normalizeNonEmptyString(raw.instanceUrl),
+        organizationId: normalizeNonEmptyString(raw.organizationId)
+      }
   }
 }
 
@@ -112,6 +155,14 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'azure-devops':
+      return ['organization', 'project', 'baseUrl'].every((key) =>
+        isNullableOptionalString(raw[key])
+      )
+    case 'planner':
+      return ['tenantId', 'planId', 'planName'].every((key) => isNullableOptionalString(raw[key]))
+    case 'ninjaone':
+      return ['instanceUrl', 'organizationId'].every((key) => isNullableOptionalString(raw[key]))
   }
 }
 
@@ -119,7 +170,10 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  'azure-devops': ['organization', 'project', 'baseUrl'],
+  planner: ['tenantId', 'planId', 'planName'],
+  ninjaone: ['instanceUrl', 'organizationId']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +211,12 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'azure-devops':
+      return [identity.organization, identity.project, identity.baseUrl].filter(Boolean).join('/')
+    case 'planner':
+      return [identity.tenantId, identity.planId].filter(Boolean).join('/')
+    case 'ninjaone':
+      return [identity.instanceUrl, identity.organizationId].filter(Boolean).join('/')
   }
 }
 

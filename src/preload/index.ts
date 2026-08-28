@@ -2069,6 +2069,13 @@ const api = {
       siteId?: string
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
+  externalTasks: {
+    status: (provider) => ipcRenderer.invoke('externalTasks:status', provider),
+    list: (args) => ipcRenderer.invoke('externalTasks:list', args),
+    detail: (args) => ipcRenderer.invoke('externalTasks:detail', args),
+    options: (provider) => ipcRenderer.invoke('externalTasks:options', provider),
+    update: (args) => ipcRenderer.invoke('externalTasks:update', args)
+  },
 
   starNag: {
     onShow: (

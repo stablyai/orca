@@ -1768,11 +1768,15 @@ export default function TaskPage(): React.JSX.Element {
     taskSearchInputRef
   ])
 
-  const { handleUseWorkItem, handleOpenOrUseGitHubWorkItem, handleUseGitLabItem } =
-    useTaskPageUseItemActions({
-      openModal,
-      repoMap
-    })
+  const {
+    handleUseWorkItem,
+    handleOpenOrUseGitHubWorkItem,
+    handleUseGitLabItem,
+    handleUseExternalTask
+  } = useTaskPageUseItemActions({
+    openModal,
+    repoMap
+  })
 
   const { handleCreateNewIssue } = useTaskPageCreateGithubSubmit({
     newIssueTargetRepo,
@@ -3087,6 +3091,11 @@ export default function TaskPage(): React.JSX.Element {
       newLinearProject={newLinearProject}
       newLinearIssue={newLinearIssue}
       newJiraIssue={newJiraIssue}
+      externalTaskList={
+        taskSource === 'azure-devops' || taskSource === 'planner' || taskSource === 'ninjaone'
+          ? { provider: taskSource, onUseTask: handleUseExternalTask }
+          : null
+      }
       connectDialogs={connectDialogs}
     />
   )

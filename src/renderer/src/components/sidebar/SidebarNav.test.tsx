@@ -4,7 +4,7 @@ import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { TooltipProvider } from '../ui/tooltip'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
   openTaskPage: vi.fn(),
   openAutomationsPage: vi.fn(),
+  openWorkLogPage: vi.fn(),
   openActivityPage: vi.fn(),
   openMobilePage: vi.fn(),
   openArtifactsPage: vi.fn(),
@@ -29,29 +30,29 @@ const mocks = vi.hoisted(() => ({
   setSetupGuideSidebarDismissed: vi.fn()
 }))
 
-vi.mock('@/store', () => ({
+vi.mock('../../store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) => selector(mocks.state)
 }))
 
-vi.mock('@/store/selectors', () => ({
+vi.mock('../../store/selectors', () => ({
   useRepoMap: () =>
     new Map(
       ((mocks.state.repos as Repo[] | undefined) ?? []).map((repo) => [repo.id, repo] as const)
     )
 }))
 
-vi.mock('@/components/activity/useActivityUnreadCount', () => ({
+vi.mock('../activity/useActivityUnreadCount', () => ({
   useActivityUnreadCount: () => 0
 }))
 
-vi.mock('@/components/dashboard/useAgentBucketCounts', () => ({
+vi.mock('../dashboard/useAgentBucketCounts', () => ({
   useAgentBucketCounts: () => {
     mocks.getAgentBucketCounts()
     return mocks.agentBucketCounts
   }
 }))
 
-vi.mock('@/hooks/useShortcutLabel', () => ({
+vi.mock('../../hooks/useShortcutLabel', () => ({
   useShortcutKeyComboDetails: () => [{ keys: ['⌘', 'J'], doubleTap: false }]
 }))
 
@@ -72,7 +73,7 @@ vi.mock('../setup-guide/use-setup-guide-progress', () => ({
   })
 }))
 
-vi.mock('@/components/ui/context-menu', () => ({
+vi.mock('../ui/context-menu', () => ({
   ContextMenu: ({ children }: { children: ReactNode }) => (
     <div data-testid="context-menu">{children}</div>
   ),
@@ -132,6 +133,7 @@ function setSidebarState({
     activeView: 'worktrees',
     openTaskPage: mocks.openTaskPage,
     openAutomationsPage: mocks.openAutomationsPage,
+    openWorkLogPage: mocks.openWorkLogPage,
     openActivityPage: mocks.openActivityPage,
     openMobilePage: mocks.openMobilePage,
     openArtifactsPage: mocks.openArtifactsPage,
@@ -384,6 +386,14 @@ describe('SidebarNav', () => {
   it('shows the Automations entry by default for older settings', () => {
     expect(shouldShowAutomationsButton(null)).toBe(true)
     expect(shouldShowAutomationsButton({})).toBe(true)
+  })
+
+  it('opens Work Log from the sidebar', async () => {
+    const container = await renderSidebarNav()
+
+    await clickButton(getButtonByText(container, 'Work Log'))
+
+    expect(mocks.openWorkLogPage).toHaveBeenCalledOnce()
   })
 
   it('hides the Automations entry when the sidebar setting is off', () => {

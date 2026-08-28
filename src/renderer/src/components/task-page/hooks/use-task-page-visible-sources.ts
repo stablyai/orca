@@ -45,24 +45,30 @@ export function useTaskPageVisibleSources({
     [settings?.visibleTaskProviders]
   )
   const defaultTaskSource = settings?.defaultTaskSource ?? 'github'
-  const visibleTaskProviders = useMemo(
-    () =>
-      restoreAvailableDefaultTaskProvider(
+  const visibleTaskProviders = useMemo(() => {
+    const available = restoreAvailableDefaultTaskProvider(
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          // External task providers have their own account checks in the
+          // source surface; keep their entry points visible so first-time
+          // setup is discoverable.
+          azureDevOpsConnected: true,
+          plannerConnected: true,
+          ninjaOneConnected: true
         },
         defaultTaskSource
       ),
-    [
-      defaultTaskSource,
-      linearConnected,
-      preferredVisibleTaskProviders,
-      preflightStatusCurrent,
-      preflightStatus?.glab?.installed
-    ]
-  )
+      externalProviders: TaskProvider[] = ['azure-devops', 'planner', 'ninjaone']
+    return [...available, ...externalProviders.filter((provider) => !available.includes(provider))]
+  }, [
+    defaultTaskSource,
+    linearConnected,
+    preferredVisibleTaskProviders,
+    preflightStatusCurrent,
+    preflightStatus?.glab?.installed
+  ])
   const sourceOptions = getSourceOptions()
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
