@@ -24,6 +24,22 @@ function makeSubscriptions(): {
   return { subscriptions, subscription }
 }
 
+function makeAgentStatusSubscription(): {
+  subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
+  subscription: SharedControlLogicalSubscription<unknown>
+} {
+  const subscriptions = new Map<string, SharedControlLogicalSubscription<unknown>>()
+  const subscription = createSharedControlSubscription({
+    requestId: 'req-agent-1',
+    method: 'agent.status.subscribe',
+    params: null,
+    retainedParamsBytes: 0,
+    callbacks: { onResponse: vi.fn(), onError: vi.fn() }
+  })
+  subscriptions.set(subscription.requestId, subscription)
+  return { subscriptions, subscription }
+}
+
 function okResponse(subscriptionId: string): RuntimeRpcResponse<unknown> {
   return {
     ok: true,
@@ -33,6 +49,30 @@ function okResponse(subscriptionId: string): RuntimeRpcResponse<unknown> {
 }
 
 describe('closeSharedControlLogicalSubscription — replay-window leak', () => {
+  it('defers agent-status cleanup until the host returns its concrete id', () => {
+    const { subscriptions, subscription } = makeAgentStatusSubscription()
+    subscription.sent = true
+
+    const request = vi.fn()
+    closeSharedControlLogicalSubscription({ subscriptions, subscription, request })
+
+    expect(subscription.closeAfterReady).toBe(true)
+    expect(subscriptions.size).toBe(1)
+    expect(request).not.toHaveBeenCalled()
+
+    handleSharedControlLogicalResponse({
+      subscriptions,
+      subscription,
+      response: okResponse('agent-status:connection-1:rpc-1'),
+      request
+    })
+
+    expect(request).toHaveBeenCalledWith('agent.status.unsubscribe', {
+      subscriptionId: 'agent-status:connection-1:rpc-1'
+    })
+    expect(subscriptions.size).toBe(0)
+  })
+
   it('sends the unsubscribe when closed after an established subscribe replay completes', () => {
     const { subscriptions, subscription } = makeSubscriptions()
     // First establishment: server assigned a concrete subscription id.

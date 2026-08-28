@@ -68,6 +68,7 @@ function seedMirrorState(): void {
       repos: [],
       worktreesByRepo: {},
       detectedWorktreesByRepo: {},
+      folderWorkspaces: [],
       projectGroups: [],
       restoredRuntimeHostIdByWorkspaceSessionKey: {},
       runtimeEnvironments: [
@@ -216,6 +217,19 @@ describe('useRuntimeSessionMirrorEnvironmentKey', () => {
       source: 'project group host',
       change: (): Partial<AppState> => ({
         projectGroups: [makeProjectGroup('runtime:env-b')]
+      })
+    },
+    {
+      source: 'folder workspace host',
+      change: (): Partial<AppState> => ({
+        folderWorkspaces: [
+          {
+            id: 'folder-b',
+            projectGroupId: null,
+            connectionId: null,
+            executionHostId: 'runtime:env-b'
+          } as unknown as AppState['folderWorkspaces'][number]
+        ]
       })
     },
     {

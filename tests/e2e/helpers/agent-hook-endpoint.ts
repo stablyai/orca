@@ -54,7 +54,7 @@ export async function emitCodexHookStatus(
   status: {
     paneKey: string
     worktreeId: string
-    state: 'working' | 'done'
+    state: 'working' | 'waiting' | 'done'
     prompt?: string
     lastAssistantMessage?: string
   }
@@ -66,10 +66,16 @@ export async function emitCodexHookStatus(
           hook_event_name: 'UserPromptSubmit',
           prompt: status.prompt
         }
-      : {
-          hook_event_name: 'Stop',
-          last_assistant_message: status.lastAssistantMessage
-        }
+      : status.state === 'waiting'
+        ? {
+            hook_event_name: 'PreToolUse',
+            tool_name: 'request_user_input',
+            tool_input: { question: 'sta5244 permission' }
+          }
+        : {
+            hook_event_name: 'Stop',
+            last_assistant_message: status.lastAssistantMessage
+          }
   const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
     method: 'POST',
     headers: {

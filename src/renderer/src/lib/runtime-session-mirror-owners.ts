@@ -42,6 +42,9 @@ export function getRuntimeSessionMirrorEnvironmentIds(state: WorktreeRuntimeOwne
   for (const group of state.projectGroups ?? []) {
     addRuntimeExecutionHost(ids, group.executionHostId)
   }
+  for (const workspace of state.folderWorkspaces ?? []) {
+    addRuntimeExecutionHost(ids, workspace.executionHostId)
+  }
   for (const hostId of Object.values(state.restoredRuntimeHostIdByWorkspaceSessionKey ?? {})) {
     addRuntimeExecutionHost(ids, hostId)
   }

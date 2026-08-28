@@ -233,6 +233,63 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
 
+  it('routes agent status facts through reconnecting shared control when supported', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    sendRemoteRuntimeRequestMock.mockResolvedValue({
+      id: 'status',
+      ok: true,
+      result: {
+        runtimeId: 'runtime-remote',
+        capabilities: [REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY]
+      },
+      _meta: { runtimeId: 'runtime-remote' }
+    })
+    subscribeRemoteRuntimeSharedControlRequestMock.mockResolvedValue({
+      requestId: 'agent-facts-shared',
+      close: vi.fn(),
+      sendBinary: vi.fn()
+    })
+
+    const add = handler<
+      { name: string; pairingCode: string },
+      { environment: { id: string; name: string } }
+    >('runtimeEnvironments:addFromPairingCode')
+    await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+    const subscribe = handler<
+      { selector: string; method: string; params?: unknown; subscriptionId?: string },
+      { subscriptionId: string; requestId: string }
+    >('runtimeEnvironments:subscribe')
+    await expect(
+      subscribe(
+        {
+          sender: {
+            id: 1,
+            isDestroyed: () => false,
+            send: vi.fn(),
+            once: vi.fn(),
+            removeListener: vi.fn()
+          }
+        },
+        {
+          selector: 'desk',
+          method: 'agent.status.subscribe',
+          params: { epoch: 'epoch-1', lastSeenSeq: 7 }
+        }
+      )
+    ).resolves.toMatchObject({ requestId: 'agent-facts-shared' })
+
+    expect(subscribeRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.any(Object),
+      'agent.status.subscribe',
+      { epoch: 'epoch-1', lastSeenSeq: 7 },
+      15_000,
+      expect.any(Object)
+    )
+    expect(subscribeRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+  })
+
   it('keeps shared-control subscriptions retained across transient errors until final close', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     const close = vi.fn()

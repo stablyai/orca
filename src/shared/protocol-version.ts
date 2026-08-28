@@ -10,6 +10,7 @@ import {
   SKILL_MANAGEMENT_CAPABILITY,
   SKILL_UPLOAD_CAPABILITY
 } from './skill-install-capability'
+import { AGENT_STATUS_FACT_STREAM_RUNTIME_CAPABILITY } from './agent-status-fact-types'
 export { SKILL_INSTALL_RESULT_V2_CAPABILITY } from './skill-install-capability'
 
 // Why: declares the Orca runtime RPC compatibility contract. Desktop,
@@ -120,6 +121,7 @@ export const AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY =
 // older host answers the unknown member with invalid_argument — a code the launch fallback does
 // not retry on — so clients must probe before taking the host-authority path.
 export const AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY = 'agent-session.kimi-resume.v1' as const
+export { AGENT_STATUS_FACT_STREAM_RUNTIME_CAPABILITY } from './agent-status-fact-types'
 // Why: older runtimes strip mutation owner fields, so clients must fence writes before RPC.
 export const FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY = 'files.mutation-ownership.v1' as const
 export const FILE_MUTATION_OWNERSHIP_UPDATE_REQUIRED_MESSAGE =
@@ -201,6 +203,7 @@ export const RUNTIME_CAPABILITIES = [
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,
   AGENT_SESSION_OMP_RESUME_PATH_RUNTIME_CAPABILITY,
   AGENT_SESSION_KIMI_RESUME_RUNTIME_CAPABILITY,
+  AGENT_STATUS_FACT_STREAM_RUNTIME_CAPABILITY,
   FILE_MUTATION_OWNERSHIP_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_DEFAULTS_RUNTIME_CAPABILITY,
   WORKTREE_VISIBILITY_SOURCE_DEFAULTS_RUNTIME_CAPABILITY,

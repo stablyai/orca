@@ -9,6 +9,7 @@ export type RuntimeSessionMirrorTargetInputs = Pick<
   | 'repos'
   | 'worktreesByRepo'
   | 'detectedWorktreesByRepo'
+  | 'folderWorkspaces'
   | 'projectGroups'
   | 'restoredRuntimeHostIdByWorkspaceSessionKey'
   | 'runtimeEnvironments'
@@ -25,6 +26,7 @@ export function selectRuntimeSessionMirrorTargetInputs(
     repos: state.repos,
     worktreesByRepo: state.worktreesByRepo,
     detectedWorktreesByRepo: state.detectedWorktreesByRepo,
+    folderWorkspaces: state.folderWorkspaces,
     projectGroups: state.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: state.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: state.runtimeEnvironments,
@@ -40,6 +42,7 @@ export function buildRuntimeSessionMirrorEnvironmentKey(
     repos: inputs.repos,
     worktreesByRepo: inputs.worktreesByRepo,
     detectedWorktreesByRepo: inputs.detectedWorktreesByRepo,
+    folderWorkspaces: inputs.folderWorkspaces,
     projectGroups: inputs.projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey: inputs.restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments: inputs.runtimeEnvironments,
@@ -60,6 +63,7 @@ export function useRuntimeSessionMirrorEnvironmentKey(): string {
     repos,
     worktreesByRepo,
     detectedWorktreesByRepo,
+    folderWorkspaces,
     projectGroups,
     restoredRuntimeHostIdByWorkspaceSessionKey,
     runtimeEnvironments,
@@ -72,6 +76,7 @@ export function useRuntimeSessionMirrorEnvironmentKey(): string {
         repos,
         worktreesByRepo,
         detectedWorktreesByRepo,
+        folderWorkspaces,
         projectGroups,
         restoredRuntimeHostIdByWorkspaceSessionKey,
         runtimeEnvironments,
@@ -82,6 +87,7 @@ export function useRuntimeSessionMirrorEnvironmentKey(): string {
       repos,
       worktreesByRepo,
       detectedWorktreesByRepo,
+      folderWorkspaces,
       projectGroups,
       restoredRuntimeHostIdByWorkspaceSessionKey,
       runtimeEnvironments,

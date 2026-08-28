@@ -129,6 +129,7 @@ import {
   sameRuntimeBrowserPlacement,
   type RuntimeBrowserPlacement
 } from '../../../shared/runtime-browser-placement'
+import { subscribeRemoteAgentStatusFacts } from './remote-agent-status-facts'
 
 const WEB_SESSION_GROUP_PREFIX = 'web-session-tabs:'
 export const WEB_SESSION_TABS_VISIBILITY_RESUME_STAGGER_MS = 100
@@ -4483,6 +4484,18 @@ export function useWebSessionTabsSync(): void {
       ? (state.runtimeStatusByEnvironmentId.get(environmentId)?.connectionGeneration ?? 0)
       : 0
   })
+  const runtimeStatusByEnvironmentId = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const runtimeStatusByEnvironmentIdRef = useRef(runtimeStatusByEnvironmentId)
+  runtimeStatusByEnvironmentIdRef.current = runtimeStatusByEnvironmentId
+  const runtimeStatusCapabilitiesKey = useAppStore((state) =>
+    Array.from(state.runtimeStatusByEnvironmentId.entries())
+      .map(
+        ([id, entry]) =>
+          `${id}\u0001${entry.connectionGeneration ?? 0}\u0001${entry.status?.capabilities?.join(',') ?? ''}`
+      )
+      .sort()
+      .join('\u0000')
+  )
   const activeWorktreeRuntimePairingRevision = useAppStore((state) => {
     const environmentId = getExplicitRuntimeEnvironmentIdForWorktree(state, state.activeWorktreeId)
     const environment = state.runtimeEnvironments.find(
@@ -5285,6 +5298,70 @@ export function useWebSessionTabsSync(): void {
       }
     }
   }, [runtimeSessionMirrorEnvironmentKey, workspaceSessionReady])
+
+  // Agent facts are deliberately outside the visibility parking layer. The
+  // session-tab inventory may sleep while the desktop is hidden; this stream
+  // remains the host-owned ordered source for new/new pairs.
+  useEffect(() => {
+    const environments = runtimeSessionMirrorEnvironmentKey
+      ? runtimeSessionMirrorEnvironmentKey
+          .split('\u0000')
+          .map((entry) => {
+            const [environmentId = '', , , rawRevision = ''] = entry.split('\u0001')
+            return {
+              environmentId,
+              expectedEnvironmentPairingRevision:
+                rawRevision === '' ? undefined : Number(rawRevision)
+            }
+          })
+          .filter(({ environmentId }) => environmentId.trim())
+      : []
+    if (!workspaceSessionReady || environments.length === 0) {
+      return
+    }
+    let disposed = false
+    const subscriptions: { unsubscribe: () => void }[] = []
+    let started = false
+    const start = (): void => {
+      if (started || disposed) {
+        return
+      }
+      started = true
+      for (const { environmentId, expectedEnvironmentPairingRevision } of environments) {
+        const knownStatus = runtimeStatusByEnvironmentIdRef.current.get(environmentId)
+        const knownCapabilities = knownStatus?.status?.capabilities
+        if (!knownCapabilities) {
+          continue
+        }
+        void subscribeRemoteAgentStatusFacts(
+          environmentId,
+          expectedEnvironmentPairingRevision,
+          (error) => {
+            if (!disposed) {
+              console.warn('[web-session-tabs-sync] agent fact stream error:', error)
+            }
+          },
+          knownCapabilities
+        ).then((subscription) => {
+          if (!subscription) {
+            return
+          }
+          if (disposed) {
+            subscription.unsubscribe()
+          } else {
+            subscriptions.push(subscription)
+          }
+        })
+      }
+    }
+    start()
+    return () => {
+      disposed = true
+      for (const subscription of subscriptions) {
+        subscription.unsubscribe()
+      }
+    }
+  }, [runtimeSessionMirrorEnvironmentKey, runtimeStatusCapabilitiesKey, workspaceSessionReady])
 
   useEffect(() => {
     const environmentId = activeWorktreeRuntimeEnvironmentId?.trim()

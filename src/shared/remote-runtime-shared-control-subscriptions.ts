@@ -137,6 +137,7 @@ function cleanupNeedsRemoteSubscriptionId(method: string): boolean {
   return (
     method === 'accounts.subscribe' ||
     method === 'notifications.subscribe' ||
+    method === 'agent.status.subscribe' ||
     method === 'runtime.clientEvents.subscribe' ||
     method === 'files.watch'
   )

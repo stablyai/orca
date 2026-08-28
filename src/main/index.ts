@@ -381,7 +381,12 @@ import {
   shouldDriveSyntheticAgentTitleFromHook,
   type SyntheticAgentTitleProfile
 } from '../shared/synthetic-agent-title'
-import type { AgentStatusState } from '../shared/agent-status-types'
+import {
+  pickParsedAgentStatusPayload,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../shared/agent-status-types'
+import type { AgentStatusFactInput } from '../shared/agent-status-fact-types'
 import { resolveTuiAgentPermissionMode } from '../shared/tui-agent-permissions'
 import { isAskUserQuestionTool } from '../shared/agent-question-answered-intent'
 import type { TerminalSideEffectBatch } from '../shared/terminal-side-effect-facts'
@@ -2504,6 +2509,37 @@ void app.whenReady().then(async () => {
     if (hookStatusChangedSessionTabs(enriched)) {
       runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }
+    if (
+      enriched.restoredUnconfirmed ||
+      enriched.providerSessionOnly ||
+      enriched.isReplay ||
+      !runtime
+    ) {
+      return
+    }
+    const worktreeId =
+      enriched.worktreeId ?? runtime.getTerminalWorktreeIdForPaneKey(enriched.paneKey) ?? null
+    if (!worktreeId) {
+      return
+    }
+    const { turnCompletedAt, ...statusPayload } = pickParsedAgentStatusPayload(enriched.payload)
+    const status: AgentStatusEntry = {
+      ...statusPayload,
+      updatedAt: enriched.receivedAt,
+      stateStartedAt: enriched.stateStartedAt,
+      paneKey: enriched.paneKey,
+      stateHistory: [],
+      ...(enriched.providerSession ? { providerSession: enriched.providerSession } : {}),
+      ...(enriched.tabId ? { tabId: enriched.tabId } : {}),
+      worktreeId
+    }
+    const fact: AgentStatusFactInput = {
+      paneKey: enriched.paneKey,
+      worktreeId,
+      status,
+      ...(turnCompletedAt !== undefined ? { turnCompletedAt } : {})
+    }
+    runtime.publishAgentStatusFact(fact)
   })
   // Teardown: agent exit, pane close, and the SSH transient-disconnect batch all land
   // here. Without it the live state published above becomes a zombie question card.
@@ -2515,6 +2551,12 @@ void app.whenReady().then(async () => {
     for (const paneKey of clearedPaneKeys) {
       hookStatusChangedSessionTabs.forgetPane(paneKey)
       runtime?.touchMobileSessionTabsForPane(paneKey)
+      const worktreeId =
+        runtime?.getAgentStatusWorktreeIdForPaneKey(paneKey) ??
+        runtime?.getTerminalWorktreeIdForPaneKey(paneKey)
+      if (runtime && worktreeId) {
+        runtime.publishAgentStatusFact({ paneKey, worktreeId, status: null })
+      }
     }
   })
   unsubscribeAgentAwakeStatusChanges = () => {

@@ -61,7 +61,7 @@ export function createAgentCompletionLifecycle({
     clearWorkingBoundary()
   }
 
-  function dispose(): void {
+  function dispose(disposeOptions: { clearReplayState?: boolean } = {}): void {
     if (processState.disposed) {
       return
     }
@@ -71,7 +71,7 @@ export function createAgentCompletionLifecycle({
     clearPendingCodexAttention()
     dropPendingTitle()
     clearWorkingBoundary()
-    identityScope.dispose(isLive())
+    identityScope.dispose(disposeOptions.clearReplayState === true ? false : isLive())
   }
 
   return {

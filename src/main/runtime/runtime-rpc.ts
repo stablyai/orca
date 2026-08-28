@@ -423,6 +423,8 @@ const MOBILE_RPC_METHOD_ALLOWLIST = new Set([
   'status.get',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  'agent.status.subscribe',
+  'agent.status.unsubscribe',
   'terminal.clearBuffer',
   'terminal.close',
   'terminal.closeTab',

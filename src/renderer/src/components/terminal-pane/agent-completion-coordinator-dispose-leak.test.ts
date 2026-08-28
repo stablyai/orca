@@ -102,6 +102,15 @@ describe('agent completion coordinator identity map stays bounded (leak regressi
     expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
   })
 
+  it('allows authoritative tombstones to clear replay state while still live', () => {
+    const live = { value: true }
+    const coordinator = driveCompletion('tab-1:leaf-remote-tombstone', live)
+    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(1)
+
+    coordinator.dispose({ clearReplayState: true })
+    expect(getAgentCompletionCoordinatorIdentityCountForTest()).toBe(0)
+  })
+
   it('clears per-coordinator working boundaries on reset and dispose', () => {
     const live = { value: true }
     const coordinator = createAgentCompletionCoordinator(

@@ -57,5 +57,5 @@ export type AgentCompletionCoordinator = {
   startProcessTracking: () => void
   hasPendingHookDoneCompletion: () => boolean
   resetCompletionState: (options?: { requireFreshWorking?: boolean }) => void
-  dispose: () => void
+  dispose: (options?: { clearReplayState?: boolean }) => void
 }

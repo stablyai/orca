@@ -265,7 +265,6 @@ describe('dispatchTerminalNotification', () => {
       agentType: 'claude',
       terminalTitle: 'claude'
     })
-
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
       terminalTitle: 'claude',
@@ -453,7 +452,6 @@ describe('dispatchTerminalNotification', () => {
     mockState.tabsByWorktree = {
       'wt-secondary': [{ id: 'tab-1' }]
     }
-
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
       terminalTitle: 'codex',
@@ -552,7 +550,6 @@ describe('dispatchTerminalNotification', () => {
       terminalTitle: 'Codex',
       lastAssistantMessage: undefined
     })
-
     dispatchTerminalNotification('wt-primary', {
       source: 'agent-task-complete',
       terminalTitle: '✳ Claude Code',
@@ -765,7 +762,6 @@ describe('dispatchTerminalNotification', () => {
       terminalTitle: '/workspace/orca',
       paneKey
     })
-
     expect(window.api.notifications.dispatch).toHaveBeenCalled()
     expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
   })
@@ -798,6 +794,29 @@ describe('dispatchTerminalNotification', () => {
     expect(mockState.markAgentCompletionPaneUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalTabUnread).not.toHaveBeenCalled()
     expect(mockState.markTerminalPaneUnread).not.toHaveBeenCalled()
+  })
+
+  it('trusts an authoritative remote completion despite a newer client-local timestamp', () => {
+    mockState.agentStatusByPaneKey[paneKey] = makeAgentStatus(paneKey, {
+      state: 'working',
+      stateStartedAt: Date.now() + 60_000
+    })
+
+    dispatchTerminalNotification('wt-primary', {
+      source: 'agent-task-complete',
+      terminalTitle: 'codex',
+      paneKey,
+      authoritativeRemote: true,
+      agentStatusSnapshot: {
+        state: 'done',
+        prompt: 'remote completion',
+        agentType: 'codex',
+        stateStartedAt: Date.now()
+      }
+    })
+
+    expect(window.api.notifications.dispatch).toHaveBeenCalled()
+    expect(mockState.markWorktreeUnread).toHaveBeenCalledWith('wt-primary')
   })
 
   it('drops accepted hook snapshots for an intentionally suppressed pty', () => {
