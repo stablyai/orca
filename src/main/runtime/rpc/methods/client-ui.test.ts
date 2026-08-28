@@ -184,6 +184,7 @@ describe('client UI RPC methods', () => {
         action: 'agent-prompt' as const,
         agent: 'codex' as const,
         prompt: 'Review this diff',
+        submitPrompt: false as const,
         scope: { type: 'global' as const }
       }
     ]
@@ -205,6 +206,7 @@ describe('client UI RPC methods', () => {
             action: 'agent-prompt',
             agent: 'codex',
             prompt: 'Review this diff\n',
+            submitPrompt: false,
             scope: { type: 'global' }
           }
         }

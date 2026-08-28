@@ -1,6 +1,9 @@
 import type { PtyTransport } from './pty-transport'
 
-type TerminalPastePtyWriter = Pick<PtyTransport, 'sendInput' | 'sendInputAccepted'>
+type TerminalPastePtyWriter = Pick<
+  PtyTransport,
+  'sendInput' | 'sendInputAccepted' | 'sendInputSettled'
+>
 
 export function writeTerminalPastePtyInput(
   transport: TerminalPastePtyWriter | undefined,
@@ -9,7 +12,11 @@ export function writeTerminalPastePtyInput(
   if (!transport) {
     return false
   }
-  // Why: paste chunking must respect PTY backpressure. sendInput only queues
-  // local writes, while sendInputAccepted resolves after the PTY accepts them.
-  return transport.sendInputAccepted?.(data) ?? transport.sendInput(data)
+  // Why: durable SSH delivery needs relay settlement; ordinary accepted writes
+  // intentionally remain unavailable there to preserve interactive latency.
+  return (
+    transport.sendInputSettled?.(data) ??
+    transport.sendInputAccepted?.(data) ??
+    transport.sendInput(data)
+  )
 }

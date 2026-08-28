@@ -203,6 +203,7 @@ export function TabBarQuickCommandsButton({
           open={editor !== null}
           mode={editor?.mode ?? 'add'}
           command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
+          hostId={editor?.hostId ?? defaultHostId}
           repos={editorRepos}
           onOpenChange={(open) => !open && setEditor(null)}
           onSave={handleSaveCommand}
@@ -232,6 +233,7 @@ export function TabBarQuickCommandsButton({
         open={editor !== null}
         mode={editor?.mode ?? 'add'}
         command={editor?.command ?? createTerminalQuickCommandDraft({ type: 'repo', repoId })}
+        hostId={editor?.hostId ?? defaultHostId}
         repos={editorRepos}
         onOpenChange={(open) => !open && setEditor(null)}
         onSave={handleSaveCommand}

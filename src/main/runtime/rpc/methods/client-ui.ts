@@ -7,6 +7,7 @@ import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
 // the typecheck graph so drift fails the build instead of a paired client.
 
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
+import { projectTerminalQuickCommandsForClient } from './terminal-quick-command-client-projection'
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
@@ -26,15 +27,21 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
     params: null,
     // Why: command bodies can total ~240 KB, so keep unrelated settings reads
     // from carrying them over every paired/relay connection.
-    handler: (_params, { runtime }) => ({
-      terminalQuickCommands: runtime.getClientTerminalQuickCommands()
+    handler: (_params, { runtime, clientCapabilities }) => ({
+      terminalQuickCommands: projectTerminalQuickCommandsForClient(
+        runtime.getClientTerminalQuickCommands(),
+        clientCapabilities
+      )
     })
   }),
   defineMethod({
     name: 'settings.updateTerminalQuickCommands',
     params: TerminalQuickCommandsUpdate,
-    handler: (params, { runtime }) => ({
-      terminalQuickCommands: runtime.updateClientTerminalQuickCommands(params.mutation)
+    handler: (params, { runtime, clientCapabilities }) => ({
+      terminalQuickCommands: projectTerminalQuickCommandsForClient(
+        runtime.updateClientTerminalQuickCommands(params.mutation),
+        clientCapabilities
+      )
     })
   }),
   defineMethod({

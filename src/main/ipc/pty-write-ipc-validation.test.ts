@@ -9,7 +9,14 @@ import {
 import { CLIPBOARD_TEXT_MEASURE_YIELD_CODE_UNITS } from '../../shared/clipboard-text'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
-import { registerPtyHandlers, deletePtyOwnership, setLocalPtyProvider } from './pty'
+import {
+  registerPtyHandlers,
+  deletePtyOwnership,
+  registerSshPtyProvider,
+  setLocalPtyProvider,
+  setPtyOwnership,
+  unregisterSshPtyProvider
+} from './pty'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -89,6 +96,61 @@ describe('registerPtyHandlers', () => {
       })
     ).toBe(false)
     expect(mockProc.proc.write).toHaveBeenCalledTimes(1)
+  })
+  it('propagates an explicit local provider write rejection', async () => {
+    const id = 'local-rejected-write'
+    const write = vi.fn(() => false)
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({ hasPty: vi.fn(() => true), write } as never)
+    setPtyOwnership(id, null)
+
+    try {
+      expect(handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, { id, data: 'draft' })).toBe(
+        false
+      )
+      expect(write).toHaveBeenCalledWith(id, 'draft')
+    } finally {
+      deletePtyOwnership(id)
+    }
+  })
+  it('waits for local daemon settlement when the provider supports it', async () => {
+    const id = 'local-daemon-settlement'
+    const write = vi.fn(() => true)
+    const writeWithSettlement = vi.fn().mockResolvedValue(false)
+    registerPtyHandlers(mainWindow as never)
+    setLocalPtyProvider({ hasPty: vi.fn(() => true), write, writeWithSettlement } as never)
+    setPtyOwnership(id, null)
+
+    try {
+      await expect(
+        handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, { id, data: 'draft' })
+      ).resolves.toBe(false)
+      expect(writeWithSettlement).toHaveBeenCalledWith(id, 'draft')
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      deletePtyOwnership(id)
+    }
+  })
+  it('waits for SSH relay settlement before acknowledging a durable write', async () => {
+    const id = 'ssh:ssh-settlement@@pty-1'
+    const writeWithSettlement = vi.fn().mockResolvedValue(false)
+    registerSshPtyProvider('ssh-settlement', {
+      hasPty: vi.fn(() => true),
+      write: vi.fn(),
+      writeWithSettlement
+    } as never)
+    setPtyOwnership(id, 'ssh-settlement')
+    registerPtyHandlers(mainWindow as never)
+
+    try {
+      await expect(
+        handlers.get('pty:writeAccepted')!(mainWindowIpcEvent, { id, data: 'draft' })
+      ).resolves.toBe(false)
+      expect(writeWithSettlement).toHaveBeenCalledWith(id, 'draft')
+    } finally {
+      deletePtyOwnership(id)
+      unregisterSshPtyProvider('ssh-settlement')
+    }
   })
   it('asks the renderer to remount when the provider rejects a stale daemon write', async () => {
     const write = vi.fn(() => {

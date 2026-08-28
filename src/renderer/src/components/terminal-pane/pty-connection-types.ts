@@ -19,6 +19,8 @@ import type { DirectSshPaneRetryAttemptId } from '@/store/slices/direct-ssh-term
 
 export type PtyPaneStartup = {
   command: string
+  /** Keep renderer-delivered startup input editable instead of submitting Enter. */
+  submit?: boolean
   /** Renderer-delivered startup input for callers that need xterm paste
    *  semantics before the submit Enter. */
   delivery?: 'terminal-paste'
@@ -85,6 +87,8 @@ export type PtyConnectionDeps = {
    *  delivery: Windows runs an argv-embedded command before this, and a POSIX shell can die
    *  before the shell-ready write. */
   onQueuedStartupSpawned?: () => void
+  /** Consumes renderer-owned startup only after its terminal paste completes. */
+  onQueuedStartupDelivered?: () => void
   consumeSuppressedPtyExit: (ptyId: string) => boolean
   isPtyShutdownPending: (ptyId: string) => boolean
   updateTabTitle: (tabId: string, title: string) => void

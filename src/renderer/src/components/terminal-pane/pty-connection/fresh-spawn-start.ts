@@ -174,7 +174,6 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             ? spawnedPtyId
             : null
         if (connectResult?.isReattach) {
-          session.pendingStartupCommand = null
           const accepted = await session.handleReattachResult(
             connectResult,
             null,
@@ -182,6 +181,9 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             outputCallbacks.generation
           )
           session.finishReattachLiveDataDeferral(accepted, outputCallbacks.generation)
+          if (accepted) {
+            session.schedulePendingStartupCommandDelivery()
+          }
           const gen = await preSignalPromise
           if (accepted && resolvedPtyId && typeof gen === 'number') {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
@@ -261,14 +263,17 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
             void window.api.pty.settlePaneSerializer(session.cacheKey, gen).catch(() => {})
           }
         }
-        if (resolvedPtyId && session.connectionId) {
+        if (resolvedPtyId) {
           if (
+            session.connectionId &&
             session.shouldUseProviderSshStartupDelivery &&
             (startupOverride?.command || session.paneStartup?.command)
           ) {
             session.armStartupDraftReadinessObservation()
           }
-          session.schedulePendingStartupCommandDelivery()
+          if (session.pendingStartupCommand) {
+            session.schedulePendingStartupCommandDelivery()
+          }
         }
         session.finishReattachLiveDataDeferral(Boolean(resolvedPtyId), outputCallbacks.generation)
         return resolvedPtyId

@@ -5,6 +5,8 @@ import type {
 } from '../../../../shared/terminal-quick-command-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { TERMINAL_QUICK_COMMAND_AGENT_DRAFTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   getTerminalQuickCommandAction,
   getTerminalQuickCommandScope,
@@ -33,6 +35,7 @@ import {
   switchTerminalQuickCommandDialogAction
 } from './terminal-quick-command-dialog-draft'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
 
 type TerminalQuickCommandDialogMode = 'add' | 'edit'
 
@@ -40,6 +43,7 @@ type TerminalQuickCommandDialogProps = {
   open: boolean
   mode: TerminalQuickCommandDialogMode
   command: TerminalQuickCommand
+  hostId: ExecutionHostId
   repos?: readonly Pick<Repo, 'id' | 'displayName' | 'path' | 'badgeColor'>[]
   /** Settings has no ambient workspace to imply scope from, so it opens the
    *  Advanced section up front. In-workspace entry points leave it collapsed. */
@@ -66,11 +70,21 @@ export function TerminalQuickCommandDialog({
   open,
   mode,
   command,
+  hostId,
   repos = EMPTY_REPOS,
   defaultAdvancedOpen = false,
   onOpenChange,
   onSave
 }: TerminalQuickCommandDialogProps): React.JSX.Element {
+  const host = parseExecutionHostId(hostId)
+  const agentDraftsSupported = useAppStore(
+    (state) =>
+      host?.kind !== 'runtime' ||
+      state.runtimeStatusByEnvironmentId
+        .get(host.environmentId)
+        ?.status?.capabilities?.includes(TERMINAL_QUICK_COMMAND_AGENT_DRAFTS_RUNTIME_CAPABILITY) ===
+        true
+  )
   const fallbackAgent: TuiAgent =
     getAgentCatalog().find((entry) => supportsTerminalAgentQuickCommand(entry.id))?.id ?? 'claude'
   const [draft, setDraft] = useState<TerminalQuickCommand>(command)
@@ -115,19 +129,25 @@ export function TerminalQuickCommandDialog({
     })
   }
 
-  const toggleAppendEnter = (): void => {
-    setDraft((current) =>
-      isTerminalAgentQuickCommand(current)
-        ? current
-        : (() => {
-            const appendEnter = !current.appendEnter
-            draftMemoryRef.current = {
-              ...draftMemoryRef.current,
-              terminalAppendEnter: appendEnter
-            }
-            return { ...current, appendEnter }
-          })()
-    )
+  const toggleImmediateSubmission = (): void => {
+    if (isTerminalAgentQuickCommand(draft)) {
+      const submitPrompt = draft.submitPrompt === false
+      draftMemoryRef.current = { ...draftMemoryRef.current, agentSubmitPrompt: submitPrompt }
+      if (!submitPrompt) {
+        setDraft({ ...draft, submitPrompt: false })
+        return
+      }
+      const { submitPrompt: _submitPrompt, ...submitted } = draft
+      void _submitPrompt
+      setDraft(submitted)
+      return
+    }
+    const appendEnter = !draft.appendEnter
+    draftMemoryRef.current = {
+      ...draftMemoryRef.current,
+      terminalAppendEnter: appendEnter
+    }
+    setDraft({ ...draft, appendEnter })
   }
 
   const saveDraft = (): void => {
@@ -138,6 +158,7 @@ export function TerminalQuickCommandDialog({
           action: 'agent-prompt',
           agent: draft.agent,
           prompt: draft.prompt.trimEnd(),
+          ...(draft.submitPrompt === false ? { submitPrompt: false as const } : {}),
           scope: selectedScope
         }
       : {
@@ -233,9 +254,10 @@ export function TerminalQuickCommandDialog({
             draft={draft}
             isAgentAction={isAgentAction}
             selectedAgent={selectedAgent}
+            agentDraftsSupported={agentDraftsSupported}
             draftMemoryRef={draftMemoryRef}
             setDraft={setDraft}
-            toggleAppendEnter={toggleAppendEnter}
+            toggleImmediateSubmission={toggleImmediateSubmission}
           />
 
           <TerminalQuickCommandAdvancedSection

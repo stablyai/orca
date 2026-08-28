@@ -40,6 +40,7 @@ const TerminalQuickCommandUpdateItem = z.union([
         message: 'Agent does not support prompt commands'
       }),
       prompt: z.string().max(MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH),
+      submitPrompt: z.boolean().optional(),
       scope: TerminalQuickCommandScopeUpdate.optional()
     })
     .strict()

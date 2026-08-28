@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getTerminalQuickCommandAgentOptions } from './terminal-quick-command-agent-options'
 import type { TerminalQuickCommandDialogDraftMemory } from './terminal-quick-command-dialog-draft'
-import { TerminalQuickCommandAppendEnterSwitch } from './TerminalQuickCommandAppendEnterSwitch'
+import { TerminalQuickCommandSubmissionSwitch } from './TerminalQuickCommandSubmissionSwitch'
 
 const QUICK_COMMAND_AGENT_OPTIONS = getTerminalQuickCommandAgentOptions()
 
@@ -26,18 +26,20 @@ type TerminalQuickCommandContentSectionProps = {
   draft: TerminalQuickCommand
   isAgentAction: boolean
   selectedAgent: TuiAgent
+  agentDraftsSupported: boolean
   draftMemoryRef: MutableRefObject<TerminalQuickCommandDialogDraftMemory>
   setDraft: Dispatch<SetStateAction<TerminalQuickCommand>>
-  toggleAppendEnter: () => void
+  toggleImmediateSubmission: () => void
 }
 
 export function TerminalQuickCommandContentSection({
   draft,
   isAgentAction,
   selectedAgent,
+  agentDraftsSupported,
   draftMemoryRef,
   setDraft,
-  toggleAppendEnter
+  toggleImmediateSubmission
 }: TerminalQuickCommandContentSectionProps): React.JSX.Element {
   const commandText = isTerminalAgentQuickCommand(draft) ? draft.prompt : draft.command
   // Why: the frame header is a plain span, so the textarea carries the accessible name itself.
@@ -189,11 +191,15 @@ export function TerminalQuickCommandContentSection({
         />
 
         <div className="flex items-center justify-between gap-3 border-t border-border bg-muted/50 px-3 py-2">
-          {!isTerminalAgentQuickCommand(draft) ? (
-            <TerminalQuickCommandAppendEnterSwitch
-              appendEnter={draft.appendEnter}
-              onToggle={toggleAppendEnter}
-              compact
+          {!isAgentAction || agentDraftsSupported ? (
+            <TerminalQuickCommandSubmissionSwitch
+              action={isAgentAction ? 'agent-prompt' : 'terminal-command'}
+              checked={
+                isTerminalAgentQuickCommand(draft)
+                  ? draft.submitPrompt !== false
+                  : draft.appendEnter
+              }
+              onToggle={toggleImmediateSubmission}
             />
           ) : (
             <span className="text-[11px] text-muted-foreground">

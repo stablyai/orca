@@ -394,6 +394,7 @@ export function QuickCommandsPane({
           open
           mode={editor.mode}
           command={editor.command}
+          hostId={editor.hostId}
           repos={hostRepos}
           defaultAdvancedOpen
           onOpenChange={(open) => !open && setEditor(null)}

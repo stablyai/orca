@@ -187,6 +187,7 @@ export type TerminalActions = {
     tabId: string,
     startup: {
       command: string
+      submit?: boolean
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>
@@ -210,6 +211,7 @@ export type TerminalActions = {
   consumeTabInitialCwd: (tabId: string) => string | null
   consumeTabStartupCommand: (tabId: string) => {
     command: string
+    submit?: boolean
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
     env?: Record<string, string>

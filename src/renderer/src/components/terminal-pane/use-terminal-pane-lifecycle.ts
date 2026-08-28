@@ -238,6 +238,7 @@ type UseTerminalPaneLifecycleDeps = {
   cwd?: string
   startup?: {
     command: string
+    submit?: boolean
     /** Startup input needing xterm paste semantics before the submit Enter. */
     delivery?: 'terminal-paste'
     startupCommandDelivery?: StartupCommandDelivery
@@ -1374,9 +1375,13 @@ export function useTerminalPaneLifecycle({
           // synchronous step, so nothing can queue in between.
           () => useAppStore.getState().pendingStartupByTabId[tabId] === startup
         )
+        const startupConsumeCallback =
+          startupWithSetupSplitWait?.delivery === 'terminal-paste'
+            ? { onQueuedStartupDelivered: onQueuedStartupSpawned }
+            : { onQueuedStartupSpawned }
         const panePtyBinding = connectPanePty(pane, manager, {
           ...ptyDeps,
-          ...(onQueuedStartupSpawned ? { onQueuedStartupSpawned } : {}),
+          ...(onQueuedStartupSpawned ? startupConsumeCallback : {}),
           // Why: spread order matters — spawnHints.cwd (source pane) must override ptyDeps.cwd (worktree root) so splits boot in the live cwd.
           ...(spawnHints?.cwd ? { cwd: spawnHints.cwd } : {}),
           restoredPtyIdByLeafId: spawnHints?.ptyId

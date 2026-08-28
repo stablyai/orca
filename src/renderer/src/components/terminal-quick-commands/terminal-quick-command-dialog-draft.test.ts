@@ -59,7 +59,7 @@ describe('terminal quick command dialog draft transitions', () => {
     })
   })
 
-  it('preserves independent text, agent, and append-enter drafts across toggles', () => {
+  it('preserves independent text and submission drafts across toggles', () => {
     const initial: TerminalQuickCommand = {
       id: 'qc-1',
       label: 'Work',
@@ -74,7 +74,8 @@ describe('terminal quick command dialog draft transitions', () => {
       ...toAgent.draft,
       action: 'agent-prompt',
       agent: 'codex',
-      prompt: 'Investigate failures'
+      prompt: 'Investigate failures',
+      submitPrompt: false
     }
     const backToTerminal = switchTerminalQuickCommandDialogAction(
       editedAgent,
@@ -101,7 +102,8 @@ describe('terminal quick command dialog draft transitions', () => {
     expect(backToAgent.draft).toMatchObject({
       action: 'agent-prompt',
       agent: 'codex',
-      prompt: 'Investigate failures'
+      prompt: 'Investigate failures',
+      submitPrompt: false
     })
 
     const finalTerminal = switchTerminalQuickCommandDialogAction(

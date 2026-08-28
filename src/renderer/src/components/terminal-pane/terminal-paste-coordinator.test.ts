@@ -500,6 +500,25 @@ describe('terminal paste coordinator', () => {
     expect(codePointAt.mock.calls.length).toBeLessThan(text.length)
   })
 
+  it('combines a small bracketed chunked plan into one acknowledged write', async () => {
+    const plan = bracketedChunkedPlan()
+    const writePty = vi.fn().mockResolvedValue(true)
+
+    const result = await executeTerminalPastePlan(plan, {
+      pasteText: vi.fn(),
+      writePty,
+      isTargetCurrent: () => true,
+      combineChunkedWritesUpToBytes: 64,
+      appendToChunkedWrite: '\r'
+    })
+
+    expect(result).toMatchObject({ status: 'pasted', chunksWritten: 1 })
+    expect(writePty).toHaveBeenCalledOnce()
+    expect(writePty).toHaveBeenCalledWith(
+      `${BRACKETED_PASTE_START}0123456789abcdef${BRACKETED_PASTE_END}\r`
+    )
+  })
+
   it('cancels before writing when the target changed during async clipboard read', async () => {
     const pasteText = vi.fn()
     const writePty = vi.fn()

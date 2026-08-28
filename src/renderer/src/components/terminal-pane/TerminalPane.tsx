@@ -294,6 +294,7 @@ function TerminalQuickCommandEditorDialog({
       open
       mode="add"
       command={command}
+      hostId={hostId}
       repos={hostRepos}
       onOpenChange={onOpenChange}
       onSave={onSave}

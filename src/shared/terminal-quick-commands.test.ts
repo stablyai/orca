@@ -132,6 +132,7 @@ describe('terminal quick commands', () => {
           action: 'agent-prompt',
           agent: 'codex',
           prompt: '  Review this diff\n',
+          submitPrompt: false,
           command: "codex 'old workaround'"
         },
         {
@@ -156,6 +157,7 @@ describe('terminal quick commands', () => {
         action: 'agent-prompt',
         agent: 'codex',
         prompt: '  Review this diff',
+        submitPrompt: false,
         scope: { type: 'global' }
       }
     ])
@@ -218,10 +220,30 @@ describe('terminal quick commands', () => {
 
   it('accepts only complete canonical command lists at protocol boundaries', () => {
     const canonical = normalizeTerminalQuickCommands([
-      { id: 'status', label: 'Status', command: 'git status', appendEnter: true }
+      { id: 'status', label: 'Status', command: 'git status', appendEnter: true },
+      {
+        id: 'review',
+        label: 'Review',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff',
+        submitPrompt: false
+      }
     ])
 
     expect(parseNormalizedTerminalQuickCommands(canonical)).toEqual(canonical)
+    expect(
+      parseNormalizedTerminalQuickCommands([
+        {
+          id: 'legacy-review',
+          label: 'Legacy review',
+          action: 'agent-prompt',
+          agent: 'codex',
+          prompt: 'Review this diff',
+          scope: { type: 'global' }
+        }
+      ])
+    ).not.toBeNull()
     expect(parseNormalizedTerminalQuickCommands([{ ...canonical[0], command: 42 }])).toBeNull()
     expect(
       parseNormalizedTerminalQuickCommands([...canonical, ...canonical.slice(0, 1)])

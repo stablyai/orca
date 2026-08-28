@@ -51,6 +51,7 @@ export type TerminalState = {
     string,
     {
       command: string
+      submit?: boolean
       delivery?: 'terminal-paste'
       startupCommandDelivery?: StartupCommandDelivery
       env?: Record<string, string>

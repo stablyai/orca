@@ -71,6 +71,8 @@ describe('createIpcPtyTransport', () => {
     const sshTransport = createIpcPtyTransport({ connectionId: 'ssh-1' })
     await sshTransport.connect({ url: '', callbacks: {} })
     expect(sshTransport.sendInputAccepted).toBeUndefined()
+    await expect(sshTransport.sendInputSettled?.('startup draft')).resolves.toBe(true)
+    expect(window.api.pty.writeAccepted).toHaveBeenLastCalledWith('pty-1', 'startup draft')
   })
 
   it('chunks large local IPC terminal input before renderer-to-main writes', async () => {

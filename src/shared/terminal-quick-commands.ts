@@ -142,7 +142,8 @@ export function normalizeTerminalQuickCommands(input: unknown): TerminalQuickCom
         prompt: (hasPrompt ? String(record.prompt).trimEnd() : '').slice(
           0,
           MAX_QUICK_COMMAND_AGENT_PROMPT_LENGTH
-        )
+        ),
+        ...(record.submitPrompt === false ? { submitPrompt: false as const } : {})
       })
     } else {
       const command = hasCommand ? String(record.command).trimEnd() : ''
@@ -198,11 +199,16 @@ function isNormalizedTerminalQuickCommand(value: unknown, expected: TerminalQuic
     return false
   }
   if (isTerminalAgentQuickCommand(expected)) {
+    const expectedKeys =
+      expected.submitPrompt === false
+        ? ['id', 'label', 'action', 'agent', 'prompt', 'submitPrompt', 'scope']
+        : ['id', 'label', 'action', 'agent', 'prompt', 'scope']
     return (
-      hasExactKeys(command, ['id', 'label', 'action', 'agent', 'prompt', 'scope']) &&
+      hasExactKeys(command, expectedKeys) &&
       command.action === 'agent-prompt' &&
       command.agent === expected.agent &&
-      command.prompt === expected.prompt
+      command.prompt === expected.prompt &&
+      command.submitPrompt === expected.submitPrompt
     )
   }
   return (

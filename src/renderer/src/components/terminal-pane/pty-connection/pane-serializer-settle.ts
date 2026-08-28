@@ -62,7 +62,10 @@ export function bindSettlePaneSerializer(session: ConnectPanePtySession): void {
   // survives renderer replacement. Only explicit terminal-paste stays renderer-owned.
   session.pendingStartupCommand = session.shouldDeliverStartupViaTerminalPaste
     ? session.paneStartup?.command
-      ? { command: session.paneStartup.command }
+      ? {
+          command: session.paneStartup.command,
+          ...(session.paneStartup.submit === false ? { submit: false } : {})
+        }
       : null
     : null
   const startupDraftReadyScanner = session.ownsStartupDraftPaste

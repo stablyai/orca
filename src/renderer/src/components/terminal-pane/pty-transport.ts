@@ -152,7 +152,19 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     },
 
     ...(connectionId
-      ? {}
+      ? {
+          async sendInputSettled(data: string): Promise<boolean> {
+            if (!connected || !ptyId) {
+              return false
+            }
+            const id = ptyId
+            await inputWriteQueue.waitForDrain()
+            if (!connected || ptyId !== id) {
+              return false
+            }
+            return writeAcceptedIpcPtyInput(id, data, () => connected && ptyId === id)
+          }
+        }
       : {
           async sendInputAccepted(data: string): Promise<boolean> {
             if (!connected || !ptyId) {

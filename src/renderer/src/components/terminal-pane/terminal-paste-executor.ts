@@ -7,6 +7,7 @@ import {
 } from './terminal-paste-limits'
 import { runTerminalPasteOperationWithTimeout } from './terminal-paste-operation-timeout'
 import { runTerminalPtyInputTransaction } from './terminal-pty-input-transaction'
+import { getTerminalInputByteLength } from '../../../../shared/terminal-input'
 import type {
   TerminalPasteExecutionReason,
   TerminalPasteExecutionResult,
@@ -21,6 +22,8 @@ type ExecuteTerminalPastePlanArgs = {
   canContinue?: () => boolean
   yieldToEventLoop?: () => Promise<void>
   operationTimeoutMs?: number
+  combineChunkedWritesUpToBytes?: number
+  appendToChunkedWrite?: string
   now?: () => number
 }
 
@@ -42,6 +45,8 @@ async function executeTerminalPastePlanNow(
     canContinue,
     yieldToEventLoop = defaultYieldToEventLoop,
     operationTimeoutMs = getTerminalPasteOperationTimeoutMs(plan),
+    combineChunkedWritesUpToBytes = 0,
+    appendToChunkedWrite = '',
     now = defaultNow
   }: ExecuteTerminalPastePlanArgs
 ): Promise<TerminalPasteExecutionResult> {
@@ -75,6 +80,20 @@ async function executeTerminalPastePlanNow(
   }
   if (!writePty) {
     return finish('rejected', 0, 'pty-writer-unavailable')
+  }
+
+  if (plan.payload.byteLength <= combineChunkedWritesUpToBytes) {
+    const combined = `${[...iterateTerminalPastePlanChunks(plan)].join('')}${appendToChunkedWrite}`
+    if (getTerminalInputByteLength(combined) <= combineChunkedWritesUpToBytes) {
+      const writeResult = await runTerminalPasteOperationWithTimeout(
+        () => writePty(combined),
+        operationTimeoutMs
+      )
+      if (writeResult.timedOut) {
+        return finish('cancelled', 0, 'operation-timeout')
+      }
+      return writeResult.value ? finish('pasted', 1) : finish('cancelled', 0, 'target-disconnected')
+    }
   }
 
   let chunksWritten = 0
@@ -133,6 +152,25 @@ async function executeTerminalPastePlanNow(
         bracketedPasteOpen = false
       }
       await yieldToEventLoop()
+    }
+    if (appendToChunkedWrite) {
+      if (isTargetCurrent && !isTargetCurrent()) {
+        return { status: 'cancelled', reason: 'stale-target' }
+      }
+      if (canContinue && !canContinue()) {
+        return { status: 'cancelled', reason: 'target-disconnected' }
+      }
+      const appendResult = await runTerminalPasteOperationWithTimeout(
+        () => writePty(appendToChunkedWrite),
+        operationTimeoutMs
+      )
+      if (appendResult.timedOut) {
+        return { status: 'cancelled', reason: 'operation-timeout' }
+      }
+      if (!appendResult.value) {
+        return { status: 'cancelled', reason: 'target-disconnected' }
+      }
+      chunksWritten += 1
     }
     return { status: 'pasted' }
   }

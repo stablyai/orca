@@ -7,6 +7,7 @@ import type { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
 
 export type PendingStartupCommand = {
   command: string
+  submit?: boolean
   env?: Record<string, string>
 }
 

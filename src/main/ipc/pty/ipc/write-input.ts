@@ -65,13 +65,11 @@ export function createPtyWriteInput(deps: {
     const chunks = iterateTerminalInputChunks(data)
     const first = chunks.next()
     if (first.done) {
-      provider.write(id, data)
-      return true
+      return provider.write(id, data) !== false
     }
     const second = chunks.next()
     if (second.done) {
-      provider.write(id, first.value)
-      return true
+      return provider.write(id, first.value) !== false
     }
     return writePtyProviderInputChunks(provider, id, chunks, first.value, second.value)
   }
@@ -98,6 +96,37 @@ export function createPtyWriteInput(deps: {
     }
   }
 
+  const writePtyProviderInputWithSettlement = async (
+    provider: IPtyProvider,
+    id: string,
+    data: string
+  ): Promise<boolean> => {
+    if (!provider.writeWithSettlement) {
+      return false
+    }
+    try {
+      const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(data)
+      if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
+        return false
+      }
+      const chunks = iterateTerminalInputChunks(data)
+      let chunk = chunks.next()
+      while (!chunk.done) {
+        if (!(await provider.writeWithSettlement(id, chunk.value))) {
+          return false
+        }
+        chunk = chunks.next()
+        if (!chunk.done) {
+          await new Promise((resolve) => setTimeout(resolve, 0))
+        }
+      }
+      return true
+    } catch (error) {
+      reportUnavailablePtyWrite(id, error)
+      return false
+    }
+  }
+
   const writePtyProviderInputChunks = async (
     provider: IPtyProvider,
     id: string,
@@ -109,7 +138,9 @@ export function createPtyWriteInput(deps: {
       let chunk: IteratorResult<string> = { done: false, value: firstChunk }
       let nextChunk: IteratorResult<string> = { done: false, value: secondChunk }
       while (!chunk.done) {
-        provider.write(id, chunk.value)
+        if (provider.write(id, chunk.value) === false) {
+          return false
+        }
         if (!nextChunk.done) {
           await new Promise((resolve) => setTimeout(resolve, 0))
         }
@@ -173,8 +204,8 @@ export function createPtyWriteInput(deps: {
     if (runtime?.getDriver(args.id).kind === 'mobile') {
       return false
     }
-    // Why: the ack infers Ctrl+C/Escape reached the local PTY; SSH providers are fire-and-forget relay notifications and can't truthfully acknowledge yet.
-    if (ptyOwnership.get(args.id) !== null) {
+    const owner = ptyOwnership.get(args.id)
+    if (owner === undefined) {
       return false
     }
     const provider = tryGetProviderForPty(args.id)
@@ -188,7 +219,10 @@ export function createPtyWriteInput(deps: {
       if (visibleRendererPtys.has(args.id)) {
         clearHiddenRendererResizeOutput(args.id)
       }
-      return writePtyProviderInput(provider, args.id, args.data)
+      if (provider.writeWithSettlement) {
+        return writePtyProviderInputWithSettlement(provider, args.id, args.data)
+      }
+      return owner === null ? writePtyProviderInput(provider, args.id, args.data) : false
     } catch {
       return false
     }

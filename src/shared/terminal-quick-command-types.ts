@@ -27,6 +27,8 @@ export type TerminalAgentQuickCommand = TerminalQuickCommandBase & {
   action: 'agent-prompt'
   agent: TuiAgent
   prompt: string
+  /** Omitted means submit immediately, preserving commands saved by older Orca versions. */
+  submitPrompt?: false
 }
 
 export type TerminalQuickCommand = TerminalCommandQuickCommand | TerminalAgentQuickCommand

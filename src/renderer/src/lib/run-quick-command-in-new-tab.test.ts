@@ -119,6 +119,26 @@ describe('runQuickCommandInNewTab', () => {
     })
   })
 
+  it('does not append Enter when the quick command is insertion-only', () => {
+    runQuickCommandInNewTab({
+      command: {
+        id: 'status',
+        label: 'Status',
+        action: 'terminal-command',
+        command: 'git status',
+        appendEnter: false
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1'
+    })
+
+    expect(mockState.queueTabStartupCommand).toHaveBeenCalledWith('tab-new', {
+      command: 'git status',
+      submit: false,
+      delivery: 'terminal-paste'
+    })
+  })
+
   it('launches agent quick commands through the programmatic agent prompt path', () => {
     mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
     mockState.unifiedTabsByWorktree['repo::worktree'] = [
@@ -148,6 +168,37 @@ describe('runQuickCommandInNewTab', () => {
     })
     expect(mockState.queueTabStartupCommand).not.toHaveBeenCalled()
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'agent-review')
+  })
+
+  it('launches insertion-only agent prompts as editable drafts', () => {
+    mocks.launchAgentInNewTab.mockReturnValue({ tabId: 'tab-agent' })
+    mockState.unifiedTabsByWorktree['repo::worktree'] = [
+      { entityId: 'tab-agent', contentType: 'terminal', groupId: 'group-1' }
+    ]
+
+    const result = runQuickCommandInNewTab({
+      command: {
+        id: 'agent-review-draft',
+        label: 'Review draft',
+        action: 'agent-prompt',
+        agent: 'codex',
+        prompt: 'Review this diff',
+        submitPrompt: false
+      },
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1'
+    })
+
+    expect(result).toEqual({ tabId: 'tab-agent' })
+    expect(mocks.launchAgentInNewTab).toHaveBeenCalledWith({
+      agent: 'codex',
+      prompt: 'Review this diff',
+      worktreeId: 'repo::worktree',
+      groupId: 'group-1',
+      promptDelivery: 'draft',
+      launchSource: 'quick_command',
+      quickCommandLabel: 'Review draft'
+    })
   })
 
   it('falls back to the active group when context-menu group resolution is missing', () => {

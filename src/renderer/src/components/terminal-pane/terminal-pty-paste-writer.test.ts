@@ -3,6 +3,20 @@ import { describe, expect, it, vi } from 'vitest'
 import { writeTerminalPastePtyInput } from './terminal-pty-paste-writer'
 
 describe('terminal PTY paste writer', () => {
+  it('prefers remotely settled writes over renderer acknowledgements', async () => {
+    const sendInput = vi.fn().mockReturnValue(true)
+    const sendInputAccepted = vi.fn().mockResolvedValue(true)
+    const sendInputSettled = vi.fn().mockResolvedValue(false)
+
+    await expect(
+      writeTerminalPastePtyInput({ sendInput, sendInputAccepted, sendInputSettled }, 'payload')
+    ).resolves.toBe(false)
+
+    expect(sendInputSettled).toHaveBeenCalledWith('payload')
+    expect(sendInputAccepted).not.toHaveBeenCalled()
+    expect(sendInput).not.toHaveBeenCalled()
+  })
+
   it('prefers acknowledged PTY writes when available', async () => {
     const sendInput = vi.fn().mockReturnValue(true)
     const sendInputAccepted = vi.fn().mockResolvedValue(true)
