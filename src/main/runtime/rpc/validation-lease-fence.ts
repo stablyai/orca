@@ -20,10 +20,19 @@ import type { OrcaRuntimeService } from '../orca-runtime'
 
 /** Every RPC that can change a worktree's contents or its running processes.
  *  Read-only methods are deliberately absent: a lease blocks mutation, not
- *  inspection. */
+ *  inspection.
+ *
+ *  Keep this exhaustive against the git and files method registries. A mutating
+ *  method missing from here is unfenced, which is the failure this single fence
+ *  exists to prevent — `validation-lease-fence.test.ts` pins the list against
+ *  those registries so a newly added mutation cannot quietly skip it. */
 export const LEASE_FENCED_METHODS: ReadonlySet<string> = new Set([
   'git.commit',
   'git.checkout',
+  'git.pull',
+  'git.fastForward',
+  'git.forkSync',
+  'git.conflictOperation',
   'git.stage',
   'git.bulkStage',
   'git.unstage',
@@ -36,8 +45,13 @@ export const LEASE_FENCED_METHODS: ReadonlySet<string> = new Set([
   'git.abortRebase',
   'files.write',
   'files.writeBase64',
+  'files.writeBase64Chunk',
+  'files.commitUpload',
   'files.createFile',
   'files.createDir',
+  'files.createDirNoClobber',
+  // Takes a worktree and an absolute path, so it can land bytes inside the tree.
+  'files.writeTerminalArtifact',
   'files.rename',
   'files.copy',
   'files.delete',

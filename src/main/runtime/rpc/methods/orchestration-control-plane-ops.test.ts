@@ -63,7 +63,13 @@ describe('correction 2: bounded control-plane operations', () => {
     // the runtime was BUILT from, and a mismatched SHA is refused before the
     // launch is even considered. Claiming the real one gets us to the launch
     // check this test is about.
-    const runtimeSha = resolveRuntimeCommitSha() ?? SHA
+    const runtimeSha = resolveRuntimeCommitSha()
+    // Why the branch: a runtime that cannot name its own commit — a dirty dev
+    // checkout, or a packaged build with no repository above it — refuses a
+    // SHA-bound PASS earlier, at `commit_unknown`. Both are the same rule
+    // (evidence must be bound to the commit the code actually is), and pinning
+    // only one of them would make this test pass or fail with the developer's
+    // working tree rather than with the code.
     await expect(
       harness.call(
         'orchestration.certify',
@@ -74,11 +80,11 @@ describe('correction 2: bounded control-plane operations', () => {
           sessionMode: 'fresh',
           kind: 'fresh_launch',
           outcome: 'PASS',
-          sha: runtimeSha
+          sha: runtimeSha ?? SHA
         },
         state.ctx
       )
-    ).rejects.toMatchObject({ code: 'unknown_dispatch' })
+    ).rejects.toMatchObject({ code: runtimeSha ? 'unknown_dispatch' : 'commit_unknown' })
 
     // And a SHA that is not the one this runtime was built from is refused
     // outright, whatever the Dispatch looks like.
@@ -96,7 +102,9 @@ describe('correction 2: bounded control-plane operations', () => {
         },
         state.ctx
       )
-    ).rejects.toMatchObject({ code: 'sha_mismatch' })
+      // Same rule, same two worlds: a runtime that knows its commit calls this a
+      // mismatch; one that cannot know it refuses before comparing.
+    ).rejects.toMatchObject({ code: runtimeSha ? 'sha_mismatch' : 'commit_unknown' })
 
     const failed = (await harness.call(
       'orchestration.certify',

@@ -1,7 +1,12 @@
+import { execFileSync } from 'node:child_process'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   readEmbeddedBuildProvenance,
   resolveRuntimeBuildIdentity,
+  resolveRuntimeCommitSha,
   type EmbeddedBuildProvenance
 } from './runtime-build-identity'
 
@@ -77,5 +82,53 @@ describe('IMMUTABLE_BUILD_PROVENANCE', () => {
     ).buildHash
     // Different bundled content yields a different build hash.
     expect(fromThisFile).not.toBe(fromAnother)
+  })
+})
+
+/** The embedded path refuses to name a commit for a dirty build. The checkout
+ *  fallback used to name one anyway, which made it the softer way in: a dev
+ *  runtime with local edits, or a stale bundle in a repo whose HEAD had moved,
+ *  could stamp evidence with a commit the executing code never came from. */
+describe('THE CHECKOUT FALLBACK MUST NOT NAME A COMMIT IT DOES NOT MATCH', () => {
+  const trees: string[] = []
+  afterEach(() => {
+    while (trees.length) {
+      rmSync(trees.pop() as string, { recursive: true, force: true })
+    }
+  })
+
+  function repo(): string {
+    const path = mkdtempSync(join(tmpdir(), 'orca-fallback-'))
+    trees.push(path)
+    const git = (args: string[]) => execFileSync('git', args, { cwd: path, encoding: 'utf8' })
+    git(['init', '--quiet'])
+    git(['config', 'user.email', 'fixture@orca.test'])
+    git(['config', 'user.name', 'Fixture'])
+    writeFileSync(join(path, 'entry.js'), '//\n')
+    git(['add', '.'])
+    git(['commit', '--quiet', '-m', 'fixture'])
+    return path
+  }
+
+  it('names the commit for a clean checkout', () => {
+    expect(resolveRuntimeCommitSha(join(repo(), 'entry.js'))).toMatch(/^[0-9a-f]{40}$/)
+  })
+
+  it('names NO commit once the tree is dirty', () => {
+    const path = repo()
+    writeFileSync(join(path, 'entry.js'), '// edited\n')
+    expect(resolveRuntimeCommitSha(join(path, 'entry.js'))).toBeNull()
+  })
+
+  it('names no commit when an untracked file could have been compiled in', () => {
+    const path = repo()
+    writeFileSync(join(path, 'extra.js'), 'export default 1\n')
+    expect(resolveRuntimeCommitSha(join(path, 'entry.js'))).toBeNull()
+  })
+
+  it('names no commit with no repository above it', () => {
+    const bare = mkdtempSync(join(tmpdir(), 'orca-norepo-'))
+    trees.push(bare)
+    expect(resolveRuntimeCommitSha(join(bare, 'entry.js'))).toBeNull()
   })
 })

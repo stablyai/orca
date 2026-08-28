@@ -83,26 +83,6 @@ export const ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS: Record<string, CommandHan
     )
   },
 
-  'orchestration certification-intent': async ({ flags, client, cwd, json }) => {
-    const result = await callOrchestrationMutation<{
-      intent: { intent_id: string; run_id: string; task_id: string; worktree_id: string }
-    }>(client, flags, 'orchestration.certificationIntent', {
-      run: getOptionalStringFlag(flags, 'run'),
-      task: getRequiredStringFlag(flags, 'task'),
-      worktree: getRequiredStringFlag(flags, 'worktree'),
-      agent: getRequiredStringFlag(flags, 'agent'),
-      model: getOptionalStringFlag(flags, 'model'),
-      reasoning: getOptionalStringFlag(flags, 'reasoning'),
-      from: await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from')
-    })
-    printResult(
-      result,
-      json,
-      (value) =>
-        `Minted ${value.intent.intent_id} for task ${value.intent.task_id} in ${value.intent.worktree_id}`
-    )
-  },
-
   'orchestration route-truth': async ({ flags, client, json }) => {
     const result = await callOrchestrationMutation<{
       agent: string

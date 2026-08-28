@@ -24,6 +24,7 @@ import {
 import { PhaseLaunchStore } from '../../orchestration/control-plane/phase-launch-store'
 import { resolveValidationScopeKey } from '../../orchestration/control-plane/validation-scope'
 import { driveRunPhaseLaunches } from './orchestration-phase-launch'
+import { GateRunParams, runGateForDispatch } from './orchestration-gate-run'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import { defineMethod, type RpcMethod } from '../core'
 import { OptionalBoolean, OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
@@ -158,6 +159,20 @@ export const ORCHESTRATION_GATE_OPS_METHODS: RpcMethod[] = [
     }
   }),
 
+  defineMethod({
+    name: 'orchestration.gateRun',
+    params: GateRunParams,
+    handler: (params, { runtime }) =>
+      runGateForDispatch({
+        db: runtime.getOrchestrationDb(),
+        runId: params.run ?? requireRunId(runtime, params.from),
+        dispatchId: params.dispatch,
+        gateId: params.gate,
+        program: params.program,
+        args: params.args,
+        ...(params.timeoutMs === undefined ? {} : { timeoutMs: params.timeoutMs })
+      })
+  }),
   defineMethod({
     name: 'orchestration.gatePlan',
     params: GatePlanParams,

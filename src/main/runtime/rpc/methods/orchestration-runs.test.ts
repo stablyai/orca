@@ -26,11 +26,14 @@ describe('orchestration RPC methods', () => {
 
   it('registers all expected methods', () => {
     const registry = buildRegistry(ORCHESTRATION_METHODS)
-    expect(registry.size).toBe(50)
+    expect(registry.size).toBe(51)
     expect(registry.has('orchestration.state')).toBe(true)
     // The typed first-certification authorisation; a boolean on worker-start
     // would have been a caller-declared claim rather than runtime authority.
     expect(registry.has('orchestration.certificationIntent')).toBe(true)
+    // The verb that produces gate evidence: without it the completion gate can
+    // never be satisfied, only failed.
+    expect(registry.has('orchestration.gateRun')).toBe(true)
     expect(registry.has('orchestration.await')).toBe(true)
     expect(registry.has('orchestration.outcomeAdmit')).toBe(true)
     expect(registry.has('orchestration.outcomeIntake')).toBe(true)

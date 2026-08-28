@@ -167,3 +167,64 @@ describe('the lease fence fails open only when there is nothing to fence', () =>
     expect(response.ok === false && response.error.message).toContain('db is sick')
   })
 })
+
+/** A mutating method missing from the list is unfenced, which is the exact
+ *  failure a single central fence exists to prevent. This pins the list against
+ *  the real registries so a newly added mutation cannot quietly skip it. */
+describe('the fenced list stays exhaustive against the real method registries', () => {
+  // Read-only by name and by handler: these inspect, they do not mutate.
+  const READ_ONLY = new Set([
+    'git.status',
+    'git.history',
+    'git.branchCompare',
+    'git.commitCompare',
+    'git.localBranches',
+    'git.upstreamStatus',
+    'git.submoduleStatus',
+    'git.checkIgnored',
+    'git.remoteCommitUrl',
+    'git.remoteFileUrl',
+    // Writes only to .git, never to the working tree a gate is reading.
+    'git.fetch',
+    'git.diff',
+    'git.branchDiff',
+    'git.commitDiff',
+    // Compose text for the user; they touch no path in the tree.
+    'git.generateCommitMessage',
+    'git.discoverCommitMessageModels',
+    'git.cancelGenerateCommitMessage',
+    'git.generatePullRequestFields',
+    'git.cancelGeneratePullRequestFields',
+    'files.list',
+    'files.listAll',
+    'files.listMarkdownDocuments',
+    'files.listDir',
+    'files.readDir',
+    'files.browseServerDir',
+    'files.searchPaths',
+    'files.search',
+    'files.open',
+    'files.openDiff',
+    'files.read',
+    'files.readPreview',
+    'files.readChunk',
+    'files.stat',
+    'files.watch',
+    'files.unwatch',
+    'files.resolveTerminalPath',
+    'files.readTerminalArtifact',
+    'files.readTerminalArtifactPreview'
+  ])
+
+  it('fences every mutating git and files method that exists', () => {
+    const all = [...GIT_METHODS, ...FILE_METHODS].map((method) => method.name)
+    const unfenced = all.filter((name) => !READ_ONLY.has(name) && !LEASE_FENCED_METHODS.has(name))
+    expect(unfenced).toEqual([])
+  })
+
+  it('does not fence a read', () => {
+    for (const name of READ_ONLY) {
+      expect(LEASE_FENCED_METHODS.has(name)).toBe(false)
+    }
+  })
+})

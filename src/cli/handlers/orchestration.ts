@@ -12,6 +12,7 @@ import { ORCHESTRATION_RUN_HANDLERS } from './orchestration/run-handlers'
 import { ORCHESTRATION_SEND_HANDLER } from './orchestration/message-send-handler'
 import { ORCHESTRATION_TASK_HANDLERS } from './orchestration/task-handlers'
 import { ORCHESTRATION_AWAIT_HANDLER } from './orchestration/await-handler'
+import { ORCHESTRATION_CERTIFICATION_HANDLERS } from './orchestration/certification-handlers'
 import { ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS } from './orchestration/control-plane-ops-handlers'
 import { ORCHESTRATION_STATE_HANDLER } from './orchestration/state-handler'
 import { ORCHESTRATION_WORKER_LAUNCH_HANDLER } from './orchestration/worker-launch-handler'
@@ -36,5 +37,6 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_WORKER_OPERATION_HANDLERS,
   ...ORCHESTRATION_STATE_HANDLER,
   ...ORCHESTRATION_AWAIT_HANDLER,
+  ...ORCHESTRATION_CERTIFICATION_HANDLERS,
   ...ORCHESTRATION_CONTROL_PLANE_OPS_HANDLERS
 }

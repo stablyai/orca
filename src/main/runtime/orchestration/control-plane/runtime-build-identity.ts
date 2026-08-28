@@ -92,10 +92,17 @@ export function resolveRuntimeCommitSha(entryPath = process.argv[1]): string | n
     return null
   }
   try {
-    const sha = gitExecFileSync(['rev-parse', 'HEAD'], {
-      cwd: dirname(resolve(entryPath))
-    }).trim()
-    return /^[0-9a-f]{40}$/.test(sha) ? sha : null
+    const cwd = dirname(resolve(entryPath))
+    const sha = gitExecFileSync(['rev-parse', 'HEAD'], { cwd }).trim()
+    if (!/^[0-9a-f]{40}$/.test(sha)) {
+      return null
+    }
+    // Why status too: HEAD alone says which commit the tree is ON, not which
+    // commit the running code IS. A dirty checkout — or a stale bundle in a repo
+    // whose HEAD has moved — would otherwise stamp evidence with a commit the
+    // executing code never came from. The embedded path already refuses a dirty
+    // build; this one has to as well or it is the softer way in.
+    return gitExecFileSync(['status', '--porcelain'], { cwd }).trim().length === 0 ? sha : null
   } catch {
     return null
   }
@@ -129,6 +136,8 @@ export function resolveRuntimeBuildIdentity(entryPath = process.argv[1]): Runtim
       }`
     }
   }
+  // Null now means "no repository above it, or a tree that does not match any
+  // commit" — both of which must refuse a SHA-bound claim rather than guess.
   const commitSha = resolveRuntimeCommitSha(entryPath)
   return {
     version,

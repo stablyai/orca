@@ -42,6 +42,28 @@ export const ORCHESTRATION_CONTROL_PLANE_SPECS: CommandSpec[] = [
     ]
   },
   {
+    path: ['orchestration', 'gate-run'],
+    summary: 'Have the RUNTIME execute a gate and record what actually happened',
+    usage:
+      'orca orchestration gate-run --dispatch <dispatch_id> --gate <gate_id> --program <cmd> [--args "<a b c>"] [--timeout-ms <n>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+    allowedFlags: [
+      ...GLOBAL_FLAGS,
+      'dispatch',
+      'gate',
+      'program',
+      'args',
+      'timeout-ms',
+      'run',
+      'from',
+      'retry-request'
+    ],
+    notes: [
+      'A completion receipt is only evidence when the runtime ran the gate itself. This is the verb that produces that evidence; a PASS with no successful execution behind it is a claim, not a receipt.',
+      'The runtime resolves the worktree and the SHA from the Dispatch and observes them itself, so a gate cannot be recorded against a commit it never ran on.',
+      'The exit code is what counts. A gate the runtime had to kill on timeout records exit 124 and does not pass.'
+    ]
+  },
+  {
     path: ['orchestration', 'certification-intent'],
     summary: "Mint the single-use intent that permits a never-certified route's first launch",
     usage:
