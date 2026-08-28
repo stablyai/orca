@@ -63,3 +63,45 @@ CORE DEFECT REPAIRED THIS ROUND
 
 NOT DONE
   no push, no PR, no release, no install, no native restart, no merge, no deploy
+
+
+BLOCKER 8 FOLLOW-UP — runtime-owned evidence writers (commit 9847fac4a0)
+
+Of the three kinds with no production writer, two are now closed and one is
+blocked on something that does not exist in Orca:
+
+  safe_launch_acceptance   CLOSED. worker-start makes this decision and used to
+                           discard it; it is now persisted at the moment it is
+                           made. A launch token is explicitly NOT accepted as a
+                           substitute (negative control).
+
+  effective_model_identity CLOSED. Read from the model the PROVIDER reports
+  effective_reasoning_mode through its own hook, bound to this Dispatch's exact
+                           pane, terminal and launch-token hash, and only when
+                           the report is newer than the Dispatch. Reports from
+                           another launch in the same pane, from a foreign pane
+                           or terminal, or predating the Dispatch are all
+                           refused (negative controls).
+
+  pretool_acceptance       BLOCKED, and failing closed by design. It requires an
+                           explicit accepted decision from an authoritative
+                           PreTool policy path. Orca has no such path: managed
+                           hook scripts emit a STATIC canned response
+                           (src/main/cursor/hook-script.ts getCursorHookResponse
+                           via wrapPosixHookCommand fallbackStdout), and a
+                           repository-wide search finds no per-Dispatch PreTool
+                           allow/deny decision anywhere in the main process —
+                           the only references to such a decision are the
+                           consumer added by this package.
+
+                           The persistence and reader now exist, so the moment a
+                           policy path records a decision it is consumed. Until
+                           then this kind cannot be satisfied.
+
+CONSEQUENCE, STATED PLAINLY
+  A route still cannot reach PASS, so AUTO_BUILDER_TO_REVIEWER remains unproven.
+  The remaining cause is no longer missing persistence — it is that Orca makes
+  no per-Dispatch PreTool policy decision to persist. Creating one is new runtime
+  policy, not an evidence writer, and inventing a proxy for it (a tool row, a
+  PostToolUse event, a static hook response) is precisely the gaming path this
+  package exists to remove and that I was corrected for attempting once already.
