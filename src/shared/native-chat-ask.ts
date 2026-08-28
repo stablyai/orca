@@ -191,6 +191,11 @@ const ASK_NEXT_TAB = '\x1b[C'
 const ASK_PREVIOUS_ROW = '\x1b[A'
 const ASK_NEXT_ROW = '\x1b[B'
 const ASK_NOTES = '\t'
+// The preview layout has no "Type something" row (upstream
+// anthropics/claude-code#27348, closed "not planned"). Free text goes through a
+// per-option note instead: `n` opens a note on the highlighted row, and the
+// typed text submits as a note-only answer that carries no option selection.
+const ASK_PREVIEW_NOTE = 'n'
 
 /** True once any option in the question carries a preview snippet — the
  *  selector then switches to a list+preview layout where a digit only moves
@@ -199,14 +204,37 @@ function questionHasPreview(q: AskQuestion): boolean {
   return q.options.some((o) => o.hasPreview === true)
 }
 
+/** Answer a preview-layout question, whose row set and commit semantics differ
+ *  from the plain selector: no "Type something" row, and a digit only highlights.
+ *
+ *  Free text always delivers through a note, which the tool result carries as an
+ *  annotation with no option counted as selected — so an answer that has BOTH a
+ *  pick and free text folds the label into the note text rather than dropping
+ *  either. Combining a committed pick with a note in one sequence is unmeasured. */
+function buildPreviewAnswerKeys(
+  q: AskQuestion,
+  sel: AskAnswerSelection | undefined,
+  other: string
+): AskAnswerKeyGroup[] {
+  if (other) {
+    const labels = answerLabels(q, sel).filter((label) => label !== other)
+    const note = labels.length > 0 ? `${labels.join(', ')} — ${other}` : other
+    return [{ raw: ASK_PREVIEW_NOTE }, { text: note }, { raw: ASK_ENTER }]
+  }
+  if ((sel?.indices.length ?? 0) > 0) {
+    return [{ raw: String(sel!.indices[0]! + 1) }, { raw: ASK_ENTER }]
+  }
+  return []
+}
+
 /** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
  *  Each group is written a step apart so the selector applies it before the next.
  *
  *  - single-select pick  → the option number (selects AND commits; in a
- *    multi-question prompt it auto-advances to the next question) — except when
- *    the question has a preview-style layout, where the digit only highlights
- *    and a following Enter commits it
+ *    multi-question prompt it auto-advances to the next question)
  *  - free-text answer    → the "Type something" row number, the text, then Enter
+ *  - preview layout      → see `buildPreviewAnswerKeys`; the row set and commit
+ *    semantics both differ from the plain selector
  *  - multi-select        → each option number TOGGLES its checkbox, then a step
  *    to the Submit tab
  *  - a multi-question prompt (and a lone multi-select) finishes on a Submit
@@ -226,35 +254,34 @@ export function buildAskAnswerKeys(
     const sel = selections[qi]
     const other = (sel?.other ?? '').trim()
     const typeSomething = String(q.options.length + 1)
-    // In the preview layout a digit only moves the highlight, so opening a row —
-    // including the "Type something" row — takes an Enter of its own before that
-    // row accepts input.
-    const openRow = (row: string): AskAnswerKeyGroup[] =>
-      questionHasPreview(q) ? [{ raw: row }, { raw: ASK_ENTER }] : [{ raw: row }]
 
     if (q.multiSelect) {
       for (const i of sel?.indices ?? []) {
         groups.push({ raw: String(i + 1) })
       }
       if (other) {
-        groups.push(...openRow(typeSomething), { text: other }, { raw: ASK_ENTER })
+        groups.push({ raw: typeSomething }, { text: other }, { raw: ASK_ENTER })
       }
       // A multi-select never auto-advances; step to the next tab (the Submit tab
       // when this is the last question).
       groups.push({ raw: ASK_NEXT_TAB })
+    } else if (questionHasPreview(q)) {
+      const previewGroups = buildPreviewAnswerKeys(q, sel, other)
+      if (previewGroups.length > 0) {
+        groups.push(...previewGroups)
+      } else if (multiQuestion) {
+        groups.push({ raw: ASK_NEXT_TAB })
+      }
     } else if (other) {
       // Single-select can only carry one value, so route any answer that
       // includes free text through the "Type something" row as one string.
       groups.push(
-        ...openRow(typeSomething),
+        { raw: typeSomething },
         { text: answerLabels(q, sel).join(', ') },
         { raw: ASK_ENTER }
       )
     } else if ((sel?.indices.length ?? 0) > 0) {
       groups.push({ raw: String(sel!.indices[0]! + 1) })
-      if (questionHasPreview(q)) {
-        groups.push({ raw: ASK_ENTER })
-      }
     } else if (multiQuestion) {
       // Unanswered question in a multi-question prompt: step past it.
       groups.push({ raw: ASK_NEXT_TAB })

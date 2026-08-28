@@ -319,37 +319,27 @@ describe('buildAskAnswerKeys', () => {
     ])
   })
 
-  it('preview selector free text: commits the "Type something" row before typing', () => {
-    // The digit only highlights that row, so without this Enter the text is typed
-    // at a selector that still has an option highlighted, and that option is what
-    // gets submitted.
+  it('preview selector free text: opens a note with `n` — there is no "Type something" row', () => {
+    // The preview layout dropped that row (upstream anthropics/claude-code#27348,
+    // closed "not planned"). `n` opens a note on the highlighted row and the text
+    // submits as a note-only answer.
     expect(
       buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
-    ).toEqual([{ raw: '3' }, { raw: '\r' }, { text: 'Zebra' }, { raw: '\r' }])
+    ).toEqual([{ raw: 'n' }, { text: 'Zebra' }, { raw: '\r' }])
   })
 
-  it('preview selector multi-select free text: commits the row before typing', () => {
-    const prompt: AskPrompt = {
-      questions: [
-        {
-          question: 'q',
-          multiSelect: true,
-          options: [
-            { label: 'A', hasPreview: true, preview: 'a' },
-            { label: 'B', hasPreview: true, preview: 'b' }
-          ]
-        }
-      ]
-    }
-    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'Zebra' }])).toEqual([
-      { raw: '1' },
-      { raw: '3' },
-      { raw: '\r' },
-      { text: 'Zebra' },
-      { raw: '\r' },
-      { raw: '\x1b[C' },
-      { raw: '\r' }
-    ])
+  it('preview selector option plus free text: folds the label into the note text', () => {
+    // A note-only answer carries no selection, so the picked label would be lost
+    // if it were not folded into the one channel that delivers.
+    expect(
+      buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
+        { indices: [1], other: 'but only in JS' }
+      ])
+    ).toEqual([{ raw: 'n' }, { text: 'Spaces — but only in JS' }, { raw: '\r' }])
+  })
+
+  it('preview selector: an unanswered lone question emits nothing', () => {
+    expect(buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [] }])).toEqual([])
   })
 
   it('plain selector free text: no extra Enter before the text', () => {
@@ -382,6 +372,32 @@ describe('buildAskAnswerKeys', () => {
       { raw: '2' },
       { raw: '\r' },
       { raw: '1' },
+      { raw: '\r' }
+    ])
+  })
+
+  it('multi-select with previews: keeps the plain checkbox sequence', () => {
+    // How the preview layout renders a multi-select — whether it keeps checkbox
+    // toggles and a "Type something" row at all — is unmeasured, so this pins
+    // current behavior rather than asserting a verified contract.
+    const prompt: AskPrompt = {
+      questions: [
+        {
+          question: 'q',
+          multiSelect: true,
+          options: [
+            { label: 'A', hasPreview: true },
+            { label: 'B', hasPreview: true }
+          ]
+        }
+      ]
+    }
+    expect(buildAskAnswerKeys(prompt, [{ indices: [0], other: 'Zebra' }])).toEqual([
+      { raw: '1' },
+      { raw: '3' },
+      { text: 'Zebra' },
+      { raw: '\r' },
+      { raw: '\x1b[C' },
       { raw: '\r' }
     ])
   })
