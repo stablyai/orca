@@ -8,7 +8,7 @@ import {
   writeFileSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { delimiter, isAbsolute, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join } from 'node:path'
 import { execFileSync, spawnSync } from 'node:child_process'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
@@ -24,6 +24,20 @@ const bashAvailable = existsSync('/bin/bash')
 const fishAvailable = spawnSync('fish', ['--version']).status === 0
 const pwshAvailable =
   spawnSync('pwsh', ['-NoLogo', '-NoProfile', '-Command', 'exit 0']).status === 0
+
+/** Absolute path of an executable on the host PATH, or null. */
+function resolveOnPath(name: string): string | null {
+  for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+    if (!dir) {
+      continue
+    }
+    const candidate = join(dir, name)
+    if (existsSync(candidate)) {
+      return candidate
+    }
+  }
+  return null
+}
 
 function writeExecutable(path: string, content: string): void {
   writeFileSync(path, content)
@@ -266,7 +280,7 @@ describe.skipIf(process.platform === 'win32')('Codex shell launch preflight', ()
           encoding: 'utf-8',
           env: {
             ...process.env,
-            PATH: `${bin}${delimiter}${process.env.PATH ?? ''}`,
+            PATH: `${bin}${delimiter}${dirname(resolveOnPath('fish') ?? '')}`,
             ORCA_CODEX_LAUNCH_PREFLIGHT: join(bin, 'orca-test')
           }
         }
