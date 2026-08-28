@@ -17,6 +17,7 @@ import { stripNoiseMessages } from './native-chat-noise'
 import { foldToolMessages, splitNativeChatBlocks } from './native-chat-tool-fold'
 import { isNearBottom, shouldShowJumpToLatest, type ScrollGeometry } from './native-chat-autoscroll'
 import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import { NativeChatReasoningRow } from './NativeChatReasoningRow'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatCopyButton } from './NativeChatCopyButton'
 import { NATIVE_CHAT_STREAMING_ID } from '../../../../shared/native-chat-streaming'
@@ -197,17 +198,28 @@ function MessageRow({
     )
   }
 
-  // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. The controls reveal on hover (and on keyboard focus-within).
-  const showControls = !isReasoning && !isSystem && markdown.length > 0
+  if (isReasoning) {
+    return (
+      <div ref={rowRef} className="max-w-full text-sm leading-relaxed">
+        <NativeChatReasoningRow
+          markdown={markdown}
+          expandSignal={expandSignal}
+          onLinkClick={onLinkClick}
+          allowFileUriLinks={allowFileUriLinks}
+        />
+      </div>
+    )
+  }
+
+  // Plain assistant prose is the copyable unit; system asides stay chrome-free.
+  // The controls reveal on hover (and on keyboard focus-within).
+  const showControls = !isSystem && markdown.length > 0
 
   return (
     <div
       ref={rowRef}
       className={cn(
         'group relative max-w-full text-sm leading-relaxed text-foreground',
-        // Reasoning is the agent thinking aloud — quieter, italic, like an aside.
-        isReasoning && 'border-l-2 border-border/60 pl-3 italic text-muted-foreground',
         isSystem && 'text-xs text-muted-foreground'
       )}
     >

@@ -58,7 +58,7 @@ export function decodeClaudeTranscriptLine(
   const messageId = extractString(record.uuid) ?? extractString(message?.id)
   return {
     id: messageId ?? fallbackId,
-    role: claudeMessageRole(role, blocks),
+    role: claudeMessageRole(role, blocks, message?.content),
     blocks,
     timestamp,
     source: 'transcript'
@@ -69,13 +69,39 @@ export function decodeClaudeTranscriptLine(
 // up solely of reasoning, surface it as a reasoning-role message.
 function claudeMessageRole(
   role: 'user' | 'assistant',
-  blocks: NativeChatBlock[]
+  blocks: NativeChatBlock[],
+  content: unknown
 ): NativeChatMessage['role'] {
   if (role === 'user') {
     const onlyToolResults = blocks.every((block) => block.type === 'tool-result')
     return onlyToolResults && blocks.length > 0 ? 'tool' : 'user'
   }
-  return role
+  return isThinkingOnlyContent(content) ? 'reasoning' : role
+}
+
+// Why: decoded text loses thinking provenance; inspect raw content while tolerating redacted siblings.
+function isThinkingOnlyContent(content: unknown): boolean {
+  if (!Array.isArray(content)) {
+    return false
+  }
+  let sawThinking = false
+  for (const item of content) {
+    if (typeof item === 'string') {
+      if (item.trim()) {
+        return false
+      }
+      continue
+    }
+    const record = asRecord(item)
+    if (!record) {
+      continue
+    }
+    if (record.type !== 'thinking' && record.type !== 'redacted_thinking') {
+      return false
+    }
+    sawThinking = true
+  }
+  return sawThinking
 }
 
 function parseTimestamp(value: unknown): number | null {
