@@ -564,6 +564,13 @@ describe('repo RPC methods', () => {
         path: '/srv/platform'
       })
     )
+    const repoPathStatusResponse = await dispatcher.dispatch(
+      makeRequest('folderWorkspace.getPathStatus', {
+        scope: 'repo',
+        repoId: 'repo-1',
+        executionHostId: ' local '
+      })
+    )
 
     expect(runtime.listProjectGroups).toHaveBeenCalled()
     expect(runtime.createProjectGroup).toHaveBeenCalledWith({
@@ -595,6 +602,11 @@ describe('repo RPC methods', () => {
       scope: 'path',
       path: '/srv/platform'
     })
+    expect(runtime.getFolderWorkspacePathStatus).toHaveBeenCalledWith({
+      scope: 'repo',
+      repoId: 'repo-1',
+      executionHostId: 'local'
+    })
     expect(moveResponse).toMatchObject({
       ok: true,
       result: { repo: { id: 'repo-1', projectGroupId: group.id } }
@@ -610,6 +622,10 @@ describe('repo RPC methods', () => {
       result: { status: { path: '/srv/platform', exists: true } }
     })
     expect(directPathStatusResponse).toMatchObject({
+      ok: true,
+      result: { status: { path: '/srv/platform', exists: true } }
+    })
+    expect(repoPathStatusResponse).toMatchObject({
       ok: true,
       result: { status: { path: '/srv/platform', exists: true } }
     })

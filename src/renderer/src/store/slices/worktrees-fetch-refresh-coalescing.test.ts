@@ -18,6 +18,7 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
+import { teardownMissingWorktreeTerminalsBestEffort } from './worktrees/teardown/missing-worktree-terminal-teardown'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
 
@@ -151,6 +152,52 @@ describe('fetchWorktrees', () => {
 
     expect(mockApi.runtime.call).toHaveBeenCalledTimes(1)
     expect(store.getState().tabsByWorktree[deleted.id]).toBeUndefined()
+  })
+
+  it('does not coalesce distinct newline-containing missing-worktree sets', async () => {
+    const releases: (() => void)[] = []
+    mockApi.runtime.call.mockImplementation(
+      ({ params }: { params?: { worktreeIds?: string[] } }) =>
+        new Promise((resolve) => {
+          const worktreeIds = params?.worktreeIds ?? []
+          releases.push(() =>
+            resolve({
+              id: `teardown-${releases.length}`,
+              ok: true,
+              result: {
+                stoppedWorktreeIds: worktreeIds,
+                verifiedStoppedWorktreeIds: worktreeIds
+              }
+            })
+          )
+        })
+    )
+    const settings = createTestStore().getState().settings
+    const detected = makeDetectedResult('repo1', [])
+    const firstIds = ['repo1::/a\nb', 'repo1::/c']
+    const secondIds = ['repo1::/a', 'repo1::/b\nc']
+
+    const first = teardownMissingWorktreeTerminalsBestEffort(
+      settings,
+      'repo1',
+      null,
+      firstIds,
+      detected
+    )
+    await vi.waitFor(() => expect(mockApi.runtime.call).toHaveBeenCalledTimes(1))
+    const second = teardownMissingWorktreeTerminalsBestEffort(
+      settings,
+      'repo1',
+      null,
+      secondIds,
+      detected
+    )
+    await vi.waitFor(() => expect(mockApi.runtime.call).toHaveBeenCalledTimes(2))
+
+    for (const release of releases) {
+      release()
+    }
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true])
   })
 
   // Why (#10562): "I can't reach the host" must never be read as "the worktree is

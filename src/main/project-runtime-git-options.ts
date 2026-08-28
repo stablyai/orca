@@ -1,6 +1,8 @@
-import type { Store } from './persistence'
 import type { Repo } from '../shared/repo-types'
-import { resolveLocalProjectRuntimeForRepo } from './local-project-runtime-resolution'
+import {
+  resolveLocalProjectRuntimeForRepo,
+  type LocalProjectRuntimeStore
+} from './local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
 
 export {
@@ -18,7 +20,7 @@ export type LocalProjectWorktreeGitOptions = {
 }
 
 export function getLocalProjectGitExecOptions(
-  store: Store,
+  store: LocalProjectRuntimeStore,
   repo: Repo
 ): LocalProjectGitExecOptions {
   // Why: local git must run in the same resolved project runtime as agents,
@@ -48,7 +50,7 @@ function getLocalProjectGitExecOptionsForRuntime(
 }
 
 export function getLocalProjectWorktreeGitOptions(
-  store: Store,
+  store: LocalProjectRuntimeStore,
   repo: Repo
 ): LocalProjectWorktreeGitOptions {
   const { wslDistro } = getLocalProjectGitExecOptions(store, repo)

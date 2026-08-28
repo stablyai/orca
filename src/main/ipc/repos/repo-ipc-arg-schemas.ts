@@ -188,7 +188,14 @@ export const FolderWorkspacePathStatusArgs = z.discriminatedUnion('scope', [
     executionHostId: z
       .string()
       .min(1)
-      .refine((value) => normalizeExecutionHostId(value) !== null)
+      .transform((value, ctx) => {
+        const executionHostId = normalizeExecutionHostId(value)
+        if (!executionHostId) {
+          ctx.addIssue({ code: 'custom', message: 'Invalid execution host ID' })
+          return z.NEVER
+        }
+        return executionHostId
+      })
   })
 ])
 

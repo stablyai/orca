@@ -18,6 +18,8 @@ type FolderWorkspacePathStatusStore = {
   getRepos: () => Repo[]
   getProjectGroups?: () => ProjectGroup[]
   getFolderWorkspaces?: () => FolderWorkspace[]
+  getProjects?: Store['getProjects']
+  getSettings?: Store['getSettings']
 }
 
 export type FolderWorkspacePathConnectionResolution =
@@ -161,7 +163,7 @@ async function statRepoPath(
   }
   let wslDistro: string | undefined
   try {
-    wslDistro = getLocalProjectWorktreeGitOptions(store as Store, repo).wslDistro
+    wslDistro = getLocalProjectWorktreeGitOptions(store, repo).wslDistro
   } catch {
     return { path: repo.path, exists: false, reason: 'unavailable' }
   }

@@ -7,7 +7,7 @@ import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-i
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { DiffCommentSchema } from '../../../../shared/diff-comment-schema'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { normalizeExecutionHostId } from '../../../../shared/execution-host'
 
 const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -71,10 +71,17 @@ const FolderWorkspaceSelector = z.object({
   folderWorkspaceId: requiredString('Missing folder workspace id')
 })
 
-const ExecutionHostIdSchema = z.custom<ExecutionHostId>(
-  (value) => typeof value === 'string' && parseExecutionHostId(value) !== null,
-  'Invalid execution host id'
-)
+const ExecutionHostIdSchema = z
+  .string()
+  .min(1)
+  .transform((value, ctx) => {
+    const executionHostId = normalizeExecutionHostId(value)
+    if (!executionHostId) {
+      ctx.addIssue({ code: 'custom', message: 'Invalid execution host ID' })
+      return z.NEVER
+    }
+    return executionHostId
+  })
 
 const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
   z.object({

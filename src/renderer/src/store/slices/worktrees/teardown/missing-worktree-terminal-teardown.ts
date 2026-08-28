@@ -32,7 +32,7 @@ export async function teardownMissingWorktreeTerminalsBestEffort(
     target.kind === 'local' ? 'local' : `runtime:${target.environmentId}`,
     repoId,
     normalizedConnectionId ?? '',
-    [...missingIds].sort().join('\n')
+    JSON.stringify([...missingIds].sort())
   ].join('\0')
   const existing = missingWorktreeTeardownsInFlight.get(key)
   if (existing) {

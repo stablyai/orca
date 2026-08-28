@@ -14,7 +14,12 @@ import {
 import { getRepoIdFromWorktreeId } from '../shared/worktree/id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
 
-function canResolveProjectRuntimeForRepo(store: Store): boolean {
+export type LocalProjectRuntimeStore = Partial<Pick<Store, 'getProjects' | 'getSettings'>>
+type ReadyLocalProjectRuntimeStore = Pick<Store, 'getProjects' | 'getSettings'>
+
+function canResolveProjectRuntimeForRepo(
+  store: LocalProjectRuntimeStore
+): store is ReadyLocalProjectRuntimeStore {
   return typeof store.getProjects === 'function' && typeof store.getSettings === 'function'
 }
 
@@ -23,9 +28,9 @@ function canResolveProjectRuntimeForWorktreeId(store: Store): boolean {
 }
 
 function resolveLocalProjectRuntime(
-  store: Store,
+  store: ReadyLocalProjectRuntimeStore,
   project: Project,
-  settings: ReturnType<Store['getSettings']> = store.getSettings()
+  settings: ReturnType<ReadyLocalProjectRuntimeStore['getSettings']> = store.getSettings()
 ): ProjectExecutionRuntimeResolution {
   const wslAvailable = hasCachedWslAvailability()
     ? (getCachedWslAvailability() ?? undefined)
@@ -42,7 +47,7 @@ function resolveLocalProjectRuntime(
 }
 
 export function resolveLocalProjectRuntimeForRepo(
-  store: Store,
+  store: LocalProjectRuntimeStore,
   repo: Repo
 ): ProjectExecutionRuntimeResolution | undefined {
   if (
@@ -59,7 +64,7 @@ export function resolveLocalProjectRuntimeForRepo(
 }
 
 export function resolveLocalProjectRuntimesForRepos(
-  store: Store,
+  store: LocalProjectRuntimeStore,
   repos: readonly Repo[]
 ): ReadonlyMap<string, ProjectExecutionRuntimeResolution> {
   const runtimeByRepoId = new Map<string, ProjectExecutionRuntimeResolution>()
