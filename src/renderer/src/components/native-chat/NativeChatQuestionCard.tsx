@@ -36,10 +36,25 @@ export function NativeChatQuestionCard({
   // unique, while Claude's selector commits the numbered row (STA-1860).
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
+  // Which option's preview is showing, per question. Pointer and keyboard focus
+  // both write it, so hovering a row previews it without committing a pick.
+  const [highlights, setHighlights] = useState<number[]>(() => prompt.questions.map(() => 0))
 
   const total = prompt.questions.length
   const isLast = index === total - 1
   const q = prompt.questions[index]!
+
+  const setHighlight = (optionIndex: number): void => {
+    setHighlights((prev) => {
+      const next = [...prev]
+      next[index] = optionIndex
+      return next
+    })
+  }
+
+  const previewIndex = highlights[index] ?? 0
+  const preview = q.options[previewIndex]?.preview
+  const questionHasPreview = q.options.some((option) => (option.preview ?? '').length > 0)
 
   const setOther = (qi: number, value: string): void => {
     setOtherText((prev) => {
@@ -86,6 +101,7 @@ export function NativeChatQuestionCard({
   // trailing Send/Next button. (Auto-submitting on the first click dismissed the
   // card before the user saw any feedback, which read as "nothing happened".)
   const pickOption = (optionIndex: number): void => {
+    setHighlight(optionIndex)
     setSelections((prev) => {
       const next = prev.map((s) => [...s])
       const cur = next[index] ?? []
@@ -169,21 +185,40 @@ export function NativeChatQuestionCard({
             </button>
           </div>
 
-          {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
-              the card's right edge instead of crowding the choices. */}
-          <div className="max-h-[50vh] divide-y divide-border/60 overflow-y-auto border-t border-border scrollbar-sleek">
-            {q.options.map((opt, i) => (
-              <OptionRow
-                key={`${i}:${opt.label}`}
-                badge={String(i + 1)}
-                label={opt.label}
-                description={opt.description}
-                selected={(selections[index] ?? []).includes(i)}
-                disabled={isSubmitting}
-                onSelect={() => pickOption(i)}
-              />
-            ))}
-            <div className="flex items-center gap-3 px-3.5 py-2.5">
+          {/* The card is width-constrained by the chat pane, not the window, so
+              the split is driven by the card's own inline size. */}
+          <div className="@container/question border-t border-border">
+            <div
+              className={cn(
+                'flex flex-col',
+                questionHasPreview && '@2xl/question:flex-row @2xl/question:items-stretch'
+              )}
+            >
+              {/* Scroll only kicks in on long option lists; the sleek scrollbar rides
+                  the card's right edge instead of crowding the choices. */}
+              <div
+                className={cn(
+                  'max-h-[50vh] min-w-0 divide-y divide-border/60 overflow-y-auto scrollbar-sleek',
+                  questionHasPreview && '@2xl/question:w-1/2 @2xl/question:shrink-0'
+                )}
+              >
+                {q.options.map((opt, i) => (
+                  <OptionRow
+                    key={`${i}:${opt.label}`}
+                    badge={String(i + 1)}
+                    label={opt.label}
+                    description={opt.description}
+                    selected={(selections[index] ?? []).includes(i)}
+                    highlighted={questionHasPreview && previewIndex === i}
+                    disabled={isSubmitting}
+                    onSelect={() => pickOption(i)}
+                    onHighlight={() => setHighlight(i)}
+                  />
+                ))}
+              </div>
+              {questionHasPreview ? <PreviewPanel preview={preview} /> : null}
+            </div>
+            <div className="flex items-center gap-3 border-t border-border/60 px-3.5 py-2.5">
               <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                 <Pencil className="size-3.5" />
               </span>
@@ -237,32 +272,57 @@ export function NativeChatQuestionCard({
   )
 }
 
+/** The highlighted option's example snippet. Monospace because the content is
+ *  literal (code, configuration); scrolls internally so a long snippet never
+ *  grows the card. */
+function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
+  return (
+    <div className="min-w-0 flex-1 border-t border-border/60 bg-muted/40 @2xl/question:border-t-0 @2xl/question:border-l">
+      {preview ? (
+        <pre className="max-h-[50vh] overflow-auto p-3.5 font-mono text-xs whitespace-pre text-foreground scrollbar-sleek">
+          {preview}
+        </pre>
+      ) : (
+        <p className="p-3.5 text-xs text-muted-foreground">
+          {translate('components.native-chat.question.noPreview', 'This option has no preview.')}
+        </p>
+      )}
+    </div>
+  )
+}
+
 function OptionRow({
   badge,
   label,
   description,
   selected,
+  highlighted,
   disabled,
-  onSelect
+  onSelect,
+  onHighlight
 }: {
   badge: string
   label: string
   description?: string
   selected: boolean
+  highlighted: boolean
   disabled: boolean
   onSelect: () => void
+  onHighlight: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
       disabled={disabled}
       onClick={onSelect}
+      onMouseEnter={onHighlight}
+      onFocus={onHighlight}
       // Selection is otherwise only the visual check/badge swap; expose it to
       // assistive tech.
       aria-pressed={selected}
       className={cn(
         'flex w-full items-start gap-3 px-3.5 py-2.5 text-left transition-colors disabled:pointer-events-none',
-        selected ? 'bg-accent' : 'hover:bg-accent'
+        selected || highlighted ? 'bg-accent' : 'hover:bg-accent'
       )}
     >
       <span
