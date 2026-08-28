@@ -30,7 +30,10 @@ describe('orchestration RPC contract', () => {
     ['orchestration.check', { unread: true }],
     ['orchestration.check', { peek: true, ack: 'delivery_1' }],
     ['orchestration.run', {}],
-    ['orchestration.runStop', {}]
+    ['orchestration.runStop', {}],
+    // Observational response, but it reconciles remote/restarted workers on the
+    // way, so a dropped reply must be recovery-tracked.
+    ['orchestration.workerShow', {}]
   ])('classifies %s as a mutation', (method, params) => {
     expect(isOrchestrationMutation(method, params)).toBe(true)
   })
@@ -43,7 +46,6 @@ describe('orchestration RPC contract', () => {
     ['orchestration.taskList', {}],
     ['orchestration.dispatchShow', {}],
     ['orchestration.gateList', {}],
-    ['orchestration.workerShow', {}],
     ['orchestration.workerRead', {}],
     ['orchestration.federationPull', {}],
     ['orchestration.federationShow', {}],

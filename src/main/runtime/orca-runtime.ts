@@ -135,7 +135,6 @@ import { mkdir, readFile, readdir, rm, stat } from 'node:fs/promises'
 import { resolveWorktreeCreateBase } from '../worktree-create-base'
 import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { OrchestrationDb } from './orchestration/db'
-import { exposeUtcTimestamp } from './orchestration/db/utc-timestamp'
 import type { DispatchStatus } from './orchestration/types'
 import { reconcileRequestedWorkerTerminalReleases } from './orchestration/worker-terminal-release-reconciliation'
 import type { LivenessSignalSource as OrchestrationLivenessSignalSource } from './orchestration/control-plane/liveness-sweep'
@@ -35651,14 +35650,11 @@ export class OrcaRuntimeService {
     const parentPaneKey = parentTerminalHandle
       ? this.getPaneKeyForTerminalHandle(parentTerminalHandle)
       : undefined
-    const dispatchedAt = dispatch.dispatched_at ? exposeUtcTimestamp(dispatch.dispatched_at) : null
-
     return {
       taskId: dispatch.task_id,
       dispatchId: dispatch.id,
       ...(dispatch.process_incarnation ? { processIncarnation: dispatch.process_incarnation } : {}),
       ...(dispatch.launch_token_hash ? { launchTokenHash: dispatch.launch_token_hash } : {}),
-      ...(dispatchedAt ? { dispatchedAt } : {}),
       dispatchStatus: dispatch.status,
       ...(display.taskTitle ? { taskTitle: display.taskTitle } : {}),
       ...(display.displayName ? { displayName: display.displayName } : {}),
