@@ -444,6 +444,28 @@ describe('NativeChatQuestionCard', () => {
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
   })
 
+  it('names the free-form row a note on preview questions, and an answer otherwise', () => {
+    // On a preview question the text delivers as an annotation that counts no
+    // option as selected, so the row is not the same promise as "your answer".
+    render(previewPrompt, vi.fn())
+    expect(container.querySelector('input')!.placeholder).toBe('Add a note instead of picking')
+
+    render(tabsOrSpaces, vi.fn())
+    expect(container.querySelector('input')!.placeholder).toBe('Type your answer')
+  })
+
+  it('submits a note with no option picked on a preview question', () => {
+    // Note-only is a valid answer in the preview layout, so the card must not
+    // require a selection alongside it.
+    const onAnswer = vi.fn()
+    render(previewPrompt, onAnswer)
+
+    typeAnswer('none of these, actually')
+    clickAction('Submit')
+
+    expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'none of these, actually' }])
+  })
+
   it('submits typed text after hovering a preview option, with no option selected', () => {
     const onAnswer = vi.fn()
     render(previewPrompt, onAnswer)

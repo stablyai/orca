@@ -247,10 +247,17 @@ export function NativeChatQuestionCard({
                     confirm(true)
                   }
                 }}
-                placeholder={translate(
-                  'components.native-chat.question.otherPlaceholder',
-                  'Type your answer'
-                )}
+                placeholder={
+                  questionHasPreviewText
+                    ? translate(
+                        'components.native-chat.question.notePlaceholder',
+                        'Add a note instead of picking'
+                      )
+                    : translate(
+                        'components.native-chat.question.otherPlaceholder',
+                        'Type your answer'
+                      )
+                }
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
               />
               <button
