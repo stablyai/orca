@@ -1,6 +1,12 @@
 import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 import type { OrchestrationDb } from '../db'
 import { exposeUtcTimestamp } from '../db/utc-timestamp'
+import { readObservedLaunchIdentity } from './certification-event-source'
+import {
+  observeProviderSessionIdentity,
+  persistObservedLaunchReceipt
+} from './provider-session-identity'
+import { readDispatchLaunchEffort } from './route-runtime-events'
 import type { DispatchContextRow } from '../types'
 import { COORDINATOR_WAKE_REASONS, WAKE_REASON_PAYLOAD_KEY } from './coordinator-wake-events'
 import { ControlPlaneStore } from './control-plane-store'
@@ -130,12 +136,50 @@ function clampToDispatchStart(
   return Number.isFinite(startedAtMs) && lastOutputAtMs < startedAtMs ? null : lastOutputAtMs
 }
 
+/** Persists the provider's own effective identity once, the first time it can be
+ *  observed. Silent and best effort: liveness must not fail because a provider
+ *  has not yet said what it is. */
+function recordObservedProviderIdentity(
+  db: OrchestrationDb,
+  dispatch: DispatchContextRow,
+  snapshot: readonly AgentStatusIpcPayload[]
+): void {
+  try {
+    if (readObservedLaunchIdentity(db, dispatch.id)) {
+      return
+    }
+    const worker = db.getWorkerDispatch(dispatch.id)
+    const verdict = observeProviderSessionIdentity({
+      dispatch,
+      snapshot,
+      reasoning: readDispatchLaunchEffort(worker?.start_options)
+    })
+    if (!verdict.ok) {
+      return
+    }
+    persistObservedLaunchReceipt(db, {
+      dispatchId: dispatch.id,
+      identity: verdict.observation.identity,
+      sessionId: verdict.observation.sessionId,
+      observedAtIso: new Date(verdict.observation.observedAtMs || Date.now()).toISOString()
+    })
+  } catch {
+    // An unobservable identity is simply not yet observed.
+  }
+}
+
 async function collectSignals(
   db: OrchestrationDb,
   dispatch: DispatchContextRow,
   source: LivenessSignalSource
 ): Promise<DispatchLivenessSignals> {
   const resource = db.getWorkerTerminalResourceByOwner(dispatch.id)
+  // Why here: the sweep already holds this Dispatch and the runtime's own status
+  // snapshot, which is exactly what is needed to notice that the provider has
+  // stated which model it is running. Recording it here means the observation is
+  // persisted while the session is alive, rather than being asked for later when
+  // the transcript may be gone.
+  recordObservedProviderIdentity(db, dispatch, source.agentStatusSnapshot())
   const processLiveness = dispatch.process_incarnation
     ? await source
         .inspectProcessLiveness(dispatch.process_incarnation, resource?.host_scope ?? null)
