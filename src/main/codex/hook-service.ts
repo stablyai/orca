@@ -19,6 +19,7 @@ import {
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { resolveHooksJsonWritePath } from '../agent-hooks/hook-config-write-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
@@ -31,6 +32,7 @@ import {
 } from '../agent-hooks/installer-utils-remote'
 import {
   buildPosixHookPayloadCapture,
+  buildPosixHookSpoolLines,
   buildWindowsHookEnvironmentGuardLines,
   buildWindowsHookStdinDrainEpilogue,
   POSIX_HOOK_STDIN_DRAIN_COMMAND
@@ -818,9 +820,11 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
+    ...buildPosixHookSpoolLines('codex'),
     // Why: sourcing refreshes PORT/TOKEN/ENV/VERSION from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
     'load_hook_endpoint() {',
     '  endpoint_path="$1"',
+    '  unset ORCA_AGENT_HOOK_TRANSPORT',
     '  case "$endpoint_path" in',
     '    *.cmd)',
     // Why: Windows passes endpoint.cmd into WSL via WSLENV; parse only Orca's known assignments since cmd.exe `set` lines aren't shell syntax.
@@ -832,6 +836,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '          "set ORCA_AGENT_HOOK_TOKEN="*) ORCA_AGENT_HOOK_TOKEN=${endpoint_line#*=} ;;',
     '          "set ORCA_AGENT_HOOK_ENV="*) ORCA_AGENT_HOOK_ENV=${endpoint_line#*=} ;;',
     '          "set ORCA_AGENT_HOOK_VERSION="*) ORCA_AGENT_HOOK_VERSION=${endpoint_line#*=} ;;',
+    '          "set ORCA_AGENT_HOOK_TRANSPORT="*) ORCA_AGENT_HOOK_TRANSPORT=${endpoint_line#*=} ;;',
     '        esac',
     '      done < "$endpoint_path"',
     '      ;;',
@@ -844,26 +849,18 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  load_hook_endpoint "$ORCA_AGENT_HOOK_ENDPOINT"',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  spool_hook_event',
     '  exit 0',
     'fi',
     'post_codex_hook() {',
     '  curl_bin="$1"',
     '  connect_timeout="${2:-0.5}"',
     '  max_time="${3:-1.5}"',
-    // Why: worktreeId embeds a path, so hand-building JSON in shell is unsafe with quotes/newlines; post raw payload plus metadata as form fields instead.
-    // Why: pipe payload to curl's stdin (`payload@-`) not an inline arg, so tens-of-KB tool output stays off the command line (EDR false positives).
-    '  printf \'%s\' "$payload" | "$curl_bin" -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/codex" \\',
-    '    --connect-timeout "$connect_timeout" --max-time "$max_time" \\',
-    '    --noproxy "127.0.0.1" \\',
-    '    -H "Content-Type: application/x-www-form-urlencoded" \\',
-    '    -H "X-Orca-Agent-Hook-Token: ${ORCA_AGENT_HOOK_TOKEN}" \\',
-    '    --data-urlencode "paneKey=${ORCA_PANE_KEY}" \\',
-    '    --data-urlencode "tabId=${ORCA_TAB_ID}" \\',
-    '    --data-urlencode "launchToken=${ORCA_AGENT_LAUNCH_TOKEN}" \\',
-    '    --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
-    '    --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
-    '    --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '    --data-urlencode "payload@-"',
+    // Why: keep full hook JSON off the command line and avoid URL-encoding paths/commands into IDS-friendly traversal signatures.
+    ...buildPosixAgentHookPostCommand('codex', {
+      curlCommand: '"$curl_bin"',
+      indent: '    '
+    }).map((line) => `  ${line}`),
     '}',
     'is_wsl_runtime() {',
     '  [ -n "$WSL_DISTRO_NAME" ] && return 0',
@@ -875,9 +872,13 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     'if is_wsl_runtime; then',
     '  windows_curl=$(command -v curl.exe 2>/dev/null || true)',
     '  if [ -n "$windows_curl" ] && [ -x "$windows_curl" ]; then',
-    '    post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',
+    '    if post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1; then',
+    '      exit 0',
+    '    fi',
+    '    # post_codex_hook "$windows_curl" 3 5 >/dev/null 2>&1 || true',
     '  fi',
     'fi',
+    'spool_hook_event',
     'exit 0',
     ''
   ].join('\n')
@@ -1074,6 +1075,7 @@ export class CodexHookService {
   }
 
   private readonly wslReconciliationGeneration = new Map<string, number>()
+  private readonly wslInstallsInFlight = new Map<string, Promise<AgentHookInstallStatus | null>>()
 
   private supersedeWslReconciliation(runtimeHomePath: string | null | undefined): number {
     if (!runtimeHomePath) {
@@ -1168,6 +1170,30 @@ export class CodexHookService {
     } finally {
       markPrimaryInstallSettled()
     }
+  }
+
+  installForRuntimeHomeSerialized(
+    runtimeHomePath: string | null | undefined,
+    target?: CodexWslRuntimeHookTarget
+  ): Promise<AgentHookInstallStatus | null> {
+    if (!runtimeHomePath) {
+      return Promise.resolve(null)
+    }
+    const targetKey = target?.runtime === 'wsl' ? target.wslDistro?.trim().toLowerCase() : ''
+    const key = `${getWslReconciliationKey(runtimeHomePath)}\0${targetKey ?? ''}`
+    const active = this.wslInstallsInFlight.get(key)
+    if (active) {
+      return active
+    }
+    const install = this.installForRuntimeHome(runtimeHomePath, target)
+    this.wslInstallsInFlight.set(key, install)
+    const clear = (): void => {
+      if (this.wslInstallsInFlight.get(key) === install) {
+        this.wslInstallsInFlight.delete(key)
+      }
+    }
+    void install.then(clear, clear)
+    return install
   }
 
   refreshRuntimeUserHooksForRuntimeHome(
@@ -1485,7 +1511,13 @@ export class CodexHookService {
       options?.codexHomeDir?.replace(/\/$/, '') ?? `${remoteHome.replace(/\/$/, '')}/.codex`
     const remoteConfigPath = `${codexHomeBase}/hooks.json`
     const remoteTomlPath = `${codexHomeBase}/config.toml`
-    const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
+    // Redirected WSL homes must use the same script location and command shape
+    // as the runtime installer; two representations of one hooks.json race
+    // into stale trust keys. Plain SSH keeps its guest-home script contract.
+    const redirectedCodexHome = options?.codexHomeDir?.replace(/\/$/, '')
+    const remoteScriptPath = redirectedCodexHome
+      ? `${redirectedCodexHome}/.orca/agent-hooks/codex-hook.sh`
+      : `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/codex-hook.sh`
     try {
       const config = await readHooksJsonRemote(sftp, remoteConfigPath)
       if (!config) {
@@ -1498,7 +1530,9 @@ export class CodexHookService {
         }
       }
 
-      const command = wrapPosixHookCommand(remoteScriptPath)
+      const command = redirectedCodexHome
+        ? wrapReadablePosixHookCommand(remoteScriptPath)
+        : wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const managedEvents = new Set<string>(CODEX_EVENTS)
       const isManagedCommand = createManagedCommandMatcher('codex-hook.sh')
@@ -1522,11 +1556,13 @@ export class CodexHookService {
         const definition: HookDefinition = {
           hooks: [buildManagedCommandHook(command)]
         }
-        nextHooks[eventName] = [...cleaned, definition]
+        nextHooks[eventName] = redirectedCodexHome
+          ? [definition, ...cleaned]
+          : [...cleaned, definition]
         trustEntries.push({
           sourcePath: remoteConfigPath,
           eventLabel: CODEX_EVENT_LABEL[eventName],
-          groupIndex: cleaned.length,
+          groupIndex: redirectedCodexHome ? 0 : cleaned.length,
           handlerIndex: 0,
           command,
           timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS

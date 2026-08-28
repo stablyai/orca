@@ -31,6 +31,7 @@
     "check:max-lines-ratchet": "node config/scripts/check-max-lines-ratchet.mjs",
     "check:runtime-electron-ratchet": "node config/scripts/check-runtime-electron-ratchet.mjs",
     "build:orcad": "node config/scripts/build-orcad.mjs",
+    "build:orcad-prebuilds": "node config/scripts/build-orcad-prebuilds.mjs",
     "smoke:orcad-terminal": "node config/scripts/ensure-native-runtime.mjs --runtime=node && pnpm run build:cli && pnpm run build:orcad && node config/scripts/runtime-serve-terminal-smoke.mjs --target orcad",
     "smoke:serve-terminal": "node config/scripts/runtime-serve-terminal-smoke.mjs",
     "check:feature-wall-assets": "node config/scripts/check-feature-wall-assets.mjs",

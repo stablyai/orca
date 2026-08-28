@@ -586,6 +586,13 @@ function writeNodePtyPatchFile(projectDir) {
 function writePatchedNodePtyBuildArtifacts(projectDir) {
   const buildDir = join(projectDir, 'node_modules', 'node-pty', 'build', 'Release')
   mkdirSync(buildDir, { recursive: true })
+  if (process.platform === 'win32') {
+    writeFileSync(join(buildDir, 'conpty.node'), '')
+    mkdirSync(join(buildDir, 'conpty'), { recursive: true })
+    writeFileSync(join(buildDir, 'conpty', 'conpty.dll'), '')
+    writeFileSync(join(buildDir, 'conpty', 'OpenConsole.exe'), '')
+    return
+  }
   writeFileSync(join(buildDir, 'pty.node'), '')
   if (process.platform === 'darwin') {
     writeFileSync(join(buildDir, 'spawn-helper'), '')

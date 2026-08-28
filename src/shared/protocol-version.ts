@@ -97,7 +97,8 @@ export const TERMINAL_PAIRED_PARKING_RUNTIME_CAPABILITY = 'terminal.paired-parki
 // terminal creation, so mobile must hide Quick Commands unless both are present.
 export const TERMINAL_QUICK_COMMANDS_RUNTIME_CAPABILITY = 'terminal.quick-commands.v1' as const
 // Why: older hosts strip worktree.create's clientMutationId, so mobile must only
-// replay ambiguous cutovers when the host advertises idempotent create support.
+// replay ambiguous cutovers when the host advertises idempotent create support;
+// status.worktreeCreateIdempotency carries the optional host retention policy.
 export const WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'worktree.create-idempotency.v1' as const
 export const CODEX_RESET_CREDIT_RUNTIME_CAPABILITY = 'accounts.codex-reset-credit.v1' as const
@@ -106,6 +107,8 @@ export const ACCOUNT_IMPORT_RUNTIME_CAPABILITY = 'accounts.import-host-credentia
 export const TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY =
   'terminal.create-idempotency.v2' as const
 export const SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY = 'session-tabs.close-intent.v1' as const
+export const SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY =
+  'session-tabs.authoritative-inventory.v1' as const
 export const AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY =
   'agent-session.session-boundary.v1' as const
 export { REMOTE_SERVER_UPDATE_CAPABILITY } from './remote-server-update'
@@ -189,6 +192,7 @@ export const RUNTIME_CAPABILITIES = [
   WORKTREE_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   TERMINAL_CREATE_IDEMPOTENCY_RUNTIME_CAPABILITY,
   SESSION_TAB_CLOSE_INTENT_RUNTIME_CAPABILITY,
+  SESSION_TABS_AUTHORITATIVE_INVENTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_BOUNDARY_RUNTIME_CAPABILITY,
   REMOTE_SERVER_UPDATE_CAPABILITY,
   AGENT_SESSION_HOST_AUTHORITY_RUNTIME_CAPABILITY,

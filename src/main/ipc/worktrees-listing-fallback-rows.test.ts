@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { listWorktreesMock, getSshGitProviderMock } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { makeWorktreeMeta } from './worktrees-test-fixtures'
+import { buildDetectedGitWorktrees } from './worktrees/listing/ssh-worktree-fallback'
+import type { Store } from '../persistence/loading-store/store'
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -224,6 +226,41 @@ describe('registerWorktreeHandlers', () => {
     })
   })
 
+  it('lists a canonical-only SSH row without leaking the same-id local row', async () => {
+    const repo = {
+      id: 'repo-ssh',
+      path: '/remote/repo',
+      displayName: 'SSH Repo',
+      badgeColor: '#000',
+      addedAt: 0,
+      connectionId: 'conn-1'
+    }
+    const worktreeId = 'repo-ssh::/shared/feature-wt'
+    const canonicalRemote = makeWorktreeMeta({
+      displayName: 'Canonical remote',
+      hostId: 'ssh:conn-1'
+    })
+    store.getRepo.mockReturnValue(repo)
+    store.getAllWorktreeMeta.mockReturnValue({
+      [worktreeId]: makeWorktreeMeta({ displayName: 'Legacy local', hostId: 'local' })
+    })
+    ;(
+      store as typeof store & {
+        getAllWorktreeMetaForHost: ReturnType<typeof vi.fn>
+      }
+    ).getAllWorktreeMetaForHost = vi.fn(() => ({ [worktreeId]: canonicalRemote }))
+
+    const listed = await handlers['worktrees:list'](null, { repoId: repo.id })
+
+    expect(listed).toEqual([
+      expect.objectContaining({
+        id: worktreeId,
+        displayName: 'Canonical remote',
+        hostId: 'ssh:conn-1'
+      })
+    ])
+  })
+
   it('falls back to reconstructed SSH rows when provider listing throws', async () => {
     const repo = {
       id: 'repo-ssh',
@@ -423,5 +460,32 @@ describe('registerWorktreeHandlers', () => {
       expect.objectContaining({ id: 'repo-ssh-a::/remote/a/one' }),
       expect.objectContaining({ id: 'repo-ssh-b::/remote/b/two' })
     ])
+  })
+
+  it('loads repo ownership once while building multiple detected rows', () => {
+    const owner = {
+      id: 'repo-1',
+      path: '/workspace/repo',
+      displayName: 'repo',
+      badgeColor: '#000',
+      addedAt: 0
+    }
+    store.getRepos.mockReturnValue([owner])
+
+    const detected = buildDetectedGitWorktrees(
+      store as unknown as Store,
+      owner,
+      ['/workspace/one', '/workspace/two', '/workspace/three'].map((path) => ({
+        path,
+        head: 'abc123',
+        branch: 'refs/heads/feature',
+        isBare: false,
+        isMainWorktree: false
+      })),
+      {}
+    )
+
+    expect(detected).toHaveLength(3)
+    expect(store.getRepos).toHaveBeenCalledTimes(1)
   })
 })

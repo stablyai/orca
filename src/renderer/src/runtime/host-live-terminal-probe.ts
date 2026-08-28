@@ -19,6 +19,7 @@ type RuntimeCall = (args: {
   method: string
   params: unknown
   timeoutMs: number
+  expectedEnvironmentPairingRevision?: number
 }) => Promise<RuntimeRpcResponse<unknown>>
 
 type ValidTerminalListResult = RuntimeTerminalListResult & {
@@ -52,7 +53,8 @@ function isTerminalListResult(value: unknown): value is ValidTerminalListResult 
 
 async function probeHost(
   environmentId: string,
-  call: RuntimeCall
+  call: RuntimeCall,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<HostLiveTerminalProbeVerdict> {
   const response = await call({
     selector: environmentId,
@@ -66,7 +68,8 @@ async function probeHost(
       requireFreshPtyLiveness: true,
       includeVisualLayouts: false
     },
-    timeoutMs: 15_000
+    timeoutMs: 15_000,
+    expectedEnvironmentPairingRevision
   })
   if (response.ok === false || !isTerminalListResult(response.result)) {
     return 'unverifiable'
@@ -86,14 +89,15 @@ async function probeHost(
 export function probeHostLiveTerminals(
   environmentId: string,
   call: RuntimeCall = (args) => window.api.runtimeEnvironments.call(args),
-  connectionGeneration = 0
+  connectionGeneration = 0,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<HostLiveTerminalProbeVerdict> {
-  const key = `${environmentId}\0${connectionGeneration}`
+  const key = `${environmentId}\0${connectionGeneration}\0${expectedEnvironmentPairingRevision ?? 'unknown'}`
   const existing = inFlightProbeByEnvironment.get(key)
   if (existing) {
     return existing
   }
-  const probe = probeHost(environmentId, call)
+  const probe = probeHost(environmentId, call, expectedEnvironmentPairingRevision)
     .catch((): HostLiveTerminalProbeVerdict => 'unverifiable')
     .finally(() => {
       if (inFlightProbeByEnvironment.get(key) === probe) {

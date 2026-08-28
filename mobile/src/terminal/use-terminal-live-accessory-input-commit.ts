@@ -21,10 +21,11 @@ export async function getTerminalLiveAccessoryInactiveInputCommitResult(
 
 type TerminalLiveAccessoryInputCommitOptions = {
   readonly activeHandle: string | null
-  readonly applyLiveInputMirror: (handle: string, fieldText: string) => void
+  readonly applyLiveInputMirror: (handle: string, fieldText: string, composing?: boolean) => void
   readonly clearPendingLiveInputCommit: () => void
   readonly flushPendingLiveInputText: (expectedHandle: string | null) => Promise<boolean>
   readonly heldLiveInputTextRef: RefObject<string>
+  readonly liveInputComposingRef: RefObject<boolean | undefined>
   readonly liveInputRef: RefObject<TextInput | null>
   readonly liveInputTerminalHandles: ReadonlySet<string>
   readonly pendingLiveInputHandleRef: RefObject<string | null>
@@ -40,6 +41,7 @@ export function useTerminalLiveAccessoryInputCommit({
   clearPendingLiveInputCommit,
   flushPendingLiveInputText,
   heldLiveInputTextRef,
+  liveInputComposingRef,
   liveInputRef,
   liveInputTerminalHandles,
   pendingLiveInputHandleRef,
@@ -81,7 +83,8 @@ export function useTerminalLiveAccessoryInputCommit({
           // field is edited here and the mirror diff syncs the PTY echo.
           setLiveInputCapture(editedText)
           liveInputRef.current?.setNativeProps({ text: editedText })
-          applyLiveInputMirror(activeHandle, editedText)
+          // Preserve undefined so Android's heuristic hold still settles on its timer.
+          applyLiveInputMirror(activeHandle, editedText, liveInputComposingRef.current)
           return { kind: 'handled' }
         }
         case 'commit-held-then-send':
@@ -101,6 +104,7 @@ export function useTerminalLiveAccessoryInputCommit({
       clearPendingLiveInputCommit,
       flushPendingLiveInputText,
       heldLiveInputTextRef,
+      liveInputComposingRef,
       liveInputRef,
       liveInputTerminalHandles,
       pendingLiveInputHandleRef,

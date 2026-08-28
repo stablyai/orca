@@ -33,6 +33,7 @@ describe('buildAiVaultServiceEnv', () => {
     const env = buildAiVaultServiceEnv(
       {
         CODEX_HOME: '/home/dev/.codex',
+        CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
         COPILOT_HOME: '/home/dev/.copilot',
         DEVIN_HOME: '/home/dev/.devin',
         GROK_HOME: '/home/dev/.grok',
@@ -49,6 +50,7 @@ describe('buildAiVaultServiceEnv', () => {
 
     expect(env).toEqual({
       CODEX_HOME: '/home/dev/.codex',
+      CLINE_SESSION_DATA_DIR: '/home/dev/cline-sessions',
       COPILOT_HOME: '/home/dev/.copilot',
       DEVIN_HOME: '/home/dev/.devin',
       GROK_HOME: '/home/dev/.grok',

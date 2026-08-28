@@ -1,3 +1,4 @@
+import { normalizeRuntimePathForComparison } from '../cross-platform-path'
 import { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
 
 export { WORKTREE_ID_SEPARATOR } from '../pty-session-id-format'
@@ -15,6 +16,22 @@ const FOLDER_WORKSPACE_INSTANCE_SUFFIX = new RegExp(
 export function getRepoIdFromWorktreeId(worktreeId: string): string {
   const separatorIdx = worktreeId.indexOf(WORKTREE_ID_SEPARATOR)
   return separatorIdx === -1 ? worktreeId : worktreeId.slice(0, separatorIdx)
+}
+
+/**
+ * Canonical comparison form of a worktree id: the repoId is compared EXACT and only the path folds,
+ * through the same `normalizeRuntimePathForComparison` a `path:` selector has always applied and
+ * byte-exact id matching denied the renderer (#16243). Null for a malformed id, so callers keep
+ * exact matching for it. Comparison only — never persist or return this key.
+ */
+export function worktreeIdComparisonKey(worktreeId: string): string | null {
+  const parsed = splitWorktreeId(worktreeId)
+  if (!parsed || !parsed.repoId || !parsed.worktreePath) {
+    return null
+  }
+  return `${parsed.repoId}${WORKTREE_ID_SEPARATOR}${normalizeRuntimePathForComparison(
+    parsed.worktreePath
+  )}`
 }
 
 export function splitWorktreeId(worktreeId: string): ParsedWorktreeId | null {

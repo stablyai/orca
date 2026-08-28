@@ -67,6 +67,8 @@ export type RemoteRuntimeMultiplexedTerminalCallbacks = {
       pendingEscapeTailAnsi?: string
       seq?: number
       kittyKeyboardFlags?: number
+      alternateScreen?: boolean
+      terminalOwner?: 'shell'
     }
   ) => void
   onSubscribed?: () => void
@@ -96,6 +98,8 @@ export type RemoteRuntimeSnapshotImage = {
    *  from any host that predates the field — the pane tracker then stays
    *  unproven and commits raw text instead of guessing zero. */
   kittyKeyboardFlags?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
 }
 
 /** Transient causes the host itself reported: a request reached it and it declined to serialize now. */
@@ -210,6 +214,8 @@ type RemoteRuntimeSnapshotInfo = {
   seq?: number
   source?: 'headless' | 'renderer'
   kittyKeyboardFlags?: number
+  alternateScreen?: boolean
+  terminalOwner?: 'shell'
   requestId?: number
   truncated?: boolean
   unavailable?: TerminalSnapshotUnavailableReason
@@ -925,6 +931,8 @@ class RemoteRuntimeTerminalMultiplexer {
               seq: info?.seq,
               source: info?.source,
               kittyKeyboardFlags: info?.kittyKeyboardFlags,
+              alternateScreen: info?.alternateScreen,
+              terminalOwner: info?.terminalOwner,
               pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi
             }
           })
@@ -933,7 +941,9 @@ class RemoteRuntimeTerminalMultiplexer {
           stream.callbacks.onSnapshot(data ?? '', {
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
             seq: info?.seq,
-            kittyKeyboardFlags: info?.kittyKeyboardFlags
+            kittyKeyboardFlags: info?.kittyKeyboardFlags,
+            alternateScreen: info?.alternateScreen,
+            terminalOwner: info?.terminalOwner
           })
         } else if (target === 'recovery') {
           // Why: a server-pushed recovery snapshot replaces terminal state
@@ -943,7 +953,9 @@ class RemoteRuntimeTerminalMultiplexer {
           stream.callbacks.onSnapshot(`\x1b[2J\x1b[3J\x1b[H${data ?? ''}`, {
             pendingEscapeTailAnsi: info?.pendingEscapeTailAnsi,
             seq: info?.seq,
-            kittyKeyboardFlags: info?.kittyKeyboardFlags
+            kittyKeyboardFlags: info?.kittyKeyboardFlags,
+            alternateScreen: info?.alternateScreen,
+            terminalOwner: info?.terminalOwner
           })
         }
       } else if (matchesPendingRequest) {
@@ -1600,6 +1612,8 @@ function decodeSnapshotInfo(
     unavailable?: unknown
     pendingEscapeTailAnsi?: unknown
     kittyKeyboardFlags?: unknown
+    alternateScreen?: unknown
+    terminalOwner?: unknown
   }>(payload)
   if (!raw) {
     return null
@@ -1611,6 +1625,11 @@ function decodeSnapshotInfo(
     source: raw.source === 'headless' || raw.source === 'renderer' ? raw.source : undefined,
     // Negative, fractional, and unsafe values are treated as absent, never clamped.
     kittyKeyboardFlags: parseTerminalKittyKeyboardFlags(raw.kittyKeyboardFlags),
+    alternateScreen:
+      raw.terminalOwner === 'shell' && typeof raw.alternateScreen === 'boolean'
+        ? raw.alternateScreen
+        : undefined,
+    terminalOwner: raw.terminalOwner === 'shell' ? raw.terminalOwner : undefined,
     requestId: typeof raw.requestId === 'number' ? raw.requestId : undefined,
     truncated: raw.truncated === true,
     unavailable: parseTerminalSnapshotUnavailableReason(raw.unavailable),

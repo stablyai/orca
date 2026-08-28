@@ -10770,7 +10770,6 @@
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PR の作成を再試行してください。",
             "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。"
           },
           "SourceControlAgentActionDialog": {

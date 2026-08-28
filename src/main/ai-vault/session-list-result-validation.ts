@@ -80,7 +80,13 @@ const aiVaultSessionSchema = z.object({
 const aiVaultScanIssueSchema = z.object({
   executionHostId: executionHostIdSchema.optional(),
   agent: z.string().min(1),
-  kind: z.enum(['host', 'scope', 'notice']).optional(),
+  // Why (#15036): a `kind` this build has never heard of used to fail the whole
+  // issue, which the fallback re-reported as an *unkinded* "invalid entry" — i.e.
+  // a newer host's source-level failure came back as a skipped transcript. An
+  // unknown kind degrades to 'scope' (its own muted row); absent stays absent.
+  kind: z
+    .union([z.enum(['host', 'scope', 'notice']), z.string().transform(() => 'scope' as const)])
+    .optional(),
   path: z.string(),
   message: z.string()
 })

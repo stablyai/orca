@@ -42,6 +42,8 @@ export type TuiAgentConfig = {
   draftPasteReadySignal?: DraftPasteReadySignal
   /** Hard deadline for the agent's composer readiness signal. */
   draftPasteReadyTimeoutMs?: number
+  /** Delay before one extra blind submit Enter, for agents that render their composer before Enter is live (codex); a no-op if the first Enter landed. */
+  submitRetryDelayMs?: number
   /** Windows Shift+Enter encoding override; omitted agents keep the legacy Esc+CR path. */
   windowsShiftEnterEncoding?: 'csi-u'
   /** Paste newlines for TUIs that read Windows console input records instead of VT paste frames. */
@@ -90,7 +92,8 @@ export const TUI_AGENT_CONFIG: Record<TuiAgent, TuiAgentConfig> = {
     windowsInputRecordPasteNewline: 'alt-enter',
     preflightTrust: 'codex',
     draftPasteReadySignal: 'codex-composer-prompt',
-    draftPasteReadyTimeoutMs: 20_000
+    draftPasteReadyTimeoutMs: 20_000,
+    submitRetryDelayMs: 1200
   },
   autohand: {
     detectCmd: 'autohand',

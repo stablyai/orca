@@ -395,6 +395,12 @@ describe('Store', () => {
     // Local worktree meta survives; the SSH host's meta is pruned.
     expect(store.getWorktreeMeta('shared::/local/repo/wt')).toBeDefined()
     expect(store.getWorktreeMeta('shared::/remote/repo/wt')).toBeUndefined()
+    store.flush()
+    const persisted = readDataFile() as PersistedState
+    const identityMetadata = Object.values(persisted.worktreeMetaByIdentity ?? {})
+    expect(identityMetadata).toEqual([
+      expect.objectContaining({ hostId: 'local', displayName: 'local-wt' })
+    ])
   })
 
   it('removeProjectForHost keeps the surviving host session for a shared repo id + path', async () => {

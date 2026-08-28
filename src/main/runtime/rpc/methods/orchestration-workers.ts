@@ -22,7 +22,11 @@ import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt
 import { resolveOrchestrationWorkerLaunchDefaults } from './orchestration-worker-launch-preferences'
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
-import { resolveOrchestrationCaller } from './orchestration-run-scope'
+import { resolveWorkerStartRunBinding } from './orchestration-worker-start-run-binding'
+import {
+  isWorkerStartTimeoutWithinTimerLimit,
+  resolveWorkerStartReadinessTimeoutMs
+} from '../../../../shared/orchestration-timing-budgets'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -32,27 +36,20 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
       input,
       { runtime, orchestrationMutation, orchestrationCompatibilityEvidence }
     ) => {
+      if (!isWorkerStartTimeoutWithinTimerLimit(input.timeoutMs)) {
+        throw new OrchestrationError(
+          'invalid_argument',
+          `--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.`
+        )
+      }
+      const readinessTimeoutMs = resolveWorkerStartReadinessTimeoutMs(input.timeoutMs)
       const db = runtime.getOrchestrationDb()
-      // Why: worker-start was the only Run-scoped verb that skipped this, so a
-      // declared --from could name someone else's pane and inherit their depth.
-      const coordinatorPane = resolveOrchestrationCaller(runtime, {
-        callerTerminalHandle: input.from,
+      const { run, task } = resolveWorkerStartRunBinding({
+        runtime,
+        db,
+        input,
         callerEvidence: orchestrationCompatibilityEvidence
       })
-      const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
-      if (!run || (input.run && input.run !== run.id)) {
-        throw new OrchestrationError(
-          'consumer_fenced',
-          'worker-start requires the coordinator terminal currently bound to the Task Run.'
-        )
-      }
-      const task = db.getTask(input.task)
-      if (!task || task.run_id !== run.id) {
-        throw new OrchestrationError(
-          'task_not_found',
-          `Task ${input.task} was not found in Run ${run.id}.`
-        )
-      }
 
       const resolvedDefaults = resolveOrchestrationWorkerLaunchDefaults({
         terminal: input.terminal,
@@ -127,7 +124,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         terminal: params.terminal ?? null,
         agent: agent ?? null,
         launch: launch.receipt,
-        timeoutMs: params.timeoutMs ?? 60_000,
+        timeoutMs: readinessTimeoutMs,
         setup: createsWorktree ? (params.setup ?? 'run') : 'not_applicable',
         setupSource: createsWorktree
           ? params.setup
@@ -224,7 +221,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         failedStage = 'agent_readiness'
         const wait = await runtime.waitForTerminal(terminalHandle, {
           condition: 'tui-idle',
-          timeoutMs: params.timeoutMs ?? 60_000
+          timeoutMs: readinessTimeoutMs
         })
         persistWorkerSetupWaitOutcome({ ...setupStage, wait })
         if (!wait.satisfied) {
@@ -284,7 +281,7 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
           stage: worker.stage,
           setup: setupReceipt,
           launch: launch.receipt,
-          timeoutMs: params.timeoutMs ?? 60_000,
+          timeoutMs: readinessTimeoutMs,
           effects,
           residualResources: [],
           ...(terminalRevealWarning ? { warning: terminalRevealWarning } : {})

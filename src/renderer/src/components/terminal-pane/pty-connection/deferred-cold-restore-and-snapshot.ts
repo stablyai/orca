@@ -154,7 +154,9 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
             kittyKeyboardFlags: meta.kittyKeyboardFlags,
             snapshotSeq: meta.snapshotSeq
           }
-        : {})
+        : {}),
+      ...(meta.terminalOwner ? { terminalOwner: meta.terminalOwner } : {}),
+      ...(meta.alternateScreen !== undefined ? { alternateScreen: meta.alternateScreen } : {})
     }
     session.scheduleReplayDataDrain()
   }

@@ -31,8 +31,16 @@ export function getNativeChatExperimentalSearchEntry(): SettingsSearchEntry {
         'codex'
       ),
       ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.openclaude',
+        'openclaude'
+      ),
+      ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.grok',
         'grok'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.experimental.search.nativeChat.omp',
+        'omp'
       ),
       ...translateSearchKeyword(
         'auto.components.settings.experimental.search.nativeChat.terminal',

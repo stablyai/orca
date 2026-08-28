@@ -43,6 +43,7 @@ export function installPtySnapshotIpcHandlers(deps: {
       scrollbackAnsi?: string
       pendingEscapeTailAnsi?: string
       kittyKeyboardFlags?: number
+      terminalOwner?: 'shell'
     } | null> => {
       if (!runtime || typeof args?.id !== 'string' || args.id.length === 0) {
         return null

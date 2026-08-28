@@ -10,6 +10,7 @@ import {
   shouldInspectWindowsAgentForeground,
   type AgentForegroundResolutionOptions
 } from './windows-agent-foreground-process'
+import { isShellProcess } from '../../shared/shell-process-detection'
 
 export type { AgentForegroundResolutionOptions } from './windows-agent-foreground-process'
 
@@ -24,6 +25,13 @@ export type AgentForegroundProcessResolution = {
   processId?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
   anchorPidForeign?: boolean
+}
+
+type ShellForegroundConfirmationOptions = {
+  readWindowsPtyJobProcessIds?: () =>
+    | ReadonlySet<number>
+    | null
+    | Promise<ReadonlySet<number> | null>
 }
 
 function collectDescendants<Row extends { pid: number; ppid: number }>(
@@ -47,6 +55,61 @@ function collectDescendants<Row extends { pid: number; ppid: number }>(
     }
   }
   return descendants
+}
+
+function commandExecutable(command: string): string {
+  const trimmed = command.trim().replace(/^[-]/, '')
+  if (trimmed.startsWith('"') || trimmed.startsWith("'")) {
+    const closingQuote = trimmed.indexOf(trimmed[0], 1)
+    return closingQuote === -1 ? trimmed.slice(1) : trimmed.slice(1, closingQuote)
+  }
+  return trimmed.split(/\s+/, 1)[0] ?? ''
+}
+
+function executableBasename(command: string): string {
+  return commandExecutable(command).split(/[\\/]/).pop()?.toLowerCase() ?? ''
+}
+
+export async function confirmShellForegroundProcess(
+  shellPid: number | null | undefined,
+  spawnedShellProcess: string | null | undefined,
+  options: ShellForegroundConfirmationOptions = {}
+): Promise<boolean> {
+  if (!shellPid || !spawnedShellProcess || !isShellProcess(spawnedShellProcess)) {
+    return false
+  }
+  if (process.platform === 'win32') {
+    try {
+      const processIds = await options.readWindowsPtyJobProcessIds?.()
+      return processIds?.size === 1 && processIds.has(shellPid)
+    } catch {
+      // Unavailable job inspection is missing proof, never a thrown confirmation.
+      return false
+    }
+  }
+  try {
+    const rows = await getFreshProcessTableSnapshot()
+    if (!rows.some((row) => row.pid === shellPid)) {
+      return false
+    }
+    const root = rows.find((row) => row.pid === shellPid)!
+    const tree = [{ ...root, depth: 0 }, ...collectDescendants(rows, shellPid)]
+    const spawnedShellBasename = executableBasename(spawnedShellProcess)
+    const foregroundShell = tree
+      .filter(
+        (row) =>
+          executableBasename(row.command) === spawnedShellBasename &&
+          isShellProcess(commandExecutable(row.command))
+      )
+      .sort((left, right) => left.depth - right.depth)[0]
+    if (tree.some((row) => row.depth > 0 && row.stat.includes('T'))) {
+      return false
+    }
+    const confirmed = foregroundShell?.stat.includes('+') === true
+    return confirmed
+  } catch {
+    return false
+  }
 }
 
 function candidateScore(row: ProcessTableRow & { depth: number }): number {

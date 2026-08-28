@@ -28,8 +28,14 @@ describe('packaged Windows PTY native capability routing', () => {
 
   it('keeps patched source rebuild, release build, runtime reuse, and aggregate routing intact', () => {
     const job = workflow.jobs.package_windows
-    const sourceRebuild = job.steps.find(
-      (step) => step.name === 'Rebuild node-pty from patched source'
+    const install = job.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
+    const nodeCacheSave = job.steps.find(
+      (step) => step.name === 'Save compiled Node native modules'
+    )
+    const electronCache = job.steps.find(
+      (step) => step.name === 'Restore compiled Electron native modules'
     )
     const build = job.steps.find((step) => step.name === 'Build package inputs')
     const prepare = job.steps.find((step) => step.name === 'Prepare Electron native runtime')
@@ -37,10 +43,17 @@ describe('packaged Windows PTY native capability routing', () => {
     const verify = workflow.jobs.verify.steps.find(
       (step) => step.name === 'Require successful checks'
     )
+    const ensureNativeRuntime = readFileSync('config/scripts/ensure-native-runtime.mjs', 'utf8')
 
-    expect(sourceRebuild.env.npm_config_build_from_source).toBe('true')
-    expect(sourceRebuild.run).toBe('pnpm rebuild node-pty')
+    expect(install.with['native-runtime']).toBe('node')
+    expect(install.with['persist-native-cache']).toBe('false')
+    expect(nodeCacheSave.uses).toBe('actions/cache/save@v5')
+    expect(nodeCacheSave.with.key).toContain('-node-node')
+    expect(electronCache.with.key).toContain('-electron-node')
+    expect(ensureNativeRuntime).toContain("runPnpm(['exec', 'node-gyp', 'rebuild']")
+    expect(ensureNativeRuntime).toContain("resolve(moduleDir, 'scripts', 'post-install.js')")
     expect(build.run).toBe('pnpm run build:release:parallel')
+    expect(build.env.ORCA_REUSE_WINDOWS_CLI_LAUNCHER).toBe('1')
     expect(prepare.run).toBe('node config/scripts/ensure-native-runtime.mjs --runtime=electron')
     expect(packageStep.env.ORCA_REUSE_PREPARED_NATIVE_RUNTIME).toBe('1')
     expect(workflow.jobs.verify.needs).toContain('package_windows')

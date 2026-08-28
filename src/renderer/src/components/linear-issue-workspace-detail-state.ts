@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useMountedRef } from '@/hooks/useMountedRef'
-import { linearGetIssue, linearIssueComments } from '@/runtime/runtime-linear-client'
+import { linearGetIssue, linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import {
   initLinearIssueEditState,

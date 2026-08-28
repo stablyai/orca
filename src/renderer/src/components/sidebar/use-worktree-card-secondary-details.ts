@@ -149,27 +149,28 @@ export function useWorktreeCardSecondaryDetails({
     (hoverReviewProvider === 'azure-devops' && linkedAzureDevOpsPR !== null) ||
     (hoverReviewProvider === 'gitea' && linkedGiteaPR !== null)
   const handleUnlinkReview = useCallback(() => {
+    const options = { executionHostId: worktree.hostId ?? 'local' }
     switch (hoverReviewProvider) {
       case 'github':
-        void updateWorktreeMeta(worktree.id, { linkedPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedPR: null }, options)
         return
       case 'gitlab':
-        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null })
+        void updateWorktreeMeta(worktree.id, { linkedGitLabMR: null }, options)
         return
       case 'bitbucket':
-        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedBitbucketPR: null }, options)
         return
       case 'azure-devops':
-        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedAzureDevOpsPR: null }, options)
         return
       case 'gitea':
-        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null })
+        void updateWorktreeMeta(worktree.id, { linkedGiteaPR: null }, options)
         break
       case 'unsupported':
       case undefined:
         break
     }
-  }, [hoverReviewProvider, updateWorktreeMeta, worktree.id])
+  }, [hoverReviewProvider, updateWorktreeMeta, worktree.hostId, worktree.id])
   const handleOpenLinearIssueInOrca = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()

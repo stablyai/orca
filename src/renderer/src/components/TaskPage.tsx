@@ -2179,7 +2179,7 @@ export default function TaskPage(): React.JSX.Element {
       setAppliedLinearProjectSearch(linearProjectSearchInput)
     }, TASK_SEARCH_DEBOUNCE_MS)
     return () => window.clearTimeout(timeout)
-  }, [linearProjectSearchInput, taskResumeApplied])
+  }, [linearProjectSearchInput, setAppliedLinearProjectSearch, taskResumeApplied])
 
   useEffect(() => {
     if (!taskResumeApplied || taskSource !== 'linear' || linearMode !== 'projects') {
@@ -2274,6 +2274,12 @@ export default function TaskPage(): React.JSX.Element {
     fetchLinearProject,
     linearRefreshNonce,
     selectedLinearProject,
+    setLinearProjectDetailError,
+    setLinearProjectDetailLoading,
+    setLinearProjectParentView,
+    setLinearProjectsError,
+    setSelectedLinearProject,
+    setSelectedLinearProjectDetail,
     setTaskResumeState,
     linearTaskSourceContext
   ])
@@ -2315,7 +2321,10 @@ export default function TaskPage(): React.JSX.Element {
     linearRefreshNonce,
     listLinearProjectIssues,
     linearTaskSourceContext,
-    selectedLinearProject
+    selectedLinearProject,
+    setLinearProjectIssuesError,
+    setLinearProjectIssuesLoading,
+    setLinearProjectIssuesResult
   ])
 
   useEffect(() => {
@@ -2433,7 +2442,11 @@ export default function TaskPage(): React.JSX.Element {
     listLinearCustomViewIssues,
     listLinearCustomViewProjects,
     linearTaskSourceContext,
-    selectedLinearCustomView
+    selectedLinearCustomView,
+    setLinearCustomViewContentsError,
+    setLinearCustomViewContentsLoading,
+    setLinearCustomViewIssuesResult,
+    setLinearCustomViewProjectsResult
   ])
 
   useEffect(() => {

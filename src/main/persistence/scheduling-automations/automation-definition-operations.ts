@@ -6,7 +6,7 @@ import type {
 } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import { normalizeAutomationPrecheck } from '../../../shared/automation-precheck'
-import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedules'
+import { nextAutomationOccurrenceAfter } from '../../../shared/automation-schedule-occurrences'
 import {
   applyAutomationExecutionTarget,
   deriveAutomationExecutionTargetForCreate,

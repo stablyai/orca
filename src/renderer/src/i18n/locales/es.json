@@ -10779,7 +10779,6 @@
             "a4e93c21d7": "Rama actual: {{value0}}",
             "c7d4e2f801": "Cambiar ref base: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "Los detalles de revisión generados no incluyeron una descripción. Reintentar Crear PR.",
             "createPrIntentGenerateDetailsFailed": "No se pudieron generar los detalles de revisión. Reintentar Crear PR."
           },
           "SourceControlAgentActionDialog": {

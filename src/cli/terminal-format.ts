@@ -141,6 +141,7 @@ export function formatTerminalRead(result: { terminal: RuntimeTerminalRead }): s
     `handle: ${terminal.handle}`,
     `status: ${terminal.status}`,
     ...(terminal.source ? [`source: ${terminal.source}`] : []),
+    ...(terminal.draft ? [`draft: ${JSON.stringify(terminal.draft)}`] : []),
     ...(terminal.nextCursor !== null ? [`cursor: ${terminal.nextCursor}`] : []),
     ...oldestCursor,
     ...latestCursor,

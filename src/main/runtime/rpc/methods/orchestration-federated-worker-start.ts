@@ -14,11 +14,6 @@ import type { OrchestrationDb } from '../../orchestration/db'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { WorkerStartInput } from './orchestration-worker-start-schema'
 import {
-  federatedUnknownReceipt,
-  isKnownFederatedWorkerStartFailure,
-  type FederatedWorkerStartReceipt
-} from './orchestration-federated-worker-start-receipt'
-import {
   assertWorkerLaunchPreferencesRuntimeSupported,
   assertWorkerLaunchPreferencesCreateTerminal,
   createPendingWorkerLaunchReceipt,
@@ -27,7 +22,14 @@ import {
   type OrchestrationWorkerLaunchDefaultsApplied
 } from './orchestration-worker-launch-preferences'
 import { validateFederatedWorkerStartPlacement } from './orchestration-worker-start-validation'
+import { resolveFederatedWorkerStartBudgets } from './orchestration-worker-start-budgets'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
+import {
+  isReadyRemoteFederatedWorkerStartReceipt,
+  parseRemoteFederatedWorkerStartReceipt
+} from './orchestration-federated-attach-receipt'
+import { isWorkerStartTimeoutWithinTimerLimit } from '../../../../shared/orchestration-timing-budgets'
+import { federatedUnknownReceipt } from './orchestration-federated-worker-start-unknown-receipt'
 
 export async function startFederatedWorker(args: {
   params: WorkerStartInput
@@ -44,6 +46,12 @@ export async function startFederatedWorker(args: {
   defaultsApplied?: OrchestrationWorkerLaunchDefaultsApplied
 }): Promise<unknown> {
   const { params, runtime, db, task, runId, orchestrationMutation } = args
+  if (!isWorkerStartTimeoutWithinTimerLimit(params.timeoutMs)) {
+    throw new OrchestrationError(
+      'invalid_argument',
+      '--timeout-ms is too large for worker-start transport grace; the derived timeout must fit within the timer limit.'
+    )
+  }
   if (!orchestrationMutation) {
     throw new OrchestrationError(
       'invalid_argument',
@@ -61,11 +69,12 @@ export async function startFederatedWorker(args: {
   assertWorkerLaunchPreferencesCreateTerminal(params)
   validateFederatedWorkerStartPlacement(params, createsWorktree)
   const server = runtime.resolveOrchestrationWorkerServer(params.on as string)
+  const budgets = resolveFederatedWorkerStartBudgets(params.timeoutMs)
   const status = (await runtime.callOrchestrationWorkerServer(
     server.environmentId,
     'status.get',
     undefined,
-    params.timeoutMs
+    budgets.preflightTimeoutMs
   )) as RuntimeStatus
   if (!status.capabilities?.includes(ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY)) {
     throw new OrchestrationError(
@@ -123,7 +132,7 @@ export async function startFederatedWorker(args: {
       terminal: params.terminal ?? null,
       agent: launchParams.agent ?? null,
       launch: requestedLaunch,
-      timeoutMs: params.timeoutMs ?? 60_000,
+      timeoutMs: budgets.readinessTimeoutMs,
       setup: setupDecision,
       setupSource: createsWorktree
         ? params.setup
@@ -142,39 +151,42 @@ export async function startFederatedWorker(args: {
   })
   db.recordWorkerStage({ dispatchId: started.dispatch.id, stage: 'remote_attach_requested' })
   try {
-    const remote = (await runtime.callOrchestrationWorkerServer(
-      server.environmentId,
-      'orchestration.federationAttachStart',
-      {
-        dispatchId: started.dispatch.id,
-        taskId: task.id,
-        taskSpec: task.spec,
-        // Carry the home dispatch depth across the federation boundary so a
-        // remote worker cannot be mistaken for a root when it dispatches again.
-        depth: started.dispatch.depth,
-        protocolVersion: federationProtocolVersion,
-        worktree,
-        name: params.name,
-        repo: params.repo,
-        baseBranch: params.baseBranch,
-        displayName: params.displayName,
-        comment: params.comment,
-        setup: createsWorktree ? (params.setup ?? 'run') : undefined,
-        setupSource: createsWorktree
-          ? params.setup
-            ? 'explicit_request'
-            : 'orchestration_default'
-          : undefined,
-        terminal: params.terminal,
-        agent: launchParams.agent,
-        model: launchParams.model,
-        effort: launchParams.effort,
-        timeoutMs: params.timeoutMs,
-        devMode: params.devMode
-      },
-      (params.timeoutMs ?? 60_000) + 15_000,
-      { orchestrationRequestId: orchestrationMutation.requestId }
-    )) as FederatedWorkerStartReceipt
+    const remote = parseRemoteFederatedWorkerStartReceipt(
+      await runtime.callOrchestrationWorkerServer(
+        server.environmentId,
+        'orchestration.federationAttachStart',
+        {
+          dispatchId: started.dispatch.id,
+          taskId: task.id,
+          taskSpec: task.spec,
+          // Carry the home dispatch depth across the federation boundary so a
+          // remote worker cannot be mistaken for a root when it dispatches again.
+          depth: started.dispatch.depth,
+          protocolVersion: federationProtocolVersion,
+          worktree,
+          name: params.name,
+          repo: params.repo,
+          baseBranch: params.baseBranch,
+          displayName: params.displayName,
+          comment: params.comment,
+          setup: createsWorktree ? (params.setup ?? 'run') : undefined,
+          setupSource: createsWorktree
+            ? params.setup
+              ? 'explicit_request'
+              : 'orchestration_default'
+            : undefined,
+          terminal: params.terminal,
+          agent: launchParams.agent,
+          model: launchParams.model,
+          effort: launchParams.effort,
+          timeoutMs: budgets.readinessTimeoutMs,
+          devMode: params.devMode
+        },
+        budgets.attachDeadlineMs,
+        { orchestrationRequestId: orchestrationMutation.requestId },
+        { contractVerified: true }
+      )
+    )
     if (remote.dispatchId !== started.dispatch.id) {
       throw new OrchestrationError(
         'resource_server_mismatch',
@@ -186,7 +198,7 @@ export async function startFederatedWorker(args: {
       requestedLaunch,
       remote.state === 'ready'
     )
-    if (remote.state === 'ready' && remote.worktreeId && remote.terminalHandle) {
+    if (isReadyRemoteFederatedWorkerStartReceipt(remote)) {
       db.updateFederatedDispatchResources({
         dispatchId: started.dispatch.id,
         remoteRuntimeEpoch: remote.runtimeEpoch,
@@ -213,7 +225,7 @@ export async function startFederatedWorker(args: {
         server: { environmentId: server.environmentId, name: server.name },
         setup: remote.setup,
         launch,
-        timeoutMs: params.timeoutMs ?? 60_000,
+        timeoutMs: budgets.readinessTimeoutMs,
         effects: remote.effects ?? [],
         residualResources: remote.residualResources ?? []
       }
@@ -247,7 +259,7 @@ export async function startFederatedWorker(args: {
     }
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error)
-    if (error instanceof OrchestrationError && isKnownFederatedWorkerStartFailure(error.code)) {
+    if (error instanceof OrchestrationError && isKnownRemoteStartFailure(error.code)) {
       const worker = db.failWorkerStart(started.dispatch.id, 'remote_attach', reason)
       return {
         runId,
@@ -266,4 +278,14 @@ export async function startFederatedWorker(args: {
     const worker = db.markWorkerStartUnknown(started.dispatch.id, 'remote_attach', reason)
     return federatedUnknownReceipt(worker, task.id, server.name, requestedLaunch)
   }
+}
+
+function isKnownRemoteStartFailure(code: string): boolean {
+  return [
+    'invalid_argument',
+    'agent_unconfigured',
+    'worktree_not_found_on_server',
+    'terminal_worktree_mismatch',
+    'capability_unsupported'
+  ].includes(code)
 }

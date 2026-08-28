@@ -29,7 +29,7 @@ export type CodexShellLaunchPreflightCommandOptions = {
 export function resolveCodexShellLaunchPreflightCommand(
   options: CodexShellLaunchPreflightCommandOptions
 ): string | null {
-  if (!options.hooksEnabled || options.isWsl || !options.managedHomePath) {
+  if (!options.hooksEnabled || !options.managedHomePath) {
     return null
   }
   const platform = options.platform ?? process.platform
@@ -42,7 +42,14 @@ export function resolveCodexShellLaunchPreflightCommand(
         ...DEV_LAUNCHER_DIR,
         platform === 'win32' ? `${DEV_COMMAND_NAME}.cmd` : DEV_COMMAND_NAME
       )
-  return candidate && isExecutableFileOnDisk(candidate, platform) ? candidate : null
+  if (!candidate || !isExecutableFileOnDisk(candidate, platform)) {
+    return null
+  }
+  if (!options.isWsl) {
+    return candidate
+  }
+  // Why: WSLENV /p translates the verified Windows launcher with the distro's configured automount root.
+  return platform === 'win32' && options.isPackaged ? candidate : null
 }
 
 function isExecutableFileOnDisk(path: string, platform: NodeJS.Platform): boolean {
@@ -65,7 +72,7 @@ export function getPosixCodexShellLaunchPreflight(): string {
 # Why || : twice — zsh alone aborts inside the substitution, but every shell's
 # assignment adopts its exit status, so an absent codex trips set -e in bash too.
 __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
-if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
+if [[ -n "\${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "\${ORCA_CODEX_LAUNCH_PREFLIGHT}" && -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name,
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
@@ -78,7 +85,7 @@ unset __orca_codex_binary
 }
 
 export function getFishCodexShellLaunchPreflight(): string {
-  return `if test -n "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
+  return `if test -x "$ORCA_CODEX_LAUNCH_PREFLIGHT"; and test (type -t codex 2>/dev/null) = file
   function codex
     command "$ORCA_CODEX_LAUNCH_PREFLIGHT" agent hooks prepare-codex >/dev/null 2>&1; or true
     command codex $argv

@@ -59,7 +59,10 @@ import {
   resolveWindowsGitBashShellPath
 } from '../git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
-import { resolveAgentForegroundProcessWithAvailability } from './agent-foreground-process'
+import {
+  confirmShellForegroundProcess,
+  resolveAgentForegroundProcessWithAvailability
+} from './agent-foreground-process'
 import { resolveStableForegroundProcess } from './stable-foreground-process'
 import { getAgentForegroundContextPaths } from './agent-foreground-context-paths'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
@@ -1561,6 +1564,21 @@ export class LocalPtyProvider implements IPtyProvider {
     } catch {
       return null
     }
+  }
+
+  async confirmShellForeground(id: string): Promise<boolean> {
+    const proc = ptyProcesses.get(id)
+    if (!proc) {
+      return false
+    }
+    const confirmed = await confirmShellForegroundProcess(
+      proc.pid,
+      ptyShellName.get(id),
+      process.platform === 'win32'
+        ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(proc) }
+        : {}
+    )
+    return ptyProcesses.get(id) === proc && confirmed
   }
 
   async serialize(_ids: string[]): Promise<string> {

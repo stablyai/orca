@@ -62,7 +62,7 @@ import {
   linearGetIssue,
   linearIssueComments,
   linearUpdateIssue
-} from '@/runtime/runtime-linear-client'
+} from '@/runtime/runtime-linear-issue-mutations'
 import { translate } from '@/i18n/i18n'
 import { formatUiRelativeTimeFromDate } from '@/i18n/relative-time-format'
 

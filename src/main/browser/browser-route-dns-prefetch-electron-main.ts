@@ -43,6 +43,10 @@ async function probe() {
   return { resolvedProxy }
 }
 
+// Why: destroying the probe window awaits stopLogging, which yields long enough for the default
+// window-all-closed quit (non-macOS) to exit 0 before the result is written.
+app.on('window-all-closed', () => {})
+
 async function run() {
   const timeout = setTimeout(() => app.exit(2), 25000)
   await app.whenReady()

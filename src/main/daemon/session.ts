@@ -1,12 +1,13 @@
 import { isValidPtySize } from './daemon-pty-size'
-import { SessionOutputPlane, type AttachedClient } from './session-output-plane'
+import type { SessionOutputPlane, AttachedClient } from './session-output-plane'
+import { createSessionOutputPipeline } from './session-output-pipeline'
 import { SessionProducerPause } from './session-producer-pause'
 import { SessionShellReadyBarrier } from './session-shell-ready-barrier'
+import type { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import {
   SessionTerminationController,
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
 } from './session-termination-controller'
-import { nudgePowerShellPromptRepaint } from './session-powershell-prompt-repaint'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
@@ -38,6 +39,7 @@ export class Session {
   private readonly shellReady: SessionShellReadyBarrier
   private readonly termination: SessionTerminationController
   private readonly startupIngress: PtyStartupIngress
+  private readonly recoveryBarrier: TerminalShellRecoveryBarrier
 
   constructor(opts: SessionOptions) {
     this.sessionId = opts.sessionId
@@ -46,13 +48,17 @@ export class Session {
     this.wslDistro = opts.wslDistro ?? null
     this.subprocess = opts.subprocess
     this.onSessionExit = opts.onExit
-    this.output = new SessionOutputPlane({
+    const pipeline = createSessionOutputPipeline({
       cols: opts.cols,
       rows: opts.rows,
       scrollback: opts.scrollback,
       wslDistro: opts.wslDistro,
-      historySeedChunks: opts.historySeedChunks
+      historySeedChunks: opts.historySeedChunks,
+      subprocess: this.subprocess,
+      isAlive: () => !this._disposed && this._state !== 'exited'
     })
+    this.output = pipeline.output
+    this.recoveryBarrier = pipeline.recoveryBarrier
     this.producerPause = new SessionProducerPause(this.subprocess)
     this.termination = new SessionTerminationController({
       sessionId: this.sessionId,
@@ -78,10 +84,14 @@ export class Session {
       ...(opts.startupIngress ? { intent: opts.startupIngress } : {}),
       ...(opts.ownerBackend ? { ownerBackend: opts.ownerBackend } : {}),
       write: (data) => this.subprocess.write(data),
-      onEmission: (emission) => this.output.emit(emission)
+      onEmission: (emission) => this.recoveryBarrier.accept(emission)
     })
     this.shellReady.startPromptReadinessProbe()
-    this.subprocess.onData((data) => this.handleSubprocessData(data))
+    this.subprocess.onData((data) => {
+      if (!this._disposed) {
+        this.shellReady.ingestSubprocessData(data)
+      }
+    })
     this.subprocess.onExit((code, cause) => this.handleSubprocessExit(code, cause))
   }
 
@@ -150,10 +160,7 @@ export class Session {
   }
 
   resize(cols: number, rows: number): void {
-    if (this._state === 'exited' || this._disposed) {
-      return
-    }
-    if (!isValidPtySize(cols, rows)) {
+    if (this._state === 'exited' || this._disposed || !isValidPtySize(cols, rows)) {
       return
     }
     this.output.resize(cols, rows)
@@ -253,22 +260,26 @@ export class Session {
     return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
   }
 
+  confirmShellForeground(): Promise<boolean> {
+    return this.recoveryBarrier.confirmOwnerSettled()
+  }
+
+  async settleShellOwnershipConfirmation(): Promise<void> {
+    await this.recoveryBarrier.awaitProofSettled()
+    // Why the fence: a snapshot at settle-resolution must not race the drained prompt's async parse.
+    await this.output.flushParsedWrites()
+  }
+
   clearScrollback(): void {
-    if (this._disposed) {
-      return
-    }
-    this.output.clearScrollback()
-    this.subprocess.clear?.()
-    nudgePowerShellPromptRepaint({
-      subprocess: this.subprocess,
-      isGatingWrites: this.shellReady.isGatingWrites,
-      isCursorOnEmptyPromptLine: () => this.output.isCursorOnEmptyPromptLine()
-    })
+    this.output.clearScrollback(this.subprocess, this.shellReady.isGatingWrites)
   }
 
   prepareForFinalSnapshot(): string {
     const held = this.shellReady.releaseHeldBytes()
     this.startupIngress.snapshotBarrier()
+    // Why last: snapshotBarrier can emit held spans into the barrier, and a
+    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
+    this.recoveryBarrier.flushPending()
     return held
   }
 
@@ -282,6 +293,10 @@ export class Session {
     this.shellReady.releaseDeviceAttributes()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    // Why after drainAndClose (and before clearClients below): a dispose
+    // mid-episode must deliver the barrier's queued bytes — drained ingress
+    // included — while clients are attached and the emulator accepts writes.
+    this.recoveryBarrier.flushPending()
     const wasTerminating = this.termination.isTerminating && this._state !== 'exited'
     const clientsToNotify = wasTerminating ? this.output.snapshotClients() : []
     if (wasTerminating) {
@@ -299,6 +314,7 @@ export class Session {
 
     this.output.clearClients()
     this.shellReady.clearPendingWrites()
+    this.recoveryBarrier.dispose()
     this.output.disposeEmulator()
 
     for (const client of clientsToNotify) {
@@ -338,13 +354,6 @@ export class Session {
     this.termination.disposeSubprocessHandle()
   }
 
-  private handleSubprocessData(data: string): void {
-    if (this._disposed) {
-      return
-    }
-    this.shellReady.ingestSubprocessData(data)
-  }
-
   private handleSubprocessExit(code: number, cause?: TerminalExitCause): void {
     this.termination.markPhysicalExit()
     if (this._disposed) {
@@ -355,6 +364,11 @@ export class Session {
     this.shellReady.disposePromptReadinessProbe()
     this.shellReady.releaseHeldBytes()
     this.startupIngress.drainAndClose()
+    // Why after drainAndClose: drained ingress bytes re-enter the barrier and can
+    // open a fresh episode; flushing here delivers them too. A shell exiting
+    // mid-proof must not strand the queued post-133;D prompt — those bytes belong
+    // to clients, records, and history before broadcastExit below.
+    this.recoveryBarrier.flushPending()
     this._exitCode = code
     this._state = 'exited'
     this.termination.clearTerminating()

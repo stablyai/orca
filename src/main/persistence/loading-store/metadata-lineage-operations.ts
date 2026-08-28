@@ -1,45 +1,14 @@
-import { randomUUID } from 'node:crypto'
 import type { WorkspaceKey } from '../../../shared/folder-workspace-types'
 import type { WorkspaceLineage, WorktreeLineage } from '../../../shared/worktree/lineage-types'
 import type { WorktreeMeta } from '../../../shared/worktree/meta-types'
-import { normalizeStoredTaskSourceContext } from '../../../shared/task-source-context'
-import { normalizeWorkspaceLinkedItem } from '../../../shared/workspace-linked-item'
-import { isWorkspaceLinkedItemSourceContextMatch } from '../../../shared/workspace-linked-item-source-context'
-import type { ExecutionHostId } from '../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { hasWorktreeRemovalRepoOwnerOnOtherHost } from '../../worktree-removal-repo-owner'
-import { DEFAULT_WORKSPACE_STATUS_ID } from '../../../shared/workspace-statuses'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   workspaceSessionOwnerPartitionForHost,
   workspaceSessionPartitionIdsForHost
 } from '../restoring-sessions/session-owner-removal'
-import { migrateWorktreeIdentity as migrateWorktreeIdentityOperation } from '../tracking-repos/worktree-identity-migration'
-
-function getDefaultWorktreeMeta(): WorktreeMeta {
-  return {
-    instanceId: randomUUID(),
-    displayName: '',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    linkedGitLabMR: null,
-    linkedGitLabIssue: null,
-    linkedBitbucketPR: null,
-    linkedAzureDevOpsPR: null,
-    linkedGiteaPR: null,
-    linkedWorkItem: null,
-    linkedTaskSourceContext: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: Date.now(),
-    lastActivityAt: 0,
-    workspaceStatus: DEFAULT_WORKSPACE_STATUS_ID
-  }
-}
-
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
@@ -50,6 +19,15 @@ import {
   partitionHasOtherRepoWorktreeTabs,
   removeWorkspaceSessionOwnerInPartition
 } from './session-host-partitions'
+import { migrateWorktreeIdentity as migrateWorktreeIdentityOperation } from '../tracking-repos/worktree-identity-migration'
+import {
+  getAllWorktreeMetaForHost as getAllWorktreeMetaForHostOperation,
+  getWorktreeMetaForHost as getWorktreeMetaForHostOperation,
+  migrateWorktreeMetadataLocator,
+  removeWorktreeMetadataForHost,
+  setWorktreeMetaForHost as setWorktreeMetaForHostOperation
+} from './worktree-identity-metadata'
+import { mergeWorktreeMetaForWrite } from './worktree-meta-write-normalization'
 
 type MetadataLineageOperationsRuntime = Pick<StoreRuntimeState, 'state'>
 
@@ -70,34 +48,62 @@ export class MetadataLineageOperations {
   ) {
     this[metadataLineageOperationsContext] = { runtime, scheduling, sessions }
   }
-
   getWorktreeMeta(worktreeId: string): WorktreeMeta | undefined {
     return this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId]
+  }
+
+  getWorktreeMetaForHost(
+    worktreeId: string,
+    executionHostId: ExecutionHostId
+  ): WorktreeMeta | undefined {
+    return getWorktreeMetaForHostOperation(
+      this[metadataLineageOperationsContext].runtime,
+      this[metadataLineageOperationsContext].scheduling,
+      worktreeId,
+      executionHostId
+    )
+  }
+
+  setWorktreeMetaForHost(
+    worktreeId: string,
+    executionHostId: ExecutionHostId,
+    meta: Partial<WorktreeMeta>
+  ): WorktreeMeta {
+    return setWorktreeMetaForHostOperation(
+      this[metadataLineageOperationsContext].runtime,
+      this[metadataLineageOperationsContext].scheduling,
+      worktreeId,
+      executionHostId,
+      meta
+    )
   }
 
   getAllWorktreeMeta(): Record<string, WorktreeMeta> {
     return this[metadataLineageOperationsContext].runtime.state.worktreeMeta
   }
 
+  getAllWorktreeMetaForHost(executionHostId: ExecutionHostId): Record<string, WorktreeMeta> {
+    return getAllWorktreeMetaForHostOperation(
+      this[metadataLineageOperationsContext].runtime,
+      executionHostId
+    )
+  }
+
   setWorktreeMeta(worktreeId: string, meta: Partial<WorktreeMeta>): WorktreeMeta {
-    const existing =
-      this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId] ||
-      getDefaultWorktreeMeta()
-    const updated = { ...existing, ...meta }
-    updated.linkedWorkItem = normalizeWorkspaceLinkedItem(updated.linkedWorkItem)
-    const linkedTaskSourceContext = normalizeStoredTaskSourceContext(
-      updated.linkedTaskSourceContext
-    )
-    updated.linkedTaskSourceContext = isWorkspaceLinkedItemSourceContextMatch(
-      updated.linkedWorkItem,
-      linkedTaskSourceContext
-    )
-      ? linkedTaskSourceContext
-      : null
-    if (!updated.instanceId) {
-      updated.instanceId = randomUUID()
+    const state = this[metadataLineageOperationsContext].runtime.state
+    const stored = state.worktreeMeta[worktreeId]
+    const executionHostId = meta.hostId ?? stored?.hostId
+    if (executionHostId) {
+      return setWorktreeMetaForHostOperation(
+        this[metadataLineageOperationsContext].runtime,
+        this[metadataLineageOperationsContext].scheduling,
+        worktreeId,
+        executionHostId,
+        meta
+      )
     }
-    this[metadataLineageOperationsContext].runtime.state.worktreeMeta[worktreeId] = updated
+    const updated = mergeWorktreeMetaForWrite(stored, meta)
+    state.worktreeMeta[worktreeId] = updated
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
     return updated
   }
@@ -119,6 +125,13 @@ export class MetadataLineageOperations {
           getRepoIdFromWorktreeId(worktreeId),
           ownerPartition
         ))
+    )
+    // Mirror the legacy delete's scope below: a full removal takes every host's identity rows,
+    // otherwise the surviving owner keeps its own.
+    removeWorktreeMetadataForHost(
+      this[metadataLineageOperationsContext].runtime.state,
+      worktreeId,
+      hostId === undefined ? undefined : (hostId ?? undefined)
     )
     // Skip partitions main never wrote: materializing one fences every sibling worktree of the repo.
     const partitions = new Set<ExecutionHostId>(
@@ -190,14 +203,27 @@ export class MetadataLineageOperations {
     scheduleSave(this[metadataLineageOperationsContext].scheduling)
   }
 
-  migrateWorktreeIdentity(oldWorktreeId: string, newWorktreeId: string): void {
-    if (
-      migrateWorktreeIdentityOperation(
-        this[metadataLineageOperationsContext].runtime.state,
-        oldWorktreeId,
-        newWorktreeId
-      )
-    ) {
+  migrateWorktreeIdentity(
+    oldWorktreeId: string,
+    newWorktreeId: string,
+    executionHostId?: ExecutionHostId
+  ): void {
+    const state = this[metadataLineageOperationsContext].runtime.state
+    const persistedOwner = state.worktreeMeta[oldWorktreeId]?.hostId
+    const mover = executionHostId ?? persistedOwner ?? LOCAL_EXECUTION_HOST_ID
+    const legacyChanged =
+      executionHostId !== undefined &&
+      persistedOwner !== undefined &&
+      persistedOwner !== executionHostId
+        ? false
+        : migrateWorktreeIdentityOperation(state, oldWorktreeId, newWorktreeId)
+    const canonicalChanged = migrateWorktreeMetadataLocator(
+      state,
+      oldWorktreeId,
+      newWorktreeId,
+      mover
+    )
+    if (legacyChanged || canonicalChanged) {
       scheduleSave(this[metadataLineageOperationsContext].scheduling)
     }
   }

@@ -68,6 +68,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
     heldLiveInputTextRef,
+    liveInputComposingRef,
     pendingLiveInputHandleRef,
     sentLiveInputTextRef,
     waitForPendingLiveInputFlush
@@ -196,6 +197,7 @@ export function useTerminalLiveInputCommit<TTabType extends string>({
     clearPendingLiveInputCommit,
     flushPendingLiveInputText,
     heldLiveInputTextRef,
+    liveInputComposingRef,
     liveInputRef,
     liveInputTerminalHandles,
     pendingLiveInputHandleRef,

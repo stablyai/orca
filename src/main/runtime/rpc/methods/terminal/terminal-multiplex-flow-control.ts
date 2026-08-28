@@ -76,6 +76,8 @@ export function installMultiplexFlowControl(
           seq: serialized.seq,
           source: serialized.source,
           kittyKeyboardFlags: serialized.kittyKeyboardFlags,
+          alternateScreen: serialized.alternateScreen,
+          terminalOwner: serialized.terminalOwner,
           truncatedByByteBudget: serialized.truncatedByByteBudget,
           data: serialized.data
         }

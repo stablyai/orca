@@ -11,13 +11,16 @@
 // rather than throwing: a truncated dump must degrade, not break crash
 // reporting.
 
-import { findStream, isMinidump, MAX_MODULES, MinidumpView } from './minidump-stream-reader'
+import { findStream, isMinidump, MinidumpView } from './minidump-stream-reader'
 import { readCrashpadAnnotations } from './minidump-crashpad-annotations'
 
 const STREAM_TYPE_MODULE_LIST = 4
 const STREAM_TYPE_EXCEPTION = 6
 
 const MODULE_RECORD_SIZE = 108
+// 8x headroom over a measured 1042-image macOS renderer, whose whole list a
+// 1_024 cap dropped; a dump claiming more than this is corrupt.
+const MAX_MODULE_LIST_MODULES = 8_192
 const MODULE_BASE_OFFSET = 0
 const MODULE_SIZE_OFFSET = 8
 const MODULE_NAME_RVA_OFFSET = 20
@@ -70,7 +73,7 @@ function readModules(view: MinidumpView): ModuleRecord[] {
     return []
   }
   const count = view.u32(stream.rva)
-  if (count === null || count > MAX_MODULES) {
+  if (count === null || count > MAX_MODULE_LIST_MODULES) {
     return []
   }
   const modules: ModuleRecord[] = []

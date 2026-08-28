@@ -100,17 +100,19 @@ describe('PR E2E gate contract', () => {
     // job without adding it to the strict loop fails here instead of silently
     // leaving that job unenforced. This is what caught GIT_COMPATIBILITY and
     // SHELL_CONTRACTS being absent from an earlier hardcoded list.
-    // Why lastIndexOf: the docs-only branch has its own loop that allows skipped.
     const successMarker = '# Require success when the PR has code-relevant changes'
-    const successLoop = verifyStep.run.slice(
-      verifyStep.run.indexOf(successMarker),
-      verifyStep.run.lastIndexOf('done')
-    )
+    const successLoop = verifyStep.run.slice(verifyStep.run.indexOf(successMarker))
     expect(successLoop.length).toBeGreaterThan(0)
+    expect(verifyStep.run).toContain('"$CODE_PATHS" != "success"')
+    expect(verifyStep.run).toContain('"$ROOT_DIRECTORY_GUARD" != "success"')
     for (const job of prWorkflow.jobs.verify.needs) {
-      const envVar = job.toUpperCase()
+      const envVar = job.replaceAll('-', '_').toUpperCase()
       expect(verifyStep.env[envVar]).toBe(`\${{ needs.${job}.result }}`)
+      if (job === 'code_paths' || job === 'root_directory_guard') {
+        continue
+      }
       expect(successLoop).toContain(`"$${envVar}"`)
+      expect(verifyStep.env[`${envVar}_SHOULD_RUN`]).toBe(`\${{ needs.code_paths.outputs.${job} }}`)
     }
   })
 
@@ -155,6 +157,18 @@ describe('PR E2E gate contract', () => {
     expect(sshDockerRunner).toContain('tests/e2e/paired-startup-exec-readiness.spec.ts')
     expect(sshDockerRunner).toContain("'electron-headless'")
     expect(sshDockerRunner).toContain("'electron-headful'")
+  })
+
+  it('reuses the composite install action instead of duplicating pnpm setup', () => {
+    const installFor = (jobName) =>
+      e2eWorkflow.jobs[jobName].steps.find(
+        (step) => step.uses === './.github/actions/install-node-dependencies'
+      )
+
+    expect(installFor('build').with['native-runtime']).toBe('node')
+    for (const jobName of ['e2e', 'changed-e2e', 'ssh-docker-watcher-isolation']) {
+      expect(installFor(jobName).with['native-runtime'], jobName).toBe('electron')
+    }
   })
 
   it('installs zsh in every Linux lane that can run paired startup readiness', () => {

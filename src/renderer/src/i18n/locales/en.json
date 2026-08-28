@@ -11491,6 +11491,9 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Blocked by Mission Control. Remap here or change it in System Settings."
+        },
+        "NativeChatSupportedAgents": {
+          "label": "Supported agents:"
         }
       },
       "right": {
@@ -12007,7 +12010,6 @@
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "Generated review details did not include a description. Retry Create PR.",
             "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
           },
           "SourceControlAgentActionDialog": {
@@ -14697,14 +14699,16 @@
           "d5a8c2f1b9": "Start the default AI agent to fix this check",
           "e2b4d7c8a1": "Choose an agent for this check",
           "f1c9e3a6d4": "Choose agent to fix check",
-          "actionRequired": "Action required"
+          "actionRequired": "Action required",
+          "copyOutput": "Copy output"
         },
         "CheckRunJobs": {
           "1c0a4d7e02": "succeeded",
           "2d3b8f1a55": "skipped",
           "3e6c9a2b71": "pending",
           "4f7d0c3e88": "steps failed",
-          "5a8e1d4f23": " · "
+          "5a8e1d4f23": " · ",
+          "copy": "Copy jobs"
         },
         "check": {
           "run": {
@@ -14784,6 +14788,14 @@
           "insertColumnRight": "Insert column right",
           "deleteRow": "Delete row",
           "deleteColumn": "Delete column"
+        },
+        "CheckRunAnnotations": {
+          "copy": "Copy annotations"
+        },
+        "CheckRunCopyButton": {
+          "copied": "Copied",
+          "failed": "Couldn't copy",
+          "empty": "Nothing to copy"
         }
       },
       "diff": {

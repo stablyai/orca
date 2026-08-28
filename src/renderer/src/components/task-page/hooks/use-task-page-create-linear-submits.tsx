@@ -3,11 +3,8 @@ import { toast } from 'sonner'
 
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
-import {
-  linearCreateIssue,
-  linearCreateProject,
-  linearGetIssue
-} from '@/runtime/runtime-linear-client'
+import { linearCreateIssue, linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
+import { linearCreateProject } from '@/runtime/runtime-linear-project-client'
 import type { GlobalSettings } from '../../../../../shared/global-settings-types'
 import type { LinearIssue } from '../../../../../shared/linear/issue-types'
 import type {

@@ -133,6 +133,7 @@ function openDialog(
     /** Extra owners of the same workspace ID, which the index reads as ambiguous. */
     otherRepos?: { repoId: string; worktree?: Partial<Worktree> }[]
     modalRepoId?: string
+    modalExecutionHostId?: string
     linearViewerOrganizationUrlKey?: string
   } = {}
 ): void {
@@ -169,6 +170,7 @@ function openDialog(
     modalData: {
       worktreeId: options.worktreeId ?? worktree.id,
       ...(options.modalRepoId ? { repoId: options.modalRepoId } : {}),
+      ...(options.modalExecutionHostId ? { executionHostId: options.modalExecutionHostId } : {}),
       currentDisplayName: worktree.displayName,
       currentComment: worktree.comment,
       focus: 'comment'
@@ -327,6 +329,27 @@ describe('WorktreeMetaDialog issue link row', () => {
     const updates = updateWorktreeMeta.mock.calls[0]?.[1] ?? {}
     expect(updates.linkedIssue).toBe(99)
     expect(updates).not.toHaveProperty('linkedLinearIssue')
+  })
+  it('qualifies a save with the host selected by the opening row', async () => {
+    openDialog({
+      worktree: { hostId: 'ssh:build-box' },
+      modalExecutionHostId: 'ssh:build-box'
+    })
+
+    fireEvent.change(screen.getByPlaceholderText('Notes about this worktree...'), {
+      target: { value: 'remote note' }
+    })
+    await act(async () => {
+      fireEvent.click(saveButton())
+    })
+
+    await waitFor(() =>
+      expect(updateWorktreeMeta).toHaveBeenCalledWith(
+        WORKTREE_ID,
+        expect.objectContaining({ comment: 'remote note' }),
+        { executionHostId: 'ssh:build-box' }
+      )
+    )
   })
 
   // updateWorktreeMeta stamps lastActivityAt on any comment write, which would

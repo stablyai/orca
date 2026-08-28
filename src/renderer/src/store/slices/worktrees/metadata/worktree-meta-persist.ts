@@ -11,16 +11,22 @@ import { toRuntimeWorktreeSelector } from '../../../../runtime/runtime-worktree-
 import { translate } from '@/i18n/i18n'
 import type { AppState } from '../../../types'
 import type { WorktreeMeta } from '../../../../../../shared/worktree/meta-types'
+import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import { encodePushTargetClearForRuntimeRpc } from './hosted-review-link-mutation'
-
 export async function persistWorktreeMeta(
   settings: AppState['settings'],
   worktreeId: string,
-  updates: Partial<WorktreeMeta>
+  updates: Partial<WorktreeMeta>,
+  executionHostId?: ExecutionHostId,
+  identityKey?: string
 ): Promise<void> {
   const target = getActiveRuntimeTarget(settings)
   if (target.kind === 'local') {
-    await window.api.worktrees.updateMeta({ worktreeId, updates })
+    await window.api.worktrees.updateMeta({
+      worktreeId,
+      ...(executionHostId ? { executionHostId } : {}),
+      updates
+    })
     return
   }
   // Why: `worktree.set` parses in strip mode, so an older runtime drops the key
@@ -55,7 +61,7 @@ export async function persistWorktreeMeta(
     target,
     'worktree.set',
     {
-      worktree: toRuntimeWorktreeSelector(worktreeId),
+      worktree: identityKey ? `identity:${identityKey}` : toRuntimeWorktreeSelector(worktreeId),
       ...encodePushTargetClearForRuntimeRpc(updates)
     },
     { timeoutMs: 15_000 }
