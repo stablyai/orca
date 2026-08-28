@@ -321,21 +321,21 @@ describe('buildAskAnswerKeys', () => {
 
   it('preview selector free text: opens a note with `n` — there is no "Type something" row', () => {
     // The preview layout dropped that row (upstream anthropics/claude-code#27348,
-    // closed "not planned"). `n` opens a note on the highlighted row and the text
-    // submits as a note-only answer.
+    // closed "not planned"). With no pick to attach to, `n` annotates the
+    // highlighted row and delivers with no option counted as selected.
     expect(
       buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [{ indices: [], other: 'Zebra' }])
     ).toEqual([{ raw: 'n' }, { text: 'Zebra' }, { raw: '\r' }])
   })
 
-  it('preview selector option plus free text: folds the label into the note text', () => {
-    // A note-only answer carries no selection, so the picked label would be lost
-    // if it were not folded into the one channel that delivers.
+  it('preview selector option plus free text: selects the row, then annotates it', () => {
+    // The note attaches to the selected row, so the digit comes first and the
+    // answer delivers as that option carrying its annotation.
     expect(
       buildAskAnswerKeys(singleWithPreview(['Tabs', 'Spaces']), [
         { indices: [1], other: 'but only in JS' }
       ])
-    ).toEqual([{ raw: 'n' }, { text: 'Spaces — but only in JS' }, { raw: '\r' }])
+    ).toEqual([{ raw: '2' }, { raw: 'n' }, { text: 'but only in JS' }, { raw: '\r' }])
   })
 
   it('preview selector: an unanswered lone question emits nothing', () => {
