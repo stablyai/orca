@@ -1,5 +1,8 @@
 import { useAppStore } from '../store'
-import { getActiveTabNavOrder } from '@/components/tab-bar/group-tab-order'
+import {
+  getActiveGroupTabIdInNavOrder,
+  getActiveTabNavOrder
+} from '@/components/tab-bar/group-tab-order'
 import {
   getActiveEntityIdForTabType,
   getNextTabAcrossAllTypes,
@@ -35,20 +38,10 @@ function resolveCycleContext(): CycleContext | null {
   if (allTabIds.length <= 1) {
     return null
   }
-  const activeGroupId = store.activeGroupIdByWorktree[worktreeId]
-  const group = activeGroupId
-    ? (store.groupsByWorktree[worktreeId] ?? []).find((candidate) => candidate.id === activeGroupId)
-    : undefined
   // Why: prefer the active group's unified tab id so split layouts disambiguate
-  // which copy of a same-entity tab is focused. Match strictly against `tabId`
-  // in that path; only fall back to backing-id matching when the group path
-  // doesn't apply (no group, or its activeTabId isn't in the visible nav —
-  // e.g. hydration races). Keeping the two domains in separate branches
-  // prevents a backing id from colliding with an unrelated tab's `tabId`.
-  const groupTabIdInNav =
-    group?.activeTabId && allTabIds.some((entry) => entry.tabId === group.activeTabId)
-      ? group.activeTabId
-      : null
+  // which copy of a same-entity tab is focused; callers fall back to backing-id
+  // matching when it resolves to null.
+  const groupTabIdInNav = getActiveGroupTabIdInNavOrder(store, worktreeId, allTabIds)
   return { store, worktreeId, allTabIds, groupTabIdInNav }
 }
 

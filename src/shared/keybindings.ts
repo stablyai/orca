@@ -67,6 +67,9 @@ export type KeybindingActionId =
   | 'tab.openMarkdown'
   | 'tab.close'
   | 'tab.closeAll'
+  | 'tab.closeOthers'
+  | 'tab.closeToRight'
+  | 'tab.closeToLeft'
   | 'tab.rename'
   | 'tab.reopenClosed'
   | 'tab.nextSameType'
@@ -633,6 +636,31 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'tabs',
     searchKeywords: ['shortcut', 'close', 'all', 'tabs', 'files', 'editors'],
     defaultBindings: platformBindings(['Mod+Alt+W'])
+  },
+  {
+    id: 'tab.closeOthers',
+    title: 'Close other tabs',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'close', 'others', 'tabs', 'siblings'],
+    // Why: unbound by default — every free Mod+W variant is already taken by close/close-all.
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.closeToRight',
+    title: 'Close tabs to the right',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'close', 'right', 'tabs', 'trailing'],
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'tab.closeToLeft',
+    title: 'Close tabs to the left',
+    group: 'Tabs',
+    scope: 'tabs',
+    searchKeywords: ['shortcut', 'close', 'left', 'tabs', 'leading'],
+    defaultBindings: platformBindings([])
   },
   {
     id: 'tab.rename',

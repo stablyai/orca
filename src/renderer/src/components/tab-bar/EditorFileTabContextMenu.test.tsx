@@ -306,6 +306,38 @@ describe('EditorFileTabContextMenu close-all shortcut', () => {
     expect(labels.some((label) => label.includes('Close Tabs To The Left'))).toBe(true)
   })
 
+  it('renders assigned shortcuts next to the scoped close items (#16614)', async () => {
+    shortcutLabelMock.mockImplementation((actionId: string) => {
+      switch (actionId) {
+        case 'tab.closeOthers':
+          return '⌘⌥⇧W'
+        case 'tab.closeToRight':
+          return '⌘⌥⇧]'
+        case 'tab.closeToLeft':
+          return '⌘⌥⇧['
+        default:
+          return null
+      }
+    })
+
+    const tree = expandNode(await renderMenu())
+    const menuItems = findElementsByType(tree, 'DropdownMenuItem')
+    const shortcutExpectations: [string, string][] = [
+      ['Close Others', '⌘⌥⇧W'],
+      ['Close Tabs To The Right', '⌘⌥⇧]'],
+      ['Close Tabs To The Left', '⌘⌥⇧[']
+    ]
+
+    for (const [label, expectedLabel] of shortcutExpectations) {
+      const item = menuItems.find((candidate) =>
+        extractText(candidate.props.children).includes(label)
+      )
+      const shortcut = findElementsByType(item, 'DropdownMenuShortcut')
+      expect(shortcut).toHaveLength(1)
+      expect(extractText(shortcut[0].props.children)).toBe(expectedLabel)
+    }
+  })
+
   it('hides the shortcut chip when close-all is unassigned', async () => {
     shortcutLabelMock.mockReturnValue(null)
 
