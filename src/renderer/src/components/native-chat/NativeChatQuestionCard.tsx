@@ -2,6 +2,7 @@ import { useState, type RefObject } from 'react'
 import { Check, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import CommentMarkdown from '@/components/sidebar/CommentMarkdown'
 import type { AskAnswerSelection, AskPrompt } from './native-chat-interactive-prompt'
 
 export type NativeChatQuestionCardProps = {
@@ -274,16 +275,28 @@ export function NativeChatQuestionCard({
   )
 }
 
-/** The highlighted option's example snippet. Monospace because the content is
- *  literal (code, configuration); scrolls internally so a long snippet never
- *  grows the card. */
+/** The highlighted option's example snippet, rendered as markdown in a monospace
+ *  box to match the AskUserQuestion tool's documented contract for the field.
+ *  Scrolls internally so a long snippet never grows the card. */
 function PreviewPanel({ preview }: { preview?: string }): React.JSX.Element {
   return (
-    <div className="min-w-0 flex-1 border-t border-border/60 bg-muted/40 @2xl/question:border-t-0 @2xl/question:border-l">
+    <div
+      data-slot="question-preview"
+      className="min-w-0 flex-1 border-t border-border/60 bg-muted/40 @2xl/question:border-t-0 @2xl/question:border-l"
+    >
       {preview ? (
-        <pre className="max-h-[50vh] overflow-auto p-3.5 font-mono text-xs whitespace-pre text-foreground scrollbar-sleek">
-          {preview}
-        </pre>
+        <CommentMarkdown
+          content={preview}
+          className={cn(
+            'max-h-[50vh] overflow-auto p-3.5 font-mono text-xs text-foreground scrollbar-sleek',
+            // The compact variant emits paragraphs as inline spans and caps its
+            // own code blocks; blocking the spans keeps line structure, and
+            // releasing the cap lets this panel's height tier govern scrolling.
+            '[&_.comment-md-p]:block [&_.comment-md-p+.comment-md-p]:mt-2',
+            '[&_pre]:my-1 [&_pre]:max-h-none [&_pre]:bg-transparent [&_pre]:p-0 [&_pre]:text-xs',
+            '[&_code]:text-xs'
+          )}
+        />
       ) : (
         <p className="p-3.5 text-xs text-muted-foreground">
           {translate('components.native-chat.question.noPreview', 'This option has no preview.')}

@@ -51,6 +51,14 @@ function clickOptionAt(index: number): void {
   click(container.querySelectorAll('button[aria-pressed]')[index], `option index ${index}`)
 }
 
+function previewPanel(): Element | null {
+  return container.querySelector('[data-slot="question-preview"]')
+}
+
+function previewText(): string {
+  return previewPanel()?.textContent ?? ''
+}
+
 function optionRow(label: string): Element {
   const row = [...container.querySelectorAll('button[aria-pressed]')].find((b) =>
     b.textContent?.includes(label)
@@ -95,12 +103,23 @@ const previewPrompt: AskPrompt = {
       question: 'Do you prefer tabs or spaces?',
       multiSelect: false,
       options: [
-        { label: 'Tabs', hasPreview: true, preview: '\tindented' },
-        { label: 'Spaces', hasPreview: true, preview: '    indented' }
+        { label: 'Tabs', hasPreview: true, preview: '```\n\ttabs-indent\n```' },
+        { label: 'Spaces', hasPreview: true, preview: '```\n    spaces-indent\n```' }
       ]
     }
   ]
 }
+
+/** A single-option question whose preview is the given markdown source. */
+const promptWithPreview = (preview: string): AskPrompt => ({
+  questions: [
+    {
+      question: 'Pick',
+      multiSelect: false,
+      options: [{ label: 'Only', hasPreview: true, preview }]
+    }
+  ]
+})
 
 describe('NativeChatQuestionCard', () => {
   it('delivers the SECOND option as index 1, not the default (STA-1860)', () => {
@@ -159,13 +178,13 @@ describe('NativeChatQuestionCard', () => {
   it('renders no preview panel when no option carries one', () => {
     render(tabsOrSpaces, vi.fn())
 
-    expect(container.querySelector('pre')).toBeNull()
+    expect(previewPanel()).toBeNull()
   })
 
   it('shows the first option’s preview before anything is picked', () => {
     render(previewPrompt, vi.fn())
 
-    expect(container.querySelector('pre')?.textContent).toBe('\tindented')
+    expect(previewText()).toContain('tabs-indent')
   })
 
   it('switches the preview to the option the pointer highlights', () => {
@@ -173,7 +192,7 @@ describe('NativeChatQuestionCard', () => {
 
     hoverOption('Spaces')
 
-    expect(container.querySelector('pre')?.textContent).toBe('    indented')
+    expect(previewText()).toContain('spaces-indent')
   })
 
   it('switches the preview to the option keyboard focus reaches', () => {
@@ -181,7 +200,7 @@ describe('NativeChatQuestionCard', () => {
 
     focusOption('Spaces')
 
-    expect(container.querySelector('pre')?.textContent).toBe('    indented')
+    expect(previewText()).toContain('spaces-indent')
   })
 
   it('previews the picked option and still delivers its index', () => {
@@ -189,10 +208,31 @@ describe('NativeChatQuestionCard', () => {
     render(previewPrompt, onAnswer)
 
     clickOption('Spaces')
-    expect(container.querySelector('pre')?.textContent).toBe('    indented')
+    expect(previewText()).toContain('spaces-indent')
 
     clickAction('Submit')
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
+  })
+
+  it('renders a fenced block in the preview as code', () => {
+    render(promptWithPreview('```ts\nconst x = 1\n```'), vi.fn())
+
+    const code = previewPanel()?.querySelector('pre code')
+    expect(code?.textContent).toContain('const x = 1')
+  })
+
+  it('renders emphasis in the preview as markup, not literal asterisks', () => {
+    render(promptWithPreview('pick **this** one'), vi.fn())
+
+    expect(previewPanel()?.querySelector('strong')?.textContent).toBe('this')
+    expect(previewText()).not.toContain('**')
+  })
+
+  it('keeps the lines of a fenced multi-line snippet intact', () => {
+    render(promptWithPreview('```\nfirst\n\tsecond\n```'), vi.fn())
+
+    const code = previewPanel()?.querySelector('pre code')
+    expect(code?.textContent).toBe('first\n\tsecond\n')
   })
 
   it('reports a missing preview for an option that has none', () => {
@@ -214,8 +254,8 @@ describe('NativeChatQuestionCard', () => {
 
     hoverOption('Bare')
 
-    expect(container.querySelector('pre')).toBeNull()
-    expect(container.textContent).toContain('no preview')
+    expect(previewText()).toContain('no preview')
+    expect(previewText()).not.toContain('const x = 1')
   })
 
   it('keeps the preview scoped to the focused question in a multi-question prompt', () => {
@@ -237,11 +277,11 @@ describe('NativeChatQuestionCard', () => {
       vi.fn()
     )
 
-    expect(container.querySelector('pre')?.textContent).toBe('first-preview')
+    expect(previewText()).toContain('first-preview')
 
     clickAction('Skip')
 
-    expect(container.querySelector('pre')?.textContent).toBe('second-preview')
+    expect(previewText()).toContain('second-preview')
   })
 
   it('carries free text through as the other answer', () => {
