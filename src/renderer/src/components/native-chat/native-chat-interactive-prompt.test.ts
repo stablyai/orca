@@ -79,7 +79,7 @@ describe('parseAskFromStatus', () => {
     expect(prompt?.questions[0]?.question).toBe('ok')
   })
 
-  it('surfaces preview presence per option, without carrying the preview text', () => {
+  it('carries each option’s preview text, dropping empty ones', () => {
     const prompt = parseAskFromStatus(
       JSON.stringify({
         questions: [
@@ -95,10 +95,20 @@ describe('parseAskFromStatus', () => {
       })
     )
     expect(prompt?.questions[0]?.options).toEqual([
-      { label: 'A', hasPreview: true },
+      { label: 'A', preview: 'const x = 1' },
       { label: 'B' },
       { label: 'C' }
     ])
+  })
+
+  it('keeps a multi-line preview snippet intact', () => {
+    const snippet = 'function greet() {\n  return "hi"\n}'
+    const prompt = parseAskFromStatus(
+      JSON.stringify({
+        questions: [{ question: 'q', options: [{ label: 'A', preview: snippet }] }]
+      })
+    )
+    expect(prompt?.questions[0]?.options[0]?.preview).toBe(snippet)
   })
 })
 
@@ -208,7 +218,7 @@ const singleWithPreview = (options: string[]): AskPrompt => ({
     {
       question: 'q',
       multiSelect: false,
-      options: options.map((label, i) => (i === 0 ? { label, hasPreview: true } : { label }))
+      options: options.map((label, i) => (i === 0 ? { label, preview: 'snippet' } : { label }))
     }
   ]
 })
@@ -304,8 +314,8 @@ describe('buildAskAnswerKeys', () => {
           question: 'q1',
           multiSelect: false,
           options: [
-            { label: 'Tabs', hasPreview: true },
-            { label: 'Spaces', hasPreview: true }
+            { label: 'Tabs', preview: '\tindented' },
+            { label: 'Spaces', preview: '    indented' }
           ]
         },
         { question: 'q2', multiSelect: false, options: [{ label: 'Apple' }, { label: 'Banana' }] }

@@ -166,10 +166,10 @@ describe('extractPendingAsk', () => {
     ).toBeNull()
   })
 
-  it('surfaces preview presence from a transcript tool-call, same as the live status path', () => {
+  it('carries preview text from a transcript tool-call, same as the live status path', () => {
     // Transcript replay decodes tool-call input as an object (not a JSON string,
     // unlike the hook-status path), but both route through the same option
-    // parser, so preview presence must survive here too.
+    // parser, so the preview must survive here too.
     const pending = extractPendingAsk([
       message('m1', [
         call('AskUserQuestion', {
@@ -180,7 +180,7 @@ describe('extractPendingAsk', () => {
       ])
     ])
     expect(pending?.questions[0]?.options).toEqual([
-      { label: 'A', hasPreview: true },
+      { label: 'A', preview: 'snippet' },
       { label: 'B' }
     ])
   })

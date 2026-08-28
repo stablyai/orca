@@ -1,7 +1,9 @@
 // Canonical AskUserQuestion prompt types consumed by the shared parser and both
 // native-chat platform UIs.
 
-export type AskOption = { label: string; description?: string; hasPreview?: boolean }
+/** `preview` is an example snippet (code, config, a mockup) the user reads before
+ *  choosing; its presence also changes how Claude's selector commits an answer. */
+export type AskOption = { label: string; description?: string; preview?: string }
 export type AskQuestion = {
   question: string
   header?: string

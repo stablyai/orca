@@ -65,8 +65,10 @@ function parseOptions(raw: unknown): AskOption[] {
         return {
           label: value.label,
           description: typeof value.description === 'string' ? value.description : undefined,
-          hasPreview:
-            typeof value.preview === 'string' && value.preview.length > 0 ? true : undefined
+          preview:
+            typeof value.preview === 'string' && value.preview.length > 0
+              ? value.preview
+              : undefined
         }
       }
       return null
@@ -194,7 +196,7 @@ const ASK_NOTES = '\t'
  *  selector then switches to a list+preview layout where a digit only moves
  *  the highlight, and a separate Enter commits it. */
 function questionHasPreview(q: AskQuestion): boolean {
-  return q.options.some((o) => o.hasPreview === true)
+  return q.options.some((o) => (o.preview ?? '').length > 0)
 }
 
 /** Build the ordered keystroke groups that answer a Claude Code AskUserQuestion.
