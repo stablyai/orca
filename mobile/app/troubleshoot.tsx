@@ -10,6 +10,7 @@ import {
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
+import * as Clipboard from 'expo-clipboard'
 import {
   ChevronLeft,
   ChevronDown,
@@ -21,6 +22,7 @@ import {
   AlertTriangle
 } from 'lucide-react-native'
 import { colors, spacing, typography } from '../src/theme/mobile-theme'
+import { PreviousCrashSessionBanner } from '../src/components/PreviousCrashSessionBanner'
 import { loadHosts } from '../src/transport/host-store'
 import {
   startDiagnosticFetchTimeout,
@@ -32,6 +34,11 @@ import {
   unreachableHostDetail
 } from '../src/diagnostics/host-reachability'
 import { troubleshootCommonIssues } from '../src/diagnostics/troubleshoot-common-issues'
+import {
+  buildMobileCrashDiagnosticsReport,
+  getPreviousMobileCrashSession
+} from '../src/diagnostics/mobile-crash-diagnostics'
+import type { MobileCrashSessionSnapshot } from '../src/diagnostics/mobile-crash-session'
 
 type DiagnosticStatus = 'idle' | 'running' | 'done'
 
@@ -61,9 +68,21 @@ export default function TroubleshootScreen() {
   const abortRef = useRef(false)
   const diagnosticRunRef = useRef(0)
   const activeInternetCheckRef = useRef<DiagnosticFetchTimeout | null>(null)
+  const [crashDiagnosticsCopied, setCrashDiagnosticsCopied] = useState(false)
+  const [previousCrashSession, setPreviousCrashSession] =
+    useState<MobileCrashSessionSnapshot | null>(null)
+  const crashSessionLoadedRef = useRef(false)
 
   const setTroubleshootRootRef = useCallback((node: View | null): void => {
     if (node !== null) {
+      if (!crashSessionLoadedRef.current) {
+        crashSessionLoadedRef.current = true
+        void getPreviousMobileCrashSession().then((session) => {
+          if (!abortRef.current) {
+            setPreviousCrashSession(session)
+          }
+        })
+      }
       return
     }
     // Why: diagnostics can outlive the screen; cancel the active run when the
@@ -174,6 +193,11 @@ export default function TroubleshootScreen() {
     setDiagnosticStatus('done')
   }, [])
 
+  const copyCrashDiagnostics = useCallback(async () => {
+    await Clipboard.setStringAsync(await buildMobileCrashDiagnosticsReport())
+    setCrashDiagnosticsCopied(true)
+  }, [])
+
   return (
     <View
       ref={setTroubleshootRootRef}
@@ -191,6 +215,13 @@ export default function TroubleshootScreen() {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {previousCrashSession && (
+          <PreviousCrashSessionBanner
+            endedAbnormally={previousCrashSession.endedAbnormally}
+            style={styles.crashBanner}
+          />
+        )}
+
         <Pressable
           style={({ pressed }) => [
             styles.diagnosticButton,
@@ -223,6 +254,19 @@ export default function TroubleshootScreen() {
         >
           <ScrollText size={16} color={colors.textPrimary} />
           <Text style={styles.diagnosticButtonLabel}>View connection log</Text>
+        </Pressable>
+
+        <Pressable
+          style={({ pressed }) => [
+            styles.diagnosticButton,
+            pressed && styles.diagnosticButtonPressed
+          ]}
+          onPress={() => void copyCrashDiagnostics()}
+        >
+          <ScrollText size={16} color={colors.textPrimary} />
+          <Text style={styles.diagnosticButtonLabel}>
+            {crashDiagnosticsCopied ? 'Crash diagnostics copied' : 'Copy crash diagnostics'}
+          </Text>
         </Pressable>
 
         {checks.length > 0 && (
@@ -283,6 +327,7 @@ export default function TroubleshootScreen() {
 }
 
 const styles = StyleSheet.create({
+  crashBanner: { marginBottom: spacing.lg },
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,

@@ -16,6 +16,7 @@ import {
 } from '../src/transport/client-context-connection-metrics'
 import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
+import { buildMobileCrashDiagnosticsReport } from '../src/diagnostics/mobile-crash-diagnostics'
 
 // Why: getSnapshot must be referentially stable when there's no data —
 // a fresh [] per call would make useSyncExternalStore re-render forever.
@@ -65,6 +66,7 @@ export default function ConnectionLogScreen() {
     if (!selected) {
       return
     }
+    const crashDiagnostics = await buildMobileCrashDiagnosticsReport()
     const report = buildConnectionDiagnosticsReport({
       hostName: selected.name,
       endpoint: selected.endpoint,
@@ -73,7 +75,8 @@ export default function ConnectionLogScreen() {
       lastConnectedAt,
       platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
       appVersion: Constants.expoConfig?.version ?? 'unknown',
-      entries
+      entries,
+      crashDiagnostics
     })
     await Clipboard.setStringAsync(report)
     setCopied(true)

@@ -14,6 +14,7 @@ export function buildConnectionDiagnosticsReport(args: {
   platform: string
   appVersion: string
   entries: readonly ConnectionLogEntry[]
+  crashDiagnostics?: string
   nowMs?: number
 }): string {
   const now = args.nowMs ?? Date.now()
@@ -40,6 +41,9 @@ export function buildConnectionDiagnosticsReport(args: {
       const detail = entry.detail ? ` — ${entry.detail}` : ''
       lines.push(`${new Date(entry.ts).toISOString()} [${entry.level}] ${entry.message}${detail}`)
     }
+  }
+  if (args.crashDiagnostics) {
+    lines.push('', args.crashDiagnostics)
   }
   return lines.join('\n')
 }

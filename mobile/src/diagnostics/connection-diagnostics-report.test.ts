@@ -52,4 +52,21 @@ describe('buildConnectionDiagnosticsReport', () => {
     expect(report).toContain('Last connected: never this session')
     expect(report).toContain('No connection events recorded this session.')
   })
+
+  it('includes the locally captured crash diagnostics when available', () => {
+    const report = buildConnectionDiagnosticsReport({
+      hostName: 'Host 2',
+      endpoint: 'ws://192.168.1.50:6768',
+      state: 'connected',
+      reconnectAttempts: 0,
+      lastConnectedAt: NOW,
+      platform: 'android 15',
+      appVersion: '0.0.29',
+      entries: [],
+      crashDiagnostics: 'Previous session ended abnormally\nroute_changed: settings',
+      nowMs: NOW
+    })
+
+    expect(report).toContain('Previous session ended abnormally\nroute_changed: settings')
+  })
 })

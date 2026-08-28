@@ -9,6 +9,7 @@ import type { CrashReportAttribution } from './react-update-depth-attribution'
 import { sanitizeCrashReportString } from './crash-report-redaction'
 
 export {
+  MAX_CRASH_REPORT_STACK_CHARS,
   sanitizeCrashReportBreadcrumbs,
   sanitizeCrashReportDetails,
   sanitizeCrashReportString

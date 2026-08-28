@@ -5,9 +5,9 @@ import type {
 } from './crash-reporting'
 
 const MAX_STRING_DETAIL_LENGTH = 240
-const MAX_STACK_DETAIL_LENGTH = 4_000
+export const MAX_CRASH_REPORT_STACK_CHARS = 4_000
 const MAX_BREADCRUMB_NAME_LENGTH = 80
-const MAX_BREADCRUMBS = 30
+const MAX_CRASH_REPORT_PAYLOAD_BREADCRUMBS = 30
 
 const SECRET_PATTERNS = [
   /\bgh[pousr]_[A-Za-z0-9_]{20,}\b/g,
@@ -21,7 +21,7 @@ const SECRET_PATTERNS = [
 ]
 const CREDENTIAL_URL_PATTERN = /\b[A-Za-z0-9._%+-]+:[A-Za-z0-9._%+-]+@(?=[^/\s]+)/g
 const SECRET_ASSIGNMENT_PATTERN =
-  /\b(token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key)\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)/gi
+  /\b((?:[A-Za-z0-9]+[_-])*(?:token|access[_-]?token|refresh[_-]?token|api[_-]?key|client[_-]?secret|secret|password|account[_-]?key))\s*[:=]\s*(?:"[^"\r\n]*"|'[^'\r\n]*'|[^&\s,;]+)/gi
 
 // Quoted paths retain spaces; unquoted paths stop at whitespace to preserve prose.
 const PATH_PATTERNS = [
@@ -66,7 +66,7 @@ export function sanitizeCrashReportDetails(
           /(?:^|_)(?:stack|component_stack|error_stack|minidump_check_message)$/i.test(
             normalizedKey
           )
-            ? MAX_STACK_DETAIL_LENGTH
+            ? MAX_CRASH_REPORT_STACK_CHARS
             : MAX_STRING_DETAIL_LENGTH
         sanitized[key] = sanitizeCrashReportString(value, maxLength)
       }
@@ -87,7 +87,7 @@ export function sanitizeCrashReportBreadcrumbs(
   }
 
   const sanitized = breadcrumbs
-    .slice(-MAX_BREADCRUMBS)
+    .slice(-MAX_CRASH_REPORT_PAYLOAD_BREADCRUMBS)
     .map((breadcrumb): CrashReportBreadcrumb | null => {
       if (!breadcrumb.name.trim() || !breadcrumb.createdAt.trim()) {
         return null
