@@ -45,6 +45,12 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
   const settings = useAppStore((s) => s.settings)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const filterWorkspaceStatuses = useAppStore((s) => s.filterWorkspaceStatuses)
+  // Why gated: without a status filter the catalog is unused here, and
+  // subscribing would rerun the board's visibility pass on every status edit.
+  const workspaceStatuses = useAppStore((s) =>
+    s.filterWorkspaceStatuses.length > 0 ? s.workspaceStatuses : undefined
+  )
   const tabsByWorktree = useAppStore((s) => (!showSleepingWorkspaces ? s.tabsByWorktree : null))
   const ptyIdsByTabId = useAppStore((s) => (!showSleepingWorkspaces ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
@@ -71,6 +77,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     return new Set(
       computeVisibleWorktrees(worktreesByRepo, sortedIds, {
         filterRepoIds,
+        filterWorkspaceStatuses,
+        workspaceStatuses,
         showSleepingWorkspaces,
         tabsByWorktree,
         ptyIdsByTabId,
@@ -99,6 +107,8 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     allWorktrees,
     browserTabsByWorktree,
     filterRepoIds,
+    filterWorkspaceStatuses,
+    workspaceStatuses,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,

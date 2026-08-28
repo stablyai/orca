@@ -73,6 +73,8 @@ export type PersistedUIState = {
   /** Per-worktree Explorer dotfile visibility. Missing entries inherit the default: show. */
   showDotfilesByWorktree?: Record<string, boolean>
   filterRepoIds: string[]
+  /** Selected workspace-status ids; absent/empty means every status is shown. */
+  filterWorkspaceStatuses?: string[]
   collapsedGroups: string[]
   uiZoomLevel: number
   editorFontZoomLevel: number

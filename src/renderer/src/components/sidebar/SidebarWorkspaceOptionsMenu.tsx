@@ -18,6 +18,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { DEFAULT_SHOW_SLEEPING_WORKSPACES } from '../../../../shared/constants'
 import { isSleepingSweepExemptionNarrowingList } from './visible-worktrees'
 import SidebarRepositoryFilterSection from './SidebarRepositoryFilterSection'
+import SidebarWorkspaceStatusFilterSection from './SidebarWorkspaceStatusFilterSection'
 import SidebarWorkspaceFilterSection from './SidebarWorkspaceFilterSection'
 import { getSidebarHostVisibilityLabel, shouldShowHostScopeControls } from './sidebar-host-options'
 import { useSidebarHostScopeOptions } from './use-sidebar-host-scope-options'
@@ -44,6 +45,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   const hideWorkspacesFromOtherDevices = useAppStore((s) => s.hideWorkspacesFromOtherDevices)
   const alwaysShowDefaultBranchWorkspace = useAppStore((s) => s.alwaysShowDefaultBranchWorkspace)
   const filterRepoIds = useAppStore((s) => s.filterRepoIds)
+  const filterWorkspaceStatuses = useAppStore((s) => s.filterWorkspaceStatuses)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const repos = useAppStore((s) => s.repos)
   const setWorkspaceHostScope = useAppStore((s) => s.setWorkspaceHostScope)
   const visibleWorkspaceHostIds = useAppStore((s) => s.visibleWorkspaceHostIds)
@@ -79,6 +82,22 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     return count
   }, [repos, filterRepoIds])
   const hasRepoFilter = selectedCount > 0
+  // Why derive from the catalog, same as repos: a stale id from a deleted
+  // status must not inflate the badge for a filter the pipeline ignores.
+  const selectedStatusCount = useMemo(() => {
+    let count = 0
+    for (const status of workspaceStatuses) {
+      if (filterWorkspaceStatuses.includes(status.id)) {
+        count += 1
+      }
+    }
+    // Why zero when everything is selected: that narrows nothing, so it is not
+    // an active filter the Clear Filters escape hatch needs to advertise.
+    return count === workspaceStatuses.length ? 0 : count
+  }, [workspaceStatuses, filterWorkspaceStatuses])
+  const hasStatusFilter = selectedStatusCount > 0
+  // Why: one status can't narrow anything; the section hides itself on the same rule.
+  const showStatusFilter = workspaceStatuses.length > 1
   const hasSleepingFilter = showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES
   const hasHostVisibilityFilter = visibleWorkspaceHostIds !== null
   // Why gated on the parent row: the exemption only narrows the list during the
@@ -96,6 +115,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     hideWorkspacesFromOtherDevices ||
     hasSleepingExemptionFilter ||
     hasRepoFilter ||
+    hasStatusFilter ||
     hasHostVisibilityFilter
   const activeFilterCount =
     (hasSleepingFilter ? 1 : 0) +
@@ -106,7 +126,8 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
     (hideWorkspacesFromOtherDevices ? 1 : 0) +
     (hasSleepingExemptionFilter ? 1 : 0) +
     (hasHostVisibilityFilter ? 1 : 0) +
-    selectedCount
+    selectedCount +
+    selectedStatusCount
   const activeFilterLabel = `${activeFilterCount} ${activeFilterCount === 1 ? 'filter' : 'filters'}`
   const sortLabel = SORT_OPTIONS.find((opt) => opt.id === sortBy)?.label ?? 'Sort'
   const projectOrderLabel =
@@ -173,7 +194,7 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
       >
         {/* Why: host + project filters share one section and the same single-row
             shell as Sort by (label left, value right) so the menu stays flat. */}
-        {(showHostScopeControls || repos.length > 1) && (
+        {(showHostScopeControls || repos.length > 1 || showStatusFilter) && (
           <>
             <DropdownMenuLabel>
               {translate('auto.components.sidebar.SidebarWorkspaceOptionsMenu.showSection', 'Show')}
@@ -189,6 +210,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               />
             )}
             <SidebarRepositoryFilterSection
+              preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
+            />
+            <SidebarWorkspaceStatusFilterSection
               preserveWorkspaceBoardOpen={preserveWorkspaceBoardOpen}
             />
             <DropdownMenuSeparator />

@@ -35,6 +35,7 @@ export function useVisibleSidebarWorktrees(args: {
   const {
     showSleepingWorkspaces,
     filterRepoIds,
+    filterWorkspaceStatuses,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
@@ -45,6 +46,21 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  // Why read the catalog only while a status filter is set: subscribing
+  // unconditionally would rerun this pipeline on every status rename/recolor
+  // for the majority of users who never filter by status.
+  const workspaceStatuses = useAppStore((s) =>
+    filterWorkspaceStatuses?.length ? s.workspaceStatuses : undefined
+  )
+  // Why pin the active workspace while a status filter is on: "Move to Status"
+  // sits on the row itself, so restatusing the workspace you are working in
+  // would otherwise delete its row while its panes stay open, with nothing on
+  // screen explaining why. Status is the only filter dimension reachable from
+  // the row, so no other filter can be turned against the row that turned it —
+  // hence the gate rather than pinning the active row unconditionally.
+  const activeWorktreeId = useAppStore((s) =>
+    filterWorkspaceStatuses?.length ? s.activeWorktreeId : null
+  )
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
@@ -68,8 +84,14 @@ export function useVisibleSidebarWorktrees(args: {
 
   const recomputedVisibleWorktrees = useMemo(() => {
     void agentStatusEpoch
+    // Either, both or neither may be set; stay undefined when neither is.
+    const forcedVisibleWorktreeIds = [args.agentSendTargetWorktreeId, activeWorktreeId].filter(
+      (id): id is string => id != null
+    )
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
+      filterWorkspaceStatuses,
+      workspaceStatuses,
       showSleepingWorkspaces,
       tabsByWorktree,
       ptyIdsByTabId,
@@ -94,14 +116,16 @@ export function useVisibleSidebarWorktrees(args: {
       visibleWorkspaceHostIds,
       defaultHostId: getSettingsFocusedExecutionHostId(settings),
       worktreeLineageById,
-      forcedVisibleWorktreeIds: args.agentSendTargetWorktreeId
-        ? [args.agentSendTargetWorktreeId]
-        : undefined
+      forcedVisibleWorktreeIds:
+        forcedVisibleWorktreeIds.length > 0 ? forcedVisibleWorktreeIds : undefined
     })
   }, [
     args.agentSendTargetWorktreeId,
+    activeWorktreeId,
     agentStatusEpoch,
     filterRepoIds,
+    filterWorkspaceStatuses,
+    workspaceStatuses,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,

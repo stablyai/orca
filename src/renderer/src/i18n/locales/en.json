@@ -5225,6 +5225,11 @@
           "allProjects": "All projects",
           "selectedProjectsCount": "{{value0}} projects"
         },
+        "SidebarWorkspaceStatusFilterSection": {
+          "status": "Status",
+          "allStatuses": "All statuses",
+          "selectedStatusesCount": "{{value0}} statuses"
+        },
         "SidebarSettingsHelpMenu": {
           "ad3d3ed7f1": "Restart Orca",
           "29c56f30ee": "Check for Updates",

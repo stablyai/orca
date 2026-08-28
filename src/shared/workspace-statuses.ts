@@ -268,6 +268,42 @@ export function getWorkspaceStatus(
     : getDefaultWorkspaceStatusId(statuses)
 }
 
+/**
+ * Drop selected filter ids that no longer exist in the catalog, and collapse a
+ * full selection back to "all".
+ *
+ * Why collapse: a selection naming every status filters nothing but still reads
+ * as an active filter in the badge and Clear Filters. Why prune: a filter for a
+ * since-deleted custom status would otherwise match no workspace and empty the
+ * sidebar with no visible cause.
+ *
+ * Returns the same array identity when nothing changed so the debounced
+ * persisted-UI writer isn't woken by a no-op normalization.
+ */
+export function sanitizeFilterWorkspaceStatuses(
+  value: unknown,
+  statuses: readonly WorkspaceStatusDefinition[]
+): WorkspaceStatus[] {
+  if (!Array.isArray(value)) {
+    return []
+  }
+  const seen = new Set<WorkspaceStatus>()
+  for (const entry of value) {
+    if (typeof entry === 'string' && isWorkspaceStatusId(entry, statuses)) {
+      seen.add(entry)
+    }
+  }
+  if (seen.size === 0 || seen.size === statuses.length) {
+    return value.length === 0 ? (value as WorkspaceStatus[]) : []
+  }
+  // Why catalog order, not selection order: the menu, the label ("N statuses")
+  // and the persisted value then stay stable across toggles.
+  const sanitized = statuses.filter((status) => seen.has(status.id)).map((status) => status.id)
+  return sanitized.length === value.length && sanitized.every((id, i) => id === value[i])
+    ? (value as WorkspaceStatus[])
+    : sanitized
+}
+
 export function getWorkspaceStatusGroupKey(status: WorkspaceStatus): string {
   return `${WORKSPACE_STATUS_GROUP_PREFIX}${encodeURIComponent(status)}`
 }
