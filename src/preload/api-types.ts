@@ -44,7 +44,7 @@ import type {
   MacosTccPromptsApi,
   NotificationsApi
 } from './api/os-permission-api'
-import type { PetApi } from './api/pet-api'
+import type { DesktopPetApi, PetApi } from './api/pet-api'
 import type { PluginsApi } from './api/plugin-host-api'
 import type { PreflightApi } from './api/preflight-api'
 import type { PtyApi } from './api/pty-api'
@@ -117,6 +117,7 @@ export type PreloadApi = {
   shell: ShellApi
   skills: SkillsApi
   pet: PetApi
+  desktopPet: DesktopPetApi
   browser: BrowserApi
   emulator: EmulatorApi
   hooks: HooksApi

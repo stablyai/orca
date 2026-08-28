@@ -13,6 +13,7 @@ import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
+import { DesktopPetAnimationPublisher } from '../components/pet/DesktopPetAnimationPublisher'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
@@ -127,6 +128,7 @@ export function AppRootSurfaces(props: {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const petVisible = useAppStore((s) => s.petVisible)
   const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
+  const petDetached = useAppStore((s) => s.petDetached)
   const dictationState = useAppStore((s) => s.dictationState)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
@@ -136,7 +138,12 @@ export function AppRootSurfaces(props: {
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
   const shouldMountDictationController =
     settings?.voice?.enabled === true || dictationState !== 'idle'
-  const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
+  const renderPetOverlay = shouldRenderPetOverlay({
+    persistedUIReady,
+    petEnabled,
+    petVisible,
+    petDetached
+  })
 
   return (
     <>
@@ -265,6 +272,10 @@ export function AppRootSurfaces(props: {
             <PetOverlay />
           </OverlayBoundary>
         </Suspense>
+      ) : null}
+      {/* Why: the detached pet window has no agent store of its own — this publishes it. */}
+      {persistedUIReady && petEnabled && petVisible && petDetached ? (
+        <DesktopPetAnimationPublisher />
       ) : null}
       {shouldMountUpdateCard ? (
         <Suspense fallback={null}>

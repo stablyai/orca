@@ -21,11 +21,27 @@ export type PetPointerInteraction = {
   }
 }
 
+/** Where drag coordinates are measured. The in-window overlay positions itself against the
+ *  viewport ('client'); the detached pet window moves the OS window itself, whose own motion
+ *  cancels out client coordinates, so it reads desktop coordinates instead. */
+export type PetPointerCoordinateSpace = 'client' | 'screen'
+
+function readPointerPoint(
+  event: ReactPointerEvent<HTMLDivElement>,
+  space: PetPointerCoordinateSpace
+): Point {
+  return space === 'screen'
+    ? { x: event.screenX, y: event.screenY }
+    : { x: event.clientX, y: event.clientY }
+}
+
 // Drag/hover state for the pet overlay. `position` is the overlay's current
-// top-left corner and `moveTo` receives the unclamped position the drag wants.
+// top-left corner — pass a getter when the pet moves without re-rendering (the detached
+// window moves itself) — and `moveTo` receives the unclamped position the drag wants.
 export function usePetPointerInteraction(
-  position: Point,
-  moveTo: (next: Point) => void
+  position: Point | (() => Point),
+  moveTo: (next: Point) => void,
+  coordinateSpace: PetPointerCoordinateSpace = 'client'
 ): PetPointerInteraction {
   const [dragging, setDragging] = useState(false)
   const [dragAnimation, setDragAnimation] = useState<PetDragAnimation>(null)
@@ -50,11 +66,13 @@ export function usePetPointerInteraction(
       return
     }
     activePointerRef.current = event.pointerId
+    const point = readPointerPoint(event, coordinateSpace)
+    const origin = typeof position === 'function' ? position() : position
     dragOffsetRef.current = {
-      x: event.clientX - position.x,
-      y: event.clientY - position.y
+      x: point.x - origin.x,
+      y: point.y - origin.y
     }
-    dragBaselineXRef.current = event.clientX
+    dragBaselineXRef.current = point.x
     dragDirectionRef.current = null
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
@@ -67,20 +85,18 @@ export function usePetPointerInteraction(
     if (event.pointerId !== activePointerRef.current) {
       return
     }
-    const next = nextPetDragAnimation(
-      dragDirectionRef.current,
-      event.clientX - dragBaselineXRef.current
-    )
+    const point = readPointerPoint(event, coordinateSpace)
+    const next = nextPetDragAnimation(dragDirectionRef.current, point.x - dragBaselineXRef.current)
     if (next.accepted) {
-      dragBaselineXRef.current = event.clientX
+      dragBaselineXRef.current = point.x
       if (next.animation !== dragDirectionRef.current) {
         dragDirectionRef.current = next.animation
         setDragAnimation(next.animation)
       }
     }
     moveTo({
-      x: event.clientX - dragOffsetRef.current.x,
-      y: event.clientY - dragOffsetRef.current.y
+      x: point.x - dragOffsetRef.current.x,
+      y: point.y - dragOffsetRef.current.y
     })
   }
 

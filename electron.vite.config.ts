@@ -299,8 +299,8 @@ export const electronViteConfig: UserConfig = {
       manifest: true,
       modulePreload: { polyfill: true },
       target: 'es2020',
-      // Why: the pop-out dashboard is a second top-level window with its own
-      // React root. It gets its own HTML entry so it can boot independently of
+      // Why: the pop-out dashboard and the detached desktop pet are top-level windows with
+      // their own React roots. Each gets its own HTML entry so it can boot independently of
       // the main window while reusing the same preload/window.api. `index` must
       // stay listed — overriding input otherwise drops electron-vite's default
       // renderer entry.
@@ -311,6 +311,7 @@ export const electronViteConfig: UserConfig = {
         input: {
           index: resolve('src/renderer/index.html'),
           popout: resolve('src/renderer/popout.html'),
+          pet: resolve('src/renderer/pet.html'),
           web: resolve('src/renderer/web-index.html')
         }
       }

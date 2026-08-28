@@ -1,0 +1,22 @@
+<!doctype html>
+<html class="native-shell">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Orca Pet</title>
+    <!-- CSP is relaxed during development; electron-vite injects a stricter policy for production builds -->
+    <style>
+      /* The window itself is transparent — the pet is the only thing that paints. */
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+        overflow: hidden;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/pet.tsx"></script>
+  </body>
+</html>

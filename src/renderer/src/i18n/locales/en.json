@@ -16848,6 +16848,12 @@
         "days": "{{value0}}d",
         "underOneMinute": "<1m"
       }
+    },
+    "status-bar": {
+      "PetStatusSegment": {
+        "dockPet": "Dock pet in Orca window",
+        "detachPet": "Keep pet on desktop"
+      }
     }
   },
   "dashboardPopout": {

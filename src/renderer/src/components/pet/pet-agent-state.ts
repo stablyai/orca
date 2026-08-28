@@ -1,14 +1,8 @@
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import type { PetAgentAnimation } from '../../../../shared/pet-types'
 import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 
-export type PetAnimationName =
-  | 'idle'
-  | 'running'
-  | 'waiting'
-  | 'review'
-  | 'jumping'
-  | 'running-right'
-  | 'running-left'
+export type PetAnimationName = PetAgentAnimation | 'jumping' | 'running-right' | 'running-left'
 
 export type PetDragAnimation = 'running-right' | 'running-left' | null
 
@@ -27,22 +21,29 @@ export function nextPetDragAnimation(
   return { animation: current, accepted: false }
 }
 
-export type PetAnimationInput = {
+export type PetAgentAnimationInput = {
   entries: AgentStatusEntry[]
   retainedCount: number
-  dragging: boolean
-  dragAnimation: PetDragAnimation
-  hovering: boolean
   now: number
   staleAfterMs: number
 }
 
-function agentStateAnimation(
-  entries: AgentStatusEntry[],
-  retainedCount: number,
-  now: number,
-  staleAfterMs: number
-): PetAnimationName {
+export type PetPointerAnimationInput = {
+  dragging: boolean
+  dragAnimation: PetDragAnimation
+  hovering: boolean
+}
+
+export type PetAnimationInput = PetAgentAnimationInput & PetPointerAnimationInput
+
+/** The agent-driven half of the pet's animation. Split out so the detached pet window can be
+ *  handed this over IPC and still layer its own pointer states on top. */
+export function selectPetAgentAnimation({
+  entries,
+  retainedCount,
+  now,
+  staleAfterMs
+}: PetAgentAnimationInput): PetAgentAnimation {
   let hasWorking = false
   let hasDone = false
 
@@ -69,6 +70,21 @@ function agentStateAnimation(
   return 'idle'
 }
 
+// Why: aligned with Codex. A horizontal drag runs toward the pointer,
+// grab-and-hold keeps the live agent state, and only a plain hover jumps.
+export function applyPetPointerAnimation(
+  base: PetAnimationName,
+  { dragging, dragAnimation, hovering }: PetPointerAnimationInput
+): PetAnimationName {
+  if (dragging) {
+    return dragAnimation ?? base
+  }
+  if (hovering) {
+    return 'jumping'
+  }
+  return base
+}
+
 export function selectPetAnimationName({
   entries,
   retainedCount,
@@ -78,14 +94,8 @@ export function selectPetAnimationName({
   now,
   staleAfterMs
 }: PetAnimationInput): PetAnimationName {
-  const base = agentStateAnimation(entries, retainedCount, now, staleAfterMs)
-  // Why: aligned with Codex. A horizontal drag runs toward the pointer,
-  // grab-and-hold keeps the live agent state, and only a plain hover jumps.
-  if (dragging) {
-    return dragAnimation ?? base
-  }
-  if (hovering) {
-    return 'jumping'
-  }
-  return base
+  return applyPetPointerAnimation(
+    selectPetAgentAnimation({ entries, retainedCount, now, staleAfterMs }),
+    { dragging, dragAnimation, hovering }
+  )
 }

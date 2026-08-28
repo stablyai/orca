@@ -48,6 +48,7 @@ import { registerKeybindingHandlers } from '../keybindings'
 import { registerTelemetryHandlers } from '../telemetry'
 import { registerShellHandlers } from '../shell'
 import { registerPetHandlers } from '../pet'
+import { registerDesktopPetHandlers } from '../desktop-pet'
 import { registerPluginHandlers } from '../plugins'
 import { registerUIHandlers, setTrustedUIRendererWebContentsId } from '../ui'
 import { registerEmulatorFrameStreamHandlers } from '../emulator-frame-stream'
@@ -198,6 +199,7 @@ export function registerCoreHandlers(
   registerBrowserHandlers()
   registerShellHandlers(store)
   registerPetHandlers()
+  registerDesktopPetHandlers(store)
   registerSessionHandlers(store)
   registerUIHandlers(store, { isDashboardPopoutRenderer })
   registerEmulatorFrameStreamHandlers()

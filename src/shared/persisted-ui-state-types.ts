@@ -188,6 +188,10 @@ export type PersistedUIState = {
   customPets?: CustomPet[]
   /** Pet overlay size in CSS pixels (square); clamped to [PET_SIZE_MIN, PET_SIZE_MAX] on read. */
   petSize?: number
+  /** Whether the pet renders in its own always-on-top desktop window instead of inside the main window. */
+  petDetached?: boolean
+  /** Saved top-left of the detached pet window in screen coordinates. Main-owned: the window persists its own drags. */
+  petWindowPosition?: { x: number; y: number } | null
   /** Legacy keys from before the sidekick -> pet rename; read only during migration, new writes use pet* above. */
   sidekickVisible?: boolean
   sidekickId?: string

@@ -10,6 +10,7 @@ import { recordDurableCrashBreadcrumb } from '../crash-reporting/durable-crash-b
 import { clearTrustedUIRendererWebContentsId, setTrustedUIRendererWebContentsId } from '../ipc/ui'
 import type { Store } from '../persistence'
 import { closeDashboardPopout } from './dashboard-popout-window'
+import { closeDesktopPetWindow } from './desktop-pet-window'
 import {
   installMainWindowCloseLifecycle,
   WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS
@@ -187,6 +188,7 @@ export function createMainWindow(
 
   mainWindow.on('closed', () => {
     closeDashboardPopout()
+    closeDesktopPetWindow()
     state.clearInitialRevealFallbackTimer()
     closeLifecycle.dispose()
     focus.dispose()

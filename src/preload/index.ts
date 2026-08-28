@@ -115,7 +115,7 @@ import type {
 } from '../shared/notification-settings-types'
 import type { OnboardingState } from '../shared/onboarding-state-types'
 import type { PersistedUIState } from '../shared/persisted-ui-state-types'
-import type { CustomPet } from '../shared/pet-types'
+import type { CustomPet, PetAgentAnimation, PetWindowPosition } from '../shared/pet-types'
 import type { MemorySnapshot } from '../shared/process-stats-types'
 import type { NestedRepoScanResult } from '../shared/project-group-types'
 import type { BaseRefDefaultResult, BaseRefSearchResult } from '../shared/repo-types'
@@ -2708,6 +2708,27 @@ const api = {
       ipcRenderer.invoke('pet:read', id, fileName, kind),
     delete: (id: string, fileName: string, kind?: 'image' | 'bundle'): Promise<void> =>
       ipcRenderer.invoke('pet:delete', id, fileName, kind)
+  },
+
+  desktopPet: {
+    publishAnimation: (animation: PetAgentAnimation): Promise<void> =>
+      ipcRenderer.invoke('desktopPet:publishAnimation', animation),
+    onAnimationRequested: (callback: () => void): (() => void) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('desktopPet:animationRequested', listener)
+      return () => ipcRenderer.removeListener('desktopPet:animationRequested', listener)
+    },
+    requestAnimation: (): Promise<void> => ipcRenderer.invoke('desktopPet:requestAnimation'),
+    onAnimation: (callback: (animation: PetAgentAnimation) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, animation: PetAgentAnimation): void =>
+        callback(animation)
+      ipcRenderer.on('desktopPet:animation', listener)
+      return () => ipcRenderer.removeListener('desktopPet:animation', listener)
+    },
+    move: (position: PetWindowPosition): Promise<void> =>
+      ipcRenderer.invoke('desktopPet:move', position),
+    setInteractive: (interactive: boolean): Promise<void> =>
+      ipcRenderer.invoke('desktopPet:setInteractive', interactive)
   },
 
   browser: {

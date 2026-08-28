@@ -1,5 +1,5 @@
 import React from 'react'
-import { Check, PackageOpen, Trash2, Upload } from 'lucide-react'
+import { Check, ExternalLink, PackageOpen, PictureInPicture2, Trash2, Upload } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   DropdownMenu,
@@ -33,6 +33,8 @@ function PetStatusSegmentInner(): React.JSX.Element {
   const removeCustomPet = useAppStore((s) => s.removeCustomPet)
   const petSize = useAppStore((s) => s.petSize)
   const setPetSize = useAppStore((s) => s.setPetSize)
+  const petDetached = useAppStore((s) => s.petDetached)
+  const setPetDetached = useAppStore((s) => s.setPetDetached)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
 
@@ -142,6 +144,26 @@ function PetStatusSegmentInner(): React.JSX.Element {
           {petVisible
             ? translate('auto.components.status.bar.PetStatusSegment.1fbc51cc77', 'Hide pet')
             : translate('auto.components.status.bar.PetStatusSegment.6d0a8cd179', 'Show pet')}
+        </DropdownMenuItem>
+        {/* Why: detaching moves the pet into its own always-on-top window so it survives a
+            minimized Orca; docking brings it back inside the app window. */}
+        <DropdownMenuItem
+          onSelect={(event) => {
+            event.preventDefault()
+            if (!petVisible) {
+              setPetVisible(true)
+            }
+            setPetDetached(!petDetached)
+          }}
+        >
+          {petDetached ? (
+            <PictureInPicture2 className="size-3.5" aria-hidden />
+          ) : (
+            <ExternalLink className="size-3.5" aria-hidden />
+          )}
+          {petDetached
+            ? translate('components.status-bar.PetStatusSegment.dockPet', 'Dock pet in Orca window')
+            : translate('components.status-bar.PetStatusSegment.detachPet', 'Keep pet on desktop')}
         </DropdownMenuItem>
         {/* Why: in-menu range so users can resize the overlay without leaving
             the dropdown — pet sprites can import larger than the default 180px

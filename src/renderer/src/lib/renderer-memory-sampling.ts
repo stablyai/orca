@@ -26,7 +26,7 @@ const RENDERER_MEMORY_HIGHWATER_RATIOS = [0.6, 0.8] as const
  */
 const RENDERER_PRIVATE_HIGHWATER_MB = [600, 1000] as const
 
-export type RendererSurface = 'main' | 'dashboard-popout'
+export type RendererSurface = 'main' | 'dashboard-popout' | 'desktop-pet'
 
 type BrowserPerformanceMemory = {
   usedJSHeapSize?: number

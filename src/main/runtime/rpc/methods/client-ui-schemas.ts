@@ -208,6 +208,7 @@ const UiUpdateFields = z
     petId: z.string().optional(),
     customPets: UnknownRecordArray.optional(),
     petSize: z.number().finite().optional(),
+    petDetached: z.boolean().optional(),
     sidekickVisible: z.boolean().optional(),
     sidekickId: z.string().optional(),
     customSidekicks: UnknownRecordArray.optional(),

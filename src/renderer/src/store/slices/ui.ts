@@ -50,7 +50,7 @@ import {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
+import { clampPetSize, PET_SIZE_DEFAULT } from '../../../../shared/pet-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
@@ -247,13 +247,6 @@ function getContextualTourProgressionForFeatureInteraction(
     return 'reveal-sidebar-and-advance'
   }
   return 'complete'
-}
-
-function clampPetSize(size: number): number {
-  if (!Number.isFinite(size)) {
-    return PET_SIZE_DEFAULT
-  }
-  return Math.max(PET_SIZE_MIN, Math.min(PET_SIZE_MAX, Math.round(size)))
 }
 
 // Why: local copy of TaskPage's preset→query mapping avoids a store ↔ lib circular import while warming the exact cache key.
@@ -994,6 +987,9 @@ export type UISlice = {
   /** Pet overlay size in CSS pixels (square). User-adjustable so an oversized imported sprite isn't stuck on screen. */
   petSize: number
   setPetSize: (size: number) => void
+  /** Whether the pet lives in its own always-on-top desktop window instead of inside this one. */
+  petDetached: boolean
+  setPetDetached: (v: boolean) => void
   pendingRevealWorktree: PendingSidebarWorktreeReveal | null
   pendingRevealSidebarRow: PendingSidebarRowReveal | null
   revealWorktreeInSidebar: (
@@ -2415,6 +2411,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ petSize: clamped })
   },
 
+  // Why: main watches this key to open/close the pet window, so persisting it IS the toggle.
+  petDetached: false,
+  setPetDetached: (v) => {
+    window.api.ui.set({ petDetached: v }).catch(console.error)
+    set({ petDetached: v })
+  },
+
   customPets: [],
   addCustomPet: (model) =>
     set((s) => {
@@ -2612,6 +2615,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         // Why: default true so existing users see the pet on first enabling the flag; only an explicit Hide persists false.
         petVisible: ui.petVisible ?? ui.sidekickVisible ?? true,
         petSize: clampPetSize(ui.petSize ?? ui.sidekickSize ?? PET_SIZE_DEFAULT),
+        petDetached: ui.petDetached === true,
         customPets,
         // Why: fall back to default when the persisted id is unknown (e.g. custom pet removed elsewhere) so the overlay renders.
         petId: ((): string => {
