@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { gitExecFileSync } from '../../../git/runner'
 import type { ControlPlaneStore } from './control-plane-store'
+import { runGate } from './runtime-gate-execution'
 
 /** A real Git worktree for tests of the runtime-observed completion contract.
  *
@@ -51,22 +52,30 @@ export function createObservedWorktree(repoId = 'repo_test'): ObservedWorktreeFi
   return fixture
 }
 
-/** Records the successful gate process the completion contract now demands.
- *  Mirrors what `runGate` writes, without spawning a process per fixture. */
+/** Records the successful gate the completion contract demands, by actually
+ *  RUNNING one.
+ *
+ *  Why a real process and not a hand-written row: an independent review found
+ *  that `runGate` had no production caller, so every accepted-completion test
+ *  was passing on a row the fixture wrote itself — proving the guard while
+ *  concealing that its satisfiable side did not exist. Going through `runGate`
+ *  means these tests fail if the execution path breaks, not merely if someone
+ *  stops writing the row. `cwd` is the tree the Dispatch actually ran in. */
 export function recordProvenGate(
   store: ControlPlaneStore,
-  args: { scopeKey: string; gateId: string; finalSha: string }
+  args: { scopeKey: string; gateId: string; finalSha: string; cwd?: string }
 ): void {
-  store.recordGateExecution({
-    execution_id: `${args.scopeKey}#${args.gateId}#${args.finalSha}`,
-    scope_key: args.scopeKey,
-    gate_id: args.gateId,
-    final_sha: args.finalSha,
-    command: args.gateId,
-    exit_code: 0,
-    log_digest: 'fixture',
-    build_id: 'fixture-build',
-    started_at: '2026-01-01T00:00:00.000Z',
-    finished_at: '2026-01-01T00:00:01.000Z'
+  const result = runGate(store, {
+    scopeKey: args.scopeKey,
+    gateId: args.gateId,
+    finalSha: args.finalSha,
+    // A command every supported platform has, whose only job is to exit zero.
+    program: 'git',
+    args: ['--version'],
+    cwd: args.cwd ?? tmpdir(),
+    buildId: 'fixture-build'
   })
+  if (!result.passed) {
+    throw new Error(`Fixture gate did not pass: exit ${result.execution.exit_code}`)
+  }
 }
