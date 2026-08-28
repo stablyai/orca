@@ -1,0 +1,60 @@
+PACKAGE B — IDENTITY RERUN 2 (Run run_66a2e2d4c7d5, "identity rerun 2")
+
+code SHA            b559819479  (clean worktree)
+candidate runtime   ea29433f-2ddc-48d6-8d1e-f2f9fa483176, pid 79997,
+                    ORCA_DEV_USER_DATA_PATH=/tmp/orca-pkgb-id2-1787882425
+worker Dispatch     ctx_c6fec112df51, task_158984c39e0a, pane
+                    cfb55324-...:01b00c33-..., dispatched 2026-08-28T02:00:29Z
+
+WHAT THIS RUN WAS FOR
+  effective_model_identity / effective_reasoning_mode were the last two kinds with
+  no observation on this head. d2910f30db + b559819479 added the writer; this Run
+  was the first live worker launched under it.
+
+WHAT THE PROVIDER ACTUALLY REPORTED  (read out of the candidate at 02:02Z)
+  last-status.json entry for this Dispatch's own pane carried, for the first time,
+  a providerSession:
+    id              3279ad72-d791-4239-bb47-7278f14aee4b
+    transcriptPath  ~/.claude/projects/-Users-...-control-plane-b/3279ad72-....jsonl
+    launchTokenHash 76c262af3617...  == the Dispatch's launch_token_hash
+    model           ABSENT from the hook (as expected for Claude)
+  The transcript held 42 assistant records naming a model, newest
+  `claude-opus-5` at 2026-08-28T02:02:43.920Z — after the Dispatch began.
+
+  observeProviderSessionIdentity, run against that exact entry and that real
+  transcript, returns:
+    ok, identity { agent: claude, model: claude-opus-5, reasoning: high },
+    sessionId 3279ad72-..., observedAtMs 1787882741612
+  and refuses the same entry under a foreign pane key (no_status_for_dispatch).
+  So the writer does observe a PROVIDER-STATED model for this Dispatch. That is
+  the thing that did not exist before this head.
+
+WHAT DID NOT HAPPEN, AND WHY
+  Nothing was persisted. worker_dispatches.start_options for ctx_c6fec112df51 still
+  held the requested copy — launch.effective == launch.requested, no
+  effectiveProvenance — at 02:02Z and again at 02:03Z.
+
+  Persistence has two triggers and neither fired:
+    liveness sweep     runs only inside orchestration.await; no sweep wrote in the
+                       ~2 min the worker was alive after its first assistant record.
+    orchestration.certify  observes on read (registry-ops observedEffectiveIdentity)
+                       and was never called.
+
+  At ~02:04Z the candidate runtime was torn down mid-Dispatch: pid 79997 gone,
+  /tmp/orca-pkgb-id2-1787882425 deleted, taking orchestration.db with it. From that
+  point the worker could not report, ask or escalate — every orchestration CLI verb
+  returns runtime_unavailable against the dead endpoint. Dispatch ctx_c6fec112df51
+  is therefore orphaned at `dispatched` in a database that no longer exists.
+
+CERTIFICATION STATE ON THIS HEAD
+  control_plane_route_evidence was EMPTY at teardown. One runtime event existed:
+  safe_launch admitted at 02:00:29.376Z. No route reached PASS on this Run.
+
+WHAT THE NEXT RUN NEEDS (no code change identified)
+  The writer is not the gap. Keep the candidate alive past the worker's first
+  assistant record and call orchestration.certify for effective_model_identity /
+  effective_reasoning_mode while the session is still live — the read-path
+  observation in registry-ops will persist it without depending on a sweep.
+
+NOT DONE
+  no push, no PR, no merge, no deploy, no evidence rows, no route PASS.
