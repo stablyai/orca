@@ -140,7 +140,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         trustedCodexHomes: [homePath],
         ...withoutHomeRanking,
         fileIsRegular: () => true,
-        listSessionFiles: async function* (): AsyncIterable<string> {
+        async *listSessionFiles(): AsyncIterable<string> {
           yield extendedEntry
         }
       })
@@ -153,7 +153,7 @@ describe('resolveTrustedCodexSessionResumeHome', () => {
         trustedCodexHomes: [homePath],
         ...withoutHomeRanking,
         fileIsRegular: () => true,
-        listSessionFiles: async function* (): AsyncIterable<string> {
+        async *listSessionFiles(): AsyncIterable<string> {
           yield `\\\\.\\C:\\Users\\Example\\.codex\\sessions\\2026\\07\\20\\rollout-${sessionId}.jsonl`
         }
       })

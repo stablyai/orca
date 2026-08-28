@@ -1,4 +1,4 @@
-import { Play } from 'lucide-react'
+import { Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import type { TerminalQuickCommandHost } from '@/hooks/use-terminal-quick-command-hosts'
 
@@ -18,7 +18,7 @@ export function TabBarQuickCommandAddActions({
           onClick={() => onAdd(host.hostId)}
           className="flex w-full cursor-pointer items-center gap-2 rounded-[5px] px-2 py-1.5 text-[12px] text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
-          <Play className="size-3.5" />
+          <Plus className="size-3.5" />
           {hosts.length === 1
             ? translate(
                 'auto.components.tab.bar.TabBarQuickCommandAddActions.45a2f36d51',

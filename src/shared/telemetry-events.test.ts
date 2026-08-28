@@ -612,3 +612,23 @@ describe('exported enum schemas', () => {
     }
   })
 })
+
+describe('remote_outbound_budget_close schema', () => {
+  it('round-trips every emitter', () => {
+    for (const emitter of ['size', 'queue']) {
+      expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter }).success).toBe(true)
+    }
+  })
+
+  it('rejects an unknown emitter and any payload-describing extra key', () => {
+    expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter: 'other' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.remote_outbound_budget_close.safeParse({
+        emitter: 'size',
+        byte_length: 4194305
+      }).success
+    ).toBe(false)
+  })
+})

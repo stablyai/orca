@@ -30,6 +30,22 @@ describe('AiVaultServiceRestartPolicy', () => {
     expect(policy.restartScheduled).toBe(false)
   })
 
+  it('clears the pending backoff and fault history for a forced retry', () => {
+    vi.useFakeTimers()
+    const policy = new AiVaultServiceRestartPolicy()
+    const restart = vi.fn()
+
+    policy.recordFault(restart)
+    policy.clearCircuit()
+    vi.advanceTimersByTime(10_000)
+
+    expect(restart).not.toHaveBeenCalled()
+    policy.recordFault(restart)
+    policy.recordFault(restart)
+    expect(policy.startError()).toBeNull()
+    policy.dispose()
+  })
+
   it('opens the circuit after three faults inside the window', () => {
     let now = 0
     const policy = new AiVaultServiceRestartPolicy(() => now)

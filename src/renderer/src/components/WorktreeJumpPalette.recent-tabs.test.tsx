@@ -12,6 +12,7 @@ import { makePaneKey } from '../../../shared/stable-pane-id'
 import {
   LEAF_ID,
   makeAgentEntry,
+  makeDuplicateRecentTabState,
   makeGroup,
   makeManyTabState,
   makeRecentTabState,
@@ -229,6 +230,25 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(testContainer.textContent).toContain('Recent Worktrees')
   })
 
+  it('keeps duplicate persisted tab ids as separate recent rows and digit targets', async () => {
+    await renderPalette(makeDuplicateRecentTabState())
+
+    expect(
+      getRenderedRowIds().filter(
+        (id) => id === 'workspace-tab:tab-duplicate' || id.includes(':workspace-tab:tab-duplicate')
+      )
+    ).toEqual(['workspace-tab:tab-duplicate', 'palette-dup:1:workspace-tab:tab-duplicate'])
+
+    await act(async () => {
+      emitCmdJRowIndexJump(1)
+    })
+    await flushEffects()
+
+    expect(activateWorkspaceTabPaletteResult).toHaveBeenCalledWith(
+      expect.objectContaining({ tabId: 'tab-duplicate', worktreeId: 'wt-beta' })
+    )
+  })
+
   it('caps the recent section so the worktree header stays above the fold', async () => {
     await renderPalette(makeManyTabState(12))
 
@@ -315,6 +335,28 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getCommandValue()).toBe('workspace-tab:tab-host')
   })
 
+  // Why: after typing, arrow moves must stick. Dropping onValueChange while cmdk already
+  // advanced its internal cursor made the next ArrowDown a no-op (Object.is short-circuit).
+  it('keeps arrow selection after the typed query ranking has committed', async () => {
+    await renderPalette(makeTypedRelevanceState())
+
+    await act(async () => {
+      setCommandQuery?.('perf')
+    })
+    await flushEffects()
+    expect(getCommandValue()).toBe('workspace-tab:tab-host')
+
+    const rows = getRenderedRowIds().filter((id) => id.length > 0)
+    expect(rows.length).toBeGreaterThan(1)
+
+    await act(async () => {
+      setCommandSelection?.(rows[1])
+    })
+    await flushEffects()
+
+    expect(getCommandValue()).toBe(rows[1])
+  })
+
   it('keeps worktrees ahead of tabs when a worktree holds the stronger match', async () => {
     await renderPalette({
       ...makeTypedRelevanceState(),
@@ -354,12 +396,12 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     })
     await flushEffects()
 
-    // Why the two word-start rows keep their input order: relevance ranks by where the match sits
-    // relative to a word boundary, not by raw offset — equal hits still defer to smart sort.
+    // Why word-b beats word-a despite input order: `perf` is a whole word in
+    // `rc-perf-update-channels` but only a prefix of `performance`.
     expect(getRenderedRowIds().filter((id) => id.startsWith('worktree:'))).toEqual([
       'worktree:wt-prefix',
-      'worktree:wt-word-a',
-      'worktree:wt-word-b'
+      'worktree:wt-word-b',
+      'worktree:wt-word-a'
     ])
   })
 
@@ -377,7 +419,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     // mount one row per workspace.
     expect(getTabRowIds()).toEqual([])
     expect(getWorktreeRows()).toHaveLength(10)
-    expect(testContainer.textContent).toContain('Type to see all 14 worktrees')
+    expect(testContainer.textContent).toContain('4 more')
   })
 
   it('captures the order when tabs hydrate after the palette is already open', async () => {
@@ -623,7 +665,7 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     expect(getTabRowIds()).toContain('tab-alpha')
   })
 
-  it('excludes the current tab when its agent is merely done', async () => {
+  it.each([undefined, true])('excludes current terminal outcomes', async (interrupted) => {
     await renderPalette(
       makeRecentTabState({
         activeWorktreeId: 'wt-alpha',
@@ -632,7 +674,9 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
         activeTabIdByWorktree: { 'wt-alpha': 'term-alpha' },
         activeTabTypeByWorktree: { 'wt-alpha': 'terminal' },
         agentStatusByPaneKey: {
-          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now())
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'done', Date.now(), {
+            interrupted
+          })
         }
       })
     )
@@ -865,6 +909,35 @@ describe('WorktreeJumpPalette recent chats & terminals', () => {
     await flushEffects()
 
     expect(activateWorkspaceTabPaletteResult).not.toHaveBeenCalled()
+  })
+
+  it('keeps the agent badge on an Open Tabs row a query surfaced', async () => {
+    await renderPalette(
+      makeRecentTabState({
+        agentStatusByPaneKey: {
+          [makePaneKey('term-alpha', LEAF_ID)]: makeAgentEntry('term-alpha', 'working', Date.now())
+        }
+      })
+    )
+
+    // Why not optional-call: a skipped setter would leave the empty-query Recent section standing
+    // and the assertions below would pass without the query path ever running.
+    const applyQuery = setCommandQuery
+    if (!applyQuery) {
+      throw new Error('CommandInput never installed a query setter')
+    }
+    await act(async () => {
+      applyQuery('Alpha')
+    })
+    await flushEffects()
+
+    // Why: searching for a tab is exactly when its status matters — the pip must survive the query.
+    expect(getTabRowIds()).toContain('tab-alpha')
+    expect(getTabRowIds()).not.toContain('tab-beta')
+    const alphaRow = testContainer.querySelector<HTMLElement>(
+      '[data-command-item="workspace-tab:tab-alpha"]'
+    )
+    expect(alphaRow?.querySelector('[title="Working"]')).not.toBeNull()
   })
 
   it('keeps create-worktree below the matches it would otherwise outrank', async () => {

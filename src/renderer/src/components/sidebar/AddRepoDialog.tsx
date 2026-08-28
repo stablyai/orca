@@ -18,6 +18,7 @@ import {
   useAddRepoHostedController,
   type AddRepoDialogHostedController
 } from './use-add-repo-hosted-controller'
+import { routeAddRepoBrowse } from './add-repo-browse-authority'
 
 export default React.memo(function AddRepoDialog({
   hosted
@@ -308,7 +309,7 @@ export default React.memo(function AddRepoDialog({
         selectedSshTargetId={hostSelection.selectedSshTargetId}
         selectedHostLabel={
           hostSelection.hostOptions.find((host) => host.id === hostSelection.selectedHostId)
-            ?.label ?? hostSelection.selectedHostId
+            ?.label ?? null
         }
         lockSshTargetSelection={hostSelection.selectedParsedHost?.kind === 'ssh'}
         remotePath={remotePath}
@@ -324,26 +325,31 @@ export default React.memo(function AddRepoDialog({
         isCreating={isCreating}
         hostSelector={<AddRepoHostSelectorSlot hostSelection={hostSelection} />}
         showRemoteAction={false}
-        browseHostKind={
-          selectedHostKind === 'ssh' || selectedHostKind === 'runtime' ? selectedHostKind : 'local'
-        }
+        actionsDisabled={!hostSelection.selectedHostId}
+        browseHostKind={selectedHostKind ?? 'runtime'}
         createDefaultParent={createDefaultParent}
         createGitAvailability={createGitAvailability}
         createRuntimeParentStatus={createRuntimeParentStatus}
         createParentDefaultPending={createParentDefaultPending}
         manualCreateParentEntry={isRuntimeEnvironmentActive || selectedHostKind === 'ssh'}
-        onBrowse={
-          selectedHostKind === 'ssh'
-            ? () => void handleOpenRemoteStep(hostSelection.selectedSshTargetId)
-            : selectedHostKind === 'runtime'
-              ? () => setStep('server-path')
-              : handleBrowse
+        onBrowse={() =>
+          routeAddRepoBrowse(hostSelection.selectedParsedHost, {
+            browseLocal: () => void handleBrowse(),
+            browseRuntime: () => setStep('server-path'),
+            browseSsh: (targetId) => void handleOpenRemoteStep(targetId)
+          })
         }
         onOpenCloneStep={() => {
+          if (!hostSelection.selectedHostId) {
+            return
+          }
           setCloneError(null)
           setStep('clone')
         }}
         onOpenCreateStep={() => {
+          if (!hostSelection.selectedHostId) {
+            return
+          }
           setCreateError(null)
           setStep('create')
         }}

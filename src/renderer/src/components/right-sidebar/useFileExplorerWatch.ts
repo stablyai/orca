@@ -1,11 +1,11 @@
 import { useEffect, useRef, type Dispatch, type SetStateAction } from 'react'
-import type { FsChangedPayload } from '../../../../shared/types'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type {
   DirCache,
   FileExplorerOperationOwner,
   FileExplorerTreeRefreshOutcome
 } from './file-explorer-types'
-import type { InlineInput } from './FileExplorerRow'
+import type { InlineInput } from './file-explorer-inline-input-row'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'

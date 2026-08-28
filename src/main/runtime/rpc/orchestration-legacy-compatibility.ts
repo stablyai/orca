@@ -206,7 +206,7 @@ export class OrchestrationLegacyCompatibility {
     request: RpcRequest,
     params: unknown,
     signal?: AbortSignal
-  ): Promise<unknown | undefined> {
+  ): Promise<unknown> {
     if (request.method === 'orchestration.send') {
       return await handleLegacyLifecycleSend({
         runtime: this.runtime,

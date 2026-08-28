@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import type { GitHubProjectSummary } from '../../../../shared/github-project-types'
+import type { GitHubProjectSummary } from '../../../../shared/github/project-types'
 import {
   PROJECT_PICKER_BROWSE_CACHE_MAX_ENTRIES,
   PROJECT_PICKER_BROWSE_CACHE_TTL_MS,

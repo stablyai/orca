@@ -179,6 +179,7 @@ $MouseEvents = @{
     MiddleDown = 0x0020
     MiddleUp = 0x0040
     Wheel = 0x0800
+    HorizontalWheel = 0x01000
 }
 
 function Write-OrcaJson($Payload) {
@@ -561,10 +562,12 @@ function Render-OrcaTree($RootElement, $WindowFrame, [bool]$CompactBrowserTabs =
         $title = if ([string]::IsNullOrWhiteSpace($record.name)) { $record.automationId } else { $record.name }
         $role = if ([string]::IsNullOrWhiteSpace($record.localizedControlType)) { $record.controlType } else { $record.localizedControlType }
         $roleKey = $role.ToLowerInvariant()
-        $snippets = @(Get-OrcaTextSnippets $Node 8 4)
         $genericSummary = $null
-        if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value) -and $snippets.Count -ge 2 -and (Test-OrcaPlainTextSubtree $Node)) {
-            $genericSummary = ($snippets -join " ")
+        if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value)) {
+            $snippets = @(Get-OrcaTextSnippets $Node 8 4)
+            if ($snippets.Count -ge 2 -and (Test-OrcaPlainTextSubtree $Node)) {
+                $genericSummary = ($snippets -join " ")
+            }
         }
         if (($roleKey -in @("pane", "group", "custom", "unknown")) -and [string]::IsNullOrWhiteSpace($title) -and [string]::IsNullOrWhiteSpace($record.value) -and $meaningfulActions.Count -eq 0 -and $null -eq $genericSummary -and $children.Count -le 1) {
             for ($i = 0; $i -lt $children.Count; $i++) {
@@ -1233,16 +1236,22 @@ function Invoke-OrcaOperation($Operation) {
         }
         "scroll" {
             $delta = 120 * [int][Math]::Ceiling((Get-OrcaPositiveNumber $Operation.pages "pages"))
-            if ($Operation.direction -eq "down" -or $Operation.direction -eq "right") {
+            $mouseEvent = $MouseEvents.Wheel
+            if ($Operation.direction -eq "down") {
                 $delta = -1 * $delta
-            } elseif ($Operation.direction -ne "up" -and $Operation.direction -ne "left") {
+            } elseif ($Operation.direction -eq "left") {
+                $mouseEvent = $MouseEvents.HorizontalWheel
+                $delta = -1 * $delta
+            } elseif ($Operation.direction -eq "right") {
+                $mouseEvent = $MouseEvents.HorizontalWheel
+            } elseif ($Operation.direction -ne "up") {
                 throw "unsupported scroll direction: $($Operation.direction)"
             }
             $point = Get-OrcaElementScreenPoint $element
             if ($null -eq $point) { $point = Get-OrcaScreenPoint $Operation $windowFrame }
             [void][OrcaDesktopWin32]::SetForegroundWindow($handle)
             [void][OrcaDesktopWin32]::SetCursorPos([int]$point.x, [int]$point.y)
-            [OrcaDesktopWin32]::mouse_event($MouseEvents.Wheel, 0, 0, $delta, [UIntPtr]::Zero)
+            [OrcaDesktopWin32]::mouse_event($mouseEvent, 0, 0, $delta, [UIntPtr]::Zero)
             $action = [pscustomobject]@{ path = "synthetic"; actionName = "scroll"; fallbackReason = $null }
         }
         "drag" {

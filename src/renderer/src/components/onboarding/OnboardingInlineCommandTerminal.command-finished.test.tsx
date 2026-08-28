@@ -8,9 +8,10 @@ import {
   ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
   type TerminalCommandFinishedEventDetail
 } from '@/hooks/terminal-command-finished-event'
+import { PASTE_TERMINAL_TEXT_EVENT, type PasteTerminalTextDetail } from '@/constants/terminal'
 
 const mocks = vi.hoisted(() => ({
-  createTab: vi.fn(() => ({ id: 'tab-1' })),
+  createTab: vi.fn(() => ({ id: 'tab-1', shellOverride: 'wsl.exe' })),
   closeTab: vi.fn(),
   setActiveTabForWorktree: vi.fn(),
   setTabCustomTitle: vi.fn()
@@ -27,7 +28,12 @@ vi.mock('@/store', () => ({
 }))
 
 vi.mock('@/components/terminal-pane/TerminalPane', () => ({
-  default: () => <div data-testid="terminal-pane" />
+  default: (props: { tabId: string }) => (
+    <div data-testid="terminal-pane" data-terminal-tab-id={props.tabId}>
+      <div data-pty-id="pty-1" />
+      <div className="xterm-rows">$</div>
+    </div>
+  )
 }))
 
 vi.mock('@/lib/focus-terminal-tab-surface', () => ({
@@ -69,6 +75,81 @@ describe('OnboardingInlineCommandTerminal command-finished forwarding', () => {
     container?.remove()
     container = null
     Reflect.deleteProperty(window, 'api')
+    vi.useRealTimers()
+  })
+
+  it('prepares auto-paste again when the resolved tab shell changes', async () => {
+    vi.useFakeTimers()
+    mocks.createTab
+      .mockReturnValueOnce({ id: 'tab-1', shellOverride: 'wsl.exe' })
+      .mockReturnValueOnce({ id: 'tab-2', shellOverride: 'powershell.exe' })
+    const prepareCommandForShell = vi.fn(
+      (command: string, shellOverride: string | undefined) => `${shellOverride}:${command}`
+    )
+    const pasted: PasteTerminalTextDetail[] = []
+    const handlePaste = (event: Event): void => {
+      pasted.push((event as CustomEvent<PasteTerminalTextDetail>).detail)
+    }
+    window.addEventListener(PASTE_TERMINAL_TEXT_EVENT, handlePaste)
+    container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+
+    try {
+      await act(async () => {
+        root?.render(
+          <OnboardingInlineCommandTerminal
+            command="npx skills add orchestration"
+            prepareCommandForShell={prepareCommandForShell}
+            shellOverride="powershell.exe"
+            title="Skill setup"
+            ariaLabel="Skill setup terminal"
+          />
+        )
+      })
+      await act(async () => {})
+      await act(async () => {
+        vi.advanceTimersByTime(250)
+      })
+      await act(async () => {
+        root?.render(
+          <OnboardingInlineCommandTerminal
+            command="npx skills add orchestration"
+            forceHostRuntime
+            prepareCommandForShell={prepareCommandForShell}
+            shellOverride="powershell.exe"
+            title="Skill setup"
+            ariaLabel="Skill setup terminal"
+          />
+        )
+      })
+      await act(async () => {})
+      await act(async () => {
+        vi.advanceTimersByTime(250)
+      })
+
+      expect(prepareCommandForShell).toHaveBeenCalledWith('npx skills add orchestration', 'wsl.exe')
+      expect(prepareCommandForShell).toHaveBeenCalledWith(
+        'npx skills add orchestration',
+        'powershell.exe'
+      )
+      expect(mocks.createTab).toHaveBeenCalledWith(
+        'ephemeral-setup-terminal:onboarding-inline-terminal',
+        undefined,
+        'powershell.exe',
+        expect.objectContaining({ forceHostRuntime: true })
+      )
+      expect(pasted).toContainEqual({
+        tabId: 'tab-1',
+        text: 'wsl.exe:npx skills add orchestration'
+      })
+      expect(pasted).toContainEqual({
+        tabId: 'tab-2',
+        text: 'powershell.exe:npx skills add orchestration'
+      })
+    } finally {
+      window.removeEventListener(PASTE_TERMINAL_TEXT_EVENT, handlePaste)
+    }
   })
 
   it('forwards exit codes only for its own branded worktree id', async () => {

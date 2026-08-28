@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { ChevronDown, ChevronRight } from 'lucide-react-native'
-import type { GitHubWorkItemDetails, PRState } from '../../../../src/shared/types'
+import type { PRState } from '../../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-item-types'
 import type { GitHubPrRepoSlug } from '../../session/github-pr-rpc'
 import { colors } from '../../theme/mobile-theme'
 import { canAddRootComment } from '../../session/pr-comment-actions'
@@ -12,12 +13,14 @@ import { CommentMarkdown } from './CommentMarkdown'
 import { PRCommentCard, type PRCommentCardActions } from './PRCommentCard'
 import { PRCommentComposer } from './PRCommentComposer'
 import {
-  PR_COMMENT_AUDIENCE_FILTERS,
   filterPRCommentsByAudience,
   getPRCommentAudienceCounts,
-  getPRCommentAudienceEmptyLabel,
   type PRCommentAudienceFilter
-} from './pr-comment-audience'
+} from '../../../../src/shared/pr-comment-audience'
+import {
+  PR_COMMENT_AUDIENCE_FILTERS,
+  getPRCommentAudienceEmptyLabel
+} from './pr-comment-audience-labels'
 import {
   getPRCommentGroupCount,
   getPRCommentGroupId,
@@ -25,7 +28,7 @@ import {
   groupPRComments,
   isResolvedPRCommentGroup,
   type PRCommentGroup
-} from './pr-comment-groups'
+} from '../../../../src/shared/pr-comment-groups'
 import { prCommentsStyles as styles } from './pr-comments-styles'
 import { mobilePrSidebarStyles as shared } from './mobile-pr-sidebar-styles'
 

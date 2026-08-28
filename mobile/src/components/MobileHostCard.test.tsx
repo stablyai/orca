@@ -94,22 +94,23 @@ describe('MobileHostCard', () => {
   it('names the relay while the dial is still in flight', async () => {
     const lines = await renderCard(undefined, {
       state: 'connecting',
-      verdict: { kind: 'normal', label: 'Connecting…' },
+      verdict: { kind: 'normal', label: 'Connecting via Relay…' },
       path: 'relay'
     })
 
-    expect(lines).toContain('Connecting…')
-    expect(lines).toContain(' · Orca Relay')
+    expect(lines).toContain('Connecting via Relay…')
+    expect(lines).not.toContain(' · Orca Relay')
   })
 
   it('names the relay while a failed direct dial is still retrying', async () => {
     const lines = await renderCard(undefined, {
       state: 'reconnecting',
-      verdict: { kind: 'normal', label: 'Reconnecting…' },
+      verdict: { kind: 'normal', label: 'Connecting via Relay…' },
       path: 'relay'
     })
 
-    expect(lines).toContain(' · Orca Relay')
+    expect(lines).toContain('Connecting via Relay…')
+    expect(lines).not.toContain(' · Orca Relay')
   })
 
   it('leaves an idle disconnected host unlabelled', async () => {

@@ -6,7 +6,9 @@ import { labelFromModelId } from './model-id-label'
 export const GROK_MODEL_LIST_ARGS = ['models']
 
 const AVAILABLE_MODELS_HEADER = 'Available models:'
-const MODEL_BULLET = /^\s*\*\s+([^\s(]+)(.*)$/
+// Why: grok bullets the default row with `*` and every other row with `-`, so a
+// `*`-only pattern silently publishes a one-model list and drops the rest.
+const MODEL_BULLET = /^\s*[*-]\s+([^\s(]+)(.*)$/
 // Why: read off the row rather than the earlier `Default model:` line, so the marker
 // cannot name an id the listing does not actually offer.
 const DEFAULT_MARKER = /\(default\)/

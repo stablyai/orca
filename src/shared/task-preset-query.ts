@@ -1,4 +1,4 @@
-import type { TaskViewPresetId } from './types'
+import type { TaskViewPresetId } from './ui-chrome-types'
 
 /**
  * Why: TaskPage presets, blank-search fallbacks, and openTaskPage prefetch must

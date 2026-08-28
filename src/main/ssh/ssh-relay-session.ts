@@ -6,6 +6,7 @@ import type { BrowserWindow } from 'electron'
 import { deployAndLaunchRelay } from './ssh-relay-deploy'
 import { execCommand } from './ssh-relay-deploy-helpers'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { replayPendingSshPtyKills } from './ssh-pending-pty-kill-replay'
 import { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import { SshPtyProvider } from '../providers/ssh-pty-provider'
 import type { SshPtyAttachResult } from '../providers/ssh-pty-session-reattach'
@@ -79,6 +80,10 @@ import {
 import { normalizeRemoteArtifactInput } from '../../shared/artifact-cli-bridge'
 import type { Store } from '../persistence'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
+import {
+  findTerminalTabIdForLeaf,
+  hasHostAuthoritativeTerminalMembership
+} from '../runtime/workspace-session-terminal-membership-authority'
 import { DEFAULT_PTY_SOURCE_WINDOW_SU } from '../../shared/pty-source-credit-contract'
 import { PTY_CONSUMER_STALE_OWNER_RECOVERY_ERROR } from '../../shared/pty-consumer-session'
 import {
@@ -438,7 +443,7 @@ export class SshRelaySession {
   async requestAiVaultSessionList(
     params: SshAiVaultRelayListParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     if (this.aiVaultListMethodSupported === false) {
       return null
     }
@@ -465,7 +470,7 @@ export class SshRelaySession {
   async requestAiVaultSessionTitles(
     params: SshAiVaultRelayTitleParams,
     options: { signal?: AbortSignal; timeoutMs?: number } = {}
-  ): Promise<unknown | null> {
+  ): Promise<unknown> {
     if (this.aiVaultTitleMethodSupported === false) {
       return null
     }
@@ -640,6 +645,7 @@ export class SshRelaySession {
       return
     }
 
+    this.releaseRelayLossWatcher()
     // Cancel any in-flight reconnect
     this.abortController?.abort()
     const abortController = new AbortController()
@@ -835,6 +841,7 @@ export class SshRelaySession {
   private runDisposal(pendingDetach: Promise<void> | null): Promise<void> {
     // Why: the whole in-memory half runs before any await so a concurrent connect can never observe
     // a half-torn session; only the durability barriers below are deferred onto the returned promise.
+    this.releaseRelayLossWatcher()
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
@@ -908,6 +915,7 @@ export class SshRelaySession {
       return
     }
     detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+    this.releaseRelayLossWatcher()
     this.abortController?.abort()
     this.stopPortScanning()
     this.broadcastEmptyLists()
@@ -927,6 +935,7 @@ export class SshRelaySession {
       // step — a fast reconnect must reclaim this identity instead of minting one, even if a
       // teardown call below throws unexpectedly.
       detachSshPtyConsumerRecovery(this.targetId, this.ptyConsumerClientInstanceId)
+      this.releaseRelayLossWatcher()
       this.abortController?.abort()
       this.stopPortScanning()
       this.broadcastEmptyLists()
@@ -947,9 +956,21 @@ export class SshRelaySession {
 
   // ── Private ───────────────────────────────────────────────────────
 
+  // Why: teardown itself can kill the mux — an aborted request emits rpc.cancel, and a saturated
+  // control lane turns that admission failure into mux.dispose('connection_lost'). Every teardown
+  // path must release the watcher before its first mux write, or our own shutdown re-enters
+  // recovery as a spurious relay loss. teardownProviders is not early enough: stopPortScanning
+  // runs ahead of it and is what emits that frame. Call this ahead of abortController.abort()
+  // too — that signal reaches no mux request today, but plumbing it into one would otherwise
+  // reopen the same hole silently.
+  private releaseRelayLossWatcher(): void {
+    this.muxDisposeCleanup?.()
+    this.muxDisposeCleanup = null
+  }
+
   // Why: onStateChange only fires on SSH-level reconnects, so watch for relay-channel loss while SSH stays up and fire onRelayLost.
   private watchMuxForRelayLoss(mux: SshChannelMultiplexer): void {
-    this.muxDisposeCleanup?.()
+    this.releaseRelayLossWatcher()
     this.muxDisposeCleanup = mux.onDispose((reason) => {
       if (reason === 'connection_lost' && this.mux === mux && !this.isDisposed()) {
         console.warn(
@@ -1420,7 +1441,7 @@ export class SshRelaySession {
     })
   }
 
-  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy (agent-status-over-ssh.md §4/§8). Best-effort.
+  // Why: ship plugin/extension source from Orca so agent-event changes don't force a relay redeploy — the relay is versioned independently. Best-effort: failure only costs agent status on this host.
   private async installPluginsOnRelay(mux: SshChannelMultiplexer): Promise<void> {
     if (!isRemoteAgentHooksEnabled() || !this.areAgentStatusHooksEnabled()) {
       return
@@ -1486,6 +1507,7 @@ export class SshRelaySession {
         compactTrigger?: unknown
         toolUseId?: unknown
         toolAgentId?: unknown
+        teammateName?: unknown
         toolAgentType?: unknown
         isReplay?: unknown
         providerSession?: unknown
@@ -1497,7 +1519,7 @@ export class SshRelaySession {
       if (typeof envelope.paneKey !== 'string') {
         return
       }
-      // Why: forward env/version verbatim so cross-build warn-once diagnostics fire on remote events too (agent-status-over-ssh.md §3).
+      // Why: forward the agent CLI's env/version verbatim (not the relay's) so warn-once protocol-mismatch diagnostics fire for remote events too.
       agentHookServer.ingestRemote(
         {
           paneKey: envelope.paneKey,
@@ -1518,6 +1540,8 @@ export class SshRelaySession {
           compactTrigger: envelope.compactTrigger,
           toolUseId: typeof envelope.toolUseId === 'string' ? envelope.toolUseId : undefined,
           toolAgentId: typeof envelope.toolAgentId === 'string' ? envelope.toolAgentId : undefined,
+          teammateName:
+            typeof envelope.teammateName === 'string' ? envelope.teammateName : undefined,
           toolAgentType:
             typeof envelope.toolAgentType === 'string' ? envelope.toolAgentType : undefined,
           isReplay: envelope.isReplay === true ? true : undefined,
@@ -1560,8 +1584,7 @@ export class SshRelaySession {
     reason: 'shutdown' | 'connection_lost',
     outputGenerationReason: string = reason
   ): void {
-    this.muxDisposeCleanup?.()
-    this.muxDisposeCleanup = null
+    this.releaseRelayLossWatcher()
     this.muxNotificationCleanup?.()
     this.muxNotificationCleanup = null
     for (const cleanup of this.ptyRecoveryNotificationCleanups) {
@@ -2230,6 +2253,23 @@ export class SshRelaySession {
     mux: SshChannelMultiplexer,
     shouldContinue: () => boolean
   ): Promise<void> {
+    const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
+    const providerGeneration = this.activePtyProviderGeneration
+    if (!ptyProvider || providerGeneration === null || this.mux !== mux) {
+      return
+    }
+    // Why before the lease read: a stop the user asked for and this client could not deliver is
+    // replayed here, and a confirmed one tombstones its lease — so it must land before the filter
+    // below decides what to reattach, or the reattach revives a PTY that is about to die.
+    await replayPendingSshPtyKills({
+      targetId: this.targetId,
+      store: this.store,
+      provider: ptyProvider,
+      shouldContinue
+    })
+    if (!shouldContinue()) {
+      return
+    }
     const activeLeases = this.store
       .getSshRemotePtyLeases(this.targetId)
       .filter((lease) => lease.state !== 'terminated' && lease.state !== 'expired')
@@ -2254,11 +2294,6 @@ export class SshRelaySession {
         ...leasedPtyIds
       ])
     )
-    const ptyProvider = getSshPtyProvider(this.targetId) as SshPtyProvider | undefined
-    const providerGeneration = this.activePtyProviderGeneration
-    if (!ptyProvider || providerGeneration === null || this.mux !== mux) {
-      return
-    }
     let nextPtyIndex = 0
     const worker = async (): Promise<void> => {
       while (shouldContinue()) {
@@ -2533,19 +2568,50 @@ export class SshRelaySession {
     lease: SshPtyLease | undefined
   ): void {
     if (lease?.worktreeId && lease.tabId && lease.leafId) {
+      const session = this.store.getWorkspaceSession?.()
+      // The lease froze its tabId at write time; `detachTerminalPaneToTab` moves a live pane, so
+      // trusting it would fence this reattach to the tab the pane LEFT and refuse a pane that
+      // merely moved. Leaf is the identity, the tab is only where it currently sits.
+      // SSH spawns bind panes into `ssh:<target>` while this reattach binds into `local`, so a
+      // fence that consulted only one partition would read "no pane" for a pane the other holds.
+      const hostSession = this.store.getWorkspaceSession?.(toSshExecutionHostId(this.targetId))
+      const tabId =
+        findTerminalTabIdForLeaf(session, lease.leafId) ??
+        findTerminalTabIdForLeaf(hostSession, lease.leafId) ??
+        lease.tabId
       this.runtime?.registerPty(appPtyId, lease.worktreeId, this.targetId, {
-        tabId: lease.tabId,
+        tabId,
         leafId: lease.leafId,
         incarnationId
       })
       try {
-        this.store.persistPtyBinding({
+        // Absence of the pane only means "the user closed it" once the persisted membership
+        // speaks for this worktree. Before that it means the renderer has not published its
+        // layout yet, and refusing there drops a tab the user still has — the regression that
+        // reverted this fix twice. Losing a tab is worse than keeping a duplicate, so an
+        // unauthoritative session still gets the creating write.
+        // Authority is read from `local` because that is the partition this write lands in — it
+        // is local's absence we would be interpreting. But a pane the other partition still holds
+        // is not gone, so it keeps its creating write: refusing there would strand a live pane
+        // behind a binding reattach can no longer reach.
+        const mayCreate =
+          !hasHostAuthoritativeTerminalMembership(session, lease.worktreeId) ||
+          findTerminalTabIdForLeaf(hostSession, lease.leafId) !== undefined
+        const bound = this.store.persistPtyBinding({
           worktreeId: lease.worktreeId,
-          tabId: lease.tabId,
+          tabId,
           leafId: lease.leafId,
           ptyId: appPtyId,
-          incarnationId
+          incarnationId,
+          ...(mayCreate ? {} : { mayCreate: false })
         })
+        if (bound === false) {
+          // The pane is gone for good, so this shell has no surface to reach it through. Expire
+          // the lease so later reconnects stop fanning out over it — deliberately not
+          // `terminated`, which would assert an exit nothing here observed, and deliberately
+          // without killing the remote process.
+          this.store.markSshRemotePtyLease(this.targetId, appPtyId, 'expired')
+        }
       } catch (error) {
         console.error('[ssh-relay-session] Failed to persist reconnect incarnation:', error)
       }

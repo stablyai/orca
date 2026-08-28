@@ -311,4 +311,34 @@ describe('terminal replay state reset', () => {
       term.dispose()
     }
   })
+
+  it('disarms mouse input when a hidden replay lands on the normal shell buffer', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    try {
+      await writeTerminal(term, '\x1b[?1003h\x1b[?1006h\x1b[?1049hTUI FRAME\x1b[?1049lSHELL MARKER')
+      expect(term.buffer.active.type).toBe('normal')
+      expect(term.modes.mouseTrackingMode).toBe('any')
+
+      await writeTerminal(term, POST_REPLAY_REATTACH_RESET)
+
+      expect(term.buffer.active.type).toBe('normal')
+      expect(term.modes.mouseTrackingMode).toBe('none')
+      expect(term.buffer.active.getLine(0)?.translateToString()).toContain('SHELL MARKER')
+    } finally {
+      term.dispose()
+    }
+  })
+
+  it('preserves mouse input for a live alternate-screen replay', async () => {
+    const term = new Terminal({ cols: 80, rows: 24, allowProposedApi: true })
+    try {
+      await writeTerminal(term, '\x1b[?1003h\x1b[?1006h\x1b[?1049hLIVE TUI')
+      await writeTerminal(term, POST_REPLAY_LIVE_SNAPSHOT_RESET)
+
+      expect(term.buffer.active.type).toBe('alternate')
+      expect(term.modes.mouseTrackingMode).toBe('any')
+    } finally {
+      term.dispose()
+    }
+  })
 })

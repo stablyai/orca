@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { commitProjectHeaderDragDrop } from './project-header-drag-commit'
 import type { ProjectHeaderDragSession } from './project-header-drag-contract'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 function makeRepo(id: string, overrides: Partial<Repo> = {}): Repo {
   return {

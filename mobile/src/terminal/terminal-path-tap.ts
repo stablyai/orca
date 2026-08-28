@@ -3,11 +3,12 @@
 // one path span containing the tapped column — mobile opens a tapped path, it
 // does not render hover links over the whole line.
 
-export type TappedFilePath = {
-  pathText: string
-  line: number | null
-  column: number | null
-}
+import {
+  parseFileLinkLocation,
+  type ParsedFileLinkLocation
+} from '../../../src/shared/file-link-location'
+
+export type TappedFilePath = ParsedFileLinkLocation
 
 // Separator-anchored path tokens (absolute, relative, ~/, drive-letter, UNC) OR
 // a bare filename with an extension (README.md, index.ts), optionally suffixed
@@ -47,18 +48,13 @@ function trimBoundaryPunctuation(
 }
 
 export function parsePathWithOptionalLineColumn(value: string): TappedFilePath | null {
-  const match = /^(.*?)(?::(\d+))?(?::(\d+))?$/.exec(value)
-  if (!match) {
+  const parsed = parseFileLinkLocation(value)
+  if (!parsed) {
     return null
   }
-  const pathText = match[1]
+  const { pathText, line, column } = parsed
   // Reject a directory-only token (trailing separator) for either slash style.
-  if (!pathText || pathText.endsWith('/') || pathText.endsWith('\\')) {
-    return null
-  }
-  const line = match[2] ? Number.parseInt(match[2], 10) : null
-  const column = match[3] ? Number.parseInt(match[3], 10) : null
-  if ((line !== null && line < 1) || (column !== null && column < 1)) {
+  if (pathText.endsWith('/') || pathText.endsWith('\\')) {
     return null
   }
   return { pathText, line, column }

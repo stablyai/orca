@@ -1,7 +1,9 @@
 import type { Dirent } from 'node:fs'
-import { readdir, stat } from 'node:fs/promises'
 import { extname, join } from 'node:path'
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { wslGatedReaddir, wslGatedStat } from '../native-chat/wsl-transcript-fs-access'
+import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
+import { recordSessionScanIssue } from './session-scan-issues'
 import type { FileWithMtime, SessionFileDiscovery } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
@@ -12,34 +14,74 @@ export async function discoverFiles(args: {
   issues: AiVaultScanIssue[]
   extensions: string[]
   filePredicate?: (path: string) => boolean
+  contentDependencyPath?: (path: string) => string
   directoryPredicate?: (name: string, depth: number) => boolean
 }): Promise<SessionFileDiscovery> {
-  const paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
-    extensions: new Set(args.extensions),
-    filePredicate: args.filePredicate,
-    directoryPredicate: args.directoryPredicate
-  })
+  let paths: string[]
+  try {
+    paths = await walkSessionFiles(args.rootDir, args.agent, args.issues, {
+      extensions: new Set(args.extensions),
+      filePredicate: args.filePredicate,
+      directoryPredicate: args.directoryPredicate
+    })
+  } catch (err) {
+    // Why: discoverAiVaultSessionSources fans out with Promise.all, so one
+    // stalled distro would otherwise reject the whole vault scan — including
+    // every healthy local agent. Contain it to this root.
+    if (!(err instanceof WslTranscriptFsError)) {
+      throw err
+    }
+    recordSessionScanIssue(args.issues, {
+      agent: args.agent,
+      path: args.rootDir,
+      message: err.message
+    })
+    return { agent: args.agent, rootDir: args.rootDir, files: [] }
+  }
   const files: FileWithMtime[] = []
   for (const path of paths) {
     try {
-      const fileStat = await stat(path)
+      const fileStat = await wslGatedStat(path, 'scan')
+      const dependencyStat = await optionalContentDependencyStat(args.contentDependencyPath?.(path))
+      const mtimeMs = Math.max(fileStat.mtimeMs, dependencyStat?.mtimeMs ?? 0)
       files.push({
         path,
-        mtimeMs: fileStat.mtimeMs,
-        modifiedAt: fileStat.mtime.toISOString(),
-        sizeBytes: fileStat.size,
+        mtimeMs,
+        modifiedAt: new Date(mtimeMs).toISOString(),
+        sizeBytes: fileStat.size + (dependencyStat?.size ?? 0),
         dev: fileStat.dev,
         ino: fileStat.ino,
         nlink: fileStat.nlink
       })
     } catch (err) {
-      args.issues.push({ agent: args.agent, path, message: errorMessage(err) })
+      recordSessionScanIssue(args.issues, {
+        agent: args.agent,
+        path,
+        message: errorMessage(err)
+      })
     }
   }
   return {
     agent: args.agent,
     rootDir: args.rootDir,
     files: files.sort((left, right) => right.mtimeMs - left.mtimeMs).slice(0, args.limit)
+  }
+}
+
+async function optionalContentDependencyStat(
+  filePath: string | undefined
+): Promise<{ mtimeMs: number; size: number } | null> {
+  if (!filePath) {
+    return null
+  }
+  try {
+    const fileStat = await wslGatedStat(filePath, 'scan')
+    return { mtimeMs: fileStat.mtimeMs, size: fileStat.size }
+  } catch (error) {
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
+    return null
   }
 }
 
@@ -63,9 +105,14 @@ export async function walkSessionFiles(
   try {
     entries = options.readDirectory
       ? await options.readDirectory(dirPath)
-      : await readdir(dirPath, { withFileTypes: true })
-  } catch {
+      : await wslGatedReaddir(dirPath, 'scan', options.signal)
+  } catch (error) {
     options.signal?.throwIfAborted()
+    // Why: a gate refusal means the scan could not run, not that the tree is
+    // empty — swallowing it would misreport a stalled distro as "no transcript".
+    if (error instanceof WslTranscriptFsError) {
+      throw error
+    }
     return []
   }
 

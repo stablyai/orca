@@ -79,6 +79,8 @@ describe('OrchestrationDb legacy contract storage', () => {
       scheduler_state_lost: 1
     })
     expect(db.getRun(adoptedRunId)).toMatchObject({ legacy: 0, consumer_generation: 0 })
+    expect(db.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([adoptedRunId])
+    expect(db.getRunMailboxOwnerIdsForHandle('term_invented')).toEqual([])
     expect(db.listTasks({ runId: LEGACY_RUN_ID })).toEqual([])
     expect(db.getDispatchContextById(fixture.legacyDispatchId)).toMatchObject({
       run_id: adoptedRunId,
@@ -144,6 +146,27 @@ describe('OrchestrationDb legacy contract storage', () => {
     expect(db.getDispatchContextById(fixture.currentDispatchId)?.run_id).toBe(
       fixture.unrelatedRunId
     )
+  })
+
+  it('fails closed when an adopted coordinator handle becomes a current-contract worker', () => {
+    const state = openAdoptedFixture()
+    expect(db!.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([state.adoptedRunId])
+    const task = db!.createTask({
+      runId: state.adoptedRunId,
+      spec: 'mixed contract worker identity',
+      createdByTerminalHandle: 'term_legacy_coord'
+    })
+
+    const dispatch = db!.createDispatchContext({
+      taskId: task.id,
+      assigneeHandle: 'term_legacy_coord',
+      assigneePaneKey: 'tab_mixed:leaf_mixed',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
+
+    expect(dispatch.contract_version).toBe(CURRENT_CONTRACT_VERSION)
+    expect(db!.getRunMailboxOwnerIdsForHandle('term_legacy_coord')).toEqual([])
   })
 
   it('does not synthesize an adopted Run or compatibility authority for a fresh database', () => {
@@ -732,7 +755,12 @@ describe('OrchestrationDb legacy contract storage', () => {
     ).toThrow(/different answer/)
 
     const currentTask = db!.createTask({ runId: state.adoptedRunId, spec: 'current retry' })
-    const currentDispatch = db!.createDispatchContext(currentTask.id, 'term_current_retry')
+    const currentDispatch = db!.createDispatchContext({
+      taskId: currentTask.id,
+      assigneeHandle: 'term_current_retry',
+      creator: { kind: 'system' },
+      maxDepth: Number.MAX_SAFE_INTEGER
+    })
     const currentQuestion = db!.createQuestion({
       runId: state.adoptedRunId,
       dispatchId: currentDispatch.id,

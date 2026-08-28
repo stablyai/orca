@@ -1,8 +1,10 @@
-import type { FolderWorkspace, ProjectGroup } from './types'
+import type { FolderWorkspace } from './folder-workspace-types'
+import type { ProjectGroup } from './project-group-types'
 import { isTuiAgent } from './tui-agent-config'
 import { normalizeStoredTaskSourceContext } from './task-source-context'
 import { normalizeWorkspaceLinkedItem } from './workspace-linked-item'
 import { isWorkspaceLinkedItemSourceContextMatch } from './workspace-linked-item-source-context'
+import { normalizeWorkspaceCreatorProvenance } from './workspace-creator-provenance'
 
 export function normalizeFolderWorkspaceName(
   name: string | null | undefined,
@@ -53,7 +55,11 @@ export function normalizeFolderWorkspaces(
     const now = Date.now()
     const linkedTask = normalizeWorkspaceLinkedItem(raw.linkedTask)
     const linkedTaskSourceContext = normalizeStoredTaskSourceContext(raw.linkedTaskSourceContext)
+    const creatorProvenance = normalizeWorkspaceCreatorProvenance(raw.creatorProvenance)
     seen.add(raw.id)
+    // Why: `executionHostId` is deliberately NOT persisted. It is a fetch-time renderer
+    // stamp that can name a `runtime:*` authority the desktop store does not own, and it
+    // carries no generation to fence on. `connectionId` below is the durable pin main projects from.
     workspaces.push({
       id: raw.id,
       projectGroupId: raw.projectGroupId,
@@ -65,6 +71,7 @@ export function normalizeFolderWorkspaces(
           : raw.connectionId === null
             ? null
             : (group?.connectionId ?? null),
+      ...(creatorProvenance ? { creatorProvenance } : {}),
       linkedTask,
       linkedTaskSourceContext: isWorkspaceLinkedItemSourceContextMatch(
         linkedTask,
@@ -100,7 +107,10 @@ export function normalizeFolderWorkspaces(
       createdAt:
         typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) ? raw.createdAt : now,
       updatedAt:
-        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now
+        typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) ? raw.updatedAt : now,
+      // Legacy read: unreleased #14112 builds wrote notes inline. Canonical home is
+      // PersistedState.folderWorkspaceDiffComments.
+      ...(Array.isArray(raw.diffComments) ? { diffComments: raw.diffComments } : {})
     })
   }
   return workspaces.sort(

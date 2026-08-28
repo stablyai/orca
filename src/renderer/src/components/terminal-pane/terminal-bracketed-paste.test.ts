@@ -111,6 +111,17 @@ describe('terminal bracketed paste policy', () => {
     expect(terminal.paste).not.toHaveBeenCalled()
   })
 
+  it('encodes Windows input-record newlines atomically and sanitizes escape bytes', () => {
+    const terminal = createTerminal(false)
+
+    pasteTerminalText(terminal, '\none\r\ntwo\x1b[201~', {
+      windowsInputRecordNewline: 'alt-enter'
+    })
+
+    expect(terminal.input).toHaveBeenCalledWith('\x1b\rone\x1b\rtwo␛[201~')
+    expect(terminal.paste).not.toHaveBeenCalled()
+  })
+
   it('does not change paste behavior when Ctrl+C happened outside bracketed paste mode', () => {
     const terminal = createTerminal(false)
     const observedIgnoreValues: (boolean | undefined)[] = []

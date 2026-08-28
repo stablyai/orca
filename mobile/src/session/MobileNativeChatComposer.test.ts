@@ -84,7 +84,9 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(onSend).toHaveBeenCalledWith(' hello')
+    // Verbatim: the send seam trims for the wire, so a rejected send can hand
+    // back the draft byte-for-byte (#14819).
+    expect(onSend).toHaveBeenCalledWith(' hello ')
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
@@ -120,7 +122,7 @@ describe('MobileNativeChatComposer', () => {
       )
     })
     await act(async () => sendButton().props.onPress())
-    expect(onSend).toHaveBeenCalledWith(' /clear is prose')
+    expect(onSend).toHaveBeenCalledWith(' /clear is prose ')
   })
 
   it('locks the option pickers while a composer send is in flight', async () => {
@@ -219,7 +221,7 @@ describe('MobileNativeChatComposer', () => {
 
     await act(async () => sendButton().props.onPress())
 
-    expect(onSend).toHaveBeenCalledWith(' hello')
+    expect(onSend).toHaveBeenCalledWith(' hello ')
     expect(onChangeText).not.toHaveBeenCalled()
   })
 
@@ -298,11 +300,12 @@ describe('MobileNativeChatComposer', () => {
   })
 
   it('moves the caret to the insert point after an autocomplete pick, then releases control', async () => {
+    const onChangeText = vi.fn()
     await act(async () => {
       renderer = create(
         createElement(MobileNativeChatComposer, {
           value: '/c',
-          onChangeText: vi.fn(),
+          onChangeText,
           onSend: vi.fn().mockResolvedValue(true),
           agent: 'claude'
         })
@@ -325,6 +328,7 @@ describe('MobileNativeChatComposer', () => {
       (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
     )[0] as { props: { onPress: () => void } }
     await act(async () => firstSuggestion.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith('/clear ')
     // `/clear ` is 7 chars — the caret jumps just past the inserted command + space.
     expect(input().props.selection).toEqual({ start: 7, end: 7 })
     // The next native selection event releases control so manual placement still works.

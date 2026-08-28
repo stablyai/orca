@@ -148,18 +148,84 @@ describe('getPRCheckDetails', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       1,
       ['api', 'repos/acme/widgets/check-runs/88'],
-      { cwd: '/repo-root', host: 'github.com' }
+      expect.objectContaining({
+        cwd: '/repo-root',
+        host: 'github.com',
+        signal: expect.any(AbortSignal)
+      })
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       2,
       ['api', 'repos/acme/widgets/check-runs/88/annotations?per_page=20'],
-      { cwd: '/repo-root', host: 'github.com' }
+      expect.objectContaining({
+        cwd: '/repo-root',
+        host: 'github.com',
+        signal: expect.any(AbortSignal)
+      })
     )
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       3,
       ['api', 'repos/acme/widgets/actions/runs/77/jobs?per_page=100'],
-      { cwd: '/repo-root', host: 'github.com' }
+      expect.objectContaining({
+        cwd: '/repo-root',
+        host: 'github.com',
+        signal: expect.any(AbortSignal)
+      })
     )
+  })
+
+  it('rejects provider failures so callers can distinguish them from unavailable details', async () => {
+    getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+    ghExecFileAsyncMock.mockRejectedValueOnce(new Error('authentication failed'))
+
+    await expect(getPRCheckDetails('/repo-root', { checkRunId: 88 })).rejects.toThrow(
+      'authentication failed'
+    )
+  })
+
+  it('aborts host work at the cumulative check-details deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
+      ghExecFileAsyncMock.mockImplementation(
+        (_args: string[], options: { signal?: AbortSignal }) =>
+          new Promise((_resolve, reject) => {
+            options.signal?.addEventListener(
+              'abort',
+              () => {
+                const error = new Error('aborted')
+                error.name = 'AbortError'
+                reject(error)
+              },
+              { once: true }
+            )
+          })
+      )
+      const request = getPRCheckDetails('/repo-root', { checkRunId: 88 })
+      const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
+
+      await vi.advanceTimersByTimeAsync(25_000)
+
+      await rejection
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops waiting for shared repository resolution at the host deadline', async () => {
+    vi.useFakeTimers()
+    try {
+      getOwnerRepoMock.mockImplementationOnce(() => new Promise(() => {}))
+      const request = getPRCheckDetails('/repo-root', { checkRunId: 88 })
+      const rejection = expect(request).rejects.toThrow('Timed out loading check details.')
+
+      await vi.advanceTimersByTimeAsync(25_000)
+
+      await rejection
+      expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('fetches sliced log tails for failed workflow jobs only', async () => {
@@ -225,7 +291,11 @@ describe('getPRCheckDetails', () => {
     expect(ghExecFileAsyncMock).toHaveBeenNthCalledWith(
       4,
       ['api', 'repos/acme/widgets/actions/jobs/8801/logs'],
-      { cwd: '/repo-root', host: 'github.com' }
+      expect.objectContaining({
+        cwd: '/repo-root',
+        host: 'github.com',
+        signal: expect.any(AbortSignal)
+      })
     )
     expect(ghExecFileAsyncMock).toHaveBeenCalledTimes(4)
   })

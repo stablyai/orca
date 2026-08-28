@@ -2,8 +2,11 @@ import { toRuntimeExecutionHostId, toSshExecutionHostId } from '../../../shared/
 import type {
   ProjectHostSetupExistingFolderArgs,
   ProjectHostSetupResult
-} from '../../../shared/types'
-import { getEphemeralVmRecipeResultProjectRoot } from '../../../shared/ephemeral-vm-recipes'
+} from '../../../shared/project-types'
+import {
+  getEphemeralVmRecipeResultCheckoutMode,
+  getEphemeralVmRecipeResultProjectRoot
+} from '../../../shared/ephemeral-vm-recipes'
 import type { EphemeralVmRecipeResultWarning } from '../../../shared/ephemeral-vm-recipe-diagnostics'
 import { PROJECT_HOST_SETUP_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { translate } from '@/i18n/i18n'
@@ -14,6 +17,8 @@ export type PrepareEphemeralVmWorkspaceTargetArgs = {
   recipeId: string
   projectId: string
   workspaceName: string
+  branch?: string
+  ref?: string
   provisionId?: string
   setupExistingFolder: (
     args: ProjectHostSetupExistingFolderArgs
@@ -25,7 +30,9 @@ export type PrepareEphemeralVmWorkspaceTargetResult =
       ok: true
       setup: ProjectHostSetupResult
       runtimeId: string
+      checkoutMode: 'orca-worktree' | 'provisioned-root'
       environmentId?: string
+      expectedRefHead?: string
       stderr: string
       warnings: EphemeralVmRecipeResultWarning[]
     }
@@ -43,10 +50,25 @@ export async function prepareEphemeralVmWorkspaceTarget(
     recipeId: args.recipeId,
     projectId: args.projectId,
     workspaceName: args.workspaceName,
+    ...(args.branch ? { branch: args.branch } : {}),
+    ...(args.ref ? { ref: args.ref } : {}),
     ...(args.provisionId ? { provisionId: args.provisionId } : {})
   })
   if (!provisioned.ok) {
     return { ok: false, error: provisioned.error, stderr: provisioned.stderr }
+  }
+
+  const checkoutMode = getEphemeralVmRecipeResultCheckoutMode(provisioned.runtime.recipeResult)
+  if (checkoutMode === 'provisioned-root' && provisioned.connectionType !== 'ssh') {
+    await cleanupProvisionedRuntime(provisioned.runtime.id)
+    return {
+      ok: false,
+      error: translate(
+        'auto.lib.ephemeralVmWorkspaceTarget.provisionedRootRequiresSsh',
+        'Provisioned-root recipes currently require a direct SSH connection.'
+      ),
+      stderr: provisioned.stderr
+    }
   }
 
   const hostId =
@@ -112,6 +134,12 @@ export async function prepareEphemeralVmWorkspaceTarget(
     ok: true,
     setup,
     runtimeId: provisioned.runtime.id,
+    checkoutMode,
+    ...(checkoutMode === 'provisioned-root' &&
+    provisioned.connectionType === 'ssh' &&
+    provisioned.expectedRefHead
+      ? { expectedRefHead: provisioned.expectedRefHead }
+      : {}),
     stderr: provisioned.stderr,
     warnings: provisioned.warnings
   } satisfies PrepareEphemeralVmWorkspaceTargetResult

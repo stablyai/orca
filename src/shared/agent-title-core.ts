@@ -5,7 +5,9 @@ import {
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
+import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
 
@@ -47,6 +49,11 @@ export const CURSOR_NATIVE_TITLE_LOWER = 'cursor agent'
 // eslint-disable-next-line no-control-regex -- intentional unicode range
 export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 
+// Why: Claude Code 2.1.228 swapped its busy title spinner from braille to
+// quarter circles (#13889), which read as "no agent" and looked like an exit.
+// Reserve the whole quarter-circle block so a later frame addition cannot regress this.
+export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
+
 export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
@@ -60,6 +67,14 @@ export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Pi/OMP titles include cwd/session text; substring matching made
   // paths like "gemini-project" masquerade as Gemini CLI.
   if (isPiAgentTitle(title)) {
+    return false
+  }
+  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
+  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
+  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
+  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
+  // emits none of them.
+  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return false
   }
   return titleHasAgentName(title, 'gemini')
@@ -81,6 +96,25 @@ export function containsBrailleSpinner(title: string): boolean {
     }
   }
   return false
+}
+
+export function containsQuarterCircleSpinner(title: string): boolean {
+  for (const char of title) {
+    const codePoint = char.codePointAt(0)
+    if (codePoint !== undefined && codePoint >= 0x25d0 && codePoint <= 0x25d3) {
+      return true
+    }
+  }
+  return false
+}
+
+/**
+ * Any spinner frame glyph an agent animates its OSC title with. Use this for
+ * generic "something is running" checks; agent-specific frame shapes (Grok,
+ * Pi, synthetic Cursor) stay pinned to their own glyph set.
+ */
+export function containsAgentSpinnerGlyph(title: string): boolean {
+  return containsBrailleSpinner(title) || containsQuarterCircleSpinner(title)
 }
 
 export function containsLegacyAgentName(title: string): boolean {
@@ -107,6 +141,19 @@ export function isClaudeManagementTitle(title: string): boolean {
 
 export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
+}
+
+const CLAUDE_IDENTITY_FRAME_RE =
+  /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+export function isClaudeIdentityFrameSegment(title: string): boolean {
+  return CLAUDE_IDENTITY_FRAME_RE.test(
+    stripLeadingAgentTitleDecorationOrEmpty(title).trim().toLowerCase()
+  )
+}
+
+export function isClaudeIdentityFrameTitle(title: string): boolean {
+  return getWrapperTitleSegments(title).some(isClaudeIdentityFrameSegment)
 }
 
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own

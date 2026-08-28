@@ -4,7 +4,9 @@ import * as React from 'react'
 import { Popover as PopoverPrimitive } from 'radix-ui'
 
 import { cn } from '@/lib/utils'
-import { updatePopoverContentRef } from './popover-content-ref'
+
+// React delegates wheel passively, so native defaultPrevented may not reflect synthetic cancellation.
+const consumerPreventedWheelEvents = new WeakSet<WheelEvent>()
 
 function Popover(props: React.ComponentProps<typeof PopoverPrimitive.Root>) {
   return <PopoverPrimitive.Root data-slot="popover" {...props} />
@@ -18,6 +20,96 @@ function PopoverAnchor(props: React.ComponentProps<typeof PopoverPrimitive.Ancho
   return <PopoverPrimitive.Anchor data-slot="popover-anchor" {...props} />
 }
 
+/**
+ * Nearest scrollable element between the wheel target and the popover content,
+ * inclusive of both. Returns null when nothing in that chain can scroll.
+ */
+function resolvePopoverScroller(
+  target: EventTarget | null,
+  content: HTMLElement
+): HTMLElement | null {
+  let node = target instanceof Node ? target : null
+  while (node && node !== content.parentNode) {
+    if (node instanceof HTMLElement && node.scrollHeight > node.clientHeight) {
+      const overflowY = getComputedStyle(node).overflowY
+      if (overflowY === 'auto' || overflowY === 'scroll') {
+        return node
+      }
+    }
+    node = node.parentNode
+  }
+  return null
+}
+
+function handlePopoverWheel(event: WheelEvent, content: HTMLDivElement): void {
+  if (
+    event.defaultPrevented ||
+    consumerPreventedWheelEvents.has(event) ||
+    !(event.target instanceof Node) ||
+    !content.contains(event.target)
+  ) {
+    return
+  }
+
+  // Why two markers: `popover-scroll-content` also imposes a 15rem max-height and its
+  // own overflow, while `popover-wheel-scroll` opts into the shim alone.
+  if (
+    !content.classList.contains('popover-scroll-content') &&
+    !content.classList.contains('popover-wheel-scroll')
+  ) {
+    return
+  }
+
+  const el = resolvePopoverScroller(event.target, content)
+  if (!el) {
+    return
+  }
+
+  const delta =
+    event.deltaMode === WheelEvent.DOM_DELTA_LINE
+      ? event.deltaY * 16
+      : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+        ? event.deltaY * el.clientHeight
+        : event.deltaY
+  const maxScrollTop = el.scrollHeight - el.clientHeight
+  const nextScrollTop = Math.max(0, Math.min(maxScrollTop, el.scrollTop + delta))
+
+  // Why: Radix dialog scroll-lock swallows native wheel scrolling in portaled popovers.
+  if (nextScrollTop !== el.scrollTop) {
+    event.preventDefault()
+    el.scrollTop = nextScrollTop
+  }
+}
+
+type PopoverContentRef = React.ComponentProps<typeof PopoverPrimitive.Content>['ref']
+
+function attachPopoverContent(
+  content: HTMLDivElement,
+  portalContainer: HTMLElement | null | undefined,
+  forwardedRef: PopoverContentRef | undefined
+): () => void {
+  // React delegates portal events here first, preserving onWheel-before-shim ordering.
+  const wheelTarget = portalContainer ?? content.ownerDocument.body
+  const handleWheel = (event: WheelEvent): void => handlePopoverWheel(event, content)
+  wheelTarget.addEventListener('wheel', handleWheel, { passive: false })
+
+  const refCleanup = typeof forwardedRef === 'function' ? forwardedRef(content) : undefined
+  if (forwardedRef && typeof forwardedRef !== 'function') {
+    forwardedRef.current = content
+  }
+
+  return () => {
+    wheelTarget.removeEventListener('wheel', handleWheel)
+    if (typeof refCleanup === 'function') {
+      refCleanup()
+    } else if (typeof forwardedRef === 'function') {
+      forwardedRef(null)
+    } else if (forwardedRef) {
+      forwardedRef.current = null
+    }
+  }
+}
+
 function PopoverContent({
   className,
   align = 'center',
@@ -25,66 +117,44 @@ function PopoverContent({
   portalContainer,
   style,
   onWheel,
+  onWheelCapture,
   ref: forwardedRef,
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content> & {
   portalContainer?: HTMLElement | null
 }) {
-  const wheelFrameIdsRef = React.useRef<Set<number>>(new Set())
-
-  const cancelWheelFrames = React.useCallback(() => {
-    for (const frameId of wheelFrameIdsRef.current) {
-      cancelAnimationFrame(frameId)
-    }
-    wheelFrameIdsRef.current.clear()
-  }, [])
-
-  const setContentRef = React.useCallback(
-    (node: HTMLDivElement | null) => {
-      // Why: the wheel shim schedules frames against the content node; cancel
-      // them when Radix removes that node instead of from a passive Effect.
-      return updatePopoverContentRef(forwardedRef, node, cancelWheelFrames)
-    },
-    [cancelWheelFrames, forwardedRef]
-  )
-
-  const handleWheel = React.useCallback(
-    (event: React.WheelEvent<HTMLDivElement>) => {
+  const handleConsumerWheel = React.useCallback(
+    (event: React.WheelEvent<HTMLDivElement>): void => {
       onWheel?.(event)
       if (event.defaultPrevented) {
-        return
-      }
-
-      const el = event.currentTarget
-      if (!el.classList.contains('popover-scroll-content') || el.scrollHeight <= el.clientHeight) {
-        return
-      }
-
-      const delta =
-        event.deltaMode === WheelEvent.DOM_DELTA_LINE
-          ? event.deltaY * 16
-          : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
-            ? event.deltaY * el.clientHeight
-            : event.deltaY
-      const maxScrollTop = el.scrollHeight - el.clientHeight
-      const nextScrollTop = Math.max(0, Math.min(maxScrollTop, el.scrollTop + delta))
-
-      // Why: issue drawers are Radix dialogs with scroll-lock. These popovers
-      // are portaled outside the dialog subtree, so native wheel scrolling is
-      // swallowed even though the scrollbar can be dragged.
-      if (nextScrollTop !== el.scrollTop) {
-        const previousScrollTop = el.scrollTop
-        event.stopPropagation()
-        const frameId = requestAnimationFrame(() => {
-          wheelFrameIdsRef.current.delete(frameId)
-          if (el.scrollTop === previousScrollTop) {
-            el.scrollTop = nextScrollTop
-          }
-        })
-        wheelFrameIdsRef.current.add(frameId)
+        consumerPreventedWheelEvents.add(event.nativeEvent)
       }
     },
     [onWheel]
+  )
+  const handleConsumerWheelCapture = React.useCallback(
+    (event: React.WheelEvent<HTMLDivElement>): void => {
+      onWheelCapture?.(event)
+      if (event.defaultPrevented) {
+        consumerPreventedWheelEvents.add(event.nativeEvent)
+      }
+    },
+    [onWheelCapture]
+  )
+
+  const setContentRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      if (node) {
+        return attachPopoverContent(node, portalContainer, forwardedRef)
+      }
+      if (typeof forwardedRef === 'function') {
+        forwardedRef(null)
+      } else if (forwardedRef) {
+        forwardedRef.current = null
+      }
+      return undefined
+    },
+    [forwardedRef, portalContainer]
   )
 
   return (
@@ -111,7 +181,8 @@ function PopoverContent({
             WebkitAppRegion: 'no-drag'
           } as React.CSSProperties
         }
-        onWheel={handleWheel}
+        onWheel={handleConsumerWheel}
+        onWheelCapture={handleConsumerWheelCapture}
         {...props}
       />
     </PopoverPrimitive.Portal>

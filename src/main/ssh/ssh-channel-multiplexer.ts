@@ -39,7 +39,7 @@ export type SshMultiplexerRequestOptions = {
 
 export type NotificationHandler = (method: string, params: Record<string, unknown>) => void
 export type MethodNotificationHandler = (params: Record<string, unknown>) => void
-export type RequestHandler = (params: Record<string, unknown>) => Promise<unknown> | unknown
+export type RequestHandler = (params: Record<string, unknown>) => unknown
 
 export type MultiplexerDisposeReason = 'shutdown' | 'connection_lost'
 

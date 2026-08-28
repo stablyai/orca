@@ -177,7 +177,9 @@ export function createOrFocusDashboardPopout(
       // Why: Chromium shares zoom by origin; a separate in-memory session keeps pop-out zoom window-local.
       partition: DASHBOARD_POPOUT_PARTITION,
       // Why: the dashboard is plain DOM — no <webview> guests — so keep the
-      // guest-embedding surface off for this window.
+      // guest-embedding surface off for this window. For the same reason it is
+      // deliberately not stamped with the browser-host id: no guest of ours can
+      // run here, so every client-placed page is a mirror to this renderer.
       webviewTag: false
     }
   })

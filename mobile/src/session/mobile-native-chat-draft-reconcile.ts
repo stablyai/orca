@@ -1,9 +1,12 @@
 import { isImageRefBlock, type NativeChatMessage } from '../../../src/shared/native-chat-types'
 import {
+  hasImagePromptMarker,
   isImageSourceUserTurn,
   normalizeImageTranscriptMessages,
-  stripImagePromptMarker
+  normalizeNativeChatUserText,
+  normalizedNativeChatUserMessageText
 } from './mobile-native-chat-image-transcript-markers'
+export { normalizeNativeChatUserText as normalizeReconcileText } from './mobile-native-chat-image-transcript-markers'
 
 /** An ack-lost ('unknown' outcome) send held until its transcript echo lands or
  *  the deadline surfaces the uncertainty. */
@@ -17,17 +20,7 @@ export type UnconfirmedSend = {
 }
 
 export function normalizedUserText(message: NativeChatMessage): string | null {
-  if (message.role !== 'user') {
-    return null
-  }
-  const text = message.blocks
-    .filter((block) => block.type === 'text')
-    .map((block) => (block.type === 'text' ? block.text : ''))
-    .join('')
-  // Claude echoes a captioned image send as `[Image #1] caption` — the sent
-  // text must still match its echo, so strip the marker before comparing.
-  const stripped = stripImagePromptMarker(text).trim()
-  return stripped || null
+  return normalizedNativeChatUserMessageText(message)
 }
 
 export function countUserTextOccurrences(
@@ -87,7 +80,7 @@ export function mergeLandedImagePreviewEchoes(
   const entries = Object.entries(previous[sessionKey] ?? {})
   for (const preview of landed) {
     const existingIndex = entries.findIndex(([messageId]) => messageId === preview.messageId)
-    if (existingIndex >= 0) {
+    if (existingIndex !== -1) {
       entries.splice(existingIndex, 1)
     }
     entries.push([preview.messageId, preview.images])
@@ -117,17 +110,13 @@ function imagePreviewReplacementMessageId(
     nextIndex++
   }
   const prompt = messages[nextIndex]
-  const firstText = prompt?.blocks.find((block) => block.type === 'text')
-  return prompt?.role === 'user' &&
-    prompt.source === source.source &&
-    firstText?.type === 'text' &&
-    stripImagePromptMarker(firstText.text) !== firstText.text
+  return prompt?.role === 'user' && prompt.source === source.source && hasImagePromptMarker(prompt)
     ? prompt.id
     : null
 }
 
 /** Moves previews forward when a progressive source-only transcript frame later
- *  folds into the marker-prefixed prompt with a different authoritative id. */
+ *  folds into the marker-bearing prompt with a different authoritative id. */
 export function migrateImagePreviewMessageIds(
   previous: Record<string, Record<string, string[]>>,
   sessionKey: string,
@@ -171,7 +160,7 @@ export function findLandedImagePreviewEchoes(
     if (!entry.images?.length) {
       continue
     }
-    const targetText = entry.text.trim()
+    const targetText = normalizeNativeChatUserText(entry.text)
     const candidates = normalized.filter((message) => {
       if (message.role !== 'user') {
         return false

@@ -61,7 +61,8 @@ async function createRuntimeWithHookRows(
   rows: AgentStatusIpcPayload[]
 ): Promise<OrcaRuntimeService> {
   const runtime = new OrcaRuntimeService(null, undefined, {
-    getAgentStatusSnapshot: () => rows
+    getAgentStatusSnapshot: () => rows,
+    getAgentProviderSessionRowsForPane: () => rows
   })
   const internals = runtime as unknown as {
     resolveTerminalWorkspaceLaunchScope: (selector: string) => Promise<unknown>
@@ -115,6 +116,22 @@ function lastOscTitleEpochMs(runtime: OrcaRuntimeService): number {
 }
 
 describe('headless hook agent-status projection (#11761)', () => {
+  it('ranks a completed hook below present launch evidence in terminal identity', async () => {
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        agentType: 'codex',
+        state: 'done',
+        prompt: '',
+        toolName: undefined,
+        interactivePrompt: undefined
+      })
+    ])
+
+    expect((await runtime.listTerminals()).terminals).toEqual([
+      expect.objectContaining({ agentIdentity: 'claude' })
+    ])
+  })
+
   it('carries the hook state, tool and interactivePrompt to paired clients', async () => {
     const agentStatus = await projectAgentStatus([hookRow()])
 
@@ -128,6 +145,23 @@ describe('headless hook agent-status projection (#11761)', () => {
         providerSession: PROVIDER_SESSION
       })
     )
+  })
+
+  it('publishes a gated turn end as event metadata, not stored agent status', async () => {
+    const turnCompletedAt = Date.now()
+    const runtime = await createRuntimeWithHookRows([
+      hookRow({
+        state: 'working',
+        interactivePrompt: undefined,
+        turnCompletedAt
+      })
+    ])
+
+    const result = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+    const tab = result.tabs[0]
+
+    expect(tab).toMatchObject({ type: 'terminal', turnCompletedAt })
+    expect(tab?.type === 'terminal' && tab.agentStatus).not.toHaveProperty('turnCompletedAt')
   })
 
   it('publishes no hook transport identity to clients', async () => {

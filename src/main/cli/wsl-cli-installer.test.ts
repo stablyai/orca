@@ -5,11 +5,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const execFileMock = vi.hoisted(() => vi.fn())
+const runWslProcessMock = vi.hoisted(() => vi.fn())
 
-vi.mock('node:child_process', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  execFile: execFileMock
+vi.mock('../wsl/wsl-runner', () => ({
+  runWslProcess: runWslProcessMock
 }))
 
 import { WslCliInstaller, _internals } from './wsl-cli-installer'
@@ -158,7 +157,7 @@ function createWslRunner(
 
 describe('WslCliInstaller', () => {
   beforeEach(() => {
-    execFileMock.mockReset()
+    runWslProcessMock.mockReset()
   })
 
   afterEach(() => {
@@ -313,7 +312,7 @@ describe('WslCliInstaller', () => {
 
   it('generates a launcher that forwards arguments through a PowerShell file bridge', () => {
     const launcher = _internals.buildWslLauncher(
-      'C:\\Program Files\\Orca\\orca.cmd',
+      'C:\\Program Files\\Orca\\resources\\bin\\orca.exe',
       '/home/alice/.local/share/orca/orca-wsl-bridge.ps1'
     )
     const bridge = _internals.buildWslBridgeScript()
@@ -333,44 +332,26 @@ describe('WslCliInstaller', () => {
     )
     expect(launcher).toContain('"$ORCA_WIN_LAUNCHER" -WslCwd "$ORCA_WSL_CWD_WIN" "$@"')
     expect(launcher).not.toContain('-Command')
-    expect(bridge).toContain('[CmdletBinding(PositionalBinding=$false)]')
-    expect(bridge).toContain('[Parameter(Mandatory=$true, Position=0)]')
-    expect(bridge).toContain('[string]$WslCwd')
-    expect(bridge).toContain('[Parameter(ValueFromRemainingArguments=$true)]')
+    expect(bridge).not.toContain('[CmdletBinding')
+    expect(bridge).not.toMatch(/^param\(/m)
+    expect(bridge).toContain("$args[1] -eq '-WslCwd'")
+    expect(bridge).toContain('[string]$OrcaLauncher = $args[0]')
+    expect(bridge).toContain('$WslCwd = $args[2]')
+    expect(bridge).toContain('$ForwardArgs = @($args[$ForwardArgStart..($args.Count - 1)])')
     expect(bridge).toContain('if ([string]::IsNullOrEmpty($WslCwd))')
     expect(bridge).toContain('$env:ORCA_CLI_CWD = $WslCwd')
     expect(bridge).toContain('Push-Location -LiteralPath (Split-Path -Parent $OrcaLauncher)')
-    expect(bridge).toContain('& $OrcaLauncher @ForwardArgs')
-    const nullExitCodeBranch = bridge.indexOf('if ($null -eq $LASTEXITCODE)')
-    const invocationFailureBranch = bridge.indexOf('if (-not $?)')
-    expect(nullExitCodeBranch).toBeGreaterThan(-1)
-    // Why: native launchers can set a non-zero LASTEXITCODE while $? is false;
-    // checking the native status first preserves that specific exit code.
-    expect(nullExitCodeBranch).toBeLessThan(invocationFailureBranch)
-    expect(bridge).toContain('$exitCode = $LASTEXITCODE')
+    expect(bridge).toContain('function ConvertTo-NativeCommandLineArgument')
+    expect(bridge).toContain("[void]$Quoted.Append([char]'\\', $BackslashCount * 2 + 1)")
+    expect(bridge).toContain('$StartInfo.UseShellExecute = $false')
+    expect(bridge).toContain('[System.Diagnostics.Process]::Start($StartInfo)')
+    expect(bridge).toContain('$Process.WaitForExit()')
+    expect(bridge).toContain('$exitCode = $Process.ExitCode')
+    expect(bridge).not.toContain('& $OrcaLauncher @ForwardArgs')
     expect(bridge).toContain('Remove-Item Env:ORCA_CLI_CWD -ErrorAction SilentlyContinue')
     expect(bridge).toContain('catch')
     expect(bridge).toContain('$exitCode = 1')
     expect(bridge).toContain('exit $exitCode')
-  })
-
-  it('wraps WSL bash scripts as a single encoded command line', () => {
-    const command = [
-      'set -euo pipefail',
-      `cat > "$command_tmp" <<'ORCA_WSL_CLI'`,
-      '#!/usr/bin/env bash',
-      'exec powershell.exe "$@"',
-      'ORCA_WSL_CLI'
-    ].join('\n')
-    const wrapped = _internals.buildEncodedWslBashCommand(command)
-    const encoded = wrapped.match(
-      /^set -o pipefail; printf %s '([^']+)' \| base64 -d \| bash$/
-    )?.[1]
-
-    expect(wrapped).not.toContain('\n')
-    expect(wrapped).toContain('set -o pipefail;')
-    expect(encoded).toBeTruthy()
-    expect(Buffer.from(encoded as string, 'base64').toString('utf8')).toBe(command)
   })
 
   it('treats absolute Windows PowerShell as interop-ready when powershell.exe is missing from PATH', async () => {
@@ -792,29 +773,37 @@ describe('WslCliInstaller', () => {
   })
 
   it('settles when wsl.exe never reports completion', async () => {
-    vi.useFakeTimers()
-    const killMock = vi.fn()
-    execFileMock.mockImplementation(() => ({ kill: killMock }))
+    // Why no fake timers: the timeout is now runProcess's own, internal to the
+    // mocked runWslProcess -- there is nothing left here to advance.
+    runWslProcessMock.mockResolvedValue({ code: null, stdout: '', stderr: '', timedOut: true })
     const installer = new WslCliInstaller({
       platform: 'win32',
       distro: 'Ubuntu',
       hostInstaller: { getStatus: async () => makeHostStatus() }
     })
 
-    const promise = installer.getStatus()
-    let settled = false
-    void promise
-      .catch(() => undefined)
-      .finally(() => {
-        settled = true
-      })
+    await expect(installer.getStatus()).rejects.toThrow('WSL command timed out')
+  })
 
-    await vi.advanceTimersByTimeAsync(10_000)
-    await Promise.resolve()
+  it('reports the distro unreachable rather than "not on PATH" without the login PATH', async () => {
+    // The `case ":$PATH:"` probe answers from the distro default PATH when the
+    // login PATH never resolved, and ~/.local/bin is never on that. Settings
+    // would then state as fact that the CLI is not on PATH while the user's
+    // own terminal finds it -- #14288 turning into a confident wrong verdict.
+    runWslProcessMock.mockResolvedValue({
+      environmentResolved: false,
+      code: 0,
+      stdout: 'no',
+      stderr: '',
+      timedOut: false
+    })
+    const installer = new WslCliInstaller({
+      platform: 'win32',
+      distro: 'Ubuntu',
+      hostInstaller: { getStatus: async () => makeHostStatus() }
+    })
 
-    expect(settled).toBe(true)
-    await expect(promise).rejects.toThrow('WSL command timed out')
-    expect(killMock).toHaveBeenCalled()
+    await expect(installer.getStatus()).rejects.toThrow('Could not reach the WSL distro')
   })
 
   it('refuses to remove an old managed launcher when the bridge path is user-owned', async () => {

@@ -47,6 +47,8 @@ type OrcaTestFixtures = {
   // Why: most E2E specs need a ready project before assertions start. Golden
   // first-run specs opt out so they can prove the zero-project onboarding path.
   seedTestRepo: boolean
+  // Synthetic-list specs need only the primary checkout; switching specs keep the two-row default.
+  minimumSeededWorktreeCount: number
   // Why: spec-scoped launch env. Mutating process.env at spec module scope
   // leaks into other specs when a worker reloads files without replaying the
   // first spec's afterAll; per-test launch env cannot leak.
@@ -252,6 +254,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
         ...(headful ? { ORCA_E2E_HEADFUL: '1' } : { ORCA_E2E_HEADLESS: '1' })
       }
     })
+    forwardElectronProcessLogs(app, testInfo)
     try {
       const resolvedHome = await app.evaluate(({ app }) => app.getPath('home'))
       assertElectronResolvedIsolatedHome(resolvedHome, homeIsolation)
@@ -261,7 +264,6 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
       await removeUserDataDirAfterShutdown(userDataDir)
       throw error
     }
-    forwardElectronProcessLogs(app, testInfo)
     await provideFixture(app)
     // Why: the Playwright close promise can settle before all Electron and PTY
     // descendants are gone in CI; worker teardown then hangs on open handles.
@@ -273,13 +275,17 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
   // Default: dismiss the onboarding overlay so it doesn't intercept clicks.
   dismissOnboarding: [true, { option: true }],
   seedTestRepo: [true, { option: true }],
+  minimumSeededWorktreeCount: [2, { option: true }],
   launchEnv: [{}, { option: true }],
   orcaAppExtraEnv: [{}, { option: true }],
   orcaAppExtraArgs: [[], { option: true }],
 
   // Test-scoped: grab the first BrowserWindow, add the test repo, and wait
   // until the session is fully ready with a worktree active.
-  sharedPage: async ({ electronApp, seedTestRepo, testRepoPath }, provideFixture) => {
+  sharedPage: async (
+    { electronApp, minimumSeededWorktreeCount, seedTestRepo, testRepoPath },
+    provideFixture
+  ) => {
     // Why: the Electron app may take a while to create the first window,
     // especially on cold start with no prior dev userData. Isolated per-test
     // profiles make late-suite launches slower, so use the full test budget.
@@ -379,7 +385,7 @@ export const test = base.extend<OrcaTestFixtures, OrcaWorkerFixtures>({
           message: 'seeded e2e worktrees did not load'
         }
       )
-      .toBeGreaterThanOrEqual(2)
+      .toBeGreaterThanOrEqual(minimumSeededWorktreeCount)
 
     // Wait for workspaceSessionReady to become true
     await page.waitForFunction(

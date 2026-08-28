@@ -2,7 +2,8 @@ import type {
   LinearCollectionMeta,
   LinearIssueSummary,
   LinearSearchIssueSummary
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
+import { linearPriorityLabel } from '../../shared/linear/priority-label'
 
 export type RawIssueResponse = {
   issue?: RawIssue | null
@@ -233,6 +234,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     assignee: issue.assignee ?? null,
     labels: issue.labels?.nodes ?? [],
     priority: issue.priority,
+    priorityLabel: linearPriorityLabel(issue.priority),
     estimate: issue.estimate,
     dueDate: issue.dueDate,
     branchName: issue.branchName,
@@ -254,6 +256,7 @@ export function pickSearchIssue(
     project: issue.project,
     assignee: issue.assignee,
     priority: issue.priority,
+    priorityLabel: issue.priorityLabel,
     estimate: issue.estimate,
     dueDate: issue.dueDate,
     updatedAt: issue.updatedAt

@@ -3,6 +3,7 @@ import { isPtyIncarnationId, type PtyIncarnationId } from '../../shared/pty-inca
 import {
   SSH_PTY_IDENTITY_MISMATCH_ERROR,
   SSH_SESSION_EXPIRED_ERROR,
+  SshPtyAbsentFromRelayError,
   isSshPtyIdentityMismatchError,
   isSshPtyNotFoundError
 } from './ssh-pty-errors'
@@ -196,6 +197,11 @@ export async function reattachSshPtySession(args: {
         cols: args.options.cols,
         rows: args.options.rows,
         suppressReplayNotification: true,
+        // A reattach always paints into a NEW terminal: a reconnect bumps tab.generation, which is
+        // the pane's React key, so TerminalPane remounts and the old xterm is disposed with its
+        // buffer. Without this the relay sees a delivery still open under our unchanged client id,
+        // answers "you already have this", and the pane stays blank until new output arrives.
+        requireReplay: true,
         ...(expectedPaneKey ? { expectedPaneKey } : {}),
         ...(expectedTabId ? { expectedTabId } : {})
       },
@@ -220,10 +226,16 @@ export async function reattachSshPtySession(args: {
     // Why: an expired relay lease must be surfaced distinctly so the renderer clears its binding.
     console.warn(`[ssh-pty] pty.attach FAILED for ${args.sessionId}:`, error)
     if (isSshPtyNotFoundError(error)) {
-      const mismatchMarker = isSshPtyIdentityMismatchError(error)
-        ? ` ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
-        : ''
-      throw new Error(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}${mismatchMarker}`)
+      if (isSshPtyIdentityMismatchError(error)) {
+        // The id names a LIVE PTY owned by another pane, so this is not evidence of absence.
+        throw new Error(
+          `${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId} ${SSH_PTY_IDENTITY_MISMATCH_ERROR}`
+        )
+      }
+      // Why the class: the relay answered for this exact id, so callers holding a pane binding may
+      // retire it and spawn fresh. Plain `SSH_SESSION_EXPIRED` cannot say that — a restarted relay
+      // renumbers from pty-1, so the message alone is indistinguishable from a lost link.
+      throw new SshPtyAbsentFromRelayError(`${SSH_SESSION_EXPIRED_ERROR}: ${relaySessionId}`)
     }
     throw error
   }
@@ -253,5 +265,41 @@ export async function reattachSshPtySessionWithExitFence(
     throw error
   } finally {
     args.exitRaceTracker.finish(operation)
+  }
+}
+
+/**
+ * The full reattach path a spawn takes when it carries a sessionId: fence the
+ * exit race, reject a session the relay can no longer restore, and commit or
+ * roll back the source-activation lease.
+ *
+ * Lives here rather than in SshPtyProvider.spawn so the lease's commit and
+ * rollback stay in one place — a caller that only wrapped the fence could
+ * return without committing and silently leak the activation.
+ */
+export async function reattachSshPtySessionForSpawn(
+  args: Parameters<typeof reattachSshPtySessionWithExitFence>[0] & {
+    acceptLivePty: (relayPtyId: string) => void
+  }
+): Promise<PtySpawnResult> {
+  let result: SshPtyReattachResult | undefined
+  try {
+    result = await reattachSshPtySessionWithExitFence(args)
+    if (result.sourceRecovery?.status === 'restoreRequired') {
+      throw new Error(
+        `${SSH_SESSION_EXPIRED_ERROR}: ${toRelaySshPtyId(args.connectionId, result.id)}`
+      )
+    }
+    args.acceptLivePty(result.id)
+    result.sourceActivationLease?.commit()
+    const {
+      sourceActivationLease: _lease,
+      sourceRecovery: _sourceRecovery,
+      ...spawnResult
+    } = result
+    return spawnResult
+  } catch (error) {
+    result?.sourceActivationLease?.rollback()
+    throw error
   }
 }

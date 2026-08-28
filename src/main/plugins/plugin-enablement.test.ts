@@ -1,7 +1,7 @@
 import { tmpdir } from 'node:os'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../shared/constants'
-import type { GlobalSettings } from '../../shared/types'
+import type { GlobalSettings } from '../../shared/global-settings-types'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import type { Store } from '../persistence'
 import { applyPluginConsent, applyPluginEnablement } from './plugin-enablement'

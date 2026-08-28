@@ -63,6 +63,12 @@ describe('useUnreadDockBadge', () => {
     expect(setUnreadDockBadgeCount).toHaveBeenCalledWith(0)
   })
 
+  it('no-ops when the preload API is unavailable', () => {
+    vi.stubGlobal('window', {})
+
+    expect(() => clearUnreadDockBadgeCount()).not.toThrow()
+  })
+
   it('does not rescan workspaces for unrelated remote activity or parent renders', () => {
     const worktrees = Array.from({ length: 100 }, (_, index) =>
       makeWorktree({ id: `repo::worktree-${index}`, repoId: 'repo' })

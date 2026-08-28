@@ -4,7 +4,7 @@ import { createElement, useEffect, act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultOnboardingState } from '../../../../shared/constants'
-import type { OnboardingState } from '../../../../shared/types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 
 const trackMock = vi.hoisted(() => vi.fn())
 
@@ -23,9 +23,8 @@ import type { StepNumber } from './use-onboarding-flow-types'
 
 type CloseWithCallback = (
   outcome: 'completed' | 'dismissed',
-  checklist: Partial<OnboardingState['checklist']>,
   lastStepReached: StepNumber,
-  completedPath?: 'open_folder' | 'clone_url' | 'add_project_modal',
+  completedPath?: 'add_project_modal',
   dismissedExtras?: DismissedExtras
 ) => Promise<boolean>
 
@@ -48,7 +47,6 @@ function setApi(api: {
 function CloseWithProbe(props: { onReady: (closeWith: CloseWithCallback) => void }): null {
   const closeWith = useCloseWith({
     onOnboardingChange: vi.fn(),
-    onboardingChecklist: makeOnboardingState().checklist,
     startTimeRef: { current: Date.now() },
     setError: vi.fn()
   })
@@ -145,7 +143,7 @@ describe('onboarding flow persistence', () => {
     }))
 
     await act(async () => {
-      await closeWith?.('completed', {}, 5)
+      await closeWith?.('completed', 5)
     })
 
     const api = (

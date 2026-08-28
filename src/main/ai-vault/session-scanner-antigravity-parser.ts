@@ -1,5 +1,5 @@
 import { remoteSessionContentLines } from './remote-session-content-lines'
-import { createReadStream } from 'node:fs'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -26,11 +26,16 @@ export async function parseAntigravitySessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  return parseAntigravitySessionLines({ file, lines, platform })
+  const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  try {
+    return await parseAntigravitySessionLines({ file, lines, platform })
+  } finally {
+    // readline.close() leaves the underlying stream open; destroy it so a
+    // mid-parse throw cannot leak the gated transcript handle.
+    lines.close()
+    input.destroy()
+  }
 }
 
 export async function parseAntigravitySessionContent(

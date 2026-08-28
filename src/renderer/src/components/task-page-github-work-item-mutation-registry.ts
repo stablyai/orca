@@ -1,4 +1,4 @@
-import type { GitHubAssignableUser } from '../../../shared/types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type {
   PendingOp,
   StickyHideEntry,
@@ -65,7 +65,7 @@ export function getTaskPageGitHubConfirmedAuthorityItemKeys(): ReadonlySet<strin
   for (const itemKey of itemSourceScopeByItemKey.keys()) {
     const separator = itemKey.indexOf('\0')
     if (
-      separator >= 0 &&
+      separator !== -1 &&
       hasConfirmedAuthorityForItem(itemKey.slice(0, separator), itemKey.slice(separator + 1))
     ) {
       keys.add(itemKey)

@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraClientForSite } from './client'
+import type { JiraClientForSite } from './authenticated-request'
 
 const { jiraRequestBinaryMock } = vi.hoisted(() => ({
   jiraRequestBinaryMock: vi.fn()
 }))
 
-vi.mock('./client', () => ({
+vi.mock('./authenticated-request', () => ({
   jiraRequestBinary: (...args: unknown[]) => jiraRequestBinaryMock(...args),
   apiBasePath: (site: { authType?: string }) =>
     site.authType === 'server' ? '/rest/api/2' : '/rest/api/3',

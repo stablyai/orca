@@ -1,13 +1,16 @@
 import {
-  resolveMobileSourceControlCommitAreaPrimaryActionDecision,
-  type MobileSourceControlPrimaryActionDecision,
-  type MobileSourceControlPrimaryActionKind,
-  type MobileSourceControlRemoteOpKind
-} from './mobile-source-control-primary-action-decision'
+  resolveSourceControlCommitAreaPrimaryActionDecision,
+  type SourceControlCommitAreaPrimaryActionDecision,
+  type SourceControlRemoteOpKind
+} from '../../../src/shared/source-control-primary-action-decision'
 import type { MobileGitBranchCompareResult } from './mobile-branch-compare'
 import type { MobileGitStatusResult } from './mobile-git-status'
 
 type GitStep = { method: string; params?: Record<string, unknown> }
+
+type MobileSourceControlPrimaryActionKind = SourceControlCommitAreaPrimaryActionDecision['kind']
+type MobileSourceControlPrimaryActionDecision = SourceControlCommitAreaPrimaryActionDecision
+type MobileSourceControlRemoteOpKind = SourceControlRemoteOpKind
 
 export type MobileSourceControlPrimaryAction = {
   kind: MobileSourceControlPrimaryActionKind
@@ -44,7 +47,7 @@ export type MobileSourceControlPrimaryActionArgs = {
 export function buildMobileSourceControlPrimaryAction(
   args: MobileSourceControlPrimaryActionArgs
 ): MobileSourceControlPrimaryAction {
-  const decision = resolveMobileSourceControlCommitAreaPrimaryActionDecision({
+  const decision = resolveSourceControlCommitAreaPrimaryActionDecision({
     stagedCount: args.stagedCount,
     hasUnstagedChanges: args.unstagedCount > 0,
     hasStageableChanges: args.stageablePaths.length > 0,
@@ -167,8 +170,16 @@ function getMobilePrimaryActionHint(decision: MobileSourceControlPrimaryActionDe
       return 'Stage at least one file to commit.'
     case 'checkout_branch_before_publish':
       return 'Check out a branch before publishing commits.'
+    case 'checking_review_status':
+      return 'Checking review status.'
+    case 'review_already_merged':
+      return 'Nothing to commit. The review is already merged.'
     case 'publish_branch':
       return 'Publish this branch to origin.'
+    case 'push_linked_review':
+      return 'Push updates to the linked review branch.'
+    case 'linked_review_target_unavailable':
+      return 'The linked review branch is unavailable.'
     case 'force_push_with_lease':
       return 'Force push with lease to update the remote branch.'
     case 'sync_counts':

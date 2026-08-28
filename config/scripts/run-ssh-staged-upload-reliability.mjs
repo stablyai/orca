@@ -17,8 +17,8 @@ const defaultFiles = [
 const cliArguments = process.argv.slice(2)
 const powerShellFlag = cliArguments.indexOf('--powershell')
 const configuredPowerShell =
-  powerShellFlag >= 0 ? cliArguments[powerShellFlag + 1] : process.env.ORCA_POWERSHELL_EXECUTABLE
-if (powerShellFlag >= 0 && !configuredPowerShell) {
+  powerShellFlag !== -1 ? cliArguments[powerShellFlag + 1] : process.env.ORCA_POWERSHELL_EXECUTABLE
+if (powerShellFlag !== -1 && !configuredPowerShell) {
   console.error('--powershell requires an executable path')
   process.exit(2)
 }

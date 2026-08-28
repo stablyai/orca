@@ -10,40 +10,27 @@ function message(id: string): NativeChatMessage {
 }
 
 describe('native chat transcript retention', () => {
-  it('holds only the latest settled transcript for the same identity while loading', () => {
+  it('holds only the latest settled transcript for the same identity while unsettled', () => {
     const retention = createNativeChatTranscriptRetention()
     const first = [message('first')]
     const second = [message('second')]
 
     retention.capture('source-a', first)
-    expect(
-      retention.visible({ identity: 'source-a', messages: [], settled: false, loading: true })
-    ).toBe(first)
-    expect(
-      retention.visible({ identity: 'source-b', messages: [], settled: false, loading: true })
-    ).toEqual([])
+    expect(retention.visible({ identity: 'source-a', messages: [], settled: false })).toBe(first)
+    expect(retention.visible({ identity: 'source-b', messages: [], settled: false })).toEqual([])
 
     retention.capture('source-b', second)
-    expect(
-      retention.visible({ identity: 'source-a', messages: [], settled: false, loading: true })
-    ).toEqual([])
-    expect(
-      retention.visible({ identity: 'source-b', messages: [], settled: false, loading: true })
-    ).toBe(second)
+    expect(retention.visible({ identity: 'source-a', messages: [], settled: false })).toEqual([])
+    expect(retention.visible({ identity: 'source-b', messages: [], settled: false })).toBe(second)
   })
 
-  it('never substitutes retained history for a settled or non-loading read', () => {
+  it('never substitutes retained history for a settled read', () => {
     const retention = createNativeChatTranscriptRetention()
     const retained = [message('retained')]
     const fresh = [message('fresh')]
     retention.capture('source', retained)
 
-    expect(
-      retention.visible({ identity: 'source', messages: fresh, settled: true, loading: false })
-    ).toBe(fresh)
-    expect(
-      retention.visible({ identity: 'source', messages: [], settled: false, loading: false })
-    ).toEqual([])
+    expect(retention.visible({ identity: 'source', messages: fresh, settled: true })).toBe(fresh)
   })
 
   it('encodes identity components without delimiter collisions', () => {

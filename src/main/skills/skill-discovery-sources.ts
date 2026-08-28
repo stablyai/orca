@@ -8,8 +8,14 @@ import type {
   SkillSourceKind
 } from '../../shared/skills'
 import type { AgentType } from '../../shared/agent-status-types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+import type { SkillProviderRootOverrides } from './skill-provider-destinations'
+import {
+  resolveDefaultHermesSkillsRoot,
+  resolveEnvironmentHermesSkillsRoot,
+  resolveEnvironmentSkillProviderRoots
+} from './skill-provider-runtime-roots'
 
 export type SkillScanRoot = Omit<SkillDiscoverySource, 'exists' | 'skippedReason'>
 type SkillDiscoveryPathApi = Pick<typeof posix, 'basename' | 'join'>
@@ -67,11 +73,21 @@ export function buildSkillDiscoverySources(
     repos?: Repo[]
     includeCwd?: boolean
     pathApi?: SkillDiscoveryPathApi
+    providerRootOverrides?: SkillProviderRootOverrides
   } = {}
 ): SkillScanRoot[] {
   const pathApi = args.pathApi ?? { basename, join }
   const home = args.homeDir ?? homedir()
   const cwd = args.cwd ?? process.cwd()
+  const providerRootOverrides =
+    args.providerRootOverrides ?? (args.pathApi ? {} : resolveEnvironmentSkillProviderRoots())
+  // Why: HERMES_HOME moves the whole profile tree, so the default home path
+  // finds nothing for `hermes -p <profile>`. Only this process's own host can
+  // read it — a custom pathApi means the home belongs to another host, whose
+  // Hermes install is POSIX-shaped even when this process runs on Windows.
+  const hermesSkillsRoot = args.pathApi
+    ? pathApi.join(home, '.hermes', 'skills')
+    : (resolveEnvironmentHermesSkillsRoot() ?? resolveDefaultHermesSkillsRoot({ homeDir: home }))
   const roots: SkillScanRoot[] = [
     source(
       'home-codex',
@@ -92,7 +108,7 @@ export function buildSkillDiscoverySources(
     source(
       'home-claude',
       'Claude home',
-      pathApi.join(home, '.claude', 'skills'),
+      providerRootOverrides.claude ?? pathApi.join(home, '.claude', 'skills'),
       'home',
       ['claude'],
       'claude'
@@ -110,7 +126,7 @@ export function buildSkillDiscoverySources(
     source(
       'home-grok',
       'Grok home',
-      pathApi.join(home, '.grok', 'skills'),
+      providerRootOverrides.grok ?? pathApi.join(home, '.grok', 'skills'),
       'home',
       ['agent-skills'],
       'grok'
@@ -139,6 +155,7 @@ export function buildSkillDiscoverySources(
       ['agent-skills'],
       'omp'
     ),
+    source('home-hermes', 'Hermes home', hermesSkillsRoot, 'home', ['agent-skills'], 'hermes'),
     source(
       'home-prime-agent',
       'Prime Agent home',
@@ -170,6 +187,38 @@ export function buildSkillDiscoverySources(
       'home',
       ['agent-skills'],
       'cursor'
+    ),
+    source(
+      'home-droid',
+      'Droid home',
+      pathApi.join(home, '.factory', 'skills'),
+      'home',
+      ['agent-skills'],
+      'droid'
+    ),
+    source(
+      'home-continue',
+      'Continue home',
+      pathApi.join(home, '.continue', 'skills'),
+      'home',
+      ['agent-skills'],
+      'continue'
+    ),
+    source(
+      'home-trae',
+      'Trae home',
+      pathApi.join(home, '.trae-cn', 'skills'),
+      'home',
+      ['agent-skills'],
+      'trae'
+    ),
+    source(
+      'home-aug',
+      'Augment home',
+      pathApi.join(home, '.augment', 'skills'),
+      'home',
+      ['agent-skills'],
+      'aug'
     )
   ]
 
@@ -204,6 +253,46 @@ export function buildSkillDiscoverySources(
         'repo',
         ['claude'],
         'claude'
+      ),
+      source(
+        `repo-droid-${stablePathId(repoPath)}`,
+        `${label} .factory`,
+        pathApi.join(repoPath, '.factory', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'droid'
+      ),
+      source(
+        `repo-continue-${stablePathId(repoPath)}`,
+        `${label} .continue`,
+        pathApi.join(repoPath, '.continue', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'continue'
+      ),
+      source(
+        `repo-trae-${stablePathId(repoPath)}`,
+        `${label} .trae`,
+        pathApi.join(repoPath, '.trae', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'trae'
+      ),
+      source(
+        `repo-grok-${stablePathId(repoPath)}`,
+        `${label} .grok`,
+        pathApi.join(repoPath, '.grok', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'grok'
+      ),
+      source(
+        `repo-aug-${stablePathId(repoPath)}`,
+        `${label} .augment`,
+        pathApi.join(repoPath, '.augment', 'skills'),
+        'repo',
+        ['agent-skills'],
+        'aug'
       )
     )
   }

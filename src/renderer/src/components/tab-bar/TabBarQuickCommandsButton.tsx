@@ -10,10 +10,10 @@ import {
   getTerminalQuickCommandScope,
   isTerminalQuickCommandComplete
 } from '../../../../shared/terminal-quick-commands'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { runQuickCommandInNewTab } from '@/lib/run-quick-command-in-new-tab'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import { translate } from '@/i18n/i18n'
 import { TabBarQuickCommandsMenu } from './TabBarQuickCommandsMenu'
@@ -23,6 +23,8 @@ import {
   useTerminalQuickCommandHosts
 } from '@/hooks/use-terminal-quick-command-hosts'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { useProjectHostSetupProjection } from '@/store/selectors'
+import { terminalQuickCommandMatchesWorkspaceProject } from '@/lib/terminal-quick-command-project-scope'
 
 type TabBarQuickCommandsButtonProps = {
   worktreeId: string
@@ -35,6 +37,7 @@ export function TabBarQuickCommandsButton({
 }: TabBarQuickCommandsButtonProps): React.JSX.Element | null {
   const recentByGroup = useAppStore((s) => s.recentQuickCommandIdByGroup)
   const repos = useAppStore((s) => s.repos)
+  const projectHostSetupProjection = useProjectHostSetupProjection()
   const { executionHostId, hosts, refreshRemoteHost, remoteHostLoadFailed, remoteHostPending } =
     useTerminalQuickCommandHosts(worktreeId)
   const confirm = useConfirmationDialog()
@@ -61,12 +64,20 @@ export function TabBarQuickCommandsButton({
       const scope = getTerminalQuickCommandScope(command)
       if (scope.type === 'global') {
         globalList.push(entry)
-      } else if (scope.type === 'repo' && repoId !== null && scope.repoId === repoId) {
+      } else if (
+        scope.type === 'repo' &&
+        terminalQuickCommandMatchesWorkspaceProject(command, {
+          commandHostId: entry.hostId,
+          projectHostSetups: projectHostSetupProjection.setups,
+          targetHostId: executionHostId,
+          targetRepoId: repoId
+        })
+      ) {
         repoList.push(entry)
       }
     }
     return { repoCommands: repoList, globalCommands: globalList }
-  }, [hosts, repoId])
+  }, [executionHostId, hosts, projectHostSetupProjection.setups, repoId])
 
   const recentId = recentByGroup[groupId] ?? null
   // Why: split-button label prefers the most recently used command for this

@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { execFileSync, spawnSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, readdirSync } from 'node:fs'
 import path from 'node:path'
@@ -50,4 +50,15 @@ export function prepareDockerSshRelayImage(root: string): void {
     ['build', '--tag', image, '--file', path.join(fixtureDir, 'Dockerfile'), fixtureDir],
     { stdio: 'inherit', timeout: 300_000 }
   )
+}
+
+export function ensureDockerSshRelayImage(root: string): void {
+  if (process.env.ORCA_E2E_SSH_DOCKER_IMAGE) {
+    return
+  }
+  const image = fixtureImage(root)
+  if (spawnSync('docker', ['image', 'inspect', image], { stdio: 'ignore' }).status === 0) {
+    return
+  }
+  prepareDockerSshRelayImage(root)
 }

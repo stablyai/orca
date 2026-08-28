@@ -4,15 +4,13 @@ import {
   HERMES_AGENT_NAME_RE,
   titleHasAgentName
 } from './agent-name-token-match'
-import { isCursorAgentTitle } from './agent-title-core'
-import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
+import { containsAgentSpinnerGlyph, isCursorAgentTitle } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 import {
   getPiCompatibleSyntheticAgentLabel,
   isLegacyPiCompatibleTitle
 } from './pi-compatible-synthetic-title'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 export const CLAUDE_IDLE = '\u2733' // ✳ (eight-spoked asterisk — Claude Code idle prefix)
 const CLAUDE_MANAGEMENT_TITLE_RE =
@@ -46,6 +44,14 @@ export function isGeminiTerminalTitle(title: string): boolean {
   // Why: Pi/OMP titles include cwd/session text; substring matching made
   // paths like "gemini-project" masquerade as Gemini CLI.
   if (isPiAgentTitle(title)) {
+    return false
+  }
+  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
+  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
+  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
+  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
+  // emits none of them.
+  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return false
   }
   return titleHasAgentName(title, 'gemini')
@@ -96,7 +102,7 @@ export function isClaudeAgent(title: string): boolean {
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsAgentSpinnerGlyph(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
     return !isCursorAgentTitle(title) && !lower.includes('openclaude')
@@ -231,7 +237,7 @@ const TITLE_LABEL_TO_AGENT: Partial<Record<string, TuiAgent>> = {
 
 function hasGenericClaudeStatusPrefix(title: string): boolean {
   return (
-    containsBrailleSpinner(title) ||
+    containsAgentSpinnerGlyph(title) ||
     title.startsWith('✳ ') ||
     title === '✳' ||
     title.startsWith('. ') ||
@@ -239,25 +245,7 @@ function hasGenericClaudeStatusPrefix(title: string): boolean {
   )
 }
 
-// Claude's own name plus, at most, one of its status words — never free-form task text.
-const CLAUDE_IDENTITY_FRAME_RE =
-  /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
-
-/**
- * Whether a title PRESENTS Claude rather than merely mentioning it, once its leading
- * status decoration is stripped. A "claude" token inside free-form task text is a mention,
- * so it must not take a pane away from its known owner (#8940) — owner-blind consumers
- * keep using `resolveExplicitTerminalTitleAgentType`, whose token match is looser.
- */
-export function isClaudeIdentityFrameTitle(title: string): boolean {
-  // Why segments: a multiplexer prefix (`zsh | ⠋ Claude Code`) would otherwise read as task
-  // text and cost a genuine Claude pane its identity.
-  return getWrapperTitleSegments(title).some((segment) =>
-    CLAUDE_IDENTITY_FRAME_RE.test(
-      stripLeadingAgentTitleDecorationOrEmpty(segment).trim().toLowerCase()
-    )
-  )
-}
+export { isClaudeIdentityFrameTitle } from './agent-title-core'
 
 function isGenericClaudeStatusClaim(title: string, titleAgent: TuiAgent | null): boolean {
   return (

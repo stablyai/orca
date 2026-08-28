@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraClientForSite } from './client'
+import type { JiraClientForSite } from './authenticated-request'
 
 const { acquireMock, clearTokenMock, getClientsMock, isAuthErrorMock, jiraRequestMock } =
   vi.hoisted(() => ({
@@ -10,16 +10,22 @@ const { acquireMock, clearTokenMock, getClientsMock, isAuthErrorMock, jiraReques
     jiraRequestMock: vi.fn()
   }))
 
-vi.mock('./client', () => ({
+vi.mock('./request-queue', () => ({
   acquire: (...args: unknown[]) => acquireMock(...args),
-  release: vi.fn(),
+  release: vi.fn()
+}))
+
+vi.mock('./authenticated-request', () => ({
   apiBasePath: () => '/rest/api/3',
-  clearToken: (...args: unknown[]) => clearTokenMock(...args),
-  getClients: (...args: unknown[]) => getClientsMock(...args),
-  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args),
   jiraRequest: (...args: unknown[]) => jiraRequestMock(...args),
   jiraRequestBinary: vi.fn(),
   JiraApiError: class JiraApiError extends Error {}
+}))
+
+vi.mock('./client', () => ({
+  clearToken: (...args: unknown[]) => clearTokenMock(...args),
+  getClients: (...args: unknown[]) => getClientsMock(...args),
+  isAuthError: (...args: unknown[]) => isAuthErrorMock(...args)
 }))
 
 function makeEntry(id: string): JiraClientForSite {

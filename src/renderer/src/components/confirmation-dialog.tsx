@@ -18,6 +18,7 @@ import {
 } from '@/components/confirmation-dialog-context'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { cn } from '@/lib/utils'
 
 type ConfirmationDialogRequest = {
   id: number
@@ -99,7 +100,12 @@ export function ConfirmationDialogProvider({
           <DialogHeader>
             <DialogTitle>{displayedRequest?.options.title}</DialogTitle>
             {displayedRequest?.options.description ? (
-              <DialogDescription>{displayedRequest.options.description}</DialogDescription>
+              // Callers pass multi-line descriptions (e.g. one path per line).
+              <DialogDescription
+                className={cn('whitespace-pre-line', displayedRequest.options.descriptionClassName)}
+              >
+                {displayedRequest.options.description}
+              </DialogDescription>
             ) : null}
           </DialogHeader>
           {displayedRequest?.options.dontAskAgain ? (

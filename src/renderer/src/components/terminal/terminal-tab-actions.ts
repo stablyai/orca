@@ -65,6 +65,19 @@ export function closeTerminalTab(
   )
   const target = resolveTerminalCloseTarget(state, tabId, precomputedCloseState)
   if (!target) {
+    const closeReason = options?.reason ?? options?.hostCloseReason ?? 'user'
+    if (closeReason !== 'pty-exit') {
+      // Why: late explicit cleanup must still revoke tab-scoped resume authority after PTY exit removed the row.
+      state.closeTab(tabId, {
+        reason: closeReason,
+        ...(options?.localPtyTeardownOwnedExternally
+          ? { localPtyTeardownOwnedExternally: true }
+          : {}),
+        ...(options?.precomputedRetirementPlan
+          ? { precomputedRetirementPlan: options.precomputedRetirementPlan }
+          : {})
+      })
+    }
     options?.onClosed?.()
     return
   }

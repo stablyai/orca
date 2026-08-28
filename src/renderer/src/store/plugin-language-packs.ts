@@ -1,6 +1,9 @@
 import { useEffect } from 'react'
 import { create } from 'zustand'
-import type { PluginLanguagePackRegistration } from '../../../shared/plugins/plugin-language-pack-artifact'
+import {
+  isPluginLanguagePackRegistration,
+  type PluginLanguagePackRegistration
+} from '../../../shared/plugins/plugin-language-pack-artifact'
 
 type PluginLanguagePackState = {
   packs: PluginLanguagePackRegistration[]
@@ -24,7 +27,16 @@ export const usePluginLanguagePackStore = create<PluginLanguagePackState>()((set
       return
     }
     try {
-      const packs = await api.listLanguagePacks()
+      const response = await api.listLanguagePacks()
+      const packs = Array.isArray(response) ? response.filter(isPluginLanguagePackRegistration) : []
+      // Why: a non-array response and a rejected member are different upstream bugs; keep them distinguishable in the log.
+      if (!Array.isArray(response)) {
+        console.warn(`[plugins] Ignoring non-array language-pack list (${typeof response})`)
+      } else if (packs.length !== response.length) {
+        console.warn(
+          `[plugins] Ignoring ${response.length - packs.length} of ${response.length} malformed language packs`
+        )
+      }
       if (generation === requestGeneration) {
         set({ packs, loaded: true })
       }

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { writeFileSync } from 'node:fs'
+import { mkdirSync, writeFileSync } from 'node:fs'
 import { mkdtemp, mkdir, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -10,6 +10,7 @@ import {
   type WorktreeBasePollEvent,
   type WorktreePollerWindowVisibility
 } from './worktree-base-directory-poller'
+import { startGitCommonPrimaryPolling } from './worktree-git-common-primary-polling'
 import type {
   WorktreeBaseRepoWatchConfig,
   WorktreeBaseWatchTarget
@@ -265,6 +266,44 @@ describe('worktree base directory poller', () => {
     ).toHaveLength(2)
   })
 
+  it('rescans on the next tick when a write races an in-flight full scan', async () => {
+    const root = await makeRoot()
+    const worktree = join(root, 'raced')
+    const received: WorktreeBasePollEvent[][] = []
+    const target = makeTarget('base', root)
+    const snapshotTicks: number[] = []
+    let raced = false
+    const poller = await startWorktreeBaseDirectoryPoller(
+      target,
+      () => target.repos,
+      (events) => received.push(events),
+      {
+        pollIntervalMs: 0,
+        onSnapshotTaken: (tick) => {
+          snapshotTicks.push(tick)
+          if (raced) {
+            return
+          }
+          raced = true
+          mkdirSync(worktree)
+          writeFileSync(join(worktree, '.git'), 'gitdir: elsewhere')
+        }
+      }
+    )
+    cleanups.push(() => poller.unsubscribe())
+
+    await waitForEvents(received, (flat) =>
+      flat.some((event) => event.type === 'create' && event.path === join(worktree, '.git'))
+    )
+
+    // A write landing after a scan's listings must leave the gate stale, so the
+    // next tick rescans instead of deferring the create to the backstop.
+    expect(snapshotTicks.slice(0, 2)).toEqual([
+      WORKTREE_BASE_BACKSTOP_TICKS,
+      WORKTREE_BASE_BACKSTOP_TICKS + 1
+    ])
+  })
+
   it('parks base scans while hidden and losslessly detects changes on resume', async () => {
     const root = await makeRoot()
     const visibility = createVisibilityHarness()
@@ -363,7 +402,7 @@ describe('worktree base directory poller', () => {
       () => target.repos,
       (events) => received.push(events),
       // Force the non-darwin poll path so this test is deterministic on all CI.
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -403,7 +442,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -430,7 +469,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -455,7 +494,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -479,7 +518,7 @@ describe('worktree base directory poller', () => {
       target,
       () => target.repos,
       (events) => received.push(events),
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -501,7 +540,7 @@ describe('worktree base directory poller', () => {
       () => target.repos,
       (events) => received.push(events),
       // Force the non-darwin poll path so this test is deterministic on all CI.
-      { pollIntervalMs: POLL_MS, platform: 'linux' }
+      { pollIntervalMs: POLL_MS, platform: 'freebsd' }
     )
     cleanups.push(() => poller.unsubscribe())
 
@@ -533,7 +572,7 @@ describe('worktree base directory poller', () => {
       (events) => received.push(events),
       {
         pollIntervalMs: POLL_MS,
-        platform: 'linux',
+        platform: 'freebsd',
         visibility: visibility.source,
         onFullScan: () => fullScans.push(Date.now())
       }
@@ -606,28 +645,25 @@ describe('worktree base directory poller', () => {
       )
     })
 
-    it('covers primary-checkout metadata alongside the narrow stream', async () => {
+    it('covers primary-checkout metadata through its bounded fallback poll', async () => {
       const commonDir = await makeRoot()
-      await mkdir(join(commonDir, 'worktrees'))
       const received: WorktreeBasePollEvent[][] = []
-      const target = makeTarget('git-common', commonDir)
-      const poller = await startWorktreeBaseDirectoryPoller(
-        target,
-        () => target.repos,
+      const visibility = createWorktreePollerWindowVisibility(() => null)
+      const poller = await startGitCommonPrimaryPolling(
+        commonDir,
+        () => [],
         (events) => received.push(events),
-        { pollIntervalMs: POLL_MS, platform: 'darwin' }
+        POLL_MS,
+        visibility
       )
       cleanups.push(() => poller.unsubscribe())
 
-      // The narrow stream is rooted at worktrees/, so top-level HEAD writes
-      // must arrive through the companion metadata poll.
       const headFile = join(commonDir, 'HEAD')
       await writeFile(headFile, 'ref: refs/heads/main')
       await waitForEvents(received, (flat) =>
         flat.some((event) => event.type === 'create' && event.path === headFile)
       )
 
-      await new Promise((resolve) => setTimeout(resolve, 10))
       await writeFile(headFile, 'ref: refs/heads/feature')
       await waitForEvents(received, (flat) =>
         flat.some((event) => event.type === 'update' && event.path === headFile)

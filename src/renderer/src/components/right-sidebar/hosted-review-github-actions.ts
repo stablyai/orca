@@ -1,4 +1,5 @@
-import type { GitHubPRMergeMethod, PRInfo, Repo } from '../../../../shared/types'
+import type { GitHubPRMergeMethod, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
 import { callRuntimeRpc, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 
@@ -30,7 +31,8 @@ export async function mergeGitHubHostedReview(args: {
         method: args.method,
         prRepo: args.prRepo ?? null
       },
-      { timeoutMs: 30_000 }
+      // Why: GitHub stack merges can run asynchronously for several minutes.
+      { timeoutMs: 4 * 60_000 }
     )
   }
   return window.api.gh.mergePR({

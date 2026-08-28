@@ -1,4 +1,4 @@
-import type { PRCheckDetail, PRCheckRunDetails } from './types'
+import type { PRCheckDetail, PRCheckRunDetails } from './github/check-types'
 
 export const PROMPT_LOG_TAIL_LINES = 150
 export const PROMPT_LOG_TAIL_SCAN_CODE_UNITS = 256 * 1024

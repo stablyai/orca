@@ -1,7 +1,9 @@
+import { supportsHostedReviewCreation } from '../../shared/hosted-review-creation-providers'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   createGitHubPullRequestMock,
+  createBitbucketPullRequestMock,
   createGitLabMergeRequestMock,
   createAzureDevOpsPullRequestMock,
   createGiteaPullRequestMock,
@@ -16,6 +18,7 @@ const {
   getEnterpriseGitHubRepoSlugMock
 } = vi.hoisted(() => ({
   createGitHubPullRequestMock: vi.fn(),
+  createBitbucketPullRequestMock: vi.fn(),
   createGitLabMergeRequestMock: vi.fn(),
   createAzureDevOpsPullRequestMock: vi.fn(),
   createGiteaPullRequestMock: vi.fn(),
@@ -60,6 +63,10 @@ vi.mock('../bitbucket/client', () => ({
   getBitbucketPullRequest: vi.fn()
 }))
 
+vi.mock('../bitbucket/pull-request-creation', () => ({
+  createBitbucketPullRequest: createBitbucketPullRequestMock
+}))
+
 vi.mock('../azure-devops/client', () => ({
   getAzureDevOpsRepoSlug: getAzureDevOpsRepoSlugMock,
   getAzureDevOpsPullRequestForBranch: vi.fn(),
@@ -99,6 +106,7 @@ describe('forge provider interface', () => {
   beforeEach(() => {
     createGitHubPullRequestMock.mockReset()
     createGitLabMergeRequestMock.mockReset()
+    createBitbucketPullRequestMock.mockReset()
     createAzureDevOpsPullRequestMock.mockReset()
     createGiteaPullRequestMock.mockReset()
     getAzureDevOpsRepoSlugMock.mockReset()
@@ -170,10 +178,16 @@ describe('forge provider interface', () => {
     ).toEqual([
       ['gitlab', true],
       ['github', true],
-      ['bitbucket', false],
+      ['bitbucket', true],
       ['azure-devops', true],
       ['gitea', true]
     ])
+    // Why: the shared list is what the Create blocker and the renderer read.
+    // When it drifted from this one, Bitbucket had a working createReview but
+    // still reported "provider does not support creating a pull request".
+    for (const provider of FORGE_PROVIDERS) {
+      expect(supportsHostedReviewCreation(provider.id)).toBe(provider.supportsReviewCreation)
+    }
     createGitHubPullRequestMock.mockResolvedValue({
       ok: true,
       number: 12,
@@ -199,6 +213,28 @@ describe('forge provider interface', () => {
       head: 'feature/provider-interface',
       title: 'Add provider interface'
     })
+  })
+
+  it('routes Bitbucket review creation through the shared provider contract', async () => {
+    createBitbucketPullRequestMock.mockResolvedValue({
+      ok: true,
+      number: 23,
+      url: 'https://bitbucket.org/team/orca/pull-requests/23'
+    })
+
+    const provider = getForgeProviderById('bitbucket')
+    const input = {
+      provider: 'bitbucket' as const,
+      base: 'main',
+      head: 'feature/provider-interface',
+      title: 'Add provider interface'
+    }
+    await expect(provider.createReview?.('/repo', input)).resolves.toEqual({
+      ok: true,
+      number: 23,
+      url: 'https://bitbucket.org/team/orca/pull-requests/23'
+    })
+    expect(createBitbucketPullRequestMock).toHaveBeenCalledWith('/repo', input)
   })
 
   it('routes GitLab review creation through the shared provider contract', async () => {

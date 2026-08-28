@@ -8,7 +8,7 @@
  *
  * Measurement:
  *   renderer timer drift during hidden flood + bulk worktree/tab open.
- *   soft freeze >= 2s, hard freeze >= 5s.
+ *   soft freeze >= 2.5s, hard freeze >= 5s.
  *
  * Run:
  *   SKIP_BUILD=1 pnpm exec playwright test \

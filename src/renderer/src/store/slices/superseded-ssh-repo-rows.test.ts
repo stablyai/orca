@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { mergeSshRepoReadoptions, reconcileReadoptedSshRepoRows } from './superseded-ssh-repo-rows'
 
 function repo(overrides: Partial<Repo>): Repo {
@@ -29,6 +29,12 @@ describe('reconcileReadoptedSshRepoRows', () => {
 
     expect(result.repos).toEqual([local, newSsh])
     expect(result.pendingReadoptions).toEqual([])
+  })
+
+  it('returns the input array when nothing is pruned', () => {
+    const repos = [repo({ id: 'shared', path: '/local' })]
+
+    expect(reconcileReadoptedSshRepoRows(repos, []).repos).toBe(repos)
   })
 
   it('keeps evidence pending when repos:changed has not delivered the new row yet', () => {

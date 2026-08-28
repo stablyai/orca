@@ -52,6 +52,11 @@ function makeResolved(overrides: Partial<SshResolvedConfig> = {}): SshResolvedCo
     proxyUseFdpass: false,
     controlMaster: 'no',
     controlPersist: 'no',
+    userKnownHostsFiles: [],
+    globalKnownHostsFiles: [],
+    strictHostKeyChecking: 'ask',
+    hashKnownHosts: false,
+    updateHostKeys: 'no',
     ...overrides
   }
 }

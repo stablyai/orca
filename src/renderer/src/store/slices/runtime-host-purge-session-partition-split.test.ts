@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, vi } from 'vitest'
 import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
-import type { WorkspaceSessionPatch } from '../../../../shared/types'
+import type { WorkspaceSessionPatch } from '../../../../shared/workspace-session-state-types'
 import {
   buildHostIdByWorktreeId,
   patchWorkspaceSessionByHost,

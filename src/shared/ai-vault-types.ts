@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 import type { ExecutionHostId, ExecutionHostScope } from './execution-host'
 
 export const AI_VAULT_AGENTS = [
@@ -18,6 +18,7 @@ export const AI_VAULT_AGENTS = [
   'openclaw',
   'devin',
   'droid',
+  'cline',
   'kimi'
 ] as const satisfies readonly TuiAgent[]
 
@@ -59,6 +60,7 @@ export const AI_VAULT_AGENT_LABELS = {
   openclaw: 'OpenClaw',
   devin: 'Devin',
   droid: 'Droid',
+  cline: 'Cline',
   kimi: 'Kimi'
 } as const satisfies Record<AiVaultAgent, string>
 

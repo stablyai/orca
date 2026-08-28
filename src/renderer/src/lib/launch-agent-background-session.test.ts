@@ -92,6 +92,7 @@ describe('launchAgentBackgroundSession', () => {
 
   it('spawns a PTY first and creates the inactive tab already bound to it', async () => {
     const { launchAgentBackgroundSession } = await import('./launch-agent-background-session')
+    mockSpawn.mockResolvedValue({ id: 'pty-1', incarnationId: 'inc-fresh' })
 
     const result = await launchAgentBackgroundSession({
       agent: 'claude',
@@ -160,7 +161,13 @@ describe('launchAgentBackgroundSession', () => {
       recordInteraction: false
     })
     expect(mockUpdateTabPtyId).toHaveBeenCalledWith(tabId, 'pty-1')
-    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith('pty-1', expect.any(Function))
+    // The incarnation rides along so a relay-recycled id cannot drain the previous owner's exit
+    // into this handler and tear the session down right after launch.
+    expect(mockRegisterEagerPtyBuffer).toHaveBeenCalledWith(
+      'pty-1',
+      expect.any(Function),
+      'inc-fresh'
+    )
     expect(mockSubscribeToPtyData).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(mockSubscribeToPtyExit).toHaveBeenCalledWith('pty-1', expect.any(Function))
     expect(result).toMatchObject({ tabId, paneKey, ptyId: 'pty-1' })
@@ -332,7 +339,7 @@ describe('launchAgentBackgroundSession', () => {
     expect(mockSpawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: 'C:\\Users\\jinwo\\repo\\feature',
-        command: "claude '--dangerously-skip-permissions' 'don'\\''t use powershell quoting'",
+        command: `claude '--dangerously-skip-permissions' 'don'"'"'t use powershell quoting'`,
         connectionId: null,
         worktreeId: 'wt-1',
         tabId: expect.stringMatching(UUID_RE)
@@ -426,7 +433,9 @@ describe('launchAgentBackgroundSession', () => {
       {
         state: 'working',
         prompt: 'check the status spinner',
-        agentType: 'command-code'
+        agentType: 'command-code',
+        // Why: Orca launched this hidden session, so the seed predates any provider signal (STA-4293).
+        observation: expect.objectContaining({ origin: 'launch', kind: 'transition' })
       },
       undefined,
       undefined,

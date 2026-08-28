@@ -19,6 +19,7 @@ export type PortScannerWindowVisibility = {
 
 type ScanHandle = {
   timer: ReturnType<typeof setTimeout> | null
+  requestAbortController: AbortController | null
   intervalMs: number
   // Why: while the window is hidden the scan chain is parked outright — no
   // timer wakeups, no remote requests — and the visibility listener resumes
@@ -48,6 +49,7 @@ export class PortScanner {
 
     const handle: ScanHandle = {
       timer: null,
+      requestAbortController: null,
       intervalMs: SSH_PORT_SCAN_BASE_INTERVAL_MS,
       parkedWhileHidden: false,
       unsubscribeVisibility: () => {},
@@ -65,8 +67,12 @@ export class PortScanner {
         return
       }
       polling = true
+      const requestAbortController = new AbortController()
+      handle.requestAbortController = requestAbortController
       try {
-        const result = (await mux.request('ports.detect')) as {
+        const result = (await mux.request('ports.detect', undefined, {
+          signal: requestAbortController.signal
+        })) as {
           ports: DetectedPort[]
           platform: string
         }
@@ -94,6 +100,9 @@ export class PortScanner {
       } catch {
         // Relay disconnected or request timed out — retry on next interval
       } finally {
+        if (handle.requestAbortController === requestAbortController) {
+          handle.requestAbortController = null
+        }
         polling = false
       }
     }
@@ -142,6 +151,8 @@ export class PortScanner {
     if (handle.timer) {
       clearTimeout(handle.timer)
     }
+    handle.requestAbortController?.abort()
+    handle.requestAbortController = null
     handle.unsubscribeVisibility()
     this.handles.delete(targetId)
   }

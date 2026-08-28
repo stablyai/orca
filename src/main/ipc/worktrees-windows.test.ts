@@ -104,15 +104,21 @@ vi.mock('../github/client', () => ({
 }))
 
 vi.mock('../hooks', () => ({
-  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
-  createSetupRunnerScript: createSetupRunnerScriptMock,
   getEffectiveHooks: getEffectiveHooksMock,
-  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
-  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   loadHooks: loadHooksMock,
   runHook: runHookMock,
-  hasHooksFile: hasHooksFileMock,
-  resolveSetupRunnerShell: resolveSetupRunnerShellMock,
+  hasHooksFile: hasHooksFileMock
+}))
+
+vi.mock('../worktree-runner-script', () => ({
+  createIssueCommandRunnerScript: createIssueCommandRunnerScriptMock,
+  createSetupRunnerScript: createSetupRunnerScriptMock,
+  resolveSetupRunnerShell: resolveSetupRunnerShellMock
+}))
+
+vi.mock('../effective-hook-config', () => ({
+  getEffectiveHooksFromConfig: getEffectiveHooksFromConfigMock,
+  getDefaultTabsLaunch: getDefaultTabsLaunchMock,
   shouldRunSetupForCreate: shouldRunSetupForCreateMock
 }))
 
@@ -139,6 +145,7 @@ vi.mock('./worktree-logic', async (importOriginal) => {
 })
 
 import { registerWorktreeHandlers } from './worktrees'
+import { resetRetirementCollisionKeyCacheForTests } from '../worktree-name-retirement'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
 
@@ -151,14 +158,19 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     }
   }
   const store = {
+    getProfileStorageDirectory: vi.fn(() => '/profile-a'),
     getRepos: vi.fn(),
     getRepo: vi.fn(),
     getProjects: vi.fn(),
     getProjectHostSetups: vi.fn(),
     getSettings: vi.fn(),
     getWorktreeMeta: vi.fn(),
+    getAllWorktreeMeta: vi.fn(),
     setWorktreeMeta: vi.fn(),
-    removeWorktreeMeta: vi.fn()
+    removeWorktreeMeta: vi.fn(),
+    addRetiredWorktreeName: vi.fn(),
+    getRetiredWorktreeNameRegistry: vi.fn(),
+    mergeRetiredWorktreeNames: vi.fn()
   }
 
   beforeEach(() => {
@@ -198,8 +210,13 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     store.getProjectHostSetups.mockReset()
     store.getSettings.mockReset()
     store.getWorktreeMeta.mockReset()
+    store.getAllWorktreeMeta.mockReset()
     store.setWorktreeMeta.mockReset()
     store.removeWorktreeMeta.mockReset()
+    store.addRetiredWorktreeName.mockReset()
+    store.getRetiredWorktreeNameRegistry.mockReset()
+    store.mergeRetiredWorktreeNames.mockReset()
+    resetRetirementCollisionKeyCacheForTests()
 
     for (const key of Object.keys(handlers)) {
       delete handlers[key]
@@ -236,6 +253,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
     })
     resolveSetupRunnerShellMock.mockReturnValue(undefined)
     store.getWorktreeMeta.mockReturnValue(undefined)
+    store.getAllWorktreeMeta.mockReturnValue({})
+    store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: [] })
     store.setWorktreeMeta.mockReturnValue({})
     resolveLocalGitUsernameMock.mockResolvedValue('')
     getDefaultBaseRefMock.mockReturnValue('origin/main')
@@ -302,6 +321,8 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
       false
     )
     expect(resolveLocalGitUsernameMock).not.toHaveBeenCalled()
+    // A name the user typed is never retired — the pool holds ordinary words people choose.
+    expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
     expect(store.setWorktreeMeta).toHaveBeenCalledWith(
       'repo-1::C:/workspaces/improve-dashboard',
       expect.objectContaining({
@@ -315,6 +336,57 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
         branch: 'refs/heads/improve-dashboard'
       })
     })
+  })
+
+  it('skips a retired generated name when the physical leaf is decorated', async () => {
+    store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: ['nautilus'] })
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\repo-nautilus-2')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\repo-nautilus-2')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/repo-nautilus-2',
+        head: 'abc123',
+        branch: 'refs/heads/nautilus-2',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'nautilus',
+      nameWasGenerated: true
+    })
+
+    expect(store.addRetiredWorktreeName).toHaveBeenCalledWith('repo-1', 'nautilus-2')
+  })
+
+  it('leaves a user-typed name reusable even when the same name is retired', async () => {
+    // Why: the creature pool contains ordinary words ("orca", "runner", "molly"). Silently
+    // renaming a deliberate `nautilus` to `nautilus-2` — and burning it — is the wrong trade.
+    store.getRetiredWorktreeNameRegistry.mockReturnValue({ exhaustedTiers: 0, names: ['nautilus'] })
+    computeWorktreePathMock.mockReturnValue('C:\\workspaces\\nautilus')
+    ensurePathWithinWorkspaceMock.mockReturnValue('C:\\workspaces\\nautilus')
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: 'C:/workspaces/nautilus',
+        head: 'abc123',
+        branch: 'refs/heads/nautilus',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, { repoId: 'repo-1', name: 'nautilus' })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      'C:\\repo',
+      'C:\\workspaces\\nautilus',
+      'nautilus',
+      'origin/main',
+      false
+    )
+    expect(store.addRetiredWorktreeName).not.toHaveBeenCalled()
   })
 
   it('resolves the Git username when the configured prefix consumes it', async () => {
@@ -432,6 +504,14 @@ describe('registerWorktreeHandlers – Windows path handling', () => {
           }
         : undefined
     )
+    store.getAllWorktreeMeta.mockReturnValue({
+      'repo-1::C:/workspaces/improve-dashboard': {
+        lastActivityAt: 123,
+        displayName: 'Improve Dashboard',
+        linkedIssue: 123,
+        linkedPR: 456
+      }
+    })
 
     await handlers['worktrees:create'](null, {
       repoId: 'repo-1',

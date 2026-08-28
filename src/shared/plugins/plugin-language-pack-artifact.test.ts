@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isPluginLanguagePackRegistration,
   parsePluginLanguagePackArtifact,
   PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH,
+  PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES,
+  validatePluginLanguagePackCatalog,
+  validatePluginLanguagePackCatalogShape,
   pluginLanguageResourceId
 } from './plugin-language-pack-artifact'
 
@@ -162,5 +166,49 @@ describe('plugin language-pack artifacts', () => {
       ok: false,
       error: expect.stringContaining('depth')
     })
+  })
+
+  it('accepts the entry limit and rejects one additional entry', () => {
+    const catalog = Object.fromEntries(
+      Array.from({ length: PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES }, (_, index) => [
+        `key${index}`,
+        'value'
+      ])
+    )
+
+    expect(validatePluginLanguagePackCatalog(catalog)).toMatchObject({
+      ok: true,
+      entries: PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES
+    })
+    catalog.overflow = 'value'
+    expect(validatePluginLanguagePackCatalog(catalog)).toMatchObject({
+      ok: false,
+      error: expect.stringContaining(`${PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES} entries`)
+    })
+  })
+
+  it('shape-validates 16 maximum-entry registrations without returning catalog copies', () => {
+    const catalog = Object.fromEntries(
+      Array.from({ length: PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES }, (_, index) => [
+        `key${index}`,
+        'value'
+      ])
+    )
+    const packs = Array.from({ length: 16 }, (_, index) => {
+      const id = `plugin:maximum-${index}` as const
+      return {
+        id,
+        resourceLanguage: pluginLanguageResourceId(id),
+        pluginKey: `maximum-${index}`,
+        locale: 'en',
+        catalog
+      }
+    })
+
+    expect(validatePluginLanguagePackCatalogShape(catalog)).toEqual({
+      ok: true,
+      entries: PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES
+    })
+    expect(packs.filter(isPluginLanguagePackRegistration)).toHaveLength(16)
   })
 })

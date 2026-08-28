@@ -2,7 +2,7 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreflightStatus } from '../../../preload/api-types'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 import { useAppStore } from '../store'
 import { useLandingPreflightRuntime } from './landing-preflight-runtime'
 

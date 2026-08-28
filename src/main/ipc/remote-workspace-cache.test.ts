@@ -4,12 +4,14 @@ import type {
   RemoteWorkspaceSnapshot
 } from '../../shared/remote-workspace-types'
 import {
-  REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES,
   _getRemoteWorkspaceCacheSizesForTests,
-  _getRemoteWorkspaceSnapshotForTests,
-  _rememberRemoteWorkspaceSnapshotForTests,
   _resetRemoteWorkspaceCachesForTests
 } from './remote-workspace'
+import {
+  REMOTE_WORKSPACE_SNAPSHOT_CACHE_MAX_ENTRIES,
+  _getRemoteWorkspaceSnapshotForTests,
+  _rememberRemoteWorkspaceSnapshotForTests
+} from './remote-workspace-snapshot-cache'
 
 function emptyRemoteWorkspaceSession(): RemoteWorkspaceSession {
   return {
