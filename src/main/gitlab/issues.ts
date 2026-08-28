@@ -3,13 +3,15 @@ import type { GitLabCommentResult, GitLabIssueInfo, MRComment } from '../../shar
 import type { IssueSourcePreference } from '../../shared/repo-types'
 import { mapGitLabIssueInfo } from './mappers'
 // prettier-ignore
-import { glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListFetchError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, parseGlabJsonList, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
+import { glabApiWithHeaders, glabExecFileAsync, acquire, release, getIssueProjectRef, resolveIssueSource, classifyGlabError, classifyListFetchError, getGlabKnownHosts, glabRepoExecOptions, glabHostnameArgs, parseGlabJsonList, parseGlabPaginationHeader, type LocalGitExecOptions, type ProjectRef } from './gl-utils'
 import { encodedProject } from './project-path-encoding'
 
 // Why: parallel to GitHub's IssueListResult — distinguishes a successful-
 // empty listing from a failed fetch.
 export type IssueListResult = {
   items: GitLabIssueInfo[]
+  /** 0 when the listing failed — the caller keeps its current pager instead of collapsing it. */
+  totalPages: number
   error?: ClassifiedError
 }
 
@@ -74,8 +76,11 @@ export async function listIssues(
   state: IssueListState = 'opened',
   assignee?: string,
   connectionId?: string | null,
-  localGitOptions: LocalGitExecOptions = {}
+  localGitOptions: LocalGitExecOptions = {},
+  page = 1
 ): Promise<IssueListResult> {
+  const currentPage = Number.isFinite(page) ? Math.max(1, Math.trunc(page)) : 1
+  const perPage = Number.isFinite(limit) ? Math.max(1, Math.trunc(limit)) : 20
   const knownHosts = await getGlabKnownHosts(connectionId, localGitOptions)
   const { source: projectRef } = await resolveIssueSource(
     repoPath,
@@ -94,6 +99,7 @@ export async function listIssues(
   if (!projectRef) {
     return {
       items: [],
+      totalPages: 0,
       error: {
         type: 'not_found',
         message: 'Could not resolve a GitLab project for this repository.'
@@ -104,24 +110,33 @@ export async function listIssues(
   try {
     const stateParam = state === 'all' ? '' : `&state=${state}`
     const scopeParam = assignee === '@me' ? '&scope=assigned_to_me' : ''
-    const { stdout } = await glabExecFileAsync(
+    const { body, headers } = await glabApiWithHeaders(
       [
-        'api',
         ...glabHostnameArgs(projectRef, connectionId),
-        `projects/${encodedProject(projectRef.path)}/issues?per_page=${limit}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
+        `projects/${encodedProject(projectRef.path)}/issues?page=${currentPage}&per_page=${perPage}&order_by=updated_at&sort=desc${stateParam}${scopeParam}`
       ],
       glabRepoExecOptions(repoPath, connectionId, localGitOptions)
     )
-    const data = parseGlabJsonList<Record<string, unknown>>(stdout)
+    const data = parseGlabJsonList<Record<string, unknown>>(body)
+    const headerTotalCount = parseGlabPaginationHeader(headers['x-total'], 0)
+    // Why: a proxy can strip both headers, so a full page advertises one more to probe (#13357);
+    // TaskPage retreats if that probe comes back empty.
+    const probedTotalPages = data.length < perPage ? currentPage : currentPage + 1
     // Why: GitLab's project issues endpoint returns true issues only
     // (MRs are a separate endpoint), so no equivalent of GitHub's
     // pull_request filter is needed here.
     return {
-      items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0]))
+      items: data.map((d) => mapGitLabIssueInfo(d as Parameters<typeof mapGitLabIssueInfo>[0])),
+      totalPages:
+        parseGlabPaginationHeader(headers['x-total-pages'], 1) ??
+        (headerTotalCount === undefined
+          ? probedTotalPages
+          : Math.max(1, Math.ceil(headerTotalCount / perPage)))
     }
   } catch (err) {
     return {
       items: [],
+      totalPages: 0,
       error: classifyListFetchError(err)
     }
   } finally {

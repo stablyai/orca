@@ -349,6 +349,12 @@ export default function TaskPage(): React.JSX.Element {
     setGitlabDialogItem,
     gitlabView,
     setGitlabView,
+    gitlabIssuePage,
+    setGitlabIssuePage,
+    gitlabIssueTotalPages,
+    setGitlabIssueTotalPages,
+    gitlabIssueLoadingTargetPage,
+    setGitlabIssueLoadingTargetPage,
     gitlabTodos,
     setGitlabTodos,
     gitlabTodosLoading,
@@ -356,7 +362,7 @@ export default function TaskPage(): React.JSX.Element {
     gitlabEmptyState,
     activeGitlabFilter,
     displayedGitLabItems
-  } = useTaskPageGitLabListState({ selectedRepos })
+  } = useTaskPageGitLabListState({ taskSource, selectedRepos, selectedReposKey })
   const {
     taskSearchInput,
     setTaskSearchInput,
@@ -1083,9 +1089,13 @@ export default function TaskPage(): React.JSX.Element {
     selectedRepos,
     selectedReposKey,
     primaryRepo,
+    gitlabIssuePage,
     setGitlabItems,
     setGitlabLoading,
     setGitlabError,
+    setGitlabIssuePage,
+    setGitlabIssueTotalPages,
+    setGitlabIssueLoadingTargetPage,
     setGitlabTodos,
     setGitlabTodosLoading
   })
@@ -2791,7 +2801,18 @@ export default function TaskPage(): React.JSX.Element {
     displayedGitLabItems,
     gitlabEmptyState,
     openGitLabDetailPage,
-    handleUseGitLabItem
+    handleUseGitLabItem,
+    showGitlabIssuePagination: gitlabView === 'issues' && gitlabIssueTotalPages > 1,
+    gitlabIssuePage,
+    gitlabIssueTotalPages,
+    gitlabIssueLoadingTargetPage,
+    onGitlabIssuePageChange: (page: number) => {
+      if (page === gitlabIssuePage) {
+        return
+      }
+      setGitlabIssueLoadingTargetPage(page)
+      setGitlabIssuePage(page)
+    }
   }
   const jiraList: JiraIssueListHostProps = {
     jiraStatusReady,

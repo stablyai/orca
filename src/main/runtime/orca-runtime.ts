@@ -23078,13 +23078,16 @@ export class OrcaRuntimeService {
     repoSelector: string,
     state?: GitLabIssueListState,
     assignee?: string,
-    limit?: number
+    limit?: number,
+    page?: number
   ): Promise<{
     items: GitLabWorkItem[]
+    totalPages: number
     error?: Awaited<ReturnType<typeof listGitLabIssues>>['error']
   }> {
     const repo = await this.resolveRepoSelector(repoSelector)
-    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit })
+    const normalized = normalizeGitLabIssueListArgs({ state, assignee, limit, page })
+    // Why: page is after localGitOptions; never spread optional args before it (#13538).
     const result = await listGitLabIssues(
       repo.path,
       normalized.limit,
@@ -23092,7 +23095,8 @@ export class OrcaRuntimeService {
       normalized.state,
       normalized.assignee,
       repo.connectionId ?? null,
-      ...this.getLocalGitExecutionOptionArgs(repo)
+      this.getLocalGitExecutionOptionArgs(repo)[0] ?? {},
+      normalized.page
     )
     // Why: web runtime mirrors the desktop preload contract, where GitLab
     // issue rows share the GitLabWorkItem shape with MRs on TaskPage.
@@ -23108,7 +23112,11 @@ export class OrcaRuntimeService {
       author: issue.author ?? null,
       repoId: repo.id
     }))
-    return { items, ...(result.error ? { error: result.error } : {}) }
+    return {
+      items,
+      totalPages: result.totalPages,
+      ...(result.error ? { error: result.error } : {})
+    }
   }
 
   async listGitLabRepoTodos(

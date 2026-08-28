@@ -64,7 +64,8 @@ describe('gitlab RPC methods', () => {
         repo: 'id:repo-1',
         state: 'opened',
         assignee: '@me',
-        limit: 50
+        limit: 50,
+        page: 2
       })
     )
     await dispatcher.dispatch(
@@ -202,7 +203,7 @@ describe('gitlab RPC methods', () => {
       25,
       'bug'
     )
-    expect(runtime.listGitLabRepoIssues).toHaveBeenCalledWith('id:repo-1', 'opened', '@me', 50)
+    expect(runtime.listGitLabRepoIssues).toHaveBeenCalledWith('id:repo-1', 'opened', '@me', 50, 2)
     expect(runtime.createGitLabRepoIssue).toHaveBeenCalledWith('id:repo-1', 'Fix bug', 'Details')
     expect(runtime.listGitLabRepoTodos).toHaveBeenCalledWith('id:repo-1')
     expect(runtime.listGitLabRepoLabels).toHaveBeenCalledWith('id:repo-1')
@@ -309,9 +310,17 @@ describe('gitlab RPC methods', () => {
       'id:repo-1',
       'closed',
       undefined,
-      100
+      100,
+      1
     )
-    expect(runtime.listGitLabRepoIssues).toHaveBeenNthCalledWith(2, 'id:repo-1', 'opened', '@me', 1)
+    expect(runtime.listGitLabRepoIssues).toHaveBeenNthCalledWith(
+      2,
+      'id:repo-1',
+      'opened',
+      '@me',
+      1,
+      1
+    )
   })
 
   // Regression for #7732: the WS/relay transports close the connection on frames
