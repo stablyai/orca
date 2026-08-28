@@ -6,7 +6,11 @@ import type {
   CreateWorktreeResult
 } from '../shared/worktree/create-types'
 import type { WorktreeMeta } from '../shared/worktree/meta-types'
-import type { AutomationWorkspaceProvenance } from '../shared/worktree/types'
+import type {
+  AutomationWorkspaceProvenance,
+  CliWorkspaceProvenance,
+  Worktree
+} from '../shared/worktree/types'
 import { isRuntimeOwnedSshTargetId, toSshExecutionHostId } from '../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import {
@@ -25,13 +29,15 @@ import {
 import { attachEphemeralVmRuntimeToWorkspace } from './ephemeral-vm-runtime-attachment'
 import { getWorktreeCreationLayout, mergeWorktree } from './ipc/worktree-logic'
 
-type AdoptionArgs = AdoptProvisionedRootArgs & {
+export type ProvisionedRootAdoptionRequest = AdoptProvisionedRootArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
+  cliProvenance?: CliWorkspaceProvenance
+  creatorProvenance?: Worktree['creatorProvenance']
 }
 
 export async function adoptProvisionedRootSshCheckout(args: {
   userDataPath: string
-  request: AdoptionArgs
+  request: ProvisionedRootAdoptionRequest
   repo: Repo
   store: Store
   isRepoCurrent: () => boolean
@@ -154,7 +160,7 @@ function pathsEqual(left: string, right: string): boolean {
 function buildProvisionedRootMeta(
   store: Store,
   repo: Repo,
-  args: AdoptionArgs,
+  args: ProvisionedRootAdoptionRequest,
   now: number
 ): Partial<WorktreeMeta> {
   return {
@@ -169,9 +175,10 @@ function buildProvisionedRootMeta(
     createdAt: now,
     orcaCreatedAt: now,
     orcaCreationSource: 'ssh',
-    creatorProvenance: { kind: 'host' },
+    creatorProvenance: args.creatorProvenance ?? { kind: 'host' },
     orcaCreationWorkspaceLayout: getWorktreeCreationLayout(repo, store.getSettings()),
     ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+    ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
     ...(args.compareBaseRef || args.baseBranch
       ? { baseRef: args.compareBaseRef ?? args.baseBranch }
       : {}),

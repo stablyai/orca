@@ -38,7 +38,7 @@ function buildProjectHostSetupResult(store: Store, repo: Repo): ProjectHostSetup
   return { project, setup, repo }
 }
 
-function alignRepoWithRequestedProject(
+export function alignRepoWithRequestedProject(
   store: Store,
   repo: Repo,
   projectId: string,

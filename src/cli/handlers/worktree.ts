@@ -198,6 +198,13 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   'worktree create': async ({ flags, client, cwd, json }) => {
     assertCreateParentFlagsCompatible(flags)
     assertWorkspaceTargetFlagsCompatible(flags)
+    const recipeId = getOptionalStringFlag(flags, 'recipe')
+    if (recipeId && (flags.has('host') || flags.has('project-host-setup'))) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--recipe provisions its own environment; it cannot combine with --host or --project-host-setup.'
+      )
+    }
     const callerTerminalHandle =
       typeof process.env.ORCA_TERMINAL_HANDLE === 'string' &&
       process.env.ORCA_TERMINAL_HANDLE.length > 0
@@ -249,6 +256,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...(cwdParentWorktree ? { cwdParentWorktree } : {}),
       noParent,
       callerTerminalHandle,
+      ...(recipeId ? { recipeId } : {}),
       // Why: marks the workspace as CLI-created so the sidebar can badge and
       // filter it. Sent on every `worktree create` — hand-typed or agent-run.
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},

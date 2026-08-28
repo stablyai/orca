@@ -547,6 +547,10 @@ import {
   getProjectHostSetupForRepo,
   getProjectHostSetupWorktreeMeta
 } from '../../shared/project-host-setup-lookup'
+import type {
+  ProvisionedRootRecipeWorkspaceArgs,
+  ProvisionedRootRecipeWorkspaceCreation
+} from '../ephemeral-vm-recipe-workspace-create'
 import { parsePtySessionId } from '../../shared/pty-session-id-format'
 import { clampLinearIssueListLimit } from '../../shared/linear/issue-read-limits'
 import { isFolderRepo } from '../../shared/repo-kind'
@@ -3145,6 +3149,14 @@ export class OrcaRuntimeService {
   private managedHookReconciliationGeneration = 0
   private managedHookReconciliationTail: Promise<void> = Promise.resolve()
   private readonly orchestrationEnvironmentTransport: OrchestrationEnvironmentTransport | null
+  private readonly createProvisionedRootRecipeWorkspaceFn:
+    | ((
+        args: ProvisionedRootRecipeWorkspaceArgs
+      ) => Promise<ProvisionedRootRecipeWorkspaceCreation>)
+    | null
+  private readonly cleanupRecipeRuntimesForWorkspaceFn:
+    | ((workspaceId: string) => Promise<void>)
+    | null
   private readonly orchestrationFederationTimers = new Map<string, ReturnType<typeof setInterval>>()
   private orchestrationTerminalHistoryRecoveryTimer: ReturnType<typeof setTimeout> | null = null
   private orchestrationTerminalHistoryRecoveryInFlight: Promise<void> | null = null
@@ -3884,6 +3896,12 @@ export class OrcaRuntimeService {
       agentSessionClaimSigner?: AgentSessionClaimSigner
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
       skillTransactionRecovery?: Promise<unknown>
+      // Why: recipe provisioning needs the full persistence Store and plugin registry, which only
+      // the app entry owns; a headless runtime without this wiring reports recipes unsupported.
+      createProvisionedRootRecipeWorkspace?: (
+        args: ProvisionedRootRecipeWorkspaceArgs
+      ) => Promise<ProvisionedRootRecipeWorkspaceCreation>
+      cleanupRecipeRuntimesForWorkspace?: (workspaceId: string) => Promise<void>
     }
   ) {
     this.store = store
@@ -3896,6 +3914,8 @@ export class OrcaRuntimeService {
       this.store?.setMobileClientTabSelections?.(state)
     })
     this.orchestrationEnvironmentTransport = deps?.orchestrationEnvironmentTransport ?? null
+    this.createProvisionedRootRecipeWorkspaceFn = deps?.createProvisionedRootRecipeWorkspace ?? null
+    this.cleanupRecipeRuntimesForWorkspaceFn = deps?.cleanupRecipeRuntimesForWorkspace ?? null
     this.skillTransactionRecovery = (deps?.skillTransactionRecovery ?? Promise.resolve()).catch(
       (error) => {
         console.warn('[skills] startup transaction recovery failed:', error)
@@ -25255,8 +25275,8 @@ export class OrcaRuntimeService {
         ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
         ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
         creatorProvenance: args.creatorProvenance ?? { kind: 'host' },
-        ...(args.linkedIssue !== undefined ? { linkedIssue: args.linkedIssue } : {}),
-        ...(args.linkedPR !== undefined ? { linkedPR: args.linkedPR } : {}),
+        ...(typeof args.linkedIssue === 'number' ? { linkedIssue: args.linkedIssue } : {}),
+        ...(typeof args.linkedPR === 'number' ? { linkedPR: args.linkedPR } : {}),
         ...(args.linkedLinearIssue !== undefined
           ? { linkedLinearIssue: args.linkedLinearIssue }
           : {}),
@@ -25266,10 +25286,12 @@ export class OrcaRuntimeService {
         ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
           ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
           : {}),
-        ...(args.linkedGitLabIssue !== undefined
+        ...(typeof args.linkedGitLabIssue === 'number'
           ? { linkedGitLabIssue: args.linkedGitLabIssue }
           : {}),
-        ...(args.linkedGitLabMR !== undefined ? { linkedGitLabMR: args.linkedGitLabMR } : {}),
+        ...(typeof args.linkedGitLabMR === 'number'
+          ? { linkedGitLabMR: args.linkedGitLabMR }
+          : {}),
         ...(args.linkedBitbucketPR !== undefined
           ? { linkedBitbucketPR: args.linkedBitbucketPR }
           : {}),
@@ -29504,6 +29526,174 @@ export class OrcaRuntimeService {
     return {
       executionHostId: LOCAL_EXECUTION_HOST_ID,
       hostPlatform: pty.isWsl || pty.wslDistro ? 'linux' : process.platform
+    }
+  }
+
+  async createManagedWorktreeOnRecipe(
+    args: Parameters<OrcaRuntimeService['createManagedWorktree']>[0] & { recipeId: string }
+  ): Promise<CreateWorktreeResult> {
+    const createRecipeWorkspace = this.createProvisionedRootRecipeWorkspaceFn
+    if (!createRecipeWorkspace) {
+      throw new Error('Environment recipes are not supported by this Orca runtime.')
+    }
+    if (!this.store) {
+      throw new Error('runtime_unavailable')
+    }
+    if (args.sparseCheckout) {
+      throw new Error('Provisioned-root recipes do not support sparse checkout.')
+    }
+    const repo = await this.resolveRepoSelector(args.repoSelector)
+    if (isFolderRepo(repo)) {
+      throw new Error('Environment recipes require a git repository.')
+    }
+    if (repo.connectionId) {
+      throw new Error('Environment recipes run from a local repository checkout.')
+    }
+    const settings = this.store.getSettings()
+    if (args.startupAgent && !isTuiAgentEnabled(args.startupAgent, settings.disabledTuiAgents)) {
+      throw new Error('Selected agent is disabled. Choose an enabled agent before creating.')
+    }
+    const sanitizedName = sanitizeWorktreeName(args.name)
+    const username =
+      !args.branchNameOverride && settings.branchPrefix === 'git-username'
+        ? await resolveLocalGitUsername(repo.path)
+        : ''
+    const branchName = await resolveCreateBranchName(
+      repo.path,
+      args.branchNameOverride,
+      sanitizedName,
+      settings,
+      username
+    )
+    const setupForRepo = getProjectHostSetupForRepo(this.listProjectHostSetups(), repo)
+    const project = this.listProjects().find((entry) => entry.id === setupForRepo.projectId)
+    const lineageInput =
+      args.lineage || args.comment ? { ...args.lineage, comment: args.comment } : undefined
+    const lineageResolution = await this.resolveLineageForWorktreeCreate(lineageInput)
+
+    const creation = await createRecipeWorkspace({
+      repo,
+      recipeId: args.recipeId,
+      projectId: setupForRepo.projectId,
+      ...(project?.providerIdentity ? { projectProviderIdentity: project.providerIdentity } : {}),
+      branchName,
+      ...(args.baseBranch ? { baseBranch: args.baseBranch } : {}),
+      request: {
+        name: sanitizedName,
+        displayName: args.displayName ?? args.name,
+        ...(args.compareBaseRef ? { compareBaseRef: args.compareBaseRef } : {}),
+        ...(typeof args.linkedIssue === 'number' ? { linkedIssue: args.linkedIssue } : {}),
+        ...(typeof args.linkedPR === 'number' ? { linkedPR: args.linkedPR } : {}),
+        ...(args.linkedLinearIssue !== undefined
+          ? { linkedLinearIssue: args.linkedLinearIssue }
+          : {}),
+        ...(args.linkedLinearIssueWorkspaceId !== undefined
+          ? { linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId }
+          : {}),
+        ...(args.linkedLinearIssueOrganizationUrlKey !== undefined
+          ? { linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey }
+          : {}),
+        ...(typeof args.linkedGitLabIssue === 'number'
+          ? { linkedGitLabIssue: args.linkedGitLabIssue }
+          : {}),
+        ...(typeof args.linkedGitLabMR === 'number'
+          ? { linkedGitLabMR: args.linkedGitLabMR }
+          : {}),
+        ...(args.linkedBitbucketPR !== undefined
+          ? { linkedBitbucketPR: args.linkedBitbucketPR }
+          : {}),
+        ...(args.linkedAzureDevOpsPR !== undefined
+          ? { linkedAzureDevOpsPR: args.linkedAzureDevOpsPR }
+          : {}),
+        ...(args.linkedGiteaPR !== undefined ? { linkedGiteaPR: args.linkedGiteaPR } : {}),
+        ...(args.linkedWorkItem !== undefined ? { linkedWorkItem: args.linkedWorkItem } : {}),
+        ...(args.linkedTaskSourceContext !== undefined
+          ? { linkedTaskSourceContext: args.linkedTaskSourceContext }
+          : {}),
+        ...(args.pushTarget ? { pushTarget: args.pushTarget } : {}),
+        ...(args.workspaceStatus ? { workspaceStatus: args.workspaceStatus } : {}),
+        ...(args.manualOrder !== undefined ? { manualOrder: args.manualOrder } : {}),
+        ...(args.telemetrySource ? { telemetrySource: args.telemetrySource } : {}),
+        ...(args.createdWithAgent ?? args.startupAgent
+          ? { createdWithAgent: args.createdWithAgent ?? args.startupAgent }
+          : {}),
+        ...(args.automationProvenance ? { automationProvenance: args.automationProvenance } : {}),
+        ...(args.cliProvenance ? { cliProvenance: args.cliProvenance } : {}),
+        ...(args.creatorProvenance ? { creatorProvenance: args.creatorProvenance } : {})
+      }
+    })
+
+    const worktree = creation.result.worktree
+    const recordedLineage = this.recordCreatedWorktreeLineage(worktree, lineageResolution)
+    this.invalidateResolvedWorktreeCache()
+    this.notifyWorktreesChanged(worktree.repoId)
+    this.emitWorktreeLifecycle({
+      kind: 'created',
+      worktreeId: worktree.id,
+      path: worktree.path,
+      branch: worktree.branch
+    })
+
+    let warning: string | undefined = creation.warnings.length
+      ? creation.warnings.map((entry) => entry.message).join(' ')
+      : undefined
+    let startupTerminal: CreateWorktreeResult['startupTerminal']
+    if (args.startupAgent) {
+      try {
+        const terminal = await this.launchAgentTerminal(`id:${worktree.id}`, {
+          agent: args.startupAgent,
+          prompt: args.startupPrompt ?? ''
+        })
+        startupTerminal = {
+          spawned: true,
+          handle: terminal.handle,
+          ...(terminal.tabId ? { tabId: terminal.tabId } : {}),
+          ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {}),
+          ...(terminal.ptyId ? { ptyId: terminal.ptyId } : {}),
+          surface: 'background'
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err)
+        const startupWarning = `Failed to create the startup terminal for ${worktree.path}: ${message}`
+        warning = warning ? `${warning} ${startupWarning}` : startupWarning
+        console.warn(`[worktree-create] ${startupWarning}`)
+      }
+    }
+    if (args.activate === true || args.runHooks === true) {
+      this.notifyActivateWorktree(worktree.repoId, worktree.id, {
+        navigationTarget: args.navigation
+      })
+    }
+    return {
+      ...creation.result,
+      worktree: {
+        ...worktree,
+        parentWorktreeId: recordedLineage.lineage?.parentWorktreeId ?? null,
+        childWorktreeIds: worktree.childWorktreeIds ?? [],
+        lineage: recordedLineage.lineage,
+        workspaceLineage: recordedLineage.workspaceLineage
+      },
+      ...(lineageInput
+        ? {
+            lineage: recordedLineage.lineage,
+            workspaceLineage: recordedLineage.workspaceLineage
+          }
+        : {}),
+      ...(recordedLineage.warnings.length ? { warnings: recordedLineage.warnings } : {}),
+      ...(startupTerminal ? { startupTerminal } : {}),
+      ...(warning ? { warning } : {})
+    }
+  }
+
+  async cleanupRecipeRuntimesForRemovedWorkspace(workspaceId: string): Promise<void> {
+    if (!this.cleanupRecipeRuntimesForWorkspaceFn) {
+      return
+    }
+    try {
+      await this.cleanupRecipeRuntimesForWorkspaceFn(workspaceId)
+    } catch (error) {
+      // The workspace removal already succeeded; a failed destroy stays retryable from settings.
+      console.warn('[worktree-rm] recipe environment cleanup failed:', error)
     }
   }
 
