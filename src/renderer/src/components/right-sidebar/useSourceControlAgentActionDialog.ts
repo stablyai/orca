@@ -66,6 +66,14 @@ export function useSourceControlAgentActionDialog({
       (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
   )
   const [isArgsDirty, setIsArgsDirty] = useState(false)
+  const isArgsDirtyRef = useRef(false)
+  const isAgentDirtyRef = useRef(false)
+
+  const setArgsDirty = (dirty: boolean): void => {
+    setIsArgsDirty(dirty)
+    isArgsDirtyRef.current = dirty
+  }
+
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
   const [detecting, setDetecting] = useState(false)
   const openCycleRef = useRef(0)
@@ -116,12 +124,16 @@ export function useSourceControlAgentActionDialog({
       savedAgentArgs ??
         (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
     )
-    setIsArgsDirty(false)
+    setArgsDirty(false)
+    isAgentDirtyRef.current = false
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
     void refreshDetectedAgents().then((nextAgents) => {
       if (stale || openCycleRef.current !== cycle) {
+        return
+      }
+      if (isAgentDirtyRef.current || isArgsDirtyRef.current) {
         return
       }
       const fallbackAgent = pickSourceControlLaunchAgent({
@@ -284,7 +296,8 @@ export function useSourceControlAgentActionDialog({
   const handleSelectedAgentChange = useCallback(
     (nextAgent: TuiAgent | null) => {
       setSelectedAgent(nextAgent)
-      setIsArgsDirty(false)
+      isAgentDirtyRef.current = true
+      setArgsDirty(false)
       if (savedAgentArgs === null || savedAgentArgs === undefined) {
         if (nextAgent) {
           setAgentArgs(resolveTuiAgentLaunchArgs(nextAgent, settings?.agentDefaultArgs))
@@ -301,7 +314,7 @@ export function useSourceControlAgentActionDialog({
   )
   const handleAgentArgsChange = useCallback((nextArgs: string) => {
     setAgentArgs(nextArgs)
-    setIsArgsDirty(true)
+    setArgsDirty(true)
   }, [])
   const onAgentArgsChange = useMemo(
     () => resetPlanAfter(handleAgentArgsChange),

@@ -22,8 +22,14 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn()
 }))
 vi.mock('@/components/agent/AgentCombobox', () => ({
-  default: ({ value }: { value: string | null }) =>
-    React.createElement('div', { 'data-agent-value': value ?? '' })
+  default: ({ value, onValueChange }: { value: string | null; onValueChange?: (val: string | null) => void }) =>
+    React.createElement('input', {
+      'data-testid': 'agent-combobox',
+      'data-agent-value': value ?? '',
+      value: value ?? '',
+      onChange: onValueChange ? (e) => onValueChange(e.target.value || null) : undefined,
+      readOnly: !onValueChange
+    })
 }))
 vi.mock('@/components/ui/dialog', () => ({
   Dialog: ({ open, children }: { open: boolean; children?: ReactNode }) =>
@@ -456,5 +462,42 @@ describe('SourceControlAgentActionDialog', () => {
 
     // It must update to the new default
     expect(input.value).toBe('--new-default')
+  })
+
+  it('does not overwrite user manual selection or arguments if changed during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    
+    const agentCombobox = container.querySelector('[data-testid="agent-combobox"]') as HTMLInputElement
+    expect(agentCombobox).not.toBeNull()
+    expect(agentCombobox.value).toBe('gemini')
+
+    // Simulate user manually selecting a different agent ('codex')
+    act(() => {
+      fireEvent.change(agentCombobox, { target: { value: 'codex' } })
+    })
+    expect(agentCombobox.value).toBe('codex')
+
+    // Resolve deferred detection
+    act(() => {
+      resolveDetection(['gemini', 'codex'])
+    })
+    await flushEffects()
+
+    // It must remain 'codex' (user choice preserved!)
+    expect(agentCombobox.value).toBe('codex')
   })
 })
