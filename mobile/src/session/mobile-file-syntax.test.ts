@@ -20,6 +20,34 @@ describe('mobile file syntax highlighting', () => {
     expect(resolveMobileSyntaxLanguage('Dockerfile')).toBe('plaintext')
   })
 
+  it('resolves HDL files onto registered grammars instead of plaintext', () => {
+    expect(detectMobileFileLanguage('rtl/counter.vhd')).toBe('vhdl')
+    expect(detectMobileFileLanguage('gate/top.vho')).toBe('vhdl')
+    expect(detectMobileFileLanguage('C:\\rtl\\TOP.VHDL')).toBe('vhdl')
+    expect(detectMobileFileLanguage('rtl/cpu.sv')).toBe('systemverilog')
+    expect(detectMobileFileLanguage('rtl/alu.v')).toBe('verilog')
+
+    expect(resolveMobileSyntaxLanguage('rtl/counter.vhd')).toBe('vhdl')
+    // highlight.js has no SystemVerilog grammar of its own.
+    expect(resolveMobileSyntaxLanguage('rtl/cpu.sv')).toBe('verilog')
+    expect(resolveMobileSyntaxLanguage('rtl/alu.v')).toBe('verilog')
+  })
+
+  it('emits semantic syntax segments for VHDL and SystemVerilog', () => {
+    const vhdl = highlightMobileCode("q <= x\"FF\" when clk'event else '0';", 'vhdl')
+
+    expect(vhdl.highlighted).toBe(true)
+    expect(vhdl.segments).toContainEqual({ text: 'when', kind: 'keyword' })
+
+    const systemVerilog = highlightMobileCode(
+      'always_ff @(posedge clk) q <= d;',
+      resolveMobileSyntaxLanguage('rtl/cpu.sv')
+    )
+
+    expect(systemVerilog.highlighted).toBe(true)
+    expect(systemVerilog.segments).toContainEqual({ text: 'always_ff', kind: 'keyword' })
+  })
+
   it('emits semantic syntax segments for highlighted code', () => {
     const result = highlightMobileCode('const label: string = "Orca"', 'typescript')
 

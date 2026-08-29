@@ -1,3 +1,5 @@
+import verilog from 'highlight.js/lib/languages/verilog'
+import vhdl from 'highlight.js/lib/languages/vhdl'
 import { common, createLowlight } from 'lowlight'
 import { detectMobileFileLanguage } from './mobile-file-language'
 
@@ -32,6 +34,9 @@ type LowlightNode = {
 }
 
 const lowlight = createLowlight(common)
+// lowlight's `common` set stops at web languages, so HDL sources — which people
+// do review from a phone — arrived here flat. Two grammars, ~20 KB.
+lowlight.register({ verilog, vhdl })
 const MAX_FILE_HIGHLIGHT_CHARS = 48_000
 const MAX_FILE_HIGHLIGHT_SEGMENTS = 3_000
 const MAX_DIFF_HIGHLIGHT_CHARS = 24_000
@@ -48,7 +53,9 @@ const LANGUAGE_ALIASES: Record<string, string> = {
   shell: 'bash',
   zsh: 'bash',
   fish: 'bash',
-  yml: 'yaml'
+  yml: 'yaml',
+  // highlight.js has no separate SystemVerilog grammar; `verilog` covers both.
+  systemverilog: 'verilog'
 }
 
 export function resolveMobileSyntaxLanguage(filePath: string, preferredLanguage?: string): string {
