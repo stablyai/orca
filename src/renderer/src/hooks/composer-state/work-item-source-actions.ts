@@ -8,6 +8,7 @@ type WorkItemSourceActionsInput = Pick<
   | 'repoId'
   | 'reuseEligibleBranch'
   | 'setBaseBranch'
+  | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
@@ -35,6 +36,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
     repoId,
     reuseEligibleBranch,
     setBaseBranch,
+    setBaseBranchNamesWorkspace,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
@@ -59,6 +61,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
         worktreeBranches: getComposerRepoWorktreeBranches(worktreesByRepo[repoId] ?? [], repoId)
       })
       setBaseBranch(selection.baseBranch)
+      setBaseBranchNamesWorkspace(true)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setStartFromResetHint(null)
@@ -86,6 +89,7 @@ export function useWorkItemSourceActions(input: WorkItemSourceActionsInput) {
       branchAutoNameRef,
       lastAutoNameRef,
       setBaseBranch,
+      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,
