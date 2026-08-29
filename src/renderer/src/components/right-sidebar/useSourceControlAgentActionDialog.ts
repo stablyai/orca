@@ -22,14 +22,7 @@ import { useSourceControlAgentActionStart } from './useSourceControlAgentActionS
 
 const DEFAULT_SAVE_TARGET_VALUE = 'global'
 
-/**
- * Custom hook that manages the state and launch arguments for the Source Control Agent Action Dialog.
- * It resolves initial and fallback agents, handles custom agent launch arguments (defaulting to YOLO mode
- * for Gemini when no custom arguments are set), and coordinates starting the agent action.
- *
- * @param props - Configuration properties for the dialog.
- * @returns The structured dialog state and event handlers.
- */
+// Custom hook managing state and launch arguments for the Source Control Agent Action Dialog.
 export function useSourceControlAgentActionDialog({
   open,
   onOpenChange,
@@ -72,6 +65,7 @@ export function useSourceControlAgentActionDialog({
     savedAgentArgs ??
       (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
   )
+  const [isArgsDirty, setIsArgsDirty] = useState(false)
   const [detectedAgents, setDetectedAgents] = useState<TuiAgent[]>([])
   const [detecting, setDetecting] = useState(false)
   const openCycleRef = useRef(0)
@@ -122,6 +116,7 @@ export function useSourceControlAgentActionDialog({
       savedAgentArgs ??
         (savedAgentId ? resolveTuiAgentLaunchArgs(savedAgentId, settings?.agentDefaultArgs) : '')
     )
+    setIsArgsDirty(false)
     setSaveLaunchRecipe(true)
     setSaveTargetValue(defaultSaveTargetValue)
     let stale = false
@@ -156,6 +151,7 @@ export function useSourceControlAgentActionDialog({
 
   useEffect(() => {
     if (!open) return
+    if (isArgsDirty) return
     if (savedAgentArgs === null || savedAgentArgs === undefined) {
       if (selectedAgent) {
         setAgentArgs(resolveTuiAgentLaunchArgs(selectedAgent, settings?.agentDefaultArgs))
@@ -163,7 +159,7 @@ export function useSourceControlAgentActionDialog({
         setAgentArgs('')
       }
     }
-  }, [open, selectedAgent, savedAgentArgs, settings?.agentDefaultArgs])
+  }, [open, selectedAgent, savedAgentArgs, settings?.agentDefaultArgs, isArgsDirty])
 
   const closeDialog = useCallback(() => onOpenChange(false), [onOpenChange])
 
@@ -284,15 +280,11 @@ export function useSourceControlAgentActionDialog({
       },
     [resetDeliveryPlan]
   )
-  /**
-   * Updates the selected agent and resolves the appropriate launch arguments.
-   * If saved arguments are not present, resolves the per-agent defaults from the saved settings.
-   *
-   * @param nextAgent - The newly selected TUI agent, or null if no agent is selected.
-   */
+  // Updates selected agent and fallback defaults.
   const handleSelectedAgentChange = useCallback(
     (nextAgent: TuiAgent | null) => {
       setSelectedAgent(nextAgent)
+      setIsArgsDirty(false)
       if (savedAgentArgs === null || savedAgentArgs === undefined) {
         if (nextAgent) {
           setAgentArgs(resolveTuiAgentLaunchArgs(nextAgent, settings?.agentDefaultArgs))
@@ -307,7 +299,14 @@ export function useSourceControlAgentActionDialog({
     () => resetPlanAfter(handleSelectedAgentChange),
     [resetPlanAfter, handleSelectedAgentChange]
   )
-  const onAgentArgsChange = useMemo(() => resetPlanAfter(setAgentArgs), [resetPlanAfter])
+  const handleAgentArgsChange = useCallback((nextArgs: string) => {
+    setAgentArgs(nextArgs)
+    setIsArgsDirty(true)
+  }, [])
+  const onAgentArgsChange = useMemo(
+    () => resetPlanAfter(handleAgentArgsChange),
+    [resetPlanAfter, handleAgentArgsChange]
+  )
   const onCommandTemplateChange = useMemo(
     () => resetPlanAfter(setCommandTemplate),
     [resetPlanAfter]

@@ -391,4 +391,70 @@ describe('SourceControlAgentActionDialog', () => {
 
     expect(input.value).toBe('--verbose')
   })
+
+  it('does not overwrite user-edited agentArgs when settings.agentDefaultArgs updates', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('--yolo')
+
+    // Simulate user typing manually
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    // Update global setting
+    await act(async () => {
+      useAppStore.setState({
+        settings: {
+          ...useAppStore.getState().settings!,
+          agentDefaultArgs: { gemini: '--new-default' }
+        }
+      })
+    })
+    await flushEffects()
+
+    // It must remain --verbose
+    expect(input.value).toBe('--verbose')
+  })
+
+  it('syncs agentArgs when settings.agentDefaultArgs updates if user has not edited them', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['gemini'])
+    mocks.ensureRemoteDetectedAgents.mockResolvedValue(['gemini'])
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+    expect(input.value).toBe('--yolo')
+
+    // Update global setting without user typing
+    await act(async () => {
+      useAppStore.setState({
+        settings: {
+          ...useAppStore.getState().settings!,
+          agentDefaultArgs: { gemini: '--new-default' }
+        }
+      })
+    })
+    await flushEffects()
+
+    // It must update to the new default
+    expect(input.value).toBe('--new-default')
+  })
 })
