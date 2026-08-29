@@ -107,6 +107,7 @@ type DroppedProducerNotificationLog = {
 }
 
 type PendingRelayRequest = {
+  clientId: number
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout>
@@ -847,7 +848,7 @@ export class RelayDispatcher {
         this.pendingRelayRequests.delete(id)
         reject(new Error(`Request "${method}" timed out after ${timeoutMs}ms`))
       }, timeoutMs)
-      this.pendingRelayRequests.set(id, { resolve, reject, timer })
+      this.pendingRelayRequests.set(id, { clientId, resolve, reject, timer })
       if (!this.enqueueFrame(client, msg, 'control', () => {}, 'reject')) {
         clearTimeout(timer)
         this.pendingRelayRequests.delete(id)
@@ -1447,6 +1448,14 @@ export class RelayDispatcher {
       return
     }
     client.closed = true
+    for (const [id, pending] of this.pendingRelayRequests) {
+      if (pending.clientId !== client.id) {
+        continue
+      }
+      clearTimeout(pending.timer)
+      this.pendingRelayRequests.delete(id)
+      pending.reject(new Error(`Client ${client.id} detached while request was pending`))
+    }
     this.requestAborts.abortClient(client.id)
     client.writer.close(error)
     client.generation++
