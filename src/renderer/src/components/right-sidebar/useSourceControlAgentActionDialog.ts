@@ -133,7 +133,7 @@ export function useSourceControlAgentActionDialog({
       if (stale || openCycleRef.current !== cycle) {
         return
       }
-      if (isAgentDirtyRef.current || isArgsDirtyRef.current) {
+      if (isAgentDirtyRef.current) {
         return
       }
       const fallbackAgent = pickSourceControlLaunchAgent({
