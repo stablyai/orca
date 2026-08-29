@@ -1,6 +1,7 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOptionAsAltProbe } from './option-as-alt-probe'
 import type { LayoutMapLike } from './detect-option-as-alt'
+import type { KeyboardLayoutChangeEvent } from '../../../../shared/keyboard-layout-events'
 
 const US_MAP: LayoutMapLike = {
   size: 9,
@@ -77,6 +78,29 @@ describe('createOptionAsAltProbe', () => {
     vi.restoreAllMocks()
   })
 
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
+  it('uses the native snapshot identity before the preference fallback', async () => {
+    const getKeyboardLayoutSnapshot = vi.fn(async () => ({
+      inputSourceId: 'com.apple.keylayout.ABC',
+      keyCharacters: {}
+    }))
+    const getKeyboardInputSourceId = vi.fn(async () => 'com.apple.keylayout.US')
+    vi.stubGlobal('window', {
+      api: { app: { getKeyboardLayoutSnapshot, getKeyboardInputSourceId } }
+    })
+    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window)
+
+    await probe.refresh()
+
+    expect(probe.getCurrent()).toBe('non-us')
+    expect(getKeyboardLayoutSnapshot).toHaveBeenCalled()
+    expect(getKeyboardInputSourceId).not.toHaveBeenCalled()
+    probe.dispose()
+  })
+
   it('starts as unknown, upgrades after first probe resolves', async () => {
     const win = makeMockWindow(US_MAP)
     const probe = createOptionAsAltProbe(win as unknown as Window)
@@ -131,6 +155,91 @@ describe('createOptionAsAltProbe', () => {
     await Promise.resolve()
     await Promise.resolve()
     expect(probe.getCurrent()).toBe('non-us')
+    probe.dispose()
+  })
+
+  it('invalidates immediately and refreshes on a native layout-change notification', async () => {
+    let activeInputSourceId = 'com.apple.keylayout.US'
+    let notifyLayoutChanged: (() => void) | undefined
+    const unsubscribe = vi.fn()
+    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+      readInputSourceId: async () => activeInputSourceId,
+      subscribeKeyboardLayoutChanged: (callback) => {
+        notifyLayoutChanged = callback
+        return unsubscribe
+      }
+    })
+    await probe.refresh()
+    expect(probe.getCurrent()).toBe('us')
+
+    activeInputSourceId = 'com.apple.keylayout.ABC'
+    notifyLayoutChanged?.()
+    expect(probe.getCurrent()).toBe('unknown')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(probe.getCurrent()).toBe('non-us')
+
+    probe.dispose()
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
+  it('fences an in-flight probe until the matching refresh phase', async () => {
+    let notifyLayoutChanged: ((event: KeyboardLayoutChangeEvent) => void) | undefined
+    let finishOldRead!: (inputSourceId: string) => void
+    const oldRead = new Promise<string>((resolve) => {
+      finishOldRead = resolve
+    })
+    const readInputSourceId = vi
+      .fn<() => Promise<string>>()
+      .mockReturnValueOnce(oldRead)
+      .mockResolvedValue('com.apple.keylayout.ABC')
+    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+      readInputSourceId,
+      subscribeKeyboardLayoutChanged: (callback) => {
+        notifyLayoutChanged = callback
+        return vi.fn()
+      }
+    })
+
+    notifyLayoutChanged?.({ phase: 'invalidated', generation: 1 })
+    finishOldRead('com.apple.keylayout.US')
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(probe.getCurrent()).toBe('unknown')
+
+    notifyLayoutChanged?.({ phase: 'refresh', generation: 1 })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(probe.getCurrent()).toBe('non-us')
+    probe.dispose()
+  })
+
+  it('blocks focus and manual probes until the matching refresh phase', async () => {
+    let notifyLayoutChanged: ((event: KeyboardLayoutChangeEvent) => void) | undefined
+    const readInputSourceId = vi.fn(async () => 'com.apple.keylayout.US')
+    const win = makeMockWindow(US_MAP)
+    const probe = createOptionAsAltProbe(win as unknown as Window, {
+      readInputSourceId,
+      subscribeKeyboardLayoutChanged: (callback) => {
+        notifyLayoutChanged = callback
+        return vi.fn()
+      }
+    })
+    await probe.refresh()
+    const readsBeforeInvalidation = readInputSourceId.mock.calls.length
+
+    notifyLayoutChanged?.({ phase: 'invalidated', generation: 1 })
+    win.fireFocus()
+    await probe.refresh()
+
+    expect(probe.getCurrent()).toBe('unknown')
+    expect(readInputSourceId).toHaveBeenCalledTimes(readsBeforeInvalidation)
+
+    notifyLayoutChanged?.({ phase: 'refresh', generation: 1 })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(probe.getCurrent()).toBe('us')
+    expect(readInputSourceId).toHaveBeenCalledTimes(readsBeforeInvalidation + 1)
     probe.dispose()
   })
 
@@ -249,6 +358,34 @@ describe('createOptionAsAltProbe', () => {
     win.fireFocus()
     // Let the focus-triggered probe resolve.
     await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(probe.getCurrent()).toBe('non-us')
+    probe.dispose()
+  })
+
+  it('does not let an older probe overwrite a newer input source', async () => {
+    let resolveOld!: (value: string | null) => void
+    let resolveNew!: (value: string | null) => void
+    const oldRead = new Promise<string | null>((resolve) => {
+      resolveOld = resolve
+    })
+    const newRead = new Promise<string | null>((resolve) => {
+      resolveNew = resolve
+    })
+    const readInputSourceId = vi
+      .fn<() => Promise<string | null>>()
+      .mockReturnValueOnce(oldRead)
+      .mockReturnValueOnce(newRead)
+    const probe = createOptionAsAltProbe(makeMockWindow(US_MAP) as unknown as Window, {
+      readInputSourceId
+    })
+    const newestProbe = probe.refresh()
+
+    resolveNew('com.apple.keylayout.ABC')
+    await newestProbe
+    expect(probe.getCurrent()).toBe('non-us')
+    resolveOld('com.apple.keylayout.US')
     await Promise.resolve()
     await Promise.resolve()
     expect(probe.getCurrent()).toBe('non-us')

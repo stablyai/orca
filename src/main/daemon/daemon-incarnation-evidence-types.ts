@@ -54,6 +54,11 @@ export type DaemonProcessEvidence =
 
 export type ProcessSignalEvidence = 'occupied' | 'permission_denied' | 'missing' | 'unavailable'
 
+export type ProcessLivenessVerdict =
+  | { status: 'live' }
+  | { status: 'unverifiable'; reason: string }
+  | { status: 'exited' }
+
 export type LinuxStatEvidence =
   | { status: 'present'; value: string }
   | { status: 'missing' }
@@ -70,6 +75,6 @@ export type DaemonProcessProbeDependencies = {
   readLinuxStat?: (pid: number) => Promise<LinuxStatEvidence>
   readBootIdentity?: () => Promise<string | undefined>
   readCommandLine?: (pid: number, platform: NodeJS.Platform) => Promise<string | undefined>
-  readProcessStartedAtMs?: (pid: number) => number | null
+  readProcessStartedAtMs?: (pid: number) => Promise<number | null>
   queryWindowsProcess?: (pid: number) => Promise<WindowsProcessEvidence>
 }

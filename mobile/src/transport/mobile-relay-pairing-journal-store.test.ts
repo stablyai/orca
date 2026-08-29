@@ -339,6 +339,48 @@ describe('mobile relay pairing journal store', () => {
     await expect(loadMobileRelayPairingJournal()).resolves.toEqual(journal)
   })
 
+  it('self-heals an undecryptable Android secret so the next QR scan can pair', async () => {
+    platform.OS = 'android'
+    const created = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-1',
+      hostName: 'Blue Whale',
+      randomBytes: (length) => new Uint8Array(length).fill(13)
+    })
+    // Why: the candidate race stamps winner/authorizationMode long before pairing completes.
+    const journal = {
+      ...created,
+      metadata: {
+        ...created.metadata,
+        winner: 'relay' as const,
+        authorizationMode: 'relay-basis' as const
+      }
+    }
+    await saveMobileRelayPairingJournal(journal)
+    expect(presenceRaw).toBe('0')
+
+    // Why: Android SecureStore reports an undecryptable keystore entry as null (#6600).
+    secretRaw = null
+
+    await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
+    expect(metadataRaw).toBeNull()
+    // Why: the presence record must outlive the self-heal so reads stay absent instead of
+    // walking back to an older generation; the metadata-less load sweeps it next.
+    expect(presenceRaw).toBe('0')
+
+    await expect(loadMobileRelayPairingJournal()).resolves.toBeNull()
+    expect(presenceRaw).toBeNull()
+
+    const rescan = createMobileRelayPairingJournal({
+      offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },
+      hostId: 'host-2',
+      hostName: 'Red Panda',
+      randomBytes: (length) => new Uint8Array(length).fill(14)
+    })
+    await expect(saveMobileRelayPairingJournal(rescan)).resolves.toBeUndefined()
+    await expect(loadMobileRelayPairingJournal()).resolves.toEqual(rescan)
+  })
+
   it('clears metadata before deleting its secret and keeps relay unavailable on web', async () => {
     const journal = createMobileRelayPairingJournal({
       offer: offer as PairingOffer & { relay: NonNullable<PairingOffer['relay']> },

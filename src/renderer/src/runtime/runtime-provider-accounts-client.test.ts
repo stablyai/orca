@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
-} from '../../../shared/types'
+} from '../../../shared/managed-account-types'
 import {
   fetchProviderAccountsSnapshot,
   removeClaudeProviderAccount,

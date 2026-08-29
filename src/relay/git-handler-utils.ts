@@ -106,7 +106,7 @@ export function parseUnmergedEntry(
  */
 export function parseBranchDiff(
   stdout: string,
-  statsByPath: Map<string, GitLineStats> = new Map()
+  statsByPath = new Map<string, GitLineStats>()
 ): Record<string, unknown>[] {
   const entries: Record<string, unknown>[] = []
   for (const line of stdout.split(/\r?\n/)) {

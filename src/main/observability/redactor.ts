@@ -123,7 +123,7 @@ export function redactString(input: string): string {
 export function redactValue(
   value: unknown,
   mode: RedactorMode = 'client',
-  seen: WeakSet<object> = new WeakSet()
+  seen = new WeakSet<object>()
 ): unknown {
   if (value === null || value === undefined) {
     return value
@@ -233,15 +233,4 @@ export function redactSpan(span: RedactableSpan, mode: RedactorMode = 'client'):
     events: redactedEvents,
     exit
   }
-}
-
-// Test-only introspection: lets tests verify the rule set without re-deriving it.
-
-export const _internalsForTests = {
-  PROVIDER_PATTERNS,
-  CLIENT_ATTR_BLOCKLIST,
-  SERVER_ATTR_BLOCKLIST_EXTRA,
-  LABELED_KV,
-  URL_USERINFO,
-  ENV_LINE
 }

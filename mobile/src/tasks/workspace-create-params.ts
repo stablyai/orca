@@ -1,9 +1,9 @@
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type {
   CreateSparseCheckoutRequest,
-  GitPushTarget,
-  SetupDecision,
-  TuiAgent
-} from '../../../src/shared/types'
+  SetupDecision
+} from '../../../src/shared/worktree/create-types'
+import type { GitPushTarget } from '../../../src/shared/worktree/types'
 import { getWorkspaceSourceName } from '../../../src/shared/new-workspace/workspace-source'
 import { resolveMobileWorkspaceCreateName } from './mobile-workspace-name'
 import type { WorkspaceAgentChoice } from './workspace-agent-selection'

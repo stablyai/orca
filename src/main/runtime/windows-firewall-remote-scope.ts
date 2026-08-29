@@ -109,7 +109,7 @@ function maskPrefixLength(maskText: string, version: IpVersion): number | null {
 function parseIpRange(scope: string): IpRange | null {
   const trimmed = scope.trim()
   const dashIndex = trimmed.indexOf('-')
-  if (dashIndex >= 0) {
+  if (dashIndex !== -1) {
     if (dashIndex !== trimmed.lastIndexOf('-')) {
       return null
     }
@@ -122,7 +122,7 @@ function parseIpRange(scope: string): IpRange | null {
   }
 
   const slashIndex = trimmed.indexOf('/')
-  if (slashIndex >= 0) {
+  if (slashIndex !== -1) {
     if (slashIndex !== trimmed.lastIndexOf('/')) {
       return null
     }
@@ -195,7 +195,7 @@ function expandEmbeddedIpv4(address: string): string | null {
   }
   const lastColon = address.lastIndexOf(':')
   const ipv4 = parseIpv4(address.slice(lastColon + 1))
-  if (lastColon < 0 || !ipv4) {
+  if (lastColon === -1 || !ipv4) {
     return null
   }
   const high = ((ipv4.value >> 16n) & 0xffffn).toString(16)

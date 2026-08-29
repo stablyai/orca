@@ -1,6 +1,13 @@
+import type { ExecutionHostId } from '../../../shared/execution-host'
+
 type WorktreeRename = {
   oldWorktreeId: string
   newWorktreeId: string
+}
+
+type WorktreeChangeOwner = {
+  forceLocalOwner?: boolean
+  executionHostId?: ExecutionHostId
 }
 
 type WorktreeChangeEvent = {
@@ -9,18 +16,16 @@ type WorktreeChangeEvent = {
   // Why: set on local worktrees:changed while a remote runtime is active, so the
   // refresh pins to the local host instead of dropping the event (see useIpcEvents).
   forceLocalOwner?: boolean
+  executionHostId?: ExecutionHostId
 }
 
 type WorktreeChangeRefreshHandler = (
   repoId: string,
   renamed?: WorktreeRename,
-  options?: { forceLocalOwner?: boolean }
+  options?: WorktreeChangeOwner
 ) => Promise<void>
 
-type QueuedWorktreeChange = {
-  renamed?: WorktreeRename
-  forceLocalOwner?: boolean
-}
+type QueuedWorktreeChange = WorktreeChangeOwner & { renamed?: WorktreeRename }
 
 type RepoRefreshState = {
   running: boolean
@@ -44,7 +49,10 @@ export function createWorktreeChangeRefreshQueue(
       while (!disposed && state.queue.length > 0) {
         const next = state.queue.shift()
         try {
-          await handler(repoId, next?.renamed, { forceLocalOwner: next?.forceLocalOwner })
+          await handler(repoId, next?.renamed, {
+            forceLocalOwner: next?.forceLocalOwner,
+            ...(next?.executionHostId ? { executionHostId: next.executionHostId } : {})
+          })
         } catch (error) {
           console.error('Failed to refresh changed worktrees:', error)
         }
@@ -76,7 +84,11 @@ export function createWorktreeChangeRefreshQueue(
       }
 
       if (event.renamed) {
-        state.queue.push({ renamed: event.renamed, forceLocalOwner: event.forceLocalOwner })
+        state.queue.push({
+          renamed: event.renamed,
+          forceLocalOwner: event.forceLocalOwner,
+          executionHostId: event.executionHostId
+        })
       } else {
         const lastQueued = state.queue.at(-1)
         // Why: Windows/OneDrive can emit a burst for one checkout change. Keep a
@@ -86,9 +98,13 @@ export function createWorktreeChangeRefreshQueue(
         if (
           !lastQueued ||
           lastQueued.renamed !== undefined ||
-          Boolean(lastQueued.forceLocalOwner) !== Boolean(event.forceLocalOwner)
+          Boolean(lastQueued.forceLocalOwner) !== Boolean(event.forceLocalOwner) ||
+          lastQueued.executionHostId !== event.executionHostId
         ) {
-          state.queue.push({ forceLocalOwner: event.forceLocalOwner })
+          state.queue.push({
+            forceLocalOwner: event.forceLocalOwner,
+            executionHostId: event.executionHostId
+          })
         }
       }
 

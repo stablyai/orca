@@ -66,7 +66,9 @@ __orca_omp() {
   fi
 }
 if [[ -n "\${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
-  omp() { __orca_omp "$@"; }
+  # Why the function reserved word: it suppresses alias expansion of the name, which
+  # an \`alias omp\` otherwise rewrites at parse time, aborting the rest of the file.
+  function omp { __orca_omp "$@"; }
 fi
 `
 }

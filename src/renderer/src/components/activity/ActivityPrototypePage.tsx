@@ -11,7 +11,7 @@ import {
   TerminalSquare
 } from 'lucide-react'
 
-import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
+import { AgentStateDot, agentStateLabel, type AgentDotState } from '@/components/AgentStateDot'
 import { AgentIcon } from '@/lib/agent-catalog'
 import {
   agentTypeToIconAgent,
@@ -56,10 +56,14 @@ import {
   resolveActivityPortalSwap
 } from './activity-portal-thread-reconciliation'
 import {
+  ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS,
   createActivityPortalReadinessLatch,
+  type ActivityPortalReadinessLatch,
   type ActivityPortalReadinessStatus
 } from './activity-portal-readiness-oscillation'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
@@ -73,6 +77,7 @@ import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
 import { migrationUnsupportedToAgentStatusEntry } from '@/lib/migration-unsupported-agent-entry'
 import { translate } from '@/i18n/i18n'
+import { formatUiRelativeTime } from '@/i18n/relative-time-format'
 import {
   getActivityThreadTaskTitle,
   getActivityThreadWorkspaceTitle,
@@ -83,8 +88,15 @@ import { getAgentRowPrimaryText } from '@/lib/agent-row-primary-text'
 type ThreadReadFilter = 'all' | 'unread'
 type ActivityGroupBy = 'status' | 'project' | 'worktree' | 'agent'
 type ActivityEventState = Extract<AgentStatusState, 'done' | 'blocked' | 'waiting'>
-type ActivityLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
-type ActivityStatusGroupId = 'working' | 'blocked' | 'waiting' | 'done' | 'interrupted'
+type ActivityHookLiveAgentState = Extract<AgentStatusState, 'working' | 'blocked' | 'waiting'>
+type ActivityLiveAgentState = ActivityHookLiveAgentState | 'monitoring'
+type ActivityStatusGroupId =
+  | 'working'
+  | 'monitoring'
+  | 'blocked'
+  | 'waiting'
+  | 'done'
+  | 'interrupted'
 
 type ActivityEvent = {
   id: string
@@ -132,7 +144,7 @@ type ActivityThreadGroup = {
   key: string
   id?: ActivityStatusGroupId
   label: string
-  state?: AgentStatusState
+  state?: AgentDotState
   threads: AgentPaneThread[]
 }
 
@@ -153,6 +165,7 @@ const ACTIVITY_TERMINAL_LOADING_LABEL_DELAY_MS = 180
 const ACTIVITY_THREAD_RESPONSE_RENDER_PREVIEW_MAX_LENGTH = 320
 const ACTIVITY_STATUS_GROUP_ORDER: ActivityStatusGroupId[] = [
   'working',
+  'monitoring',
   'blocked',
   'waiting',
   'done',
@@ -168,24 +181,12 @@ const absoluteDateFormatter = new Intl.DateTimeFormat(undefined, {
   minute: '2-digit'
 })
 
-const relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' })
-
 function formatAbsoluteDate(timestamp: number): string {
   return absoluteDateFormatter.format(new Date(timestamp))
 }
 
 function formatRelativeTime(timestamp: number): string {
-  const diffMs = timestamp - Date.now()
-  const diffMinutes = Math.round(diffMs / 60_000)
-  if (Math.abs(diffMinutes) < 60) {
-    return relativeTimeFormatter.format(diffMinutes, 'minute')
-  }
-  const diffHours = Math.round(diffMinutes / 60)
-  if (Math.abs(diffHours) < 24) {
-    return relativeTimeFormatter.format(diffHours, 'hour')
-  }
-  const diffDays = Math.round(diffHours / 24)
-  return relativeTimeFormatter.format(diffDays, 'day')
+  return formatUiRelativeTime(timestamp - Date.now())
 }
 
 function findActivityTerminalPane(
@@ -300,13 +301,16 @@ export function useActivityTerminalPortalStatus(
     paneKey: null,
     status: 'loading'
   })
+  // Why: portal churn replaces every subscription identity, so the burst budget must outlive it.
+  const readinessLatchRef = useRef<ActivityPortalReadinessLatch | null>(null)
 
   useLayoutEffect(() => {
     let disposed = false
     let readinessFrame: number | null = null
+    let readinessReleaseTimer: number | null = null
     let pendingStatus: ActivityTerminalPortalReadiness['status'] | null = null
 
-    // Why: subscription churn can otherwise chain layout-effect updates past React's root-wide limit.
+    // Why: coalesce observer bursts and cancel frames from stale portal subscriptions.
     const scheduleReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
       if (disposed) {
         return
@@ -336,6 +340,10 @@ export function useActivityTerminalPortalStatus(
         cancelAnimationFrame(readinessFrame)
         readinessFrame = null
       }
+      if (readinessReleaseTimer !== null) {
+        window.clearTimeout(readinessReleaseTimer)
+        readinessReleaseTimer = null
+      }
     }
 
     if (!target || !paneKey) {
@@ -347,10 +355,22 @@ export function useActivityTerminalPortalStatus(
       return disposeFrame
     }
 
-    const readinessLatch = createActivityPortalReadinessLatch()
+    const readinessLatch = (readinessLatchRef.current ??= createActivityPortalReadinessLatch())
 
     const updateReadiness = (status: ActivityTerminalPortalReadiness['status']): void => {
-      scheduleReadiness(readinessLatch.next(status))
+      const nextStatus = readinessLatch.next(status)
+      scheduleReadiness(nextStatus)
+      if (readinessReleaseTimer !== null) {
+        window.clearTimeout(readinessReleaseTimer)
+        readinessReleaseTimer = null
+      }
+      if (nextStatus !== status) {
+        // Why: a quiet loading pane has no mutation to release the burst latch on its own.
+        readinessReleaseTimer = window.setTimeout(
+          checkReadiness,
+          ACTIVITY_PORTAL_READINESS_BURST_WINDOW_MS
+        )
+      }
     }
 
     const checkReadiness = (): void => {
@@ -462,7 +482,9 @@ function isActivityEventState(state: AgentStatusState): state is ActivityEventSt
   return state === 'done' || state === 'blocked' || state === 'waiting'
 }
 
-function isActivityLiveAgentState(state: AgentStatusState): state is ActivityLiveAgentState {
+function isActivityHookLiveAgentState(
+  state: AgentStatusState
+): state is ActivityHookLiveAgentState {
   return state === 'working' || state === 'blocked' || state === 'waiting'
 }
 
@@ -470,10 +492,15 @@ function freshActivityLiveAgentState(
   entry: AgentStatusEntry,
   now: number
 ): ActivityLiveAgentState | null {
-  if (!isActivityLiveAgentState(entry.state)) {
+  if (
+    !isActivityHookLiveAgentState(entry.state) ||
+    !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+  ) {
     return null
   }
-  return isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS) ? entry.state : null
+  return entry.state === 'working' && entry.workingMode === 'monitoring'
+    ? 'monitoring'
+    : entry.state
 }
 
 function standaloneActivityWorktree(worktreeId: string): Worktree {
@@ -580,7 +607,8 @@ function appendActivityEventsForEntry(args: {
     })
   }
 
-  if (!isActivityEventState(args.entry.state)) {
+  // Why: SessionStart creates an idle row, not an "Agent finished" activity event (STA-3386).
+  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
     return
   }
   appendActivityEvent({
@@ -809,7 +837,7 @@ export function buildAgentPaneThreads(args: {
         agentType: liveAgent.agentType,
         currentAgentState: liveAgent.state,
         currentAgentEntry: liveAgent.entry,
-        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.state),
+        responsePreview: statusPreviewForEntry(liveAgent.entry, liveAgent.entry.state),
         latestTimestamp: liveAgent.timestamp,
         latestEvent: null,
         events: [],
@@ -827,7 +855,7 @@ export function buildAgentPaneThreads(args: {
     existing.currentAgentEntry = liveAgent.entry
     existing.responsePreview = statusPreviewForEntry(
       liveAgent.entry,
-      liveAgent.state,
+      liveAgent.entry.state,
       existing.responsePreview
     )
     existing.latestTimestamp = liveAgent.timestamp
@@ -947,7 +975,7 @@ function EventRepoBadge({ repo }: { repo: Repo | null }): React.JSX.Element | nu
   )
 }
 
-function threadAgentState(thread: AgentPaneThread): AgentStatusState {
+function threadAgentState(thread: AgentPaneThread): AgentDotState {
   return thread.currentAgentState ?? thread.latestEvent?.state ?? 'done'
 }
 
@@ -1011,10 +1039,12 @@ function threadStatusGroupId(thread: AgentPaneThread): ActivityStatusGroupId {
   if (!thread.currentAgentState && state === 'done' && thread.latestEvent?.entry.interrupted) {
     return 'interrupted'
   }
-  return state === 'working' || state === 'blocked' || state === 'waiting' ? state : 'done'
+  return state === 'working' || state === 'monitoring' || state === 'blocked' || state === 'waiting'
+    ? state
+    : 'done'
 }
 
-function threadStatusGroupState(id: ActivityStatusGroupId): AgentStatusState {
+function threadStatusGroupState(id: ActivityStatusGroupId): AgentDotState {
   return id === 'interrupted' ? 'done' : id
 }
 
@@ -1150,14 +1180,18 @@ export function handleActivityFilterFocusShortcut({
   return true
 }
 
-function ThreadAgentStateIndicator({ thread }: { thread: AgentPaneThread }): React.JSX.Element {
+export function ThreadAgentStateIndicator({
+  thread
+}: {
+  thread: AgentPaneThread
+}): React.JSX.Element {
   const state = threadAgentState(thread)
   const label = threadAgentStateLabel(thread)
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span className="inline-flex size-4 shrink-0 items-center justify-center">
-          <AgentStateDot state={state} size="md" />
+          <AgentStateDot state={state} size="md" title={null} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
@@ -1396,6 +1430,8 @@ export default function ActivityPrototypePage(): React.JSX.Element {
   const [groupBy, setGroupBy] = useState<ActivityGroupBy>('status')
   const [query, setQuery] = useState('')
   const activityFilterInputRef = useRef<HTMLInputElement | null>(null)
+  // Why: bounds auto mark-read to one acknowledgement per selected thread turn.
+  const autoAcknowledgedTurnRef = useRef<string | null>(null)
   const [compactMode, setCompactMode] = useState(false)
   const [selectedPaneKey, setSelectedPaneKey] = useState<string | null>(null)
   const [displayedPaneKey, setDisplayedPaneKey] = useState<string | null>(null)
@@ -1589,6 +1625,7 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     visibleThread
   ])
 
+  // Why: swap-staged makes the displayed thread selected, so this branch cannot repeat by itself.
   useLayoutEffect(() => {
     const swap = resolveActivityPortalSwap({
       selectedThread,
@@ -1700,11 +1737,20 @@ export default function ActivityPrototypePage(): React.JSX.Element {
     ) {
       return
     }
+    // Why (React #185): a turn stamped ahead of this clock (SSH/remote execution host) can never
+    // have its unread cleared, and each retry lands on a later millisecond, so acknowledgeAgents'
+    // `prev < now` guard rewrites the ack map every time and re-enters here forever through
+    // storeData. Auto-read is once per turn, not a retry.
+    const autoAcknowledgeKey = `${selectedThread.paneKey}:${selectedThread.latestTimestamp}`
+    if (autoAcknowledgedTurnRef.current === autoAcknowledgeKey) {
+      return
+    }
     const selectedThreadHasDetailOnlyView =
       !selectedHasLiveTab || selectedThread.migrationUnsupportedPtyId !== undefined
     const selectedThreadIsVisibleTerminal =
       visibleThread?.paneKey === effectiveSelectedPaneKey && visiblePortalReady
     if (selectedThreadHasDetailOnlyView || selectedThreadIsVisibleTerminal) {
+      autoAcknowledgedTurnRef.current = autoAcknowledgeKey
       storeData.acknowledgeAgents([selectedThread.paneKey])
     }
   }, [

@@ -18,6 +18,7 @@ import {
   type MobileGitStatusEntry
 } from './mobile-git-status'
 import { buildMobileReviewFileRoute } from './mobile-review-route'
+import { revealMobileSourceControlSessionDiff } from './reveal-mobile-source-control-session-diff'
 import type {
   GitDiffTextResult,
   MobileBranchCompareState,
@@ -115,11 +116,13 @@ export function useMobileSourceControlOpeners(params: Params) {
           relativePath: entry.path,
           staged: entry.area === 'staged'
         })
+        let openedTabMode: 'diff' | 'edit' = 'diff'
         if (!response.ok && isMobileGitUnavailable(response.error?.code, response.error?.message)) {
           response = await client.sendRequest('files.open', {
             worktree: `id:${worktreeId}`,
             relativePath: entry.path
           })
+          openedTabMode = 'edit'
         }
         if (!response.ok) {
           throw new Error(response.error?.message || 'Unable to open diff')
@@ -127,8 +130,22 @@ export function useMobileSourceControlOpeners(params: Params) {
         if (!mountedRef.current) {
           return
         }
+        const revealResult = await revealMobileSourceControlSessionDiff({
+          client,
+          worktreeId,
+          relativePath: entry.path,
+          tabMode: openedTabMode,
+          staged: entry.area === 'staged',
+          onOpenedFileDiff,
+          isCurrent: () => mountedRef.current && openingPathRef.current === entry.path
+        })
+        if (revealResult === 'cancelled') {
+          return
+        }
+        if (revealResult === 'timeout') {
+          throw new Error("The file opened, but its tab isn't ready yet. Try again.")
+        }
         triggerSelection()
-        onOpenedFileDiff?.(entry.path)
         // Why: when launched from the session screen, opening a file dismisses
         // this surface back to the session. In embedded mode there is nothing
         // to pop (the panel docks beside the terminal), so close the dock

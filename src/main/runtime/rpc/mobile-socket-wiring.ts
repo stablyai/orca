@@ -170,7 +170,8 @@ export class MobileSocketWiring {
           }
           this.authenticatedSockets.set(ws, socket)
           transport.setClientId(ws, device.deviceToken)
-          this.deviceRegistry.updateLastSeen(device.deviceId)
+          // Why: deferred — the client's e2ee_authenticated must not wait on a secure-file rewrite.
+          this.deviceRegistry.updateLastSeenDeferred(device.deviceId)
           this.onReady?.(socket)
         },
         onError: (code, reason) => {

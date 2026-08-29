@@ -1,7 +1,23 @@
+import { isWslUncPath, parseWslUncPath, toWindowsWslPath } from './wsl-paths'
+
 const SLASH_CHAR_CODE = '/'.charCodeAt(0)
 
 export function isWindowsAbsolutePathLike(value: string): boolean {
   return /^[A-Za-z]:[\\/]/.test(value) || value.startsWith('\\\\') || value.startsWith('//')
+}
+
+/**
+ * Whether names under `rootPath` compare case-insensitively.
+ *
+ * Decided by path SYNTAX, never by the client platform — a Windows client can
+ * drive a case-sensitive SSH or WSL workspace. Windows drive/UNC roots fold
+ * case; the WSL UNC aliases front a case-sensitive Linux filesystem, as do
+ * POSIX roots. macOS stays case-sensitive here, matching
+ * `normalizeRuntimePathForComparison`: folding a case-sensitive root would
+ * merge distinct files, which is worse than missing a case-only duplicate.
+ */
+export function isCaseInsensitiveRuntimeRoot(rootPath: string): boolean {
+  return isWindowsAbsolutePathLike(rootPath) && !isWslUncPath(rootPath)
 }
 
 export function normalizeRuntimePathSeparators(value: string): string {
@@ -38,6 +54,33 @@ export function normalizeRuntimePathForComparison(rawValue: string): string {
     return `//wsl/${wslUnc[1].toLowerCase()}${wslUnc[2] ?? ''}`
   }
   return isWindowsPath ? normalized.toLowerCase() : normalized
+}
+
+export function areLocalWindowsWslPathAliases(left: string, right: string): boolean {
+  const leftIdentity = getLocalWindowsWslPathIdentity(left)
+  const rightIdentity = getLocalWindowsWslPathIdentity(right)
+  return (
+    (leftIdentity.isWslUnc || rightIdentity.isWslUnc) &&
+    leftIdentity.aliasComparisonPath === rightIdentity.aliasComparisonPath
+  )
+}
+
+export type LocalWindowsWslPathIdentity = {
+  normalizedPath: string
+  aliasComparisonPath: string
+  isWslUnc: boolean
+}
+
+export function getLocalWindowsWslPathIdentity(value: string): LocalWindowsWslPathIdentity {
+  const wslPath = parseWslUncPath(value)
+  const normalizedPath = normalizeRuntimePathForComparison(value)
+  return {
+    normalizedPath,
+    aliasComparisonPath: wslPath
+      ? normalizeRuntimePathForComparison(toWindowsWslPath(wslPath.linuxPath, wslPath.distro))
+      : normalizedPath,
+    isWslUnc: wslPath !== null
+  }
 }
 
 export function isRuntimePathAbsolute(

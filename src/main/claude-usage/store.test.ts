@@ -1,20 +1,12 @@
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import type * as FsPromises from 'node:fs/promises'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ClaudeUsagePersistedState } from './types'
 import type * as Scanner from './scanner'
 
-const { getPathMock, writeOpens, writeGate } = vi.hoisted(() => ({
-  getPathMock: vi.fn(() => '/tmp/orca-test-userdata'),
-  // Why only mode 'w': the durable write also opens the directory read-only to fsync it, so counting
-  // every open would hide a regression back to multiple full-cache rewrites per scan.
-  writeOpens: { value: 0, inFlight: 0, maxConcurrent: 0 },
-  writeGate: {
-    blocked: false,
-    waiters: [] as (() => void)[]
-  }
+const { getPathMock } = vi.hoisted(() => ({
+  getPathMock: vi.fn(() => '/tmp/orca-test-userdata')
 }))
 
 vi.mock('electron', () => ({
@@ -22,29 +14,6 @@ vi.mock('electron', () => ({
     getPath: getPathMock
   }
 }))
-
-vi.mock('node:fs/promises', async () => {
-  const actual = await vi.importActual<typeof FsPromises>('node:fs/promises')
-  return {
-    ...actual,
-    open: (async (...args: Parameters<typeof actual.open>) => {
-      if (args[1] !== 'w') {
-        return actual.open(...args)
-      }
-      writeOpens.value += 1
-      writeOpens.inFlight += 1
-      writeOpens.maxConcurrent = Math.max(writeOpens.maxConcurrent, writeOpens.inFlight)
-      try {
-        if (writeGate.blocked) {
-          await new Promise<void>((resolve) => writeGate.waiters.push(resolve))
-        }
-        return await actual.open(...args)
-      } finally {
-        writeOpens.inFlight -= 1
-      }
-    }) as typeof actual.open
-  }
-})
 
 vi.mock('./scanner', async (importOriginal) => ({
   ...(await importOriginal<typeof Scanner>()),
@@ -54,12 +23,15 @@ vi.mock('./scanner', async (importOriginal) => ({
 import { ClaudeUsageStore, initClaudeUsagePath } from './store'
 import { scanClaudeUsageFiles } from './scanner'
 
-function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
-  const store = new ClaudeUsageStore({
+function createBackingStore(): ConstructorParameters<typeof ClaudeUsageStore>[0] {
+  return {
     getRepos: () => [],
-    getAllWorktreeMeta: () => ({}),
-    getWorktreeMeta: () => undefined
-  } as never)
+    getAllWorktreeMeta: () => ({})
+  }
+}
+
+function createStoreWithState(state: Partial<ClaudeUsagePersistedState>): ClaudeUsageStore {
+  const store = new ClaudeUsageStore(createBackingStore())
 
   ;(store as unknown as { state: ClaudeUsagePersistedState }).state = {
     schemaVersion: 1,
@@ -86,11 +58,6 @@ describe('ClaudeUsageStore', () => {
     tempUserData = mkdtempSync(join(tmpdir(), 'orca-claude-usage-store-'))
     getPathMock.mockReturnValue(tempUserData)
     initClaudeUsagePath()
-    writeOpens.value = 0
-    writeOpens.inFlight = 0
-    writeOpens.maxConcurrent = 0
-    writeGate.blocked = false
-    writeGate.waiters = []
     vi.mocked(scanClaudeUsageFiles).mockReset()
     vi.mocked(scanClaudeUsageFiles).mockResolvedValue({
       processedFiles: [],
@@ -104,6 +71,17 @@ describe('ClaudeUsageStore', () => {
   afterEach(() => {
     vi.useRealTimers()
     rmSync(tempUserData, { recursive: true, force: true })
+  })
+
+  it('defaults a null legacy opt-in while invalidating the cache', () => {
+    writeFileSync(
+      join(tempUserData, 'orca-claude-usage.json'),
+      JSON.stringify({ schemaVersion: 4, scanState: { enabled: null } })
+    )
+
+    const store = new ClaudeUsageStore(createBackingStore())
+
+    expect(store.getScanState().enabled).toBe(false)
   })
 
   it('reports no data for Orca scope when only non-Orca usage exists', async () => {
@@ -123,6 +101,7 @@ describe('ClaudeUsageStore', () => {
           totalOutputTokens: 20,
           totalCacheReadTokens: 10,
           totalCacheWriteTokens: 5,
+          totalCacheWrite1hTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'cwd:/outside/repo',
@@ -133,7 +112,8 @@ describe('ClaudeUsageStore', () => {
               inputTokens: 100,
               outputTokens: 20,
               cacheReadTokens: 10,
-              cacheWriteTokens: 5
+              cacheWriteTokens: 5,
+              cacheWrite1hTokens: 0
             }
           ]
         }
@@ -151,7 +131,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 100,
           outputTokens: 20,
           cacheReadTokens: 10,
-          cacheWriteTokens: 5
+          cacheWriteTokens: 5,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -181,6 +162,7 @@ describe('ClaudeUsageStore', () => {
           totalOutputTokens: 20,
           totalCacheReadTokens: 10,
           totalCacheWriteTokens: 5,
+          totalCacheWrite1hTokens: 0,
           locationBreakdown: [
             {
               locationKey: 'worktree:repo-1::/workspace/repo-a',
@@ -191,7 +173,8 @@ describe('ClaudeUsageStore', () => {
               inputTokens: 100,
               outputTokens: 20,
               cacheReadTokens: 10,
-              cacheWriteTokens: 5
+              cacheWriteTokens: 5,
+              cacheWrite1hTokens: 0
             }
           ]
         }
@@ -209,7 +192,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 100,
           outputTokens: 20,
           cacheReadTokens: 10,
-          cacheWriteTokens: 5
+          cacheWriteTokens: 5,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -235,7 +219,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 100,
           outputTokens: 20,
           cacheReadTokens: 10,
-          cacheWriteTokens: 5
+          cacheWriteTokens: 5,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -261,7 +246,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -273,6 +259,37 @@ describe('ClaudeUsageStore', () => {
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
     ).toBeCloseTo(36.75)
+  })
+
+  it('prices the 1-hour cache-write share above the 5-minute rate', async () => {
+    const store = createStoreWithState({
+      dailyAggregates: [
+        {
+          day: '2026-04-09',
+          model: 'claude-opus-4-7-20260416',
+          projectKey: 'worktree:repo-1::/workspace/repo-a',
+          projectLabel: 'Repo A',
+          repoId: 'repo-1',
+          worktreeId: 'repo-1::/workspace/repo-a',
+          turnCount: 1,
+          zeroCacheReadTurnCount: 0,
+          inputTokens: 1_000_000,
+          outputTokens: 1_000_000,
+          cacheReadTokens: 1_000_000,
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 400_000
+        }
+      ]
+    })
+
+    const summary = await store.getSummary('orca', '30d')
+    const breakdown = await store.getBreakdown('orca', '30d', 'model')
+
+    // 5 + 25 + 0.5 + (0.6 * 6.25 + 0.4 * 10); the flat 5m rate would give 36.75.
+    expect(summary.estimatedCostUsd).toBeCloseTo(38.25)
+    expect(
+      breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
+    ).toBeCloseTo(38.25)
   })
 
   it('prices Claude Opus 4.8 with current Anthropic rates', async () => {
@@ -290,7 +307,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -304,7 +322,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -336,7 +355,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -350,7 +370,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -364,7 +385,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -379,7 +401,7 @@ describe('ClaudeUsageStore', () => {
     ).toBeCloseTo(73.5)
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-5-thinking')?.estimatedCostUsd
-    ).toBeCloseTo(22.05)
+    ).toBeCloseTo(14.7)
   })
 
   it('prices Sonnet 5 long-context usage at flat rates', async () => {
@@ -397,7 +419,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 300_000,
           outputTokens: 300_000,
           cacheReadTokens: 300_000,
-          cacheWriteTokens: 300_000
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -405,7 +428,7 @@ describe('ClaudeUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
 
     // Why: Sonnet 4.6 and earlier bill above 200k at a premium; Sonnet 5 does not.
-    expect(summary.estimatedCostUsd).toBeCloseTo(6.615)
+    expect(summary.estimatedCostUsd).toBeCloseTo(4.41)
   })
 
   it('does not collapse Opus 4.5 or Sonnet 4.5 usage into Claude 5 pricing', async () => {
@@ -422,7 +445,8 @@ describe('ClaudeUsageStore', () => {
         inputTokens: 300_000,
         outputTokens: 300_000,
         cacheReadTokens: 300_000,
-        cacheWriteTokens: 300_000
+        cacheWriteTokens: 300_000,
+        cacheWrite1hTokens: 0
       }))
     })
 
@@ -455,7 +479,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -469,7 +494,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -494,7 +520,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         },
         {
           day: '2026-04-09',
@@ -508,7 +535,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 1_000_000,
           outputTokens: 1_000_000,
           cacheReadTokens: 1_000_000,
-          cacheWriteTokens: 1_000_000
+          cacheWriteTokens: 1_000_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -533,7 +561,8 @@ describe('ClaudeUsageStore', () => {
           inputTokens: 300_000,
           outputTokens: 300_000,
           cacheReadTokens: 300_000,
-          cacheWriteTokens: 300_000
+          cacheWriteTokens: 300_000,
+          cacheWrite1hTokens: 0
         }
       ]
     })
@@ -568,6 +597,7 @@ describe('ClaudeUsageStore', () => {
           totalOutputTokens: 500,
           totalCacheReadTokens: 200,
           totalCacheWriteTokens: 100,
+          totalCacheWrite1hTokens: 0,
           locationBreakdown: [
             {
               locationKey: `worktree:${worktreeId}`,
@@ -578,7 +608,8 @@ describe('ClaudeUsageStore', () => {
               inputTokens: 1000,
               outputTokens: 500,
               cacheReadTokens: 200,
-              cacheWriteTokens: 100
+              cacheWriteTokens: 100,
+              cacheWrite1hTokens: 0
             }
           ]
         }
@@ -617,64 +648,7 @@ describe('ClaudeUsageStore', () => {
     expect(refreshMock).toHaveBeenCalledWith(false)
   })
 
-  it('persists setEnabled via async durable write without leaving tmp files', async () => {
-    const store = createStoreWithState({
-      schemaVersion: 5,
-      scanState: {
-        enabled: false,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: null
-      }
-    })
-
-    await store.setEnabled(true)
-
-    expect(writeOpens.value).toBe(1)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    const persisted = JSON.parse(
-      readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')
-    )
-    expect(persisted.scanState.enabled).toBe(true)
-    // Pretty-print preserved for human inspection of the analytics cache.
-    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
-  })
-
-  it('vetoes a stale concurrent async write so the newer snapshot wins', async () => {
-    const store = createStoreWithState({
-      schemaVersion: 5,
-      scanState: {
-        enabled: true,
-        lastScanStartedAt: null,
-        lastScanCompletedAt: null,
-        lastScanError: null
-      }
-    })
-    const internals = store as unknown as {
-      writeToDisk: () => Promise<void>
-      state: ClaudeUsagePersistedState
-    }
-
-    writeGate.blocked = true
-    const first = internals.writeToDisk()
-    await vi.waitFor(() => expect(writeGate.waiters.length).toBe(1))
-
-    internals.state.scanState.enabled = false
-    writeGate.blocked = false
-    const second = internals.writeToDisk()
-    writeGate.waiters.splice(0).forEach((resolve) => resolve())
-    await Promise.all([first, second])
-
-    expect(
-      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).scanState
-        .enabled
-    ).toBe(false)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    // Serialized, so the superseded write can be skipped safely rather than racing the newer one.
-    expect(writeOpens.maxConcurrent).toBe(1)
-  })
-
-  it('persists a successful refresh with one full-cache write', async () => {
+  it('adapts Claude scans to pretty-printed cache persistence', async () => {
     const store = createStoreWithState({
       schemaVersion: 5,
       scanState: {
@@ -687,25 +661,7 @@ describe('ClaudeUsageStore', () => {
 
     await store.refresh(true)
 
-    // Why exactly one: scan start used to rewrite the whole 20 MB cache before any result changed.
-    expect(writeOpens.value).toBe(1)
-    expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    expect(
-      JSON.parse(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).scanState
-    ).toMatchObject({
-      lastScanStartedAt: new Date('2026-04-09T12:00:00.000-04:00').getTime(),
-      lastScanCompletedAt: new Date('2026-04-09T12:00:00.000-04:00').getTime(),
-      lastScanError: null
-    })
-  })
-
-  it('sweeps a usage temp file orphaned by a crash between write and rename', async () => {
-    const orphan = join(tempUserData, 'orca-claude-usage.json.999.1.abc.tmp')
-    writeFileSync(orphan, '{}')
-
-    createStoreWithState({})
-    await vi.waitFor(() =>
-      expect(readdirSync(tempUserData).filter((f) => f.endsWith('.tmp'))).toHaveLength(0)
-    )
+    expect(scanClaudeUsageFiles).toHaveBeenCalledWith([], [])
+    expect(readFileSync(join(tempUserData, 'orca-claude-usage.json'), 'utf-8')).toContain('\n')
   })
 })

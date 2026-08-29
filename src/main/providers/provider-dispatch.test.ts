@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { setPtyHostBindings } from '../ipc/pty-host-bindings'
 
 const { handleMock, onMock, removeHandlerMock, removeAllListenersMock } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -62,6 +63,7 @@ import {
   unregisterSshPtyProvider
 } from '../ipc/pty'
 import type { IPtyProvider } from './types'
+import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../pty/legacy-terminal-shim-dir'
 
 describe('PTY provider dispatch', () => {
   const handlers = new Map<string, (...args: unknown[]) => unknown>()
@@ -80,6 +82,16 @@ describe('PTY provider dispatch', () => {
     })
     onMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
       handlers.set(channel, handler)
+    })
+    // Why: pty.ts registers against an injected surface now, so the mocked ipcMain must
+    // be installed for this suite's own `handlers` map to capture registrations.
+    setPtyHostBindings({
+      ipc: {
+        handle: handleMock,
+        on: onMock,
+        removeHandler: removeHandlerMock,
+        removeAllListeners: removeAllListenersMock
+      }
     })
     registerPtyHandlers(mainWindow as never)
   }
@@ -147,6 +159,7 @@ describe('PTY provider dispatch', () => {
     const sshSpawnArgs = vi.mocked(mockSshProvider.spawn).mock.calls.at(-1)![0]
     expect([...(sshSpawnArgs.envToDelete ?? [])].sort()).toEqual(
       [
+        ...LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS,
         'CLAUDE_CODE_CHILD_SESSION',
         'CLAUDE_CODE_SESSION_ID',
         'CLAUDE_CODE_BRIDGE_SESSION_ID'

@@ -11,16 +11,27 @@
 import { cleanup, render } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
+import { makeWorktree } from '../../store/slices/store-test-helpers'
 
 const WINDOW_START = 20
 const WINDOW_END = 25
 const TOTAL_SIZE = 21_992
+const virtualizerKeys = vi.hoisted(() => [] as (string | number)[])
 
 vi.mock('@tanstack/react-virtual', () => ({
-  useVirtualizer: ({ count }: { count: number }) => {
-    const start = count === 0 ? 0 : Math.min(WINDOW_START, count - 1)
+  useVirtualizer: ({
+    count,
+    getItemKey
+  }: {
+    count: number
+    getItemKey: (index: number) => string | number
+  }) => {
+    const start = count === 0 || count <= WINDOW_END + 1 ? 0 : WINDOW_START
     const end = count === 0 ? -1 : Math.min(WINDOW_END, count - 1)
+    virtualizerKeys.splice(0)
     return {
       getTotalSize: () => (count === 0 ? 0 : count * 44 - 8),
       measurementsCache: Array.from({ length: count }, (_, index) => ({
@@ -31,7 +42,9 @@ vi.mock('@tanstack/react-virtual', () => ({
       getVirtualItems: () =>
         Array.from({ length: Math.max(0, end - start + 1) }, (_, offset) => {
           const index = start + offset
-          return { index, key: `w${index}`, start: index * 44 }
+          const key = getItemKey(index)
+          virtualizerKeys.push(key)
+          return { index, key, start: index * 44 }
         }),
       measureElement: () => {}
     }
@@ -39,8 +52,24 @@ vi.mock('@tanstack/react-virtual', () => ({
 }))
 
 vi.mock('./WorkspaceKanbanCard', () => ({
-  default: ({ worktree, laneIndex }: { worktree: Worktree; laneIndex: number }) => (
-    <div data-workspace-board-card-id={worktree.id} data-workspace-board-card-index={laneIndex} />
+  default: ({
+    worktree,
+    laneIndex,
+    isActive,
+    isSelected
+  }: {
+    worktree: Worktree
+    laneIndex: number
+    isActive: boolean
+    isSelected: boolean
+  }) => (
+    <div
+      data-workspace-board-card-id={getWorktreeHostIdentity(worktree)}
+      data-workspace-board-worktree-id={worktree.id}
+      data-workspace-board-card-index={laneIndex}
+      data-active={isActive ? 'true' : 'false'}
+      data-selected={isSelected ? 'true' : 'false'}
+    />
   )
 }))
 
@@ -49,15 +78,24 @@ const { default: WorkspaceKanbanLaneCardList } = await import('./WorkspaceKanban
 const REPO_MAP = new Map<string, Repo>()
 
 function renderLane(count: number): HTMLElement {
+  return renderLaneItems(
+    Array.from({ length: count }, (_, index) => ({ id: `w${index}`, hostId: 'local' }) as Worktree)
+  )
+}
+
+function renderLaneItems(
+  items: readonly Worktree[],
+  options: { activeIdentity?: string; selectedIdentities?: readonly string[] } = {}
+): HTMLElement {
   const scrollRef = createRef<HTMLDivElement>()
   const { container } = render(
     <div ref={scrollRef}>
       <WorkspaceKanbanLaneCardList
-        items={Array.from({ length: count }, (_, index) => ({ id: `w${index}` }) as Worktree)}
+        items={items}
         repoMap={REPO_MAP}
-        activeWorktreeId={null}
+        activeWorktreeIdentity={options.activeIdentity ?? null}
         scrollRef={scrollRef}
-        selectedWorktreeIds={new Set()}
+        selectedWorktreeIds={new Set(options.selectedIdentities)}
         selectedWorktrees={[]}
         nativeDragEnabled={false}
         onActivate={() => {}}
@@ -78,7 +116,14 @@ describe('WorkspaceKanbanLaneCardList', () => {
     const ids = Array.from(container.querySelectorAll('[data-workspace-board-card-id]')).map(
       (card) => card.getAttribute('data-workspace-board-card-id')
     )
-    expect(ids).toEqual(['w20', 'w21', 'w22', 'w23', 'w24', 'w25'])
+    expect(ids).toEqual([
+      'local|w20',
+      'local|w21',
+      'local|w22',
+      'local|w23',
+      'local|w24',
+      'local|w25'
+    ])
   })
 
   it('gives every rendered card its lane index, not its rendered position', () => {
@@ -113,7 +158,36 @@ describe('WorkspaceKanbanLaneCardList', () => {
 
     const single = renderLane(1)
     const card = single.querySelector('[data-workspace-board-card-id]')
-    expect(card?.getAttribute('data-workspace-board-card-id')).toBe('w0')
+    expect(card?.getAttribute('data-workspace-board-card-id')).toBe('local|w0')
     expect(card?.getAttribute('data-workspace-board-card-index')).toBe('0')
+  })
+
+  it('gives same-id cards unique host-qualified virtual and DOM identities', () => {
+    const container = renderLaneItems(
+      [
+        makeWorktree({ id: 'shared', repoId: 'repo', hostId: 'local' }),
+        makeWorktree({ id: 'shared', repoId: 'repo', hostId: 'ssh:host-b' })
+      ],
+      {
+        activeIdentity: 'ssh:host-b|shared',
+        selectedIdentities: ['local|shared']
+      }
+    )
+
+    expect(virtualizerKeys).toEqual(['local|shared', 'ssh:host-b|shared'])
+    expect(
+      Array.from(container.querySelectorAll('[data-workspace-board-card-id]')).map((card) =>
+        card.getAttribute('data-workspace-board-card-id')
+      )
+    ).toEqual(['local|shared', 'ssh:host-b|shared'])
+    expect(
+      Array.from(container.querySelectorAll('[data-workspace-board-card-id]')).map((card) => ({
+        active: card.getAttribute('data-active'),
+        selected: card.getAttribute('data-selected')
+      }))
+    ).toEqual([
+      { active: 'false', selected: 'true' },
+      { active: 'true', selected: 'false' }
+    ])
   })
 })

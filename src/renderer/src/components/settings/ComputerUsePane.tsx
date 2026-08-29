@@ -44,12 +44,12 @@ const PERMISSIONS: PermissionDefinition[] = [
 function statusLabel(status: ComputerUsePermissionStatus | undefined): string {
   switch (status) {
     case 'granted':
-      return 'Granted'
+      return translate('auto.components.settings.ComputerUsePane.statusGranted', 'Granted')
     case 'unsupported':
-      return 'macOS only'
+      return translate('auto.components.settings.ComputerUsePane.statusUnsupported', 'macOS only')
     case 'not-granted':
     case undefined:
-      return 'Not enabled'
+      return translate('auto.components.settings.ComputerUsePane.statusNotEnabled', 'Not enabled')
   }
 }
 
@@ -85,21 +85,51 @@ export function ComputerUsePane(): React.JSX.Element {
   const resetAccessDisabled =
     resetting || loading || states.length === 0 || pendingId !== null || setupUnavailable
   const summaryTitle = checking
-    ? 'Checking Computer Use access.'
+    ? translate(
+        'auto.components.settings.computerUseSummary.checkingTitle',
+        'Checking Computer Use access.'
+      )
     : setupUnavailable
-      ? 'Computer Use is unavailable.'
+      ? translate(
+          'auto.components.settings.computerUseSummary.unavailableTitle',
+          'Computer Use is unavailable.'
+        )
       : allGranted
-        ? 'Computer Use is ready.'
-        : 'Finish setup to use local apps.'
+        ? translate(
+            'auto.components.settings.computerUseSummary.readyTitle',
+            'Computer Use is ready.'
+          )
+        : translate(
+            'auto.components.settings.computerUseSummary.permissionsTitle',
+            'Finish setup to use local apps.'
+          )
+  const missingCount = PERMISSIONS.length - grantedCount
   const summaryDescription = checking
-    ? 'Orca is checking macOS privacy permissions for the Computer Use helper.'
+    ? translate(
+        'auto.components.settings.computerUseSummary.checkingDescription',
+        'Orca is checking macOS privacy permissions for the Computer Use helper.'
+      )
     : setupUnavailable
-      ? `Computer Use permissions are unavailable because ${helperUnavailableReason}.`
+      ? translate(
+          'auto.components.settings.computerUseSummary.unavailableDescription',
+          'Computer Use permissions are unavailable because {{value0}}.',
+          { value0: helperUnavailableReason }
+        )
       : allGranted
-        ? 'Agents can inspect and operate app windows when you ask.'
-        : `${PERMISSIONS.length - grantedCount} permission${
-            PERMISSIONS.length - grantedCount === 1 ? '' : 's'
-          } required before agents can operate app windows.`
+        ? translate(
+            'auto.components.settings.computerUseSummary.readyDescription',
+            'Agents can inspect and operate app windows when you ask.'
+          )
+        : missingCount === 1
+          ? translate(
+              'auto.components.settings.computerUseSummary.permissionsRequired_one',
+              '1 permission required before agents can operate app windows.'
+            )
+          : translate(
+              'auto.components.settings.computerUseSummary.permissionsRequired_other',
+              '{{value0}} permissions required before agents can operate app windows.',
+              { value0: missingCount }
+            )
 
   useEffect(() => {
     mountedRef.current = true

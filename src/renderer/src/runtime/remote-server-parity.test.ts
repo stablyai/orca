@@ -15,7 +15,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import { toWebTerminalSurfaceTabId } from '../../../shared/terminal-surface-id'
-import type { Tab } from '../../../shared/types'
+import type { Tab } from '../../../shared/tab-types'
 import {
   applyFreshWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,
@@ -270,8 +270,10 @@ describe('parity §4: remote create focuses new tab; echoes never steal focus', 
       ENV,
       NOW + 10
     ) as Partial<WebSessionTabsSyncState>
-    // Focus stays on the user's current tab (tab-2), not the echoed tab-1.
-    expect(groupActive(patch)).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
+    // Focus stays on the user's current tab (tab-2), not the echoed tab-1. Under
+    // client-owned placement the strongest form holds: groups are not rewritten at all.
+    const effectiveGroups = patch.groupsByWorktree?.[WT] ?? prior.groupsByWorktree[WT]
+    expect(effectiveGroups?.[0]?.activeTabId).toBe(toWebTerminalSurfaceTabId('host-tab-2'))
   })
 })
 
@@ -304,7 +306,13 @@ describe('parity §11: remote browser create focuses the new browser tab', () =>
   it('honors focus intent for a newly created browser session tab', () => {
     const pageId = 'browser-page-1'
     const prior = stateWithLocalTerminals([localTerminal('host-tab-1', 0, true)])
-    recordWebSessionFocusIntent({ environmentId: ENV }, WT, pageId)
+    recordWebSessionFocusIntent(
+      { environmentId: ENV },
+      WT,
+      pageId,
+      undefined,
+      toWebTerminalSurfaceTabId('host-tab-1')
+    )
     const patch = applyWebSessionTabsSnapshot(
       prior,
       makeSnapshot([{ parentTab: 'host-tab-1', leaf: LEAF_A, active: false }], {

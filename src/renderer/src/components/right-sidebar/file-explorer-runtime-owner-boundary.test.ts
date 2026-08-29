@@ -13,7 +13,7 @@ describe('right sidebar file/git runtime ownership boundaries', () => {
     'src/renderer/src/components/right-sidebar/useFileExplorerTree.ts',
     'src/renderer/src/components/right-sidebar/useFileExplorerImport.ts',
     'src/renderer/src/components/right-sidebar/useFileExplorerInlineInput.ts',
-    'src/renderer/src/components/right-sidebar/useFileExplorerDragDrop.ts',
+    'src/renderer/src/components/right-sidebar/useFileExplorerMoveDrop.ts',
     'src/renderer/src/components/right-sidebar/useFileDuplicate.ts',
     'src/renderer/src/components/right-sidebar/useFileDeletion.ts',
     'src/renderer/src/components/right-sidebar/use-file-explorer-ignored-paths.ts',
@@ -24,7 +24,7 @@ describe('right sidebar file/git runtime ownership boundaries', () => {
     const text = source(path)
 
     expect(text).toMatch(
-      /getRightSidebarWorktreeRuntimeSettings|getSettingsForWorktreeRuntimeOwner|getFileExplorerOperationOwner|getFileExplorerOperationRoute|captureFileExplorerOperationGuard|requireFileExplorerOperationRoute|requireMatchingFileExplorerOperationRoute/
+      /getRightSidebarWorktreeRuntimeSettings|getSettingsForWorktreeRuntimeOwner|getFileExplorerOperationOwner|getFileExplorerOperationRoute|captureFileExplorerOperationGuard|requireMatchingFileExplorerOperationRoute/
     )
     expect(text).not.toContain('settings: useAppStore.getState().settings')
     expect(text).not.toContain('const settings = useAppStore.getState().settings')

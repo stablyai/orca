@@ -154,6 +154,51 @@ function pngBase64(width: number): string {
   return bytes.toString('base64')
 }
 
+async function renderPdfViewerProps(
+  scrollCacheKey?: string | null
+): Promise<Record<string, unknown>> {
+  reactHookRuntime.index = 0
+  const module = await import('./ImageViewer')
+  const rendered = expandNode(
+    module.default({
+      content: 'JVBERi0xLjQK',
+      filePath: '/repo/report.pdf',
+      mimeType: 'application/pdf',
+      ...(scrollCacheKey === undefined ? {} : { scrollCacheKey })
+    })
+  )
+  const [pdf] = findElementsByType(rendered, 'PdfViewer')
+  if (!pdf) {
+    throw new Error('PdfViewer not rendered')
+  }
+  return pdf.props
+}
+
+describe('ImageViewer PDF scroll cache key', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  // Why: nothing else pins the wiring, so a dropped prop anywhere between
+  // EditorContent and PdfViewer would ship as silently amnesiac scrolling.
+  it('forwards the scroll cache key to PdfViewer', async () => {
+    expect(await renderPdfViewerProps('/repo/report.pdf::tab-2:pdf')).toMatchObject({
+      filePath: '/repo/report.pdf',
+      scrollCacheKey: '/repo/report.pdf::tab-2:pdf'
+    })
+  })
+
+  it('passes null when no key is supplied, so unkeyed callers stay opted out', async () => {
+    expect((await renderPdfViewerProps()).scrollCacheKey).toBeNull()
+  })
+
+  it('passes an explicit null through unchanged', async () => {
+    expect((await renderPdfViewerProps(null)).scrollCacheKey).toBeNull()
+  })
+})
+
 describe('ImageViewer preview source retry', () => {
   beforeEach(() => {
     reactHookRuntime.states = []
@@ -192,5 +237,28 @@ describe('ImageViewer preview source retry', () => {
 
     expect(findElementsByType(rendered, 'Image')).toHaveLength(1)
     expect(findElementsByType(rendered, 'img')).toHaveLength(0)
+  })
+})
+
+describe('ImageViewer pre-load layout box', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  // Why: the scroll surface's inner box is w-max/h-max, so percentage maxes resolve
+  // to none and a 6000x4000 image lays out at natural resolution before onLoad.
+  it('bounds both scroll surfaces with viewport units before the image loads', async () => {
+    const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
+
+    expect(images).toHaveLength(2)
+    for (const image of images) {
+      const className = String(image.props.className)
+      expect(className).toContain('max-h-[100vh]')
+      expect(className).toContain('max-w-[100vw]')
+      expect(className).not.toContain('max-h-full')
+      expect(className).not.toContain('max-w-full')
+    }
   })
 })

@@ -3,7 +3,13 @@ import type {
   MobileFilePreviewSource
 } from './mobile-file-preview-request'
 
-export function isEditableMobileTerminalArtifactPreview(preview: MobileFilePreviewResult): boolean {
+export function isEditableMobileTerminalArtifactPreview(
+  preview: MobileFilePreviewResult,
+  readOnly = false
+): boolean {
+  if (readOnly) {
+    return false
+  }
   return (
     (preview.status === 'ready' && preview.kind !== 'image' && !preview.truncated) ||
     preview.status === 'empty'

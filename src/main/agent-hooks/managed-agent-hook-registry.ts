@@ -15,8 +15,25 @@ import { hermesHookService } from '../hermes/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 
-export type ManagedAgentHookInstaller = readonly [HookInstallAgent, () => AgentHookInstallStatus]
-export type ManagedAgentHookRemover = readonly [HookInstallAgent, () => AgentHookInstallStatus]
+// Why (#16441): Codex's installer awaits a codex app-server trust-grant session
+// instead of blocking the main thread on spawnSync. Widening the tuple keeps the
+// other thirteen agent services synchronous — the shared loop already awaits.
+export type ManagedAgentHookInstallOptions = { userInitiated?: boolean }
+export type ManagedAgentHookInstaller = readonly [
+  HookInstallAgent,
+  (
+    options?: ManagedAgentHookInstallOptions
+  ) => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
+]
+export type ManagedAgentHookScriptRefresher = readonly [HookInstallAgent, () => Promise<void>]
+export type ManagedAgentHookRemover = readonly [
+  HookInstallAgent,
+  () => AgentHookInstallStatus | Promise<AgentHookInstallStatus>
+]
+export type ManagedAgentHookAsyncRemover = readonly [
+  HookInstallAgent,
+  () => Promise<AgentHookInstallStatus>
+]
 export type ManagedAgentHookStatusReader = readonly [HookInstallAgent, () => AgentHookInstallStatus]
 
 export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[] = [
@@ -29,11 +46,32 @@ export const MANAGED_AGENT_HOOK_INSTALLERS: readonly ManagedAgentHookInstaller[]
   ['cursor', () => cursorHookService.install()],
   ['droid', () => droidHookService.install()],
   ['command-code', () => commandCodeHookService.install()],
-  ['grok', () => grokHookService.install()],
+  ['grok', (options) => grokHookService.install(options)],
   ['copilot', () => copilotHookService.install()],
   ['hermes', () => hermesHookService.install()],
   ['devin', () => devinHookService.install()],
   ['kimi', () => kimiHookService.install()]
+]
+
+// Why: covers the shared launcher/statusline scripts under ~/.orca/agent-hooks — the files a
+// user-wide agent config keeps invoking after the CLI falls off PATH. Amp and Hermes write
+// provider-native plugin code into their own config dirs with their own install lifecycles,
+// not shared launchers, so they are deliberately absent. Enforced by the coverage test in
+// managed-hook-script-refresh.test.ts: a new installer that writes a launcher without adding
+// a refresher here fails that test.
+export const MANAGED_AGENT_HOOK_SCRIPT_REFRESHERS: readonly ManagedAgentHookScriptRefresher[] = [
+  ['claude', () => claudeHookService.refreshManagedScripts()],
+  ['openclaude', () => openClaudeHookService.refreshManagedScripts()],
+  ['codex', () => codexHookService.refreshManagedScripts()],
+  ['gemini', () => geminiHookService.refreshManagedScripts()],
+  ['antigravity', () => antigravityHookService.refreshManagedScripts()],
+  ['cursor', () => cursorHookService.refreshManagedScripts()],
+  ['droid', () => droidHookService.refreshManagedScripts()],
+  ['command-code', () => commandCodeHookService.refreshManagedScripts()],
+  ['grok', () => grokHookService.refreshManagedScripts()],
+  ['copilot', () => copilotHookService.refreshManagedScripts()],
+  ['devin', () => devinHookService.refreshManagedScripts()],
+  ['kimi', () => kimiHookService.refreshManagedScripts()]
 ]
 
 export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
@@ -51,6 +89,10 @@ export const MANAGED_AGENT_HOOK_REMOVERS: readonly ManagedAgentHookRemover[] = [
   ['hermes', () => hermesHookService.remove()],
   ['devin', () => devinHookService.remove()],
   ['kimi', () => kimiHookService.remove()]
+]
+
+export const MANAGED_AGENT_HOOK_ASYNC_REMOVERS: readonly ManagedAgentHookAsyncRemover[] = [
+  ['grok', () => grokHookService.removeAsync()]
 ]
 
 export const MANAGED_AGENT_HOOK_STATUS_READERS: readonly ManagedAgentHookStatusReader[] = [

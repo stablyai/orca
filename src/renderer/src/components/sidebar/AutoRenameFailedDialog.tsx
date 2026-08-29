@@ -26,7 +26,7 @@ type AutoRenameFailedDialogProps = {
  * CLI output when main still holds it (in-memory, lost on restart), falling
  * back to the persisted excerpt — either can run many lines, so it gets a
  * dedicated scrollable surface rather than a tooltip — see the sibling
- * SshDisconnectedDialog pattern.
+ * AddRemoteHostDialog pattern.
  */
 export function AutoRenameFailedDialog({
   open,
@@ -115,8 +115,9 @@ export function AutoRenameFailedDialog({
           )}
         </p>
         {/* Why: agent-CLI output is literal and often multi-line, so render it
-            verbatim (mono, wrapped) inside a height-capped scroll region. */}
-        <div className="space-y-1.5">
+            verbatim (mono, wrapped) inside a height-capped scroll region.
+            min-w-0 keeps an unbroken token from widening this grid column. */}
+        <div className="min-w-0 space-y-1.5">
           <p className="text-xs font-medium text-foreground">
             {translate(
               'auto.components.sidebar.AutoRenameFailedDialog.74fc00776f',
@@ -143,14 +144,14 @@ export function AutoRenameFailedDialog({
             >
               {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
             </Button>
-            <pre className="scrollbar-sleek max-h-[40vh] overflow-auto rounded-md border border-border/60 bg-muted/40 py-3 pl-3 pr-9 font-mono text-[11px] leading-4 whitespace-pre-wrap break-words text-foreground">
+            <pre className="scrollbar-sleek max-h-[40vh] overflow-auto rounded-md border border-border/60 bg-muted/40 py-3 pl-3 pr-9 font-mono text-[11px] leading-4 whitespace-pre-wrap [overflow-wrap:anywhere] text-foreground">
               {detailText}
             </pre>
           </div>
         </div>
         <DialogFooter>
           {/* Why: Close backs the user out, so it stays quiet (outline, not a
-              solid CTA) — matching the sibling SshDisconnectedDialog. */}
+              solid CTA) — matching the other sidebar dialogs. */}
           <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
             {translate('auto.components.sidebar.AutoRenameFailedDialog.aed1623b1e', 'Close')}
           </Button>

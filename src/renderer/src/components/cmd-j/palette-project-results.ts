@@ -1,11 +1,19 @@
 import { isCmdJPaletteQueryTooLarge } from './palette-results'
-import type { Project, ProjectGroup, ProjectHostSetup, Repo } from '../../../../shared/types'
-import { translate } from '@/i18n/i18n'
 import {
-  getProjectGroupHeaderKey,
-  getProjectHeaderRevealTarget,
-  type ProjectGroupingModel
-} from '../sidebar/worktree-list-groups'
+  cmdJPaletteTokenScore,
+  isCmdJPaletteQueryOverTokenLimit,
+  uniqueCmdJPaletteQueryTokens,
+  normalizeCmdJPaletteQuery,
+  uniqueNormalizedCmdJPaletteKeywords
+} from './palette-query-tokens'
+import type { PaletteResultQualityClass } from '@/lib/palette-match/match-quality'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import { translate } from '@/i18n/i18n'
+import { getProjectGroupHeaderKey } from '../sidebar/worktree-list/grouping/group-keys'
+import { getProjectHeaderRevealTarget } from '../sidebar/worktree-list/grouping/project-grouping'
+import type { ProjectGroupingModel } from '../sidebar/worktree-list/grouping/project-grouping'
 
 export type CmdJProjectGroupResult = {
   id: string
@@ -30,81 +38,31 @@ export type CmdJProjectResult = {
 
 export type CmdJProjectSearchResult = CmdJProjectGroupResult | CmdJProjectResult
 
+/** Ranked row plus the cross-section class that decides which palette section leads. */
+export type CmdJRankedProjectSearchResult = CmdJProjectSearchResult & {
+  qualityClass: PaletteResultQualityClass
+}
+
 type RankedProjectResult = {
   result: CmdJProjectSearchResult
   rule: number
   score: number
 }
 
+/**
+ * Only rule 1 (query equals this row's own title) is a decisive intent. Rule 3 is
+ * equality against a generic alias like `repo`, which every project shares, so it
+ * must not let the whole section claim leadership over a named entity hit.
+ */
+function projectRuleQualityClass(rule: number): PaletteResultQualityClass {
+  if (rule === 1) {
+    return 'exact-intent'
+  }
+  return rule <= 4 ? 'visible-prefix' : 'partial-evidence'
+}
+
 const PROJECT_GROUP_ALIASES = ['group', 'repo group']
 const PROJECT_ALIASES = ['project', 'repo']
-
-function normalizeQuery(value: string): string {
-  let normalized = ''
-  let pendingWhitespace = false
-  for (let index = 0; index < value.length; index += 1) {
-    const code = value.charCodeAt(index)
-    if (isCmdJPaletteWhitespace(code)) {
-      pendingWhitespace = normalized.length > 0
-      continue
-    }
-    if (pendingWhitespace) {
-      normalized += ' '
-      pendingWhitespace = false
-    }
-    normalized += value.charAt(index).toLowerCase()
-  }
-  return normalized
-}
-
-function isCmdJPaletteWhitespace(code: number): boolean {
-  return (
-    code === 32 ||
-    (code >= 9 && code <= 13) ||
-    code === 160 ||
-    code === 5760 ||
-    (code >= 8192 && code <= 8202) ||
-    code === 8232 ||
-    code === 8233 ||
-    code === 8239 ||
-    code === 8287 ||
-    code === 12288 ||
-    code === 65279
-  )
-}
-
-function uniqueNormalized(values: readonly string[]): string[] {
-  return [...new Set(values.map(normalizeQuery).filter(Boolean))]
-}
-
-function tokenize(value: string): string[] {
-  return normalizeQuery(value)
-    .split(/[^a-z0-9]+/)
-    .filter(Boolean)
-}
-
-function tokenScore(query: string, values: readonly string[]): number {
-  const candidateTokens = values.flatMap(tokenize)
-  if (candidateTokens.length === 0) {
-    return 0
-  }
-
-  let score = 0
-  for (const queryToken of tokenize(query)) {
-    let best = 0
-    for (const candidateToken of candidateTokens) {
-      if (candidateToken === queryToken) {
-        best = Math.max(best, 3)
-      } else if (candidateToken.startsWith(queryToken)) {
-        best = Math.max(best, 2)
-      } else if (candidateToken.includes(queryToken)) {
-        best = Math.max(best, 1)
-      }
-    }
-    score += best
-  }
-  return score
-}
 
 function buildCmdJProjectSearchCandidates({
   projectGroups,
@@ -134,7 +92,7 @@ function buildCmdJProjectSearchCandidates({
       ),
       rowKey: getProjectGroupHeaderKey(group.id),
       order,
-      keywords: uniqueNormalized([group.name, ...PROJECT_GROUP_ALIASES])
+      keywords: uniqueNormalizedCmdJPaletteKeywords([group.name, ...PROJECT_GROUP_ALIASES])
     })
   })
 
@@ -156,7 +114,11 @@ function buildCmdJProjectSearchCandidates({
       rowKey: target.key,
       repo: target.repo,
       order: projectGroups.length + repoIndex,
-      keywords: uniqueNormalized([target.label, repo.displayName, ...PROJECT_ALIASES])
+      keywords: uniqueNormalizedCmdJPaletteKeywords([
+        target.label,
+        repo.displayName,
+        ...PROJECT_ALIASES
+      ])
     })
   })
 
@@ -189,9 +151,10 @@ export function hasCmdJProjectSearchCandidates({
 
 function projectRankingForCandidate(
   query: string,
+  queryTokens: readonly string[],
   candidate: CmdJProjectSearchResult
 ): RankedProjectResult | null {
-  const title = normalizeQuery(candidate.title)
+  const title = normalizeCmdJPaletteQuery(candidate.title)
   if (query === title) {
     return { result: candidate, rule: 1, score: 0 }
   }
@@ -199,13 +162,13 @@ function projectRankingForCandidate(
     return { result: candidate, rule: 2, score: 0 }
   }
   const aliasKeywords = candidate.kind === 'project-group' ? PROJECT_GROUP_ALIASES : PROJECT_ALIASES
-  if (aliasKeywords.map(normalizeQuery).includes(query)) {
+  if (aliasKeywords.map(normalizeCmdJPaletteQuery).includes(query)) {
     return { result: candidate, rule: 3, score: 0 }
   }
   if (candidate.keywords.some((keyword) => keyword.startsWith(query))) {
     return { result: candidate, rule: 4, score: 0 }
   }
-  const score = tokenScore(query, [candidate.title, ...candidate.keywords])
+  const score = cmdJPaletteTokenScore(queryTokens, [candidate.title, ...candidate.keywords])
   return score > 0 ? { result: candidate, rule: 5, score } : null
 }
 
@@ -236,18 +199,19 @@ export function searchCmdJProjectResults({
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
   renderableRepoIds?: ReadonlySet<string>
-}): CmdJProjectSearchResult[] {
+}): CmdJRankedProjectSearchResult[] {
   // Why: oversized pasted input should not force the palette to scan project,
   // repo, or group names that may include private workspace details.
   if (isCmdJPaletteQueryTooLarge(query)) {
     return []
   }
-  const normalizedQuery = normalizeQuery(query)
+  const normalizedQuery = normalizeCmdJPaletteQuery(query)
   // Why: project/group rows sit after worktree matches, so one-character
   // searches would add broad noisy navigation targets before intent is clear.
-  if (normalizedQuery.length < 2) {
+  if (normalizedQuery.length < 2 || isCmdJPaletteQueryOverTokenLimit(normalizedQuery)) {
     return []
   }
+  const queryTokens = uniqueCmdJPaletteQueryTokens(normalizedQuery)
   return buildCmdJProjectSearchCandidates({
     projectGroups,
     repos,
@@ -255,8 +219,8 @@ export function searchCmdJProjectResults({
     projectHostSetups,
     renderableRepoIds
   })
-    .map((candidate) => projectRankingForCandidate(normalizedQuery, candidate))
+    .map((candidate) => projectRankingForCandidate(normalizedQuery, queryTokens, candidate))
     .filter((entry): entry is RankedProjectResult => entry !== null)
     .sort(compareProjectRanked)
-    .map((entry) => entry.result)
+    .map((entry) => ({ ...entry.result, qualityClass: projectRuleQualityClass(entry.rule) }))
 }

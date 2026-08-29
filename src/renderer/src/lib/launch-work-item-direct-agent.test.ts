@@ -8,7 +8,10 @@ vi.mock('@/lib/telemetry', () => ({
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, value: string) => value }))
 
-import { buildDirectWorkItemStartupOpts } from './launch-work-item-direct-agent'
+import {
+  buildDirectWorkItemAgentStartupPlan,
+  buildDirectWorkItemStartupOpts
+} from './launch-work-item-direct-agent'
 import type { AgentStartupPlan } from './tui-agent-startup'
 
 describe('buildDirectWorkItemStartupOpts', () => {
@@ -57,5 +60,51 @@ describe('buildDirectWorkItemStartupOpts', () => {
 
     expect(opts.startup?.draftPrompt).toBeUndefined()
     expect(opts.startup?.launchDraftText).toBe('https://github.com/o/r/issues/12')
+  })
+})
+
+const settings = {
+  agentCmdOverrides: {},
+  agentDefaultArgs: {},
+  agentDefaultEnv: {},
+  experimentalNativeChat: true,
+  nativeChatSessionOptions: {
+    codex: {
+      model: 'gpt-5.2-codex',
+      valuesByModel: { 'gpt-5.2-codex': { effort: 'medium' } }
+    }
+  }
+}
+
+describe('buildDirectWorkItemAgentStartupPlan', () => {
+  it('omits native-chat preferences when the new workspace opens in terminal mode', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Review issue 42',
+      promptDelivery: 'draft',
+      settings: { ...settings, openAgentTabsInChatByDefault: false },
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+    expect(result.startupPlan?.launchCommand).not.toContain("'-m'")
+    expect(result.startupPlan?.sessionOptions).toBeUndefined()
+  })
+
+  it('applies native-chat preferences when the new workspace opens in chat', () => {
+    const result = buildDirectWorkItemAgentStartupPlan({
+      agent: 'codex',
+      draftContent: 'Review issue 42',
+      promptDelivery: 'draft',
+      settings: { ...settings, openAgentTabsInChatByDefault: true },
+      launchPlatform: 'darwin',
+      nativeChatTranscriptIsLocalReadable: true
+    })
+
+    expect(result.startupPlan?.launchCommand).toContain("'-m' 'gpt-5.2-codex'")
+    expect(result.startupPlan?.sessionOptions).toEqual({
+      model: 'gpt-5.2-codex',
+      effort: 'medium'
+    })
   })
 })

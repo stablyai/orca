@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { SparsePreset } from '../../../../shared/types'
+import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import type { AppState } from '../types'
 import { createSparsePresetsSlice } from './sparse-presets'
 

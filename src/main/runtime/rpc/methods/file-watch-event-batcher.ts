@@ -1,8 +1,9 @@
-import type { FsChangeEvent } from '../../../../shared/types'
-
-const FILE_WATCH_FLUSH_MS = 150
-const FILE_WATCH_MAX_WAIT_MS = 500
-const MAX_FILE_WATCH_BATCH_EVENTS = 5_000
+import {
+  WATCH_BATCH_MAX_WAIT_MS,
+  WATCH_BATCH_TRAILING_MS
+} from '../../../../shared/filesystem-watch-batch-window'
+import type { FsChangeEvent } from '../../../../shared/filesystem-entry-types'
+import { MAX_BATCHED_WATCHER_EVENTS } from '../../../ipc/filesystem-watcher-event-batch'
 
 export function createFileWatchEventBatcher(
   worktree: string,
@@ -46,7 +47,7 @@ export function createFileWatchEventBatcher(
         if (incomingOverflow) {
           events = [incomingOverflow]
           overflowed = true
-        } else if (events.length + nextEvents.length > MAX_FILE_WATCH_BATCH_EVENTS) {
+        } else if (events.length + nextEvents.length > MAX_BATCHED_WATCHER_EVENTS) {
           // Why: once precision is too expensive to retain and stream, one
           // overflow asks clients to refresh safely without a huge payload.
           events = [
@@ -66,14 +67,14 @@ export function createFileWatchEventBatcher(
       if (firstEventAt === 0) {
         firstEventAt = now
       }
-      if (now - firstEventAt >= FILE_WATCH_MAX_WAIT_MS) {
+      if (now - firstEventAt >= WATCH_BATCH_MAX_WAIT_MS) {
         flush()
         return
       }
       clearTimer()
       // Why: remote file-watch events cross the runtime WebSocket before the
       // renderer refreshes the tree. Match local watcher batching here.
-      timer = setTimeout(flush, FILE_WATCH_FLUSH_MS)
+      timer = setTimeout(flush, WATCH_BATCH_TRAILING_MS)
       if (typeof timer.unref === 'function') {
         timer.unref()
       }

@@ -576,6 +576,15 @@ describe('workspace_create_failed schema', () => {
 })
 
 describe('settings_changed schema', () => {
+  it('accepts structured native chat as a boolean adoption signal', () => {
+    expect(
+      eventSchemas.settings_changed.safeParse({
+        setting_key: 'experimentalStructuredNativeChat',
+        value_kind: 'bool'
+      }).success
+    ).toBe(true)
+  })
+
   it('accepts whitelisted setting keys', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       const parsed = eventSchemas.settings_changed.safeParse({
@@ -610,5 +619,25 @@ describe('exported enum schemas', () => {
     for (const key of SETTINGS_CHANGED_WHITELIST) {
       expect(settingsChangedKeySchema.safeParse(key).success).toBe(true)
     }
+  })
+})
+
+describe('remote_outbound_budget_close schema', () => {
+  it('round-trips every emitter', () => {
+    for (const emitter of ['size', 'queue']) {
+      expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter }).success).toBe(true)
+    }
+  })
+
+  it('rejects an unknown emitter and any payload-describing extra key', () => {
+    expect(eventSchemas.remote_outbound_budget_close.safeParse({ emitter: 'other' }).success).toBe(
+      false
+    )
+    expect(
+      eventSchemas.remote_outbound_budget_close.safeParse({
+        emitter: 'size',
+        byte_length: 4194305
+      }).success
+    ).toBe(false)
   })
 })

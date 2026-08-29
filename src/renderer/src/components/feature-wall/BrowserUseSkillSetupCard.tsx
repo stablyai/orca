@@ -59,6 +59,7 @@ export function BrowserUseSkillSetupCard(props: {
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="feature-wall-browser-use-skill-terminal"
       terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+      terminalRuntime={activeSkillRuntime.agentRuntime}
       installed={skill.installed}
       loading={skill.loading}
       error={activeSkillRuntime.installDisabledReason ?? skill.error}
@@ -75,10 +76,8 @@ export function BrowserUseSkillSetupCard(props: {
       onBeforeOpenTerminal={handleBeforeOpenTerminal}
       showRecheckWhenInstalled={false}
       onRecheck={skill.refresh}
-      // Why: the local-host-only freshness scan cannot vouch for a WSL runtime,
-      // so fall back to the presence-only pill there (mirrors the settings cards).
       freshnessSkillName={
-        activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : ORCA_CLI_SKILL_NAME
+        activeSkillRuntime.canUseLocalSkillFreshness ? ORCA_CLI_SKILL_NAME : undefined
       }
     />
   )

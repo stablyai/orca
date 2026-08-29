@@ -130,9 +130,5 @@ export const ORCA_LINEAR_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCo
 export const ORCA_LINEAR_SKILL_UPDATE_COMMAND =
   buildAgentFeatureSkillUpdateCommand(ORCA_LINEAR_SKILL_NAME)
 
-export const LINEAR_TICKETS_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
-  LINEAR_TICKETS_SKILL_NAME
-])
-
 export const LINEAR_TICKETS_SKILL_UPDATE_COMMAND =
   buildAgentFeatureSkillUpdateCommand(LINEAR_TICKETS_SKILL_NAME)

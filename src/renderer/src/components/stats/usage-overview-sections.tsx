@@ -1,13 +1,12 @@
 import { AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
-import {
-  formatUsageCost,
-  formatUsageTokens,
-  type UsageOverviewDailyPoint,
-  type UsageOverviewModel,
-  type UsageProviderOverview
-} from './usage-overview-model'
+import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
+import type {
+  UsageOverviewDailyPoint,
+  UsageOverviewModel,
+  UsageProviderOverview
+} from './usage-overview-types'
 import { translate } from '@/i18n/i18n'
 
 const INTENSITY_CLASS: Record<UsageOverviewDailyPoint['intensity'], string> = {
@@ -30,7 +29,10 @@ function formatDayLabel(day: string): string {
   if (Number.isNaN(parsed.getTime())) {
     return day
   }
-  return parsed.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+  return parsed.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric'
+  })
 }
 
 export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): React.JSX.Element {
@@ -97,7 +99,10 @@ export function TokenMixBar({ overview }: { overview: UsageOverviewModel }): Rea
                 aria-label={translate(
                   'auto.components.stats.usage.overview.sections.32330a6e66',
                   '{{value0}}: {{value1}} tokens',
-                  { value0: segment.label, value1: segment.value.toLocaleString() }
+                  {
+                    value0: segment.label,
+                    value1: segment.value.toLocaleString()
+                  }
                 )}
               />
             ) : null
@@ -201,7 +206,11 @@ export function ProviderUsageRow({
   onEnable: () => void
 }): React.JSX.Element {
   const share = totalTokens > 0 ? provider.totalTokens / totalTokens : 0
-  const status = provider.enabled ? (provider.isScanning ? 'Scanning' : 'Enabled') : 'Off'
+  const status = provider.enabled
+    ? provider.isScanning
+      ? translate('auto.components.stats.usage.overview.sections.statusScanning', 'Scanning')
+      : translate('auto.components.stats.usage.overview.sections.statusEnabled', 'Enabled')
+    : translate('auto.components.stats.usage.overview.sections.statusOff', 'Off')
   const statusVariant = provider.enabled ? 'secondary' : 'outline'
 
   return (
@@ -246,7 +255,9 @@ export function ProviderUsageRow({
       <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
         <div
           className="h-full rounded-full bg-foreground/75"
-          style={{ width: `${Math.max(share * 100, provider.totalTokens > 0 ? 2 : 0)}%` }}
+          style={{
+            width: `${Math.max(share * 100, provider.totalTokens > 0 ? 2 : 0)}%`
+          }}
         />
       </div>
       {provider.lastScanError ? (

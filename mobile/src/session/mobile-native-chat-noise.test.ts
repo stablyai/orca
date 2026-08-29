@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
+import { isNoiseMessage, stripNoiseMessages } from '../../../src/shared/native-chat-noise'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { isNoiseMessage, stripNoiseMessages } from './mobile-native-chat-noise'
 
 function msg(
   role: NativeChatMessage['role'],

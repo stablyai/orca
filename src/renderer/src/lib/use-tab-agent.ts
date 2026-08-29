@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { isShellProcess } from '../../../shared/agent-detection'
-import { worktreeUsesRemoteConnection } from '@/store/slices/terminals'
+import { worktreeUsesRemoteConnection } from '@/store/terminals/terminal-workspace-routing'
 import { parseRemoteRuntimePtyId } from '@/runtime/runtime-terminal-stream'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -12,11 +12,15 @@ import {
   resolveSiblingRetainedTabAgent,
   resolveSiblingTabAgent
 } from './tab-agent'
-import { resolveExplicitTerminalTitleAgentType } from '../../../shared/terminal-title-agent-type'
+import {
+  isClaudeIdentityFrameTitle,
+  resolveExplicitTerminalTitleAgentType
+} from '../../../shared/terminal-title-agent-type'
 import { resolveCompatibleAgentTypeForOwner } from '../../../shared/agent-title-owner'
 import { isOpenCodeNativeTitle } from '../../../shared/opencode-terminal-title'
 import { resolvePaneAgentOwner } from '../../../shared/pane-agent-owner'
-import type { TerminalTab, TuiAgent } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 // A shell name or the tab's neutral default title (where inferred-interrupt reset parks it); blank titles are no evidence.
 function titleShowsNoAgent(title: string, defaultTitle?: string): boolean {
@@ -115,11 +119,16 @@ export function resolveTabAgentFromSignals(args: {
   )
   const priorIdentity = idleFocusedIdentity ?? launchAgent
   const nativeOpenCodeTitle = explicitTitleAgent === 'opencode' && isOpenCodeNativeTitle(args.title)
+  // Why: a "claude" token in another agent's task text is a mention, not identity, so it must
+  // not take a pane from its known owner — only a title that PRESENTS Claude may (#8940).
+  const titleClaimsIdentity =
+    explicitTitleAgent !== 'claude' || isClaudeIdentityFrameTitle(args.title)
   // Why: native OpenCode titles can reclaim stale launch intent before any observed hook signal.
   const titleReclaimsReusedPane =
     priorIdentity !== null &&
     explicitTitleAgent !== null &&
     explicitTitleAgent !== priorIdentity &&
+    titleClaimsIdentity &&
     (args.hasObservedAgentSignal || hasCompletedHook || nativeOpenCodeTitle)
   // Why: native OpenCode titles lack a provider generation and cannot displace durable ownership.
   const titleAgent =
@@ -275,7 +284,13 @@ export function useTabAgent(tab: TerminalTab): TuiAgent | null {
       ? explicitTitleAgent === tab.launchAgent
       : Boolean(explicitTitleAgent || siblingHookAgent)
     // Why: a recognized foreground process arms exit clearing even for agents with no hook or title integration.
-    if (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal) {
+    // Why the ref gate: this effect re-runs on every title frame, and re-dispatching an
+    // already-true flag costs SortableTab a second commit each time — and names its fiber
+    // in #185 stacks driven elsewhere (see shared/react-update-depth-attribution.ts).
+    if (
+      !hasObservedAgentSignalRef.current &&
+      (focusedHookAgent || completedHookEvidence || processAgent || fallbackAgentSignal)
+    ) {
       hasObservedAgentSignalRef.current = true
       setHasObservedAgentSignal(true)
     }

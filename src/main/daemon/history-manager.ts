@@ -225,13 +225,18 @@ export class HistoryManager {
   }
 
   // Full checkpoints are rare (clean disconnect, pending-buffer overflow, log cap); the 5s tick appends increments instead.
-  checkpoint(sessionId: string, snapshot: TerminalSnapshot): Promise<HistoryCheckpointResult> {
-    return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot))
+  checkpoint(
+    sessionId: string,
+    snapshot: TerminalSnapshot,
+    opts?: { pendingOutputSeq?: number }
+  ): Promise<HistoryCheckpointResult> {
+    return this.mutations.track(sessionId, this.checkpointUntracked(sessionId, snapshot, opts))
   }
 
   private async checkpointUntracked(
     sessionId: string,
-    snapshot: TerminalSnapshot
+    snapshot: TerminalSnapshot,
+    opts?: { pendingOutputSeq?: number }
   ): Promise<HistoryCheckpointResult> {
     if (this.disabledSessions.has(sessionId)) {
       return 'unavailable'
@@ -243,8 +248,8 @@ export class HistoryManager {
 
     try {
       // Why: tmp+rename is atomic (corrupt checkpoint > stale); async so a sync ~MB write can't stall IPC (worse under Windows AV).
-      // The adapter's checkpointInFlight guard serializes checkpoints, so concurrent async writes can't collide on the fixed .tmp path.
-      const checkpoint = await writer.checkpoint(snapshot)
+      // The adapter's per-session checkpoint queue prevents concurrent writes from colliding on the fixed .tmp path.
+      const checkpoint = await writer.checkpoint(snapshot, opts)
       if (checkpoint.result === 'retryable') {
         this.onWriteError?.(sessionId, checkpoint.error)
       }

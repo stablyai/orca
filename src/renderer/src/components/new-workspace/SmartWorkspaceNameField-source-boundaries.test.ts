@@ -99,6 +99,31 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(githubLookupSection).toContain('repoBackedSearchTargets.map')
   })
 
+  it('does not fan decisive Linear URLs out to unrelated providers', () => {
+    const githubGate = sourceBetween(
+      FIELD_SOURCE,
+      'const shouldQueryGithub =',
+      'const shouldQueryLinear ='
+    )
+    const branchGate = sourceBetween(
+      FIELD_SOURCE,
+      'const branchSearchRequest = useMemo',
+      'useEffect(() => {\n    if (!branchSearchRequest)'
+    )
+    const gitlabGate = sourceBetween(
+      FIELD_SOURCE,
+      'const shouldQueryGitlab =',
+      'useEffect(() => {\n    if (!shouldQueryGitlab'
+    )
+
+    expect(FIELD_SOURCE).toContain(
+      "linearUrlIntent !== null && (mode === 'smart' || mode === 'linear')"
+    )
+    expect(githubGate).toContain('!linearUrlIntentOwnsInput')
+    expect(branchGate).toContain('linearUrlIntentOwnsInput')
+    expect(gitlabGate).toContain('!linearUrlIntentOwnsInput')
+  })
+
   it('reports the active source mode without lifting source search state', () => {
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange?: (mode: SmartNameMode) => void')
     expect(FIELD_SOURCE).toContain('onActiveSourceModeChange')
@@ -112,5 +137,9 @@ describe('SmartWorkspaceNameField repo-backed source boundaries', () => {
     expect(FIELD_SOURCE).toContain('isComposerFieldToFieldFocus')
     expect(FIELD_SOURCE).toContain('onPointerDown={() => {')
     expect(FIELD_SOURCE).toContain('markSourcePopoverUserEngaged()')
+  })
+
+  it('confines source-mode overflow to the source strip', () => {
+    expect(FIELD_SOURCE).toContain('overflow-x-auto overflow-y-hidden px-0 scrollbar-sleek')
   })
 })

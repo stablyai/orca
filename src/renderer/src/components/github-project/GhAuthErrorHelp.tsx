@@ -12,8 +12,8 @@ import { useEffect, useState } from 'react'
 import { Copy, ExternalLink, RotateCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
-import type { GitHubProjectViewError } from '@/../../shared/github-project-types'
-import type { GhAuthDiagnostic } from '@/../../shared/github-auth-types'
+import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
+import type { GhAuthDiagnostic } from '../../../../shared/github/auth-types'
 import { translate } from '@/i18n/i18n'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
@@ -40,14 +40,12 @@ function refreshCommandForHost(host: string | null | undefined): string {
 // macOS/Linux vs PowerShell on Windows.
 const IS_WINDOWS = typeof navigator !== 'undefined' && /Win(dows|32|64)/i.test(navigator.userAgent)
 
-function reloadOrcaRenderer(): void {
-  const reload = window.api.app.reload
-  if (typeof reload !== 'function') {
-    window.location.reload()
-    return
-  }
-  void reload().catch(() => {
-    window.location.reload()
+export function reloadOrcaRenderer(): void {
+  void window.api.app.reload().catch((error) => {
+    console.error(
+      '[github-projects] Renderer reload refused:',
+      error instanceof Error ? error.name : typeof error
+    )
   })
 }
 

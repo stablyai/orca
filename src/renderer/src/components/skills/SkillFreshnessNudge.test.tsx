@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   toastDismiss: vi.fn(),
   requestDialog: vi.fn(),
   settingsLoaded: true,
+  canUseLocalSkillFreshness: true,
+  freshnessEnabled: true,
   inventory: null as SkillFreshnessInventory | null,
   error: null as string | null
 }))
@@ -57,11 +59,20 @@ function eligibleInventory(): SkillFreshnessInventory {
 }
 
 vi.mock('@/hooks/useSkillFreshness', () => ({
-  useSkillFreshness: () => ({
-    inventory: mocks.inventory,
-    loading: false,
-    error: mocks.error,
-    refresh: vi.fn()
+  useSkillFreshness: (enabled = true) => {
+    mocks.freshnessEnabled = enabled
+    return {
+      inventory: mocks.inventory,
+      loading: false,
+      error: mocks.error,
+      refresh: vi.fn()
+    }
+  }
+}))
+
+vi.mock('@/hooks/useActiveProjectSkillRuntime', () => ({
+  useActiveProjectSkillRuntime: () => ({
+    canUseLocalSkillFreshness: mocks.canUseLocalSkillFreshness
   })
 }))
 
@@ -107,6 +118,8 @@ describe('SkillFreshnessNudge', () => {
   beforeEach(() => {
     mocks.dismissed = []
     mocks.settingsLoaded = true
+    mocks.canUseLocalSkillFreshness = true
+    mocks.freshnessEnabled = true
     mocks.inventory = eligibleInventory()
     mocks.error = null
     mocks.updateSettings.mockReset()
@@ -175,6 +188,19 @@ describe('SkillFreshnessNudge', () => {
     await rerenderNudge()
     options.onDismiss()
 
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('freshness-toast')
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+  })
+
+  it('retracts an active local nudge when runtime freshness becomes unavailable', async () => {
+    await renderNudge()
+    const options = mocks.toastInfo.mock.calls[0]?.[1]
+
+    mocks.canUseLocalSkillFreshness = false
+    await rerenderNudge()
+    options.onDismiss()
+
+    expect(mocks.freshnessEnabled).toBe(false)
     expect(mocks.toastDismiss).toHaveBeenCalledWith('freshness-toast')
     expect(mocks.updateSettings).not.toHaveBeenCalled()
   })

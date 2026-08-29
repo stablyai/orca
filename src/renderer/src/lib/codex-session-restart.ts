@@ -18,13 +18,18 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
+// Why launchAgent: pty:spawn runs the managed-auth readiness gate and Codex
+// launch prep (project trust pre-mark) only for launchAgent 'codex', so without
+// it a restart respawn could race the account handoff and record a launch
+// account the pane does not actually read.
 export const CODEX_ACCOUNT_RESTART_STARTUP = {
   command: 'codex',
-  startupCommandDelivery: 'shell-ready'
+  startupCommandDelivery: 'shell-ready',
+  launchAgent: 'codex'
 } as const
 
 export type CodexPaneScanResult = {
@@ -209,16 +214,59 @@ export async function markLiveCodexSessionsForRestart(args: {
     return
   }
 
+  const recordedLiveScans = scans.filter((scan) => scan.eligible && scan.laneSource === 'recorded')
+  // Why: a reauth can report null -> A even though a pane's immutable launch
+  // route was already A; main's per-PTY record is the restart authority.
+  const authoritativeStalePanes =
+    recordedLiveScans.length === 0
+      ? null
+      : await window.api.codexAccounts
+          .listStalePanes({ ptyIds: recordedLiveScans.map((scan) => scan.ptyId) })
+          .catch(() => null)
+  const authoritativeStaleByPtyId = authoritativeStalePanes
+    ? new Map(authoritativeStalePanes.map((pane) => [pane.ptyId, pane]))
+    : null
+  if (authoritativeStaleByPtyId) {
+    for (const scan of recordedLiveScans) {
+      if (!authoritativeStaleByPtyId.has(scan.ptyId)) {
+        useAppStore.getState().clearCodexRestartNotice(scan.ptyId)
+      }
+    }
+  }
+
   useAppStore.getState().markCodexRestartNotices(
-    liveCodexSessionPtyIds.map((ptyId) => ({
-      ptyId,
-      previousAccountLabel: args.previousAccountLabel,
-      nextAccountLabel: args.nextAccountLabel,
-      ...(args.previousAccountId === undefined
-        ? {}
-        : { previousAccountId: args.previousAccountId }),
-      ...(args.nextAccountId === undefined ? {} : { nextAccountId: args.nextAccountId })
-    }))
+    scans.flatMap((scan) => {
+      if (!scan.eligible) {
+        return []
+      }
+      if (authoritativeStaleByPtyId && scan.laneSource === 'recorded') {
+        const stalePane = authoritativeStaleByPtyId.get(scan.ptyId)
+        if (!stalePane) {
+          return []
+        }
+        return [
+          {
+            ptyId: scan.ptyId,
+            previousAccountLabel: args.previousAccountLabel,
+            nextAccountLabel: args.nextAccountLabel,
+            previousAccountId: stalePane.launchAccountId,
+            nextAccountId: stalePane.activeAccountId,
+            homeRouteChanged: stalePane.reason === 'home-route-change'
+          }
+        ]
+      }
+      return [
+        {
+          ptyId: scan.ptyId,
+          previousAccountLabel: args.previousAccountLabel,
+          nextAccountLabel: args.nextAccountLabel,
+          ...(args.previousAccountId === undefined
+            ? {}
+            : { previousAccountId: args.previousAccountId }),
+          ...(args.nextAccountId === undefined ? {} : { nextAccountId: args.nextAccountId })
+        }
+      ]
+    })
   )
 }
 
@@ -266,7 +314,8 @@ export async function markRestoredStaleCodexSessionsForRestart(args?: {
       // Why the ids: main decided staleness by id, and the labels can collide.
       // Passing only labels hands the store a question it cannot answer.
       previousAccountId: pane.launchAccountId,
-      nextAccountId: pane.activeAccountId
+      nextAccountId: pane.activeAccountId,
+      ...(pane.reason === 'home-route-change' ? { homeRouteChanged: true as const } : {})
     }))
   )
   // Why not every stale pane: the bind sweep suppresses a "notified" pane for the

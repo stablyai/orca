@@ -4,6 +4,7 @@ import type {
   SshRepoReadoption,
   SshTarget
 } from '../../shared/ssh-types'
+import { meaningfulSshAlias, sshEndpointKey, type SshIdentityFields } from './ssh-target-identity'
 
 /**
  * Re-adoption of workspaces orphaned when an SSH target was removed.
@@ -13,7 +14,8 @@ import type {
  * minted and nothing links the old workspaces to it. We bridge that gap using
  * removal-time tombstones ({ oldTargetId, configHost, host, username, port }):
  * on add/import we match the new target's identity to a tombstone and re-point
- * every repo/worktree from the old id to the new one.
+ * every repo/worktree from the old id to the new one, together with the stored
+ * automations and persisted host filter pinned to it.
  *
  * Matching is intentionally strict — configHost (alias) first, then the
  * host+username+port tuple — so we only auto-reattach on a confident identity
@@ -21,28 +23,12 @@ import type {
  * match cleanly stays a ghost, handled by the forget flow instead.
  */
 
-type IdentityFields = Pick<SshTarget, 'configHost' | 'host' | 'port' | 'username'>
-
-function normalize(value: string | undefined): string {
-  return value?.trim().toLowerCase() ?? ''
-}
-
-function tupleKey(fields: IdentityFields): string {
-  return `${normalize(fields.host)}|${fields.port}|${normalize(fields.username)}`
-}
-
-// An alias only counts as a distinguishing identity when it differs from the
-// host. addTarget defaults configHost to host, so a manual add with no real
-// ssh-config alias has configHost === host — that's not an alias, it's just the
-// hostname, and matching on it alone would ignore port/username.
-function meaningfulAlias(fields: IdentityFields): string {
-  const alias = normalize(fields.configHost)
-  return alias && alias !== normalize(fields.host) ? alias : ''
-}
-
-function tombstoneMatches(tombstone: RemovedSshTargetTombstone, target: IdentityFields): boolean {
-  const targetAlias = meaningfulAlias(target)
-  const tombstoneAlias = meaningfulAlias(tombstone)
+function tombstoneMatches(
+  tombstone: RemovedSshTargetTombstone,
+  target: SshIdentityFields
+): boolean {
+  const targetAlias = meaningfulSshAlias(target)
+  const tombstoneAlias = meaningfulSshAlias(tombstone)
   // Primary: matching ssh-config alias. Stable across remove/re-import.
   if (targetAlias && tombstoneAlias) {
     // Both carry a real alias — the alias is the identity. Different aliases
@@ -54,7 +40,7 @@ function tombstoneMatches(tombstone: RemovedSshTargetTombstone, target: Identity
   // Fallback: identical host+user+port. Used when either side has no real alias
   // (manual adds default configHost to host), so a different account or port on
   // the same host is correctly treated as a different target.
-  return tupleKey(tombstone) === tupleKey(target)
+  return sshEndpointKey(tombstone) === sshEndpointKey(target)
 }
 
 /**
@@ -76,7 +62,7 @@ export function readoptOrphanedWorkspacesForTarget(
     // Why: a re-added target can't share the id of one that still exists, but
     // guard anyway so we never re-point a live target onto itself.
     if (tombstone.oldTargetId === newTarget.id) {
-      store.removeRemovedSshTargetTombstone(tombstone.oldTargetId)
+      store.releaseRemovedSshTargetTombstone(tombstone.oldTargetId)
       continue
     }
     if (!tombstoneMatches(tombstone, newTarget)) {
@@ -87,8 +73,9 @@ export function readoptOrphanedWorkspacesForTarget(
       readoptions.push({ oldTargetId: tombstone.oldTargetId, newTargetId: newTarget.id, repoIds })
     }
     // Consume the tombstone whether or not it re-pointed anything: the host has
-    // returned, so the record has served its purpose.
-    store.removeRemovedSshTargetTombstone(tombstone.oldTargetId)
+    // returned, so the record has served its purpose — unless an automation or the
+    // persisted filter still depends on that removal evidence, which retains it.
+    store.releaseRemovedSshTargetTombstone(tombstone.oldTargetId)
   }
   return readoptions
 }

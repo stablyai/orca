@@ -55,7 +55,8 @@ vi.mock('./gh-utils', () => ({
   release: releaseMock,
   _resetOwnerRepoCache: vi.fn(),
   classifyGhError: (stderr: string) => ({ type: 'unknown', message: stderr }),
-  classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr })
+  classifyListIssuesError: (stderr: string) => ({ type: 'unknown', message: stderr }),
+  classifyListPrsError: (stderr: string) => ({ type: 'unknown', message: stderr })
 }))
 
 vi.mock('../git/runner', () => ({
@@ -111,7 +112,7 @@ import {
   _resetMergeQueueCacheForTests,
   _resetOwnerRepoCache
 } from './client'
-import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github-work-items-query-bounds'
+import { GITHUB_WORK_ITEMS_QUERY_MAX_BYTES } from '../../shared/github/work-items-query-bounds'
 
 import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
 

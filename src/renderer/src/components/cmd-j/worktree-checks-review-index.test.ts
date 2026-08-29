@@ -1,9 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { searchWorktrees } from '@/lib/worktree-palette-search'
 import { buildWorktreeChecksReviewIndex } from './worktree-checks-review-index'
 
 const repo: Repo = {
@@ -176,6 +179,56 @@ describe('buildWorktreeChecksReviewIndex', () => {
 
     expect(reviews.has(localWorktree)).toBe(false)
     expect(reviews.get(sshWorktree)).toMatchObject({ provider: 'github', number: 42 })
+  })
+
+  it('does not expose a physical SSH review to its runtime-owned worktree', () => {
+    const runtimeRepo: Repo = {
+      ...repo,
+      path: '/remote/orca',
+      executionHostId: 'runtime:paired-host'
+    }
+    const runtimeWorktree: Worktree = {
+      ...worktree,
+      linkedPR: null,
+      runtimeOwnerEnvironmentId: 'paired-host'
+    }
+    const physicalKey = getGitHubPRCacheKey(
+      repo.path,
+      repo.id,
+      'feature/search',
+      null,
+      repo.connectionId,
+      repo.executionHostId,
+      true
+    )
+
+    const repoByHostIdentity = new Map([
+      [getRepoHostIdentity(repo), repo],
+      [getRepoHostIdentity(runtimeRepo), runtimeRepo]
+    ])
+    const prCache = {
+      [physicalKey]: { data: makePR(), fetchedAt: 1 },
+      '/remote/orca::feature/search': {
+        data: { ...makePR(), title: 'Physical legacy PR' },
+        fetchedAt: 1
+      }
+    }
+    const reviews = buildWorktreeChecksReviewIndex({
+      worktrees: [runtimeWorktree],
+      repoByHostIdentity,
+      prCache,
+      hostedReviewCache: {},
+      settings: null
+    })
+
+    expect(reviews.has(runtimeWorktree)).toBe(false)
+    expect(
+      searchWorktrees([runtimeWorktree], 'physical legacy', new Map([[repo.id, repo]]), {
+        repoMapByHostIdentity: repoByHostIdentity,
+        prCache,
+        checksReviewByWorktree: reviews
+      })
+    ).toEqual([])
   })
 
   it('skips a branch-less worktree instead of throwing', () => {

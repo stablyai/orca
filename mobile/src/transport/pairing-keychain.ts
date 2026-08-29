@@ -162,7 +162,12 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
   if (presenceGeneration !== null) {
     const value = await SecureStore.getItemAsync(key, optionsForGeneration(presenceGeneration))
     if (value === null) {
-      throw new Error('pairing keychain item is unavailable at its recorded generation')
+      // Why: Android reports an undecryptable entry as null, so failing closed here latched
+      // callers out of their own orphan cleanup forever; report absent instead. The presence
+      // record must survive — it is the only thing that keeps a later read from resurrecting
+      // the superseded value under an older generation. Callers clear it via delete or a
+      // re-pair write, so a legitimately-current older value is traded for re-pairing.
+      return null
     }
     return value
   }

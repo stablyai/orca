@@ -5,9 +5,12 @@ import { existsSync } from 'node:fs'
 export {
   getCmdExePath,
   getSpawnArgsForWindows,
+  wrapWindowsStartWait,
   isWindowsBatchScript,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
-  UnsafeWindowsBatchArgumentsError
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL,
+  UnsafeWindowsBatchArgumentsError,
+  type GetSpawnArgsForWindowsOptions
 } from '../shared/windows-batch-spawn'
 
 function execFileWithoutBlocking(

@@ -163,6 +163,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         )}
         terminalWorktreeId="settings-ephemeral-vms-skill-terminal"
         terminalShellOverride={activeSkillRuntime.terminalShellOverride}
+        terminalRuntime={activeSkillRuntime.agentRuntime}
         installed={skillDetected}
         loading={skillLoading}
         error={activeSkillRuntime.installDisabledReason ?? skillError}
@@ -183,7 +184,7 @@ export function EphemeralVmsPane(): React.JSX.Element {
         }}
         onRecheck={refreshSkill}
         freshnessSkillName={
-          activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? undefined : EPHEMERAL_VMS_SKILL_NAME
+          activeSkillRuntime.canUseLocalSkillFreshness ? EPHEMERAL_VMS_SKILL_NAME : undefined
         }
       />
 

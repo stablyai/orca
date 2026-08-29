@@ -1,8 +1,9 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { StyleSheet, View } from 'react-native'
 import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
-import { flattenAgentRowLineage } from '../worktree/agent-row-lineage'
+import { buildAgentRowLineageTree, flattenAgentRowLineage } from '../worktree/agent-row-lineage'
 import { WorktreeAgentRow } from './WorktreeAgentRow'
+import { WorktreeAgentSummary } from './WorktreeAgentSummary'
 
 type Props = {
   agents: RuntimeWorktreeAgentRow[]
@@ -14,20 +15,35 @@ type Props = {
 // a depth-indented WorktreeAgentRow per agent, mirroring the desktop sidebar's
 // WorktreeCardAgents.
 export function WorktreeAgentList({ agents, now, unvisited }: Props) {
-  // Why: rebuild the lineage tree only when the agent list changes, not on every
-  // re-render (the shared useNow tick re-renders this list every 30s).
   const nodes = useMemo(() => flattenAgentRowLineage(agents), [agents])
+  const summaryAgents = useMemo(() => {
+    const lineage = buildAgentRowLineageTree(agents)
+    return lineage.childrenByParentPaneKey.size > 0 ? lineage.rootRows : agents
+  }, [agents])
+  const [expanded, setExpanded] = useState(false)
+  const usesSummary = summaryAgents.length > 1
+
   return (
     <View style={styles.list}>
-      {nodes.map((node) => (
-        <WorktreeAgentRow
-          key={node.row.paneKey}
-          agent={node.row}
-          depth={node.depth}
+      {usesSummary ? (
+        <WorktreeAgentSummary
+          agents={summaryAgents}
+          expanded={expanded}
           now={now}
-          unvisited={unvisited}
+          onToggle={() => setExpanded((value) => !value)}
         />
-      ))}
+      ) : null}
+      {!usesSummary || expanded
+        ? nodes.map((node) => (
+            <WorktreeAgentRow
+              key={node.row.paneKey}
+              agent={node.row}
+              depth={node.depth}
+              now={now}
+              unvisited={unvisited}
+            />
+          ))
+        : null}
     </View>
   )
 }

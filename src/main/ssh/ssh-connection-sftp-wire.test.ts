@@ -267,6 +267,7 @@ async function boundedTransfer(
 
 function splitNamespaceMapping(homeRelativePath: string): SftpNamespacePathMapping {
   return {
+    homeRelativeNamespaceRoot: RELAY_DIR,
     homeRelativePath,
     shellProbePath: `${SHELL_RELAY_DIR}/${MARKER_PATH}`,
     homeRelativeProbePath: `${RELAY_DIR}/${MARKER_PATH}`

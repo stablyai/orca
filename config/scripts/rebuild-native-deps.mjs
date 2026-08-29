@@ -62,7 +62,9 @@ if (ignoreModules.length > 0) {
 const NATIVE_MODULES = [
   'node-pty',
   'cpu-features',
-  ...(rebuildPlatform === 'win32' ? ['windows-native-registry'] : [])
+  ...(rebuildPlatform === 'win32'
+    ? ['windows-native-registry', '@vscode/windows-process-tree']
+    : [])
 ]
 const onlyModules = NATIVE_MODULES.filter((m) => !ignoreModules.includes(m))
 const forceRebuild =
@@ -399,14 +401,23 @@ function getPatchedNodePtyRebuildReason() {
     return null
   }
 
-  // Why: Orca patches node-pty's native Unix spawn path; upstream prebuilds can
-  // load successfully in Electron while missing the patched fd/error handling.
+  // Why: Orca patches node-pty's native Unix spawn path and Windows job-object
+  // exports; upstream prebuilds can load while missing those patches.
   const nodePtyDir = resolve(projectDir, 'node_modules', 'node-pty')
-  const artifactPaths = [resolve(nodePtyDir, 'build', 'Release', 'pty.node')]
-  // Why: node-pty only builds spawn-helper on macOS; Linux builds only pty.node.
-  if (process.platform === 'darwin') {
-    artifactPaths.push(resolve(nodePtyDir, 'build', 'Release', 'spawn-helper'))
-  }
+  const artifactPaths =
+    rebuildPlatform === 'win32'
+      ? [
+          resolve(nodePtyDir, 'build', 'Release', 'conpty.node'),
+          ...NODE_PTY_CONPTY_RUNTIME_FILES.map((filename) =>
+            resolve(nodePtyDir, 'build', 'Release', 'conpty', filename)
+          )
+        ]
+      : [
+          resolve(nodePtyDir, 'build', 'Release', 'pty.node'),
+          ...(osPlatform() === 'darwin'
+            ? [resolve(nodePtyDir, 'build', 'Release', 'spawn-helper')]
+            : [])
+        ]
   const missingArtifact = artifactPaths.find((artifactPath) => !existsSync(artifactPath))
 
   if (!missingArtifact) {
@@ -418,9 +429,6 @@ function getPatchedNodePtyRebuildReason() {
 
 function requiresPatchedNodePtySourceBuild() {
   if (!onlyModules.includes('node-pty')) {
-    return false
-  }
-  if (rebuildPlatform === 'win32') {
     return false
   }
   if (rebuildPlatform !== osPlatform() || rebuildArch !== process.arch) {
@@ -473,9 +481,14 @@ function loadNativeModule(moduleName) {
   }
   if (moduleName === 'node-pty') {
     projectRequire('node-pty')
+    const { assertNodePtyJobOwnership } = projectRequire(
+      './config/scripts/node-pty-job-ownership.cjs'
+    )
     const { loadNativeModule } = projectRequire('node-pty/lib/utils')
-    const native = loadNativeModule(getNodePtyNativeModuleName())
+    const nativeName = getNodePtyNativeModuleName()
+    const native = loadNativeModule(nativeName)
     assertNodePtyWindowsConptyRuntime(native.dir)
+    assertNodePtyJobOwnership({ nativeName, native })
     if (requirePatchedNodePtySourceBuild && !isNodePtyReleaseBuildDir(native.dir)) {
       throw new Error(
         'node-pty resolved to ' +

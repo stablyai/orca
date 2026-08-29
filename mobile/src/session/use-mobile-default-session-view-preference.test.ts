@@ -30,7 +30,6 @@ describe('useMobileDefaultSessionViewPreference', () => {
   let preference: MobileDefaultSessionViewPreference | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
     vi.mocked(saveDefaultSessionView).mockReset().mockResolvedValue(undefined)
   })

@@ -5,6 +5,21 @@ import {
   isWindowsAbsolutePathLike,
   relativePathInsideRoot
 } from '../../../../shared/cross-platform-path'
+import {
+  restoreRecentlyClosedTabPosition,
+  type RecentlyClosedTabPosition
+} from './recently-closed-tab-position'
+
+export {
+  createRecentlyClosedTabPositionIndex,
+  getRecentlyClosedTabPosition,
+  insertTabAtRecentlyClosedPosition,
+  restoreRecentlyClosedTabPosition
+} from './recently-closed-tab-position'
+export type {
+  RecentlyClosedTabPosition,
+  RecentlyClosedTabPositionIndex
+} from './recently-closed-tab-position'
 
 /** Snapshot of a terminal tab captured at user-initiated close time. Reopen
  *  recreates a fresh shell in the same startup directory (Ghostty semantics) —
@@ -14,6 +29,7 @@ export type ClosedTerminalTabSnapshot = {
   shellOverride?: string
   customTitle?: string
   color?: string
+  position?: RecentlyClosedTabPosition
 }
 
 export type RecentlyClosedTabKind = 'terminal' | 'browser' | 'editor'
@@ -135,7 +151,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       return false
     }
 
-    const tab = get().createTab(worktreeId, undefined, snapshot.shellOverride, {
+    const tab = get().createTab(worktreeId, snapshot.position?.groupId, snapshot.shellOverride, {
       ...(snapshot.startupCwd ? { startupCwd: snapshot.startupCwd } : {}),
       activate: true
     })
@@ -146,13 +162,7 @@ export const createRecentlyClosedTabsSlice: StateCreator<
       get().setTabColor(tab.id, snapshot.color)
     }
     get().setActiveTabType('terminal')
-    // Why: with a stored order the strip appends unknown ids last already, but
-    // an explicit append keeps the reopened tab at the end even after future
-    // reorders write the stored order back.
-    const order = get().tabBarOrderByWorktree[worktreeId]
-    if (order && !order.includes(tab.id)) {
-      get().setTabBarOrder(worktreeId, [...order, tab.id])
-    }
+    restoreRecentlyClosedTabPosition(get, worktreeId, tab.id, snapshot.position)
     return true
   },
 

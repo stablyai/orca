@@ -1,4 +1,5 @@
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -173,11 +174,15 @@ export function resolveSettingsTargetRepoId(
  */
 export async function removeSettingsProjectFromAllHosts(
   setups: readonly ProjectHostSetup[],
-  removeProject: (repoId: string, options: { hostId: ExecutionHostId }) => Promise<void>
+  removeProject: (
+    repoId: string,
+    options: { hostId: ExecutionHostId; errorFeedback?: 'toast' | 'silent' }
+  ) => Promise<void>
 ): Promise<void> {
   for (const setup of setups) {
     if (setup.repoId.trim().length > 0) {
-      await removeProject(setup.repoId, { hostId: setup.hostId })
+      // Why: user-initiated single-project removal, so a failure must be visible rather than silent (#11994).
+      await removeProject(setup.repoId, { hostId: setup.hostId, errorFeedback: 'toast' })
     }
   }
 }

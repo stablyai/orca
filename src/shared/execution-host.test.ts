@@ -10,6 +10,7 @@ import {
   normalizeExecutionHostScope,
   normalizeVisibleExecutionHostIds,
   parseExecutionHostId,
+  requestedExecutionHostScope,
   toRuntimeExecutionHostId,
   toSshExecutionHostId
 } from './execution-host'
@@ -66,6 +67,16 @@ describe('execution host identity', () => {
     expect(normalizeExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
   })
 
+  it('defaults an omitted scope request to this host, not a fan-out', () => {
+    expect(requestedExecutionHostScope(undefined)).toBe(LOCAL_EXECUTION_HOST_ID)
+    expect(requestedExecutionHostScope(null)).toBe(LOCAL_EXECUTION_HOST_ID)
+    // An empty or unrecognized scope is a real value, so it still fans out.
+    expect(requestedExecutionHostScope('')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(requestedExecutionHostScope('bogus')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(requestedExecutionHostScope('all')).toBe(ALL_EXECUTION_HOSTS_SCOPE)
+    expect(requestedExecutionHostScope('ssh:dev%20box')).toBe('ssh:dev%20box')
+  })
+
   it('normalizes visible host id arrays', () => {
     expect(normalizeVisibleExecutionHostIds(null)).toBeNull()
     expect(normalizeVisibleExecutionHostIds([])).toBeNull()
@@ -107,5 +118,18 @@ describe('execution host identity', () => {
     expect(getSettingsFocusedExecutionHostId({ activeRuntimeEnvironmentId: 'runtime-1' })).toBe(
       'runtime:runtime-1'
     )
+  })
+})
+
+describe('execution host id delimiter invariant', () => {
+  it('rejects an unencoded pipe so a crafted id cannot rebind a worktree identity alias', () => {
+    // composeWorktreeHostIdentity splits at the first `|`, so `ssh:a|b` would resolve as `ssh:a`.
+    expect(parseExecutionHostId('ssh:a|b')).toBeNull()
+    expect(parseExecutionHostId('runtime:a|b')).toBeNull()
+    expect(parseExecutionHostId(toSshExecutionHostId('a|b'))).toEqual({
+      kind: 'ssh',
+      id: 'ssh:a%7Cb',
+      targetId: 'a|b'
+    })
   })
 })

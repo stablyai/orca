@@ -24,6 +24,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       first.result.current.setSort('created')
       first.result.current.setGroup('folder')
       first.result.current.setHideEmptySessions(true)
+      first.result.current.setSessionLimit('unlimited')
     })
     first.unmount()
 
@@ -32,9 +33,23 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.sort).toBe('created')
     expect(restored.result.current.group).toBe('folder')
     expect(restored.result.current.hideEmptySessions).toBe(true)
+    expect(restored.result.current.sessionLimit).toBe('unlimited')
   })
 
-  it('keeps at least one agent enabled', () => {
+  it('allows clearing every agent so a single agent can be re-enabled', () => {
+    const hook = renderHook(() => usePersistedAiVaultViewOptions())
+
+    act(() => hook.result.current.setAllAgentsEnabled(false))
+    expect(hook.result.current.agents).toEqual([])
+
+    act(() => hook.result.current.setAgentEnabled('claude', true))
+    expect(hook.result.current.agents).toEqual(['claude'])
+
+    act(() => hook.result.current.setAllAgentsEnabled(true))
+    expect(hook.result.current.agents).toEqual([...AI_VAULT_AGENTS])
+  })
+
+  it('allows disabling the last remaining agent', () => {
     const hook = renderHook(() => usePersistedAiVaultViewOptions())
     const lastEnabled = AI_VAULT_AGENTS[0]
 
@@ -46,7 +61,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(hook.result.current.agents).toEqual([lastEnabled])
 
     act(() => hook.result.current.setAgentEnabled(lastEnabled, false))
-    expect(hook.result.current.agents).toEqual([lastEnabled])
+    expect(hook.result.current.agents).toEqual([])
   })
 
   it('keeps in-memory options usable when persistence fails', () => {
@@ -68,6 +83,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       hook.result.current.setSort('created')
       hook.result.current.setGroup('agent')
       hook.result.current.setHideEmptySessions(true)
+      hook.result.current.setSessionLimit(1000)
       hook.result.current.resetViewOptions()
     })
 
@@ -75,6 +91,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(hook.result.current.sort).toBe('updated')
     expect(hook.result.current.group).toBe('project')
     expect(hook.result.current.hideEmptySessions).toBe(false)
+    expect(hook.result.current.sessionLimit).toBe(250)
 
     hook.unmount()
     const restored = renderHook(() => usePersistedAiVaultViewOptions())
@@ -82,5 +99,6 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.sort).toBe('updated')
     expect(restored.result.current.group).toBe('project')
     expect(restored.result.current.hideEmptySessions).toBe(false)
+    expect(restored.result.current.sessionLimit).toBe(250)
   })
 })

@@ -25,7 +25,9 @@ type EditorPanelRenderModelParams = {
   gitStatusEntries: StoreState['gitStatusByWorktree'][string] | undefined
   gitBranchEntries: StoreState['gitBranchChangesByWorktree'][string] | undefined
   markdownViewMode: StoreState['markdownViewMode']
+  markdownRichModeSizeOverride: StoreState['markdownRichModeSizeOverride']
   isChangesMode: boolean
+  canOpenWorkspaceFileBrowser: boolean
 }
 
 export function getEditorPanelRenderModel({
@@ -35,7 +37,9 @@ export function getEditorPanelRenderModel({
   gitStatusEntries,
   gitBranchEntries,
   markdownViewMode,
-  isChangesMode
+  markdownRichModeSizeOverride,
+  isChangesMode,
+  canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
     activeFile.mode === 'diff' &&
@@ -128,7 +132,9 @@ export function getEditorPanelRenderModel({
   const inlineMarkdownRenderMode =
     activeFile.mode === 'edit' && inlineMarkdownContent !== null
       ? getMarkdownRenderMode({
-          exceedsRichModeSizeLimit: exceedsMarkdownRichModeSizeLimit(inlineMarkdownContent),
+          exceedsRichModeSizeLimit:
+            markdownRichModeSizeOverride[activeFile.id] !== true &&
+            exceedsMarkdownRichModeSizeLimit(inlineMarkdownContent),
           hasRichModeUnsupportedContent:
             getMarkdownRichModeUnsupportedMessage(inlineMarkdownContent) !== null,
           viewMode: mdViewMode
@@ -163,6 +169,7 @@ export function getEditorPanelRenderModel({
     // when the modified side still exists on disk (canOpen excludes deleted
     // files and commit diffs whose content may not match the working tree).
     canOpenPreviewToSide:
+      canOpenWorkspaceFileBrowser &&
       canPreviewLanguage(viewerLanguage) &&
       (activeFile.mode === 'edit' || (isSingleDiff && openFileState.canOpen)),
     mdViewMode,

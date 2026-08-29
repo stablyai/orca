@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { computeVisibleWorktreeIds } from './visible-worktrees'
-import type { Repo, TerminalTab, Worktree, WorktreeLineage } from '../../../../shared/types'
+import { getPairedDeviceIdsByEnvironment } from './workspace-creator-visibility'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 function makeTab(id: string, worktreeId: string, ptyId: string | null): TerminalTab {
@@ -79,6 +83,8 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
     hideAutomationGeneratedWorkspaces: false,
     hideCliCreatedWorkspaces: false,
     hideDetachedHeadWorkspaces: false,
+    hideWorkspacesFromOtherDevices: false,
+    pairedDeviceIdsByEnvironment: new Map(),
     repoMap,
     workspaceHostScope: 'all',
     defaultHostId: LOCAL_EXECUTION_HOST_ID,
@@ -88,6 +94,68 @@ function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions
 }
 
 describe('computeVisibleWorktreeIds', () => {
+  it('prefers the authenticated live device id over cached pairing metadata', () => {
+    const deviceIds = getPairedDeviceIdsByEnvironment(
+      [{ id: 'env-1', pairedDeviceId: 'cached-device' } as never],
+      new Map([
+        [
+          'env-1',
+          {
+            status: { pairedDeviceId: 'authenticated-device' } as never
+          }
+        ]
+      ])
+    )
+
+    expect(deviceIds.get('env-1')).toBe('authenticated-device')
+  })
+
+  it('hides only known workspaces created by another device', () => {
+    const own = {
+      ...makeWorktree('own'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-a' }
+    }
+    const other = {
+      ...makeWorktree('other'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
+    }
+    const host = {
+      ...makeWorktree('host'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'host' as const }
+    }
+    const legacy = { ...makeWorktree('legacy'), runtimeOwnerEnvironmentId: 'env-1' }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [own, other, host, legacy] },
+      [own.id, other.id, host.id, legacy.id],
+      visibleOptions({
+        hideWorkspacesFromOtherDevices: true,
+        pairedDeviceIdsByEnvironment: new Map([['env-1', 'device-a']])
+      })
+    )
+
+    expect(result).toEqual([own.id, legacy.id])
+  })
+
+  it('fails open when an older host does not publish the requester device id', () => {
+    const other = {
+      ...makeWorktree('other'),
+      runtimeOwnerEnvironmentId: 'env-1',
+      creatorProvenance: { kind: 'paired-device' as const, deviceId: 'device-b' }
+    }
+
+    const result = computeVisibleWorktreeIds(
+      { repo1: [other] },
+      [other.id],
+      visibleOptions({ hideWorkspacesFromOtherDevices: true })
+    )
+
+    expect(result).toEqual([other.id])
+  })
+
   it('keeps browser-tab worktrees visible when sleeping workspaces are hidden', () => {
     const wt = makeWorktree('wt-browser')
 
@@ -551,6 +619,69 @@ describe('computeVisibleWorktreeIds', () => {
     )
 
     expect(result).toEqual([parent.id, child.id])
+  })
+
+  it('gives a sleeping-exempt main its cached-sort slot, not a position at the end', () => {
+    // #8873: the exempted main enters `all` and is sorted with everyone else,
+    // so Cmd+1-9 numbers it where the sidebar actually renders it.
+    const awakeA = makeWorktree('awake-a')
+    const main = { ...makeWorktree('main'), isMainWorktree: true }
+    const awakeB = makeWorktree('awake-b')
+
+    const options = {
+      showSleepingWorkspaces: false,
+      tabsByWorktree: {
+        [awakeA.id]: [makeTab('t-a', awakeA.id, 'p-a')],
+        [awakeB.id]: [makeTab('t-b', awakeB.id, 'p-b')]
+      },
+      ptyIdsByTabId: { 't-a': ['p-a'], 't-b': ['p-b'] }
+    }
+    const byRepo = { repo1: [awakeA, main, awakeB] }
+    const sortedIds = [awakeA.id, main.id, awakeB.id]
+
+    expect(
+      computeVisibleWorktreeIds(
+        byRepo,
+        sortedIds,
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: true })
+      )
+    ).toEqual([awakeA.id, main.id, awakeB.id])
+
+    expect(
+      computeVisibleWorktreeIds(
+        byRepo,
+        sortedIds,
+        visibleOptions({ ...options, alwaysShowDefaultBranchWorkspace: false })
+      )
+    ).toEqual([awakeA.id, awakeB.id])
+  })
+
+  it('leaves lineage ordering untouched when the exempted main is also a parent', () => {
+    // The parent used to arrive via addVisibleLineageAncestors and now arrives
+    // on its own; either way it must render immediately above its child.
+    const parent = { ...makeWorktree('parent'), isMainWorktree: true }
+    const child = makeWorktree('child')
+    const sibling = makeWorktree('sibling')
+    const lineage = makeWorktreeLineage(child, parent)
+
+    const run = (alwaysShowDefaultBranchWorkspace: boolean): string[] =>
+      computeVisibleWorktreeIds(
+        { repo1: [parent, child, sibling] },
+        [sibling.id, child.id, parent.id],
+        visibleOptions({
+          showSleepingWorkspaces: false,
+          alwaysShowDefaultBranchWorkspace,
+          tabsByWorktree: {
+            [child.id]: [makeTab('t-child', child.id, 'p-child')],
+            [sibling.id]: [makeTab('t-sib', sibling.id, 'p-sib')]
+          },
+          ptyIdsByTabId: { 't-child': ['p-child'], 't-sib': ['p-sib'] },
+          worktreeLineageById: { [child.id]: lineage }
+        })
+      )
+
+    expect(run(true)).toEqual([sibling.id, parent.id, child.id])
+    expect(run(false)).toEqual(run(true))
   })
 
   it('includes a filtered parent from resolved inline lineage when hydration has no side-map entry', () => {

@@ -173,6 +173,29 @@ describe('createWorktreeChangeRefreshQueue', () => {
     expect(handler).toHaveBeenNthCalledWith(3, 'repo-1', undefined, { forceLocalOwner: true })
   })
 
+  it('does not coalesce same-ID refreshes from different runtime hosts', async () => {
+    const firstRefresh = deferred()
+    const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)
+    const queue = createWorktreeChangeRefreshQueue(handler)
+
+    queue.enqueue({ repoId: 'same-repo', executionHostId: 'runtime:env-1' })
+    queue.enqueue({ repoId: 'same-repo', executionHostId: 'runtime:env-1' })
+    queue.enqueue({ repoId: 'same-repo', executionHostId: 'runtime:env-2' })
+
+    firstRefresh.resolve()
+    await flushPromises()
+
+    expect(handler).toHaveBeenCalledTimes(3)
+    expect(handler).toHaveBeenNthCalledWith(2, 'same-repo', undefined, {
+      forceLocalOwner: undefined,
+      executionHostId: 'runtime:env-1'
+    })
+    expect(handler).toHaveBeenNthCalledWith(3, 'same-repo', undefined, {
+      forceLocalOwner: undefined,
+      executionHostId: 'runtime:env-2'
+    })
+  })
+
   it('drops queued trailing refreshes after disposal', async () => {
     const firstRefresh = deferred()
     const handler = vi.fn().mockReturnValueOnce(firstRefresh.promise).mockResolvedValue(undefined)

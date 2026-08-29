@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Terminal } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
+import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { skillPlacementParticipatesInGlobalFreshness } from '../../../../shared/skill-freshness'
@@ -25,7 +26,8 @@ function candidateKey(args: {
 }
 
 export function SkillFreshnessNudge(): null {
-  const state = useSkillFreshness()
+  const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const state = useSkillFreshness(activeSkillRuntime.canUseLocalSkillFreshness)
   const settingsLoaded = useAppStore((store) => store.settings !== null)
   const dismissed = useAppStore(
     (store) => store.settings?.dismissedSkillFreshnessNudges ?? NO_DISMISSED_FRESHNESS_NUDGES
@@ -36,6 +38,15 @@ export function SkillFreshnessNudge(): null {
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
+    if (!activeSkillRuntime.canUseLocalSkillFreshness) {
+      const active = activeNudgeRef.current
+      if (active) {
+        active.persistDismissal = false
+        activeNudgeRef.current = null
+        toast.dismiss(active.id)
+      }
+      return
+    }
     const inventory = state.inventory
     if (!settingsLoaded) {
       return
@@ -182,7 +193,14 @@ export function SkillFreshnessNudge(): null {
       }
     )
     activeNudgeRef.current = nextActive
-  }, [dismissed, settingsLoaded, state.error, state.inventory, updateSettings])
+  }, [
+    activeSkillRuntime.canUseLocalSkillFreshness,
+    dismissed,
+    settingsLoaded,
+    state.error,
+    state.inventory,
+    updateSettings
+  ])
 
   return null
 }

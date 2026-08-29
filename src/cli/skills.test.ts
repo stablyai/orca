@@ -1,7 +1,10 @@
+import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { delimiter } from 'node:path'
+import { delimiter, join } from 'node:path'
 import type * as CodexCliCommandModule from '../shared/node-cli-command-resolution'
+import { WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL } from '../shared/windows-batch-spawn'
 
 const {
   detectCommandsMock,
@@ -213,7 +216,7 @@ describe('orca skills CLI', () => {
       'Usage: orca skills get <topic> [--full] [--json]'
     )
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
-      'Commands:\n  list               List version-matched skill guides'
+      'Commands:\n  installed          List installed skill selectors'
     )
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
       'get                Print a version-matched skill guide'
@@ -224,7 +227,7 @@ describe('orca skills CLI', () => {
     expect(String(logSpy.mock.calls[1]?.[0])).toContain(
       'update             Update already-installed Orca skills'
     )
-    expect(String(logSpy.mock.calls[2]?.[0])).toContain('Skills:\n  skills list')
+    expect(String(logSpy.mock.calls[2]?.[0])).toContain('Skills:\n  skills installed')
     expect(String(logSpy.mock.calls[2]?.[0])).toContain('skills update')
     expect(runtimeClientConstructorMock).not.toHaveBeenCalled()
   })
@@ -655,9 +658,16 @@ describe('orca skills CLI', () => {
   })
 
   it('puts the resolved npx directory on the child PATH', async () => {
+    // Why a real directory with a real sibling node: pairing only fires when the
+    // node it would add actually exists, so a fictional path proves nothing.
+    const npxBin = mkdtempSync(join(tmpdir(), 'orca-npx-'))
+    for (const name of ['node', 'npx']) {
+      writeFileSync(join(npxBin, name), '')
+      chmodSync(join(npxBin, name), 0o755)
+    }
     const child = createFakeChild()
     spawnMock.mockReturnValue(child)
-    resolveCliCommandMock.mockReturnValue('/home/alice/.nvm/versions/node/v22/bin/npx')
+    resolveCliCommandMock.mockReturnValue(join(npxBin, 'npx'))
     vi.stubEnv('PATH', `/usr/bin${delimiter}/bin`)
     vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
 
@@ -671,10 +681,28 @@ describe('orca skills CLI', () => {
     const env = spawnMock.mock.calls[0]?.[2]?.env
     // Why: the child still needs the inherited PATH and the rest of the parent
     // environment; replacing it outright breaks git, node, HOME and npm config.
-    expect(env?.PATH).toBe(
-      `/home/alice/.nvm/versions/node/v22/bin${delimiter}/usr/bin${delimiter}/bin`
-    )
+    expect(env?.PATH).toBe(`${npxBin}${delimiter}/usr/bin${delimiter}/bin`)
     expect(env?.HOME ?? env?.USERPROFILE).toBe(process.env.HOME ?? process.env.USERPROFILE)
+  })
+
+  it('leaves PATH untouched when no node ships beside the resolved npx', async () => {
+    // Why: prepending a directory that has no node buys nothing and would shadow
+    // the caller's own ordering for every other binary the child resolves.
+    const npxBin = mkdtempSync(join(tmpdir(), 'orca-npx-bare-'))
+    writeFileSync(join(npxBin, 'npx'), '')
+    chmodSync(join(npxBin, 'npx'), 0o755)
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child)
+    resolveCliCommandMock.mockReturnValue(join(npxBin, 'npx'))
+    vi.stubEnv('PATH', `/usr/bin${delimiter}/bin`)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    child.emit('exit', 0, null)
+    await resultPromise
+
+    expect(spawnMock.mock.calls[0]?.[2]?.env?.PATH).toBe(`/usr/bin${delimiter}/bin`)
   })
 
   it('reports a Windows npx path cmd.exe would reinterpret', async () => {
@@ -689,6 +717,26 @@ describe('orca skills CLI', () => {
     expect(spawnMock).not.toHaveBeenCalled()
     expect(process.exitCode).toBe(1)
     expect(String(errorSpy.mock.calls[0]?.[0])).toContain('cmd.exe would reinterpret')
+    // Why: remediation advice that names the wrong characters is unactionable.
+    expect(String(errorSpy.mock.calls[0]?.[0])).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
+  })
+
+  it('runs npx from a Program Files (x86) install instead of refusing it', async () => {
+    const child = createFakeChild()
+    spawnMock.mockReturnValue(child)
+    vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
+    vi.stubEnv('ComSpec', 'C:\\Windows\\System32\\cmd.exe')
+    const npx = 'C:\\Program Files (x86)\\nodejs\\npx.cmd'
+    resolveCliCommandMock.mockReturnValue(npx)
+    vi.spyOn(process.stderr, 'write').mockImplementation(() => true)
+
+    const resultPromise = main(['skills', 'install', '--skill', 'alpha'], '/tmp/repo')
+    await vi.waitFor(() => expect(spawnMock).toHaveBeenCalled())
+    child.emit('exit', 0, null)
+    await resultPromise
+
+    expect(spawnMock.mock.calls[0]?.[0]).toBe('C:\\Windows\\System32\\cmd.exe')
+    expect(spawnMock.mock.calls[0]?.[1]?.slice(0, 3)).toEqual(['/d', '/c', npx])
   })
 
   it('never puts the current directory on the child PATH when npx is unresolvable', async () => {

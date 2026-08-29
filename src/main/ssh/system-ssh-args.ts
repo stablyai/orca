@@ -2,16 +2,21 @@ import type { SshTarget } from '../../shared/ssh-types'
 import { getControlSocketPath, type SystemSshResolvedConfig } from './ssh-control-socket'
 
 export type SystemSshBuildArgsOptions = {
+  configFile?: string
   resolvedConfig?: SystemSshResolvedConfig | null
   disableControlMaster?: boolean
   suppressOrcaControlMaster?: boolean
   gssapiOnly?: boolean
+  nonInteractive?: boolean
 }
 
 export function buildSshArgs(target: SshTarget, options?: SystemSshBuildArgsOptions): string[] {
   const args: string[] = []
 
-  args.push('-o', options?.gssapiOnly ? 'BatchMode=yes' : 'BatchMode=no')
+  if (options?.configFile) {
+    args.push('-F', options.configFile)
+  }
+  args.push('-o', options?.gssapiOnly || options?.nonInteractive ? 'BatchMode=yes' : 'BatchMode=no')
   if (options?.gssapiOnly) {
     // Why: the probe must neither authenticate with a key nor open an OpenSSH
     // credential prompt; failure belongs to Orca's existing ssh2 prompt path.
@@ -99,6 +104,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   options: SystemSshBuildArgsOptions | undefined
 ): SystemSshBuildArgsOptions | undefined {
   const buildArgsOptions: SystemSshBuildArgsOptions = {}
+  if (options?.configFile !== undefined) {
+    buildArgsOptions.configFile = options.configFile
+  }
   if (options?.resolvedConfig !== undefined) {
     buildArgsOptions.resolvedConfig = options.resolvedConfig
   }
@@ -110,6 +118,9 @@ export function getSystemSshBuildArgsFromOperationOptions(
   }
   if (options?.gssapiOnly === true) {
     buildArgsOptions.gssapiOnly = true
+  }
+  if (options?.nonInteractive === true) {
+    buildArgsOptions.nonInteractive = true
   }
   return Object.keys(buildArgsOptions).length === 0 ? undefined : buildArgsOptions
 }

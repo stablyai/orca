@@ -6,6 +6,7 @@ const CODEX_AUTH_ERROR_PATTERNS = [
   /please (?:log out and )?sign in again/i,
   /please reauthenticate/i,
   /not logged in/i,
+  /sign in with chatgpt/i,
   /token data is not available/i,
   /auth (?:is missing|tokens are missing|does not expose)/i,
   // Why: app-server rejects account/rateLimits/read with this when auth.json

@@ -2,7 +2,7 @@ export type MobileMarkdownBlock =
   | { type: 'paragraph'; text: string }
   | { type: 'heading'; level: number; text: string }
   | { type: 'quote'; text: string }
-  | { type: 'code'; text: string; language?: string }
+  | { type: 'code'; text: string; language?: string; closed: boolean }
   | { type: 'list'; ordered: boolean; items: Array<{ text: string; checked?: boolean }> }
   | { type: 'image'; alt: string; url: string }
   | { type: 'table'; headers: string[]; rows: string[][] }
@@ -42,10 +42,12 @@ export function parseMobileMarkdown(content: string): MobileMarkdownBlock[] {
         code.push(lines[index] ?? '')
         index += 1
       }
-      if (index < lines.length) {
+      // closed=false means the fence is still streaming in (no terminator yet).
+      const closed = index < lines.length
+      if (closed) {
         index += 1
       }
-      blocks.push({ type: 'code', text: code.join('\n'), language: fence[1] })
+      blocks.push({ type: 'code', text: code.join('\n'), language: fence[1], closed })
       continue
     }
 

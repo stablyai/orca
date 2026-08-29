@@ -9,9 +9,13 @@ import {
   redactRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../shared/runtime-environments'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import { RemoteRuntimeClientError } from '../../shared/remote-runtime-client-error'
+import { RuntimeRpcCallQueueOverloadError } from '../../shared/runtime-rpc-call-queue'
+import type { RuntimeRpcFailure, RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
 import type { RuntimeStatus } from '../../shared/runtime-types'
 import type { Store } from '../persistence'
+import { clearBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-runtime'
+import { retireBrowserRoutePartitionStorageForEnvironment } from '../browser/browser-route-partition-storage-retirement'
 import { verifyAndAddRuntimeEnvironmentFromPairingCode } from './runtime-environment-pairing-verification'
 import { closeRemoteRuntimeRequestConnection } from './runtime-environment-request-connections'
 import {
@@ -43,7 +47,7 @@ export function isRuntimeEnvironmentManuallyDisconnected(environmentId: string):
 type ConnectivityHandlerOptions = {
   store: Store
   getUserDataPath: () => string
-  invalidateTransport: (environmentId: string) => void
+  invalidateTransport: (environmentId: string) => Promise<void> | void
 }
 
 export function registerRuntimeEnvironmentConnectivityHandlers({
@@ -87,8 +91,20 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
       manuallyDisconnectedEnvironmentIds.delete(removed.id)
-      invalidateTransport(removed.id)
+      const retiring = Promise.resolve(invalidateTransport(removed.id))
       closeLegacySelectorTransport(args.selector, removed.id)
+      // Why: removal is an explicit lifecycle decision, so its client-hosted browser storage goes
+      // too -- but only once the client host releases its partitions, or every one refuses as live.
+      void retireBrowserRoutePartitionStorageForEnvironment({
+        environmentId: removed.id,
+        whenClientHostClosed: retiring,
+        clearStorage: clearBrowserRoutePartitionStorageForEnvironment,
+        onError: (error) => {
+          console.warn('[runtime-environments] browser partition storage clear failed:', error)
+        }
+      }).catch((error) => {
+        console.warn('[runtime-environments] browser partition storage clear failed:', error)
+      })
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
@@ -151,6 +167,25 @@ function registerPassiveStatusHandler(getUserDataPath: () => string): void {
   )
 }
 
+function runtimeEnvironmentCallFailure(
+  environment: ReturnType<typeof resolveEnvironment>,
+  method: string,
+  error: unknown
+): RuntimeRpcFailure | null {
+  if (
+    !(error instanceof RemoteRuntimeClientError) &&
+    !(error instanceof RuntimeRpcCallQueueOverloadError)
+  ) {
+    return null
+  }
+  return {
+    id: method,
+    ok: false,
+    error: { code: error.code, message: error.message },
+    _meta: { runtimeId: environment.runtimeId }
+  }
+}
+
 function registerPassiveCallHandler(getUserDataPath: () => string): void {
   ipcMain.handle(
     'runtimeEnvironments:call',
@@ -168,14 +203,23 @@ function registerPassiveCallHandler(getUserDataPath: () => string): void {
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         return manuallyDisconnectedResponse(environment)
       }
-      const response = await callRuntimeEnvironment(
-        getUserDataPath(),
-        environment.id,
-        args.method,
-        args.params,
-        args.timeoutMs,
-        args.expectedEnvironmentPairingRevision
-      )
+      let response: RuntimeRpcResponse<unknown>
+      try {
+        response = await callRuntimeEnvironment(
+          getUserDataPath(),
+          environment.id,
+          args.method,
+          args.params,
+          args.timeoutMs,
+          args.expectedEnvironmentPairingRevision
+        )
+      } catch (error) {
+        const failure = runtimeEnvironmentCallFailure(environment, args.method, error)
+        if (failure) {
+          return failure
+        }
+        throw error
+      }
       return isRuntimeEnvironmentManuallyDisconnected(environment.id)
         ? manuallyDisconnectedResponse(environment)
         : response

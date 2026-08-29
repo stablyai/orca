@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useMountedRef } from '@/hooks/useMountedRef'
+import { subscribeDaemonSessionInventoryInvalidated } from './daemon-session-inventory-invalidation'
 import {
   EMPTY_DAEMON_SESSION_INVENTORY,
   inventoryFromSessions,
@@ -121,6 +122,17 @@ export function useResourceSessionInventory(ready: boolean): ResourceSessionInve
       return
     }
     void refreshSessions()
+  }, [ready, refreshSessions])
+
+  useEffect(() => {
+    if (!ready) {
+      return
+    }
+    // Why: management kills/restarts destroy daemon sessions without a pty:exit,
+    // so the closed badge would keep the pre-kill count until the popover opens.
+    return subscribeDaemonSessionInventoryInvalidated(() => {
+      void refreshSessions()
+    })
   }, [ready, refreshSessions])
 
   useEffect(() => {

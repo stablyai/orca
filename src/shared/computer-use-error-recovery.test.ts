@@ -40,6 +40,19 @@ describe('computerUseErrorRecoveryData', () => {
     ])
   })
 
+  it('requires state verification when a focus failure may follow a delivered press', () => {
+    const recovery = computerUseErrorRecoveryData(
+      'window_not_focused',
+      'coordinate click aborted; 1 press(es) may already have been delivered'
+    )
+
+    expect(recovery?.nextSteps).toEqual([
+      expect.stringContaining('verify whether the intended action already occurred'),
+      expect.stringContaining('Do not retry the click if it already took effect')
+    ])
+    expect(recovery?.nextSteps.join('\n')).not.toContain('Retry once with `--restore-window`')
+  })
+
   it('keeps missing web app recovery within computer-use desktop app targeting', () => {
     const recovery = computerUseErrorRecoveryData('app_not_found')
 

@@ -52,7 +52,7 @@ export function consumeNativeProviderLines(
   let remaining = buffer
   while (true) {
     const newline = remaining.indexOf('\n')
-    if (newline < 0) {
+    if (newline === -1) {
       return remaining
     }
     const line = remaining.slice(0, newline)

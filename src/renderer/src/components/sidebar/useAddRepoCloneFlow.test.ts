@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -136,7 +136,12 @@ describe('useAddRepoCloneFlow', () => {
     })
     expect(mocks.cloneLocal).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'ssh:ssh-1'
     })
     expect(mocks.storeState.projects).toEqual(
       expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
@@ -144,7 +149,7 @@ describe('useAddRepoCloneFlow', () => {
     expect(mocks.storeState.projectHostSetups).toEqual(
       expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
     )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'ssh:ssh-1')
   })
 
   it('does not prefill SSH clone destinations from the local workspace directory', async () => {
@@ -186,7 +191,13 @@ describe('useAddRepoCloneFlow', () => {
   })
 
   it('clones through the selected runtime environment', async () => {
-    const repo = makeRepo({ id: 'runtime-repo', executionHostId: 'runtime:env-1' })
+    const repo = makeRepo({ id: 'runtime-repo' })
+    const localRepo = makeRepo({
+      id: repo.id,
+      path: '/local/runtime-repo',
+      executionHostId: 'local'
+    })
+    mocks.storeState.repos = [localRepo]
     mocks.callRuntimeRpc.mockResolvedValue({ repo })
     mocks.fetchWorktrees.mockResolvedValue(true)
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
@@ -213,8 +224,14 @@ describe('useAddRepoCloneFlow', () => {
     expect(mocks.cloneLocal).not.toHaveBeenCalled()
     expect(mocks.cloneRemote).not.toHaveBeenCalled()
     expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true
+      requireAuthoritative: true,
+      executionHostId: 'runtime:env-1'
     })
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
+    expect(mocks.storeState.repos).toContainEqual({
+      ...repo,
+      executionHostId: 'runtime:env-1'
+    })
+    expect(mocks.storeState.repos).toContainEqual(localRepo)
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'runtime:env-1')
   })
 })

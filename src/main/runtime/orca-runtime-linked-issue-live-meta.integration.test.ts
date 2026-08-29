@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { WorktreeMeta } from '../../shared/types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type * as GitStatusModule from '../git/status'
 import type * as CommitMessageTextGenerationModule from '../text-generation/commit-message-text-generation'
 import type * as WorktreeModule from '../git/worktree'
@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../git/worktree', async () => ({
   ...(await vi.importActual<typeof WorktreeModule>('../git/worktree')),
-  listWorktrees: mocks.listWorktrees
+  listWorktrees: mocks.listWorktrees,
+  listWorktreesStrict: mocks.listWorktrees
 }))
 
 vi.mock('../git/status', async () => ({

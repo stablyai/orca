@@ -1,4 +1,3 @@
-export const PTY_SOURCE_CREDIT_VERSION = 1
 export const DEFAULT_PTY_SOURCE_WINDOW_SU = 256 * 1024
 export const MAX_PTY_ACK_ENTRIES = 64
 

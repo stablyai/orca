@@ -14,6 +14,7 @@ export const DOCKER_SSH_SECOND_HUB_REMOTE_REPO_PATH = '/tmp/orca-docker-second-h
 export type DockerSshRelayTarget = {
   containerName: string
   containerIp: string
+  host: string
   identityFile: string
   port: number
   tempDir: string
@@ -44,6 +45,21 @@ export function execDockerSshRelayTargetCommand(
   })
 }
 
+export function execDockerSshRelayTargetControlCommand(
+  target: DockerSshRelayTarget,
+  command: string
+): string {
+  return run('docker', [
+    'exec',
+    target.containerName,
+    'bash',
+    '--noprofile',
+    '--norc',
+    '-c',
+    command
+  ])
+}
+
 function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
   return [
     '-i',
@@ -58,7 +74,7 @@ function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
     'BatchMode=yes',
     '-o',
     'IdentitiesOnly=yes',
-    'root@127.0.0.1',
+    `root@${target.host}`,
     command
   ]
 }
@@ -110,6 +126,80 @@ function seedRemoteRepo(target: DockerSshRelayTarget, repoPath: string): void {
   )
 }
 
+/**
+ * The fixture image ships Debian's `/etc/bash.bashrc` with the xterm title block commented out and
+ * an all-comments `/root/.bashrc`, so its shell never emits OSC 0. Orca derives a tab title from
+ * that sequence, so without this every SSH tab keeps its `Terminal N` placeholder no matter how
+ * healthy the shell is. Opt in from specs that assert on titles; a real user's shell sets one.
+ */
+export function enableDockerSshRelayTargetShellTitle(target: DockerSshRelayTarget): void {
+  execDockerSshRelayTargetControlCommand(
+    target,
+    `printf '%s\\n' ${shellQuote(String.raw`PS1="\[\e]0;\u@\h: \w\a\]$PS1"`)} >> /root/.bashrc`
+  )
+}
+
+/**
+ * Attempts a `direct-tcpip` channel to a closed loopback port using the host's own ssh client.
+ *
+ * The two outcomes are exactly what distinguishes the policies: a server that permits forwarding
+ * reports a connect failure (port 9 is closed on any sane host), while one running
+ * `AllowTcpForwarding no` refuses the channel itself with "administratively prohibited".
+ */
+function probeDockerSshRelayTargetForwarding(target: DockerSshRelayTarget): string {
+  const result = spawnSync(
+    'ssh',
+    [
+      '-i',
+      target.identityFile,
+      '-p',
+      String(target.port),
+      '-o',
+      'StrictHostKeyChecking=no',
+      '-o',
+      'UserKnownHostsFile=/dev/null',
+      '-o',
+      'BatchMode=yes',
+      '-o',
+      'IdentitiesOnly=yes',
+      '-W',
+      '127.0.0.1:9',
+      `root@${target.host}`
+    ],
+    { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 15_000 }
+  )
+  return result.stderr || result.stdout || `exit ${result.status}`
+}
+
+/**
+ * Denies TCP forwarding on the container's sshd the way a locked-down enterprise host does, so a
+ * spec can prove browser routing fails closed while the terminal plane keeps working.
+ *
+ * sshd re-execs itself on SIGHUP and re-reads its config, which is why this HUPs PID 1 instead of
+ * restarting it — PID 1 *is* sshd here (the entrypoint `exec`s it), so killing it takes the whole
+ * container down. Only sessions opened after the re-exec are governed by the new policy, so call
+ * this before the app connects. Returns once a real ssh client has confirmed the refusal, so a
+ * config that silently failed to apply surfaces here rather than as a confusing assertion later.
+ */
+export function blockDockerSshRelayTargetTcpForwarding(target: DockerSshRelayTarget): void {
+  execDockerSshRelayTargetControlCommand(
+    target,
+    "printf '%s\\n' 'AllowTcpForwarding no' >> /etc/ssh/sshd_config; kill -HUP 1"
+  )
+  const deadline = Date.now() + 60_000
+  let lastProbe = ''
+  while (Date.now() < deadline) {
+    lastProbe = probeDockerSshRelayTargetForwarding(target)
+    if (/administratively prohibited/i.test(lastProbe)) {
+      return
+    }
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 500)
+  }
+  throw new Error(
+    `sshd never began refusing TCP forwarding after AllowTcpForwarding no: ${lastProbe}`
+  )
+}
+
 export function writeDockerSshRelayTargetFile(
   target: DockerSshRelayTarget,
   filePath: string,
@@ -122,6 +212,13 @@ export function writeDockerSshRelayTargetFile(
 }
 
 export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTarget {
+  const host = process.env.ORCA_E2E_SSH_TARGET_HOST?.trim() || '127.0.0.1'
+  if (host === 'localhost' || host === '::1' || host.startsWith('127.')) {
+    if (process.env.ORCA_E2E_SSH_TARGET_HOST) {
+      throw new Error(`ORCA_E2E_SSH_TARGET_HOST must be non-loopback: ${host}`)
+    }
+  }
+  const bindHost = host === '127.0.0.1' ? host : '0.0.0.0'
   const tempDir = mkdtempSync(path.join(os.tmpdir(), 'orca-ssh-docker-'))
   const identityFile = path.join(tempDir, 'id_ed25519')
   run('ssh-keygen', ['-t', 'ed25519', '-N', '', '-f', identityFile, '-q'])
@@ -139,7 +236,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
         '--name',
         containerName,
         '-p',
-        '127.0.0.1::22',
+        `${bindHost}::22`,
         '-e',
         `AUTHORIZED_KEY=${publicKey}`,
         getDockerSshRelayImage(),
@@ -169,7 +266,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     if (!containerIp) {
       throw new Error(`Unable to read container IP for ${containerName}`)
     }
-    target = { containerName, containerIp, identityFile, port, tempDir }
+    target = { containerName, containerIp, host, identityFile, port, tempDir }
     waitForSsh(target)
     seedRemoteRepo(target, DOCKER_SSH_RELAY_REMOTE_REPO_PATH)
     seedRemoteRepo(target, DOCKER_SSH_PROXY_JUMP_REMOTE_REPO_PATH)
@@ -177,7 +274,7 @@ export function startDockerSshRelayTarget(testInfo: TestInfo): DockerSshRelayTar
     return target
   } catch (error) {
     cleanupDockerSshRelayTarget(
-      target ?? { containerName, containerIp: '', identityFile, port: 0, tempDir }
+      target ?? { containerName, containerIp: '', host, identityFile, port: 0, tempDir }
     )
     throw error
   }

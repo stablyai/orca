@@ -12,7 +12,8 @@
  * where pre-mount output produces no attention side effects. The one exception
  * is a PTY whose consumer just unregistered: see the handoff buffer below.
  */
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { ParsedAgentStatusPayload } from '../../../../shared/agent-status-types'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type {
   TerminalSideEffectBatch,
@@ -63,6 +64,7 @@ export function isMainTerminalSideEffectAuthorityForPty(args: {
 }
 
 export type TerminalSideEffectFactConsumerCallbacks = {
+  onAgentStatus?: (payload: ParsedAgentStatusPayload) => void
   /** `meta.staleWorkingTitleClear` marks facts derived from main's 3s
    *  stale-title timer — policy must clear title/cache state without
    *  scheduling task-complete notifications or unread attention. */
@@ -84,8 +86,8 @@ export type TerminalSideEffectFactConsumerCallbacks = {
   onCommandCodeWorking?: (prompt: string) => void
   onCommandCodeDone?: (prompt: string) => void
   /** DECSET 2031 subscribe observed by main's tracker. Registered only by
-   *  hidden-delivery-gated consumers (their bytes never arrive); the theme
-   *  reply is sent renderer-side — query authority stays with the view. */
+   *  hidden-delivery-gated consumers (their bytes never arrive); it records the
+   *  subscription for later theme-flip pushes, it does not answer. */
   onMode2031Subscribe?: () => void
   /** DECSET 2031 withdrawal observed by main's tracker. Clears the pane's
    *  subscription registry so later theme flips stop pushing CSI 997. */
@@ -104,6 +106,9 @@ let channelUnsubscribe: (() => void) | null = null
 
 function applyLiveFact(entry: ConsumerEntry, fact: TerminalSideEffectFact, seq: number): void {
   switch (fact.kind) {
+    case 'agent-status':
+      entry.callbacks.onAgentStatus?.(fact.payload)
+      return
     case 'title':
       entry.lastLiveTitleSeq = seq
       entry.callbacks.onTitleChange?.(

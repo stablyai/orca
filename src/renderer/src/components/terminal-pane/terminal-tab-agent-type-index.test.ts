@@ -71,4 +71,30 @@ describe('createTerminalTabAgentTypeSelector', () => {
     expect(select(state, 'tab-1')).toEqual({})
     expect(select(state, 'malformed')).toEqual({})
   })
+
+  it('uses a live foreground process until hook identity arrives', () => {
+    const select = createTerminalTabAgentTypeSelector()
+    const foreground = {
+      'tab-1:leaf-a': {
+        agent: 'codex' as const,
+        shellForeground: false,
+        routingTrusted: true
+      }
+    }
+
+    expect(select({}, 'tab-1', foreground)).toEqual({ 'leaf-a': 'codex' })
+    expect(select({ 'tab-1:leaf-a': entry('claude') }, 'tab-1', foreground)).toEqual({
+      'leaf-a': 'claude'
+    })
+    expect(
+      select({}, 'tab-1', {
+        'tab-1:leaf-a': { ...foreground['tab-1:leaf-a'], shellForeground: true }
+      })
+    ).toEqual({})
+    expect(
+      select({}, 'tab-1', {
+        'tab-1:leaf-a': { ...foreground['tab-1:leaf-a'], routingRevoked: true }
+      })
+    ).toEqual({})
+  })
 })

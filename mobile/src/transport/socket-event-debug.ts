@@ -32,3 +32,11 @@ export function describeSocketEvent(event: unknown): { keys: string[]; json: str
   }
   return { keys, json }
 }
+
+export function redactSocketEndpoint(endpoint: string): string {
+  try {
+    return new URL(endpoint).host || 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}

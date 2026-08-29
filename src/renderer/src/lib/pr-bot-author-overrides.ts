@@ -2,8 +2,11 @@ import { useMemo } from 'react'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
-import { createBotAuthorOverrideSet, normalizePRCommentAuthorLogin } from './pr-comment-audience'
-import { MAX_PR_BOT_AUTHOR_OVERRIDES } from '../../../shared/pr-bot-author-overrides'
+import {
+  createBotAuthorOverrideSet,
+  MAX_PR_BOT_AUTHOR_OVERRIDES,
+  normalizePRCommentAuthorLogin
+} from '../../../shared/pr-bot-author-overrides'
 
 let overrideUpdateQueue = Promise.resolve()
 

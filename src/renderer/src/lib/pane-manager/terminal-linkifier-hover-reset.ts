@@ -3,6 +3,9 @@ import type { Terminal } from '@xterm/xterm'
 type LinkifierHoverCache = {
   _lastBufferCell?: unknown
   _activeLine?: number
+  // Private xterm cleanup that invokes the active provider's leave callback
+  // and removes its pointer cursor decoration.
+  _clearCurrentLink?: () => void
   // Set while xterm is showing a hovered link; cleared on mouseleave / when the
   // pointer moves off the link (Linkifier `_clearCurrentLink`).
   _currentLink?: unknown
@@ -34,15 +37,29 @@ type TerminalCoreWithLinkifier = {
 export function resetTerminalLinkifierHoverState(terminal: Terminal): void {
   try {
     const linkifier = (terminal as unknown as TerminalCoreWithLinkifier)._core?.linkifier
-    if (!linkifier) {
-      return
+    // Why: window blur can strand xterm's active link without another mouse
+    // event, so invoke its own leave path before invalidating the cache. Its
+    // own try: this runs provider leave() callbacks, and a throwing one must
+    // not skip the cache invalidation below.
+    try {
+      linkifier?._clearCurrentLink?.()
+    } catch {
+      /* provider leave() threw — cache invalidation below still applies */
     }
-    if ('_lastBufferCell' in linkifier) {
+    if (linkifier && '_currentLink' in linkifier) {
+      linkifier._currentLink = undefined
+    }
+    if (linkifier && '_lastBufferCell' in linkifier) {
       linkifier._lastBufferCell = undefined
     }
-    if ('_activeLine' in linkifier) {
+    if (linkifier && '_activeLine' in linkifier) {
       linkifier._activeLine = -1
     }
+    // Why: keep the cursor recoverable if a future xterm build omits the
+    // private cleanup method or has no last mouse event for it to use.
+    terminal.element
+      ?.querySelector<HTMLElement>('.xterm-screen')
+      ?.classList.remove('xterm-cursor-pointer')
   } catch {
     /* linkifier internals unavailable — link recovers on the next cell change */
   }

@@ -24,7 +24,6 @@ function makeSkill(sourceKind: SkillSourceKind, directoryPath: string): Discover
     directoryPath,
     skillFilePath: `${directoryPath}/SKILL.md`,
     installed: true,
-    fileCount: 1,
     updatedAt: null
   }
 }

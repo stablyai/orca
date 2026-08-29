@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 type ButtonCapture = {
   label: string
@@ -17,8 +19,17 @@ const mocks = vi.hoisted(() => ({
     } as Record<string, unknown>,
     closeModal: vi.fn(),
     addNonGitFolder: vi.fn(),
-    runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }]
-  }
+    runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }],
+    repos: [] as Repo[],
+    projects: [],
+    projectHostSetups: [],
+    worktreesByRepo: {} as Record<string, Worktree[]>,
+    fetchWorktrees: vi.fn(),
+    settings: {}
+  },
+  addRemote: vi.fn(),
+  onboardingGet: vi.fn(),
+  activateAndRevealWorktree: vi.fn()
 }))
 
 function textContent(node: ReactModule.ReactNode): string {
@@ -74,10 +85,33 @@ vi.mock('sonner', () => ({
 }))
 
 vi.mock('@/lib/worktree-activation', () => ({
-  activateAndRevealWorktree: vi.fn()
+  activateAndRevealWorktree: mocks.activateAndRevealWorktree
 }))
 
 import NonGitFolderDialog from './NonGitFolderDialog'
+
+function makeWorktree(id: string, path: string, hostId: Worktree['hostId']): Worktree {
+  return {
+    id,
+    repoId: 'shared-repo',
+    path,
+    hostId,
+    displayName: 'Folder',
+    comment: '',
+    linkedIssue: null,
+    linkedPR: null,
+    linkedLinearIssue: null,
+    isArchived: false,
+    isUnread: false,
+    isPinned: false,
+    sortOrder: 0,
+    lastActivityAt: 0,
+    head: '',
+    branch: '',
+    isBare: false,
+    isMainWorktree: true
+  }
+}
 
 describe('NonGitFolderDialog', () => {
   beforeEach(() => {
@@ -89,6 +123,18 @@ describe('NonGitFolderDialog', () => {
       runtimeEnvironmentId: 'env-1'
     }
     mocks.state.runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
+    mocks.state.repos = []
+    mocks.state.projects = []
+    mocks.state.projectHostSetups = []
+    mocks.state.worktreesByRepo = {}
+    mocks.state.fetchWorktrees.mockResolvedValue(true)
+    mocks.onboardingGet.mockResolvedValue(null)
+    vi.stubGlobal('window', {
+      api: {
+        repos: { addRemote: mocks.addRemote },
+        onboarding: { get: mocks.onboardingGet }
+      }
+    })
   })
 
   it('shows the checked host in the folder confirmation', () => {
@@ -108,5 +154,55 @@ describe('NonGitFolderDialog', () => {
       runtimeEnvironmentId: 'env-1'
     })
     expect(mocks.state.closeModal).toHaveBeenCalled()
+  })
+
+  it('activates only the selected SSH folder when repo IDs collide', async () => {
+    const repo: Repo = {
+      id: 'shared-repo',
+      path: '/srv/non-git',
+      displayName: 'SSH folder',
+      badgeColor: '#111',
+      addedAt: 1,
+      kind: 'folder',
+      connectionId: 'ssh-1'
+    }
+    const localWorktree = makeWorktree('shared-repo::/local/non-git', '/local/non-git', 'local')
+    const sshWorktree = makeWorktree('shared-repo::/srv/non-git', '/srv/non-git', 'ssh:ssh-1')
+    mocks.state.modalData = {
+      folderPath: '/srv/non-git',
+      connectionId: 'ssh-1'
+    }
+    mocks.state.repos = [
+      {
+        ...repo,
+        path: '/local/non-git',
+        connectionId: null,
+        executionHostId: 'local'
+      }
+    ]
+    mocks.addRemote.mockResolvedValue({ repo })
+    mocks.state.fetchWorktrees.mockImplementation(async () => {
+      mocks.state.worktreesByRepo = { [repo.id]: [localWorktree, sshWorktree] }
+      return true
+    })
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
+    button?.onClick?.()
+
+    await vi.waitFor(() =>
+      expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(sshWorktree.id, {
+        sidebarRevealBehavior: 'auto',
+        executionHostId: 'ssh:ssh-1'
+      })
+    )
+    expect(mocks.state.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
+      requireAuthoritative: true,
+      executionHostId: 'ssh:ssh-1'
+    })
+    expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalledWith(
+      localWorktree.id,
+      expect.anything()
+    )
   })
 })

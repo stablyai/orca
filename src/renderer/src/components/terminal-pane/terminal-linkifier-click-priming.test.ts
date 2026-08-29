@@ -124,7 +124,7 @@ describe('installTerminalLinkifierClickPriming', () => {
     expect(linkifier._activeLine).toBe(5)
   })
 
-  it('ignores plain clicks and degrades safely when xterm internals are unavailable', () => {
+  it('primes plain action clicks and degrades safely when xterm internals are unavailable', () => {
     vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
     const handleMouseMove = vi.fn()
     const present = createTerminal({ _handleMouseMove: handleMouseMove })
@@ -136,7 +136,7 @@ describe('installTerminalLinkifierClickPriming', () => {
     expect(() =>
       getMouseDownHandler(absent.registrations)(modifierMouseDown({ metaKey: true }))
     ).not.toThrow()
-    expect(handleMouseMove).not.toHaveBeenCalled()
+    expect(handleMouseMove).toHaveBeenCalledOnce()
   })
 
   it('removes its capture listener on dispose', () => {

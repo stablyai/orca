@@ -152,10 +152,20 @@ describe('registerTerminalSideEffectFactConsumer', () => {
 
   it('routes live facts to the registered consumer in batch order', () => {
     const { callbacks, events } = createCallbackRecorder()
-    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      callbacks: {
+        ...callbacks,
+        onAgentStatus: (payload) => events.push(['status', payload.state, payload.agentType])
+      }
+    })
 
     _dispatchTerminalSideEffectBatchForTest(
       batch([
+        {
+          kind: 'agent-status',
+          payload: { state: 'working', prompt: 'fix it', agentType: 'codex' }
+        },
         { kind: 'title', normalizedTitle: '⠋ Claude', rawTitle: '⠋ Claude' },
         { kind: 'agent-working' },
         { kind: 'title', normalizedTitle: '✳ Claude', rawTitle: '✳ Claude' },
@@ -165,6 +175,7 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     )
 
     expect(events).toEqual([
+      ['status', 'working', 'codex'],
       ['title', '⠋ Claude', '⠋ Claude'],
       ['working'],
       ['title', '✳ Claude', '✳ Claude'],

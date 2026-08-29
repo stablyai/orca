@@ -1,4 +1,5 @@
 import { createHash, createHmac, randomBytes } from 'node:crypto'
+import { EventEmitter } from 'node:events'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { WebSocketServer, type WebSocket } from 'ws'
@@ -376,5 +377,176 @@ describe('RelayControlClient', () => {
 
     socket.send(JSON.stringify({ type: 'drain', graceMs: 5_000, recovery: 'resolve-director' }))
     await vi.waitFor(() => expect(onDrain).toHaveBeenCalledOnce())
+  })
+})
+
+class FakeControlSocket extends EventEmitter {
+  readonly OPEN = 1
+  readyState = 1
+  script: ((message: Record<string, unknown>, socket: FakeControlSocket) => void) | null = null
+
+  send(payload: string): void {
+    this.script?.(JSON.parse(payload) as Record<string, unknown>, this)
+  }
+
+  close(code = 1000): void {
+    if (this.readyState !== 1) {
+      return
+    }
+    this.readyState = 3
+    this.emit('close', code)
+  }
+
+  terminate(): void {
+    this.close(1006)
+  }
+
+  deliver(message: object): void {
+    this.emit('message', JSON.stringify(message), false)
+  }
+}
+
+function scriptedControl(options: { closeWithAck?: boolean; issuedAtOffsetMs?: number } = {}): {
+  client: RelayControlClient
+  socket: FakeControlSocket
+  onClose: ReturnType<typeof vi.fn>
+} {
+  const hostKeys = nacl.box.keyPair()
+  const keypair: E2EEKeypair = {
+    publicKey: hostKeys.publicKey,
+    secretKey: hostKeys.secretKey,
+    publicKeyB64: Buffer.from(hostKeys.publicKey).toString('base64')
+  }
+  const origin = 'http://relay.test'
+  const relayHostId = createHash('sha256')
+    .update(hostKeys.publicKey)
+    .digest('base64url')
+    .slice(0, 16)
+  const socket = new FakeControlSocket()
+  socket.script = (message, ws) => {
+    if (message.type === 'host-hello') {
+      const relayKeys = nacl.box.keyPair()
+      const nonce = randomBytes(24)
+      const secret = randomBytes(32)
+      const issuedAt = Date.now() + (options.issuedAtOffsetMs ?? 0)
+      const expiresAt = issuedAt + 10_000
+      const transcript = buildTranscript({
+        origin,
+        relayKey: relayKeys.publicKey,
+        nonce,
+        challengeId: 'challenge-1',
+        issuedAt,
+        expiresAt,
+        relayHostId,
+        hostKey: hostKeys.publicKey
+      })
+      const plaintext = concat([
+        text(`${CHALLENGE_DOMAIN}\0`),
+        uint32(transcript.byteLength),
+        transcript,
+        secret
+      ])
+      ws.deliver({
+        type: 'host-challenge',
+        challengeId: 'challenge-1',
+        relayEphemeralPublicKeyB64: Buffer.from(relayKeys.publicKey).toString('base64'),
+        nonceB64: nonce.toString('base64'),
+        ciphertextB64: Buffer.from(
+          nacl.box(plaintext, nonce, hostKeys.publicKey, relayKeys.secretKey)
+        ).toString('base64'),
+        expiresAt
+      })
+      return
+    }
+    if (message.type === 'host-challenge-ack') {
+      ws.deliver({
+        type: 'host-hello-ack',
+        v: 1,
+        generation: 4,
+        controlResumeSecret: randomBytes(32).toString('base64url'),
+        leaseExpiresAt: Date.now() + 3_600_000,
+        activeConnIds: [],
+        pendingConns: []
+      })
+      // Same ws parser turn: the close event fires before any awaiting caller
+      // of connect() gets to run.
+      if (options.closeWithAck) {
+        ws.close(1006)
+      }
+    }
+  }
+  const onClose = vi.fn()
+  const client = new RelayControlClient({
+    cellUrl: origin,
+    relayJwt: 'scoped-token',
+    relayHostId,
+    assignmentEpoch: 3,
+    identity: { userId: 'user-1', profileId: 'profile-1', organizationId: 'org-1' },
+    keypair,
+    appVersion: '1.2.3',
+    onConnectionOpen: vi.fn(),
+    onDrain: vi.fn(),
+    onClose,
+    createSocket: () => socket as unknown as WebSocket
+  })
+  queueMicrotask(() => socket.emit('open'))
+  return { client, socket, onClose }
+}
+
+describe('RelayControlClient scripted-socket lifecycle', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('resolves connect when close lands in the ack parser turn, but reports not live', async () => {
+    const { client, onClose } = scriptedControl({ closeWithAck: true })
+
+    await expect(client.connect()).resolves.toMatchObject({ generation: 4 })
+
+    expect(onClose).toHaveBeenCalledWith(1006)
+    expect(client.isLive()).toBe(false)
+  })
+
+  it('tolerates a cell clock slightly ahead when validating the challenge', async () => {
+    // A relay whose clock runs ~100ms-2s ahead is normal NTP drift, not replay.
+    const { client } = scriptedControl({ issuedAtOffsetMs: 1_500 })
+
+    await expect(client.connect()).resolves.toMatchObject({ generation: 4 })
+    expect(client.isLive()).toBe(true)
+  })
+
+  it('rejects a challenge issued beyond the clock tolerance', async () => {
+    const { client } = scriptedControl({ issuedAtOffsetMs: 45_000 })
+
+    await expect(client.connect()).rejects.toThrow('invalid host challenge')
+    expect(client.isLive()).toBe(false)
+  })
+
+  it('terminates a silent control after the silence limit and reports closure', async () => {
+    vi.useFakeTimers()
+    const { client, socket, onClose } = scriptedControl()
+    await expect(client.connect()).resolves.toMatchObject({ generation: 4 })
+    expect(client.isLive()).toBe(true)
+
+    vi.advanceTimersByTime(91_000)
+
+    expect(socket.readyState).toBe(3)
+    expect(onClose).toHaveBeenCalledWith(1006)
+    expect(client.isLive()).toBe(false)
+  })
+
+  it('keeps a control live while server pings keep arriving', async () => {
+    vi.useFakeTimers()
+    const { client, socket } = scriptedControl()
+    await client.connect()
+
+    for (let round = 0; round < 6; round++) {
+      vi.advanceTimersByTime(60_000)
+      socket.deliver({ type: 'ping', t: Date.now() })
+    }
+    expect(client.isLive()).toBe(true)
+
+    vi.advanceTimersByTime(91_000)
+    expect(client.isLive()).toBe(false)
   })
 })

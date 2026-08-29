@@ -1,14 +1,11 @@
-import type { PersistedUIState } from '../../../../shared/types'
+import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { defineMethod, type RpcMethod } from '../core'
-import {
-  FeatureInteractionIdParam,
-  PRBotAuthorOverrideUpdate,
-  SettingsUpdate,
-  UiUpdate
-} from './client-ui-schemas'
+import { PRBotAuthorOverrideUpdate, SettingsUpdate } from './client-settings-schemas'
+import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
 // Type-only side effect: keeps the schema/PersistedUIState parity assertions in
 // the typecheck graph so drift fails the build instead of a paired client.
-import type {} from './ui-state-schema-parity-checks'
+
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [
@@ -50,20 +47,24 @@ export const CLIENT_UI_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'ui.get',
     params: null,
-    handler: (_params, { runtime }) => ({ ui: runtime.getUIState() })
+    handler: (_params, { runtime }) => ({ ui: omitPairingLocalUiFields(runtime.getUIState()) })
   }),
   defineMethod({
     name: 'ui.set',
     params: UiUpdate,
+    // Why the fields are dropped here rather than removed from the schema: UiUpdate is strict, so
+    // an unlisted key would make the dispatcher reject an old client's ENTIRE payload.
     handler: (params, { runtime }) => ({
-      ui: runtime.updateUIState(params as Partial<PersistedUIState>)
+      ui: omitPairingLocalUiFields(
+        runtime.updateUIState(omitPairingLocalUiFields(params) as Partial<PersistedUIState>)
+      )
     })
   }),
   defineMethod({
     name: 'ui.recordFeatureInteraction',
     params: FeatureInteractionIdParam,
     handler: (params, { runtime }) => ({
-      ui: runtime.recordFeatureInteraction(params)
+      ui: omitPairingLocalUiFields(runtime.recordFeatureInteraction(params))
     })
   })
 ]

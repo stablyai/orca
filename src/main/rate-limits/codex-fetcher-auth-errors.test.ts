@@ -34,13 +34,24 @@ function makeRpcChild() {
   const child = new EventEmitter() as EventEmitter & {
     stdout: EventEmitter
     stderr: EventEmitter
-    stdin: { write: ReturnType<typeof vi.fn> }
+    stdin: EventEmitter & { write: ReturnType<typeof vi.fn>; end: ReturnType<typeof vi.fn> }
     kill: ReturnType<typeof vi.fn>
+    exitCode: number | null
   }
   child.stdout = new EventEmitter()
   child.stderr = new EventEmitter()
-  child.stdin = { write: vi.fn() }
-  child.kill = vi.fn()
+  // Why: like the real app-server, the fake dies on stdin EOF or a signal —
+  // the graceful shutdown path resolves only once the child reports exit.
+  const exitNow = (): void => {
+    child.exitCode = 0
+    child.emit('exit', 0, null)
+  }
+  child.stdin = Object.assign(new EventEmitter(), { write: vi.fn(), end: vi.fn(exitNow) })
+  child.exitCode = null
+  child.kill = vi.fn(() => {
+    exitNow()
+    return true
+  })
   return child
 }
 
@@ -176,5 +187,38 @@ describe('fetchCodexRateLimits auth errors', () => {
       status: 'error',
       error: authError
     })
+  })
+
+  it('stops a PTY probe when Codex renders its sign-in screen', async () => {
+    const ptyHandlers: { onData?: (data: string) => void } = {}
+    const ptyWrite = vi.fn()
+    const ptyKill = vi.fn()
+
+    childSpawnMock.mockImplementation(() => {
+      throw new Error('rpc unavailable')
+    })
+    ptySpawnMock.mockReturnValue({
+      onData: vi.fn((callback) => {
+        ptyHandlers.onData = callback
+        return makeDisposable()
+      }),
+      onExit: vi.fn(() => makeDisposable()),
+      write: ptyWrite,
+      kill: ptyKill
+    })
+
+    const resultPromise = fetchCodexRateLimits()
+    await vi.advanceTimersByTimeAsync(0)
+    ptyHandlers.onData?.('\u001b[2JSign in with ChatGPT\r\n')
+
+    await expect(resultPromise).resolves.toMatchObject({
+      provider: 'codex',
+      session: null,
+      weekly: null,
+      status: 'error',
+      error: 'Sign in with ChatGPT'
+    })
+    expect(ptyWrite).not.toHaveBeenCalled()
+    expect(ptyKill).toHaveBeenCalledOnce()
   })
 })

@@ -439,3 +439,32 @@ describe('processFileExplorerFsPayload update reconciliation', () => {
     expect(remainingExpanded).toEqual(new Set())
   })
 })
+
+describe('processFileExplorerFsPayload overflow reconciliation', () => {
+  it('routes an overflow event to a single tree refresh and skips per-dir refreshes', () => {
+    const root = '/repo'
+    const refreshDir = vi.fn()
+    const refreshTree = vi.fn()
+    processFileExplorerFsPayload({
+      payload: {
+        worktreePath: root,
+        events: [
+          { kind: 'create', absolutePath: `${root}/a.txt` },
+          { kind: 'overflow', absolutePath: root },
+          { kind: 'create', absolutePath: `${root}/src/b.txt` }
+        ]
+      },
+      currentWorktreePath: root,
+      worktreeId: 'wt-1',
+      cache: { [root]: cacheWithChildren([]), [`${root}/src`]: cacheWithChildren([]) },
+      expanded: new Set([`${root}/src`]),
+      setDirCache: vi.fn(),
+      setSelectedPath: vi.fn(),
+      refreshDir,
+      refreshTree
+    })
+
+    expect(refreshTree).toHaveBeenCalledOnce()
+    expect(refreshDir).not.toHaveBeenCalled()
+  })
+})

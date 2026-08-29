@@ -1,20 +1,32 @@
-import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { createServer } from 'node:net'
+import { chmod, cp, link, mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   describeObservedSkillFile,
   matchingKnownSnapshot,
   observeSkillPackage,
+  officialPathsGitTreeSha,
   skillPackageDigest
 } from './skill-package-identity'
 
 const temporaryDirectories: string[] = []
+const execFileAsync = promisify(execFile)
 
 async function temporarySkill(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), 'orca-skill-freshness-'))
   temporaryDirectories.push(root)
   return root
+}
+
+/** A byte-identical folder elsewhere, so a hash can be derived without the original. */
+async function copyOf(source: string): Promise<string> {
+  const target = await temporarySkill()
+  await cp(source, target, { recursive: true })
+  return target
 }
 
 afterEach(async () => {
@@ -32,14 +44,18 @@ describe('skill package identity', () => {
     // hashes, not raw file buffers, should survive each file's identity pass.
     expect(observed.files[0]).not.toHaveProperty('bytes')
     expect(
-      matchingKnownSnapshot(observed, [
-        {
-          releaseRevision: 1,
-          packageDigest: skillPackageDigest([expected]),
-          gitTreeSha: 'tree',
-          files: [expected]
-        }
-      ])?.releaseRevision
+      matchingKnownSnapshot(
+        observed,
+        [
+          {
+            releaseRevision: 1,
+            packageDigest: skillPackageDigest([expected]),
+            gitTreeSha: 'tree',
+            files: [expected]
+          }
+        ],
+        new Set(['SKILL.md'])
+      )?.releaseRevision
     ).toBe(1)
   })
 
@@ -49,6 +65,33 @@ describe('skill package identity', () => {
     expect(executable.identitySha256).toBe(executable.exactSha256)
     expect(binary.identitySha256).toBe(binary.exactSha256)
     expect(binary.classification).toBe('binary')
+  })
+
+  it('infers shebang scripts as executable on Windows filesystems', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'skill\n')
+    await writeFile(join(root, 'run.sh'), '#!/bin/sh\necho ok\n')
+
+    const observed = await observeSkillPackage(root, undefined, undefined, undefined, 'win32', true)
+
+    expect(observed.files.find((file) => file.path === 'run.sh')?.executable).toBe(true)
+    expect(observed.files.find((file) => file.path === 'SKILL.md')?.executable).toBe(false)
+  })
+
+  it('matches receipt executable paths case-insensitively on Windows', async () => {
+    const root = await temporarySkill()
+    await writeFile(join(root, 'SKILL.md'), 'skill\n')
+    await writeFile(join(root, 'run.sh'), '#!/bin/sh\necho ok\n')
+
+    const observed = await observeSkillPackage(
+      root,
+      undefined,
+      new Set(['Run.sh']),
+      undefined,
+      'win32'
+    )
+
+    expect(observed.files.find((file) => file.path === 'run.sh')?.executable).toBe(true)
   })
 
   it('orders package files by locale-independent code units', async () => {
@@ -80,6 +123,32 @@ describe('skill package identity', () => {
     ).rejects.toThrow('skill-package-entry-limit')
   })
 
+  it.runIf(process.platform !== 'win32')('rejects hardlinks, FIFOs, and Unix sockets', async () => {
+    const root = await temporarySkill()
+    const source = join(root, 'SKILL.md')
+    await writeFile(source, 'skill')
+    await link(source, join(root, 'hardlink.md'))
+    await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-link')
+    await rm(join(root, 'hardlink.md'))
+
+    const fifo = join(root, 'named-pipe')
+    await execFileAsync('mkfifo', [fifo])
+    await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
+    await rm(fifo)
+
+    const socket = join(root, 'unix-socket')
+    const server = createServer()
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socket, resolve)
+    })
+    try {
+      await expect(observeSkillPackage(root)).rejects.toThrow('skill-package-special-file')
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()))
+    }
+  })
+
   it('ignores OS-authored sidecars so a browsed folder still matches its snapshot', async () => {
     const pristine = await temporarySkill()
     await writeFile(join(pristine, 'SKILL.md'), 'skill\n')
@@ -102,14 +171,18 @@ describe('skill package identity', () => {
     // has to come out clean too, not just the digest.
     expect(observed.observedGitTreeSha).toBe(official.observedGitTreeSha)
     expect(
-      matchingKnownSnapshot(observed, [
-        {
-          releaseRevision: 1,
-          packageDigest: official.observedDigest,
-          gitTreeSha: official.observedGitTreeSha,
-          files: official.files
-        }
-      ])?.releaseRevision
+      matchingKnownSnapshot(
+        observed,
+        [
+          {
+            releaseRevision: 1,
+            packageDigest: official.observedDigest,
+            gitTreeSha: official.observedGitTreeSha,
+            files: official.files
+          }
+        ],
+        new Set(['SKILL.md'])
+      )?.releaseRevision
     ).toBe(1)
   })
 
@@ -141,11 +214,13 @@ describe('skill package identity', () => {
     const edited = await temporarySkill()
     await writeFile(join(edited, 'SKILL.md'), 'skill\nlocal tweak\n')
     await writeFile(join(edited, '.DS_Store'), Buffer.from([0, 1]))
-    // An unexpected file that is NOT OS metadata must keep failing closed; tolerating
-    // extras in general would let an injected payload ride along beside a clean SKILL.md.
+    // Extra sidecar next to an untouched SKILL.md must still match — agent CLIs
+    // write agents/openai.yaml (and similar) without editing official bytes.
+    // Content drift on a listed file remains fail-closed.
     const withPayload = await temporarySkill()
     await writeFile(join(withPayload, 'SKILL.md'), 'skill\n')
-    await writeFile(join(withPayload, 'payload.sh'), '#!/bin/sh\n')
+    await mkdir(join(withPayload, 'agents'), { recursive: true })
+    await writeFile(join(withPayload, 'agents', 'openai.yaml'), 'display_name: test\n')
 
     const snapshot = [
       {
@@ -155,8 +230,116 @@ describe('skill package identity', () => {
         files: official.files
       }
     ]
-    expect(matchingKnownSnapshot(await observeSkillPackage(edited), snapshot)).toBeNull()
-    expect(matchingKnownSnapshot(await observeSkillPackage(withPayload), snapshot)).toBeNull()
+    const official1 = new Set(['SKILL.md'])
+    expect(matchingKnownSnapshot(await observeSkillPackage(edited), snapshot, official1)).toBeNull()
+    expect(
+      matchingKnownSnapshot(await observeSkillPackage(withPayload), snapshot, official1)
+        ?.releaseRevision
+    ).toBe(1)
+  })
+
+  it('does not let an older revision launder drift on a file the current one lists', async () => {
+    // Subset matching treats a path the tested revision does not list as a neighbour.
+    // Left unguarded, revision 1 (SKILL.md alone) would match a revision-2 folder whose
+    // references/x.md had been rewritten — reporting a tampered package as merely
+    // outdated, with an update offered and no "may be modified" anywhere.
+    const pristine = await temporarySkill()
+    await writeFile(join(pristine, 'SKILL.md'), 'skill\n')
+    const revisionOne = await observeSkillPackage(pristine)
+
+    const tampered = await temporarySkill()
+    await writeFile(join(tampered, 'SKILL.md'), 'skill\n')
+    await mkdir(join(tampered, 'references'), { recursive: true })
+    await writeFile(join(tampered, 'references', 'x.md'), 'attacker content\n')
+
+    const snapshots = [
+      {
+        releaseRevision: 1,
+        packageDigest: revisionOne.observedDigest,
+        gitTreeSha: revisionOne.observedGitTreeSha,
+        files: revisionOne.files
+      }
+    ]
+    const observed = await observeSkillPackage(tampered)
+
+    expect(
+      matchingKnownSnapshot(observed, snapshots, new Set(['SKILL.md', 'references/x.md']))
+    ).toBeNull()
+    // The same folder is a plain sidecar case once the current bundle stops claiming
+    // that path, so the guard must key on what is official — not on file count.
+    expect(matchingKnownSnapshot(observed, snapshots, new Set(['SKILL.md']))?.releaseRevision).toBe(
+      1
+    )
+  })
+
+  it('hashes official paths for the lock without hiding an upstream file it added', async () => {
+    const clean = await temporarySkill()
+    await writeFile(join(clean, 'SKILL.md'), 'skill\n')
+    const source = await observeSkillPackage(clean)
+
+    const withSidecar = await temporarySkill()
+    await writeFile(join(withSidecar, 'SKILL.md'), 'skill\n')
+    await mkdir(join(withSidecar, 'agents'), { recursive: true })
+    await writeFile(join(withSidecar, 'agents', 'openai.yaml'), 'display_name: test\n')
+    const sidecarObserved = await observeSkillPackage(withSidecar)
+    const officialPaths = new Set(['SKILL.md'])
+
+    // A sidecar folder reaches the lock's source-tree hash only once scoped.
+    expect(sidecarObserved.observedGitTreeSha).not.toBe(source.observedGitTreeSha)
+    expect(officialPathsGitTreeSha(sidecarObserved, officialPaths)).toBe(source.observedGitTreeSha)
+
+    // An upstream revision that ADDS a file puts it in the lock's own tree, so the
+    // whole-folder hash has to survive alongside — scoping it away would re-break the
+    // clean install this check exists to recognise (#11220).
+    const upstream = await temporarySkill()
+    await writeFile(join(upstream, 'SKILL.md'), 'skill\n')
+    await mkdir(join(upstream, 'references'), { recursive: true })
+    await writeFile(join(upstream, 'references', 'new.md'), 'shipped upstream\n')
+    const upstreamObserved = await observeSkillPackage(upstream)
+    // The lock is the source tree the CLI installed, derived independently of the
+    // observation under test — comparing the observation to itself would assert nothing.
+    const upstreamLock = (await observeSkillPackage(await copyOf(upstream))).observedGitTreeSha
+
+    expect(officialPathsGitTreeSha(upstreamObserved, officialPaths)).not.toBe(upstreamLock)
+    expect(upstreamObserved.observedGitTreeSha).toBe(upstreamLock)
+  })
+
+  it('scopes the lock hash to the current bundle, not every path ever shipped', async () => {
+    // A file an older revision shipped and the current one dropped is a stale leftover,
+    // not part of what the updater installed. Scoping to the union of all revisions would
+    // drag it back into the hash purely because its name was once official, and the copy
+    // would read "may be modified" over bytes the CLI itself wrote.
+    const source = await temporarySkill()
+    await writeFile(join(source, 'SKILL.md'), 'skill\n')
+    const lock = (await observeSkillPackage(source)).observedGitTreeSha
+
+    const withLeftover = await temporarySkill()
+    await writeFile(join(withLeftover, 'SKILL.md'), 'skill\n')
+    await mkdir(join(withLeftover, 'references'), { recursive: true })
+    await writeFile(join(withLeftover, 'references', 'legacy.md'), 'dropped after rev 1\n')
+    const observed = await observeSkillPackage(withLeftover)
+
+    expect(officialPathsGitTreeSha(observed, new Set(['SKILL.md']))).toBe(lock)
+    // The union of every revision's paths — what scoping must NOT use.
+    expect(
+      officialPathsGitTreeSha(observed, new Set(['SKILL.md', 'references/legacy.md']))
+    ).not.toBe(lock)
+  })
+
+  it('does not hand the lock an empty tree when no official path is present', async () => {
+    // git's empty-tree sha is a real, matchable value; returning it would let a lock that
+    // ever recorded an empty source tree vouch for any folder holding nothing official.
+    const root = await temporarySkill()
+    await mkdir(join(root, 'agents'), { recursive: true })
+    await writeFile(join(root, 'agents', 'openai.yaml'), 'display_name: test\n')
+    const observed = await observeSkillPackage(root)
+
+    expect(officialPathsGitTreeSha(observed, new Set(['SKILL.md']))).toBe(
+      observed.observedGitTreeSha
+    )
+    expect(officialPathsGitTreeSha(observed, new Set(['SKILL.md']))).not.toBe(
+      '4b825dc642cb6eb9a060e54bf8d69288fbee4904'
+    )
   })
 
   it.runIf(process.platform !== 'win32')('tracks executable mode in package identity', async () => {

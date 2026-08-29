@@ -52,7 +52,6 @@ describe('useMobileSessionViewMode', () => {
   let controller: MobileSessionViewModeController | null = null
 
   beforeEach(() => {
-    globalThis.IS_REACT_ACT_ENVIRONMENT = true
     vi.mocked(loadDefaultSessionView).mockReset().mockResolvedValue('terminal')
     vi.mocked(readSessionViewOverridesPreference)
       .mockReset()

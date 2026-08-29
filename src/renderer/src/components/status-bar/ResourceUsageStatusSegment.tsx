@@ -28,14 +28,14 @@ import { useMountedRef } from '@/hooks/useMountedRef'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { useAppStore } from '../../store'
-import { useWorktreeMap } from '../../store/selectors'
+import { getAllWorktreesFromState, useWorktreeMap } from '../../store/selectors'
 import { runWorktreeDelete } from '../sidebar/delete-worktree-flow'
 import { useDaemonActions, DaemonActionDialog } from '../shared/useDaemonActions'
-import type { AppMemory, BrowserWorkspace, UsageValues, Worktree } from '../../../../shared/types'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { AppMemory, UsageValues } from '../../../../shared/process-stats-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { ORPHAN_WORKTREE_ID } from '../../../../shared/constants'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../../shared/execution-host'
-import { isFolderRepo } from '../../../../shared/repo-kind'
-import { isWorkspaceOldForCleanup } from '../../../../shared/workspace-cleanup'
 import { mergeSnapshotAndSessions, UNATTRIBUTED_REPO_ID } from './mergeSnapshotAndSessions'
 import type {
   Metric,
@@ -67,8 +67,13 @@ import {
   getResourceManagerAriaLabel,
   getResourceManagerTooltipLines
 } from './resource-manager-terminal-copy'
-import { getResourceMemoryMetricCopy } from './resource-memory-metric-copy'
+import {
+  getCommitPressureToneClass,
+  getResourceCommitMetricCopy,
+  getResourceMemoryMetricCopy
+} from './resource-memory-metric-copy'
 import { requiresKillConfirmation } from './resource-session-kill-confirmation'
+import { resolveResourceManagerWorktreeTarget } from './resource-manager-worktree-target'
 import {
   countUnboundDaemonSessions,
   selectUnboundDaemonSessions,
@@ -825,9 +830,6 @@ export function ResourceUsageStatusSegment({
       clearSessionsError()
       void fetchSnapshot()
       void refreshSessions()
-    },
-    onKillAllSettled: () => {
-      void refreshSessions()
     }
   })
 
@@ -911,26 +913,10 @@ export function ResourceUsageStatusSegment({
     return map
   }, [repos])
 
-  const repoById = useMemo(() => new Map(repos.map((repo) => [repo.id, repo])), [repos])
   const worktreeById = useMemo(
     () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
     [allWorktrees]
   )
-
-  const oldWorkspaceCount = useMemo(() => {
-    const now = Date.now()
-    let count = 0
-    for (const worktree of allWorktrees) {
-      const repo = repoById.get(worktree.repoId)
-      if (!repo || isFolderRepo(repo) || worktree.isMainWorktree) {
-        continue
-      }
-      if (isWorkspaceOldForCleanup(worktree, now)) {
-        count += 1
-      }
-    }
-    return count
-  }, [allWorktrees, repoById])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
@@ -978,15 +964,29 @@ export function ResourceUsageStatusSegment({
   const memoryMetricCopy = getResourceMemoryMetricCopy(
     resourceSnapshot?.processMemoryMetric ?? 'rss'
   )
-  const { totalMemory, totalCpu, memBadgeLabel } = useMemo(() => {
-    const memory = resourceSnapshot?.totalMemory ?? 0
-    const cpu = resourceSnapshot?.totalCpu ?? 0
-    return {
-      totalMemory: memory,
-      totalCpu: cpu,
-      memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—'
-    }
-  }, [resourceSnapshot])
+  // Why null-not-zero: a host that cannot read commit (every Unix host, and any
+  // host older than the field) must render nothing here, never "0 B committed".
+  const commitMetricCopy = resourceSnapshot?.processCommitMetric
+    ? getResourceCommitMetricCopy()
+    : null
+  const { totalMemory, totalCpu, memBadgeLabel, totalPrivateMemory, commitToneClass } =
+    useMemo(() => {
+      const memory = resourceSnapshot?.totalMemory ?? 0
+      const cpu = resourceSnapshot?.totalCpu ?? 0
+      const privateMemory = resourceSnapshot?.totalPrivateMemory
+      return {
+        totalMemory: memory,
+        totalCpu: cpu,
+        memBadgeLabel: resourceSnapshot ? formatMemory(memory) : '—',
+        totalPrivateMemory: privateMemory,
+        commitToneClass: getCommitPressureToneClass({
+          privateMemory,
+          hostTotalMemory: resourceSnapshot?.host.totalMemory ?? 0
+        })
+      }
+    }, [resourceSnapshot])
+  const commitBadgeLabel =
+    commitMetricCopy && totalPrivateMemory !== undefined ? formatMemory(totalPrivateMemory) : null
 
   // Why: memorySnapshotError null means "succeeded" OR "never fetched"; a sessions failure before any snapshot still counts as daemon-unreachable.
   const daemonUnreachable = sessionsError && (memorySnapshotError !== null || snapshot === null)
@@ -994,7 +994,14 @@ export function ResourceUsageStatusSegment({
   const sessionsOnlyError = sessionsError && memorySnapshotError === null
   const resourceManagerTooltipLines = getResourceManagerTooltipLines({
     memoryLabel: resourceSnapshot
-      ? `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`
+      ? [
+          `${memBadgeLabel} · ${memoryMetricCopy.summaryLabel}`,
+          commitBadgeLabel && commitMetricCopy
+            ? `${commitBadgeLabel} ${commitMetricCopy.summaryLabel}`
+            : null
+        ]
+          .filter(Boolean)
+          .join(' · ')
       : memBadgeLabel,
     sessionCount: triggerSessionCount,
     spaceScanReady
@@ -1033,7 +1040,14 @@ export function ResourceUsageStatusSegment({
     if (worktreeId === ORPHAN_WORKTREE_ID || worktreeId.startsWith(`${UNATTRIBUTED_REPO_ID}::`)) {
       return
     }
-    activateAndRevealWorktree(worktreeId)
+    const target = resolveResourceManagerWorktreeTarget(
+      worktreeId,
+      getAllWorktreesFromState(useAppStore.getState())
+    )
+    if (!target) {
+      return
+    }
+    activateAndRevealWorktree(worktreeId, { executionHostId: target.hostId })
   }, [])
 
   const navigateToTab = useCallback(
@@ -1050,8 +1064,15 @@ export function ResourceUsageStatusSegment({
   )
 
   const deleteWorktree = useCallback((worktreeId: string): void => {
+    const target = resolveResourceManagerWorktreeTarget(
+      worktreeId,
+      getAllWorktreesFromState(useAppStore.getState())
+    )
+    if (!target) {
+      return
+    }
     setOpen(false)
-    runWorktreeDelete(worktreeId)
+    runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
   }, [])
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
@@ -1166,7 +1187,14 @@ export function ResourceUsageStatusSegment({
               <MemoryStick className="size-3 text-muted-foreground" />
               {!iconOnly && (
                 <>
-                  <span className="text-[11px] font-medium tabular-nums text-muted-foreground">
+                  {/* Tint only: the number stays the resident sum it has always been,
+                      and the tooltip names the commit figure that raised the tone. */}
+                  <span
+                    className={cn(
+                      'text-[11px] font-medium tabular-nums',
+                      commitToneClass ?? 'text-muted-foreground'
+                    )}
+                  >
                     {memBadgeLabel}
                   </span>
                   <span className="text-muted-foreground/50">·</span>
@@ -1198,12 +1226,9 @@ export function ResourceUsageStatusSegment({
         </TooltipTrigger>
         <TooltipContent side="top" sideOffset={6}>
           <div className="space-y-0.5">
-            {resourceManagerTooltipLines.map((line, index) => (
-              <div
-                key={`${index}:${line}`}
-                className={line === 'Space scan ready' ? 'text-primary' : ''}
-              >
-                {line}
+            {resourceManagerTooltipLines.map((line) => (
+              <div key={line.id} className={line.emphasized ? 'text-primary' : ''}>
+                {line.text}
               </div>
             ))}
           </div>
@@ -1360,6 +1385,30 @@ export function ResourceUsageStatusSegment({
                   {memoryMetricCopy.description}
                 </TooltipContent>
               </Tooltip>
+              {commitBadgeLabel && commitMetricCopy && (
+                <>
+                  <span className="text-muted-foreground/50">·</span>
+                  <Tooltip delayDuration={200}>
+                    <TooltipTrigger asChild>
+                      <span
+                        tabIndex={0}
+                        className={cn(
+                          'font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring focus-visible:rounded',
+                          commitToneClass ?? 'text-foreground'
+                        )}
+                      >
+                        {commitBadgeLabel}{' '}
+                        <span className="font-normal text-muted-foreground">
+                          {commitMetricCopy.summaryLabel}
+                        </span>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" sideOffset={6} className="z-[70] max-w-xs">
+                      {commitMetricCopy.description}
+                    </TooltipContent>
+                  </Tooltip>
+                </>
+              )}
             </div>
             {orphanCount > 0 && (
               <span className="shrink-0 text-yellow-500" aria-live="polite">
@@ -1497,8 +1546,7 @@ export function ResourceUsageStatusSegment({
             <span className="min-w-0 truncate px-4 text-center">
               {translate(
                 'auto.components.status.bar.ResourceUsageStatusSegment.92924a14e3',
-                'Review inactive workspaces ({{value0}})',
-                { value0: oldWorkspaceCount }
+                'Clean up workspaces'
               )}
             </span>
             <ChevronRight
@@ -1515,12 +1563,12 @@ export function ResourceUsageStatusSegment({
               {orphanCount === 1
                 ? translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.c7e3b1a0d9f2',
-                    'Kill {{value0}} orphan terminal',
+                    'End {{value0}} orphan terminal',
                     { value0: orphanCount }
                   )
                 : translate(
                     'auto.components.status.bar.ResourceUsageStatusSegment.d8f4c2b1e0a3',
-                    'Kill {{value0}} orphan terminals',
+                    'End {{value0}} orphan terminals',
                     { value0: orphanCount }
                   )}
             </button>

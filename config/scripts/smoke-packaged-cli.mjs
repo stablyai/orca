@@ -35,6 +35,7 @@ const appDir = resolve(readAppDirArg(process.argv.slice(2)))
 const tempRoot = await mkdtemp(join(tmpdir(), 'orca-packaged-cli-smoke-'))
 const copiedAppDir = join(tempRoot, basename(appDir))
 
+let smokeFailure = null
 try {
   await cp(appDir, copiedAppDir, { recursive: true, verbatimSymlinks: true })
   const cliPath = getPackagedCliPath(copiedAppDir)
@@ -73,6 +74,31 @@ try {
   assert.equal(install.executed, false)
   assert.equal(update.executed, false)
   console.log(`[packaged-cli-smoke] help and skills commands passed via ${cliPath}`)
-} finally {
-  await rm(tempRoot, { recursive: true, force: true })
+} catch (error) {
+  smokeFailure = error
+}
+
+// Why: on Windows the launcher above spawns the copied Orca.exe (and its crashpad/utility children)
+// once per command; those handles can outlive execFile's exit by a few ms, so this cleanup hits
+// EBUSY on our own just-exited process after every assertion already passed. Same retry treatment
+// as removeHostTree(); a lock that never clears still throws — unless the smoke run itself failed,
+// in which case surfacing EBUSY instead of the real assertion would hide the actual regression.
+const cleanupFailure = await rm(tempRoot, {
+  recursive: true,
+  force: true,
+  maxRetries: 20,
+  retryDelay: 250
+}).then(
+  () => null,
+  (error) => error
+)
+
+if (smokeFailure) {
+  if (cleanupFailure) {
+    console.warn(`[packaged-cli-smoke] temp cleanup failed: ${cleanupFailure.message}`)
+  }
+  throw smokeFailure
+}
+if (cleanupFailure) {
+  throw cleanupFailure
 }

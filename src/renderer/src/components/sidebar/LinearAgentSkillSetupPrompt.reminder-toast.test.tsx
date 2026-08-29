@@ -61,7 +61,7 @@ vi.mock('../settings/CliSkillRuntimeSetup', () => ({
     runtime: { runtime: string; wslDistro?: string | null }
   ) =>
     runtime.runtime === 'wsl'
-      ? `wsl.exe${runtime.wslDistro ? ` -d '${runtime.wslDistro}'` : ''} -- bash -lc '${command}'`
+      ? `wsl.exe${runtime.wslDistro ? ` -d '${runtime.wslDistro}'` : ''} --exec bash -lc '${command}'`
       : command,
   ensureWslCliAvailableForAgentSkillTerminal: mocks.ensureWslCli,
   getWslCliDistroRequest: (runtime?: { runtime: string; wslDistro?: string | null }) =>
@@ -119,6 +119,7 @@ async function renderPrompt(
   await act(async () => {
     root?.render(<LinearAgentSkillSetupPrompt {...props} />)
   })
+  await import('./LinearAgentSkillSetupDialog')
   await act(async () => {})
 }
 

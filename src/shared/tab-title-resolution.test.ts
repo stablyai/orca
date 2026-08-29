@@ -73,6 +73,78 @@ describe('tab title resolution', () => {
     ).toBe('Manual label')
   })
 
+  it('keeps a Codex thread name stable across activity plus project OSC titles', () => {
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          aiVaultTitle: {
+            agent: 'codex',
+            sessionId: 'codex-session',
+            title: 'Repair provider-native tab titles'
+          },
+          title: '⠋ albacore'
+        },
+        false
+      )
+    ).toBe('Repair provider-native tab titles')
+  })
+
+  it('keeps manual and quick-command labels ahead of AI Vault titles', () => {
+    const aiVaultTitle = {
+      agent: 'claude' as const,
+      sessionId: 'claude-session',
+      title: 'Claude conversation'
+    }
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: 'Manual label',
+          quickCommandLabel: 'Run tests',
+          aiVaultTitle,
+          title: 'claude working'
+        },
+        false
+      )
+    ).toBe('Manual label')
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          quickCommandLabel: 'Run tests',
+          aiVaultTitle,
+          title: 'claude working'
+        },
+        false
+      )
+    ).toBe('Run tests')
+  })
+
+  it('keeps OpenCode native and Orca-generated title behavior intact', () => {
+    const aiVaultTitle = {
+      agent: 'codex' as const,
+      sessionId: 'codex-session',
+      title: 'Codex conversation'
+    }
+    expect(
+      resolveTerminalTabTitle(
+        {
+          customTitle: null,
+          aiVaultTitle,
+          generatedTitle: 'Orca generated',
+          title: 'OC | OpenCode native'
+        },
+        true
+      )
+    ).toBe('OC | OpenCode native')
+    expect(
+      resolveTerminalTabTitle(
+        { customTitle: null, generatedTitle: 'Orca generated', title: '⠋ albacore' },
+        true
+      )
+    ).toBe('Orca generated')
+  })
+
   it('uses the same priority for unified tab labels', () => {
     expect(
       resolveUnifiedTabLabel(

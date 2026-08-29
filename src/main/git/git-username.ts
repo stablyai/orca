@@ -219,14 +219,6 @@ async function getGhLoginOutcome(): Promise<GhLoginOutcome> {
   return probe
 }
 
-/**
- * Resolve the `gh` CLI's GitHub login without ever blocking the caller for
- * longer than the probe wall. Never rejects; unknown resolves to ''.
- */
-export async function getGhLoginAsync(): Promise<string> {
-  return (await getGhLoginOutcome()).login
-}
-
 async function readGitStdout(repoPath: string, args: string[]): Promise<string> {
   try {
     const { stdout } = await gitExecFileAsync(args, {

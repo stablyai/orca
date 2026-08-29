@@ -1,6 +1,7 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { useAppStore } from '@/store'
 import {
+  assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
   RuntimeRpcCallError,
   type RuntimeClientTarget
@@ -15,6 +16,8 @@ import type {
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
 import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from './client-creation-action-policy'
 
 export { addressForPort } from './workspace-port-urls'
 
@@ -121,16 +124,26 @@ export async function openWorkspacePortInBrowser(args: {
   if (!worktreeId) {
     return { ok: false, reason: 'No workspace selected for the browser.' }
   }
-  activateAndRevealWorktree(worktreeId)
+  // Why: the browser tab opened below is this jump's surface; seeding a shell would add a
+  // PTY the user never asked for in a workspace whose last terminal they closed.
+  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
     try {
+      await assertRuntimeEnvironmentCapability(
+        args.runtimeTarget.environmentId,
+        BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
+        RUNTIME_BROWSER_UNAVAILABLE_MESSAGE
+      )
       const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
         args.runtimeTarget,
         'browser.tabCreate',
         { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
-      const tab = args.createBrowserTab(worktreeId, url, { activate: true })
+      const tab = args.createBrowserTab(worktreeId, url, {
+        activate: true,
+        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
+      })
       if (!tab.activePageId) {
         return { ok: false, reason: 'Failed to create a browser page.' }
       }
@@ -144,25 +157,12 @@ export async function openWorkspacePortInBrowser(args: {
       return { ok: false, reason: message || 'Failed to open remote browser.' }
     }
   }
-  args.createBrowserTab(worktreeId, url, { activate: true })
-  return { ok: true }
-}
-
-export async function refreshWorkspacePortScanState(args: {
-  runtimeTarget: RuntimeClientTarget
-  setWorkspacePortScan: WorkspacePortScanSetter
-  setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
-}): Promise<WorkspacePortScanResult> {
-  args.setWorkspacePortScanRefreshing(true)
   try {
-    const scan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-    args.setWorkspacePortScan({
-      key: workspacePortScanKeyForTarget(args.runtimeTarget),
-      result: scan
-    })
-    return scan
-  } finally {
-    args.setWorkspacePortScanRefreshing(false)
+    args.createBrowserTab(worktreeId, url, { activate: true })
+    return { ok: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason: message || 'Failed to open browser.' }
   }
 }
 

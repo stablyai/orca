@@ -56,8 +56,9 @@ export const glApi = {
       state?: 'opened' | 'closed' | 'all'
       assignee?: string
       limit?: number
+      page?: number
     }
-  ): Promise<{ items: unknown[]; error?: unknown }> =>
+  ): Promise<{ items: unknown[]; totalPages?: number; error?: unknown }> =>
     ipcRenderer.invoke('gitlab:listIssues', args),
 
   createIssue: (
@@ -154,7 +155,7 @@ export const glApi = {
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:resolveMRDiscussion', args),
 
   jobTrace: (
-    args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown }
+    args: GitLabRepoSelectorArgs & { jobId: number; projectRef?: unknown; logExcerpt?: boolean }
   ): Promise<unknown> => ipcRenderer.invoke('gitlab:jobTrace', args),
 
   retryJob: (

@@ -47,7 +47,7 @@ function AgentDashboardDrawerBody({
   }, [])
   const handleRevealAgent = useCallback(
     (args: AgentRevealArgs) => {
-      useAppStore.getState().setActiveWorktree(args.worktreeId)
+      useAppStore.getState().setActiveWorktree(args.worktreeId, args.executionHostId)
       activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
       onClose()
     },

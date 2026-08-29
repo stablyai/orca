@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs'
+import { remoteSessionContentLines } from './remote-session-content-lines'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -33,22 +34,28 @@ export async function parseDroidSessionFile(
   file: FileWithMtime,
   platform: NodeJS.Platform = process.platform
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  return parseDroidSessionLines({ file, lines, platform })
+  const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  try {
+    return await parseDroidSessionLines({ file, lines, platform })
+  } finally {
+    // readline.close() leaves the underlying stream open; destroy it so a
+    // mid-parse throw cannot leak the gated transcript handle.
+    lines.close()
+    input.destroy()
+  }
 }
 
 export async function parseDroidSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   return parseDroidSessionLines({
     file,
-    lines: content.split(/\r?\n/),
+    lines: remoteSessionContentLines(content, signal),
     platform,
     options
   })

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { deriveTaskPagePRCheckSummary } from './task-page-pr-check-summary'
-import type { PRCheckDetail } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 function check(patch: Partial<PRCheckDetail>): PRCheckDetail {
   return {
@@ -50,7 +50,7 @@ describe('deriveTaskPagePRCheckSummary', () => {
         check({ conclusion: 'skipped' })
       ])
     ).toEqual({
-      state: 'neutral',
+      state: 'success',
       total: 3,
       passed: 2,
       failed: 0,

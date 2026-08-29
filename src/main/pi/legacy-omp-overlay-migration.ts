@@ -146,7 +146,7 @@ function copyMissingLegacyOmpOverlayEntries(
   overlayDir: string,
   sourceAgentDir: string,
   pathSegments: string[] = [],
-  copiedFilePaths: Set<string> = new Set()
+  copiedFilePaths = new Set<string>()
 ): boolean {
   let completed = true
   let entries: Dirent[]

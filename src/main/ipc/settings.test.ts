@@ -344,7 +344,7 @@ describe('registerSettingsHandlers', () => {
   })
 
   it('updates the agent awake service when the keep-awake setting changes', () => {
-    const agentAwakeService = { setEnabled: vi.fn() }
+    const agentAwakeService = { setMode: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: true })
     registerSettingsHandlers(store as never, agentAwakeService as never)
@@ -356,11 +356,18 @@ describe('registerSettingsHandlers', () => {
 
     handler(settingsInvokeEvent, { keepComputerAwakeWhileAgentsRun: true })
 
-    expect(agentAwakeService.setEnabled).toHaveBeenCalledWith(true)
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        computerAwakeMode: 'auto',
+        keepComputerAwakeWhileAgentsRun: true
+      },
+      expect.any(Object)
+    )
+    expect(agentAwakeService.setMode).toHaveBeenCalledWith('auto')
   })
 
   it('does not notify the agent awake service for unrelated setting changes', () => {
-    const agentAwakeService = { setEnabled: vi.fn() }
+    const agentAwakeService = { setMode: vi.fn() }
     store.getSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     store.updateSettings.mockReturnValue({ keepComputerAwakeWhileAgentsRun: false })
     registerSettingsHandlers(store as never, agentAwakeService as never)
@@ -372,7 +379,7 @@ describe('registerSettingsHandlers', () => {
 
     handler(settingsInvokeEvent, { defaultTuiAgent: 'codex' })
 
-    expect(agentAwakeService.setEnabled).not.toHaveBeenCalled()
+    expect(agentAwakeService.setMode).not.toHaveBeenCalled()
   })
 
   it('prepares local worktree roots when workspace directory changes', async () => {
@@ -494,6 +501,54 @@ describe('registerSettingsHandlers', () => {
 
     expect(store.updateSettings).toHaveBeenCalledWith(
       { terminalLineHeight: 1 },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('normalizes custom mobile pairing addresses before persistence', async () => {
+    store.getSettings.mockReturnValue({
+      mobilePairingCustomAddress: null,
+      mobilePairingCustomAddresses: []
+    })
+    store.updateSettings.mockReturnValue({
+      mobilePairingCustomAddress: '100.126.117.25:6768',
+      mobilePairingCustomAddresses: ['first.example:6768']
+    })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, {
+      mobilePairingCustomAddress: ' 100.126.117.25:6768 ',
+      mobilePairingCustomAddresses: [' first.example:6768 ', 'host:99999', 'first.example:6768']
+    })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      {
+        mobilePairingCustomAddress: '100.126.117.25:6768',
+        mobilePairingCustomAddresses: ['first.example:6768']
+      },
+      { notifyListeners: true, originWebContentsId: 1 }
+    )
+  })
+
+  it('clears malformed custom mobile pairing addresses before persistence', async () => {
+    store.getSettings.mockReturnValue({ mobilePairingCustomAddress: '100.126.117.25:6768' })
+    store.updateSettings.mockReturnValue({ mobilePairingCustomAddress: null })
+    registerSettingsHandlers(store as never)
+
+    const handler = handleMock.mock.calls.find((call) => call[0] === 'settings:set')?.[1] as (
+      _event: unknown,
+      args: unknown
+    ) => Promise<unknown>
+
+    await handler(settingsInvokeEvent, { mobilePairingCustomAddress: 'host:99999' })
+
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      { mobilePairingCustomAddress: null },
       { notifyListeners: true, originWebContentsId: 1 }
     )
   })

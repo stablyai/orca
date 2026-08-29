@@ -6,13 +6,18 @@ import {
 } from '../../../../shared/execution-host'
 import type { ProjectHostSetupProjection } from '../../../../shared/project-host-setup-projection'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
-import type { ProjectHostSetup, Repo, Worktree } from '../../../../shared/types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   createNormalizedPathInsideOrEqualMatcher,
-  normalizeRuntimePathForComparison,
-  normalizeRuntimePathSeparators
+  normalizeRuntimePathForComparison
 } from '../../../../shared/cross-platform-path'
-import type { AiVaultSessionProject } from '../../../../shared/ai-vault-session-filters'
+import {
+  folderGroupKey,
+  folderLabel,
+  type AiVaultSessionProject
+} from '../../../../shared/ai-vault-session-filters'
 
 // Why: the plain project descriptor moved to /shared (so the lifted filter core
 // stays renderer-free). Re-export it here for renderer import parity.
@@ -308,20 +313,11 @@ function compareCandidates(left: SessionProjectCandidate, right: SessionProjectC
 }
 
 function folderProject(cwd: string): AiVaultSessionProject {
-  const normalizedPath = normalizeRuntimePathForComparison(cwd)
   return {
     kind: 'folder',
-    key: `folder:${normalizedPath}`,
-    label: compactFolderLabel(cwd)
+    key: folderGroupKey(cwd),
+    label: folderLabel(cwd)
   }
-}
-
-function compactFolderLabel(pathValue: string): string {
-  const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
-  if (parts.length >= 2) {
-    return parts.slice(-2).join('/')
-  }
-  return parts[0] ?? pathValue
 }
 
 function resolveActiveProjectKey(

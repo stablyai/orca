@@ -1,10 +1,14 @@
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import { isRuntimeOwnedSshTargetId } from '../../../src/shared/execution-host'
-import { isNativeChatSupportedAgent } from '../../../src/shared/native-chat-agent-support'
+import {
+  isNativeChatSupportedAgent,
+  nativeChatRequiresLocalTranscript
+} from '../../../src/shared/native-chat-agent-support'
 
 // Why: native chat renders an agent's own JSONL transcript, and the host
-// resolver knows these transcript layouts. Grok is additionally gated on host
-// readability because Model-A SSH stores its transcript on the remote target.
+// resolver knows these transcript layouts. Agents whose hook reports no
+// transcript path (Grok, omp) are additionally gated on host readability,
+// because Model-A SSH stores their transcript on the remote target.
 export function isMobileNativeChatTranscriptReadable(
   connectionId: string | null | undefined
 ): boolean {
@@ -50,7 +54,7 @@ export function resolveMobileNativeChat(
   if (!agent || !isNativeChatSupportedAgent(agent)) {
     return null
   }
-  if (agent === 'grok' && !nativeChatTranscriptIsLocalReadable) {
+  if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
     return null
   }
   return {

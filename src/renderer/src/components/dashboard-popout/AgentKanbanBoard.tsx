@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
 import {
   DASHBOARD_BUCKET_ORDER,
@@ -152,10 +152,11 @@ export function AgentKanbanBoard({
     [snapshot.cards, visibleBuckets]
   )
   const [query, setQuery] = useState('')
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
   const filteredCards = useMemo(
     () => filterDashboardCards(visibleCards, query, filters),
-    [filters, query, visibleCards]
+    [visibleCards, filters, query]
   )
   const grouped = useMemo(() => groupByBucket(filteredCards), [filteredCards])
   const hasRelativeTimestamps = useMemo(
@@ -163,7 +164,6 @@ export function AgentKanbanBoard({
     [snapshot.cards]
   )
   const [now, setNow] = useState(() => Date.now())
-
   useEffect(() => {
     if (!hasRelativeTimestamps) {
       return
@@ -173,6 +173,27 @@ export function AgentKanbanBoard({
       intervalMs: 30_000
     })
   }, [hasRelativeTimestamps])
+
+  useEffect(() => {
+    const handleSearchShortcut = (event: KeyboardEvent): void => {
+      const usesPlatformModifier = navigator.userAgent.includes('Mac')
+        ? event.metaKey
+        : event.ctrlKey
+      if (!usesPlatformModifier || event.key.toLowerCase() !== 'k') {
+        return
+      }
+      if (
+        event.target instanceof Element &&
+        event.target.closest('input, textarea, [contenteditable="true"], .xterm')
+      ) {
+        return
+      }
+      event.preventDefault()
+      searchInputRef.current?.focus()
+    }
+    document.addEventListener('keydown', handleSearchShortcut)
+    return () => document.removeEventListener('keydown', handleSearchShortcut)
+  }, [])
 
   // The open terminal dialog survives bucket moves: only the paneKey is
   // remembered, and the card data is re-resolved from each fresh snapshot.
@@ -214,14 +235,16 @@ export function AgentKanbanBoard({
     if (dialogCard?.unseen) {
       onAckAgent(dialogCard.paneKey)
     }
-  }, [dialogCard?.unseen, dialogCard?.paneKey, onAckAgent])
+  }, [dialogCard?.paneKey, dialogCard?.unseen, onAckAgent])
 
   return (
     // Why: the pop-out is its own React root with no app-level provider, and the
     // card's repo tooltip needs one in both hosts. Nesting inside the main
     // window's provider is harmless.
     <TooltipProvider delayDuration={300}>
-      <div className={cn('flex flex-col bg-background text-foreground', containerClassName)}>
+      <div
+        className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}
+      >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
           <h1 className="text-[13px] font-semibold">
             {translate('dashboardPopout.title', 'Agents')}
@@ -255,6 +278,7 @@ export function AgentKanbanBoard({
           onQueryChange={setQuery}
           filters={filters}
           onFiltersChange={setFilters}
+          searchInputRef={searchInputRef}
         />
         <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
           {/* Auto margins center the capped board and collapse during horizontal overflow. */}

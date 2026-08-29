@@ -1,9 +1,6 @@
 import { parseLinuxStartTicks, readBootIdentity } from '../agent-hooks/managed-hook-owner-identity'
-import {
-  commandLineMatchesDaemon,
-  getProcessStartedAtMs,
-  startTimesWithinTolerance
-} from './daemon-health'
+import { commandLineMatchesDaemon } from './daemon-pid-identity'
+import { startTimesWithinTolerance } from './daemon-process-start-time'
 import {
   WINDOWS_CREATION_TIME_TOLERANCE_MS,
   type DaemonEvidenceSources,
@@ -15,7 +12,9 @@ import {
 import {
   inspectProcessSignal,
   queryWindowsProcess,
+  readLinuxProcessStartedAtMs,
   readLinuxStat,
+  readMacosProcessStartedAtMs,
   readProcessCommandLine
 } from './daemon-process-inspection'
 
@@ -43,6 +42,9 @@ export async function probeDaemonProcessIdentity(
     return unknown('exact_identity_unavailable', ['pid_record'])
   }
   const platform = dependencies.platform ?? process.platform
+  if (platform !== 'linux' && platform !== 'darwin' && platform !== 'win32') {
+    return unknown('inspection_failed', ['process_signal'])
+  }
   const signalProcess = dependencies.signalProcess ?? inspectProcessSignal
   const signal = signalProcess(exactIncarnation.identity.pid)
   if (platform !== 'win32' && signal === 'missing') {
@@ -134,7 +136,7 @@ async function probeLinuxProcess(
     ])
   }
 
-  const startedAtMs = (dependencies.readProcessStartedAtMs ?? getProcessStartedAtMs)(
+  const startedAtMs = await (dependencies.readProcessStartedAtMs ?? readLinuxProcessStartedAtMs)(
     exactIncarnation.identity.pid
   )
   if (startedAtMs === null) {
@@ -172,7 +174,7 @@ async function probeMacosProcess(
   if (!commandLineMatchesDaemon(commandLine, endpoint.socketPath, endpoint.tokenPath)) {
     return unknown('command_line_mismatch', ['process_command_line'])
   }
-  const startedAtMs = (dependencies.readProcessStartedAtMs ?? getProcessStartedAtMs)(
+  const startedAtMs = await (dependencies.readProcessStartedAtMs ?? readMacosProcessStartedAtMs)(
     exactIncarnation.identity.pid
   )
   if (startedAtMs === null) {
@@ -236,7 +238,7 @@ async function probeWindowsProcess(
 
 export function parseLinuxProcessState(statLine: string): string | null {
   const commandEnd = statLine.lastIndexOf(')')
-  if (commandEnd < 0) {
+  if (commandEnd === -1) {
     return null
   }
   return (

@@ -94,3 +94,13 @@ export function compareAppVersions(left: string, right: string): number {
 
   return 0
 }
+
+/** True when `current` is at or past `target`. Unparseable or absent versions never qualify. */
+export function hasReachedAppVersion(current: string, target: string | null): boolean {
+  return (
+    target !== null &&
+    isValidAppVersion(current) &&
+    isValidAppVersion(target) &&
+    compareAppVersions(current, target) >= 0
+  )
+}

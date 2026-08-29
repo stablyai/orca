@@ -104,6 +104,41 @@ describe('Windows signing workflow contract', () => {
     expect(installRun).toContain('throw "Unable to install the SignPath PowerShell module')
   })
 
+  it('still installs SignPath when the cut ref predates the composite action', () => {
+    const parsedWorkflow = readWorkflow('.github/workflows/release-cut.yml')
+    const steps = parsedWorkflow.jobs.build.steps
+    const stepNames = steps.map((step) => step.name)
+    const checkoutIndex = stepNames.indexOf('Checkout')
+    const restoreIndex = stepNames.indexOf('Restore composite actions from the workflow ref')
+    const installIndex = stepNames.indexOf('Install SignPath PowerShell module')
+
+    // Why: the build job checks out the cut tag, which for a hotfix cut from an
+    // older ref can predate `.github/actions/install-signpath-module`; without
+    // this restore the `uses: ./…` step dies on a missing action.yml.
+    expect(restoreIndex).toBeGreaterThan(checkoutIndex)
+    expect(restoreIndex).toBeLessThan(installIndex)
+
+    const restoreStep = steps[restoreIndex]
+    const restoreRun = restoreStep.run
+
+    expect(restoreStep.env.WORKFLOW_SHA).toBe('${{ github.workflow_sha }}')
+    expect(restoreRun).toContain('.github/actions/install-signpath-module/action.yml')
+    expect(restoreRun).toContain('git fetch --no-tags --depth=1 origin "$WORKFLOW_SHA"')
+    expect(restoreRun).toContain('git checkout "$WORKFLOW_SHA" -- .github/actions')
+
+    // Why: restoring the action must not turn signing into a soft dependency —
+    // a missing module still has to fail the Windows job, and the CDN fallback
+    // still has to reject an unexpected payload.
+    expect(steps[installIndex]['continue-on-error']).toBeUndefined()
+    expect(restoreStep['continue-on-error']).toBeUndefined()
+
+    const installRun = readWorkflow('.github/actions/install-signpath-module/action.yml').runs
+      .steps[0].run
+
+    expect(installRun).toContain('$actualHash -ne $expectedHash.ToUpperInvariant()')
+    expect(installRun).toContain('throw "SHA-256 mismatch for $source')
+  })
+
   it('shares one SignPath module install path between release and rehearsal', () => {
     const rehearsalWorkflow = readWorkflow('.github/workflows/windows-signing-rehearsal.yml')
     const stepNames = rehearsalWorkflow.jobs.rehearse.steps.map((step) => step.name)

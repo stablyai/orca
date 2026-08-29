@@ -77,9 +77,12 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       endpointIdentity
     )
     let publication: RelayPtySourcePublication
-    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
-      publication.onCreditAvailable(id)
-    )
+    let creditNoticeEnabled = true
+    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) => {
+      if (creditNoticeEnabled) {
+        publication.onCreditAvailable(id)
+      }
+    })
     publication = new RelayPtySourcePublication(dispatcher, adapter, (id) => capacityIds.push(id))
     dispatcher.feed(
       requestFrame(1, 'pty.openClient', {
@@ -100,7 +103,29 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       })
     ).toBe('opened')
     activationSettlements[0]({ ok: true })
-    return { adapter, publication, exitSettlements, capacityIds, writes }
+    return {
+      adapter,
+      publication,
+      exitSettlements,
+      capacityIds,
+      writes,
+      setCreditNoticeEnabled: (enabled: boolean): void => {
+        creditNoticeEnabled = enabled
+      }
+    }
+  }
+
+  function activateOwner(publication: RelayPtySourcePublication): void {
+    const settlements: ((result: SinkWriteSettlement) => void)[] = []
+    expect(
+      publication.activate('pty-1', 'incarnation-1', {
+        clientId: 1,
+        isStale: () => false,
+        sessionIdentity: endpointIdentity,
+        onResponseSettled: (callback) => settlements.push(callback)
+      })
+    ).toBe('opened')
+    settlements[0]({ ok: true })
   }
 
   function cancelDeliveryFrame(
@@ -200,16 +225,7 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
     dispatcher!.feed(cancelDeliveryFrame(2, activation))
     await flushRequests()
 
-    const activationSettlements: ((result: SinkWriteSettlement) => void)[] = []
-    expect(
-      harness.publication.activate('pty-1', 'incarnation-1', {
-        clientId: 1,
-        isStale: () => false,
-        sessionIdentity: endpointIdentity,
-        onResponseSettled: (callback) => activationSettlements.push(callback)
-      })
-    ).toBe('opened')
-    activationSettlements[0]({ ok: true })
+    activateOwner(harness.publication)
 
     expect(
       harness.publication.sealAndPublishExit({
@@ -219,6 +235,46 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       })
     ).toBe(true)
     expect(exitFrames(harness.writes)).toHaveLength(1)
+  })
+
+  it('reopens the delivery when the same client re-attaches over a closed ledger record', async () => {
+    const harness = await createHarness(8, true)
+    harness.publication.publish('pty-1', { data: 'data' }, false)
+    const activation = harness.publication.receivingActivation('pty-1', 1)!
+    dispatcher!.feed(ackFrame(2, activation, 4))
+    harness.publication.sealAndPublishExit({ id: 'pty-1', code: 0, incarnationId: 'incarnation-1' })
+    dispatcher!.feed(cancelDeliveryFrame(3, activation))
+    await flushRequests()
+    harness.exitSettlements[0]({ ok: true })
+    // Why: A' held the record across the in-flight frame, so it outlives the closed ledger until
+    // a capacity consumer prunes it — a re-attach must not resume that dead delivery.
+    expect(harness.publication.accepts('pty-1')).toBe(true)
+
+    activateOwner(harness.publication)
+
+    expect(harness.publication.publish('pty-1', { data: 'more' }, false)).toBe(true)
+  })
+
+  it('retires the record and defers capacity when an append lands on a closed delivery', async () => {
+    const harness = await createHarness()
+    harness.publication.publish('pty-1', { data: 'data' }, false)
+    const activation = harness.publication.receivingActivation('pty-1', 1)!
+    // Why: emulate a close the publication never saw — B3 backstops exactly the record/ledger
+    // disagreement that layer A's credit notification normally prevents.
+    harness.setCreditNoticeEnabled(false)
+    dispatcher!.feed(cancelDeliveryFrame(2, activation))
+    await flushRequests()
+    expect(harness.publication.accepts('pty-1')).toBe(true)
+    const capacityBefore = harness.capacityIds.length
+
+    expect(harness.publication.publish('pty-1', { data: 'more' }, false)).toBe(false)
+
+    expect(harness.publication.accepts('pty-1')).toBe(false)
+    // Why: publish() can run inside the captured-queue drain, so a synchronous capacity callback
+    // would publish pty.exit ahead of the chunk that is re-queued later in this same tick.
+    expect(harness.capacityIds).toHaveLength(capacityBefore)
+    await Promise.resolve()
+    expect(harness.capacityIds.slice(capacityBefore)).toEqual(['pty-1'])
   })
 
   it('survives a cancel while the credit-mode exit frame is still in flight', async () => {
@@ -275,6 +331,9 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       })
     ).toBe(true)
     expect(harness.publication.accepts('pty-1')).toBe(false)
+    // Why: the failed write closed the owner socket, so B1's owner-targeted retry matches no
+    // client — it must still retire the record rather than fan the exit out to everyone else.
+    expect(exitFrames(harness.writes)).toHaveLength(1)
     expect(harness.publication.getDebugSnapshot()).toMatchObject({
       exitCommitted: 0,
       exitRolledBack: 1
@@ -304,5 +363,32 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
       ).toBe(false)
     ).not.toThrow()
     expect(exitFrames(harness.writes)).toHaveLength(1)
+  })
+
+  it('forgets the legacy exit projection once the healthy exit settles', async () => {
+    const harness = await createHarness()
+    const exit = { id: 'pty-1', code: 0, incarnationId: 'incarnation-1' }
+    expect(harness.publication.sealAndPublishExit(exit)).toBe(true)
+
+    expect(harness.publication.exitPublicationSettled('pty-1')).toBe(true)
+
+    // Why: every client already holds this exit, so a retained index entry would both leak a row
+    // per exited pty and re-publish to the owner if any later fallback ran for the same id.
+    expect(harness.publication.publishExitAfterRetire(exit)).toBeNull()
+    expect(exitFrames(harness.writes)).toHaveLength(1)
+  })
+
+  it('re-targets the owner when a re-attach retires a record that already projected the exit', async () => {
+    const harness = await createHarness()
+    const exit = { id: 'pty-1', code: 0, incarnationId: 'incarnation-1' }
+    expect(harness.publication.sealAndPublishExit(exit)).toBe(true)
+
+    // Why: the handler holds its settled-check back while legacy output is still buffered, so B2
+    // can retire the record first — the index is then all that remembers the projection.
+    activateOwner(harness.publication)
+
+    expect(harness.publication.publishExitAfterRetire(exit)).toBe(true)
+    expect(exitFrames(harness.writes)).toHaveLength(2)
+    expect(harness.publication.publishExitAfterRetire(exit)).toBeNull()
   })
 })

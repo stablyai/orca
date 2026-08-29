@@ -1,8 +1,12 @@
-import type { BrowserPage, BrowserWorkspace } from '../../../../shared/types'
+import type { BrowserPage, BrowserWorkspace } from '../../../../shared/browser-workspace-types'
 import {
   destroyPersistentWebview,
   moveFocusToRendererBeforeFocusedWebviewHidden
-} from '../../components/browser-pane/webview-registry'
+} from '../../components/browser-pane/host-guest/webview-registry'
+import {
+  getExplicitBrowserPageZoomLevel,
+  rememberExplicitBrowserPageZoomLevel
+} from '../../components/browser-pane/host-guest/browser-page-zoom'
 
 export { moveFocusToRendererBeforeFocusedWebviewHidden }
 
@@ -29,6 +33,32 @@ export function collectBrowserWebviewIds(
     }
   }
   return ids
+}
+
+// Why: guest-budget eviction destroys every guest a hidden worktree retains
+// while its tabs/pages stay in the store, so a revisit rebuilds from state.
+// Eviction is not a user close — the tab stays in the UI, so the user's zoom
+// is re-remembered past the destroy-path forget: the revisit reasserts it
+// instead of writing the default through Chromium's partition-wide HostZoomMap
+// (which would also reset same-host sibling tabs).
+export function destroyWorktreeBrowserGuests(
+  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
+  browserPagesByWorkspace: Record<string, BrowserPage[]>,
+  worktreeId: string
+): void {
+  for (const tab of browserTabsByWorktree[worktreeId] ?? []) {
+    const pages = browserPagesByWorkspace[tab.id] ?? []
+    // Legacy sessions persisted before pages existed key their webview by the
+    // workspace tab id (same fallback as collectBrowserWebviewIds).
+    const guestIds = pages.length === 0 ? [tab.id] : pages.map((page) => page.id)
+    for (const guestId of guestIds) {
+      const explicitZoomLevel = getExplicitBrowserPageZoomLevel(guestId)
+      destroyRemovedBrowserWebview(guestId)
+      if (explicitZoomLevel !== null) {
+        rememberExplicitBrowserPageZoomLevel(guestId, explicitZoomLevel)
+      }
+    }
+  }
 }
 
 export function destroyWorkspaceWebviews(

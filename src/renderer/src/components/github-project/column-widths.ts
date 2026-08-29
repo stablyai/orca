@@ -7,7 +7,7 @@
 // the grid always fit its container exactly. Resize redistributes
 // weights between a column pair so the total stays constant and the
 // table never grows beyond its container.
-import type { GitHubProjectField } from '../../../../shared/github-project-types'
+import type { GitHubProjectField } from '../../../../shared/github/project-types'
 
 const STORAGE_KEY = 'orca.githubProject.columnWidths'
 
@@ -69,18 +69,4 @@ export function resolveWidth(
     return stored
   }
   return defaultWidthFor(field)
-}
-
-export function buildGridTemplate(
-  fields: GitHubProjectField[],
-  widths: Readonly<Record<string, number>>
-): string {
-  // Why: emit `minmax(<min>px, <weight>fr)` so the grid honors the
-  // user's relative weights AND fits within the container — pixel
-  // widths would let a wide TITLE blow past the parent and push the
-  // surrounding chrome out. The minmax floor is what stops a column
-  // from collapsing to zero when its weight is small.
-  const cols = fields.map((f) => `minmax(${MIN_COLUMN_WIDTH}px, ${resolveWidth(f, widths)}fr)`)
-  cols.push(`${ACTION_COLUMN_WIDTH}px`)
-  return cols.join(' ')
 }

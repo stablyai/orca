@@ -4,6 +4,7 @@ import {
   mkdirSync,
   mkdtempSync,
   readdirSync,
+  writeFileSync,
   rmSync,
   statSync,
   utimesSync
@@ -20,20 +21,30 @@ import {
   commandInRemoteDirectory,
   commandWithNodePath,
   listRelayBaseDirsCommand,
+  MAX_RELAY_GC_LISTING_ENTRIES,
   makeRemoteDirectoryCommand,
   moveRemoteTreeCommand,
+  promoteRemoteTreeContentsCommand,
   probeDirectoryExistsCommand,
   probeRelayInstalledCommand,
   readRemoteHomeCommand,
   relayLivenessProbeCommand
 } from './ssh-remote-commands'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
+import {
+  RELAY_INSTALL_COMPLETE_FILENAME,
+  relayArtifactFilenames
+} from '../../shared/relay-artifacts'
 
 const posix = getRemoteHostPlatform('linux-x64')
 const windows = getRemoteHostPlatform('win32-x64')
-const powerShellExecutable = (
-  process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh']
-).find((candidate) => {
+const powerShellExecutable = [
+  process.env.ORCA_POWERSHELL_EXECUTABLE,
+  ...(process.platform === 'win32' ? ['pwsh.exe', 'powershell.exe'] : ['pwsh'])
+].find((candidate) => {
+  if (!candidate) {
+    return false
+  }
   const result = spawnSync(candidate, ['-NoProfile', '-NonInteractive', '-Command', 'exit 0'], {
     stdio: 'ignore'
   })
@@ -111,7 +122,69 @@ describe('ssh remote command builders', () => {
     const probe = probeRelayInstalledCommand(posix, '/home/me/relay')
     expect(probe).toContain('test -d')
     expect(probe).toContain('managed-hook-runtime.js')
+    expect(probe).toContain('relay-ai-vault-service.js')
   })
+
+  it('requires every declared relay artifact before calling an install complete', () => {
+    const posixProbe = probeRelayInstalledCommand(posix, '/home/me/relay')
+    for (const filename of relayArtifactFilenames(false)) {
+      expect(posixProbe, `POSIX probe ignores ${filename}`).toContain(filename)
+    }
+    expect(posixProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
+    // A POSIX relay must not be asked for the Windows-only node-pty patch.
+    expect(posixProbe).not.toContain('node-pty-1.1.0-console-list-agent-patch.cjs')
+
+    const windowsProbe = decodePowerShellCommand(
+      probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
+    )
+    for (const filename of relayArtifactFilenames(true)) {
+      expect(windowsProbe, `Windows probe ignores ${filename}`).toContain(filename)
+    }
+    expect(windowsProbe).toContain(RELAY_INSTALL_COMPLETE_FILENAME)
+  })
+
+  // Stage a complete install, then remove one companion: the probe must flip.
+  function stageRelayInstall(isWindows: boolean): string {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-relay-probe-'))
+    for (const filename of relayArtifactFilenames(isWindows)) {
+      writeFileSync(join(dir, filename), '')
+    }
+    writeFileSync(join(dir, RELAY_INSTALL_COMPLETE_FILENAME), '')
+    return dir
+  }
+
+  it.skipIf(!powerShellExecutable)(
+    'rejects a Windows install missing only the WSL transcript helper',
+    async () => {
+      const dir = stageRelayInstall(true)
+      const probe = (): string => decodePowerShellCommand(probeRelayInstalledCommand(windows, dir))
+      try {
+        expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('OK')
+
+        // The exact shape a pre-STA-4831 relay left behind: everything but this.
+        rmSync(join(dir, 'wsl-transcript-fs-process-entry.js'))
+        expect((await runPowerShellCommand(powerShellExecutable!, probe())).trim()).toBe('MISSING')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
+
+  it.skipIf(process.platform === 'win32')(
+    'rejects a POSIX install missing only the WSL transcript helper',
+    async () => {
+      const dir = stageRelayInstall(false)
+      const probe = (): string => probeRelayInstalledCommand(posix, dir)
+      try {
+        expect((await runShellCommand(probe())).trim()).toBe('OK')
+
+        rmSync(join(dir, 'wsl-transcript-fs-process-entry.js'))
+        expect((await runShellCommand(probe())).trim()).toBe('MISSING')
+      } finally {
+        rmSync(dir, { recursive: true, force: true })
+      }
+    }
+  )
 
   it('uses encoded PowerShell for Windows deploy commands', () => {
     expect(readRemoteHomeCommand(windows)).toContain('powershell.exe')
@@ -121,6 +194,7 @@ describe('ssh remote command builders', () => {
     const probe = probeRelayInstalledCommand(windows, 'C:/Users/me/relay')
     expect(probe).toContain('-EncodedCommand')
     expect(decodePowerShellCommand(probe)).toContain('managed-hook-runtime.js')
+    expect(decodePowerShellCommand(probe)).toContain('relay-ai-vault-service.js')
   })
 
   it('uses a legacy-visible Windows lock directory with an exclusive owner file', () => {
@@ -151,6 +225,29 @@ describe('ssh remote command builders', () => {
     expect(windowsScript).toContain("'MOVED'")
   })
 
+  it('enumerates Windows staging children before copying', () => {
+    const script = decodePowerShellCommand(
+      promoteRemoteTreeContentsCommand(windows, 'C:/Users/me/relay.upload-123', 'C:/Users/me/relay')
+    )
+    expect(script).toContain('Get-ChildItem -LiteralPath')
+    expect(script).toContain(' -Force -ErrorAction Stop | Copy-Item -Destination')
+    expect(script).not.toContain('Copy-Item -LiteralPath')
+    expect(script).toContain('Remove-Item -LiteralPath')
+    expect(script).toContain("$ErrorActionPreference = 'Stop'")
+    expect(script).toContain('Copy-Item -Destination')
+  })
+
+  it('removes POSIX staging only after the copy succeeds', () => {
+    const command = promoteRemoteTreeContentsCommand(
+      posix,
+      '/home/u/relay.upload-123',
+      '/home/u/relay'
+    )
+    expect(command).toContain("cp -a '/home/u/relay.upload-123'/. '/home/u/relay'/")
+    expect(command).toContain("&& rm -rf '/home/u/relay.upload-123'")
+    expect(command.indexOf('cp -a')).toBeLessThan(command.indexOf('rm -rf'))
+  })
+
   it('emits an explicit POSIX liveness result so GC can fail closed', () => {
     const command = relayLivenessProbeCommand(posix, '/home/u/.orca-remote/relay-0.1.0')
 
@@ -175,6 +272,36 @@ describe('ssh remote command builders', () => {
     expect(listRelayBaseDirsCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
       '-EncodedCommand'
     )
+  })
+
+  it('bounds real POSIX GC output with more than the exec-cap stage population', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-relay-gc-scale-'))
+    try {
+      for (let index = 0; index < 15_197; index += 1) {
+        mkdirSync(join(root, `relay-0.1.0+abc.upload-${String(index).padStart(12, '0')}`))
+      }
+      mkdirSync(join(root, 'relay-0.1.0+aaa'))
+      mkdirSync(join(root, 'relay-0.1.0+bbb'))
+
+      const output = await runShellCommand(listRelayBaseDirsCommand(posix, root))
+      const entries = output.trim().split('\n')
+
+      expect(entries).toEqual(['relay-0.1.0+aaa', 'relay-0.1.0+bbb'])
+      expect(Buffer.byteLength(output)).toBeLessThan(1_024)
+      expect(entries.length).toBeLessThanOrEqual(MAX_RELAY_GC_LISTING_ENTRIES)
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  }, 30_000)
+
+  it('fails closed when real POSIX GC enumeration fails', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-relay-gc-failure-'))
+    try {
+      const command = `find() { return 23; }\n${listRelayBaseDirsCommand(posix, root)}`
+      await expect(runShellCommand(command)).rejects.toThrow('shell exited 1')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 
   it('escapes double quotes before passing JavaScript to native Windows commands', () => {

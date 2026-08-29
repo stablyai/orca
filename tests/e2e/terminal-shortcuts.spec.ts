@@ -526,13 +526,29 @@ test.describe('Terminal Shortcuts', () => {
     await pressAndExpectWrite(orcaPage, electronApp, 'Control+Alt+;', '\x1b;')
   })
 
-  test('Ctrl+Enter writes the kitty modified-enter chord for terminal TUIs', async ({
+  test('Ctrl+Enter protects local ConPTY shells without breaking trusted TUI chords', async ({
     orcaPage,
     electronApp
   }) => {
     await installMainProcessPtyWriteSpy(electronApp)
     await waitForActivePanePtyId(orcaPage)
 
+    if (process.platform === 'win32') {
+      await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\r')
+      const paneKey = await setActivePaneForegroundAgent(orcaPage, 'droid')
+      try {
+        // Droid queries CSI-u without activating live flags; trusted process evidence preserves cue/queue.
+        await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\x1b[13;5u')
+      } finally {
+        await orcaPage.evaluate(
+          (key) => window.__store?.getState().clearPaneForegroundAgent(key),
+          paneKey
+        )
+      }
+      return
+    }
+
+    // Preserve the established query-only Droid/Grok contract outside local ConPTY.
     await pressAndExpectWrite(orcaPage, electronApp, 'Control+Enter', '\x1b[13;5u')
   })
 
@@ -730,8 +746,8 @@ test.describe('Terminal Shortcuts', () => {
     await pressAndExpectWrite(orcaPage, electronApp, 'Alt+ArrowRight', '\x1bf')
 
     // Ctrl+←/→ on non-mac → readline backward-word / forward-word (\eb / \ef).
-    // Mac-gated: Ctrl+Arrow on macOS is reserved for Mission Control / Spaces.
-    if (!isMac) {
+    // macOS reserves Ctrl+Arrow; Windows ConPTY leaves it to PSReadLine.
+    if (!isMac && process.platform !== 'win32') {
       await pressAndExpectWrite(orcaPage, electronApp, 'Control+ArrowLeft', '\x1bb')
       await pressAndExpectWrite(orcaPage, electronApp, 'Control+ArrowRight', '\x1bf')
     }

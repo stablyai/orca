@@ -5,39 +5,21 @@ import type { AgentHookInstallState, AgentHookInstallStatus } from '../../shared
 import {
   buildManagedCommandDefinition,
   createManagedCommandMatcher,
-  buildWindowsAgentHookPostCommand,
   getSharedManagedScriptPath,
   readHooksJson,
   removeManagedCommands,
-  wrapPosixHookCommand,
-  wrapWindowsHookCommand,
   writeHooksJson,
   writeManagedScript,
   type HookDefinition
 } from '../agent-hooks/installer-utils'
+import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
   writeManagedScriptRemote
 } from '../agent-hooks/installer-utils-remote'
-import {
-  buildPosixHookPayloadCapture,
-  buildWindowsHookEnvironmentGuardLines,
-  buildWindowsHookStdinDrainEpilogue
-} from '../agent-hooks/hook-stdin-contract'
-
-// cursor-agent's declarative hooks surface (https://cursor.com/docs/hooks); subscribe to the minimum set for spinner + turn detection.
-// sessionStart/sessionEnd are NOT subscribed: they fire at process (not turn) boundaries and can race/reset the just-submitted turn's prompt cache.
-const CURSOR_EVENTS = [
-  'beforeSubmitPrompt',
-  'stop',
-  'preToolUse',
-  'postToolUse',
-  'postToolUseFailure',
-  'beforeShellExecution',
-  'beforeMCPExecution',
-  'afterAgentResponse'
-] as const
+import { CURSOR_EVENTS } from './hook-events'
+import { getManagedCommand, getManagedScript, getPosixManagedCommand } from './hook-script'
 
 function getConfigPath(): string {
   return join(homedir(), '.cursor', 'hooks.json')
@@ -51,6 +33,7 @@ function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(getManagedScriptFileName())
 }
 
+/*
 function getManagedCommand(scriptPath: string): string {
   return process.platform === 'win32'
     ? wrapWindowsHookCommand(scriptPath)
@@ -62,7 +45,7 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     return [
       '@echo off',
       'setlocal',
-      // Why: source the endpoint file so a surviving PTY reaches the current server, not the prior Orca's coordinates (see claude/hook-service.ts).
+      // Why: source current endpoint coordinates for PTYs surviving an Orca restart.
       'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
       ...buildWindowsHookEnvironmentGuardLines(),
       buildWindowsAgentHookPostCommand('cursor'),
@@ -75,15 +58,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
   return [
     '#!/bin/sh',
     ...buildPosixHookPayloadCapture(),
-    // Why: sourcing refreshes PORT/TOKEN/ENV from the current Orca so a surviving PTY keeps reporting after a restart (see claude/hook-service.ts).
+    ...buildPosixHookSpoolLines('cursor'),
+    // Why: refresh endpoint coordinates so surviving PTYs keep reporting.
     'if [ -n "$ORCA_AGENT_HOOK_ENDPOINT" ] && [ -r "$ORCA_AGENT_HOOK_ENDPOINT" ]; then',
     '  . "$ORCA_AGENT_HOOK_ENDPOINT" 2>/dev/null || :',
     'fi',
     'if [ -z "$ORCA_AGENT_HOOK_PORT" ] || [ -z "$ORCA_AGENT_HOOK_TOKEN" ] || [ -z "$ORCA_PANE_KEY" ]; then',
+    '  spool_hook_event',
     '  exit 0',
     'fi',
-    // Why: worktreeId embeds a path, so hand-building JSON in shell is unsafe (quotes/newlines); post raw payload as form fields instead.
-    // Why: pipe payload via curl stdin (`payload@-`), not an inline arg, so large tool output stays off the command line (EDR false positives).
+    // Why: post form fields because path-bearing worktree IDs are unsafe in hand-built JSON.
+    // Why: pipe payload to curl stdin to keep large output off the command line.
     'printf \'%s\' "$payload" | curl -sS -X POST "http://127.0.0.1:${ORCA_AGENT_HOOK_PORT}/hook/cursor" \\',
     '  --connect-timeout 0.5 --max-time 1.5 \\',
     '  -H "Content-Type: application/x-www-form-urlencoded" \\',
@@ -94,13 +79,17 @@ function getManagedScript(target: 'local' | 'posix' = 'local'): string {
     '  --data-urlencode "worktreeId=${ORCA_WORKTREE_ID}" \\',
     '  --data-urlencode "env=${ORCA_AGENT_HOOK_ENV}" \\',
     '  --data-urlencode "version=${ORCA_AGENT_HOOK_VERSION}" \\',
-    '  --data-urlencode "payload@-" >/dev/null 2>&1 || true',
+    '  --data-urlencode "payload@-" >/dev/null 2>&1 || spool_hook_event',
     'exit 0',
     ''
   ].join('\n')
 }
-
+*/
 export class CursorHookService {
+  async refreshManagedScripts(): Promise<void> {
+    await refreshManagedScriptIfPresent(getManagedScriptPath(), getManagedScript())
+  }
+
   getStatus(): AgentHookInstallStatus {
     const configPath = getConfigPath()
     const scriptPath = getManagedScriptPath()
@@ -115,10 +104,10 @@ export class CursorHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
     const missing: string[] = []
     let presentCount = 0
     for (const eventName of CURSOR_EVENTS) {
+      const command = getManagedCommand(scriptPath, eventName)
       const definitions = Array.isArray(config.hooks?.[eventName]) ? config.hooks![eventName]! : []
       // Why: Cursor puts command directly on the definition (Claude nests under `hooks`); match both shapes.
       const hasCommand = definitions.some(
@@ -162,12 +151,11 @@ export class CursorHookService {
       }
     }
 
-    const command = getManagedCommand(scriptPath)
     // Why: config.hooks is undefined on a fresh file with no prior hook install.
     const nextHooks = { ...config.hooks }
     const managedEvents = new Set<string>(CURSOR_EVENTS)
 
-    // Why: match by script filename (not exact command) so installs sweep stale entries from older builds or a different userData path.
+    // Why: match filenames to remove stale hooks from prior builds and user-data paths.
     const isManagedCommand = createManagedCommandMatcher(getManagedScriptFileName())
 
     // Why: sweep managed entries from events we no longer subscribe to, else upgraded users keep firing stale hooks.
@@ -181,7 +169,7 @@ export class CursorHookService {
       const cleaned = removeManagedCommands(definitions, isManagedCommand)
       // Also strip entries with the command at the top level (Cursor schema).
       const strippedCursorShape = cleaned.filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
+        (definition) => !isManagedCommand(definition.command)
       )
       if (strippedCursorShape.length === 0) {
         delete nextHooks[eventName]
@@ -191,17 +179,18 @@ export class CursorHookService {
     }
 
     for (const eventName of CURSOR_EVENTS) {
+      const command = getManagedCommand(scriptPath, eventName)
       const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
-      // Sweep both Claude-shaped (hooks[].command) and Cursor-shaped (definition.command) variants so installs converge on one entry.
+      // Sweep Claude- and Cursor-shaped variants so installs converge on one entry.
       const cleaned = removeManagedCommands(current, isManagedCommand).filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
+        (definition) => !isManagedCommand(definition.command)
       )
       // Why: Cursor's schema puts `command` directly on the definition (not under `hooks`); emit that shape.
       const definition: HookDefinition = buildManagedCommandDefinition(command)
       nextHooks[eventName] = [...cleaned, definition]
     }
 
-    // Why: cursor-agent's schema requires top-level `version: 1` (https://cursor.com/docs/hooks); keep any user-pinned value.
+    // Why: Cursor requires `version: 1`; preserve user-pinned values.
     const nextConfig: Record<string, unknown> = { ...config, hooks: nextHooks }
     if (nextConfig.version === undefined) {
       nextConfig.version = 1
@@ -211,7 +200,7 @@ export class CursorHookService {
     return this.getStatus()
   }
 
-  // Installs managed Cursor hooks on an SSH remote (POSIX-only). See docs/design/agent-status-over-ssh.md §8.
+  // Installs managed Cursor hooks on an SSH remote (POSIX-only); the managed script/JSON shape must match local install() or remote panes report a different status.
   async installRemote(sftp: SFTPWrapper, remoteHome: string): Promise<AgentHookInstallStatus> {
     const remoteConfigPath = `${remoteHome.replace(/\/$/, '')}/.cursor/hooks.json`
     const remoteScriptPath = `${remoteHome.replace(/\/$/, '')}/.orca/agent-hooks/cursor-hook.sh`
@@ -227,15 +216,15 @@ export class CursorHookService {
         }
       }
 
-      const command = wrapPosixHookCommand(remoteScriptPath)
       const nextHooks = { ...config.hooks }
       const isManagedCommand = createManagedCommandMatcher('cursor-hook.sh')
 
       for (const eventName of CURSOR_EVENTS) {
+        const command = getPosixManagedCommand(remoteScriptPath, eventName)
         const current = Array.isArray(nextHooks[eventName]) ? nextHooks[eventName] : []
         // Why: dual-shape sweep so repeated installs converge on a single managed entry.
         const cleaned = removeManagedCommands(current, isManagedCommand).filter(
-          (definition) => !isManagedCommand(definition.command as string | undefined)
+          (definition) => !isManagedCommand(definition.command)
         )
         const definition: HookDefinition = buildManagedCommandDefinition(command)
         nextHooks[eventName] = [...cleaned, definition]
@@ -247,7 +236,7 @@ export class CursorHookService {
       }
 
       // Why: script-then-config order so a partial mid-install leaves a working script nothing points at.
-      // Why: SSH remotes always use POSIX `.sh` hook paths even when Orca runs on Windows; never derive from local OS.
+      // Why: SSH hooks always use POSIX .sh paths, regardless of the local OS.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
       await writeHooksJsonRemote(sftp, remoteConfigPath, nextConfig)
 
@@ -289,7 +278,7 @@ export class CursorHookService {
         continue
       }
       const cleaned = removeManagedCommands(definitions, isManagedCommand).filter(
-        (definition) => !isManagedCommand(definition.command as string | undefined)
+        (definition) => !isManagedCommand(definition.command)
       )
       if (cleaned.length === 0) {
         delete nextHooks[eventName]

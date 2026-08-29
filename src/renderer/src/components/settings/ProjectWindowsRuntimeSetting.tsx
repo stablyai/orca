@@ -1,4 +1,5 @@
-import type { GlobalSettings, Project, ProjectUpdateArgs } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Project, ProjectUpdateArgs } from '../../../../shared/project-types'
 import type { LocalWindowsRuntimePreference } from '../../../../shared/project-execution-runtime'
 import {
   normalizeProjectRuntimePreference,

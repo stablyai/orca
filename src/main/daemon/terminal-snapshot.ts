@@ -1,5 +1,6 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TerminalModes } from './terminal-modes'
+import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type TerminalSnapshot = {
   snapshotAnsi: string
@@ -9,6 +10,8 @@ export type TerminalSnapshot = {
   scrollbackAnsi: string
   oscLinks?: TerminalOscLinkRange[]
   rehydrateSequences: string
+  /** Live modes and cursor state that can be restored without the alt frame. */
+  frameRestoreAnsi?: string
   cwd: string | null
   modes: TerminalModes
   cols: number
@@ -17,4 +20,6 @@ export type TerminalSnapshot = {
   lastTitle?: string
   /** Optional because persisted snapshots and older v19 daemons lack it. */
   outputSequence?: number
+  /** Ordered shell lifecycle evidence captured at this snapshot boundary. */
+  terminalOwner?: TerminalOwner
 }

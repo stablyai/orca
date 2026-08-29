@@ -7,6 +7,7 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { useAppStore } from '@/store'
+import { resetSshConnectInFlightForTests } from '@/ssh/ssh-connect-in-flight'
 import type { SshConnectionState } from '../../../../shared/ssh-types'
 
 const toastMocks = vi.hoisted(() => ({
@@ -59,6 +60,7 @@ function installSshConnect(
 describe('TerminalSshReconnectOverlay', () => {
   beforeEach(() => {
     useAppStore.setState(useAppStore.getInitialState(), true)
+    resetSshConnectInFlightForTests()
     toastMocks.error.mockReset()
     deleteFlowMocks.runWorktreeDelete.mockReset()
     environmentSshMocks.connectRuntimeEnvironmentSshTarget.mockReset()
@@ -93,6 +95,55 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(connect).toHaveBeenCalledWith({ targetId: 'ssh-target-1' })
   })
 
+  // The canned "Connect again to continue" sentence is the same for a timeout and for a refused
+  // host key. Only the detail says which, and for a host key it carries the only remedy the user
+  // will see anywhere in the terminal.
+  it('shows the failure detail beneath the status sentence', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="error"
+        error="Host key verification failed for devbox. Run: ssh-keygen -R devbox"
+      />
+    )
+
+    // Both, not either: the sentence says what to do, the detail says what happened.
+    expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
+    expect(screen.getByText(/ssh-keygen -R devbox/)).toBeInTheDocument()
+  })
+
+  it('shows nothing extra when there is no detail', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="devbox" status="error" />
+    )
+
+    expect(screen.getByText(/The SSH connection to devbox failed/)).toBeInTheDocument()
+    expect(screen.queryByText(/ssh-keygen/)).not.toBeInTheDocument()
+  })
+
+  // A removed target already explains itself and can never reconnect; a stale connection error
+  // underneath would contradict that.
+  it('suppresses the detail for a removed target', () => {
+    installSshConnect(vi.fn())
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="error"
+        error="Host key verification failed for devbox."
+        targetRemoved
+      />
+    )
+
+    expect(screen.queryByText(/Host key verification failed/)).not.toBeInTheDocument()
+  })
+
   it('shows an in-flight state while the SSH target is reconnecting', () => {
     const connect = vi.fn().mockResolvedValue(undefined)
     installSshConnect(connect)
@@ -106,7 +157,7 @@ describe('TerminalSshReconnectOverlay', () => {
     )
 
     expect(screen.getByText(/Connecting to devbox/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Connecting.../ })).toBeDisabled()
+    expect(screen.getByRole('button', { name: /Connecting…/ })).toBeDisabled()
     expect(connect).not.toHaveBeenCalled()
   })
 
@@ -123,10 +174,10 @@ describe('TerminalSshReconnectOverlay', () => {
       />
     )
 
-    await user.click(screen.getByRole('button', { name: 'Connect' }))
+    await user.click(screen.getByRole('button', { name: 'Reconnect' }))
 
     await waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith('Passphrase rejected'))
-    expect(screen.getByRole('button', { name: 'Connect' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Reconnect' })).toBeEnabled()
   })
 
   it('resyncs target metadata after a failed connect so a stale overlay converges', async () => {
@@ -199,7 +250,9 @@ describe('TerminalSshReconnectOverlay', () => {
     expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Remove workspace' }))
-    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt')
+    expect(deleteFlowMocks.runWorktreeDelete).toHaveBeenCalledWith('repo::/work/wt', {
+      expectedHostId: 'ssh:ssh-dead'
+    })
     expect(connect).not.toHaveBeenCalled()
   })
 
@@ -260,6 +313,44 @@ describe('TerminalSshReconnectOverlay', () => {
     // The failed-connect resync must not rewrite local target metadata.
     expect(listTargets).not.toHaveBeenCalled()
     expect(useAppStore.getState().sshTargetsHydrated).toBe(false)
+  })
+
+  // Why: the sidebar card control, the host-header menu, and this overlay can be on screen
+  // at once; a shared verb table keeps them from naming the same click three ways.
+  it.each([
+    ['disconnected', 'Connect'],
+    ['auth-failed', 'Reconnect'],
+    ['error', 'Retry'],
+    ['reconnection-failed', 'Retry']
+  ] as const)('labels the %s action %s, matching every other SSH surface', (status, verb) => {
+    installSshConnect(vi.fn().mockResolvedValue(undefined))
+
+    render(
+      <TerminalSshReconnectOverlay targetId="ssh-target-1" targetLabel="devbox" status={status} />
+    )
+
+    expect(screen.getByRole('button', { name: verb })).toBeEnabled()
+  })
+
+  it('suppresses a second connect while one is already in flight for the same target', async () => {
+    const connect = vi.fn().mockReturnValue(new Promise(() => {}))
+    installSshConnect(connect)
+    const user = userEvent.setup()
+
+    render(
+      <TerminalSshReconnectOverlay
+        targetId="ssh-target-1"
+        targetLabel="devbox"
+        status="disconnected"
+      />
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Connect' }))
+
+    // Why: N surfaces share one connection; a second dial on a passphrase-gated
+    // target means a second credential prompt.
+    await waitFor(() => expect(screen.getByRole('button', { name: /Connecting…/ })).toBeDisabled())
+    expect(connect).toHaveBeenCalledTimes(1)
   })
 
   it('publishes the returned SSH state so deferred terminal reattach can resume', async () => {

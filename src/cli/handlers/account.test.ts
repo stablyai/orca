@@ -1,3 +1,4 @@
+import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
 import { EventEmitter } from 'node:events'
 import { createHash } from 'node:crypto'
 import { existsSync } from 'node:fs'
@@ -12,6 +13,7 @@ const {
   resolveCliCommandMock,
   rmSyncMock,
   spawnMock,
+  stdioForWindowsInteractiveChildMock,
   writeKeychainMock
 } = vi.hoisted(() => ({
   deleteKeychainMock: vi.fn(),
@@ -20,6 +22,7 @@ const {
   resolveCliCommandMock: vi.fn(),
   rmSyncMock: vi.fn(),
   spawnMock: vi.fn(),
+  stdioForWindowsInteractiveChildMock: vi.fn(),
   writeKeychainMock: vi.fn()
 }))
 
@@ -41,15 +44,25 @@ vi.mock('../../main/claude-accounts/keychain', () => ({
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
   writeActiveClaudeKeychainCredentials: writeKeychainMock
 }))
-vi.mock('../../shared/node-cli-command-resolution', () => ({
+// Why importOriginal: withCliRuntimeOnPath is a pure filesystem-probing helper,
+// and the PATH assertions below are only meaningful against the real one.
+vi.mock('../../shared/node-cli-command-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof NodeCliCommandResolutionModule>()),
   getVersionManagerBinPaths: getVersionManagerBinPathsMock,
   resolveCliCommand: resolveCliCommandMock
+}))
+vi.mock('../../shared/windows-console-input', () => ({
+  stdioForWindowsInteractiveChild: stdioForWindowsInteractiveChildMock
 }))
 
 import { ACCOUNT_HANDLERS } from './account'
 import type { HandlerContext } from '../dispatch'
 import type { RuntimeClient } from '../runtime-client'
-import { getCmdExePath } from '../../shared/windows-batch-spawn'
+import {
+  getCmdExePath,
+  WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
+  WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
+} from '../../shared/windows-batch-spawn'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 function successfulChild(): EventEmitter {
@@ -101,6 +114,10 @@ describe('account CLI handlers', () => {
   beforeEach(() => {
     Object.defineProperty(process, 'platform', originalPlatform)
     spawnMock.mockReset().mockImplementation(() => successfulChild())
+    stdioForWindowsInteractiveChildMock.mockReset().mockImplementation((json: boolean) => ({
+      stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
+      dispose: vi.fn()
+    }))
     resolveCliCommandMock.mockReset().mockImplementation((command: string) => command)
     getVersionManagerBinPathsMock.mockReset().mockReturnValue([])
     readKeychainMock.mockReset().mockResolvedValue(null)
@@ -155,6 +172,56 @@ describe('account CLI handlers', () => {
     })
   })
 
+  it('passes Windows console device handles to the login child instead of inheriting Electron stdio', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const dispose = vi.fn()
+    stdioForWindowsInteractiveChildMock.mockReturnValue({
+      stdio: [11, 'inherit', 'inherit'],
+      dispose
+    })
+
+    await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      ['login', '--device-auth'],
+      expect.objectContaining({ stdio: [11, 'inherit', 'inherit'] })
+    )
+    expect(dispose).toHaveBeenCalledTimes(1)
+  })
+
+  it('disposes the Windows console input fd when spawn throws synchronously', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const dispose = vi.fn()
+    stdioForWindowsInteractiveChildMock.mockReturnValue({
+      stdio: [11, 'inherit', 'inherit'],
+      dispose
+    })
+    spawnMock.mockImplementationOnce(() => {
+      throw new Error('invalid stdio')
+    })
+
+    await expect(ACCOUNT_HANDLERS['account add'](context('codex'))).rejects.toThrow('invalid stdio')
+
+    expect(dispose).toHaveBeenCalledOnce()
+  })
+
+  it('keeps JSON login prompts off the CLI stdout envelope when console fds are attached', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    stdioForWindowsInteractiveChildMock.mockReturnValue({
+      stdio: [11, process.stderr, 'inherit'],
+      dispose: vi.fn()
+    })
+
+    await ACCOUNT_HANDLERS['account add'](context('codex', true))
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      'codex',
+      ['login', '--device-auth'],
+      expect.objectContaining({ stdio: [11, process.stderr, 'inherit'] })
+    )
+  })
+
   it('routes Windows package-manager shims through the safe cmd launcher', async () => {
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
     resolveCliCommandMock.mockReturnValue('C:\\tools\\codex.cmd')
@@ -166,6 +233,35 @@ describe('account CLI handlers', () => {
       ['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--device-auth'],
       expect.objectContaining({ stdio: ['inherit', 'inherit', 'inherit'] })
     )
+  })
+
+  it('launches a Windows shim installed under Program Files (x86)', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const shim = 'C:\\Program Files (x86)\\nodejs\\codex.cmd'
+    resolveCliCommandMock.mockReturnValue(shim)
+
+    await ACCOUNT_HANDLERS['account add'](context('codex'))
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      getCmdExePath(),
+      ['/d', '/c', shim, 'login', '--device-auth'],
+      expect.anything()
+    )
+  })
+
+  it('explains an unspawnable Windows shim path instead of leaking the error sentinel', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    resolveCliCommandMock.mockReturnValue('C:\\Users\\A&B\\codex.cmd')
+
+    const error = await ACCOUNT_HANDLERS['account add'](context('codex')).catch(
+      (thrown: unknown) => thrown
+    )
+
+    expect(spawnMock).not.toHaveBeenCalled()
+    const message = error instanceof Error ? error.message : String(error)
+    expect(message).not.toBe(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
+    expect(message).toContain('C:\\Users\\A&B\\codex.cmd')
+    expect(message).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
   })
 
   it('adds version-manager Node paths to the login child environment', async () => {

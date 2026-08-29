@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 import { getCheckSeverityRank, sortChecksBySeverity } from './pr-check-severity-order'
 import { mapGitLabPipelineJobStatusToConclusion } from './gitlab-pipeline-checks'
 
@@ -116,10 +116,11 @@ describe('PR check severity order', () => {
       check('pass-b', 'success')
     ]
 
+    // A manual GitLab gate is neutral, so it sinks below the passing checks a reviewer reads first.
     expect(sortChecksBySeverity(checks).map((item) => item.name)).toEqual([
-      'manual',
       'pass-a',
       'pass-b',
+      'manual',
       'future'
     ])
   })

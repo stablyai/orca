@@ -14,6 +14,9 @@ import { MacosTccPromptWatch } from './macos-tcc-prompt-watch'
 /** Why: the first detected dialog identifies an affected user; the notice remains one-time. */
 export const TCC_PROMPT_NOTICE_THRESHOLD = 1
 
+/** Why: re-arm users who may have trusted the former false-positive Full Disk Access badge. */
+export const TCC_PROMPT_NOTICE_VERSION = 2
+
 /** Why: preserve detection when Electron never emits `ready-to-show` without competing with startup. */
 export const TCC_PROMPT_WATCH_START_FALLBACK_MS = 10_000
 
@@ -28,6 +31,7 @@ export type TccPromptNoticeClaim = TccPromptNoticePayload & {
 }
 
 type TccPromptTally = {
+  noticeVersion: number
   promptCount: number
   notified: boolean
   dismissed: boolean
@@ -35,6 +39,7 @@ type TccPromptTally = {
 }
 
 const EMPTY_TALLY: TccPromptTally = {
+  noticeVersion: TCC_PROMPT_NOTICE_VERSION,
   promptCount: 0,
   notified: false,
   dismissed: false,
@@ -57,15 +62,28 @@ function loadTally(): TccPromptTally {
   try {
     const parsed = JSON.parse(readFileSync(tallyPath(), 'utf-8')) as Partial<TccPromptTally>
     const dismissed = parsed.dismissed === true
-    if (!dismissed && typeof parsed.acknowledgedAfterClose !== 'boolean') {
-      // Why: a legacy tally only proves a past prompt, not that Full Disk Access is still missing.
+    if (dismissed) {
+      return {
+        noticeVersion: TCC_PROMPT_NOTICE_VERSION,
+        promptCount: typeof parsed.promptCount === 'number' ? parsed.promptCount : 0,
+        notified: true,
+        dismissed: true,
+        acknowledgedAfterClose: true
+      }
+    }
+    if (parsed.noticeVersion !== TCC_PROMPT_NOTICE_VERSION) {
+      return { ...EMPTY_TALLY }
+    }
+    if (typeof parsed.acknowledgedAfterClose !== 'boolean') {
+      // Why: an incomplete tally proves only a past prompt, not that access is still missing.
       return { ...EMPTY_TALLY }
     }
     const acknowledgedAfterClose = parsed.acknowledgedAfterClose === true
     return {
+      noticeVersion: TCC_PROMPT_NOTICE_VERSION,
       promptCount: typeof parsed.promptCount === 'number' ? parsed.promptCount : 0,
-      notified: parsed.notified === true && (dismissed || acknowledgedAfterClose),
-      dismissed,
+      notified: parsed.notified === true && acknowledgedAfterClose,
+      dismissed: false,
       acknowledgedAfterClose
     }
   } catch {

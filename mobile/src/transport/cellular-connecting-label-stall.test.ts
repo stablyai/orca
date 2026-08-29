@@ -31,6 +31,9 @@ type CarrierBehavior =
   // Endpoint is healthy but its e2ee_ready lands after readyAfterMs, which a
   // high-latency / lossy cellular link readily pushes past the 5s budget.
   | { kind: 'slow-handshake'; readyAfterMs: number }
+  // Upgrade completes, nothing is ever answered, and the native socket is already
+  // half-open, so RN never delivers a close event for the client's own close().
+  | { kind: 'wedged-open-then-silent' }
 
 let carrier: CarrierBehavior = { kind: 'blackhole' }
 const sockets: CarrierWebSocket[] = []
@@ -54,7 +57,11 @@ class CarrierWebSocket {
       setTimeout(() => this.fail(), 1)
       return
     }
-    if (carrier.kind === 'open-then-silent' || carrier.kind === 'slow-handshake') {
+    if (
+      carrier.kind === 'open-then-silent' ||
+      carrier.kind === 'slow-handshake' ||
+      carrier.kind === 'wedged-open-then-silent'
+    ) {
       setTimeout(() => {
         this.readyState = 1
         this.onopen?.()
@@ -86,6 +93,10 @@ class CarrierWebSocket {
 
   close(): void {
     if (this.readyState === 3) {
+      return
+    }
+    if (carrier.kind === 'wedged-open-then-silent') {
+      this.readyState = 3
       return
     }
     this.fail()
@@ -233,6 +244,35 @@ describe('issue #10119 — what a phone shows while it cannot reach the desktop'
     expect(client.getReconnectAttempt()).toBe(0)
 
     client.close()
+  })
+
+  it('redials after a handshake timeout the wedged transport never reports as closed', () => {
+    carrier = { kind: 'wedged-open-then-silent' }
+    const client = connect('ws://192.168.0.56:6769', 'device-token', 'server-public-key')
+
+    // 200ms upgrade plus the 5s handshake budget, still inside the reconnect delay.
+    vi.advanceTimersByTime(5_400)
+
+    // Without the onclose fallback nothing else leaves 'handshaking': no reconnect
+    // timer is armed, the activity probe bails, and foregrounding is a no-op.
+    expect(sockets).toHaveLength(1)
+    expect(client.getState()).toBe('reconnecting')
+
+    vi.advanceTimersByTime(1_000)
+    expect(sockets).toHaveLength(2)
+
+    client.close()
+  })
+
+  it('escalates past "Connecting…" while every wedged dial swallows its close event', () => {
+    carrier = { kind: 'wedged-open-then-silent' }
+    const samples = observe('ws://192.168.0.56:6769', 900_000)
+
+    expect(Math.max(...samples.map((s) => s.attempts))).toBeGreaterThanOrEqual(12)
+    expect(samples.some((s) => s.label === "Can't reach desktop")).toBe(true)
+
+    const after = labelsAfterFirstEscalation(samples)
+    expect(after.every((s) => s.label !== 'Connecting…')).toBe(true)
   })
 
   it('contrast: an endpoint that RSTs escalates the same way', () => {

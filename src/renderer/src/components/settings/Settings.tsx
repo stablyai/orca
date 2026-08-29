@@ -10,7 +10,10 @@ import {
   type MutableRefObject
 } from 'react'
 import { toast } from 'sonner'
-import type { GlobalSettings, OrcaHooks, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SpeechModelState } from '../../../../shared/speech-types'
 import type {
   SourceControlAiSettings,
@@ -22,7 +25,7 @@ import { useAppStore } from '../../store'
 import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
 import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { applyDocumentTheme } from '@/lib/document-theme'
-import { useConfirmationDialog } from '@/components/confirmation-dialog'
+import { useConfirmationDialog } from '@/components/confirmation-dialog-context'
 import {
   SCROLLBACK_PRESETS_ROWS,
   getFallbackTerminalFonts,
@@ -54,6 +57,10 @@ import { ExperimentalPane } from './ExperimentalPane'
 import { PluginsSettingsSection } from './PluginsSettingsSection'
 import { AgentsPane } from './AgentsPane'
 import { OrchestrationPane } from './OrchestrationPane'
+import { ArtifactsSettingsPane } from './ArtifactsSettingsPane'
+import { ShareSkillsSettingsPane } from './ShareSkillsSettingsPane'
+import { AutomationsSettingsPane } from './AutomationsSettingsPane'
+import { OrcaAccountSettingsPane } from './OrcaAccountSettingsPane'
 import { LinearAgentSkillPane } from './LinearAgentSkillPane'
 import { AccountsPane } from './AccountsPane'
 import { StatsPane } from '../stats/StatsPane'
@@ -177,6 +184,7 @@ const SETTINGS_NAV_GROUP_BY_ID = new Map<string, SettingsNavGroupDefinition>(
 
 const SHORTCUTS_ESCAPE_CONFIRM_TOAST_ID = 'shortcuts-escape-confirm'
 const SHORTCUTS_ESCAPE_CONFIRM_WINDOW_MS = 2200
+const SETTINGS_TARGET_HIGHLIGHT_MS = 3_000
 
 function getSettingsSectionId(
   pane: SettingsNavTarget,
@@ -302,7 +310,6 @@ function Settings(): React.JSX.Element {
   const settingsProjectHostSelection = useAppStore((s) => s.settingsProjectHostSelection)
   const settingsProjectSetupSelection = useAppStore((s) => s.settingsProjectSetupSelection)
   const setSettingsProjectHostSelection = useAppStore((s) => s.setSettingsProjectHostSelection)
-  const settingsSearchInputQuery = useAppStore((s) => s.settingsSearchInputQuery)
   const settingsSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const setSettingsSearchQuery = useAppStore((s) => s.setSettingsSearchQuery)
   const modelStates = useAppStore((s) => s.modelStates)
@@ -351,9 +358,8 @@ function Settings(): React.JSX.Element {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
-  // Why: skill freshness only covers the validated global rail (not WSL), so the nav pill stays presence-only under WSL.
-  const { inventory: skillFreshnessInventory } = useSkillFreshness()
-  const skillFreshnessApplies = activeSkillRuntime.agentRuntime?.runtime !== 'wsl'
+  const skillFreshnessApplies = activeSkillRuntime.canUseLocalSkillFreshness
+  const { inventory: skillFreshnessInventory } = useSkillFreshness(skillFreshnessApplies)
   const [voiceModelStatesLoading, setVoiceModelStatesLoading] = useState(showDesktopOnlySettings)
   // Why: trim platform-only Terminal entries from the shared search index so search never reveals hidden controls.
   const [scrollbackMode, setScrollbackMode] = useState<'preset' | 'custom'>('preset')
@@ -373,6 +379,9 @@ function Settings(): React.JSX.Element {
     getInitialMountedSectionIds
   )
   const [pendingNavRequestTick, setPendingNavRequestTick] = useState(0)
+  const [highlightedSettingsTargetId, setHighlightedSettingsTargetId] = useState<string | null>(
+    null
+  )
   const [quickCommandAddIntentSignal, setQuickCommandAddIntentSignal] = useState(0)
   const [sshHostAddIntentSignal, setSshHostAddIntentSignal] = useState(0)
   const [remoteServerAddIntentSignal, setRemoteServerAddIntentSignal] = useState(0)
@@ -380,7 +389,7 @@ function Settings(): React.JSX.Element {
   const [hasUnsavedBranchPromptChanges, setHasUnsavedBranchPromptChanges] = useState(false)
   const [sourceControlAiPromptDiscardSignal, setSourceControlAiPromptDiscardSignal] = useState(0)
   const confirm = useConfirmationDialog()
-  // Why: session-only (deliberately not persisted) unlock — Shift-click the Experimental entry reveals the hidden group.
+  // Why: session-only (deliberately not persisted) unlock — Option-click the Experimental page title reveals the hidden group.
   const [hiddenExperimentalUnlocked, setHiddenExperimentalUnlocked] = useState(false)
   const contentScrollRef = useRef<HTMLDivElement | null>(null)
   const searchInputRef = useRef<HTMLInputElement | null>(null)
@@ -446,6 +455,17 @@ function Settings(): React.JSX.Element {
       settingsMountedRef.current = false
     }
   }, [])
+
+  useEffect(() => {
+    if (!highlightedSettingsTargetId) {
+      return
+    }
+    const timeout = window.setTimeout(
+      () => setHighlightedSettingsTargetId(null),
+      SETTINGS_TARGET_HIGHLIGHT_MS
+    )
+    return () => window.clearTimeout(timeout)
+  }, [highlightedSettingsTargetId])
 
   const requestFontSuggestions = useCallback((): void => {
     if (installedFontsLoadedRef.current || installedFontsLoadPromiseRef.current) {
@@ -662,6 +682,11 @@ function Settings(): React.JSX.Element {
     }
     pendingNavSectionRef.current = paneSectionId
     pendingScrollTargetRef.current = settingsNavigationTarget.sectionId ?? paneSectionId
+    setHighlightedSettingsTargetId(
+      settingsNavigationTarget.pane === 'developer-permissions'
+        ? (settingsNavigationTarget.sectionId ?? null)
+        : null
+    )
     // Why: ensure Appearance's nested status-bar section is open before scrolling so the row is visible.
     if (settingsNavigationTarget.pane === 'appearance') {
       const accordion = resolveAppearanceAccordionDeepLink(settingsNavigationTarget.sectionId)
@@ -1083,16 +1108,9 @@ function Settings(): React.JSX.Element {
   ])
 
   const scrollToSection = useCallback(
-    async (
-      sectionId: string,
-      modifiers?: { metaKey: boolean; ctrlKey: boolean; shiftKey: boolean; altKey: boolean }
-    ): Promise<void> => {
+    async (sectionId: string): Promise<void> => {
       if (sectionId !== activeSectionId && !(await confirmDiscardSourceControlAiPromptChanges())) {
         return
-      }
-      // Why: Shift-click the Experimental row unlocks the hidden power-user group (session-only).
-      if (sectionId === 'experimental' && modifiers?.shiftKey) {
-        setHiddenExperimentalUnlocked((previous) => !previous)
       }
       const container = contentScrollRef.current
       if (container) {
@@ -1180,10 +1198,10 @@ function Settings(): React.JSX.Element {
         generalGroups={generalNavGroups}
         repoSections={repoNavSections}
         hasRepos={repos.length > 0}
-        searchQuery={settingsSearchInputQuery}
         searchInputRef={searchInputRef}
+        // Why: deep-links open panes/modals that own focus; plain entry lands in search.
+        searchAutoFocus={settingsNavigationTarget == null}
         onBack={closeSettingsPageWithPromptGuard}
-        onSearchChange={setSettingsSearchQuery}
         onSelectSection={scrollToSection}
       />
 
@@ -1272,7 +1290,9 @@ function Settings(): React.JSX.Element {
                   )}
                   searchEntries={getSectionSearchEntries('orchestration')}
                 >
-                  {isSectionMounted('orchestration') ? <OrchestrationPane /> : null}
+                  {isSectionMounted('orchestration') ? (
+                    <OrchestrationPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
                 </SettingsSection>
 
                 {linearConnected ? (
@@ -1322,6 +1342,20 @@ function Settings(): React.JSX.Element {
                   </>
                 ) : null}
 
+                {showDesktopOnlySettings ? (
+                  <SettingsSection
+                    id="orca-account"
+                    title={translate('auto.components.settings.orcaAccount.title', 'Orca Account')}
+                    description={translate(
+                      'auto.components.settings.orcaAccount.description',
+                      'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
+                    )}
+                    searchEntries={getSectionSearchEntries('orca-account')}
+                  >
+                    {isSectionMounted('orca-account') ? <OrcaAccountSettingsPane /> : null}
+                  </SettingsSection>
+                ) : null}
+
                 <SettingsSection
                   id="setup-guide"
                   title={translate(
@@ -1351,6 +1385,7 @@ function Settings(): React.JSX.Element {
                     <GeneralPane
                       settings={settings}
                       updateSettings={updateSettings}
+                      updateSettingsOrThrow={updateSettingsOrThrow}
                       fontSuggestions={terminalFontSuggestions}
                       onRequestFontSuggestions={requestFontSuggestions}
                       wslSupportedPlatform={localWslSupportedPlatform}
@@ -1390,6 +1425,48 @@ function Settings(): React.JSX.Element {
                 ) : null}
 
                 <SettingsSection
+                  id="automations"
+                  title={translate('auto.components.settings.automations.title', 'Automations')}
+                  description={translate(
+                    'auto.components.settings.automations.description',
+                    'Schedule agent work and choose whether Automations appears in the sidebar.'
+                  )}
+                  searchEntries={getSectionSearchEntries('automations')}
+                >
+                  {isSectionMounted('automations') ? (
+                    <AutomationsSettingsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="artifacts"
+                  title={translate('auto.components.settings.artifacts.title', 'Artifacts')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.artifacts.description',
+                    'Share HTML and Markdown files with your team and manage their public links.'
+                  )}
+                  searchEntries={getSectionSearchEntries('artifacts')}
+                >
+                  {isSectionMounted('artifacts') ? (
+                    <ArtifactsSettingsPane settings={settings} updateSettings={updateSettings} />
+                  ) : null}
+                </SettingsSection>
+
+                <SettingsSection
+                  id="share-skills"
+                  title={translate('auto.components.settings.shareSkills.title', 'Share Skills')}
+                  badge="Beta"
+                  description={translate(
+                    'auto.components.settings.shareSkills.description',
+                    'Share your skills with an unlisted link. Anyone who has it can install them.'
+                  )}
+                  searchEntries={getSectionSearchEntries('share-skills')}
+                >
+                  {isSectionMounted('share-skills') ? <ShareSkillsSettingsPane /> : null}
+                </SettingsSection>
+
+                <SettingsSection
                   id="git"
                   title={translate(
                     'auto.components.settings.Settings.70100f94c7',
@@ -1397,7 +1474,7 @@ function Settings(): React.JSX.Element {
                   )}
                   description={translate(
                     'auto.components.settings.Settings.cfa34f4465',
-                    'Branch naming, base refs, attribution, and Git AI Author.'
+                    'Branch naming, base refs, and Git AI Author.'
                   )}
                   searchEntries={getSectionSearchEntries('git')}
                   forceVisible={hasUnsavedSourceControlAiPromptChanges}
@@ -1481,7 +1558,6 @@ function Settings(): React.JSX.Element {
                   {isSectionMounted('quick-commands') ? (
                     <QuickCommandsPane
                       settings={settings}
-                      updateSettings={updateSettings}
                       addCommandIntentSignal={quickCommandAddIntentSignal}
                     />
                   ) : null}
@@ -1697,7 +1773,9 @@ function Settings(): React.JSX.Element {
                     searchEntries={getSectionSearchEntries('developer-permissions')}
                   >
                     {isSectionMounted('developer-permissions') ? (
-                      <DeveloperPermissionsPane />
+                      <DeveloperPermissionsPane
+                        highlightedSettingId={highlightedSettingsTargetId}
+                      />
                     ) : null}
                   </SettingsSection>
                 ) : null}
@@ -1759,6 +1837,13 @@ function Settings(): React.JSX.Element {
                     'New features that are still taking shape. Give them a try.'
                   )}
                   searchEntries={getSectionSearchEntries('experimental')}
+                  // Why: Option-click the page title unlocks the hidden staff group
+                  // (session-only) — same idiom as Option-click on the Updates header.
+                  onTitleClick={(event) => {
+                    if (event.altKey) {
+                      setHiddenExperimentalUnlocked((previous) => !previous)
+                    }
+                  }}
                 >
                   {isSectionMounted('experimental') ? (
                     <ExperimentalPane

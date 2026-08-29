@@ -18,31 +18,30 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 
 describe('task drawer source boundaries', () => {
   it('threads GitHub task source context through detail mutations', () => {
-    const source = componentSource('GitHubItemDialog.tsx')
+    const source = [
+      componentSource('github-item-dialog/edit-item-fields/gh-edit-section.tsx'),
+      componentSource('github-item-dialog/edit-item-fields/gh-edit-section-mutations.ts')
+    ].join('\n')
     const issueUpdate = sourceBetween(
-      source,
+      componentSource('github/github-work-item-edit-mutations.ts'),
       'async function runIssueUpdate',
       'async function runWorkItemBodyUpdate'
     )
     const commentUpdate = sourceBetween(
-      source,
+      componentSource('github/github-work-item-comment-mutations.ts'),
       'function addIssueCommentForRepo',
       'function addPRReviewCommentForRepo'
     )
-    const editSection = sourceBetween(
-      source,
-      'function GHEditSection',
-      'function GHCommentComposer'
-    )
+    const editSection = source
 
     expect(issueUpdate).toContain('sourceContext: args.sourceContext')
     expect(commentUpdate).toContain('sourceContext: args.sourceContext')
     expect(editSection).toContain('sourceContext,')
     expect(editSection).toContain(
-      'patchWorkItem(item.id, { state: newState }, item.repoId, { sourceContext })'
+      'patchWorkItem(itemId, { state: newState }, itemRepoId, { sourceContext })'
     )
     expect(editSection).toContain(
-      'patchWorkItem(item.id, { labels: newLabels }, item.repoId, { sourceContext })'
+      'patchWorkItem(itemId, { labels: newLabels }, itemRepoId, { sourceContext })'
     )
   })
 

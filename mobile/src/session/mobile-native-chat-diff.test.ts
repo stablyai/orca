@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { diffFromText, diffFromToolCall } from './mobile-native-chat-diff'
+import { diffFromText, diffFromToolCall } from '../../../src/shared/native-chat-diff'
 
 describe('diffFromToolCall', () => {
   it('builds del/add lines from an Edit tool call', () => {
@@ -34,6 +34,16 @@ describe('diffFromText', () => {
 
   it('does not treat ordinary prose as a diff', () => {
     expect(diffFromText('Here is a list:\n- one bullet\nthat is all')).toBeNull()
+  })
+
+  it('counts a removed -- comment line despite the --- prefix collision', () => {
+    const lines = diffFromText('@@ -1,2 +1,2 @@\n ctx\n---sql comment\n+new')
+    expect(lines).toEqual([
+      { kind: 'meta', text: '@@ -1,2 +1,2 @@' },
+      { kind: 'context', text: ' ctx' },
+      { kind: 'del', text: '--sql comment' },
+      { kind: 'add', text: 'new' }
+    ])
   })
 
   it('caps large diffs before creating render rows', () => {

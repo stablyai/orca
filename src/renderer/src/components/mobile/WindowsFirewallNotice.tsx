@@ -10,12 +10,15 @@ import { cn } from '../../lib/utils'
 type WindowsFirewallNoticeProps = {
   pairingReady: boolean
   address?: string
+  /** Relay offers still carry a LAN endpoint, but a blocked one is not fatal. */
+  usingRelay?: boolean
   className?: string
 }
 
 export function WindowsFirewallNotice({
   pairingReady,
   address,
+  usingRelay = false,
   className
 }: WindowsFirewallNoticeProps): React.JSX.Element | null {
   const [status, setStatus] = useState<WindowsMobileFirewallStatus | null>(null)
@@ -173,6 +176,14 @@ export function WindowsFirewallNotice({
                       { port: firewallStatus.port }
                     )}
             </p>
+            {usingRelay ? (
+              <p className="text-xs text-muted-foreground">
+                {translate(
+                  'auto.components.mobile.WindowsFirewallNotice.relay-note',
+                  'Pairing still works over Orca Relay — allowing this only adds the faster local connection.'
+                )}
+              </p>
+            ) : null}
           </div>
           {networkIsPublic ? (
             <Button

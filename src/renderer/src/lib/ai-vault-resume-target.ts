@@ -6,8 +6,8 @@ import {
   toSshExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import type { Repo } from '../../../shared/types'
-import { getRepoIdFromWorktreeId } from '../../../shared/worktree-id'
+import type { Repo } from '../../../shared/repo-types'
+import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import { isWslUncPath } from '../../../shared/wsl-paths'
 import type { AppState } from '@/store/types'
@@ -178,7 +178,7 @@ function getAiVaultResumeFolderTargetStatus(
   }
 
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const groupHostId = normalizeExecutionHostId(group?.executionHostId)
+  const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
   if (groupHostId) {
     return getAiVaultResumeExecutionHostTargetStatus(groupHostId)
   }
@@ -202,7 +202,7 @@ function getAiVaultResumeFolderExecutionHostId(
   }
 
   const group = state.projectGroups.find((entry) => entry.id === workspace.projectGroupId)
-  const groupHostId = normalizeExecutionHostId(group?.executionHostId)
+  const groupHostId = normalizeExecutionHostId(workspace.executionHostId ?? group?.executionHostId)
   if (groupHostId) {
     return groupHostId
   }

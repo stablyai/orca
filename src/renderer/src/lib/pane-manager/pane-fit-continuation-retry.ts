@@ -19,14 +19,30 @@ const retryByPane = new WeakMap<ManagedPane, RetryState>()
 function scheduleRetryTick(run: () => void): RetrySchedule {
   if (typeof requestAnimationFrame === 'function') {
     let cancelled = false
+    let settled = false
     let timer: ReturnType<typeof setTimeout> | null = null
+    const finish = (): void => {
+      if (cancelled || settled) {
+        return
+      }
+      settled = true
+      if (typeof cancelAnimationFrame === 'function') {
+        cancelAnimationFrame(rafId)
+      }
+      run()
+    }
     const rafId = requestAnimationFrame(() => {
-      if (!cancelled) {
+      if (!cancelled && !settled) {
         // Why: FitAddon must observe committed CSS, and synchronous rAF test
         // shims must not recursively consume the whole retry budget inline.
-        timer = setTimeout(run, LAYOUT_SETTLE_MS)
+        if (timer !== null) {
+          clearTimeout(timer)
+        }
+        timer = setTimeout(finish, LAYOUT_SETTLE_MS)
       }
     })
+    // Why: Chromium can indefinitely throttle rAF for a hidden Electron window; the fit budget must still release deferred PTY output.
+    timer = setTimeout(finish, LAYOUT_SETTLE_MS * 2)
     return {
       cancel: () => {
         cancelled = true
