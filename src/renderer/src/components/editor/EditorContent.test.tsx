@@ -10,6 +10,10 @@ vi.mock('@/lib/lazy-with-retry', () => ({
 }))
 
 import { EditorContent, getMarkdownSourceLineOffset } from './EditorContent'
+import {
+  EDITOR_TEXT_READ_LIMIT_BYTES,
+  formatFileTooLargeMessage
+} from '../../../../shared/editor-file-read-limit'
 
 function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
   return {
@@ -82,6 +86,51 @@ describe('EditorContent', () => {
     expect(html).toContain('Unable to load file')
     expect(html).toContain('Access denied')
     expect(html).not.toContain('Unable to render notebook')
+  })
+
+  // The fallback only draws the override when the surface hands it one; this pins
+  // the edit surface's wiring, without which the panel is a dead end.
+  it('offers the size-limit override on a local refusal in an edit tab', () => {
+    const activeFile = createOpenFile()
+    const html = renderToStaticMarkup(
+      <EditorContent
+        activeFile={activeFile}
+        viewStateScopeId={activeFile.id}
+        fileContents={{
+          [activeFile.id]: {
+            content: '',
+            isBinary: false,
+            loadError: formatFileTooLargeMessage({
+              byteLength: 53_477_376,
+              limitBytes: EDITOR_TEXT_READ_LIMIT_BYTES.local,
+              scope: 'local'
+            })
+          }
+        }}
+        diffContents={{}}
+        editBuffers={{}}
+        openFiles={[activeFile]}
+        worktreeEntries={[]}
+        resolvedLanguage="notebook"
+        isMarkdown={false}
+        isMermaid={false}
+        isCsv={false}
+        isNotebook
+        mdViewMode="rich"
+        isChangesMode={false}
+        sideBySide={false}
+        pendingEditorReveal={null}
+        handleContentChange={vi.fn()}
+        handleContentChangeForFile={vi.fn()}
+        handleDirtyStateHint={vi.fn()}
+        handleSave={vi.fn()}
+        handleSaveForFile={vi.fn()}
+        reloadContent={vi.fn()}
+      />
+    )
+
+    expect(html).toContain('data-testid="large-file-fallback"')
+    expect(html).toContain('Open Anyway')
   })
 
   it('shows the changed-on-disk banner above a dirty edit tab', () => {

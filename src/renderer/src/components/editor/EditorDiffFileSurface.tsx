@@ -2,6 +2,7 @@ import { translate } from '@/i18n/i18n'
 import type { OpenFile } from '@/store/slices/editor'
 import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 import { getDiffContentSignature } from './diff-content-signature'
+import type { EditorContentReloadOptions } from './editor-panel-content-types'
 import { DiffViewer, ImageDiffViewer, MarkdownPreview } from './editor-lazy-views'
 import { ExternalFileChangeBanner } from './ExternalFileChangeBanner'
 import type { useMarkdownDocuments } from './useMarkdownDocuments'
@@ -41,7 +42,7 @@ export function EditorDiffFileSurface({
   markdownDocuments: MarkdownDocumentsController
   onContentChange: (content: string) => void
   onSave: (content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: EditorContentReloadOptions) => void
 }): React.JSX.Element {
   if (!diffContent) {
     return (

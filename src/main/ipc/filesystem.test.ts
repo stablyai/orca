@@ -68,6 +68,7 @@ vi.mock(
   async () => (await import('./filesystem-test-harness')).pullRequestLinkedIssueMock
 )
 
+import { EDITOR_READ_OVERRIDE_CEILING_BYTES } from '../../shared/editor-file-read-limit'
 import { registerFilesystemHandlers } from './filesystem'
 import {
   registerWorktreeRootsForRepo,
@@ -430,7 +431,144 @@ describe('registerFilesystemHandlers', () => {
 
     await expect(
       handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.json') })
-    ).rejects.toThrow('exceeds 50MB limit')
+    ).rejects.toThrow('[size=53477376 limit=52428800 scope=local]')
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  // The local budget is a confirmation, not a hard ceiling — a local read has no
+  // shared transport to protect — so an explicit override reads the whole file.
+  it('reads a file past the editor budget when the caller overrides it', async () => {
+    // Why: the gate reads the size from stat, so the fixture bytes stay small.
+    const content = 'over the budget'
+    statMock.mockResolvedValue({ size: 51 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(Buffer.from(content))
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/huge.json'),
+        allowLargeFile: true
+      })
+    ).resolves.toEqual({ content, isBinary: false })
+  })
+
+  it('reads a previewable binary past its budget when the caller overrides it', async () => {
+    const buf = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00])
+    statMock.mockResolvedValue({ size: 60 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+    readFileMock.mockResolvedValue(buf)
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/huge.png'),
+        allowLargeFile: true
+      })
+    ).resolves.toEqual({
+      content: buf.toString('base64'),
+      isBinary: true,
+      isImage: true,
+      mimeType: 'image/png'
+    })
+  })
+
+  // "Open Anyway" lifts the confirmation budget, not the transport's own ceiling.
+  // This path materializes the whole file as one main-process string and ships it
+  // whole over IPC, and V8 cannot hold a string past MAX_STRING_LENGTH — refusing
+  // by size keeps the failure a parseable refusal instead of an allocation throw.
+  it('still refuses an overridden text read past the ceiling the transport can hold', async () => {
+    statMock.mockResolvedValue({
+      size: EDITOR_READ_OVERRIDE_CEILING_BYTES + 1,
+      isDirectory: () => false,
+      mtimeMs: 123
+    })
+    openMock.mockResolvedValue({
+      read: vi.fn(async (buffer: Buffer) => {
+        buffer[0] = 0x61
+        return { bytesRead: 1, buffer }
+      }),
+      close: vi.fn()
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/enormous.log'),
+        allowLargeFile: true
+      })
+    ).rejects.toThrow(`limit=${EDITOR_READ_OVERRIDE_CEILING_BYTES} scope=local`)
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('still refuses an overridden previewable-binary read past the ceiling', async () => {
+    statMock.mockResolvedValue({
+      size: EDITOR_READ_OVERRIDE_CEILING_BYTES + 1,
+      isDirectory: () => false,
+      mtimeMs: 123
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/enormous.png'),
+        allowLargeFile: true
+      })
+    ).rejects.toThrow(`limit=${EDITOR_READ_OVERRIDE_CEILING_BYTES} scope=local`)
+
+    expect(readFileMock).not.toHaveBeenCalled()
+  })
+
+  it('still refuses an overridden live-tail log read past the ceiling', async () => {
+    const close = vi.fn()
+    const readFile = vi.fn()
+    openMock.mockResolvedValue({
+      stat: vi.fn().mockResolvedValue({
+        size: EDITOR_READ_OVERRIDE_CEILING_BYTES + 1,
+        dev: 1,
+        ino: 2,
+        birthtimeMs: 3
+      }),
+      readFile,
+      close
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, {
+        filePath: path.resolve('/workspace/repo/session.jsonl'),
+        includeLocalLogMetadata: true,
+        allowLargeFile: true
+      })
+    ).rejects.toThrow(`limit=${EDITOR_READ_OVERRIDE_CEILING_BYTES} scope=local`)
+
+    expect(readFile).not.toHaveBeenCalled()
+    expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  // The size gate must not swallow the binary placeholder: an oversized archive
+  // is not "unreadable", it is simply not text, and the editor already has a
+  // view for that.
+  it('still reports oversized non-previewable binaries as binary', async () => {
+    statMock.mockResolvedValue({ size: 60 * 1024 * 1024, isDirectory: () => false, mtimeMs: 123 })
+    openMock.mockResolvedValue({
+      read: vi.fn(async (buffer: Buffer) => {
+        buffer[0] = 0x00
+        return { bytesRead: 1, buffer }
+      }),
+      close: vi.fn()
+    })
+
+    registerFilesystemHandlers(store as never)
+
+    await expect(
+      handlers.get('fs:readFile')!(null, { filePath: path.resolve('/workspace/repo/huge.bin') })
+    ).resolves.toEqual({ content: '', isBinary: true })
 
     expect(readFileMock).not.toHaveBeenCalled()
   })

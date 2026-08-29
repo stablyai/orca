@@ -6,7 +6,11 @@ import { EditorContent } from './EditorContent'
 import { EditorPanelHeader } from './EditorPanelHeader'
 import { UntitledFileRenameDialog } from './UntitledFileRenameDialog'
 import type { getEditorPanelRenderModel } from './editor-panel-render-model'
-import type { DiffContent, FileContent } from './editor-panel-content-types'
+import type {
+  DiffContent,
+  EditorContentReloadOptions,
+  FileContent
+} from './editor-panel-content-types'
 import type { EditorToggleValue } from './EditorViewToggle'
 import { shouldShowEditorPanelHeader } from './editor-header'
 import { getUntitledFileRoot } from './untitled-file-rename-path'
@@ -49,7 +53,7 @@ type EditorPanelShellProps = {
   onDirtyStateHint: (dirty: boolean) => void
   onSave: (content: string) => Promise<boolean>
   onSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  onReloadContent: (file: OpenFile) => void
+  onReloadContent: (file: OpenFile, options?: EditorContentReloadOptions) => void
   onCloseMarkdownTableOfContents: () => void
   onCloseRenameDialog: () => void
   onRenameConfirm: (newRelPath: string) => Promise<void>

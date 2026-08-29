@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import {
   enoent,
+  openMock,
   readdirMock,
   resolveAuthorizedPathMock,
   statMock
@@ -94,6 +95,27 @@ describe('RuntimeFileCommands', () => {
       kind: 'markdown',
       opened: true
     })
+  })
+
+  // The read is capped at the budget, so `byteLength` describes the prefix, not
+  // the file. Only a stat the host actually performed may be reported as a size.
+  it('reports the observed file size when a local runtime read is truncated', async () => {
+    const { commands } = createRuntimeFileCommands({})
+    resolveAuthorizedPathMock.mockResolvedValue('/repo/docs/huge.log')
+    statMock.mockResolvedValue({ isDirectory: () => false, size: 4 * 1024 * 1024 * 1024 })
+    openMock.mockResolvedValue({
+      read: (buffer: Buffer, offset: number, length: number) => {
+        buffer.fill(0x78, offset, offset + length)
+        return Promise.resolve({ bytesRead: length })
+      },
+      close: () => Promise.resolve()
+    })
+
+    const result = await commands.readMobileFile('id:wt-1', 'docs/huge.log')
+
+    expect(result.truncated).toBe(true)
+    expect(result.byteLength).toBe(512 * 1024 + 1)
+    expect(result.totalByteLength).toBe(4 * 1024 * 1024 * 1024)
   })
 
   it('opens previewable images through the renderer host as an image tab', async () => {

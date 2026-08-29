@@ -1,4 +1,5 @@
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
+import { stripFileTooLargeMarker } from '../../shared/editor-file-read-limit'
 
 // Why: a stalled WSL distro or an unreachable remote host fails one probe per
 // discovered path, so an uncapped list ships one row per transcript file in the
@@ -6,10 +7,17 @@ import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 // the same and both feed the same panel.
 const SCAN_ISSUE_LIMIT = 500
 
+// Why: the panel renders issue.message verbatim, and remote transcript reads go
+// through the same reader the editor uses, so its machine marker rides along.
+function toReadableIssue(issue: AiVaultScanIssue): AiVaultScanIssue {
+  const message = stripFileTooLargeMarker(issue.message)
+  return message === issue.message ? issue : { ...issue, message }
+}
+
 /** Append a scan issue, collapsing everything past the cap into one notice. */
 export function recordSessionScanIssue(issues: AiVaultScanIssue[], issue: AiVaultScanIssue): void {
   if (issues.length < SCAN_ISSUE_LIMIT - 1) {
-    issues.push(issue)
+    issues.push(toReadableIssue(issue))
     return
   }
   if (issues.length === SCAN_ISSUE_LIMIT - 1) {

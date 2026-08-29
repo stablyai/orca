@@ -1,5 +1,6 @@
 import { useEffect, type Dispatch, type MutableRefObject, type SetStateAction } from 'react'
 import type { OpenFile } from '@/store/slices/editor'
+import { parseFileTooLargeMessage } from '../../../../shared/editor-file-read-limit'
 import {
   WORKTREE_OWNER_NOT_READY_ERROR,
   WORKTREE_OWNER_UNREACHABLE_ERROR,
@@ -37,6 +38,12 @@ export function shouldRetryFileLoadError(message: string): boolean {
   // Terminal: the owner-not-ready budget is spent; only an explicit Retry should
   // restart it, never the automatic backoff.
   if (message === WORKTREE_OWNER_UNREACHABLE_ERROR) {
+    return false
+  }
+  // A size refusal is deterministic, so retrying only burns the budget. Match the
+  // parser so the bare `file_too_large` token counts too — it has no spaces, so
+  // the prose check below never saw it.
+  if (parseFileTooLargeMessage(message)) {
     return false
   }
   const lower = message.toLowerCase()

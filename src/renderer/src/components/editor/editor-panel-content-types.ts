@@ -38,3 +38,6 @@ export type InFlightContentRead<T> = {
   externalEventGeneration?: number
   promise: Promise<T>
 }
+
+/** Per-read overrides a reload entry point accepts from the error fallback. */
+export type EditorContentReloadOptions = { allowLargeFile?: boolean }

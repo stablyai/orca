@@ -21,6 +21,7 @@ import { useMonacoEditorDecorations } from './use-monaco-editor-decorations'
 import { useMonacoEditorMount } from './use-monaco-editor-mount'
 import { snapshotMonacoViewState } from './monaco-view-state-persistence'
 import { MonacoMarkdownAnnotationOverlay } from './MonacoMarkdownAnnotationOverlay'
+import { useMonacoLargeFileNotice } from './use-monaco-large-file-notice'
 
 type MonacoEditorProps = {
   fileId: string
@@ -165,6 +166,8 @@ export default function MonacoEditor({
       ...buildFileEditorWordWrapOptions(editorWordWrap)
     })
   }, [editorFontFamily, editorFontSize, editorWordWrap])
+
+  useMonacoLargeFileNotice(mountedEditor, filePath)
 
   const decorations = useMonacoEditorDecorations({
     editorRef,

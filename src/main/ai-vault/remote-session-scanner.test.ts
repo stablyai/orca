@@ -3,6 +3,7 @@ import { getRemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import { scanRemoteAiVaultSessions } from './remote-session-scanner'
 import { MemoryRemoteProvider, jsonLines } from './remote-session-scanner-test-fixtures'
 import { primeAgentFixture } from './session-scanner-prime-agent-fixtures'
+import { formatFileTooLargeMessage } from '../../shared/editor-file-read-limit'
 
 describe('scanRemoteAiVaultSessions', () => {
   it('indexes Cline manifests on the SSH-owned disk without messages-file phantoms', async () => {
@@ -403,6 +404,40 @@ describe('scanRemoteAiVaultSessions', () => {
         agent: 'antigravity',
         path: deniedTranscript,
         message: expect.stringContaining('EACCES')
+      })
+    ])
+  })
+
+  // The relay serves these reads with the same function the editor uses, so its
+  // refusal arrives carrying the editor's machine marker. This row is rendered
+  // verbatim in the sidebar, so the marker must not survive the scan.
+  it('records an oversized transcript without the editor read marker', async () => {
+    const provider = new MemoryRemoteProvider()
+    const transcript = '/home/ada/.claude/projects/repo/huge.jsonl'
+    provider.addFile(transcript, jsonLines([{ type: 'user', message: { content: 'hi' } }]), 5)
+    provider.failReadFile(
+      transcript,
+      new Error(
+        formatFileTooLargeMessage({
+          byteLength: 13_002_342,
+          limitBytes: 10 * 1024 * 1024,
+          scope: 'ssh'
+        })
+      )
+    )
+
+    const result = await scanRemoteAiVaultSessions({
+      provider,
+      executionHostId: 'ssh:dev-box',
+      remoteHome: '/home/ada',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+
+    expect(result.issues).toEqual([
+      expect.objectContaining({
+        path: transcript,
+        message:
+          'File too large: 12.4 MB exceeds the 10.0 MB read limit for files on this SSH host.'
       })
     ])
   })

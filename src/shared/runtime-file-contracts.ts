@@ -28,6 +28,13 @@ export type RuntimeFileReadResult = {
   content: string
   truncated: boolean
   byteLength: number
+  /** Budget that produced `truncated`. Absent on hosts predating this field. */
+  maxByteLength?: number
+  /**
+   * Size the host stat'd. `byteLength` only measures the capped prefix it read,
+   * so it must never be shown as the file's size. Absent when unobserved.
+   */
+  totalByteLength?: number
 }
 
 export type RuntimeTerminalPathOpenTarget =

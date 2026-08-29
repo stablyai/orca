@@ -144,15 +144,21 @@ import {
   applyGitStatusUpstreamRefWatchRequest,
   type GitStatusUpstreamRefWatchRequest
 } from './git-status-upstream-ref-watch-request'
+import {
+  EDITOR_PREVIEWABLE_BINARY_MAX_BYTES,
+  EDITOR_READ_OVERRIDE_CEILING_BYTES,
+  EDITOR_TEXT_READ_LIMIT_BYTES,
+  formatFileTooLargeMessage
+} from '../../shared/editor-file-read-limit'
 
-// Why: Monaco degrades features on large files like VS Code, so a 5MB block would needlessly lock out ordinary JSON/log files.
-const MAX_TEXT_FILE_SIZE = 50 * 1024 * 1024 // 50MB
+// Why: the editor degrades features on large files, so a 5MB block would needlessly lock out ordinary JSON/log files.
+const MAX_TEXT_FILE_SIZE = EDITOR_TEXT_READ_LIMIT_BYTES.local
 const BINARY_PROBE_BYTES = 8192
 const FULL_GIT_OBJECT_ID_PATTERN = /^(?:[0-9a-fA-F]{40}|[0-9a-fA-F]{64})$/
 // 32 visible matches plus one truncation sentinel stays below the legacy frame ceiling.
 const QUICK_OPEN_SSH_LEGACY_RESULT_LIMIT = 33
 // Why: previewable binaries are base64 blobs (not parsed as text), and local IPC has no frame limit (unlike the relay's 10MB), so 50MB is safe.
-const MAX_PREVIEWABLE_BINARY_SIZE = 50 * 1024 * 1024 // 50MB
+const MAX_PREVIEWABLE_BINARY_SIZE = EDITOR_PREVIEWABLE_BINARY_MAX_BYTES
 const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.png': 'image/png',
   '.jpg': 'image/jpeg',
@@ -164,7 +170,27 @@ const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.ico': 'image/x-icon',
   '.pdf': 'application/pdf'
 }
-async function readLocalLogSnapshot(filePath: string): Promise<{
+
+function throwFileTooLarge(byteLength: number, limitBytes: number): never {
+  throw new Error(formatFileTooLargeMessage({ byteLength, limitBytes, scope: 'local' }))
+}
+
+/**
+ * The budget an overridden read still answers to. "Open Anyway" overrules the
+ * confirmation, not the transport: this handler hands the renderer one whole
+ * string, and past `EDITOR_READ_OVERRIDE_CEILING_BYTES` neither V8 nor the
+ * editor model can hold one — those throws carry no refusal marker, so the
+ * editor would show a raw allocation error and retry into it. Refusing by size
+ * keeps it a `file_too_large`.
+ */
+function localReadLimit(budgetBytes: number, allowLargeFile: boolean): number {
+  return allowLargeFile ? EDITOR_READ_OVERRIDE_CEILING_BYTES : budgetBytes
+}
+
+async function readLocalLogSnapshot(
+  filePath: string,
+  allowLargeFile: boolean
+): Promise<{
   content: string
   isBinary: boolean
   fileIdentity?: string
@@ -172,16 +198,13 @@ async function readLocalLogSnapshot(filePath: string): Promise<{
   const handle = await open(filePath, 'r')
   try {
     const stats = await handle.stat()
-    if (stats.size > MAX_TEXT_FILE_SIZE) {
-      throw new Error(
-        `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
-      )
+    const limit = localReadLimit(MAX_TEXT_FILE_SIZE, allowLargeFile)
+    if (stats.size > limit) {
+      throwFileTooLarge(stats.size, limit)
     }
     const buffer = await handle.readFile()
-    if (buffer.byteLength > MAX_TEXT_FILE_SIZE) {
-      throw new Error(
-        `File too large: ${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB exceeds ${MAX_TEXT_FILE_SIZE / 1024 / 1024}MB limit`
-      )
+    if (buffer.byteLength > limit) {
+      throwFileTooLarge(buffer.byteLength, limit)
     }
     if (isBinaryBuffer(buffer)) {
       return { content: '', isBinary: true }
@@ -581,7 +604,13 @@ export function registerFilesystemHandlers(
     'fs:readFile',
     async (
       _event,
-      args: { filePath: string; connectionId?: string; includeLocalLogMetadata?: boolean }
+      args: {
+        filePath: string
+        connectionId?: string
+        includeLocalLogMetadata?: boolean
+        /** Caller overruled the local size budget; see LargeFileFallback. */
+        allowLargeFile?: boolean
+      }
     ): Promise<{
       content: string
       isBinary: boolean
@@ -594,20 +623,25 @@ export function registerFilesystemHandlers(
         return provider.readFile(args.filePath)
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
+      // Why: the local budget is a confirmation, not a ceiling — no shared
+      // transport is at stake — but `localReadLimit` still bounds the override.
+      const allowLargeFile = args.allowLargeFile === true
       if (args.includeLocalLogMetadata === true) {
-        return readLocalLogSnapshot(filePath)
+        return readLocalLogSnapshot(filePath, allowLargeFile)
       }
       const stats = await stat(filePath)
       const mimeType = PREVIEWABLE_BINARY_MIME_TYPES[extname(filePath).toLowerCase()]
-      const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
-      if (stats.size > sizeLimit) {
-        throw new Error(
-          `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
-        )
-      }
 
       if (mimeType) {
+        const previewLimit = localReadLimit(MAX_PREVIEWABLE_BINARY_SIZE, allowLargeFile)
+        if (stats.size > previewLimit) {
+          throwFileTooLarge(stats.size, previewLimit)
+        }
         const buffer = await readFile(filePath)
+        // Why: stat is advisory — the file may have grown before the read landed.
+        if (buffer.byteLength > previewLimit) {
+          throwFileTooLarge(buffer.byteLength, previewLimit)
+        }
         return {
           content: buffer.toString('base64'),
           isBinary: true,
@@ -617,14 +651,25 @@ export function registerFilesystemHandlers(
         }
       }
 
-      // Why: probe large unknown files first so archives aren't fully buffered only to discover they aren't editable text.
+      // Why: classify before the text budget applies. An oversized archive is not
+      // unreadable, it is not text — the binary placeholder is the right answer,
+      // and the probe reads 8KB so it never buffers the file to find out.
       if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
         return { content: '', isBinary: true }
+      }
+
+      const textLimit = localReadLimit(MAX_TEXT_FILE_SIZE, allowLargeFile)
+      if (stats.size > textLimit) {
+        throwFileTooLarge(stats.size, textLimit)
       }
 
       const buffer = await readFile(filePath)
       if (isBinaryBuffer(buffer)) {
         return { content: '', isBinary: true }
+      }
+      // Why: stat is advisory — an appending log can outgrow it before the read.
+      if (buffer.byteLength > textLimit) {
+        throwFileTooLarge(buffer.byteLength, textLimit)
       }
 
       return { content: buffer.toString('utf-8'), isBinary: false }

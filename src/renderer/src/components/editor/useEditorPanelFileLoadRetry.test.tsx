@@ -103,6 +103,16 @@ describe('useEditorPanelFileLoadRetry — owner-not-ready bounding (#6648)', () 
     expect(shouldRetryFileLoadError('Access denied: outside allowed directories')).toBe(false)
   })
 
+  // SSH-backed runtime reads refuse with the bare token, which has no spaces, so
+  // the prose substring check missed it and spent the whole backoff budget on a
+  // deterministic refusal.
+  it('treats the bare file_too_large protocol token as terminal', () => {
+    expect(shouldRetryFileLoadError('file_too_large')).toBe(false)
+    expect(
+      shouldRetryFileLoadError("Error invoking remote method 'files.read': Error: file_too_large")
+    ).toBe(false)
+  })
+
   it('does not spend retry budget when hiding cancels a pending retry', () => {
     setTimeoutSpy.mockRestore()
     setTimeoutSpy = vi.spyOn(window, 'setTimeout')

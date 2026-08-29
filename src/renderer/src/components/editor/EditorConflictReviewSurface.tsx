@@ -7,7 +7,7 @@ import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { ConflictBanner, ConflictPlaceholderView, ConflictReviewPanel } from './ConflictComponents'
 import { ImageViewer, MonacoEditor } from './editor-lazy-views'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import type { FileContent } from './editor-panel-content-types'
+import type { EditorContentReloadOptions, FileContent } from './editor-panel-content-types'
 import { translate } from '@/i18n/i18n'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 
@@ -34,7 +34,7 @@ export function EditorConflictReviewSurface({
   getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
   handleContentChangeForFile: (file: OpenFile, content: string) => void
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: EditorContentReloadOptions) => void
 }): React.JSX.Element {
   const openConflictReviewFile = useAppStore((s) => s.openConflictReviewFile)
   const openConflictReview = useAppStore((s) => s.openConflictReview)
@@ -131,7 +131,9 @@ export function EditorConflictReviewSurface({
         <div className={className}>
           <EditorFileLoadErrorView
             message={fileContent.loadError}
+            filePath={contentFile.filePath}
             onRetry={() => reloadContent(contentFile)}
+            onOpenAnyway={() => reloadContent(contentFile, { allowLargeFile: true })}
           />
         </div>
       )

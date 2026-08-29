@@ -823,17 +823,20 @@ export class RuntimeFileCommands {
     }
 
     const filePath = joinWorktreeRelativePath(worktree.path, relativePath)
-    const content = connectionId
-      ? await this.readRemoteMobileFile(filePath, connectionId)
+    // The SSH path refuses oversized files outright, so it never observes a size.
+    const observed: { content: string; totalByteLength?: number } = connectionId
+      ? { content: await this.readRemoteMobileFile(filePath, connectionId) }
       : await readLocalMobileFile(filePath, store)
-    const truncated = truncateMobileFilePreview(content)
+    const truncated = truncateMobileFilePreview(observed.content)
 
     return {
       worktree: worktree.id,
       relativePath,
       content: truncated.content,
       truncated: truncated.truncated,
-      byteLength: truncated.byteLength
+      byteLength: truncated.byteLength,
+      maxByteLength: MOBILE_FILE_READ_MAX_BYTES,
+      totalByteLength: observed.totalByteLength
     }
   }
 
@@ -1266,7 +1269,8 @@ export class RuntimeFileCommands {
       relativePath: grant.absolutePath,
       content: truncated.content,
       truncated: truncated.truncated,
-      byteLength: truncated.byteLength
+      byteLength: truncated.byteLength,
+      maxByteLength: MOBILE_FILE_READ_MAX_BYTES
     }
   }
 
@@ -2625,7 +2629,10 @@ function rethrowRuntimeFileCreateError(error: unknown, targetPath: string): neve
   throw error
 }
 
-async function readLocalMobileFile(filePath: string, store: Store): Promise<string> {
+async function readLocalMobileFile(
+  filePath: string,
+  store: Store
+): Promise<{ content: string; totalByteLength: number }> {
   const authorizedPath = await resolveAuthorizedPath(filePath, store)
   const fileStat = await stat(authorizedPath)
   // Why: cap the read so opening a large file can't block the WebSocket (previews are read-only convenience views).
@@ -2634,7 +2641,11 @@ async function readLocalMobileFile(filePath: string, store: Store): Promise<stri
   try {
     const buffer = Buffer.alloc(readLimit)
     const { bytesRead } = await handle.read(buffer, 0, readLimit, 0)
-    return buffer.subarray(0, bytesRead).toString('utf8')
+    // Report the stat'd size separately: the text returned is only the prefix.
+    return {
+      content: buffer.subarray(0, bytesRead).toString('utf8'),
+      totalByteLength: fileStat.size
+    }
   } finally {
     await handle.close()
   }

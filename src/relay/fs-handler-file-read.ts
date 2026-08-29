@@ -12,24 +12,32 @@ import {
   isBinaryBuffer,
   isBinaryFilePrefix
 } from './fs-handler-utils'
+import { formatFileTooLargeMessage } from '../shared/editor-file-read-limit'
+
+function throwRelayFileTooLarge(byteLength: number, limitBytes: number): never {
+  throw new Error(formatFileTooLargeMessage({ byteLength, limitBytes, scope: 'ssh' }))
+}
 
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-  const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
-  if (stats.size > sizeLimit) {
-    throw new Error(
-      `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
-    )
-  }
 
   if (mimeType) {
+    if (stats.size > MAX_PREVIEWABLE_BINARY_SIZE) {
+      throwRelayFileTooLarge(stats.size, MAX_PREVIEWABLE_BINARY_SIZE)
+    }
     const buffer = await readFile(filePath)
     return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
   }
 
+  // Why: classify before the text budget applies, so an oversized archive still
+  // reaches the binary placeholder instead of a "too large" refusal.
   if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
     return { content: '', isBinary: true }
+  }
+
+  if (stats.size > MAX_TEXT_FILE_SIZE) {
+    throwRelayFileTooLarge(stats.size, MAX_TEXT_FILE_SIZE)
   }
 
   const buffer = await readFile(filePath)
@@ -80,11 +88,8 @@ export async function readRelayFileStreamMetadata(
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
   const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-  const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
-  if (stats.size > sizeLimit) {
-    throw new Error(
-      `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
-    )
+  if (mimeType && stats.size > MAX_PREVIEWABLE_BINARY_SIZE) {
+    throwRelayFileTooLarge(stats.size, MAX_PREVIEWABLE_BINARY_SIZE)
   }
 
   if (stats.size === 0) {
@@ -98,9 +103,14 @@ export async function readRelayFileStreamMetadata(
   }
   // Why: unlike the legacy single-shot path, streaming does not read the full
   // buffer before classifying content. Probe every unknown file so small binary
-  // files do not get decoded as UTF-8 text over SSH.
+  // files do not get decoded as UTF-8 text over SSH — and so an oversized
+  // archive lands on the binary placeholder rather than the text budget.
   if (!mimeType && (await isBinaryFilePrefix(filePath))) {
     return { totalSize: 0, isBinary: true, empty: true }
+  }
+
+  if (!mimeType && stats.size > MAX_TEXT_FILE_SIZE) {
+    throwRelayFileTooLarge(stats.size, MAX_TEXT_FILE_SIZE)
   }
 
   // Why: reserved before the fd opens so a refusal costs nothing, and released only

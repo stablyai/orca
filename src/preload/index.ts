@@ -3407,6 +3407,8 @@ const api = {
       filePath: string
       connectionId?: string
       includeLocalLogMetadata?: boolean
+      /** Local reads only: the user overruled the editor size budget. */
+      allowLargeFile?: boolean
     }): Promise<{
       content: string
       isBinary: boolean

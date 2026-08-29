@@ -16,6 +16,8 @@ type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewM
 export type EditorPanelContentLoadOptions = {
   force?: boolean
   externalEventGeneration?: number
+  /** The user overruled the size refusal for this one read. */
+  allowLargeFile?: boolean
 }
 
 type UseEditorPanelExternalContentEventsParams = {

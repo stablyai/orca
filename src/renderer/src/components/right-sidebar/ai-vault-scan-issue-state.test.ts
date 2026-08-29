@@ -6,6 +6,10 @@ import {
   skippedAiVaultTranscriptCount,
   skippedAiVaultTranscriptReasons
 } from './ai-vault-scan-issue-state'
+import {
+  formatFileTooLargeMessage,
+  stripFileTooLargeMarker
+} from '../../../../shared/editor-file-read-limit'
 
 describe('blockingAiVaultScanIssue', () => {
   it('surfaces the cause when a scan returns no sessions', () => {
@@ -115,7 +119,17 @@ describe('aiVaultScanNoticeIssues', () => {
 })
 
 describe('skippedAiVaultTranscriptReasons', () => {
+  // Built from the real refusal the scanner records, so the row cannot drift back
+  // into showing the editor's machine marker to a reader.
   it('surfaces the file-too-large reason behind a skipped transcript', () => {
+    const recorded = stripFileTooLargeMarker(
+      formatFileTooLargeMessage({
+        byteLength: 13_002_342,
+        limitBytes: 10 * 1024 * 1024,
+        scope: 'ssh'
+      })
+    )
+
     expect(
       skippedAiVaultTranscriptReasons(
         result(
@@ -124,12 +138,14 @@ describe('skippedAiVaultTranscriptReasons', () => {
             {
               agent: 'claude',
               path: '/home/dev/.claude/projects/a/huge.jsonl',
-              message: 'File too large: 12.4MB exceeds 10MB limit'
+              message: recorded
             }
           ]
         )
       )
-    ).toEqual(['File too large: 12.4MB exceeds 10MB limit'])
+    ).toEqual([
+      'File too large: 12.4 MB exceeds the 10.0 MB read limit for files on this SSH host.'
+    ])
   })
 
   it('leaves host and scope notices to their own rows', () => {

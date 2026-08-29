@@ -31,6 +31,7 @@ export type EditorPanelFileContentLoader = (
 
 type UseEditorPanelFileContentLoaderParams = {
   fileLoadRetryAttemptsRef: MutableRefObject<Record<string, number>>
+  largeFileOverrideIdsRef: MutableRefObject<Set<string>>
   fileReadGenerationCounterRef: MutableRefObject<number>
   fileReadGenerationRef: MutableRefObject<Record<string, number>>
   openFilesRef: MutableRefObject<OpenFile[]>
@@ -57,12 +58,19 @@ function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
   }
 }
 
-function inFlightReadKey(connectionId: string | undefined, filePath: string): string {
-  return `${connectionId ?? ''}::${filePath}`
+// Why: the budget is part of the identity of a read — a read started under the
+// confirmation budget must never be handed to a caller that overruled it.
+function inFlightReadKey(
+  connectionId: string | undefined,
+  filePath: string,
+  allowLargeFile: boolean
+): string {
+  return `${connectionId ?? ''}::${allowLargeFile ? 'full' : 'budgeted'}::${filePath}`
 }
 
 export function useEditorPanelFileContentLoader({
   fileLoadRetryAttemptsRef,
+  largeFileOverrideIdsRef,
   fileReadGenerationCounterRef,
   fileReadGenerationRef,
   openFilesRef,
@@ -81,6 +89,15 @@ export function useEditorPanelFileContentLoader({
       fileReadGenerationCounterRef.current = generation
       fileReadGenerationRef.current[id] = generation
       outstandingFileReadsRef.current[id] = generation
+      if (options?.allowLargeFile === true) {
+        largeFileOverrideIdsRef.current.add(id)
+      }
+      // Why: "Open Anyway" is this file's budget from then on, not one read. Every
+      // later reload — an external write, a reveal after invalidation, a retry —
+      // passes no options, and re-imposing the budget there would swap the loaded
+      // file back to the too-large fallback on the next write to disk.
+      const allowLargeFile =
+        options?.allowLargeFile === true || largeFileOverrideIdsRef.current.has(id)
       try {
         const resolvedConnectionId = getConnectionIdForFile(worktreeId ?? null, filePath)
         const connectionId = resolvedConnectionId ?? undefined
@@ -163,7 +180,7 @@ export function useEditorPanelFileContentLoader({
           }
         }
         const readScope = getRuntimeFileReadScope(readSettings, readConnectionId)
-        const key = inFlightReadKey(readScope, filePath)
+        const key = inFlightReadKey(readScope, filePath, allowLargeFile)
         const registeredRead = inFlightFileReads.get(key)
         if (
           options?.force &&
@@ -183,7 +200,8 @@ export function useEditorPanelFileContentLoader({
             worktreeId: readWorktreeId,
             connectionId: readConnectionId,
             expectedExternalSshTargetId: restoredOpenFile?.externalSshTargetId,
-            includeLocalLogMetadata: isLiveTailLogTab
+            includeLocalLogMetadata: isLiveTailLogTab,
+            allowLargeFile
           }) as Promise<FileContent>
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightFileReads.set(key, pending)
@@ -217,6 +235,7 @@ export function useEditorPanelFileContentLoader({
     },
     [
       fileLoadRetryAttemptsRef,
+      largeFileOverrideIdsRef,
       fileReadGenerationCounterRef,
       fileReadGenerationRef,
       openFilesRef,

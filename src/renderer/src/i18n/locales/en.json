@@ -14452,7 +14452,9 @@
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
           "fd68ae03b3": "Search in Files",
-          "largePasteTooLarge": "Paste is too large."
+          "largePasteTooLarge": "Paste is too large.",
+          "largeFileOptimizations": "Large file: syntax highlighting, folding and word wrap are off",
+          "largeFileOptimizationsDescription": "The editor disables these on very large files to avoid freezing. Editing and search still work."
         },
         "MonacoGutterContextMenu": {
           "7b57b1b468": "Copy Remote URL",
@@ -14708,6 +14710,17 @@
           "f1d136a163": "lines per side",
           "23433fcdea": "combined characters",
           "7944ed9fb8": "Not counted"
+        },
+        "LargeFileFallback": {
+          "title": "This file is too large to open in the editor.",
+          "size": "File size",
+          "limit": "Read limit",
+          "openAnyway": "Open Anyway",
+          "scopeLocal": "Local files use the largest budget Orca opens without asking.",
+          "localOverridable": "You can open it anyway, but the editor may become slow.",
+          "localAtCeiling": "This file is past the largest size the editor can hold, so opening it anyway would refuse again.",
+          "scopeSsh": "Files read over SSH share the connection with your terminals, so they use a smaller budget than local files.",
+          "scopeRuntime": "Files read from a remote workspace travel over the workspace connection, so they use a smaller budget than local files."
         },
         "DiffViewer": {
           "b5675b0694": "Save",

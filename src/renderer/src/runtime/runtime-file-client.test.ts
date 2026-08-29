@@ -9,6 +9,7 @@ import {
   writeRuntimeFile,
   type RuntimeReadableFileContent
 } from './runtime-file-client'
+import { parseFileTooLargeMessage } from '../../../shared/editor-file-read-limit'
 import {
   fsReadFile,
   fsWriteFile,
@@ -37,6 +38,25 @@ describe('runtime file client', () => {
 
     expect(fsReadFile).toHaveBeenCalledWith({ filePath: '/repo/readme.md', connectionId: 'ssh-1' })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  // The fallback's override has to reach the host that applied the cap; dropping
+  // the flag here would render a button that silently refuses again.
+  it('forwards a large-file override to the local read', async () => {
+    const localResult: RuntimeReadableFileContent = { content: 'huge', isBinary: false }
+    fsReadFile.mockResolvedValue(localResult)
+
+    await readRuntimeFileContent({
+      settings: { activeRuntimeEnvironmentId: null },
+      filePath: '/repo/huge.log',
+      relativePath: 'huge.log',
+      worktreeId: 'wt-1',
+      allowLargeFile: true
+    })
+
+    expect(fsReadFile).toHaveBeenCalledWith(
+      expect.objectContaining({ filePath: '/repo/huge.log', allowLargeFile: true })
+    )
   })
 
   it('reads an external SSH file only from its owning target', async () => {
@@ -219,14 +239,20 @@ describe('runtime file client', () => {
       _meta: { runtimeId: 'remote-runtime' }
     })
 
-    await expect(
-      readRuntimeFileContent({
-        settings: { activeRuntimeEnvironmentId: 'env-1' },
-        filePath: '/remote/repo/large.log',
-        relativePath: 'large.log',
-        worktreeId: 'wt-1'
-      })
-    ).rejects.toThrow('Remote file is too large to open in the editor')
+    // A host predating both budget fields reported nothing measurable, so the
+    // refusal names no number at all — least of all the prefix length.
+    const message = await readRuntimeFileContent({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      filePath: '/remote/repo/large.log',
+      relativePath: 'large.log',
+      worktreeId: 'wt-1'
+    }).then(
+      () => 'resolved',
+      (error: Error) => error.message
+    )
+    expect(message).toContain('File too large')
+    expect(message).not.toContain('524288')
+    expect(parseFileTooLargeMessage(message)).toEqual({ scope: 'runtime' })
   })
 
   it('falls back to files.readPreview when a remote binary file is opened', async () => {
@@ -305,6 +331,62 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.readPreview' })
     )
+  })
+
+  function mockTruncatedRead(result: Record<string, unknown>): void {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'files.read') {
+        return Promise.resolve({
+          id: 'rpc-read',
+          ok: true,
+          result: {
+            worktree: 'wt-1',
+            relativePath: 'huge.log',
+            content: 'x'.repeat(8),
+            truncated: true,
+            ...result
+          },
+          _meta: { runtimeId: 'remote-runtime' }
+        })
+      }
+      throw new Error('files.readPreview should not be called')
+    })
+  }
+
+  async function readHugeLogError(): Promise<string> {
+    return await readRuntimeFileContent({
+      settings: { activeRuntimeEnvironmentId: 'env-1' },
+      filePath: '/remote/repo/huge.log',
+      relativePath: 'huge.log',
+      worktreeId: 'wt-1'
+    }).then(
+      () => 'resolved',
+      (error: Error) => error.message
+    )
+  }
+
+  // `byteLength` is the bounded prefix the host managed to read, not the file's
+  // size; reporting it as the size told a 4GB log's owner it was 0.5MB.
+  it('never reports the truncated prefix length as the file size', async () => {
+    mockTruncatedRead({ byteLength: 524_289, maxByteLength: 524_288 })
+
+    const message = await readHugeLogError()
+    expect(message).toContain('File too large')
+    expect(message).toContain('512.0 KB')
+    expect(message).not.toContain('524289')
+    expect(message).not.toContain('0.5')
+  })
+
+  it('reports the file size once the host actually observes one', async () => {
+    mockTruncatedRead({
+      byteLength: 524_289,
+      maxByteLength: 524_288,
+      totalByteLength: 4 * 1024 * 1024 * 1024
+    })
+
+    const message = await readHugeLogError()
+    expect(message).toContain('4.0 GB')
+    expect(message).toContain('512.0 KB')
   })
 
   it('propagates a files.readPreview failure during the binary fallback', async () => {

@@ -8,7 +8,7 @@ import { EditorConflictReviewSurface } from './EditorConflictReviewSurface'
 import { EditorDiffFileSurface } from './EditorDiffFileSurface'
 import { EditorEditFileSurface } from './EditorEditFileSurface'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
-import type { FileContent } from './editor-panel-content-types'
+import type { EditorContentReloadOptions, FileContent } from './editor-panel-content-types'
 import { translate } from '@/i18n/i18n'
 import { useEditorConflictNavigation } from './useEditorConflictNavigation'
 import { useMarkdownDocuments } from './useMarkdownDocuments'
@@ -86,7 +86,7 @@ export function EditorContent({
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
   handleSaveForFile: (file: OpenFile, content: string) => Promise<boolean>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: EditorContentReloadOptions) => void
 }): React.JSX.Element {
   const editorViewStateKey =
     viewStateScopeId === activeFile.id
@@ -185,7 +185,9 @@ export function EditorContent({
       return (
         <EditorFileLoadErrorView
           message={fileContent.loadError}
+          filePath={activeFile.filePath}
           onRetry={() => reloadContent(activeFile)}
+          onOpenAnyway={() => reloadContent(activeFile, { allowLargeFile: true })}
         />
       )
     }
