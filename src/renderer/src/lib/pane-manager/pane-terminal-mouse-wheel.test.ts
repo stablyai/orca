@@ -56,6 +56,7 @@ class TestWheelEvent extends Event {
   }
 }
 
+/** Creates the minimal terminal element state needed by wheel-routing tests. */
 function terminalElement(mouseReporting = true): HTMLElement {
   return {
     classList: {
@@ -64,6 +65,7 @@ function terminalElement(mouseReporting = true): HTMLElement {
   } as HTMLElement
 }
 
+/** Creates a wheel-event fixture with a vertical pixel delta by default. */
 function wheelEvent(
   init: Partial<WheelEventInit> & { wheelDelta?: number; wheelDeltaY?: number } = {}
 ): WheelEvent {
@@ -421,7 +423,6 @@ describe('terminal mouse wheel multiplier', () => {
     expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
   })
 
-  /** Verifies normal-buffer wheel input scrolls instead of reaching arrow-key fallback. */
   it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting', () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
     const scrollLines = vi.fn()
@@ -441,7 +442,6 @@ describe('terminal mouse wheel multiplier', () => {
     expect(scrollLines).toHaveBeenCalledWith(-1)
   })
 
-  /** Verifies alternate-buffer TUIs retain xterm's arrow-key fallback. */
   it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting', () => {
     const handlers: ((event: WheelEvent) => boolean)[] = []
     const terminal = {
