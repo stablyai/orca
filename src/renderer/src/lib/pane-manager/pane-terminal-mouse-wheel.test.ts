@@ -76,6 +76,44 @@ function wheelEvent(
   } as WheelEvent
 }
 
+/** Verifies that normal-buffer wheel input scrolls terminal history directly. */
+function verifyNormalBufferWheelScroll(): void {
+  const handlers: ((event: WheelEvent) => boolean)[] = []
+  const scrollLines = vi.fn()
+  const terminal = {
+    attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
+      handlers.push(handler)
+    },
+    buffer: { active: { type: 'normal' as const } },
+    element: terminalElement(false),
+    modes: { mouseTrackingMode: 'none' as const },
+    rows: 24,
+    scrollLines
+  }
+  attachTerminalMouseWheelMultiplier(terminal)
+
+  expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
+  expect(scrollLines).toHaveBeenCalledWith(-1)
+}
+
+/** Verifies that alternate-buffer wheel input remains available to xterm's fallback. */
+function verifyAlternateBufferWheelFallback(): void {
+  const handlers: ((event: WheelEvent) => boolean)[] = []
+  const terminal = {
+    attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
+      handlers.push(handler)
+    },
+    buffer: { active: { type: 'alternate' as const } },
+    element: terminalElement(false),
+    modes: { mouseTrackingMode: 'none' as const },
+    rows: 24,
+    scrollLines: vi.fn()
+  }
+  attachTerminalMouseWheelMultiplier(terminal)
+
+  expect(handlers[0]?.(wheelEvent())).toBe(true)
+}
+
 describe('terminal mouse wheel multiplier', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
@@ -423,41 +461,15 @@ describe('terminal mouse wheel multiplier', () => {
     expect(shouldMultiplyTerminalMouseWheel(dispatched[0]!, target)).toBe(false)
   })
 
-  it('blocks wheel-to-arrow synthesis for normal buffers without mouse reporting' /** Verifies that normal-buffer wheel input scrolls terminal history directly. */, () => {
-    const handlers: ((event: WheelEvent) => boolean)[] = []
-    const scrollLines = vi.fn()
-    const terminal = {
-      attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
-        handlers.push(handler)
-      },
-      buffer: { active: { type: 'normal' as const } },
-      element: terminalElement(false),
-      modes: { mouseTrackingMode: 'none' as const },
-      rows: 24,
-      scrollLines
-    }
-    attachTerminalMouseWheelMultiplier(terminal)
+  it(
+    'blocks wheel-to-arrow synthesis for normal buffers without mouse reporting',
+    verifyNormalBufferWheelScroll
+  )
 
-    expect(handlers[0]?.(wheelEvent({ deltaY: -16, deltaMode: DOM_DELTA_PIXEL }))).toBe(false)
-    expect(scrollLines).toHaveBeenCalledWith(-1)
-  })
-
-  it('preserves wheel-to-arrow fallback for alternate buffers without mouse reporting' /** Verifies that alternate-buffer wheel input remains available to xterm's fallback. */, () => {
-    const handlers: ((event: WheelEvent) => boolean)[] = []
-    const terminal = {
-      attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
-        handlers.push(handler)
-      },
-      buffer: { active: { type: 'alternate' as const } },
-      element: terminalElement(false),
-      modes: { mouseTrackingMode: 'none' as const },
-      rows: 24,
-      scrollLines: vi.fn()
-    }
-    attachTerminalMouseWheelMultiplier(terminal)
-
-    expect(handlers[0]?.(wheelEvent())).toBe(true)
-  })
+  it(
+    'preserves wheel-to-arrow fallback for alternate buffers without mouse reporting',
+    verifyAlternateBufferWheelFallback
+  )
 
   it('discards pending replay when mouse reporting turns off before drain', async () => {
     vi.stubGlobal('WheelEvent', TestWheelEvent)
