@@ -5,7 +5,8 @@ import {
   registerPtyMock,
   setMigrationUnsupportedPtyMock,
   clearMigrationUnsupportedPtysForPaneKeyMock,
-  clearPaneKeyAliasesForPtyMock
+  clearPaneKeyAliasesForPtyMock,
+  noteAgentPaneLaunchTokenMock
 } from './pty-ipc-mock-registry'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
@@ -407,6 +408,25 @@ describe('registerPtyHandlers', () => {
     const read = await runtime.readTerminal(created.handle)
     expect(read.tail).toContain('headless reattach history')
   })
+  it('tells the hook server which launch token this spawn put in the pane', async () => {
+    // Why this is wired at spawn and not inferred from a hook event: the pane's token-keyed
+    // status gates otherwise learn about a replacement process only from a session boundary,
+    // which several providers never send — so a respawned pane stayed suppressed for good.
+    registerPtyHandlers(mainWindow as never)
+    const leafId = '22222222-2222-4222-8222-222222222222'
+    const stablePaneKey = makePaneKey('tab-1', leafId)
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId,
+      env: { ORCA_PANE_KEY: stablePaneKey, ORCA_AGENT_LAUNCH_TOKEN: 'launch-token-1' }
+    })
+
+    expect(noteAgentPaneLaunchTokenMock).toHaveBeenLastCalledWith(stablePaneKey, 'launch-token-1')
+  })
+
   it('upgrades legacy numeric pane keys when the spawn metadata proves the stable leaf', async () => {
     registerPtyHandlers(mainWindow as never)
     const leafId = '11111111-1111-4111-8111-111111111111'

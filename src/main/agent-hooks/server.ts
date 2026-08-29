@@ -47,7 +47,10 @@ import {
   normalizeClaudePromptId,
   warnOnHookEnvOrVersionMismatch
 } from '../../shared/agent-hook-listener/listener-limits'
-import { isNewTurnEvent } from '../../shared/agent-hook-listener/provider-event-routing'
+import {
+  isNewTurnEvent,
+  isSessionStartEvent
+} from '../../shared/agent-hook-listener/provider-event-routing'
 import { normalizeHookPayload } from '../../shared/agent-hook-listener'
 import { mergeAgentHookRequestHeaders } from '../../shared/agent-hook-listener/hook-envelope'
 import {
@@ -1228,12 +1231,17 @@ export class AgentHookServer {
     if (!paneRetired) {
       const tokenFence = this.restartedStatusLaunchTokenHashByPaneKey.get(ownerPaneKey)
       // Why: deferred retirement lets a new process start in a still-authorized pane, so
-      // its tokened SessionStart re-fences; prompts recur, so a stale process would win.
-      if (
-        event?.hookEventName === 'SessionStart' &&
-        event.isReplay !== true &&
-        tokenFence !== undefined
-      ) {
+      // its tokened session boundary re-fences; prompts recur, so a stale process would win.
+      // Why the classifier, not a literal: `SessionStart` is how 5 of 18 sources spell it, so
+      // the rest could never re-fence and a pane Orca respawned stayed suppressed for the life
+      // of the process. Same defect the retired branch below already fixed.
+      // Why the literal survives as the fallback: an older relay omits `source` entirely.
+      const startsNewSession =
+        event !== undefined &&
+        (event.source !== undefined
+          ? isSessionStartEvent(event.source, event.hookEventName)
+          : event.hookEventName === 'SessionStart')
+      if (event && startsNewSession && event.isReplay !== true && tokenFence !== undefined) {
         const startedLaunchToken = event.launchToken?.trim()
         if (startedLaunchToken) {
           this.restartedStatusLaunchTokenHashByPaneKey.set(
@@ -2077,6 +2085,40 @@ export class AgentHookServer {
   // lifts here instead of waiting for the agent to speak again — an agent re-attached
   // mid-turn or left idle would otherwise stay suppressed for the rest of its life
   // (STA-4114). A closed *tab* is a separate, stronger claim and is left standing.
+  /**
+   * Main just launched a PTY for this pane carrying this launch token, so the token names the
+   * pane's current agent lineage by construction — no provider has to say anything for it to
+   * be true.
+   *
+   * Why main and not a hook event: both token-keyed status gates could only learn about a new
+   * process from an event the provider might never send. The live-pane re-fence matched a raw
+   * `SessionStart`, and the spool-replay fence compares against the last token it happened to
+   * observe, which can be OLDER than the generation being replayed. Either way a pane Orca
+   * itself respawned went silent with no user-reachable recovery.
+   *
+   * Why the status fence is replaced and never armed here: arming one would fence panes that no
+   * revive ever fenced and start suppressing their tokenless posters.
+   *
+   * Why the replay expectation is only raised and never cleared: it exists to reject an older
+   * generation's spool, and a shell launched with no agent token is not evidence about any
+   * generation.
+   */
+  noteAgentPaneLaunchToken(paneKey: string, launchToken: string | undefined): void {
+    const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
+    const trimmed = launchToken?.trim()
+    const hash = trimmed ? createHash('sha256').update(trimmed).digest('hex') : null
+    if (this.restartedStatusLaunchTokenHashByPaneKey.has(ownerPaneKey)) {
+      if (hash) {
+        this.restartedStatusLaunchTokenHashByPaneKey.set(ownerPaneKey, hash)
+      } else {
+        this.restartedStatusLaunchTokenHashByPaneKey.delete(ownerPaneKey)
+      }
+    }
+    if (hash) {
+      this.hydratedLaunchTokenHashByPaneKey.set(ownerPaneKey, hash)
+    }
+  }
+
   restorePaneAuthority(paneKey: string): boolean {
     const ownerPaneKey = this.resolvePaneKeyAlias(paneKey)
     if (this.isClosedAgentStatusTabForPaneKey(ownerPaneKey)) {
@@ -2423,7 +2465,17 @@ export class AgentHookServer {
     if (envelope.isReplay === true) {
       const expectedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(paneKey)
       const actualLaunchTokenHash = launchTokenHash(envelope.launchToken)
-      if (expectedLaunchTokenHash && actualLaunchTokenHash !== expectedLaunchTokenHash) {
+      // Why a tokenless replay is admitted rather than rejected: this is the read-side of the
+      // same rule the spawn notification applies on the write side. A record carrying no token
+      // is not evidence about ANY generation, so treating it as evidence of the WRONG one would
+      // discard the whole spool of any agent whose process never received the token: the
+      // `${ORCA_AGENT_LAUNCH_TOKEN:-}` posters, and every WSL/SSH host where the env is lost in
+      // transit. That is the same silent, unrecoverable frozen row this fence exists to prevent.
+      if (
+        expectedLaunchTokenHash &&
+        actualLaunchTokenHash &&
+        actualLaunchTokenHash !== expectedLaunchTokenHash
+      ) {
         return
       }
     }

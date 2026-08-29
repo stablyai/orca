@@ -30,6 +30,39 @@ export function admitRendererAgentLaunchAuthority(args: {
   return { launchToken: args.launchToken, launchAgent: args.launchAgent }
 }
 
+/**
+ * The pane and launch token a fresh PTY is about to carry, or null when this spawn starts no new
+ * process for a pane.
+ *
+ * Why separate from {@link admitRendererAgentLaunchAuthority}: that gate decides whether the
+ * renderer may claim *orchestration* authority, and deliberately refuses a pane that already has
+ * an owner. Re-fencing a pane's status is the opposite question — a respawn into an already-owned
+ * pane is exactly the case that must be reported, because that is the pane whose previous process
+ * the spawn replaced.
+ *
+ * Why spawnEnv and not the renderer's `launchToken` argument: the env is what this PTY's hook
+ * scripts will read and post, so it is the token the status gates will be compared against. A
+ * spawn with no token in its env reports `undefined`, which is a statement (this pane's new
+ * process has no token), not a missing value.
+ */
+export function resolveSpawnedPaneLaunchToken(args: {
+  validatedPaneKey: string | null
+  isReattach: boolean
+  spawnEnv: Record<string, string> | undefined
+}): { paneKey: string; launchToken: string | undefined } | null {
+  // Why a reattach is excluded: rebinding a client to a running PTY starts no process, so it is
+  // no evidence about which process owns the pane.
+  if (!args.validatedPaneKey || args.isReattach) {
+    return null
+  }
+  const launchToken = args.spawnEnv?.ORCA_AGENT_LAUNCH_TOKEN
+  return {
+    paneKey: args.validatedPaneKey,
+    launchToken:
+      typeof launchToken === 'string' && launchToken.trim().length > 0 ? launchToken : undefined
+  }
+}
+
 export function admitProviderReattachLaunchIdentity(args: {
   isReattach?: boolean
   launchAgent?: unknown

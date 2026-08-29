@@ -20,7 +20,8 @@ import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
 import {
   admitProviderReattachLaunchIdentity,
-  admitRendererAgentLaunchAuthority
+  admitRendererAgentLaunchAuthority,
+  resolveSpawnedPaneLaunchToken
 } from '../pane/launch-authority'
 import type { PtyIpcSpawnState } from './spawn-state'
 import { persistPtyIpcSpawnCommit } from './spawn-commit-persist'
@@ -132,6 +133,23 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
   }
   if (ctx.isClaudeLaunch && !ctx.stablePaneOwner) {
     markClaudePtySpawned(ctx.result.id)
+  }
+  // Why here: a fresh PTY for a pane is main's own proof that the pane's agent lineage moved on,
+  // and it is the only such proof for the sources that emit no session boundary. Without it the
+  // pane's token-keyed status gates keep answering for the process this spawn replaced.
+  // Why ctx.spawnEnv and not args.launchToken: the env is what the PTY's hook scripts will
+  // actually read and post, so it is the token the gates will be compared against.
+  // Why not on a reattach: rebinding a client to a running PTY starts no process.
+  const spawnedPaneLaunch = resolveSpawnedPaneLaunchToken({
+    validatedPaneKey: ctx.validatedPaneKey,
+    isReattach: ctx.result.isReattach === true,
+    spawnEnv: ctx.spawnEnv
+  })
+  if (spawnedPaneLaunch) {
+    agentHookServer.noteAgentPaneLaunchToken(
+      spawnedPaneLaunch.paneKey,
+      spawnedPaneLaunch.launchToken
+    )
   }
   // Why: record the paneKey mapping so clearProviderPtyState can clear the agent-hooks server's per-paneKey caches on exit.
   // Why: args.env is untrusted IPC JSON (type unenforced); bound the paneKey so malformed/oversized values can't pollute ptyPaneKey or clearPaneState.

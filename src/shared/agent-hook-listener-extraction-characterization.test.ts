@@ -82,6 +82,12 @@ describe('agent hook extraction boundaries', () => {
     for (const source of ['devin', 'mimo-code', 'prime-agent', 'kimi', 'hermes'] as const) {
       expect(normalizeProviderState(source, 'UnknownEvent')).toBeNull()
     }
+    // Why kimi's SessionStart is called out by name: its event names are otherwise
+    // Claude-compatible, so `isSessionStartEvent` looks like it should ride with claude. It
+    // cannot — this returns null, the relay drops a null-normalizing event on both the live and
+    // spool paths, and `KIMI_HOOK_EVENTS` never subscribes to one. If this ever yields a payload,
+    // kimi has gained a session boundary and `isSessionStartEvent` must be taught to name it.
+    expect(normalizeProviderState('kimi', 'SessionStart')).toBeNull()
   })
 
   it('warns before tab rejection and caps version and environment warning keys independently', () => {

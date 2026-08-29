@@ -81,6 +81,65 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
   }
 }
 
+/**
+ * The per-provider answer to "did a NEW agent process just start in this pane?".
+ *
+ * Deliberately not {@link isNewTurnEvent}: a turn boundary recurs inside one process, so it can
+ * never order two processes that share a pane. A session boundary is emitted once per process,
+ * which is what a launch-token fence needs before it hands the pane to a different token.
+ *
+ * Exported so the fence reuses this instead of matching a raw `SessionStart` literal — only 5 of
+ * the 18 sources spell it that way, and the other 13 were stranded by it.
+ */
+export function isSessionStartEvent(source: AgentHookSource, eventName: unknown): boolean {
+  // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently
+  // joining the half that can never re-fence.
+  switch (source) {
+    case 'claude':
+    case 'codex':
+    case 'opencode':
+    case 'droid':
+    case 'devin':
+      return eventName === 'SessionStart'
+    case 'copilot':
+      return normalizeCopilotEventName(eventName) === 'SessionStart'
+    // Why cursor stays named here even though `CURSOR_EVENTS` deliberately does not subscribe to
+    // it (a process-boundary hook resets the submitted-turn prompt cache): `normalizeCursorEvent`
+    // does map it, so a hand-written hook config reaches this gate. An Orca-managed cursor pane is
+    // re-fenced by the spawn path instead.
+    case 'cursor':
+      return eventName === 'sessionStart'
+    case 'amp':
+      return eventName === 'session.start'
+    case 'pi':
+    case 'prime-agent':
+      return eventName === 'session_start'
+    case 'grok':
+      return isGrokEvent(eventName, 'session_start')
+    case 'hermes':
+      return eventName === 'on_session_start'
+    // Why false rather than a guess: these sources emit no session boundary this codebase has
+    // ever seen — Gemini CLI sends only BeforeAgent/AfterAgent/BeforeTool/AfterTool, Antigravity
+    // only PreInvocation/PostInvocation, mimo-code has no SessionStart (the OpenCode-family
+    // normalizer accepts it for `opencode` alone), omp is excluded from Pi's session_start
+    // handling, and Command Code names no lifecycle event at all. Naming an event they do not
+    // send would be a fence that never opens; their panes are re-fenced by the spawn path
+    // instead, which needs no provider event.
+    // Why kimi is here despite emitting Claude-compatible names: `normalizeKimiEvent` has no
+    // SessionStart case, so the listener returns null for one and the relay drops it before it
+    // can reach any fence — and `KIMI_HOOK_EVENTS` does not subscribe to it either. Claiming
+    // the Claude spelling for kimi would be a branch no event can reach. Teaching Orca to read
+    // one would need a normalizer case AND a config entry, not a line here.
+    case 'kimi':
+    case 'gemini':
+    case 'antigravity':
+    case 'mimo-code':
+    case 'omp':
+    case 'command-code':
+      return false
+  }
+}
+
 export function hasExplicitUserPrompt(
   source: AgentHookSource,
   eventName: unknown,
