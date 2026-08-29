@@ -27,6 +27,19 @@ import { filterEnabledTuiAgents, isTuiAgentEnabled } from '../../../../shared/tu
 import { getAgentCatalog } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
 
+/**
+ * Whether a restored draft's `baseBranch` still names the workspace.
+ *
+ * A draft written before the flag existed carries no intent, so it restores as a branch pick —
+ * the behavior it had when it was saved.
+ */
+export function resolveDraftBaseBranchNamesWorkspace(args: {
+  persistDraft: boolean
+  draftValue: boolean | undefined
+}): boolean {
+  return args.persistDraft ? (args.draftValue ?? true) : true
+}
+
 export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const {
     initialBaseBranch,
@@ -93,7 +106,12 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   )
   // Why: a branch picked to name the workspace shows as a source pill; a base ref chosen in
   // the composer's own picker must not, or it would hide the name the user typed.
-  const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(true)
+  const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(() =>
+    resolveDraftBaseBranchNamesWorkspace({
+      persistDraft,
+      draftValue: newWorkspaceDraft?.baseBranchNamesWorkspace
+    })
+  )
 
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.compareBaseRef : undefined
