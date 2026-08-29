@@ -147,10 +147,7 @@ function isMislabeledUserPrompt(text: string, entry: Pick<AgentStatusEntry, 'pro
   }
   // Why: some hooks echo the live user prompt into assistant preview fields
   // between turns; never surface that as the agent's latest reply.
-  if (trimmed === entry.prompt.trim()) {
-    return true
-  }
-  return false
+  return trimmed === entry.prompt.trim()
 }
 
 /** Latest agent activity line — tool step while working, assistant reply otherwise. */

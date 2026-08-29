@@ -88,11 +88,11 @@ async function deleteRelayBranchAfterWorktreeRemoval(
   repoPath: string,
   branchName: string,
   forceBranchDelete: boolean
-): Promise<'deleted' | 'checked-out'> {
+): Promise<void> {
   const deleteFlag = forceBranchDelete ? '-D' : '-d'
   try {
     await git(['branch', deleteFlag, '--', branchName], repoPath)
-    return 'deleted'
+    return
   } catch (error) {
     if (!isBranchCheckedOutInWorktreeError(error)) {
       throw error
@@ -108,15 +108,14 @@ async function deleteRelayBranchAfterWorktreeRemoval(
       `relay removeWorktree: failed to prune worktrees before deleting branch "${branchName}"`,
       error
     )
-    return 'checked-out'
+    return
   }
 
   try {
     await git(['branch', deleteFlag, '--', branchName], repoPath)
-    return 'deleted'
   } catch (error) {
     if (isBranchCheckedOutInWorktreeError(error)) {
-      return 'checked-out'
+      return
     }
     throw error
   }
@@ -187,15 +186,7 @@ export async function removeWorktreeOp(
   // after the last PR review worktree is gone.
   try {
     // Why: use `-d` (not `-D`) to mirror the local removeWorktree fix.
-    const branchDeleteResult = await deleteRelayBranchAfterWorktreeRemoval(
-      git,
-      repoPath,
-      branchName,
-      forceBranchDelete
-    )
-    if (branchDeleteResult === 'checked-out') {
-      return {}
-    }
+    await deleteRelayBranchAfterWorktreeRemoval(git, repoPath, branchName, forceBranchDelete)
     return {}
   } catch (error) {
     if (!forceBranchDelete && branchHead) {

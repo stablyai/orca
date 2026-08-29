@@ -1318,15 +1318,12 @@ async function deleteBranchAfterWorktreeRemoval(
   try {
     // Why: also drop the now-orphaned branch so delete-worktree leaves none; `-d` (not `-D`) preserves
     // unmerged work, and forceBranchDelete opts into `-D` for failed-creation rollback.
-    const branchDeleteResult = await deleteLocalBranchAfterWorktreeRemoval(
+    await deleteLocalBranchAfterWorktreeRemoval(
       repoPath,
       branchName,
       options.forceBranchDelete === true,
       options
     )
-    if (branchDeleteResult === 'checked-out') {
-      return {}
-    }
     return {}
   } catch (error) {
     if (!options.forceBranchDelete && branchHead) {
@@ -1363,14 +1360,14 @@ async function deleteLocalBranchAfterWorktreeRemoval(
   branchName: string,
   forceBranchDelete: boolean,
   options: GitWorktreeExecOptions = {}
-): Promise<'deleted' | 'checked-out'> {
+): Promise<void> {
   const deleteFlag = forceBranchDelete ? '-D' : '-d'
   try {
     await gitExecFileAsync(
       ['branch', deleteFlag, '--', branchName],
       gitExecOptions(repoPath, options)
     )
-    return 'deleted'
+    return
   } catch (error) {
     if (!isBranchCheckedOutInWorktreeError(error)) {
       throw error
@@ -1382,7 +1379,7 @@ async function deleteLocalBranchAfterWorktreeRemoval(
     await gitExecFileAsync(['worktree', 'prune'], gitExecOptions(repoPath, options))
   } catch (error) {
     console.warn(`[git] Failed to prune worktrees before deleting branch "${branchName}"`, error)
-    return 'checked-out'
+    return
   }
 
   try {
@@ -1390,10 +1387,9 @@ async function deleteLocalBranchAfterWorktreeRemoval(
       ['branch', deleteFlag, '--', branchName],
       gitExecOptions(repoPath, options)
     )
-    return 'deleted'
   } catch (error) {
     if (isBranchCheckedOutInWorktreeError(error)) {
-      return 'checked-out'
+      return
     }
     throw error
   }

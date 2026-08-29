@@ -118,13 +118,6 @@ export function hasExplicitUserPrompt(
   if (extractedPrompt.source === 'message') {
     return false
   }
-  if (
-    extractedPrompt.source === 'user_prompt' ||
-    extractedPrompt.source === 'userPrompt' ||
-    extractedPrompt.source === 'user_message'
-  ) {
-    return isNewTurnEvent(source, eventName)
-  }
   return isNewTurnEvent(source, eventName)
 }
 

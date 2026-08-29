@@ -64,27 +64,9 @@ async function resolveDefaultTarget(
   cwd: string,
   client: Parameters<CommandHandler>[0]['client']
 ): Promise<{ repo?: string; workspace?: string; runContext?: WorkspaceRunContext }> {
-  assertWorkspaceTargetFlagsCompatible(flags)
-  const repo = getOptionalStringFlag(flags, 'repo')
-  if (repo && getOptionalStringFlag(flags, 'workspace')) {
-    throw new RuntimeClientError('invalid_argument', 'Use either --repo or --workspace, not both.')
-  }
-  if (hasWorkspaceProjectTarget(flags) && getOptionalStringFlag(flags, 'workspace')) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --workspace or project target flags, not both.'
-    )
-  }
-  const projectTarget = await resolveProjectCreateTarget(flags, client)
-  if (projectTarget) {
-    return {
-      repo: projectTarget.repoSelector,
-      runContext: buildAutomationRunContextFromSetup(projectTarget.setup)
-    }
-  }
-  const workspace = await getOptionalWorktreeSelector(flags, 'workspace', cwd, client)
-  if (repo || workspace) {
-    return { repo, workspace }
+  const target = await getExplicitTarget(flags, cwd, client)
+  if (target.repo || target.workspace || target.runContext) {
+    return target
   }
   if (client.isRemote) {
     return {}

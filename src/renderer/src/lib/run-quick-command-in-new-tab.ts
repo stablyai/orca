@@ -71,9 +71,6 @@ export function runQuickCommandInNewTab({
       }
       return { tabId: result.tabId }
     }
-    if (result) {
-      return null
-    }
     return null
   }
 

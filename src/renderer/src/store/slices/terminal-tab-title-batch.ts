@@ -1,9 +1,9 @@
 import { deriveGeneratedTabTitle } from '../../../../shared/agent-tab-title'
 import { isDecorativeAgentTitleFrameChange } from '../../../../shared/agent-decorative-title-signature'
-import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '../types'
+import { getTabIdFromPaneKey } from '../terminals/terminal-pty-identities'
 import {
   adoptTerminalTabOwnerMetadataOnlyBuckets,
   getTerminalTabOwners
@@ -46,10 +46,6 @@ function getFallbackTabTitle(tab: TerminalTab): string {
     tab.title ||
     'Terminal 1'
   )
-}
-
-function getTabIdFromPaneKey(paneKey: string): string | null {
-  return parsePaneKey(paneKey)?.tabId ?? parseLegacyNumericPaneKey(paneKey)?.tabId ?? null
 }
 
 function getOwnerStage(

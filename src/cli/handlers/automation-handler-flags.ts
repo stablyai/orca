@@ -165,56 +165,36 @@ export function getScheduleFlag(
   return { rrule, dtstart: Date.now() }
 }
 
-export function getEnabledFlag(flags: Map<string, string | boolean>): boolean | undefined {
-  const enabledFlag = flags.get('enabled')
-  const disabledFlag = flags.get('disabled')
-  if (typeof enabledFlag === 'string') {
-    throw new RuntimeClientError('invalid_argument', '--enabled does not take a value')
+function getAutomationBooleanChoice(
+  flags: Map<string, string | boolean>,
+  trueFlagName: string,
+  falseFlagName: string
+): boolean | undefined {
+  const trueFlag = flags.get(trueFlagName)
+  const falseFlag = flags.get(falseFlagName)
+  if (typeof trueFlag === 'string') {
+    throw new RuntimeClientError('invalid_argument', `--${trueFlagName} does not take a value`)
   }
-  if (typeof disabledFlag === 'string') {
-    throw new RuntimeClientError('invalid_argument', '--disabled does not take a value')
+  if (typeof falseFlag === 'string') {
+    throw new RuntimeClientError('invalid_argument', `--${falseFlagName} does not take a value`)
   }
-  const enabled = enabledFlag === true
-  const disabled = disabledFlag === true
+  const enabled = trueFlag === true
+  const disabled = falseFlag === true
   if (enabled && disabled) {
     throw new RuntimeClientError(
       'invalid_argument',
-      'Use either --enabled or --disabled, not both.'
+      `Use either --${trueFlagName} or --${falseFlagName}, not both.`
     )
   }
-  if (enabled) {
-    return true
-  }
-  if (disabled) {
-    return false
-  }
-  return undefined
+  return enabled ? true : disabled ? false : undefined
+}
+
+export function getEnabledFlag(flags: Map<string, string | boolean>): boolean | undefined {
+  return getAutomationBooleanChoice(flags, 'enabled', 'disabled')
 }
 
 export function getReuseSessionFlag(flags: Map<string, string | boolean>): boolean | undefined {
-  const reuseFlag = flags.get('reuse-session')
-  const freshFlag = flags.get('fresh-session')
-  if (typeof reuseFlag === 'string') {
-    throw new RuntimeClientError('invalid_argument', '--reuse-session does not take a value')
-  }
-  if (typeof freshFlag === 'string') {
-    throw new RuntimeClientError('invalid_argument', '--fresh-session does not take a value')
-  }
-  const reuse = reuseFlag === true
-  const fresh = freshFlag === true
-  if (reuse && fresh) {
-    throw new RuntimeClientError(
-      'invalid_argument',
-      'Use either --reuse-session or --fresh-session, not both.'
-    )
-  }
-  if (reuse) {
-    return true
-  }
-  if (fresh) {
-    return false
-  }
-  return undefined
+  return getAutomationBooleanChoice(flags, 'reuse-session', 'fresh-session')
 }
 
 export function getPrecheckFlag(

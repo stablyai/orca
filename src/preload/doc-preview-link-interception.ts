@@ -130,10 +130,7 @@ export function handleDocPreviewLinkClick(
 }
 
 export function handleDocPreviewLinkAuxClick(event: MouseEvent): void {
-  if (!event.isTrusted || event.button !== 1) {
-    return
-  }
-  if (!findClickedAnchor(event)) {
+  if (!event.isTrusted || event.button !== 1 || !findClickedAnchor(event)) {
     return
   }
   // Why swallowed rather than routed: a middle click asks for a background tab, and honouring it

@@ -30,9 +30,6 @@ export function getActiveEntityIdForTabType(
   if (activeTabType === 'browser') {
     return activeBrowserTabId
   }
-  if (activeTabType === 'simulator') {
-    return activeTabId
-  }
   return activeTabId
 }
 
