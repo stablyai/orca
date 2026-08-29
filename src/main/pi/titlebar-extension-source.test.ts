@@ -7,7 +7,10 @@ import { getPiTitlebarExtensionSource } from './titlebar-extension-source'
 
 const BRAILLE_RE = /[⠀-⣿]/
 
-type TitlebarContext = { ui: { setTitle: (title: string) => void } }
+type TitlebarContext = {
+  ui: { setTitle: (title: string) => void }
+  isIdle?: () => boolean
+}
 type HookHandler = (event?: unknown, context?: TitlebarContext) => Promise<void> | void
 
 type Harness = {
@@ -21,14 +24,15 @@ const CWD = '/repo/orca-app'
 const SESSION = 'omp-session'
 const IDLE_TITLE = `π - ${SESSION} - orca-app`
 
-function createHarness(options: { paneKey?: string } = {}): Harness {
+function createHarness(options: { paneKey?: string; isIdle?: () => boolean } = {}): Harness {
   const titles: string[] = []
   const ctx: TitlebarContext = {
     ui: {
       setTitle: (title: string) => {
         titles.push(title)
       }
-    }
+    },
+    isIdle: options.isIdle
   }
 
   const module = {
@@ -51,7 +55,9 @@ function createHarness(options: { paneKey?: string } = {}): Harness {
     Promise,
     // Why: forward to the test realm's timers so vi.useFakeTimers() drives the VM's interval.
     setInterval: (...args: Parameters<typeof setInterval>) => setInterval(...args),
-    clearInterval: (timer: ReturnType<typeof setInterval>) => clearInterval(timer)
+    clearInterval: (timer: ReturnType<typeof setInterval>) => clearInterval(timer),
+    setTimeout: (...args: Parameters<typeof setTimeout>) => setTimeout(...args),
+    clearTimeout: (timer: ReturnType<typeof setTimeout>) => clearTimeout(timer)
   } as Record<string, unknown>
   context.globalThis = context
 
@@ -186,6 +192,46 @@ describe('getPiTitlebarExtensionSource', () => {
     expect(vi.getTimerCount()).toBe(1)
     vi.advanceTimersByTime(80)
     expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('transfers an idle-compaction spinner to a new run without publishing idle', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('auto_compaction_start', { reason: 'idle' })
+    vi.advanceTimersByTime(80)
+    const titleCountBeforeTransfer = harness.titles.length
+
+    await harness.callHook('agent_start')
+
+    const transferTitles = harness.titles.slice(titleCountBeforeTransfer)
+    expect(transferTitles).not.toContain(IDLE_TITLE)
+    expect(transferTitles).toHaveLength(1)
+    expect(transferTitles[0]).toMatch(BRAILLE_RE)
+  })
+
+  it('keeps spinning across a non-terminal OMP agent_end', async () => {
+    const harness = createHarness()
+
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end', { willContinue: true })
+
+    expect(vi.getTimerCount()).toBe(1)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+  })
+
+  it('waits for modern runtimes to become idle after agent_end', async () => {
+    let idle = false
+    const harness = createHarness({ isIdle: () => idle })
+
+    await harness.callHook('agent_start')
+    await harness.callHook('agent_end')
+    await vi.advanceTimersByTimeAsync(100)
+    expect(harness.lastTitle()).toMatch(BRAILLE_RE)
+
+    idle = true
+    await vi.advanceTimersByTimeAsync(200)
+    expect(vi.getTimerCount()).toBe(0)
+    expect(harness.lastTitle()).toBe(IDLE_TITLE)
   })
 
   it('still stops on legacy agent_end and on session shutdown', async () => {

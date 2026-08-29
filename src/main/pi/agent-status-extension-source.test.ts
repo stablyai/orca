@@ -855,6 +855,16 @@ describe('getPiAgentStatusExtensionSource', () => {
     await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
   })
 
+  it('does not report a non-terminal OMP agent_end without an idle context', async () => {
+    const harness = createHarness({ kind: 'omp' })
+
+    await harness.callHook('agent_end', { willContinue: true })
+    expect(harness.fetchMock).not.toHaveBeenCalled()
+
+    await harness.callHook('agent_end')
+    await vi.waitFor(() => expect(harness.fetchMock).toHaveBeenCalledTimes(1))
+  })
+
   it('does not treat WSLENV alone as WSL evidence', async () => {
     const harness = createHarness({
       kind: 'omp',
