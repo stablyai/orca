@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
+  applyPdfWheelScale,
   applyPdfScalePreference,
   clampPdfScale,
+  getNextPdfWheelScale,
+  shouldHandlePdfZoomWheel,
   stepPdfScalePreference
 } from './pdf-scale-preference'
 
@@ -32,6 +35,79 @@ describe('applyPdfScalePreference', () => {
     const viewer = { currentScale: 1, currentScaleValue: 'auto' }
     applyPdfScalePreference(viewer, 99, BOUNDS)
     expect(viewer.currentScale).toBe(5)
+  })
+})
+
+describe('getNextPdfWheelScale', () => {
+  it('maps wheel direction to bounded PDF zoom', () => {
+    expect(getNextPdfWheelScale(1, -30, 0, BOUNDS)).toBeGreaterThan(1)
+    expect(getNextPdfWheelScale(1, 30, 0, BOUNDS)).toBeLessThan(1)
+    expect(getNextPdfWheelScale(BOUNDS.max, -30, 0, BOUNDS)).toBe(BOUNDS.max)
+    expect(getNextPdfWheelScale(BOUNDS.min, 30, 0, BOUNDS)).toBe(BOUNDS.min)
+  })
+})
+
+describe('applyPdfWheelScale', () => {
+  it('zooms around the pointer and returns the applied scale', () => {
+    const viewer = {
+      currentScale: 1,
+      updateScale: vi.fn(({ scaleFactor }: { scaleFactor: number }) => {
+        viewer.currentScale *= scaleFactor
+      })
+    }
+
+    const applied = applyPdfWheelScale(
+      viewer,
+      { clientX: 120, clientY: 240, deltaMode: 0, deltaY: -30 },
+      BOUNDS
+    )
+
+    expect(applied).toBeGreaterThan(1)
+    expect(viewer.updateScale).toHaveBeenCalledWith({
+      scaleFactor: applied,
+      origin: [120, 240]
+    })
+  })
+
+  it('does not update past a scale bound', () => {
+    const viewer = { currentScale: BOUNDS.max, updateScale: vi.fn() }
+    expect(
+      applyPdfWheelScale(viewer, { clientX: 0, clientY: 0, deltaMode: 0, deltaY: -30 }, BOUNDS)
+    ).toBe(BOUNDS.max)
+    expect(viewer.updateScale).not.toHaveBeenCalled()
+  })
+
+  it('seeds pdf.js before scaling its unknown internal scale', () => {
+    let internalScale = 0
+    const viewer = {
+      get currentScale(): number {
+        return internalScale || 1
+      },
+      set currentScale(scale: number) {
+        internalScale = scale
+      },
+      updateScale: vi.fn(({ scaleFactor }: { scaleFactor: number }) => {
+        internalScale = Math.max(0.1, internalScale * scaleFactor)
+      })
+    }
+
+    const applied = applyPdfWheelScale(
+      viewer,
+      { clientX: 0, clientY: 0, deltaMode: 0, deltaY: 30 },
+      BOUNDS
+    )
+
+    expect(applied).toBeGreaterThan(0.1)
+    expect(applied).toBeCloseTo(getNextPdfWheelScale(1, 30, 0, BOUNDS))
+  })
+})
+
+describe('shouldHandlePdfZoomWheel', () => {
+  it('supports Ctrl/pinch gestures everywhere and Command-wheel on macOS', () => {
+    expect(shouldHandlePdfZoomWheel({ ctrlKey: true, metaKey: false }, 'linux')).toBe(true)
+    expect(shouldHandlePdfZoomWheel({ ctrlKey: false, metaKey: true }, 'linux')).toBe(false)
+    expect(shouldHandlePdfZoomWheel({ ctrlKey: false, metaKey: true }, 'darwin')).toBe(true)
+    expect(shouldHandlePdfZoomWheel({ ctrlKey: true, metaKey: false }, 'darwin')).toBe(true)
   })
 })
 

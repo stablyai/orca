@@ -5,11 +5,15 @@ import { dispatchZoomLevelChanged } from '@/lib/zoom-events'
 import { stepUIZoomLevel } from '../../../../shared/ui-zoom-level'
 import { useAppStore } from '../../store'
 import { resolveZoomTarget } from '../resolve-zoom-target'
+import { dispatchPdfZoomCommand } from '@/lib/pdf-zoom-command'
 
 export function registerZoomIpcBridge(unsubs: (() => void)[]): void {
   // Zoom handling for menu accelerators and keyboard fallback paths.
   unsubs.push(
     window.api.ui.onTerminalZoom((direction) => {
+      if (dispatchPdfZoomCommand(direction)) {
+        return
+      }
       const store = useAppStore.getState()
       const { activeView, activeTabType, editorFontZoomLevel, setEditorFontZoomLevel, settings } =
         store
