@@ -215,6 +215,7 @@ describe('searchBaseRefs (widened glob)', () => {
 
   it('allows creating a local branch from the selected matching remote base ref', async () => {
     const sha = getHeadSha(tmpDir)
+    git(tmpDir, ['remote', 'add', 'origin', 'https://example.invalid/repo.git'])
     createRemoteRef(tmpDir, 'origin/feature/something', sha)
 
     const result = await getBranchConflictKind(

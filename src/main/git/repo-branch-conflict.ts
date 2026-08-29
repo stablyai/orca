@@ -1,56 +1,50 @@
-import { listRemoteNames, resolveLocalBranchName } from './repo-base-ref-search'
-import { gitExecOptions, type LocalGitExecOptions } from './repo-default-base-ref'
+import { resolveConfiguredRemoteBranchName } from './repo-base-ref-search'
+import { gitExecOptions, type GitExec, type LocalGitExecOptions } from './repo-default-base-ref'
 import { gitExecFileAsync } from './runner'
 
 export type BranchConflictKind = 'local' | 'remote'
 
-/** Whether `ref` resolves in the repository at `path`. */
-async function hasGitRefAsync(
-  path: string,
-  ref: string,
-  options: LocalGitExecOptions = {}
-): Promise<boolean> {
+async function hasGitRefAsync(exec: GitExec, ref: string): Promise<boolean> {
   try {
-    await gitExecFileAsync(['rev-parse', '--verify', ref], gitExecOptions(path, options))
-    return true
+    const { stdout } = await exec(['rev-parse', '--verify', ref])
+    return stdout.trim().length > 0
   } catch {
     return false
   }
 }
 
-/**
- * Whether `branchName` is already taken, and by what. Only refs under a configured
- * remote count as remote conflicts; `allowedBaseRef` exempts the ref being branched from.
- */
-export async function getBranchConflictKind(
-  path: string,
+async function listRemoteNamesViaExec(exec: GitExec): Promise<string[]> {
+  try {
+    const { stdout } = await exec(['remote'])
+    return stdout
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .sort((a, b) => b.length - a.length)
+  } catch {
+    return []
+  }
+}
+
+/** Run branch-conflict policy through the host that owns Git execution. */
+export async function getBranchConflictKindViaExec(
+  exec: GitExec,
   branchName: string,
-  allowedBaseRef?: string,
-  options: LocalGitExecOptions = {}
+  allowedBaseRef?: string
 ): Promise<BranchConflictKind | null> {
-  if (await hasGitRefAsync(path, `refs/heads/${branchName}`, options)) {
+  if (await hasGitRefAsync(exec, `refs/heads/${branchName}`)) {
     return 'local'
   }
 
   try {
-    const remoteNames = (await listRemoteNames(path, options)).sort((a, b) => b.length - a.length)
-    const { stdout } = await gitExecFileAsync(
-      ['for-each-ref', '--format=%(refname)', 'refs/remotes'],
-      gitExecOptions(path, options)
-    )
-    const hasRemoteConflict = stdout.split('\n').some((ref) => {
+    const remoteNames = await listRemoteNamesViaExec(exec)
+    const { stdout } = await exec(['for-each-ref', '--format=%(refname)', 'refs/remotes'])
+    const hasRemoteConflict = stdout.split(/\r?\n/).some((ref) => {
       const trimmed = ref.trim()
       if (isAllowedRemoteBaseRef(trimmed, allowedBaseRef)) {
         return false
       }
-      const shortRef = trimmed.replace(/^refs\/remotes\//, '')
-      // Why: a ref under a prefix no configured remote owns tracks nothing — a
-      // hand-planted ref, or a fork remote that was removed — so it cannot collide
-      // with a new local branch. Ref *display* still resolves those leniently.
-      if (!remoteNames.some((candidate) => shortRef.startsWith(`${candidate}/`))) {
-        return false
-      }
-      return resolveLocalBranchName(trimmed, shortRef, remoteNames) === branchName
+      return resolveConfiguredRemoteBranchName(trimmed, remoteNames) === branchName
     })
 
     return hasRemoteConflict ? 'remote' : null
@@ -59,7 +53,20 @@ export async function getBranchConflictKind(
   }
 }
 
-/** The one remote ref a caller may branch from without it counting as a conflict. */
+export function getBranchConflictKind(
+  path: string,
+  branchName: string,
+  allowedBaseRef?: string,
+  options: LocalGitExecOptions = {}
+): Promise<BranchConflictKind | null> {
+  const execOptions = gitExecOptions(path, options)
+  return getBranchConflictKindViaExec(
+    (argv) => gitExecFileAsync(argv, execOptions),
+    branchName,
+    allowedBaseRef
+  )
+}
+
 function isAllowedRemoteBaseRef(refName: string, allowedBaseRef: string | undefined): boolean {
   if (!allowedBaseRef) {
     return false
