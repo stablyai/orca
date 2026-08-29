@@ -214,6 +214,11 @@ import {
 } from '../../../../src/session/session-tab-snapshot-gate'
 import { resolveActiveSessionTab } from '../../../../src/session/active-session-tab'
 import {
+  pickMobileSessionTabAfterClose,
+  recordMobileSessionTabActivation,
+  shouldRestoreMobileSessionTabAfterClose
+} from '../../../../src/session/mobile-session-tab-recency'
+import {
   createInitialSessionAutoCreateState,
   useInitialSessionTerminalAutoCreate,
   useWorktreeSessionTabsLoaded
@@ -821,6 +826,8 @@ export default function SessionScreen() {
   const [coveredStreamRevision, setCoveredStreamRevision] = useState(0)
   const [activeSessionTabId, setActiveSessionTabId] = useState<string | null>(null)
   const activeSessionTabIdRef = useRef<string | null>(null)
+  const recentSessionTabIdsRef = useRef<string[]>([])
+  const sessionTabSelectionRevisionRef = useRef(0)
   // Auto-scroll the tab strip so the desktop-synced active tab is revealed without a manual scroll.
   const tabStripRef = useRef<ScrollView>(null)
   const tabStripOffsetRef = useRef(0)
@@ -1022,6 +1029,11 @@ export default function SessionScreen() {
   activeSessionTabTypeRef.current = activeSessionTab?.type ?? null
   sessionTabsRef.current = sessionTabs
   activeSessionTabIdRef.current = activeSessionTabId
+  recentSessionTabIdsRef.current = recordMobileSessionTabActivation(
+    recentSessionTabIdsRef.current,
+    sessionTabs,
+    activeSessionTabId
+  )
   markdownDocsRef.current = markdownDocs
   const reconciledCreateWarningState = reconcileMobileSessionCreateWarningState(
     createWarningState,
@@ -1811,6 +1823,9 @@ export default function SessionScreen() {
       diagnostics.tabsApplied(result, nextTabs, active, selectionSource)
       if (!resolved.retainSelectedSessionTabId || active !== resolved.activeTab) {
         selectedSessionTabIdRef.current = active?.id ?? null
+      }
+      if (followsHost) {
+        sessionTabSelectionRevisionRef.current += 1
       }
       activeSessionTabTypeRef.current = active?.type ?? null
       activeSessionTabIdRef.current = active?.id ?? null
@@ -2604,6 +2619,8 @@ export default function SessionScreen() {
     activeSessionTabTypeRef.current = null
     pendingActiveSessionTabIdRef.current = null
     selectedSessionTabIdRef.current = null
+    recentSessionTabIdsRef.current = []
+    sessionTabSelectionRevisionRef.current = 0
     pendingActiveTerminalHandleRef.current = null
     pendingBrowserFocusPageIdRef.current = null
     pendingTerminalActivationAttemptRef.current = null
@@ -2825,6 +2842,8 @@ export default function SessionScreen() {
 
   const switchSessionTab = useCallback(
     (tab: MobileSessionTab) => {
+      sessionTabSelectionRevisionRef.current += 1
+      activeSessionTabIdRef.current = tab.id
       if (tab.type === 'terminal') {
         if (typeof tab.terminal === 'string') {
           switchTab(tab.terminal)
@@ -3706,6 +3725,7 @@ export default function SessionScreen() {
       return
     }
     creatingTerminalRef.current = true
+    sessionTabSelectionRevisionRef.current += 1
 
     setCreating(true)
     setCreateError('')
@@ -3740,14 +3760,16 @@ export default function SessionScreen() {
           initializedHandlesRef.current.delete(prev)
         }
         pendingActiveSessionTabIdRef.current = created.id
+        sessionTabSelectionRevisionRef.current += 1
+        activeSessionTabIdRef.current = created.id
         activeSessionTabTypeRef.current = 'terminal'
         setActiveSessionTabId(created.id)
-        setSessionTabs((prev) => {
-          if (prev.some((tab) => tab.id === created.id)) {
-            return prev
-          }
-          return [...prev, { ...created, isActive: true }]
-        })
+        const nextSessionTabs = sessionTabsRef.current.some((tab) => tab.id === created.id)
+          ? sessionTabsRef.current
+          : [...sessionTabsRef.current, { ...created, isActive: true }]
+        // Why: a racing close reads this ref before React can commit the created-tab state.
+        sessionTabsRef.current = nextSessionTabs
+        setSessionTabs(nextSessionTabs)
         if (typeof created.terminal === 'string') {
           const createdHandle = created.terminal
           defaultTerminalHandlesToLiveInput([createdHandle])
@@ -4063,6 +4085,10 @@ export default function SessionScreen() {
     if (!client) {
       return
     }
+    const activeTabIdAtCloseStart = activeSessionTabIdRef.current
+    const sessionTabsAtCloseStart = sessionTabsRef.current
+    const recentTabIdsAtCloseStart = recentSessionTabIdsRef.current
+    const selectionRevisionAtCloseStart = sessionTabSelectionRevisionRef.current
     try {
       const response = await client.sendRequest('session.tabs.close', {
         worktree: `id:${worktreeId}`,
@@ -4073,6 +4099,19 @@ export default function SessionScreen() {
       })
       if (response.ok) {
         const remainingTabs = sessionTabsRef.current.filter((candidate) => candidate.id !== tab.id)
+        const replacement = shouldRestoreMobileSessionTabAfterClose({
+          closingTabId: tab.id,
+          activeTabIdAtCloseStart,
+          selectionRevisionAtCloseStart,
+          currentSelectionRevision: sessionTabSelectionRevisionRef.current
+        })
+          ? pickMobileSessionTabAfterClose(
+              sessionTabsAtCloseStart,
+              remainingTabs,
+              recentTabIdsAtCloseStart,
+              tab.id
+            )
+          : null
         if (tab.type === 'browser' && tab.browserPageId === pendingBrowserFocusPageIdRef.current) {
           pendingBrowserFocusPageIdRef.current = null
         }
@@ -4085,12 +4124,15 @@ export default function SessionScreen() {
         }
         sessionTabsRef.current = remainingTabs
         setSessionTabs(remainingTabs)
+        recentSessionTabIdsRef.current = recentSessionTabIdsRef.current.filter(
+          (id) => id !== tab.id
+        )
         // Why: tombstone the closed tab and rely on the snapshot, not a blind refetch that often re-added the not-yet-closed tab.
         closedTabTombstonesRef.current.set(tab.id, Date.now() + 10_000)
-        // Why: bulk close re-activates the anchor before awaiting each close;
-        // the render-synced ref sees that switch while this closure would not,
-        // so comparing against the ref keeps the anchor from being nulled out.
-        if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
+        // Why: bulk close re-activates its anchor before each close, so only clear a tab that remains active.
+        if (replacement) {
+          switchSessionTab(replacement)
+        } else if (activeSessionTabIdRef.current === tab.id || remainingTabs.length === 0) {
           activeSessionTabTypeRef.current = null
           // Why: an explicit close is not a transient gap; drop the sticky pick so the snapshot picks the next tab.
           selectedSessionTabIdRef.current = null
