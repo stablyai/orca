@@ -9,9 +9,16 @@ const registeredWorktreeRootsByRepo = new Map<string, Set<string>>()
 const registeredWorktreeRootRepoIds = new Set<string>()
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
+// Why (#15667): a rebuild parked on `git worktree list` can be overtaken by an
+// invalidation (worktree create/remove, repo forget, ~30 call sites). Without
+// a generation marker the stale rebuild then overwrites the fresher state,
+// marks the cache clean, and filesystem auth serves pre-mutation roots —
+// denying a just-created worktree or re-authorizing removed ones.
+let authorizedRootsInvalidationEpoch = 0
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 
 export function invalidateAuthorizedRootsCache(): void {
+  authorizedRootsInvalidationEpoch += 1
   registeredWorktreeRootsDirty = true
   // Why: dirty roots can't be trusted for auth short-circuits; fresh worktrees:list seeds safe per-repo roots before a full rebuild.
   registeredWorktreeRoots.clear()
@@ -22,6 +29,7 @@ export function invalidateAuthorizedRootsCache(): void {
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // Why: bounded parallelism keeps the Windows speedup without one git process per repo.
   // Why no realpath here: canonicalizing every root on invalidation would trigger macOS TCC prompts; handlers still canonicalize the target before any operation.
+  const epochAtRebuildStart = authorizedRootsInvalidationEpoch
   const repos = getLocalRepos(store)
   const perProjectResults = await mapWithConcurrency(
     repos,
@@ -42,6 +50,14 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     }
   )
 
+  if (authorizedRootsInvalidationEpoch !== epochAtRebuildStart) {
+    // Why (#15667): an invalidation landed while this rebuild was parked on git.
+    // Its snapshot predates the mutation, so committing it would clobber the
+    // invalidation (and any fresher per-repo seed) and falsely mark the cache
+    // clean. Discard, stay dirty, and let the next ensure rebuild fresh state.
+    registeredWorktreeRootsDirty = true
+    return
+  }
   registeredWorktreeRoots.clear()
   registeredWorktreeRootsByRepo.clear()
   registeredWorktreeRootRepoIds.clear()
@@ -103,15 +119,17 @@ export function registerWorktreeRootsForRepo(
 }
 
 export async function ensureAuthorizedRootsCache(store: Store): Promise<void> {
-  if (!registeredWorktreeRootsDirty) {
-    return
+  // Why (#15667): loop, not join-once — an in-flight rebuild that started
+  // before this caller's invalidation will discard itself on completion, and
+  // the caller must then start a fresh rebuild rather than trust the stale one.
+  while (registeredWorktreeRootsDirty) {
+    if (!registeredWorktreeRootsRefresh) {
+      registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
+        registeredWorktreeRootsRefresh = null
+      })
+    }
+    await registeredWorktreeRootsRefresh
   }
-  if (!registeredWorktreeRootsRefresh) {
-    registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
-      registeredWorktreeRootsRefresh = null
-    })
-  }
-  await registeredWorktreeRootsRefresh
 }
 
 /**

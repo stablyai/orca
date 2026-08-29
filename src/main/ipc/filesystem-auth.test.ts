@@ -18,6 +18,7 @@ import {
 } from './filesystem-auth'
 import { isDescendantOrEqual, validateGitRelativeFilePath } from './filesystem-path-containment'
 import {
+  ensureAuthorizedRootsCache,
   invalidateAuthorizedRootsCache,
   rebuildAuthorizedRootsCache,
   resolveRegisteredWorktreePath
@@ -143,6 +144,71 @@ describe('filesystem auth worktree roots', () => {
     expect(maxActive).toBeLessThanOrEqual(8)
   })
 })
+
+
+  it('discards a rebuild that an invalidation overtook, so a just-created worktree is not denied (#15667)', async () => {
+    const firstListingRelease: { fn: (() => void) | null } = { fn: null }
+    const firstListing = new Promise<GitWorktreeInfo[]>((release) => {
+      firstListingRelease.fn = () =>
+        release([{ path: '/repos/app', head: 'a', branch: 'main', isBare: false, isMainWorktree: true }])
+    })
+    let listingCall = 0
+    vi.mocked(listRepoWorktrees).mockImplementation(async () => {
+      listingCall += 1
+      if (listingCall === 1) {
+        // Pre-mutation snapshot: the linked worktree does not exist yet.
+        return firstListing
+      }
+      // The post-invalidation listing knows the new worktree.
+      return Promise.resolve([
+        { path: '/repos/app', head: 'a', branch: 'main', isBare: false, isMainWorktree: true },
+        { path: '/repos/linked/new', head: 'a', branch: 'feature', isBare: false, isMainWorktree: false }
+      ])
+    })
+
+    const store = makeStore()
+    // A leaked rebuild from an earlier test can leave the cache clean; force
+    // dirty so this test's ensure deterministically starts the parked rebuild.
+    invalidateAuthorizedRootsCache()
+    const parkedEnsure = ensureAuthorizedRootsCache(store)
+    expect(listingCall).toBeGreaterThanOrEqual(1)
+    // The overtaking invalidation (what worktrees:create does) lands while parked.
+    invalidateAuthorizedRootsCache()
+    firstListingRelease.fn?.()
+
+    await parkedEnsure
+
+    // The overtaken rebuild was discarded and a fresh one committed its listing.
+    expect(listingCall).toBeGreaterThanOrEqual(2)
+    await expect(
+      resolveRegisteredWorktreePath('/repos/linked/new', store)
+    ).resolves.toBe(resolve('/repos/linked/new'))
+  })
+
+  it('does not re-authorize removed roots when an invalidation overtakes a rebuild (#15667)', async () => {
+    const firstListingRelease: { fn: (() => void) | null } = { fn: null }
+    const firstListing = new Promise<GitWorktreeInfo[]>((release) => {
+      firstListingRelease.fn = () =>
+        release([{ path: '/repos/app', head: 'a', branch: 'main', isBare: false, isMainWorktree: true }])
+    })
+    let listingCall = 0
+    vi.mocked(listRepoWorktrees).mockImplementation(async () => {
+      listingCall += 1
+      return listingCall === 1 ? firstListing : Promise.resolve([])
+    })
+
+    const store = makeStore()
+    const parkedEnsure = ensureAuthorizedRootsCache(store)
+    // The repo is forgotten while the rebuild is parked.
+    invalidateAuthorizedRootsCache()
+    firstListingRelease.fn?.()
+    await parkedEnsure
+
+    const emptyStore = makeStore([])
+    await expect(resolveRegisteredWorktreePath('/repos/app', emptyStore)).rejects.toThrow(
+      'Access denied'
+    )
+  })
 
 describe('filesystem-auth path containment', () => {
   it('authorizes missing nested descendants under an allowed repo', async () => {
