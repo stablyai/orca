@@ -81,6 +81,7 @@ function verifyNormalBufferWheelScroll(): void {
   const handlers: ((event: WheelEvent) => boolean)[] = []
   const scrollLines = vi.fn()
   const terminal = {
+    /** Captures the normal-buffer wheel handler for direct invocation. */
     attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
       handlers.push(handler)
     },
@@ -100,6 +101,7 @@ function verifyNormalBufferWheelScroll(): void {
 function verifyAlternateBufferWheelFallback(): void {
   const handlers: ((event: WheelEvent) => boolean)[] = []
   const terminal = {
+    /** Captures the alternate-buffer wheel handler for direct invocation. */
     attachCustomWheelEventHandler: (handler: (event: WheelEvent) => boolean) => {
       handlers.push(handler)
     },
