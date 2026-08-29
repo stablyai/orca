@@ -5,42 +5,15 @@ import type {
   WatcherProcessDeliveryOptions,
   WatcherProcessEvent
 } from './parcel-watcher-process-protocol'
-
-const DIRECTORY_STAT_CONCURRENCY = 8
-let activeDirectoryStats = 0
-const directoryStatWaiters: (() => void)[] = []
+import { DIRECTORY_STAT_CONCURRENCY, withDirectoryStatSlot } from './watcher-directory-stat-limit'
 
 export type WatcherProcessEventDeliveryQueue = {
   enqueue(events: readonly ParcelWatcherEvent[]): void
   close(): void
 }
 
-async function acquireDirectoryStatSlot(): Promise<void> {
-  if (activeDirectoryStats < DIRECTORY_STAT_CONCURRENCY) {
-    activeDirectoryStats++
-    return
-  }
-  await new Promise<void>((resolve) => directoryStatWaiters.push(resolve))
-}
-
-function releaseDirectoryStatSlot(): void {
-  const next = directoryStatWaiters.shift()
-  if (next) {
-    // Transfer the existing slot directly so a newly arriving task cannot
-    // overtake this waiter and temporarily exceed the global budget.
-    next()
-    return
-  }
-  activeDirectoryStats--
-}
-
 async function statWatcherEventPath(eventPath: string): Promise<boolean> {
-  await acquireDirectoryStatSlot()
-  try {
-    return (await stat(eventPath)).isDirectory()
-  } finally {
-    releaseDirectoryStatSlot()
-  }
+  return withDirectoryStatSlot(async () => (await stat(eventPath)).isDirectory())
 }
 
 async function mapWithConcurrency<T, R>(

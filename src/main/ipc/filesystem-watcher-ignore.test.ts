@@ -33,6 +33,22 @@ describe('buildParcelWatcherIgnoreOptions', () => {
     expect(options.ignoreGlobs?.[0]).not.toContain('?!')
   })
 
+  it('prunes nested ignored dirs on macOS, not just the daemon exclusion paths', () => {
+    setPlatform('darwin')
+    const options = buildParcelWatcherIgnoreOptions(WATCHER_IGNORE_DIRS)
+    expect(options.ignore?.length ?? 0).toBeLessThanOrEqual(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
+    // @parcel/watcher resolves plain `ignore` entries to <root>/<dir>, so a nested
+    // copy is only pruned if the userspace glob covers the full ignore list.
+    const regex = new RegExp(options.ignoreGlobs?.[0] ?? '(?!)')
+    for (const dir of WATCHER_IGNORE_DIRS) {
+      expect(regex.test(`packages/app/${dir}`)).toBe(true)
+      expect(regex.test(`packages/app/${dir}/index.ts`)).toBe(true)
+    }
+    expect(regex.test('packages/app/.github/workflows')).toBe(false)
+    expect(regex.test('packages/app/node_modules-cache/file.ts')).toBe(false)
+    expect(options.ignoreGlobs?.[0]).not.toContain('?!')
+  })
+
   it('uses one lookahead-free native regex for nested ignores on Linux/Windows', () => {
     for (const platform of ['linux', 'win32'] as const) {
       setPlatform(platform)

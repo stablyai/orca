@@ -56,9 +56,10 @@ export function buildParcelWatcherIgnoreOptions(
     return { ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)] }
   }
   const daemonExcludedDirs = ignoreDirs.slice(0, MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
-  const remainingDirs = ignoreDirs.slice(MACOS_FSEVENTS_EXCLUSION_PATH_LIMIT)
   return {
     ignore: [...daemonExcludedDirs],
-    ...(remainingDirs.length > 0 ? { ignoreGlobs: [buildNestedDirectoryRegex(remainingDirs)] } : {})
+    // Why: plain entries only exclude <root>/<dir> at the daemon, so the glob must cover the
+    // FULL list — otherwise nested node_modules/.git churn reaches this process on macOS only.
+    ignoreGlobs: [buildNestedDirectoryRegex(ignoreDirs)]
   }
 }
