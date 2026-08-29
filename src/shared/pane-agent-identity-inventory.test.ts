@@ -171,6 +171,7 @@ const INVENTORY: readonly InventoryGroup[] = [
     helper: 'resolveCommittedTitleAgentType',
     classification: 'identity-consumer',
     paths: [
+      ['src/renderer/src/components/tab-bar/tab-bar-item-surface.tsx', 3],
       ['src/renderer/src/components/terminal-pane/native-chat-leaf-title-agent.ts', 4],
       ['src/renderer/src/components/terminal-pane/pty-connection/pane-agent-identity.ts', 2]
     ]

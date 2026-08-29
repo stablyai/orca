@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   type MouseEventHandler,
@@ -17,6 +18,7 @@ import {
   PanelsTopLeft,
   PanelRightClose,
   Pencil,
+  SquareTerminal,
   X
 } from 'lucide-react'
 import {
@@ -28,7 +30,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { translate } from '@/i18n/i18n'
-import { isMacPlatform } from './native-chat-shortcut'
+import { isMacPlatform, nativeChatToggleShortcutLabel } from './native-chat-shortcut'
 
 type NativeChatContextMenuState = {
   open: boolean
@@ -38,6 +40,7 @@ type NativeChatContextMenuState = {
 
 type UseNativeChatContextMenuArgs = {
   rootRef: RefObject<HTMLElement | null>
+  onSwitchToTerminal?: () => void
   actions: NativeChatContextMenuActions
 }
 
@@ -79,7 +82,11 @@ export const emptyNativeChatContextMenuActions: Omit<NativeChatContextMenuAction
   onClosePane: () => {}
 }
 
-export function useNativeChatContextMenu({ rootRef, actions }: UseNativeChatContextMenuArgs): {
+export function useNativeChatContextMenu({
+  rootRef,
+  onSwitchToTerminal,
+  actions
+}: UseNativeChatContextMenuArgs): {
   onContextMenuCapture: MouseEventHandler<HTMLElement>
   onSelectionCapture: () => void
   menu: React.JSX.Element
@@ -91,6 +98,7 @@ export function useNativeChatContextMenu({ rootRef, actions }: UseNativeChatCont
     point: { x: 0, y: 0 },
     selectedText: ''
   })
+  const shortcutLabel = useMemo(() => nativeChatToggleShortcutLabel(isMacPlatform()), [])
 
   const rememberCurrentSelection = useCallback(() => {
     const selectedText = getNativeChatSelectedText(rootRef.current)
@@ -157,6 +165,16 @@ export function useNativeChatContextMenu({ rootRef, actions }: UseNativeChatCont
             <Clipboard />
             {translate('auto.components.terminal.pane.TerminalContextMenu.0a917b591a', 'Paste')}
           </DropdownMenuItem>
+          {onSwitchToTerminal ? (
+            <DropdownMenuItem onSelect={onSwitchToTerminal}>
+              <SquareTerminal />
+              {translate(
+                'components.tab.bar.SortableTabContextMenu.switchToTerminalView',
+                'Switch to terminal view'
+              )}
+              <DropdownMenuShortcut>{shortcutLabel}</DropdownMenuShortcut>
+            </DropdownMenuItem>
+          ) : null}
           {actions.canContinueAgentSessionInNewSession ? (
             <DropdownMenuItem onSelect={actions.onContinueAgentSessionInNewSession}>
               <MessageSquarePlus />

@@ -441,7 +441,6 @@ describe('closeTerminalTab', () => {
       activeTabId: 'terminal-entity-1',
       openFiles: [],
       browserTabsByWorktree: {},
-      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
       closeTab,
       closeUnifiedTab,
       setActiveTab: vi.fn(),
@@ -454,7 +453,7 @@ describe('closeTerminalTab', () => {
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
-  it('defers successor selection for unified terminal tabs to the unified close contract', () => {
+  it('activates the next unified terminal tab when closing the active unified-only tab', () => {
     const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()
     const setActiveTab = vi.fn()
@@ -505,10 +504,7 @@ describe('closeTerminalTab', () => {
 
     closeTerminalTab('terminal-entity-1')
 
-    // Why: a unified terminal must not pre-pick a terminal-only successor — the
-    // store's closeUnifiedTab owns the MRU/neighbor repair (which may land on an
-    // agent-session tab); terminal-tab-actions-unified-close.test.ts covers it.
-    expect(setActiveTab).not.toHaveBeenCalled()
+    expect(setActiveTab).toHaveBeenCalledWith('terminal-entity-2')
     expect(closeTab).toHaveBeenCalledWith('terminal-entity-1', { reason: undefined })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
@@ -577,7 +573,6 @@ describe('closeTerminalTab', () => {
       activeTabId: 'pinned-entity-1',
       openFiles: [],
       browserTabsByWorktree: {},
-      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
       closeTab: vi.fn(),
       closeUnifiedTab: vi.fn(),
       setActiveTab: vi.fn(),

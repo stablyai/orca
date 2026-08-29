@@ -1,11 +1,10 @@
 import type { BrowserFocusTarget } from '../components/browser-pane/host-guest/browser-focus'
-import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 
 // The surface that held focus before a modal (QuickOpen, Cmd+J, ...) opened.
 // Captured at open time because Radix steals document focus once the dialog
 // mounts, so the raw activeElement is gone by close time.
 export type ModalReturnFocusSurface = {
-  tabType: WorkspaceVisibleTabType
+  tabType: 'browser' | 'editor' | 'terminal' | 'simulator'
   worktreeId: string | null
   browserPageId: string | null
   browserTarget: BrowserFocusTarget

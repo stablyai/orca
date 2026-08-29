@@ -19,7 +19,6 @@ const mocks = vi.hoisted(() => ({
     onCompositionEnd?: (event: { currentTarget: HTMLTextAreaElement }) => void
     sessionOptionsSurface?: SessionOptionsSurface | null
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
-    attachDisabled?: boolean
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'interaction-required' | 'unknown',
   confirmationObserver: null as {
@@ -32,7 +31,6 @@ const mocks = vi.hoisted(() => ({
   createClaudeModelSwitchConfirmationObserver: vi.fn(),
   discoverCommitMessageModels: vi.fn(),
   draft: 'hello',
-  imageAttachments: [] as { id: string; path: string }[],
   getMainBufferSnapshot: vi.fn(),
   sendHandle: { cancel: vi.fn(), settleAfterMs: 500 },
   sendNativeChatMessage: vi.fn(),
@@ -111,7 +109,7 @@ vi.mock('./use-native-chat-skills', () => ({
 }))
 vi.mock('./use-native-chat-composer-attachments', () => ({
   useNativeChatComposerAttachments: () => ({
-    imageAttachments: mocks.imageAttachments,
+    imageAttachments: [],
     attachResolvedPaths: vi.fn(),
     clearImageAttachments: vi.fn(),
     removeImageAttachment: vi.fn()
@@ -152,7 +150,6 @@ describe('NativeChatComposer', () => {
     mocks.fieldProps = null
     mocks.modelSwitchOutcome = 'applied'
     mocks.draft = 'hello'
-    mocks.imageAttachments = []
     mocks.draftScopeKeys.length = 0
     mocks.confirmationObserver = null
     mocks.createClaudeModelSwitchConfirmationObserver.mockImplementation(() => {
@@ -245,85 +242,6 @@ describe('NativeChatComposer', () => {
 
     expect(onOptimisticSend).toHaveBeenCalledWith('hello', [])
     expect(mocks.trackPendingSend).toHaveBeenCalledWith(mocks.sendHandle, 'pending-1')
-  })
-
-  it('routes structured sends and hydrated options through the existing composer', async () => {
-    const send = vi.fn(() => true)
-    const dispatchCommand = vi.fn(async () => ({
-      handled: false,
-      accepted: false,
-      error: null
-    }))
-    const optionsSurface = {
-      getSnapshot: () => [],
-      setOption: vi.fn(),
-      invokeAction: vi.fn(),
-      subscribe: () => () => {}
-    } satisfies SessionOptionsSurface
-    const optionSnapshot = [{ id: 'model' }] as SessionOptionDescriptor[]
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:structured"
-        targetPtyId={null}
-        agent="codex"
-        structuredTransport={{
-          send,
-          dispatchCommand,
-          optionsSurface,
-          optionSnapshot,
-          onError: vi.fn(),
-          runtime: 'local'
-        }}
-      />
-    )
-
-    expect(mocks.fieldProps?.sessionOptionsSurface).toBe(optionsSurface)
-    expect(mocks.fieldProps?.sessionOptionsSnapshot).toBe(optionSnapshot)
-    expect(mocks.fieldProps?.attachDisabled).toBe(false)
-    await act(async () => mocks.fieldProps?.onSend?.())
-
-    expect(dispatchCommand).toHaveBeenCalledWith('hello')
-    expect(send).toHaveBeenCalledWith('hello', [])
-    expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
-    expect(mocks.setDraft).toHaveBeenCalledWith('')
-  })
-
-  it('sends structured image attachments through the durable transport', async () => {
-    mocks.draft = ''
-    mocks.imageAttachments = [{ id: 'image-1', path: '/tmp/image.png' }]
-    const send = vi.fn(() => true)
-    render(
-      <NativeChatComposer
-        terminalTabId="tab-1"
-        paneKey="tab-1:structured"
-        targetPtyId={null}
-        agent="codex"
-        structuredTransport={{
-          send,
-          dispatchCommand: vi.fn(async () => ({
-            handled: false,
-            accepted: false,
-            error: null
-          })),
-          optionsSurface: {
-            getSnapshot: () => [],
-            setOption: vi.fn(),
-            invokeAction: vi.fn(),
-            subscribe: () => () => {}
-          },
-          optionSnapshot: [],
-          worktreeId: 'wt-1',
-          onError: vi.fn(),
-          runtime: 'local'
-        }}
-      />
-    )
-
-    await act(async () => mocks.fieldProps?.onSend?.())
-
-    expect(send).toHaveBeenCalledWith('', mocks.imageAttachments)
-    expect(mocks.setDraft).toHaveBeenCalledWith('')
   })
 
   it('types Codex slash composer sends instead of pasting them', () => {

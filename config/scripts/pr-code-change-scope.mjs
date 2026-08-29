@@ -93,18 +93,8 @@ const CROSS_VERSION_WIRE_PREFIXES = [
   'src/shared/browser-client-host-protocol',
   'src/shared/browser-network-tunnel-protocol',
   'src/shared/browser-client-host-placement',
-  'src/shared/agent-session-wire',
-  'src/shared/agent-session-mutation-envelope',
-  'src/shared/agent-session-journal-',
-  'src/main/ai-vault/structured-session-ownership.ts',
-  'src/main/native-chat/agent-session-journal/',
-  'src/main/native-chat/agent-session-wire/',
-  'src/main/runtime/agent-session-record-store',
   'src/main/runtime/rpc/dispatcher',
-  'src/main/runtime/rpc/methods/ai-vault.ts',
   'src/main/runtime/rpc/methods/browser-tab-create-schema',
-  'src/main/runtime/rpc/methods/session-tabs.ts',
-  'src/main/runtime/rpc/methods/structured-agent-session',
   'src/main/runtime/rpc/methods/terminal',
   'src/renderer/src/runtime/remote-runtime-terminal-multiplexer'
 ]

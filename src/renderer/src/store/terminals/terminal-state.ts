@@ -89,8 +89,6 @@ export type TerminalState = {
   tabBarOrderByWorktree: Record<string, string[]>
   /** False until global reconnect publishes every deferred wake hint. */
   workspaceSessionReady: boolean
-  /** True after main ownership restoration, renderer PTY adoption, and structured-tab projection settle. */
-  terminalStartupRestorationReady: boolean
   restoredRuntimeHostIdByWorkspaceSessionKey: Record<string, ExecutionHostId>
   defaultTerminalTabsAppliedByWorktreeId: Record<string, true>
   closedTerminalTabTombstonesByTabId: ClosedTerminalTabTombstonesByTabId

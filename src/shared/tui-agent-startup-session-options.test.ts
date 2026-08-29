@@ -140,22 +140,15 @@ describe('tui agent startup session options', () => {
     expect(plan?.sessionOptions).toEqual({ model: 'opus', effort: 'high' })
   })
 
-  it('applies explicit session options to resume commands', () => {
+  it('never injects session options into resume commands', () => {
     const plan = buildAgentResumeStartupPlan({
       agent: 'codex',
       providerSession: { key: 'session_id', id: 'thread-1' },
       cmdOverrides: {},
       platform: 'linux',
-      agentArgs: '-m gpt-5.6-sol -c model_reasoning_effort=medium',
-      sessionOptions: { model: 'gpt-5.5', effort: 'high' },
-      sessionOptionsOverrideAgentArgs: true
+      sessionOptions: { model: 'gpt-5.5', effort: 'high' }
     })
-    expect(plan?.launchCommand).toBe(
-      "codex '-m' 'gpt-5.5' '-c' 'model_reasoning_effort=high' 'resume' 'thread-1'"
-    )
-    expect(plan?.launchConfig.agentCommand).toBe(
-      "codex '-m' 'gpt-5.6-sol' '-c' 'model_reasoning_effort=medium'"
-    )
-    expect(plan?.sessionOptions).toEqual({ model: 'gpt-5.5', effort: 'high' })
+    expect(plan?.launchCommand).toBe("codex 'resume' 'thread-1'")
+    expect(plan?.sessionOptions).toBeUndefined()
   })
 })

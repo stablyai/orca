@@ -11,7 +11,6 @@ import { setBoundedScopeCacheEntry } from './native-chat-composer-scope-cache'
 
 export type UseNativeChatComposerAttachmentsArgs = {
   attachmentScopeKey: string
-  allowWithoutTarget?: boolean
   caret: number
   resolveTarget: () => NativeChatResolvedTarget | null
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -22,7 +21,6 @@ export type UseNativeChatComposerAttachmentsArgs = {
 
 export function useNativeChatComposerAttachments({
   attachmentScopeKey,
-  allowWithoutTarget = false,
   caret,
   resolveTarget,
   textareaRef,
@@ -109,10 +107,7 @@ export function useNativeChatComposerAttachments({
   const attachResolvedPaths = useCallback(
     (paths: string[]) => {
       const target = resolveTarget()
-      if (
-        (!target && !allowWithoutTarget) ||
-        (target && nativeChatComposerTargetIsRemote(target.ptyId))
-      ) {
+      if (!target || nativeChatComposerTargetIsRemote(target.ptyId)) {
         setNotice(
           translate(
             'components.native-chat.composer.localAttachmentUnsupported',
@@ -133,14 +128,7 @@ export function useNativeChatComposerAttachments({
         requestAnimationFrame(() => textareaRef.current?.focus())
       }
     },
-    [
-      allowWithoutTarget,
-      appendImageAttachments,
-      insertFileReferences,
-      resolveTarget,
-      setNotice,
-      textareaRef
-    ]
+    [appendImageAttachments, insertFileReferences, resolveTarget, setNotice, textareaRef]
   )
 
   return {

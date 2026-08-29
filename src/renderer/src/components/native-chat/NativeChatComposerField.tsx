@@ -18,7 +18,6 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
-import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerFieldProps = {
   textareaRef: RefObject<HTMLTextAreaElement | null>
@@ -55,7 +54,6 @@ export type NativeChatComposerFieldProps = {
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
-  sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
 }
 
 export type NativeChatComposerImageAttachment = {
@@ -97,8 +95,7 @@ export function NativeChatComposerField({
   onSend,
   onStop,
   sessionOptionsSurface,
-  sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsSnapshot
 }: NativeChatComposerFieldProps): React.JSX.Element {
   return (
     <div className="shrink-0 bg-background">
@@ -216,7 +213,6 @@ export function NativeChatComposerField({
                 onStop={onStop}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
-                sessionOptionsPickerRequest={sessionOptionsPickerRequest}
               />
             </div>
           </div>

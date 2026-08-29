@@ -22,7 +22,6 @@ export type TabGroupWorktreeSnapshot = {
 
 export type GroupEditorItem = OpenFile & { tabId: string }
 export type GroupBrowserItem = BrowserTabState & { tabId: string }
-export type GroupAgentSessionItem = Tab & { contentType: 'agent-session' }
 
 type TerminalTabItem = TerminalTab & { unifiedTabId: string }
 
@@ -119,14 +118,6 @@ export function useTabGroupItemProjections({
     [groupTabs, worktreeState.browserTabs]
   )
 
-  const agentSessionItems = useMemo<GroupAgentSessionItem[]>(
-    () =>
-      groupTabs.filter(
-        (item): item is GroupAgentSessionItem => item.contentType === 'agent-session'
-      ),
-    [groupTabs]
-  )
-
   const tabBarOrder = useMemo(
     () =>
       (group?.tabOrder ?? []).map((itemId) => {
@@ -141,14 +132,5 @@ export function useTabGroupItemProjections({
     [group, groupTabs]
   )
 
-  return {
-    group,
-    groupTabs,
-    activeTab,
-    terminalTabs,
-    editorItems,
-    browserItems,
-    agentSessionItems,
-    tabBarOrder
-  }
+  return { group, groupTabs, activeTab, terminalTabs, editorItems, browserItems, tabBarOrder }
 }

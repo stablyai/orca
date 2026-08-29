@@ -26,10 +26,7 @@ function forceWorkspaceSessionReady(): void {
     workspaceSessionReady: true,
     pendingReconnectWorktreeIds: [],
     pendingReconnectTabByWorktree: {},
-    pendingReconnectPtyIdByTabId: {},
-    // Why: the activation gate waits on this flag; a degraded boot must still release it
-    // or no worktree ever gets its fallback terminal.
-    terminalStartupRestorationReady: true
+    pendingReconnectPtyIdByTabId: {}
   })
 }
 

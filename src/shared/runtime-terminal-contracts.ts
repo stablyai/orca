@@ -1,4 +1,3 @@
-import type { AgentSessionPtyWriteRefusal } from './agent-session-pty-write-admission'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -203,11 +202,6 @@ export type RuntimeTerminalSend = {
   accepted: boolean
   bytesWritten: number
   refusedReason?: 'no-agent' | 'permission'
-  /**
-   * Present only when a durable agent-session lease refused the write. Additive and optional: an
-   * old client sees the `accepted: false` it already handles and ignores this field.
-   */
-  agentSessionRefusal?: AgentSessionPtyWriteRefusal
 }
 
 export type RuntimeTerminalAgentStatusState = 'working' | 'permission' | 'idle' | null
@@ -261,8 +255,6 @@ export type RuntimeTerminalCreate = {
   warning?: string
   agentSessionDisposition?: 'created' | 'adopted'
   isReattach?: true
-  /** Spawn process identity for host-internal ownership proof. */
-  processId?: number
 }
 
 export type RuntimeTerminalSplit = {

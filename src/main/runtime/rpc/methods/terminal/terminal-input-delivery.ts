@@ -1,4 +1,3 @@
-import { isAgentSessionPtyWriteRefusedError } from '../../../../../shared/agent-session-pty-write-admission'
 import { InvalidArgumentError } from '../../core'
 import type {
   DriverState,
@@ -92,11 +91,6 @@ export function watchSubscriptionLifetime(
 }
 
 export function isTerminalStreamInputRejection(error: unknown): boolean {
-  // Why: a lease refusal is a deliberate rejection, not a transport failure, so the stream reports
-  // it through the WriteUnavailable frame old clients already decode rather than a new opcode.
-  if (isAgentSessionPtyWriteRefusedError(error)) {
-    return true
-  }
   const message = error instanceof Error ? error.message : String(error)
   return message.includes('terminal_not_writable') || message.includes('terminal_handle_stale')
 }

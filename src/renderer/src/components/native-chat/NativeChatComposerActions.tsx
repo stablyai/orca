@@ -7,7 +7,6 @@ import type {
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
-import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 
 export type NativeChatComposerActionsProps = {
   attachDisabled: boolean
@@ -24,7 +23,6 @@ export type NativeChatComposerActionsProps = {
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
-  sessionOptionsPickerRequest?: NativeChatOptionPickerRequest | null
 }
 
 export function NativeChatComposerActions({
@@ -41,21 +39,8 @@ export function NativeChatComposerActions({
   onSend,
   onStop,
   sessionOptionsSurface,
-  sessionOptionsSnapshot,
-  sessionOptionsPickerRequest
+  sessionOptionsSnapshot
 }: NativeChatComposerActionsProps): React.JSX.Element {
-  const handleCriticalAction = (event: React.MouseEvent<HTMLButtonElement>): void => {
-    // A double-click commonly lands after the first send has started and the button has
-    // changed to Stop; ignore the second click instead of cancelling the new turn.
-    if (event.detail > 1) {
-      return
-    }
-    if (isWorking) {
-      onStop?.()
-    } else {
-      onSend()
-    }
-  }
   const dictationLabel = isDictating
     ? translate('components.native-chat.composer.stopDictation', 'Stop dictation')
     : translate('components.native-chat.composer.startDictation', 'Start dictation')
@@ -88,7 +73,6 @@ export function NativeChatComposerActions({
           surface={sessionOptionsSurface}
           snapshot={sessionOptionsSnapshot}
           isWorking={isWorking}
-          pickerRequest={sessionOptionsPickerRequest}
         />
         <Tooltip>
           <TooltipTrigger asChild>
@@ -136,14 +120,13 @@ export function NativeChatComposerActions({
         </Tooltip>
         <Button
           type="button"
-          data-native-chat-critical-action={isWorking ? 'stop' : undefined}
           aria-label={
             isWorking
               ? translate('components.native-chat.stop', 'Stop the agent')
               : translate('components.native-chat.composer.send', 'Send')
           }
           disabled={sendDisabled}
-          onClick={handleCriticalAction}
+          onClick={isWorking ? onStop : onSend}
           variant={isWorking ? 'secondary' : 'default'}
           size="icon"
           className="size-8 rounded-full pointer-coarse:size-10"

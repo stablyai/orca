@@ -71,7 +71,6 @@ function makeDispatcher(): RpcDispatcher {
   // which delegates to the shared cache module the IPC handler also uses.
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
     listAiVaultSessions: (args?: Parameters<typeof listAiVaultSessions>[0]) =>
       listAiVaultSessions(args),
     resolveAiVaultSessionTitles: (requests: unknown[], signal?: AbortSignal) =>
@@ -83,7 +82,6 @@ function makeDispatcher(): RpcDispatcher {
 function makeFailingDispatcher(error: Error): RpcDispatcher {
   const runtime = {
     getRuntimeId: () => 'test-runtime',
-    ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
     listAiVaultSessions: vi.fn().mockRejectedValue(error)
   } as unknown as OrcaRuntimeService
   return new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })
@@ -197,7 +195,6 @@ describe('aiVault.prepareSessionResume', () => {
     const prepareAiVaultSessionResume = vi.fn().mockResolvedValue({ useRealCodexHome: true })
     const runtime = {
       getRuntimeId: () => 'test-runtime',
-      ensureStructuredAgentSessionHost: vi.fn(async () => undefined),
       prepareAiVaultSessionResume
     } as unknown as OrcaRuntimeService
     const dispatcher = new RpcDispatcher({ runtime, methods: AI_VAULT_METHODS })

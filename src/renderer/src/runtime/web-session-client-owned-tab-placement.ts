@@ -144,14 +144,7 @@ export function reconcileClientOwnedTabPlacement(
     if (working.has(requestedGroupId) || layoutGroupIds.has(requestedGroupId)) {
       return requestedGroupId
     }
-    // Why: with no local group to join, repair the rendered leaf first; failing that,
-    // materialize the requested group so a tab is never published into an unrendered one.
-    return (
-      activeGroupIdIfValid ??
-      groupOrder[0] ??
-      layoutGroupIds.values().next().value ??
-      requestedGroupId
-    )
+    return activeGroupIdIfValid ?? groupOrder[0]
   }
 
   const movedTabIds = new Set<string>()

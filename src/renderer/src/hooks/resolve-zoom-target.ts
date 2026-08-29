@@ -4,7 +4,7 @@
  */
 export function resolveZoomTarget(args: {
   activeView: TopLevelView
-  activeTabType: WorkspaceVisibleTabType
+  activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator'
   activeElement: unknown
 }): 'terminal' | 'editor' | 'simulator' | 'ui' {
   const { activeView, activeTabType, activeElement } = args
@@ -55,4 +55,3 @@ export function resolveZoomTarget(args: {
   return 'ui'
 }
 import type { TopLevelView } from '../../../shared/ui-chrome-types'
-import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'

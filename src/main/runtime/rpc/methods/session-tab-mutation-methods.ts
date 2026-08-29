@@ -1,11 +1,14 @@
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { defineMethod, type RpcAnyMethod } from '../core'
+import { projectSessionTabAgentStatus } from './session-tab-agent-status-projection'
 import {
   assertProjectedSessionTabVisible,
+  clientCanObserveClientHostedBrowserPages,
+  projectSessionTabBrowserPlacements,
   translateProjectedSessionTabMove
 } from './session-tab-browser-placement-projection'
-import { projectSessionTabsForClient } from './session-tabs-inventory'
 import { ActivateTab, MoveTab, SetTabProps, UpdatePaneLayout } from './session-tabs-schemas'
 
 export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
@@ -13,10 +16,9 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
     name: 'session.tabs.activate',
     params: ActivateTab,
     handler: async (params, { runtime, clientKind, pairedDeviceId, clientCapabilities }) => {
-      if (clientKind) {
-        const visible = projectSessionTabsForClient(
+      if (clientKind && !clientCanObserveClientHostedBrowserPages(clientCapabilities)) {
+        const visible = projectSessionTabBrowserPlacements(
           await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId),
-          clientKind,
           clientCapabilities
         )
         assertProjectedSessionTabVisible(visible, params.tabId)
@@ -44,9 +46,9 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
     params: MoveTab,
     handler: async (params, { runtime, pairedDeviceId, clientCapabilities, clientKind }) => {
       let translated: Parameters<typeof translateProjectedSessionTabMove>[2] = params
-      if (clientKind) {
+      if (clientKind && !clientCanObserveClientHostedBrowserPages(clientCapabilities)) {
         const raw = await runtime.listMobileSessionTabs(params.worktree, pairedDeviceId)
-        const projected = projectSessionTabsForClient(raw, clientKind, clientCapabilities)
+        const projected = projectSessionTabBrowserPlacements(raw, clientCapabilities)
         translated = translateProjectedSessionTabMove(raw, projected, params)
       }
       const base = { tabId: translated.tabId, targetGroupId: translated.targetGroupId }
@@ -113,7 +115,16 @@ export const SESSION_TAB_MUTATION_METHODS: RpcAnyMethod[] = [
   })
 ]
 
-const projectSessionTabsForMutationClient = projectSessionTabsForClient
+function projectSessionTabsForMutationClient(
+  snapshot: RuntimeMobileSessionTabsResult,
+  clientKind: 'mobile' | 'runtime' | undefined,
+  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
+): RuntimeMobileSessionTabsResult {
+  return projectSessionTabBrowserPlacements(
+    projectSessionTabAgentStatus(snapshot, clientKind, clientCapabilities),
+    clientCapabilities
+  )
+}
 
 async function assertVisibleMutationTab(
   runtime: OrcaRuntimeService,
@@ -121,14 +132,13 @@ async function assertVisibleMutationTab(
   tabId: string,
   pairedDeviceId: string | undefined,
   clientKind: 'mobile' | 'runtime' | undefined,
-  clientCapabilities: Parameters<typeof projectSessionTabsForClient>[2]
+  clientCapabilities: Parameters<typeof projectSessionTabAgentStatus>[2]
 ): Promise<void> {
-  if (!clientKind) {
+  if (!clientKind || clientCanObserveClientHostedBrowserPages(clientCapabilities)) {
     return
   }
-  const visible = projectSessionTabsForClient(
+  const visible = projectSessionTabBrowserPlacements(
     await runtime.listMobileSessionTabs(worktree, pairedDeviceId),
-    clientKind,
     clientCapabilities
   )
   assertProjectedSessionTabVisible(visible, tabId)

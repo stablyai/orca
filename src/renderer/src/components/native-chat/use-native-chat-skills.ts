@@ -43,13 +43,6 @@ const IDLE_STATE: StoredDiscoveryState = {
   error: null,
   contextKey: null
 }
-const MISSING_CONTEXT_STATE: StoredDiscoveryState = {
-  status: 'error',
-  skills: [],
-  error: new Error('Skill discovery context is unavailable.'),
-  errorKind: 'unknown',
-  contextKey: null
-}
 const inFlightDiscovery = new Map<string, Promise<SkillDiscoveryResult>>()
 
 export function isNativeChatSkillForAgent(
@@ -182,13 +175,11 @@ export function useNativeChatSkills(
 
   const effectiveState = useMemo(
     () =>
-      !profile || !enabled
+      !profile || !enabled || !context
         ? IDLE_STATE
-        : !context
-          ? MISSING_CONTEXT_STATE
-          : state.contextKey === context.key
-            ? state
-            : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
+        : state.contextKey === context.key
+          ? state
+          : { status: 'loading' as const, skills: [], error: null, contextKey: context.key },
     [context, enabled, profile, state]
   )
   const visibleSkills = useMemo(() => {

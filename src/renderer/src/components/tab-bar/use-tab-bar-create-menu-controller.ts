@@ -3,10 +3,7 @@ import { toast } from 'sonner'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { translate } from '@/i18n/i18n'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import {
-  launchAgentInNewTab,
-  shouldQueueTerminalFocusAfterMenuClose
-} from '@/lib/launch-agent-in-new-tab'
+import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import type { WindowsTerminalCapabilities } from '@/lib/windows-terminal-capabilities'
 import { useAppStore } from '../../store'
 import type { TabAgentLaunchOption } from './tab-agent-launch-options'
@@ -240,9 +237,7 @@ export function useTabBarCreateMenuController({
       queueTerminalTabFocusAfterNewTabMenuClose(result.tabId)
       return
     }
-    if (shouldQueueTerminalFocusAfterMenuClose(result)) {
-      queueNewActiveTerminalFocusAfterNewTabMenuClose()
-    }
+    queueNewActiveTerminalFocusAfterNewTabMenuClose()
   }
   const runPendingNewTabMenuFocusAfterClose = (): void => {
     const pendingFocus = pendingNewTabMenuFocusRef.current

@@ -61,7 +61,7 @@ describe('CodexRuntimeHomeService', () => {
       '',
       '[model_providers.codex-lb]',
       'base_url = "https://codex-lb.example.test/v1"',
-      'env_key = "EXAMPLE_GATEWAY_TOKEN"',
+      'env_key = "CODEX_LB_API_KEY"',
       ''
     ].join('\n')
     writeFileSync(canonicalConfigPath, canonicalConfig, 'utf-8')

@@ -9,7 +9,6 @@ import { isTerminalInputQuarantined } from './terminal-input-quarantine'
 
 const mocks = vi.hoisted(() => ({
   remountTerminalTabForRecovery: vi.fn<(tabId: string) => boolean>(() => true),
-  getTab: vi.fn<() => { viewMode?: 'terminal' | 'chat' } | null>(() => null),
   recordRendererCrashBreadcrumb: vi.fn(),
   hasPty: vi.fn<(id: string) => Promise<boolean | null>>(async () => true)
 }))
@@ -17,8 +16,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({
-      remountTerminalTabForRecovery: mocks.remountTerminalTabForRecovery,
-      getTab: mocks.getTab
+      remountTerminalTabForRecovery: mocks.remountTerminalTabForRecovery
     })
   }
 }))
@@ -31,8 +29,6 @@ beforeEach(() => {
   _resetTerminalPaneRecoveryForTests()
   mocks.remountTerminalTabForRecovery.mockClear()
   mocks.remountTerminalTabForRecovery.mockReturnValue(true)
-  mocks.getTab.mockClear()
-  mocks.getTab.mockReturnValue(null)
   mocks.recordRendererCrashBreadcrumb.mockClear()
   mocks.hasPty.mockClear()
   mocks.hasPty.mockResolvedValue(true)
@@ -49,20 +45,6 @@ afterEach(() => {
 })
 
 describe('requestTerminalPaneRecovery', () => {
-  it('does not remount a terminal surface hidden behind native chat', async () => {
-    mocks.getTab.mockReturnValue({ viewMode: 'chat' })
-
-    await expect(
-      requestTerminalPaneRecovery({
-        tabId: 'tab-1',
-        ptyId: 'pty-1',
-        reason: 'input-undeliverable'
-      })
-    ).resolves.toBe(false)
-    expect(mocks.remountTerminalTabForRecovery).not.toHaveBeenCalled()
-    expect(mocks.hasPty).not.toHaveBeenCalled()
-  })
-
   it('remounts the tab and records a breadcrumb for a certified-dead pipeline', async () => {
     const result = await requestTerminalPaneRecovery({
       tabId: 'tab-1',

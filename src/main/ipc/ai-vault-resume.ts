@@ -5,10 +5,8 @@ import type {
   AiVaultSessionResumePreparation
 } from '../../shared/ai-vault-resume-preparation'
 import { parseExecutionHostId } from '../../shared/execution-host'
-import { assertLegacyAiVaultResumeAllowed } from '../ai-vault/structured-session-ownership'
 
 export type AiVaultResumeHandlerOptions = {
-  ensureStructuredSessionOwnership?: () => Promise<void>
   prepareSessionResume?: AiVaultSessionResumePreparation
   prepareRuntimeSessionResume?: (
     environmentId: string,
@@ -26,8 +24,6 @@ export async function prepareAiVaultSessionResume(
   args: AiVaultPrepareSessionResumeArgs,
   options: AiVaultResumeHandlerOptions
 ): Promise<AiVaultPrepareSessionResumeResult> {
-  await options.ensureStructuredSessionOwnership?.()
-  assertLegacyAiVaultResumeAllowed(args)
   const executionHost = parseExecutionHostId(args.executionHostId)
   if (executionHost?.kind === 'runtime') {
     if (!options.prepareRuntimeSessionResume) {

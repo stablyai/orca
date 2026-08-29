@@ -51,6 +51,12 @@ type SortableTabProps = {
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
   includeTopTabBorder?: boolean
+  /** True when this agent terminal can switch to native chat view; surfaces the "Switch view" context-menu item. */
+  canToggleViewMode?: boolean
+  /** True when the tab is currently showing the native chat view. */
+  isChatView?: boolean
+  /** Toggle the tab between terminal and native chat view. */
+  onToggleViewMode?: () => void
 }
 
 export const CLOSE_ALL_CONTEXT_MENUS_EVENT = 'orca-close-all-context-menus'
@@ -76,7 +82,10 @@ export default function SortableTab({
   onToggleExpand,
   dragData,
   dropIndicator,
-  includeTopTabBorder = true
+  includeTopTabBorder = true,
+  canToggleViewMode = false,
+  isChatView = false,
+  onToggleViewMode
 }: SortableTabProps): React.JSX.Element {
   // Why: agent-completion unread exists even with terminal-attention off; collapse both sources to one primitive so unrelated tabs don't re-render.
   const hasUnreadActivity = useAppStore((s) =>
@@ -426,6 +435,9 @@ export default function SortableTab({
         onRenameOpen={handleRenameOpen}
         onSetTabColor={onSetTabColor}
         onTogglePin={onTogglePin}
+        canToggleViewMode={canToggleViewMode}
+        isChatView={isChatView}
+        onToggleViewMode={onToggleViewMode}
       />
     </>
   )

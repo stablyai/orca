@@ -67,12 +67,6 @@ const aiVaultSessionSchema = z.object({
   queuedMessageCount: z.number().default(0),
   subagentTranscriptCount: z.number().default(0),
   resumeCommand: z.string(),
-  structuredSession: z
-    .object({
-      sessionId: z.string().min(1).max(512),
-      workspaceId: z.string().min(1).max(512)
-    })
-    .optional(),
   subagent: z
     .object({
       parentSessionId: z.string(),

@@ -3,8 +3,7 @@ import type { AiVaultSession } from './ai-vault-types'
 export type AiVaultPrepareSessionResumeArgs = Pick<
   AiVaultSession,
   'agent' | 'filePath' | 'codexHome' | 'executionHostId'
-> &
-  Partial<Pick<AiVaultSession, 'sessionId'>>
+>
 
 export type AiVaultPrepareSessionResumeResult = {
   useRealCodexHome: boolean

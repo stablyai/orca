@@ -15,7 +15,6 @@ import {
 } from './native-chat-session-option-state'
 
 export type NativeChatSessionOptionMode = 'draft' | 'live'
-export type NativeChatLiveOptionTransport = 'catalog' | 'agent-session'
 
 function choiceWithCurrent(
   choices: readonly SessionOptionSelectChoice[],
@@ -31,7 +30,6 @@ function choiceWithCurrent(
 
 function settableState(args: {
   mode: NativeChatSessionOptionMode
-  liveTransport: NativeChatLiveOptionTransport
   apply: { launchArgs?: unknown; composedIntoModel?: true; midSession?: CatalogMidSessionApply }
   composedModelApply?: { midSession?: CatalogMidSessionApply }
 }): Pick<SessionOptionDescriptor, 'settable' | 'disabledReason'> {
@@ -39,9 +37,6 @@ function settableState(args: {
     return args.apply.launchArgs || args.apply.composedIntoModel
       ? { settable: true }
       : { settable: false, disabledReason: 'available-after-session-start' }
-  }
-  if (args.liveTransport === 'agent-session') {
-    return { settable: true }
   }
   if (args.apply.composedIntoModel && args.composedModelApply?.midSession?.kind === 'command') {
     return { settable: true }
@@ -55,10 +50,9 @@ function settableState(args: {
 function actionForApply(
   apply: { midSession?: CatalogMidSessionApply },
   tracked: TrackedNativeChatSessionOption | undefined,
-  mode: NativeChatSessionOptionMode,
-  liveTransport: NativeChatLiveOptionTransport
+  mode: NativeChatSessionOptionMode
 ): SessionOptionDescriptor['action'] {
-  if (mode !== 'live' || liveTransport === 'agent-session') {
+  if (mode !== 'live') {
     return undefined
   }
   if (apply.midSession?.kind === 'agent-picker') {
@@ -73,13 +67,12 @@ function optionDescriptor(args: {
   option: CatalogOption
   tracked: TrackedNativeChatSessionOption | undefined
   mode: NativeChatSessionOptionMode
-  liveTransport: NativeChatLiveOptionTransport
   modelIsCliDefault: boolean
   composedModelApply: AgentSessionOptionCatalog['modelApply']
 }): SessionOptionDescriptor | null {
-  const { option, tracked, mode, liveTransport, modelIsCliDefault, composedModelApply } = args
-  const action = actionForApply(option.apply, tracked, mode, liveTransport)
-  const settable = settableState({ mode, liveTransport, apply: option.apply, composedModelApply })
+  const { option, tracked, mode, modelIsCliDefault, composedModelApply } = args
+  const action = actionForApply(option.apply, tracked, mode)
+  const settable = settableState({ mode, apply: option.apply, composedModelApply })
   // Why: the launch only emits `values[id] ?? defaultValue` alongside a model flag, so
   // a draft names this option's value exactly when a model was picked. Under the CLI's
   // own default no flag is sent at all, and the CLI's unstated choice is not ours to name.
@@ -202,9 +195,8 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   record: NativeChatSessionOptionRecord
   mode: NativeChatSessionOptionMode
   modelLabel: string
-  liveTransport?: NativeChatLiveOptionTransport
 }): SessionOptionDescriptor[] {
-  const { catalog, models, record, mode, modelLabel, liveTransport = 'catalog' } = args
+  const { catalog, models, record, mode, modelLabel } = args
   if (models.length === 0) {
     return []
   }
@@ -220,7 +212,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
   const trackedModelId = typeof modelTracked?.value === 'string' ? modelTracked.value : null
   const defaultModelId = cliDefaultModelId(catalog, models, trackedModelId)
   const effectiveModelId = trackedModelId ?? defaultModelId
-  const modelAction = actionForApply(catalog.modelApply, modelTracked, mode, liveTransport)
+  const modelAction = actionForApply(catalog.modelApply, modelTracked, mode)
   const snapshot: SessionOptionDescriptor[] = [
     {
       id: 'model',
@@ -232,7 +224,7 @@ export function buildNativeChatSessionOptionSnapshot(args: {
         choices: modelChoices
       },
       valueSource: modelTracked?.source ?? (defaultModelId ? 'default' : 'unknown'),
-      ...settableState({ mode, liveTransport, apply: catalog.modelApply }),
+      ...settableState({ mode, apply: catalog.modelApply }),
       ...(modelAction ? { action: modelAction } : {})
     }
   ]
@@ -246,7 +238,6 @@ export function buildNativeChatSessionOptionSnapshot(args: {
       option,
       tracked: trackedValues[option.id],
       mode,
-      liveTransport,
       modelIsCliDefault: effectiveModelId === defaultModelId,
       composedModelApply: catalog.modelApply
     })

@@ -32,12 +32,9 @@ import {
 import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { RELAY_WINDOWS_PROCESS_TREE_FILENAME } from '../../src/shared/relay-artifacts.ts'
-import {
-  nodeGypRebuildInvocation,
-  WINDOWS_PROCESS_TREE_PACKAGE_DIR as PACKAGE_DIR
-} from './windows-process-tree-gyp-rebuild.mjs'
 
 const ROOT = resolve(import.meta.dirname, '..', '..')
+const PACKAGE_DIR = join(ROOT, 'node_modules', '@vscode', 'windows-process-tree')
 const SUPPORTED_ARCHES = ['x64', 'arm64']
 
 /** PE `IMAGE_FILE_HEADER.Machine` values, so a cross-build cannot silently emit host arch. */
@@ -172,9 +169,12 @@ function main() {
   applyWindowsProcessTreeBuildFixes()
   assertPatchApplied()
 
-  const gyp = nodeGypRebuildInvocation(arch)
-  console.log(`[windows-process-tree] building ${arch} from ${gyp.cwd}`)
-  execFileSync(process.execPath, gyp.args, { cwd: gyp.cwd, stdio: 'inherit' })
+  console.log(`[windows-process-tree] building ${arch} from ${PACKAGE_DIR}`)
+  execFileSync(
+    process.execPath,
+    [join(ROOT, 'node_modules', 'node-gyp', 'bin', 'node-gyp.js'), 'rebuild', `--arch=${arch}`],
+    { cwd: PACKAGE_DIR, stdio: 'inherit' }
+  )
 
   const built = join(PACKAGE_DIR, 'build', 'Release', 'windows_process_tree.node')
   if (!existsSync(built)) {

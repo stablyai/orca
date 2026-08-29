@@ -96,7 +96,6 @@ export function VaultSessionRow({
       writeAiVaultSessionDragData(event.dataTransfer, {
         agent: session.agent,
         sessionId: session.sessionId,
-        ...(session.structuredSession ? { structuredSession: session.structuredSession } : {}),
         title: session.title,
         command: resumeStartup.command,
         sessionFilePath: session.filePath,

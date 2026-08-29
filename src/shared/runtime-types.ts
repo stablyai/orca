@@ -114,7 +114,6 @@ export type {
   RuntimeBrowserDriverState,
   RuntimeDesktopWindowStatus,
   RuntimeGraphStatus,
-  RuntimeMobileSessionAgentTab,
   RuntimeMobileSessionBrowserTab,
   RuntimeMobileSessionClientTab,
   RuntimeMobileSessionCreateTerminalResult,

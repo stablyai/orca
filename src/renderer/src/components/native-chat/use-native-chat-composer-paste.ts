@@ -5,7 +5,6 @@ import type { AgentType } from '../../../../shared/agent-status-types'
 import { resolveImagePaste } from './native-chat-image-paste'
 import { NATIVE_CHAT_CONTEXT_PASTE_MAX_BYTES } from './native-chat-composer-target'
 import {
-  nativeChatLocalAttachmentUnsupportedNotice,
   nativeChatWorktreeNotReadyNotice,
   type NativeChatAttachmentOwner
 } from './native-chat-attachment-upload'
@@ -74,10 +73,6 @@ export function useNativeChatComposerPaste({
     async (
       owner: NativeChatAttachmentOwner
     ): Promise<{ status: 'saved'; tempPath: string } | { status: 'empty' | 'failed' }> => {
-      if (owner.kind === 'runtime') {
-        setNotice(nativeChatLocalAttachmentUnsupportedNotice())
-        return { status: 'failed' }
-      }
       try {
         // SSH panes save the image on the remote host (SFTP) so the attached
         // path is readable by the remote agent, matching terminal image paste.

@@ -5,8 +5,6 @@ import {
   type WorkerSetupReceipt
 } from './orchestration-worker-topology'
 import type { OrchestrationWorkerLaunchReceipt } from './orchestration-worker-launch-preferences'
-import { isAgentSessionPtyWriteRefusedError } from '../../../../shared/agent-session-pty-write-admission'
-import { structuredChatPtyWriteRefusalCopy } from '../../../../shared/agent-session-pty-write-refusal-copy'
 
 export function failWorkerStartWithReceipt(args: {
   db: OrchestrationDb
@@ -18,13 +16,7 @@ export function failWorkerStartWithReceipt(args: {
   setup: WorkerSetupReceipt
   launch: OrchestrationWorkerLaunchReceipt
 }): unknown {
-  const agentSessionRefusal = isAgentSessionPtyWriteRefusedError(args.error)
-    ? args.error.refusal
-    : undefined
-  const reason =
-    (agentSessionRefusal &&
-      structuredChatPtyWriteRefusalCopy(agentSessionRefusal, 'worker-start')) ??
-    (args.error instanceof Error ? args.error.message : String(args.error))
+  const reason = args.error instanceof Error ? args.error.message : String(args.error)
   const unknown = isUnknownWorkerStartOutcome(args.error, args.failedStage)
   const worker = unknown
     ? args.db.markWorkerStartUnknown(args.dispatchId, args.failedStage, reason)
@@ -45,7 +37,6 @@ export function failWorkerStartWithReceipt(args: {
     launch: args.launch,
     effects: JSON.parse(worker.effects) as unknown[],
     residualResources: JSON.parse(worker.residual_resources) as unknown[],
-    ...(agentSessionRefusal ? { agentSessionRefusal } : {}),
     ...(unknown
       ? {
           nextCommands: [

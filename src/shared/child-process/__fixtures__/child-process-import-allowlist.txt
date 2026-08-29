@@ -14,8 +14,6 @@
 # `detached: true` for a process-group kill, a synchronous taskkill, and an stdio shape other
 # than all-pipes (a long-lived `ssh -N` must not be handed a stdin pipe nobody closes).
 # Migrating them means teaching run-process.ts those options first.
-# codex-app-server-posix-supervisor.ts requires child_process only inside its
-# dependency-free POSIX supervisor script, never in Orca's process.
 #
 # The src/main/git/command-runner/* entries are the seven spawn sites that used
 # to live in the single line src/main/git/runner.ts; splitting that file moved
@@ -46,7 +44,6 @@ src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/runtime-home-service.ts
 src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-client.ts
-src/main/codex/codex-app-server-posix-supervisor.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
 src/main/codex/codex-wsl-hook-install-plan.ts

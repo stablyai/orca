@@ -120,9 +120,9 @@ export function createProcessTableSnapshotReader(
   }
 }
 
-export const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
+const readProcessTable = createProcessTableSnapshotReader(readFreshProcessTable)
 
-export function readProcessTableBeforeDeadline(
+function readProcessTableBeforeDeadline(
   readTable: ProcessTableReader,
   timeoutMs: number
 ): Promise<ProcessTableCapture | null> {
@@ -298,7 +298,7 @@ export async function killWithDescendantSweep(
   }
 }
 
-export function sendDescendantSignal(pid: number, signal: NodeJS.Signals): void {
+function defaultSendSignal(pid: number, signal: NodeJS.Signals): void {
   try {
     process.kill(pid, signal)
   } catch {
@@ -306,14 +306,14 @@ export function sendDescendantSignal(pid: number, signal: NodeJS.Signals): void 
   }
 }
 
-export type TerminateDeps = {
+type TerminateDeps = {
   readTable?: ProcessTableReader
   sendSignal?: SignalSender
   graceMs?: number
   timeoutMs?: number
 }
 
-export function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
+function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
   const startedAtMs = Date.parse(row.startedAt)
   if (!Number.isFinite(startedAtMs)) {
     return false
@@ -333,7 +333,7 @@ export function terminateDescendantSnapshot(
   snapshot: DescendantSnapshot,
   deps: TerminateDeps = {}
 ): void {
-  const sendSignal = deps.sendSignal ?? sendDescendantSignal
+  const sendSignal = deps.sendSignal ?? defaultSendSignal
   const readTable = deps.readTable ?? readProcessTable
   for (const row of snapshot.descendants) {
     sendSignal(row.pid, 'SIGTERM')

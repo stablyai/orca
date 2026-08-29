@@ -18,39 +18,11 @@ import {
 } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
-import { agentSessionPtyWriteGate } from '../../../runtime/agent-session-pty-write-gate'
-import { reportAgentSessionWriteRefusal } from '../agent-session-write-refusal-report'
 
-export function writePtyFromRuntimeController(
-  deps: PtyRuntimeControllerDeps,
-  ptyId: string,
-  data: string
-): boolean {
-  // Why: the backstop for every runtime write path — query replies, followups, deliveries —
-  // so a caller that forgets the typed gate still cannot reach a provider.
-  const admission = agentSessionPtyWriteGate.admit(ptyId)
-  if (!admission.admitted) {
-    reportAgentSessionWriteRefusal(deps.mainWindow, ptyId, admission.refusal)
-    return false
-  }
+export function writePtyFromRuntimeController(ptyId: string, data: string): boolean {
   try {
     getProviderForPty(ptyId).write(ptyId, data)
     return true
-  } catch {
-    return false
-  }
-}
-
-export function writePtyAgentSessionProofFromRuntimeController(
-  ptyId: string,
-  data: string,
-  authority: { sessionId: string; spawnToken: string }
-): boolean {
-  if (!agentSessionPtyWriteGate.admitProof(ptyId, authority)) {
-    return false
-  }
-  try {
-    return getProviderForPty(ptyId).write(ptyId, data) !== false
   } catch {
     return false
   }

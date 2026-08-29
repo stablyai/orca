@@ -2,7 +2,6 @@ import {
   spawn as nodeSpawn,
   spawnSync as nodeSpawnSync,
   type ChildProcess,
-  type ChildProcessWithoutNullStreams,
   type SpawnOptions as NodeSpawnOptions
 } from 'node:child_process'
 import { buildWindowsCmdShimCommandLine, isCmdInterpretedProgram } from './windows-command-line'
@@ -149,13 +148,9 @@ export function resolveSpawn(spec: ProcessSpec, platform: NodeJS.Platform): Reso
  * `runProcess` handles that for you; here it cannot, because a blanket handler
  * would also defeat callers that track and remove their own listeners.
  */
-export function spawnProcess(spec: ProcessSpec): ChildProcessWithoutNullStreams {
+export function spawnProcess(spec: ProcessSpec): ChildProcess {
   const resolved = resolveSpawn(spec, process.platform)
-  return nodeSpawn(
-    resolved.file,
-    [...resolved.args],
-    resolved.options
-  ) as ChildProcessWithoutNullStreams
+  return nodeSpawn(resolved.file, [...resolved.args], resolved.options)
 }
 
 /**

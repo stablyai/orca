@@ -1,7 +1,6 @@
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { isValidHostTerminalTabId } from '../../../../shared/terminal-tab-id'
-import { emptyLayoutSnapshot, singlePaneLayoutSnapshot } from '../slices/terminal-helpers'
-import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { emptyLayoutSnapshot } from '../slices/terminal-helpers'
 import {
   buildOrphanTerminalCleanupPatch,
   getOrphanTerminalIds
@@ -38,19 +37,6 @@ export function getNextTerminalOrdinal(tabs: TerminalTab[]): number {
   return nextOrdinal
 }
 
-type TabStartupCommand = TerminalSlice['pendingStartupByTabId'][string]
-
-function normalizeTabStartupCommand(startup: TabStartupCommand): TabStartupCommand {
-  // Why: launchToken is only meaningful for tracked launch-config reuse; plain startup commands must not mint a synthetic token.
-  const launchToken = startup.launchConfig
-    ? (startup.launchToken ?? createBrowserUuid())
-    : undefined
-  return {
-    ...startup,
-    ...(launchToken ? { launchToken } : {})
-  }
-}
-
 export function createTerminalTabCreationActions(
   set: TerminalStoreSet,
   get: TerminalStoreGet
@@ -80,15 +66,6 @@ export function createTerminalTabCreationActions(
           )
         }
         const id = hintedId !== undefined && !idCollides ? hintedId : createBrowserUuid()
-        const requestedInitialLeafId =
-          options?.initialLeafId && isTerminalLeafId(options.initialLeafId)
-            ? options.initialLeafId
-            : undefined
-        // Why: startup delivery is pane-owned; pin its first leaf so an aborted/remounted renderer retries against the same spawn reservation.
-        const initialLeafId =
-          options?.initialPtyId || options?.pendingStartup
-            ? (requestedInitialLeafId ?? createBrowserUuid())
-            : undefined
         const shouldActivate = options?.activate !== false
         const nextOrdinal = getNextTerminalOrdinal(existing)
         const defaultTitle = `Terminal ${nextOrdinal}`
@@ -251,23 +228,9 @@ export function createTerminalTabCreationActions(
             ...orphanCleanupPatch.ptyIdsByTabId,
             [tab.id]: options?.initialPtyId ? [options.initialPtyId] : []
           },
-          pendingStartupByTabId: options?.pendingStartup
-            ? {
-                ...orphanCleanupPatch.pendingStartupByTabId,
-                [tab.id]: normalizeTabStartupCommand(options.pendingStartup)
-              }
-            : orphanCleanupPatch.pendingStartupByTabId,
-          automaticAgentResumeClaimsByTabId: options?.automaticResumeClaim
-            ? {
-                ...orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
-                [tab.id]: options.automaticResumeClaim
-              }
-            : orphanCleanupPatch.automaticAgentResumeClaimsByTabId,
           terminalLayoutsByTabId: {
             ...orphanCleanupPatch.terminalLayoutsByTabId,
-            [tab.id]: initialLeafId
-              ? singlePaneLayoutSnapshot(initialLeafId, options?.initialPtyId)
-              : emptyLayoutSnapshot()
+            [tab.id]: emptyLayoutSnapshot()
           }
         }
       })
