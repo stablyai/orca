@@ -279,7 +279,12 @@ describe('legacy question takeover compatibility', () => {
             from: CURRENT_COORDINATOR_HANDLE,
             run: harness.adoptedRunId
           },
-          'answer-after-takeover'
+          'answer-after-takeover',
+          {
+            terminalHandle: CURRENT_COORDINATOR_HANDLE,
+            paneKey: CURRENT_COORDINATOR_PANE,
+            launchToken: 'current-coordinator-token'
+          }
         )
       )
     ).resolves.toMatchObject({ ok: true })

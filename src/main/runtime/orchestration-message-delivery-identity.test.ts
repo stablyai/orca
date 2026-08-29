@@ -25,6 +25,8 @@ const TERMINAL_HANDLE = 'term_sta_4325'
 const REMINTED_TERMINAL_HANDLE = 'term_sta_4325_reminted'
 const WORKTREE_ID = 'repo-sta-4325::/tmp/sta-4325'
 const LAUNCH_TOKEN = 'sta-4325-launch'
+const COORDINATOR_PROCESS_INCARNATION = `${PTY_ID}:sta-4325-incarnation`
+const COORDINATOR_HOST_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
 const temporaryDirectories: string[] = []
 const CLI_PATH = join(process.cwd(), 'out', 'cli', 'index.js')
 const itIfCliBuilt = existsSync(CLI_PATH) ? it : it.skip
@@ -148,7 +150,8 @@ async function runBuiltCli(
       ...process.env,
       ORCA_USER_DATA_PATH: userDataPath,
       ORCA_TERMINAL_HANDLE: TERMINAL_HANDLE,
-      ORCA_PANE_KEY: PANE_KEY
+      ORCA_PANE_KEY: PANE_KEY,
+      ORCA_AGENT_LAUNCH_TOKEN: LAUNCH_TOKEN
     },
     stdio: ['ignore', 'pipe', 'pipe']
   })
@@ -268,7 +271,9 @@ describe('STA-4325 message and delivery identity', () => {
     const run = fixture.db.createRun({
       objective: 'STA-4325 restart',
       coordinatorHandle: TERMINAL_HANDLE,
-      coordinatorPaneKey: PANE_KEY
+      coordinatorPaneKey: PANE_KEY,
+      coordinatorProcessIncarnation: COORDINATOR_PROCESS_INCARNATION,
+      coordinatorHostScope: COORDINATOR_HOST_SCOPE
     })
     const status = fixture.db.insertMessage({
       from: 'term_worker',
@@ -389,12 +394,17 @@ describe('STA-4325 message and delivery identity', () => {
     const run = fixture.db.createRun({
       objective: 'Late old-handle arrival',
       coordinatorHandle: TERMINAL_HANDLE,
-      coordinatorPaneKey: PANE_KEY
+      coordinatorPaneKey: PANE_KEY,
+      coordinatorProcessIncarnation: COORDINATOR_PROCESS_INCARNATION,
+      coordinatorHostScope: COORDINATOR_HOST_SCOPE
     })
     fixture.db.bindRun({
       runId: run.id,
       coordinatorHandle: REMINTED_TERMINAL_HANDLE,
-      coordinatorPaneKey: PANE_KEY
+      coordinatorPaneKey: PANE_KEY,
+      coordinatorProcessIncarnation: COORDINATOR_PROCESS_INCARNATION,
+      coordinatorHostScope: COORDINATOR_HOST_SCOPE,
+      authorityContinuity: true
     })
     const done = fixture.db.insertMessage({
       from: 'term_worker',
@@ -435,11 +445,7 @@ describe('STA-4325 message and delivery identity', () => {
       const userDataPath = mkdtempSync(join(tmpdir(), 'orca-sta-4325-cli-'))
       temporaryDirectories.push(userDataPath)
       const db = new OrchestrationDb(join(userDataPath, 'orchestration.db'))
-      const runtime = new OrcaRuntimeService()
-      runtime.setOrchestrationDb(db)
-      vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
-        handle === TERMINAL_HANDLE ? PANE_KEY : null
-      )
+      const { runtime } = createRuntime(db)
       const run = db.createRun({
         objective: 'STA-4325 built CLI',
         coordinatorHandle: TERMINAL_HANDLE,

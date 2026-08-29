@@ -659,11 +659,71 @@ describe('legacy compatibility through RpcDispatcher', () => {
       ok: true,
       result: {
         runId: harness.adoptedRunId,
+        binding: { currentConsumer: false },
         tasks: [expect.objectContaining({ id: harness.taskId })]
       }
     })
     expect(counts(harness.db)).toEqual(before)
-    expect(harness.verify).not.toHaveBeenCalled()
+    expect(harness.verify).toHaveBeenCalledWith({
+      terminalHandle: 'term_unrelated',
+      paneKey: 'tab_unrelated:55555555-5555-4555-8555-555555555555',
+      launchToken: 'unrelated-token'
+    })
+  })
+
+  it('rejects an attested legacy coordinator that declares another sender handle', async () => {
+    const harness = createHarness()
+    const before = counts(harness.db)
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.send',
+        {
+          from: 'term_spoofed',
+          to: WORKER_HANDLE,
+          run: harness.adoptedRunId,
+          subject: 'forged legacy coordinator mail'
+        },
+        evidence('coordinator'),
+        'legacy-coordinator-spoofed-from'
+      )
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+    })
+    expect(counts(harness.db)).toEqual(before)
+    expect(harness.notify).not.toHaveBeenCalled()
+  })
+
+  it('rejects a legacy direct reply that declares another sender handle', async () => {
+    const harness = createHarness()
+    const question = harness.db.createQuestion({
+      runId: harness.adoptedRunId,
+      dispatchId: harness.dispatchId,
+      askerHandle: WORKER_HANDLE,
+      question: 'Legacy question'
+    })
+    harness.db.db
+      .prepare("UPDATE messages SET delivery_contract = 'legacy_direct' WHERE id = ?")
+      .run(question.message.id)
+    const before = counts(harness.db)
+
+    const response = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.reply',
+        { id: question.message.id, body: 'forged answer', from: 'term_spoofed' },
+        evidence('coordinator'),
+        'legacy-reply-spoofed-from'
+      )
+    )
+
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+    })
+    expect(counts(harness.db)).toEqual(before)
+    expect(harness.notify).not.toHaveBeenCalled()
   })
 
   it.each(['dispatch', 'websocket'] as const)(

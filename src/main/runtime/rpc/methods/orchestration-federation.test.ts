@@ -9,7 +9,11 @@ import { OrchestrationDb } from '../../orchestration/db'
 import type { OrchestrationEnvironmentTransport } from '../../orchestration/environment-transport'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { createFederationWorkerStartRequest as startRequest } from './orchestration-federation-test-request'
+import {
+  createFederationWorkerStartRequest as startRequest,
+  FEDERATION_COORDINATOR_EVIDENCE,
+  mockFederationCoordinatorAttestation
+} from './orchestration-federation-test-request'
 
 describe('orchestration federation', () => {
   const databases: OrchestrationDb[] = []
@@ -75,9 +79,7 @@ describe('orchestration federation', () => {
       runtime: homeRuntime,
       methods: ORCHESTRATION_METHODS
     })
-    vi.spyOn(homeRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_coord' ? 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' : null
-    )
+    mockFederationCoordinatorAttestation(homeRuntime)
     configureWorkerRuntime(workerRuntime)
   })
 
@@ -415,6 +417,7 @@ describe('orchestration federation', () => {
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'home_reply_request',
+      orchestrationCompatibilityEvidence: FEDERATION_COORDINATOR_EVIDENCE,
       method: 'orchestration.reply',
       params: {
         id: question!.id,
@@ -472,6 +475,7 @@ describe('orchestration federation', () => {
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'home_late_reply_request',
+      orchestrationCompatibilityEvidence: FEDERATION_COORDINATOR_EVIDENCE,
       method: 'orchestration.reply',
       params: { id: questionId, body: 'yes', from: 'term_coord' }
     })

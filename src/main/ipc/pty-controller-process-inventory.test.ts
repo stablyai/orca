@@ -167,7 +167,19 @@ describe('aggregate PTY process inventory', () => {
 
     // Without a forwarded deadline an unanswered relay list runs to the SSH mux's own
     // 30s default, far past the runtime's 3s budget for the whole refresh.
+    expect(local.calls).toEqual([{ opts: { deadlineMs } }])
     expect(remote.calls).toEqual([{ opts: { deadlineMs } }])
+  })
+
+  it('forwards the caller deadline on a targeted local-provider list', async () => {
+    const local = createProvider([session('local-pty')])
+    setLocalPtyProvider(local.provider)
+    const controller = captureController()
+    const deadlineMs = Date.now() + 1200
+
+    await controller.listProcesses(null, { deadlineMs })
+
+    expect(local.calls).toEqual([{ opts: { deadlineMs } }])
   })
 
   it('forwards the caller deadline on a targeted single-connection list', async () => {

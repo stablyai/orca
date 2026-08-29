@@ -22,6 +22,8 @@ export const SECOND_TERMINAL_HANDLE = 'term_mailbox_consistency_second'
 export const SECOND_LAUNCH_TOKEN = 'mailbox-consistency-second-launch'
 export const WORKTREE_ID = 'repo-mailbox::/tmp/mailbox'
 export const LAUNCH_TOKEN = 'mailbox-consistency-launch'
+export const COORDINATOR_PROCESS_INCARNATION = `${PTY_ID}:mailbox-incarnation`
+export const COORDINATOR_HOST_SCOPE = JSON.stringify({ kind: 'local', hostId: 'local' })
 export const temporaryDirectories: string[] = []
 
 export function createDatabase(prefix: string): OrchestrationDb {
@@ -38,7 +40,9 @@ export function createBoundRun(db: OrchestrationDb, objective: string) {
   return db.createRun({
     objective,
     coordinatorHandle: TERMINAL_HANDLE,
-    coordinatorPaneKey: PANE_KEY
+    coordinatorPaneKey: PANE_KEY,
+    coordinatorProcessIncarnation: COORDINATOR_PROCESS_INCARNATION,
+    coordinatorHostScope: COORDINATOR_HOST_SCOPE
   })
 }
 

@@ -1,4 +1,9 @@
 import type { RunRow } from '../../types'
+import { OrchestrationError } from '../../orchestration-error'
+import {
+  isCurrentRunCoordinator,
+  type RunCoordinatorIdentity
+} from '../../run-coordinator-authority'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../../../shared/orchestration-run-pagination'
 import {
   isEquivalentPaneKey,
@@ -124,10 +129,27 @@ export function getRunRaw(this: OrchestrationDb, id: string): RunRow | undefined
 export function unbindOtherRunsForPane(
   this: OrchestrationDb,
   paneKey: string,
+  identity: RunCoordinatorIdentity,
   exceptRunId?: string
 ): void {
   for (const run of this.runsBoundToPane(paneKey)) {
     if (run.id !== exceptRunId) {
+      if (!isCurrentRunCoordinator(run, identity)) {
+        throw new OrchestrationError(
+          'consumer_fenced',
+          `Run ${run.id} is owned by another coordinator process in this pane. No effects were applied.`,
+          {
+            effectsApplied: false,
+            inspectCommandArgs: ['orchestration', 'run-show', '--id', run.id, '--json'],
+            retryCommandArgs: ['orchestration', 'run-use', '--id', run.id, '--json'],
+            nextSteps: [
+              `Inspect current authority by running orchestration run-show --id ${run.id} --json with the same Orca CLI executable.`,
+              `To switch Runs from this replacement process, first run orchestration run-use --id ${run.id} --json with that executable after its owning host proves the incumbent exited.`,
+              'Do not retry the create or bind command unchanged while another process owns the pane.'
+            ]
+          }
+        )
+      }
       if (run.coordinator_handle) {
         this.routeAllUnreadDirectMessagesToRunMailbox(run.id, run.coordinator_handle)
       }
@@ -135,6 +157,8 @@ export function unbindOtherRunsForPane(
         .prepare(
           `UPDATE runs
            SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+               coordinator_process_incarnation = NULL, coordinator_host_scope = NULL,
+               coordinator_authority_revision = coordinator_authority_revision + 1,
                consumer_generation = consumer_generation + 1,
                updated_at = datetime('now')
            WHERE id = ?`

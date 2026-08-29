@@ -7,7 +7,10 @@ import {
 } from '../../flags'
 import { ORCHESTRATION_RUN_PAGE_LIMIT } from '../../../shared/orchestration-run-pagination'
 import { callOrchestrationMutation } from './mutation-request'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import {
+  resolveCoordinatorTerminalHandle,
+  resolveOptionalCoordinatorTerminalHandle
+} from './terminal-identity'
 
 export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
   'orchestration run-create': async ({ flags, client, cwd, json }) => {
@@ -64,7 +67,8 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
     })
   },
 
-  'orchestration run-show': async ({ flags, client, json }) => {
+  'orchestration run-show': async ({ flags, client, cwd, json }) => {
+    const runId = getRequiredStringFlag(flags, 'id')
     const result = await client.call<{
       run: {
         id: string
@@ -73,12 +77,20 @@ export const ORCHESTRATION_RUN_HANDLERS: Record<string, CommandHandler> = {
         legacy: number
         created_at: string
       }
-    }>('orchestration.runShow', { id: getRequiredStringFlag(flags, 'id') })
+      binding?: { currentConsumer: boolean }
+    }>('orchestration.runShow', {
+      id: runId,
+      from: await resolveOptionalCoordinatorTerminalHandle(flags, cwd, client)
+    })
     printResult(
       result,
       json,
       (r) =>
-        `${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
+        `${
+          r.binding?.currentConsumer === false
+            ? `Run ${r.run.id} is not bound to this terminal; shown read-only. Mutations require the owning coordinator.\n`
+            : ''
+        }${r.run.id}${r.run.legacy ? ' [legacy, inspect only]' : ''} ${r.run.objective}\n` +
         `consumer generation ${r.run.consumer_generation}; created ${r.run.created_at}`
     )
   }

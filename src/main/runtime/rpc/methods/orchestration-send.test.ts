@@ -76,7 +76,8 @@ describe('orchestration RPC methods', () => {
       db.bindRun({
         runId: activeRunId!,
         coordinatorHandle: 'term_reminted',
-        coordinatorPaneKey: remintedPaneKey
+        coordinatorPaneKey: remintedPaneKey,
+        authorityContinuity: true
       })
       const waiting = runtime.waitForMessage(`run:${activeRunId}`, { timeoutMs: 5_000 })
 

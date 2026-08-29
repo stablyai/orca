@@ -80,7 +80,8 @@ describe('orchestration notification mailbox consistency', () => {
     db.bindRun({
       runId: runA.id,
       coordinatorHandle: SECOND_TERMINAL_HANDLE,
-      coordinatorPaneKey: SECOND_PANE_KEY
+      coordinatorPaneKey: SECOND_PANE_KEY,
+      authorityContinuity: true
     })
     sqliteFor(db)
       .prepare('UPDATE messages SET to_handle = ? WHERE id = ?')
@@ -359,7 +360,8 @@ describe('orchestration notification mailbox consistency', () => {
       runId: runA.id,
       coordinatorHandle: 'term_new_coordinator',
       coordinatorPaneKey:
-        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
+        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666',
+      authorityContinuity: true
     })
     const runB = createBoundRun(db, 'Run B')
     const response = await new RpcDispatcher({

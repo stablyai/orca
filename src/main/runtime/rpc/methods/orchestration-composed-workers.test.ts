@@ -56,7 +56,11 @@ describe('orchestration RPC methods', () => {
         exitCode: null
       })
       vi.mocked(runtime.getTerminalProcessIncarnation).mockImplementation((handle) =>
-        handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
+        handle === 'term_worker'
+          ? 'runtime_test:term_worker:1'
+          : handle === 'term_coord'
+            ? 'runtime_test:term_coord:1'
+            : null
       )
       vi.spyOn(runtime, 'getTerminalOrchestrationCliCommand').mockReturnValue('orca')
       vi.spyOn(runtime, 'sendTerminalAgentPrompt').mockResolvedValue({
@@ -101,7 +105,7 @@ describe('orchestration RPC methods', () => {
       expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
-    it('deliberately permits present but unverifiable restored-terminal evidence', async () => {
+    it('rejects restored-terminal evidence that names a different caller', async () => {
       setup()
       mockCurrentWorkerStart()
       // Restored/adopted terminals have no launch token, so verification returns null; this
@@ -115,14 +119,14 @@ describe('orchestration RPC methods', () => {
         }
       }
 
-      const result = (await call('orchestration.workerStart', {
-        task: task.id,
-        from: 'term_coord',
-        agent: 'codex'
-      })) as { state: string }
-
-      expect(result.state).toBe('ready')
-      expect(db.getDispatchContext(task.id)).toBeDefined()
+      await expect(
+        call('orchestration.workerStart', {
+          task: task.id,
+          from: 'term_coord',
+          agent: 'codex'
+        })
+      ).rejects.toMatchObject({ code: 'consumer_fenced' })
+      expect(db.getDispatchContext(task.id)).toBeUndefined()
     })
 
     it('starts a fresh agent in the coordinator current worktree', async () => {

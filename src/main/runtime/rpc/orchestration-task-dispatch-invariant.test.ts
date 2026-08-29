@@ -242,6 +242,18 @@ function createHarness(): Harness {
     }
     return null
   })
+  vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((evidence) =>
+    evidence?.terminalHandle === COORDINATOR_HANDLE && evidence.paneKey === COORDINATOR_PANE
+      ? {
+          terminalHandle: COORDINATOR_HANDLE,
+          paneKey: COORDINATOR_PANE,
+          processIncarnation: 'runtime:coordinator:1',
+          hostScope: { kind: 'local', hostId: 'local' },
+          launchTokenHash: 'test-token-hash',
+          terminalProvenance: 'current_runtime'
+        }
+      : null
+  )
   const runId = db.createRun({
     objective: 'Enforce Task/Dispatch state',
     coordinatorHandle: COORDINATOR_HANDLE,
@@ -369,7 +381,12 @@ function request(method: string, params: Record<string, unknown>): RpcRequest {
     method,
     params,
     orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-    orchestrationRequestId: `task_dispatch_invariant_${requestSequence}`
+    orchestrationRequestId: `task_dispatch_invariant_${requestSequence}`,
+    orchestrationCompatibilityEvidence: {
+      terminalHandle: COORDINATOR_HANDLE,
+      paneKey: COORDINATOR_PANE,
+      launchToken: 'test-launch-token'
+    }
   }
 }
 

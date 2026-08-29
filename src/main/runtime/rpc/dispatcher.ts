@@ -26,6 +26,7 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { routeDispatcherClientHostedBrowserRpc } from './dispatcher-client-browser-routing'
 import { needsLocalCallerFingerprint } from './dispatcher-caller-fingerprint'
 import { createDispatcherStreamingFeatureEmitter } from './dispatcher-streaming-feature-emitter'
+import { resolveRpcCallerEvidence } from './dispatcher-orchestration-caller-evidence'
 
 export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
 
@@ -108,6 +109,7 @@ export class RpcDispatcher {
         request,
         compatibility.legacyCoordinatorAuthority
       )
+      const callerEvidence = resolveRpcCallerEvidence(request, effectiveParams, legacyCoordinator)
       const authenticatedCallerFingerprint =
         options?.authenticatedCallerFingerprint ??
         (needsLocalCallerFingerprint(request, effectiveParams)
@@ -133,7 +135,7 @@ export class RpcDispatcher {
           revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
           orchestrationCompatibilityCallerAuthority:
             compatibility.orchestrationCompatibilityCallerAuthority,
-          orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+          orchestrationCompatibilityEvidence: callerEvidence
         })
       }
       const result = await this.orchestrationMutations.run(
@@ -221,6 +223,7 @@ export class RpcDispatcher {
           request,
           compatibility.legacyCoordinatorAuthority
         )
+        const callerEvidence = resolveRpcCallerEvidence(request, effectiveParams, legacyCoordinator)
         const authenticatedCallerFingerprint =
           options?.authenticatedCallerFingerprint ??
           (needsLocalCallerFingerprint(request, effectiveParams)
@@ -251,7 +254,7 @@ export class RpcDispatcher {
             revalidateLegacyCoordinator: legacyCoordinator?.revalidate,
             orchestrationCompatibilityCallerAuthority:
               compatibility.orchestrationCompatibilityCallerAuthority,
-            orchestrationCompatibilityEvidence: request.orchestrationCompatibilityEvidence
+            orchestrationCompatibilityEvidence: callerEvidence
           })
         }
         const result = await this.orchestrationMutations.run(

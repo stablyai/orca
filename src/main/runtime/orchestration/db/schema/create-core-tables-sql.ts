@@ -8,6 +8,9 @@ CREATE TABLE IF NOT EXISTS runs (
   home_database         TEXT NOT NULL DEFAULT 'this_database',
   coordinator_handle    TEXT,
   coordinator_pane_key  TEXT,
+  coordinator_process_incarnation TEXT,
+  coordinator_host_scope TEXT,
+  coordinator_authority_revision INTEGER NOT NULL DEFAULT 0,
   consumer_generation   INTEGER NOT NULL DEFAULT 0,
   legacy                INTEGER NOT NULL DEFAULT 0,
   created_at            TEXT NOT NULL DEFAULT (datetime('now')),
@@ -73,6 +76,20 @@ CREATE TRIGGER IF NOT EXISTS trg_runs_forget_coordinator_handles
 AFTER DELETE ON runs
 BEGIN
   DELETE FROM run_coordinator_handles WHERE run_id = OLD.id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_runs_clear_stale_coordinator_authority
+AFTER UPDATE OF coordinator_handle, coordinator_pane_key ON runs
+WHEN NEW.coordinator_authority_revision = OLD.coordinator_authority_revision
+  AND NOT (
+    NEW.coordinator_handle IS OLD.coordinator_handle
+    AND NEW.coordinator_pane_key IS OLD.coordinator_pane_key
+  )
+BEGIN
+  UPDATE runs
+  SET coordinator_process_incarnation = NULL, coordinator_host_scope = NULL,
+      coordinator_authority_revision = -1
+  WHERE id = NEW.id;
 END;
 
 CREATE TABLE IF NOT EXISTS deliveries (

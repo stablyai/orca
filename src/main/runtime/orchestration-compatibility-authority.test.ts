@@ -70,7 +70,8 @@ describe('orchestration compatibility runtime authority', () => {
       paneKey: PANE_KEY,
       terminalHandle: 'term-1',
       processIncarnation: 'incarnation-1',
-      launchTokenHash: TOKEN_HASH
+      launchTokenHash: TOKEN_HASH,
+      terminalProvenance: 'current_runtime'
     })
     expect(JSON.stringify(authority)).not.toContain(TOKEN)
     expect(

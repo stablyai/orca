@@ -146,7 +146,8 @@ describe('orchestration detached mailbox routing', () => {
       runId: currentRun!.id,
       coordinatorHandle: 'term_rebound_coordinator',
       coordinatorPaneKey:
-        '77777777-7777-4777-8777-777777777777:88888888-8888-4888-8888-888888888888'
+        '77777777-7777-4777-8777-777777777777:88888888-8888-4888-8888-888888888888',
+      authorityContinuity: true
     })
     const checked = await checkBoundMailbox(harness.runtime)
     expect(checked).toMatchObject({ runId: workerRun.id, dispatchId: dispatch.id, count: 1 })
@@ -446,7 +447,8 @@ describe('orchestration detached mailbox routing', () => {
       runId: run.id,
       coordinatorHandle: 'term_new_coordinator',
       coordinatorPaneKey:
-        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666'
+        '55555555-5555-4555-8555-555555555555:66666666-6666-4666-8666-666666666666',
+      authorityContinuity: true
     })
 
     expect(db.getMessageById(message.id)?.to_handle).toBe(TERMINAL_HANDLE)

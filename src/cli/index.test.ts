@@ -291,6 +291,24 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('describes Run authority claims and retired coordinator commands for agents', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const help = logSpy.mock.calls.flat().join('\n')
+    expect(help).toContain(
+      "orchestration run-use     Claim an existing Run's coordinator authority"
+    )
+    expect(help).toContain(
+      'orchestration coordinator-start Retired: load the current orchestration skill'
+    )
+    expect(help).toContain(
+      'orchestration coordinator-stop Retired: load the current orchestration skill'
+    )
+    logSpy.mockRestore()
+  })
+
   it('advertises host-local account management', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 

@@ -120,6 +120,15 @@ describe('orchestration RPC methods', () => {
 
     it('uses the stable pane identity when the coordinator handle was reminted', async () => {
       setup()
+      db.bindRun({
+        runId: activeRunId!,
+        coordinatorHandle: 'term_coord',
+        coordinatorPaneKey,
+        coordinatorProcessIncarnation: 'pty-coordinator:incarnation-1'
+      })
+      vi.mocked(runtime.getTerminalProcessIncarnation).mockReturnValue(
+        'pty-coordinator:incarnation-1'
+      )
       db.insertMessage({
         from: 'term_worker',
         to: `run:${activeRunId}`,

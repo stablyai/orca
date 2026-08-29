@@ -145,9 +145,23 @@ export async function handleLegacyReply(args: {
   if (!original || original.delivery_contract !== 'legacy_direct') {
     return undefined
   }
+  if (params.from && request.orchestrationCompatibilityEvidence?.terminalHandle !== params.from) {
+    throw new OrchestrationError(
+      'consumer_fenced',
+      `This terminal is attested as ${request.orchestrationCompatibilityEvidence?.terminalHandle ?? 'unknown'} and cannot act as ${params.from}.`,
+      { effectsApplied: false }
+    )
+  }
   const principal = authority.attestCoordinator(request, original.run_id)
   if (!principal) {
     throw legacyCoordinatorReadOnly()
+  }
+  if (params.from && params.from !== principal.terminal_handle) {
+    throw new OrchestrationError(
+      'consumer_fenced',
+      `This terminal is attested as ${principal.terminal_handle} and cannot act as ${params.from}.`,
+      { effectsApplied: false }
+    )
   }
   const operation = operationIdentity(request, 'reply', {
     questionId: params.id,

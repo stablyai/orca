@@ -217,10 +217,10 @@ describe('legacy coordinator delivery targets after takeover', () => {
       )
     )
 
-    // It still owns the Run binding, so it reads its own Run rather than being fenced read-only.
+    // Binding metadata alone is not caller identity after the coordinator pane changes.
     expect(response).toMatchObject({
-      ok: true,
-      result: { runId: harness.adoptedRunId, legacyReadOnly: false }
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
     })
   })
 
@@ -303,7 +303,7 @@ describe('legacy coordinator delivery targets after takeover', () => {
 })
 
 // Why: bindRun only revokes a committed principal when it takes over or the legacy work is settled,
-// so a coordinator restarting inside the legacy pane rebinds the Run while the principal stays
+// so a coordinator reminting its handle inside the legacy pane rebinds while the principal stays
 // committed. Delivery still routes legacy_direct to the addressed handle there, and no reader can
 // see that mailbox, so the permit must refuse rather than accept mail nobody will ever read.
 describe('legacy coordinator delivery targets without a takeover', () => {
@@ -329,7 +329,8 @@ describe('legacy coordinator delivery targets without a takeover', () => {
       harness.db.bindRun({
         runId: harness.adoptedRunId,
         coordinatorHandle: REBOUND_COORDINATOR_HANDLE,
-        coordinatorPaneKey: COORDINATOR_PANE
+        coordinatorPaneKey: COORDINATOR_PANE,
+        authorityContinuity: true
       })
     ).toMatchObject({ coordinator_handle: REBOUND_COORDINATOR_HANDLE })
     expect(harness.db.getLegacyCoordinatorPrincipal(harness.adoptedRunId)?.status).toBe('committed')

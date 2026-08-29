@@ -10,6 +10,10 @@ import type { OrchestrationEnvironmentTransport } from '../../orchestration/envi
 import type { RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
+import {
+  FEDERATION_COORDINATOR_EVIDENCE,
+  mockFederationCoordinatorAttestation
+} from './orchestration-federation-test-request'
 
 describe('orchestration federated worker output', () => {
   const databases: OrchestrationDb[] = []
@@ -73,9 +77,7 @@ describe('orchestration federated worker output', () => {
       runtime: homeRuntime,
       methods: ORCHESTRATION_METHODS
     })
-    vi.spyOn(homeRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
-      handle === 'term_coord' ? 'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' : null
-    )
+    mockFederationCoordinatorAttestation(homeRuntime)
     configureWorkerRuntime(workerRuntime)
   })
 
@@ -101,6 +103,7 @@ describe('orchestration federated worker output', () => {
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'request_windows_worker',
+      orchestrationCompatibilityEvidence: FEDERATION_COORDINATOR_EVIDENCE,
       method: 'orchestration.workerStart',
       params: {
         task: taskId,

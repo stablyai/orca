@@ -55,6 +55,14 @@ function writeMetadata(
   )
 }
 
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name]
+  } else {
+    process.env[name] = value
+  }
+}
+
 function findUnusedPid(seed = 200_000): number {
   // Why: the stale-bootstrap test must point metadata at a definitely-dead
   // process. Hard-coding a small PID is host-dependent and flakes when that
@@ -137,6 +145,62 @@ describe.skipIf(process.platform === 'win32')('RuntimeClient', () => {
     expect(requests[2]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
     expect(requests[3]?.method).toBe('orchestration.taskList')
     expect(requests[3]?.compatibilityInvocationId).not.toBe(requests[1]?.compatibilityInvocationId)
+  })
+
+  it('refreshes caller evidence after a pane-proven terminal handle remint', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-client-'))
+    const endpoint = join(userDataPath, 'runtime.sock')
+    const requests: Record<string, unknown>[] = []
+    const server = createServer((socket) => {
+      sockets.add(socket)
+      socket.once('close', () => sockets.delete(socket))
+      socket.once('data', (data) => {
+        const request = JSON.parse(String(data).trim()) as Record<string, unknown>
+        requests.push(request)
+        const result =
+          request.method === 'status.get'
+            ? { capabilities: [ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY] }
+            : {}
+        socket.write(
+          `${JSON.stringify({
+            id: request.id,
+            ok: true,
+            result,
+            _meta: { runtimeId: 'runtime-1' }
+          })}\n`
+        )
+      })
+    })
+    servers.add(server)
+    await new Promise<void>((resolve) => server.listen(endpoint, resolve))
+    writeMetadata(userDataPath, endpoint)
+
+    const priorHandle = process.env.ORCA_TERMINAL_HANDLE
+    const priorPaneKey = process.env.ORCA_PANE_KEY
+    const priorLaunchToken = process.env.ORCA_AGENT_LAUNCH_TOKEN
+    process.env.ORCA_TERMINAL_HANDLE = 'term_stale'
+    process.env.ORCA_PANE_KEY = 'tab_1:leaf_1'
+    process.env.ORCA_AGENT_LAUNCH_TOKEN = 'launch-secret'
+    const client = new RuntimeClient(userDataPath, 500)
+    try {
+      client.refreshOrchestrationCallerHandleAfterPaneRemint(
+        'term_stale',
+        'tab_1:leaf_1',
+        'term_reminted'
+      )
+      await client.call('orchestration.taskList', {})
+    } finally {
+      restoreEnv('ORCA_TERMINAL_HANDLE', priorHandle)
+      restoreEnv('ORCA_PANE_KEY', priorPaneKey)
+      restoreEnv('ORCA_AGENT_LAUNCH_TOKEN', priorLaunchToken)
+    }
+
+    expect(requests[0]?.method).toBe('orchestration.taskList')
+    expect(requests[0]?.orchestrationCompatibilityEvidence).toEqual({
+      terminalHandle: 'term_reminted',
+      paneKey: 'tab_1:leaf_1',
+      launchToken: 'launch-secret'
+    })
   })
 
   it('rejects an old local runtime before sending an orchestration mutation', async () => {

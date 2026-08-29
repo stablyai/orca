@@ -48,7 +48,8 @@ describe('Run coordinator handle history migration', () => {
     db.bindRun({
       runId: run.id,
       coordinatorHandle: 'term_new',
-      coordinatorPaneKey: 'tab:leaf'
+      coordinatorPaneKey: 'tab:leaf',
+      authorityContinuity: true
     })
     const late = db.insertMessage({
       runId: run.id,

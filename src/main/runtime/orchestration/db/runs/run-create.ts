@@ -10,20 +10,35 @@ export function createRun(
     objective: string
     coordinatorHandle: string
     coordinatorPaneKey: string
+    coordinatorProcessIncarnation?: string | null
+    coordinatorHostScope?: string | null
   }
 ): RunRow {
   const id = generateId('run')
   this.db.exec('BEGIN IMMEDIATE')
   try {
-    this.unbindOtherRunsForPane(params.coordinatorPaneKey)
+    this.unbindOtherRunsForPane(params.coordinatorPaneKey, {
+      handle: params.coordinatorHandle,
+      paneKey: params.coordinatorPaneKey,
+      processIncarnation: params.coordinatorProcessIncarnation ?? null,
+      hostScope: params.coordinatorHostScope ?? null
+    })
     this.db
       .prepare(
         `INSERT INTO runs (
            id, objective, coordinator_handle, coordinator_pane_key,
-           consumer_generation, legacy
-         ) VALUES (?, ?, ?, ?, 1, 0)`
+           coordinator_process_incarnation, coordinator_host_scope,
+           coordinator_authority_revision, consumer_generation, legacy
+         ) VALUES (?, ?, ?, ?, ?, ?, 0, 1, 0)`
       )
-      .run(id, params.objective, params.coordinatorHandle, params.coordinatorPaneKey)
+      .run(
+        id,
+        params.objective,
+        params.coordinatorHandle,
+        params.coordinatorPaneKey,
+        params.coordinatorProcessIncarnation ?? null,
+        params.coordinatorHostScope ?? null
+      )
     this.rememberRunCoordinatorHandle(id, params.coordinatorHandle)
     this.db.exec('COMMIT')
   } catch (error) {

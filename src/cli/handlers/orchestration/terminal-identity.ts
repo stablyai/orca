@@ -77,7 +77,16 @@ async function resolveOrchestrationPaneTerminalHandle(
     const response = await client.call<{ terminal: { handle: string } }>('terminal.resolvePane', {
       paneKey
     })
-    return response.result.terminal.handle
+    const remintedHandle = response.result.terminal.handle
+    const previousHandle = process.env.ORCA_TERMINAL_HANDLE
+    if (previousHandle) {
+      client.refreshOrchestrationCallerHandleAfterPaneRemint?.(
+        previousHandle,
+        paneKey,
+        remintedHandle
+      )
+    }
+    return remintedHandle
   } catch (err) {
     if (
       isPaneRemintUnavailableError(err) ||
@@ -125,6 +134,21 @@ export async function resolveCoordinatorTerminalHandle(
   return await resolveOrchestrationTerminalHandle(flags, cwd, client, 'from', {
     validateEnvHandle: true
   })
+}
+
+export async function resolveOptionalCoordinatorTerminalHandle(
+  flags: Map<string, string | boolean>,
+  cwd: string,
+  client: RuntimeClient
+): Promise<string | undefined> {
+  try {
+    return await resolveCoordinatorTerminalHandle(flags, cwd, client)
+  } catch (err) {
+    if (getClientErrorCode(err) === 'no_active_sender_terminal') {
+      return undefined
+    }
+    throw err
+  }
 }
 
 async function resolveImplicitOrchestrationSender(

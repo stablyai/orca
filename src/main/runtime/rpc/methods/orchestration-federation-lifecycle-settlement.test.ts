@@ -11,7 +11,10 @@ import type { OrchestrationEnvironmentTransport } from '../../orchestration/envi
 import { waitForFederatedLifecycleSettlement } from '../../orchestration/federation-lifecycle-settlement'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { createFederationWorkerStartRequest as startRequest } from './orchestration-federation-test-request'
+import {
+  createFederationWorkerStartRequest as startRequest,
+  mockFederationCoordinatorAttestation
+} from './orchestration-federation-test-request'
 
 describe('orchestration federation lifecycle settlement', () => {
   let homeDb: OrchestrationDb
@@ -72,9 +75,7 @@ describe('orchestration federation lifecycle settlement', () => {
     })
     homeRuntime.setOrchestrationDb(homeDb)
     homeDispatcher = new RpcDispatcher({ runtime: homeRuntime, methods: ORCHESTRATION_METHODS })
-    vi.spyOn(homeRuntime, 'getTerminalPaneKey').mockReturnValue(
-      'tab_coord:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
-    )
+    mockFederationCoordinatorAttestation(homeRuntime)
     configureWorkerRuntime()
   })
 

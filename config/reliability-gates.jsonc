@@ -12328,6 +12328,7 @@
       "surfaces": [
         "live-idle terminal notification",
         "Run binding and rebinding",
+        "Run coordinator process authority",
         "active Dispatch ownership",
         "orchestration check and acknowledgment",
         "outstanding Run Deliveries",
@@ -12338,17 +12339,19 @@
       "providers": ["local", "daemon", "ssh", "wsl", "remote-runtime"],
       "coveredPlatforms": ["macos"],
       "coveredProviders": ["local", "daemon", "ssh"],
-      "coverageNotes": "A deterministic isolated runtime/SQLite/RPC harness covers Run and Dispatch ownership, exact handle and remint-stable pane recipients, fixed Delivery replay and acknowledgment, restart, concurrent pollers, filtered waiters, and built-CLI parity with direct DB state. Schema v28 durably records every coordinator handle through SQLite triggers, backfills current handles on open, recreates routing triggers after old table rebuilds, and atomically canonicalizes coordinator-addressed inserts to run:<id>. A 125-row oracle and 151-row reconciliation suite cover paged old-handle backlogs, commit-without-notify recovery, duplicate Dispatch owners, cancellation, and lifecycle fencing. Federation tests use real databases, dropped acknowledgments, restart/reconnect, and protocol v1/v2 peers; duplicate read rows do not wake again. Daemon and SSH pointer settlement is deterministic, with SSH bounded at 60 seconds beyond the 20-second mux health window. No RPC parameter, stream opcode, or published payload changed. Live headed/headless paired-runtime, physical SSH, WSL, Linux, and Windows acceptance remain gaps.",
+      "coverageNotes": "A deterministic isolated runtime/SQLite/RPC harness covers Run and Dispatch ownership, exact handle and remint-stable pane recipients, fixed Delivery replay and acknowledgment, restart, concurrent pollers, filtered waiters, and built-CLI parity with direct DB state. Schema v28 durably records every coordinator handle through SQLite triggers, backfills current handles on open, recreates routing triggers after old table rebuilds, and atomically canonicalizes coordinator-addressed inserts to run:<id>. Schema v31 adds coordinator process incarnation, execution-host scope, and an authority revision; tests initialize newly created post-migration Runs at revision 0, refuse live and unverifiable replacement, reject identity-less copied-handle mutations and generic replies, require runtime-attested identity before explicit reads claim current-consumer authority, require runtime-attested restored-process continuity before backfilling a migrated revision -1 row, fence attestation loss during that bind, preserve generation and pending Delivery identity for the same process after handle/pane remint even before the agent hook observes its reminted pane, permit only owning-host-proven exit takeover, fence a stale concurrent takeover observation, and clear stale authority when an older runtime changes only v30 binding columns. Lifecycle tokens bypass caller attestation only for genuinely capability-backed Dispatch rows; legacy replies reject contradictory declared senders. A 125-row oracle and 151-row reconciliation suite cover paged old-handle backlogs, commit-without-notify recovery, duplicate Dispatch owners, cancellation, and lifecycle fencing. Federation tests use real databases, dropped acknowledgments, restart/reconnect, and protocol v1/v2 peers; duplicate read rows do not wake again. Daemon and SSH pointer settlement is deterministic, with SSH bounded at 60 seconds beyond the 20-second mux health window. RPC changes are additive optional response fields; no stream opcode changed. Live headed/headless paired-runtime, physical SSH, WSL, Linux, and Windows acceptance remain gaps.",
       "motivatingLinks": [
+        "https://linear.app/stably/issue/STA-5729",
         "https://linear.app/stably/issue/STA-4325",
         "https://github.com/stablyai/orca/issues/14522",
         "internal incident evidence: improve-vps-setup, 2026-08-10"
       ],
-      "invariant": "Each message has one stable row ID and authoritative recipient; coordinator-addressed current-delivery inserts are atomically owned by run:<id>. Pointer staging may set delivered_at but never consumes mail. Each Run consumer generation has at most one outstanding Delivery with a fixed ID and fixed message IDs; ordinary checks replay it until an explicit matching acknowledgment marks exactly those rows read. Rebinding fences the old generation, notification types/counts correspond to unread rows retrievable under the same authority, and federation replay imports each stable message identity once without re-waking an already-read duplicate.",
-      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then separately exceed the bound and require retryable undelivered state.",
+      "invariant": "Each message has one stable row ID and authoritative recipient; coordinator-addressed current-delivery inserts are atomically owned by run:<id>. Pointer staging may set delivered_at but never consumes mail. Each Run consumer generation has at most one outstanding Delivery with a fixed ID and fixed message IDs; ordinary checks replay it until an explicit matching acknowledgment marks exactly those rows read. Coordinator authority follows the same process incarnation on the same execution host across handle/pane remint without fencing; a distinct process can replace it only after the owning host proves the incumbent exited, and a stale observation cannot win. Rebinding fences the old generation, notification types/counts correspond to unread rows retrievable under the same authority, and federation replay imports each stable message identity once without re-waking an already-read duplicate.",
+      "oracle": "Seed status, dispatch, and worker_done rows across direct-handle and canonical Run recipients in an isolated DB. Compare pointer count, RPC and built-CLI check output, direct SQLite rows, unread/peek/all/type filters, concurrent pollers, fixed Delivery IDs, explicit acknowledgment, restart, filtered check --wait, and coordinator remint. Attempt live, unverifiable, proven-exited, same-process, cross-host, and stale-observation Run bindings; require one authority winner, preserved pending Delivery identity for continuity, and explicit read-only disclosure for a non-owner listing. Route a 125-row old-handle backlog, inject a commit without notification, and require startup repair. Exercise duplicate Run/Dispatch owners, stale panes, 50-row pages, cancellation, lifecycle fencing, and absent PTYs. Drop a federation ACK, reconnect/restart v1/v2 peers, and require stable import plus no duplicate read-row wake. Hold a healthy SSH write past five seconds but below the 60-second settlement deadline, then separately exceed the bound and require retryable undelivered state.",
       "commands": [
         "pnpm run build:cli && pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-message-delivery-identity.test.ts --reporter=dot --testTimeout=5000",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration-mailbox-routing-races.test.ts src/main/runtime/orchestration-mailbox-notification-consistency.test.ts src/main/runtime/orchestration-mailbox-detached-routing.test.ts src/main/runtime/orchestration-mailbox-transport-settlement.test.ts src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts src/main/runtime/orchestration/formatter.test.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-write.test.ts src/main/daemon/client.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/run-coordinator-authority-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-runs.test.ts src/main/runtime/rpc/methods/orchestration-run-remint-authority.test.ts src/main/runtime/rpc/methods/orchestration-caller-attestation.test.ts src/main/runtime/rpc/orchestration-legacy-compatibility-dispatcher.test.ts src/main/runtime/rpc/methods/orchestration-ask.test.ts src/cli/handlers/orchestration-run-cli.test.ts src/main/ipc/pty-controller-process-inventory.test.ts src/cli/handlers/orchestration-gate-cli.test.ts src/main/runtime/rpc/methods/orchestration-gates.test.ts src/main/runtime/rpc/methods/orchestration-gate-run-authorization.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/terminal-send-stale-leaf-liveness.test.ts src/main/runtime/rpc/methods/orchestration-runs.test.ts src/main/runtime/rpc/methods/orchestration-send.test.ts src/main/runtime/rpc/methods/orchestration-check.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/federation-sync.test.ts src/main/runtime/rpc/methods/orchestration-federation.test.ts src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts --reporter=dot"
       ],
@@ -12359,7 +12362,14 @@
         "src/main/runtime/orchestration-mailbox-routing-races.test.ts",
         "src/main/runtime/orchestration-mailbox-transport-settlement.test.ts",
         "src/main/runtime/orchestration/run-coordinator-handle-migration.test.ts",
+        "src/main/runtime/orchestration/run-coordinator-authority-migration.test.ts",
+        "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
         "src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts",
+        "src/cli/handlers/orchestration-run-cli.test.ts",
+        "src/main/ipc/pty-controller-process-inventory.test.ts",
+        "src/cli/handlers/orchestration-gate-cli.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-gates.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-gate-run-authorization.test.ts",
         "src/main/runtime/orchestration/orchestration-worker-dispatch-db.test.ts",
         "src/main/runtime/orchestration/formatter.test.ts",
         "src/main/providers/ssh-pty-provider.test.ts",
@@ -12369,6 +12379,10 @@
         "src/main/daemon/degraded-daemon-pty-provider.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/terminal-send-stale-leaf-liveness.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-caller-attestation.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-run-remint-authority.test.ts",
+        "src/main/runtime/rpc/orchestration-legacy-compatibility-dispatcher.test.ts",
+        "src/main/runtime/rpc/methods/orchestration-ask.test.ts",
         "src/main/runtime/rpc/methods/orchestration-runs.test.ts",
         "src/main/runtime/rpc/methods/orchestration-send.test.ts",
         "src/main/runtime/rpc/methods/orchestration-check.test.ts",
@@ -12377,6 +12391,89 @@
         "src/main/runtime/rpc/methods/orchestration-federation-lifecycle-settlement.test.ts"
       ],
       "assertionRefs": [
+        {
+          "file": "src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts",
+          "assertions": [
+            "same-process handle remint preserves consumer generation and the outstanding Delivery ID",
+            "proven incumbent exit fences the old generation and replays unread mail to the winner",
+            "two takeovers using one exited-owner observation produce exactly one winner"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-runs.test.ts",
+          "assertions": [
+            "a live incumbent rejects a distinct coordinator with no effects",
+            "refuses replacement when a migrated incumbent is not provably exited",
+            "does not grant a migrated binding to a replacement incarnation on the same handle",
+            "backfills an exact migrated handle only from restored process authority and fences mid-bind attestation loss",
+            "backfills a migrated binding when a reminted handle resolves to the same process",
+            "same-process handle and pane remint preserves Run authority",
+            "does not grant Run authority to a replacement process in the same pane",
+            "a distinct coordinator binds only after owning-host process inventory proves exit",
+            "binds an authority-less migrated Run without requiring a nonexistent incumbent",
+            "cancels the Run bound during an asynchronous incumbent observation",
+            "explicit task listing discloses when the caller is not the current consumer"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-run-remint-authority.test.ts",
+          "assertions": [
+            "same-process remint survives stale agent-hook pane evidence only when current runtime launch proof matches the persisted process and host"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-caller-attestation.test.ts",
+          "assertions": [
+            "rejects an identity-less caller that copies the current coordinator handle with no effects and agent-readable recovery steps",
+            "marks identity-less explicit run-show, task-list, and gate-list reads that copy the current coordinator handle as non-owner inspection",
+            "a bogus lifecycle capability cannot bypass caller attestation for a capability-less Dispatch",
+            "an attested coordinator cannot reply to another Run mailbox"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/orchestration-legacy-compatibility-dispatcher.test.ts",
+          "assertions": [
+            "legacy direct reply rejects a declared sender that contradicts the attested coordinator"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/run-coordinator-authority-migration.test.ts",
+          "assertions": [
+            "adds nullable authority identity to v30 Runs and backfills on same-pane use",
+            "creates new Runs at authority revision 0 after v31 migration",
+            "clears stale authority when an older runtime changes only the binding columns"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts",
+          "assertions": [
+            "keeps a live legacy-provider process without incarnation identity unverifiable"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-run-cli.test.ts",
+          "assertions": [
+            "keeps explicit Run inspection available without an active terminal",
+            "discloses a non-owner run-show as read-only",
+            "discloses headless run-show inspection as read-only",
+            "discloses non-owner inspection even when the Run has no tasks"
+          ]
+        },
+        {
+          "file": "src/main/ipc/pty-controller-process-inventory.test.ts",
+          "assertions": [
+            "bounds every relay list by the caller deadline instead of the mux default",
+            "forwards the caller deadline on a targeted local-provider list"
+          ]
+        },
+        {
+          "file": "src/cli/handlers/orchestration-gate-cli.test.ts",
+          "assertions": ["inspects a named Run without requiring a caller terminal"]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orchestration-gate-run-authorization.test.ts",
+          "assertions": ["keeps gate-list from leaking gates outside the caller Run"]
+        },
         {
           "file": "src/main/runtime/orchestration-message-delivery-identity.test.ts",
           "assertions": [
@@ -12486,6 +12583,15 @@
       ],
       "evidenceRuns": [
         {
+          "date": "2026-08-27",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orchestration/run-coordinator-authority-migration.test.ts src/main/runtime/orchestration/orchestration-run-delivery-db.test.ts src/main/runtime/orca-runtime-process-incarnation-liveness.test.ts src/main/runtime/rpc/methods/orchestration-runs.test.ts src/main/runtime/rpc/methods/orchestration-run-remint-authority.test.ts src/main/runtime/rpc/methods/orchestration-caller-attestation.test.ts src/main/runtime/rpc/orchestration-legacy-compatibility-dispatcher.test.ts src/main/runtime/rpc/methods/orchestration-ask.test.ts src/cli/handlers/orchestration-run-cli.test.ts src/main/ipc/pty-controller-process-inventory.test.ts src/cli/handlers/orchestration-gate-cli.test.ts src/main/runtime/rpc/methods/orchestration-gates.test.ts src/main/runtime/rpc/methods/orchestration-gate-run-authorization.test.ts",
+          "result": "passed",
+          "durationSeconds": 5.23,
+          "summary": "The final focused Run-authority gate passed 143/143 across schema migration and mixed-version writes, mutation and explicit-read caller attestation, same-process remint launch proof, capability-backed and capability-less Dispatch lifecycle authority, generic and legacy reply ownership, race and Delivery fencing, owning-host liveness and deadlines, coordinator lifecycle, and CLI recovery inspection. Sixteen authority regressions failed deterministically before their fixes; the final orchestration/RPC/CLI slice passed 1,298 tests across 135 files, after an earlier broader branch gate passed 2,405 tests with one skipped."
+        },
+        {
           "date": "2026-08-13",
           "runner": "local",
           "platform": "macos",
@@ -12532,11 +12638,11 @@
       },
       "redGreenEvidence": {
         "status": "complete",
-        "evidence": "The byte-identical five-test oracle (SHA-256 76a2d672d27e04e5b1db2f52df3b303468bdf006be7cfd003bf443618a856c35) failed 5/5 on reported v1.4.180 commit 0b62333cf179, failed 5/5 on latest origin/main 9bb8836bb6, passed 5/5 on the final candidate, and failed 5/5 with candidate production changes reverted to 9bb8836bb6. Baselines announced two messages while check exposed one, returned no direct-only row after restart, left all 125 old-handle rows direct, failed commit-without-notify canonicalization, and made built CLI report one of two rows. The candidate aligned every count, stable message ID, fixed Delivery, acknowledgment, restart, backlog, and CLI/SQLite assertion. Live topology coverage remains a separate promotion gap."
+        "evidence": "The byte-identical five-test STA-4325 oracle (SHA-256 76a2d672d27e04e5b1db2f52df3b303468bdf006be7cfd003bf443618a856c35) failed 5/5 on reported v1.4.180 commit 0b62333cf179 and latest origin/main 9bb8836bb6, then passed 5/5 on its final candidate. For STA-5729, sixteen added regressions failed before implementation: same-pane process replacement mutated, an incarnation-less live coordinator was reported exited, an unbound migrated Run was stranded, a concurrent binding waiter was not cancelled, explicit headless Run inspection failed, targeted-local plus aggregate-local provider inventory dropped caller deadlines, a migrated exact-handle row accepted replacement or stale restored authority, an identity-less caller could copy the live coordinator handle for mutation or authority-bearing reads, post-migration Runs inherited revision -1, stale hook evidence rejected a proven same-process remint, bogus tokens bypassed caller attestation for capability-less Dispatches, generic replies crossed Run mailboxes, and legacy replies ignored contradictory declared senders. All sixteen passed after the authority, liveness, waiter, CLI, deadline, provenance, capability, reply-ownership, attestation, and revalidation fixes. The final orchestration/RPC/CLI slice passed 1,298 tests across 135 files after an earlier broader branch gate passed 2,405 tests with one skip. Live topology coverage remains a separate promotion gap."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "Coordinator inserts use one SQLite trigger in the insertion transaction; current handles are backfilled and historical A-to-B-to-C bindings are trigger-recorded. Bulk rebind is one indexed O(backlog) UPDATE. Detached routing is an ownership-driven UNION whose coordinator, exact-Dispatch, and pane-Dispatch branches each cap at 51 duplicate-free rows before the final merge; full drains measured 40/77/187/1,040 ms for 5k/10k/20k/100k rows versus the prior 96/429/1,908 ms at 5k/10k/20k. Each transaction routes at most 50 rows and yields between pages. Typed partial indexes keep filtered Run peek at 0.08-0.13 ms over 100k rows. Trigger overhead measured about 0.6-1.0 microseconds per message. SSH pointer writes use one cleared, unrefed 60-second timer per pending write, beyond the 20-second mux health window. No subprocess, provider fanout, polling, persistent listener, renderer work, or wire payload was added."
+        "evidence": "Coordinator inserts use one SQLite trigger in the insertion transaction; current handles are backfilled and historical A-to-B-to-C bindings are trigger-recorded. Bulk rebind is one indexed O(backlog) UPDATE. Detached routing is an ownership-driven UNION whose coordinator, exact-Dispatch, and pane-Dispatch branches each cap at 51 duplicate-free rows before the final merge; full drains measured 40/77/187/1,040 ms for 5k/10k/20k/100k rows versus the prior 96/429/1,908 ms at 5k/10k/20k. Each transaction routes at most 50 rows and yields between pages. Typed partial indexes keep filtered Run peek at 0.08-0.13 ms over 100k rows. Trigger overhead measured about 0.6-1.0 microseconds per message. Distinct run-use performs one bounded owning-provider inventory only when authority continuity fails, passes the same three-second deadline to SSH/daemon transport, and retains an outer timeout. No polling, persistent listener, renderer work, stream opcode, or recurring subprocess was added."
       },
       "promotionCriteria": [
         "Add isolated live restart and SSH or paired-runtime evidence.",

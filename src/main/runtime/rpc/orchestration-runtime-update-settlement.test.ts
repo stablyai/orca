@@ -140,9 +140,7 @@ function createUpdateHarness(): Harness {
     runtime.setOrchestrationDb(db)
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(null)
     const getProcessIncarnation = runtime.getTerminalProcessIncarnation.bind(runtime)
-    vi.spyOn(runtime, 'getTerminalProcessIncarnation')
-      .mockImplementationOnce(getProcessIncarnation)
-      .mockReturnValue(null)
+    vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation(getProcessIncarnation)
     vi.spyOn(runtime, 'notifyMessageArrived').mockImplementation(() => {})
     return new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
   }

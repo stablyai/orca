@@ -7,6 +7,14 @@ import {
   assertCallerHandleMatchesEvidence,
   resolveOrchestrationCaller
 } from './orchestration-run-scope'
+import { isCurrentRunCoordinator } from '../../orchestration/run-coordinator-authority'
+import { isEquivalentPaneKey } from '../../orchestration/db/pane-key-match'
+import {
+  isCallerCurrentRunCoordinator,
+  resolveAttestedRunCoordinatorPane,
+  resolveRunCoordinatorIdentity
+} from './orchestration-coordinator-caller'
+import { observeRunCoordinator } from './orchestration-run-coordinator-observation'
 
 const RunCreateParams = z.object({
   objective: requiredString('Missing --objective'),
@@ -38,10 +46,13 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
       })
       const db = runtime.getOrchestrationDb()
       const priorRun = db.getCurrentRunForPane(paneKey)
+      const identity = resolveRunCoordinatorIdentity(runtime, params.from, paneKey)
       const run = db.createRun({
         objective: params.objective,
         coordinatorHandle: params.from,
-        coordinatorPaneKey: paneKey
+        coordinatorPaneKey: paneKey,
+        coordinatorProcessIncarnation: identity.processIncarnation,
+        coordinatorHostScope: identity.hostScope
       })
       runtime.cancelMessageWaiters(params.from)
       if (priorRun) {
@@ -53,15 +64,19 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runUse',
     params: RunUseParams,
-    handler: (
+    handler: async (
       params,
       {
         runtime,
         legacyCoordinatorAuthority,
         orchestrationCompatibilityEvidence,
-        orchestrationCompatibilityCallerAuthority: callerAuthority
+        orchestrationCompatibilityCallerAuthority: preflightCallerAuthority
       }
     ) => {
+      let callerAuthority =
+        preflightCallerAuthority ??
+        runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence) ??
+        undefined
       const paneKey = resolveOrchestrationCaller(runtime, {
         callerTerminalHandle: params.from,
         callerEvidence: orchestrationCompatibilityEvidence,
@@ -79,13 +94,131 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
           { effectsApplied: false }
         )
       }
-      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence)
       const db = runtime.getOrchestrationDb()
+      const targetRun = db.getRun(params.id)
+      const identity = resolveRunCoordinatorIdentity(runtime, params.from, paneKey)
+      const incumbentIdentity =
+        targetRun &&
+        !targetRun.coordinator_process_incarnation &&
+        targetRun.coordinator_handle &&
+        targetRun.coordinator_handle !== params.from
+          ? resolveRunCoordinatorIdentity(
+              runtime,
+              targetRun.coordinator_handle,
+              targetRun.coordinator_pane_key
+            )
+          : null
+      const dynamicProcessContinuity = Boolean(
+        incumbentIdentity?.processIncarnation &&
+        identity.processIncarnation &&
+        incumbentIdentity.processIncarnation === identity.processIncarnation &&
+        incumbentIdentity.hostScope === identity.hostScope
+      )
+      const persistedProcessContinuity = Boolean(
+        targetRun?.coordinator_process_incarnation &&
+        targetRun.coordinator_handle !== params.from &&
+        targetRun.coordinator_process_incarnation === identity.processIncarnation &&
+        targetRun.coordinator_host_scope === identity.hostScope
+      )
+      const sameProcessRemint = dynamicProcessContinuity || persistedProcessContinuity
+      if (!callerAuthority && sameProcessRemint && orchestrationCompatibilityEvidence) {
+        callerAuthority =
+          runtime.verifyOrchestrationCompatibilityCaller(orchestrationCompatibilityEvidence, {
+            currentRuntimeLaunchSufficient: true
+          }) ?? undefined
+      }
+      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence, {
+        callerAuthority,
+        allowLegacyAuthority: Boolean(legacyCoordinatorAuthority)
+      })
+      const restoredMigratedContinuity = Boolean(
+        targetRun &&
+        targetRun.coordinator_authority_revision < 0 &&
+        callerAuthority?.terminalProvenance === 'restored' &&
+        callerAuthority.processIncarnation === identity.processIncarnation &&
+        JSON.stringify(callerAuthority.hostScope) === identity.hostScope &&
+        targetRun.coordinator_handle === params.from &&
+        targetRun.coordinator_pane_key &&
+        isEquivalentPaneKey(targetRun.coordinator_pane_key, paneKey)
+      )
+      const sameAuthority = targetRun
+        ? isCurrentRunCoordinator(targetRun, identity) ||
+          dynamicProcessContinuity ||
+          restoredMigratedContinuity
+        : false
+      const incumbentObservation =
+        targetRun && !sameAuthority
+          ? await observeRunCoordinator(runtime, targetRun, incumbentIdentity)
+          : undefined
+      const currentPaneKey = resolveOrchestrationCaller(runtime, {
+        callerTerminalHandle: params.from,
+        callerEvidence: orchestrationCompatibilityEvidence,
+        callerAuthority,
+        requireStablePane: true,
+        evidenceAssertedByCaller: true
+      })
+      assertCallerHandleMatchesEvidence(runtime, params.from, orchestrationCompatibilityEvidence, {
+        callerAuthority,
+        allowLegacyAuthority: Boolean(legacyCoordinatorAuthority)
+      })
+      const currentIdentity = resolveRunCoordinatorIdentity(runtime, params.from, currentPaneKey)
+      const revalidatedCaller = orchestrationCompatibilityEvidence
+        ? runtime.verifyOrchestrationCompatibilityCaller(
+            orchestrationCompatibilityEvidence,
+            params.takeoverLegacy || sameProcessRemint
+              ? { currentRuntimeLaunchSufficient: true }
+              : undefined
+          )
+        : null
+      const restoredContinuityStillAttested =
+        !restoredMigratedContinuity ||
+        Boolean(
+          revalidatedCaller?.terminalProvenance === 'restored' &&
+          revalidatedCaller.terminalHandle === params.from &&
+          revalidatedCaller.paneKey === paneKey &&
+          revalidatedCaller.processIncarnation === currentIdentity.processIncarnation &&
+          JSON.stringify(revalidatedCaller.hostScope) === currentIdentity.hostScope
+        )
+      const claimantStillLive = revalidatedCaller
+        ? revalidatedCaller.terminalHandle === params.from && revalidatedCaller.paneKey === paneKey
+        : legacyCoordinatorAuthority || !orchestrationCompatibilityEvidence
+          ? runtime.getLiveTerminalPaneKey(params.from) === paneKey
+          : false
+      if (
+        (incumbentObservation && !claimantStillLive) ||
+        !restoredContinuityStillAttested ||
+        currentPaneKey !== paneKey ||
+        currentIdentity.processIncarnation !== identity.processIncarnation ||
+        currentIdentity.hostScope !== identity.hostScope
+      ) {
+        const coordinatorStatus = incumbentObservation?.status === 'live' ? 'live' : 'unverifiable'
+        throw new OrchestrationError(
+          'consumer_fenced',
+          'The claiming coordinator process changed while Run authority was being checked. No effects were applied.',
+          {
+            effectsApplied: false,
+            coordinatorStatus,
+            claimantStatus: 'changed',
+            inspectCommandArgs: ['orchestration', 'run-show', '--id', params.id, '--json'],
+            retryCommandArgs: ['orchestration', 'run-use', '--id', params.id, '--json'],
+            nextSteps: [
+              `Inspect current authority by running orchestration run-show --id ${params.id} --json with the same Orca CLI executable.`,
+              coordinatorStatus === 'live'
+                ? 'Continue from the owning coordinator; do not retry while it remains live.'
+                : `From one stable replacement agent process, run orchestration run-use --id ${params.id} --json with that executable so Orca can re-prove the incumbent state.`
+            ]
+          }
+        )
+      }
       const priorRun = db.getCurrentRunForPane(paneKey)
       const run = db.bindRun({
         runId: params.id,
         coordinatorHandle: params.from,
         coordinatorPaneKey: paneKey,
+        coordinatorProcessIncarnation: identity.processIncarnation,
+        coordinatorHostScope: identity.hostScope,
+        authorityContinuity: sameProcessRemint || restoredMigratedContinuity,
+        incumbentObservation,
         takeoverLegacy: params.takeoverLegacy,
         legacyCoordinatorAuthority
       })
@@ -112,7 +245,10 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
         callerEvidence: orchestrationCompatibilityEvidence,
         requireStablePane: true
       })
-      return { run: runtime.getOrchestrationDb().getCurrentRunForPane(paneKey) ?? null }
+      const run = runtime.getOrchestrationDb().getCurrentRunForPane(paneKey)
+      return {
+        run: run && isCallerCurrentRunCoordinator(runtime, run, params.from, paneKey) ? run : null
+      }
     }
   }),
   defineMethod({
@@ -123,12 +259,31 @@ export const ORCHESTRATION_RUN_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'orchestration.runShow',
     params: RunShowParams,
-    handler: (params, { runtime }) => {
-      const run = runtime.getOrchestrationDb().getRun(params.id)
+    handler: (params, { orchestrationCompatibilityEvidence, runtime }) => {
+      const db = runtime.getOrchestrationDb()
+      const run = db.getRun(params.id)
       if (!run) {
         throw new OrchestrationError('run_not_found', `Run ${params.id} was not found.`)
       }
-      return { run }
+      const callerPaneKey = params.from
+        ? resolveAttestedRunCoordinatorPane(
+            runtime,
+            run,
+            params.from,
+            orchestrationCompatibilityEvidence
+          )
+        : null
+      return {
+        run,
+        binding: {
+          currentConsumer: Boolean(
+            params.from &&
+            run.legacy === 0 &&
+            callerPaneKey !== null &&
+            db.getCurrentRunForPane(callerPaneKey)?.id === run.id
+          )
+        }
+      }
     }
   })
 ]

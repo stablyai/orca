@@ -6,6 +6,7 @@ import type {
   OrcaRuntimeService,
   OrchestrationCompatibilityCallerAuthority
 } from '../../orca-runtime'
+import { isCallerCurrentRunCoordinator } from './orchestration-coordinator-caller'
 
 export type RunScopeParams = {
   runId?: string
@@ -21,13 +22,40 @@ export type RunScopeParams = {
 export function assertCallerHandleMatchesEvidence(
   runtime: OrcaRuntimeService,
   callerTerminalHandle: string,
-  callerEvidence?: OrchestrationCompatibilityEvidence
+  callerEvidence?: OrchestrationCompatibilityEvidence,
+  options: {
+    callerAuthority?: OrchestrationCompatibilityCallerAuthority
+    allowLegacyAuthority?: boolean
+  } = {}
 ): void {
-  if (!callerEvidence) {
+  if (callerEvidence && callerEvidence.terminalHandle !== callerTerminalHandle) {
+    throw new OrchestrationError(
+      'consumer_fenced',
+      `This terminal is attested as ${callerEvidence.terminalHandle} and cannot act as ${callerTerminalHandle}.`,
+      { effectsApplied: false }
+    )
+  }
+  // Why: trusted in-process handlers omit evidence; public RPCs receive an invalid sentinel.
+  if (!callerEvidence || options.allowLegacyAuthority) {
     return
   }
-  const attested = runtime.verifyOrchestrationCompatibilityCaller(callerEvidence)
-  if (attested && attested.terminalHandle !== callerTerminalHandle) {
+  const attested =
+    options.callerAuthority ?? runtime.verifyOrchestrationCompatibilityCaller(callerEvidence)
+  if (!attested) {
+    throw new OrchestrationError(
+      'consumer_fenced',
+      'Orchestration mutations require authenticated identity from a live Orca agent terminal. No effects were applied.',
+      {
+        effectsApplied: false,
+        nextSteps: [
+          'Run the command inside the invoking agent terminal with the version-matched Orca CLI.',
+          'Omit --from; Orca resolves and attests the invoking agent terminal automatically.',
+          'Use explicit Run reads for inspection; a copied terminal handle does not grant mutation authority.'
+        ]
+      }
+    )
+  }
+  if (attested.terminalHandle !== callerTerminalHandle) {
     throw new OrchestrationError(
       'consumer_fenced',
       `This terminal is attested as ${attested.terminalHandle} and cannot act as ${callerTerminalHandle}.`,
@@ -64,7 +92,9 @@ export function resolveOrchestrationCaller(
   params: OrchestrationCallerParams
 ): string | null {
   if (!params.evidenceAssertedByCaller) {
-    assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
+    assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence, {
+      callerAuthority: params.callerAuthority
+    })
   }
   const paneKey =
     params.callerAuthority?.terminalHandle === params.callerTerminalHandle
@@ -97,10 +127,13 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
       orchestrationSkillRecoveryData()
     )
   }
-  assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
   if (explicit && params.legacyCoordinatorRunId === explicit.id) {
+    assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence, {
+      allowLegacyAuthority: true
+    })
     return explicit
   }
+  assertCallerHandleMatchesEvidence(runtime, params.callerTerminalHandle, params.callerEvidence)
   const paneKey = params.callerPaneKey ?? runtime.getTerminalPaneKey(params.callerTerminalHandle)
   if (!paneKey) {
     throw new OrchestrationError(
@@ -109,7 +142,10 @@ export function resolveRunScope(runtime: OrcaRuntimeService, params: RunScopePar
     )
   }
   const current = db.getCurrentRunForPane(paneKey)
-  if (!current) {
+  if (
+    !current ||
+    !isCallerCurrentRunCoordinator(runtime, current, params.callerTerminalHandle, paneKey)
+  ) {
     if (explicit) {
       throw new OrchestrationError(
         'consumer_fenced',

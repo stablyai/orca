@@ -40,11 +40,16 @@ export function classifyWorkerTerminalProcessIncarnation(
   processIncarnation: string,
   sessions: readonly PtyProcessInfo[]
 ): 'live' | 'exited' | 'unverifiable' {
-  const possibleMatches = sessions.filter((session) =>
+  const directMatches = sessions.filter((session) =>
     processIncarnation.startsWith(`${session.id}:`)
   )
+  const legacyMatches = sessions.filter(
+    (session) =>
+      !processIncarnation.startsWith(`${session.id}:`) &&
+      processIncarnation.includes(`:${session.id}:`)
+  )
   if (
-    possibleMatches.some((session) => {
+    directMatches.some((session) => {
       const incarnationId = session.incarnationId
       if (!incarnationId || incarnationId !== incarnationId.trim()) {
         return false
@@ -54,7 +59,10 @@ export function classifyWorkerTerminalProcessIncarnation(
   ) {
     return 'live'
   }
-  return possibleMatches.some(
+  if (legacyMatches.length > 0) {
+    return 'unverifiable'
+  }
+  return directMatches.some(
     (session) => !session.incarnationId || session.incarnationId !== session.incarnationId.trim()
   )
     ? 'unverifiable'

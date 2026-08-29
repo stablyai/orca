@@ -78,6 +78,19 @@ describe('orchestration federation control mail', () => {
     vi.spyOn(homeRuntime, 'getTerminalPaneKey').mockImplementation((handle) =>
       handle === 'term_coord' ? coordinatorPaneKey : null
     )
+    vi.spyOn(homeRuntime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((evidence) =>
+      evidence?.terminalHandle === 'term_coord' &&
+      evidence.paneKey === coordinatorPaneKey &&
+      evidence.launchToken === 'coordinator-launch-token'
+        ? {
+            hostScope: { kind: 'local', hostId: 'local' },
+            paneKey: coordinatorPaneKey,
+            terminalHandle: 'term_coord',
+            processIncarnation: 'coordinator-process:1',
+            launchTokenHash: 'coordinator-launch-hash'
+          }
+        : null
+    )
     homeDispatcher = new RpcDispatcher({
       runtime: homeRuntime,
       methods: ORCHESTRATION_METHODS
@@ -143,6 +156,11 @@ describe('orchestration federation control mail', () => {
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'send-control-request',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term_coord',
+        paneKey: coordinatorPaneKey,
+        launchToken: 'coordinator-launch-token'
+      },
       method: 'orchestration.send',
       params: {
         from: 'term_coord',
@@ -217,6 +235,11 @@ describe('orchestration federation control mail', () => {
       authToken: 'coordinator-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'send-stale-control-request',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term_coord',
+        paneKey: coordinatorPaneKey,
+        launchToken: 'coordinator-launch-token'
+      },
       method: 'orchestration.send',
       params: {
         from: 'term_coord',

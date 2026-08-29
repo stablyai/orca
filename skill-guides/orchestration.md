@@ -99,6 +99,32 @@ Takeover fences only the old coordinator, binds the current one, and moves pendi
 
 Do not launch a replacement editor merely because the desktop app or runtime was updated. If adoption cannot prove continuing authority, keep the original worker as the only editor until it reaches a stable handoff point, then use a new current Dispatch in a conflict-free placement for any remaining work.
 
+## Run Coordinator Authority
+
+Orca orchestration is agent-operated. A Run therefore has one current coordinator agent, not a human operator. That coordinator is the sole task-graph writer and consuming mailbox reader for coordinator-side operations; workers retain only their exact Dispatch capabilities for heartbeat, questions, escalation, and `worker_done`. This is per-Run authority, not an operating-system or global Orca privilege.
+
+The single-writer rule prevents two agents from changing Task, Dispatch, worker, or gate state concurrently and prevents two consumers from acknowledging different views of the same FIFO Delivery. The current coordinator may create and update Tasks (`task-create`, `task-update`), start or dispatch workers (`worker-start`, `dispatch`), create and resolve gates (`gate-create`, `gate-resolve`), answer worker questions (`reply`), and consume or acknowledge Run mail (`check`). Explicit `run-show`, `task-list --run`, `gate-list --run`, and inbox calls remain read-only for non-owners and headless callers. `check --peek` is non-consuming, but an ordinary current Run still requires its coordinator authority; do not use it as a non-owner inspection path.
+
+`run-use` is an authority claim, not a read-only selection. When a transfer is intended, make one claim from the stable replacement agent terminal with `orca orchestration run-use --id <run_id> --json`; do not guess whether its process is a remint or spoof the owner with `--from`. Orca either preserves same-process authority, grants replacement authority after proving exit, or rejects the claim with `effectsApplied: false`.
+
+On rejection, read `error.data.coordinatorStatus`, `claimantStatus`, `nextSteps`, and any exact command-argument fields. `coordinatorStatus` is `live` or `unverifiable` because a proven `exited` incumbent permits the claim to succeed. If `claimantStatus` is `changed`, the invoking agent changed during proof; follow the returned retry arguments once from one stable process instead of treating it as a network verdict or retrying blindly. Never infer authority from a terminal handle alone.
+
+- Same coordinator process, reminted handle: authority and any outstanding Delivery are preserved without advancing the consumer generation.
+- Different process and `live` incumbent: `consumer_fenced`; continue from the owning coordinator terminal. To transfer intentionally, stop or exit the owning coordinator process before retrying from its replacement.
+- Different process and `unverifiable` incumbent: `consumer_fenced`; restore connectivity to the owning host. Loss of contact is never evidence of exit, including SSH, relay, Windows, WSL, and federated runtimes.
+- Different process and `exited` incumbent: the replacement may run `orca orchestration run-use --id <run_id> --json`. Orca advances the consumer generation, fences the old outstanding Delivery, preserves pending Run mail and worker assignments, and grants the replacement coordinator authority.
+
+Inspect without claiming authority:
+
+```bash
+orca orchestration run-show --id <run_id> --json
+orca orchestration task-list --run <run_id> --json
+```
+
+`binding.currentConsumer` is `true` only for the current coordinator. `false` permits inspection, not coordinator mutations or consuming `check` calls, and never proves that the Run is unowned.
+
+No live-to-live transfer command exists. A seamless live handoff would require a separate owner-authorized protocol; do not simulate one by retrying, changing `--from`, or replacing a terminal handle. `--takeover-legacy` is not a force override for ordinary Runs: it is limited to the automatically adopted legacy Run described above.
+
 ## Ownership
 
 New orchestration messages and tasks belong to one explicitly bound Run. A Run is only a durable namespace and coordinator inbox; it never schedules or places workers. Lifecycle authority comes from the active Dispatch, and terminal handles remain routing metadata rather than durable identity. Send `worker_done` and `heartbeat` from the worker's own terminal; Orca routes them to that Dispatch's Run.
@@ -135,7 +161,7 @@ orca orchestration inbox [--limit <n>] [--json]
 
 Rules:
 
-- Omit `--from` unless impersonating another terminal; Orca auto-resolves it from the current terminal.
+- Omit `--from` unless an injected preamble or exact recovery command supplies it; Orca normally resolves the current terminal. A declared handle is routing input, never proof of coordinator authority or a transfer mechanism.
 - A coordinator `check` returns the bound Run's oldest FIFO Delivery (up to 50 messages) and replays that exact batch until `--ack <delivery_id>`. Process every message before acknowledging; `check --ack <id> --wait` acknowledges, checks, and waits in one operation.
 - Use `--peek` and `--all` only for read-only history/debugging. Type filters decide when a waiter wakes; the returned actionable Delivery is still the oldest full batch.
 - Use `dispatch:<id>` for coordinator guidance to one supervised worker. Orca routes that stable address locally or through the connected-server relay; do not substitute a remote terminal handle.
@@ -198,7 +224,9 @@ Two limits worth knowing:
 
 - **It is a guardrail, not a security boundary.** A caller that declares another terminal's
   handle while its own launch evidence is unverifiable (an ordinary restored terminal, for
-  example) can be counted as that terminal instead. Orca does not treat workers as hostile.
+  example) can be counted as that terminal instead. This affects only nesting-depth
+  classification; it never grants coordinator or Dispatch authority. Orca does not treat
+  workers as hostile.
 - **It applies while a Dispatch is active.** After `worker_done`, or after a coordinator
   settles the task, the terminal is no longer a worker and is counted as a root again. The
   process may still be alive; that is the documented boundary, not an accident.

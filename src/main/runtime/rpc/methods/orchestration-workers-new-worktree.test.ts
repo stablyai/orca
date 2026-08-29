@@ -34,7 +34,23 @@ describe('orchestration new-worktree workers', () => {
           : null
     )
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((handle) =>
-      handle === 'term_worker' ? 'runtime_test:term_worker:1' : null
+      handle === 'term_worker'
+        ? 'runtime_test:term_worker:1'
+        : handle === 'term_coord'
+          ? 'runtime_test:term_coord:1'
+          : null
+    )
+    vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((evidence) =>
+      evidence?.terminalHandle === 'term_coord' && evidence.paneKey === coordinatorPaneKey
+        ? {
+            terminalHandle: evidence.terminalHandle,
+            paneKey: evidence.paneKey,
+            processIncarnation: 'runtime_test:term_coord:1',
+            hostScope: { kind: 'local', hostId: 'local' },
+            launchTokenHash: 'test-token-hash',
+            terminalProvenance: 'current_runtime'
+          }
+        : null
     )
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
     vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
@@ -537,6 +553,11 @@ describe('orchestration new-worktree workers', () => {
       authToken: 'caller-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'worker_start_request',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term_coord',
+        paneKey: coordinatorPaneKey,
+        launchToken: 'coordinator-launch-token'
+      },
       method: 'orchestration.workerStart',
       params: {
         task: task.id,
@@ -604,6 +625,11 @@ describe('orchestration new-worktree workers', () => {
       authToken: 'caller-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: 'worker_start_request',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term_coord',
+        paneKey: coordinatorPaneKey,
+        launchToken: 'coordinator-launch-token'
+      },
       method: 'orchestration.workerStart',
       params: {
         task: task.id,
@@ -632,6 +658,20 @@ describe('orchestration new-worktree workers', () => {
         ? `tab_coord_reminted:${coordinatorPaneKey.split(':')[1]}`
         : null
     )
+    vi.spyOn(restartedRuntime, 'verifyOrchestrationCompatibilityCaller').mockImplementation(
+      (evidence) =>
+        evidence?.terminalHandle === 'term_coord_reminted' &&
+        evidence.paneKey === `tab_coord_reminted:${coordinatorPaneKey.split(':')[1]}`
+          ? {
+              terminalHandle: evidence.terminalHandle,
+              paneKey: evidence.paneKey,
+              processIncarnation: 'runtime_test:term_coord:1',
+              hostScope: { kind: 'local', hostId: 'local' },
+              launchTokenHash: 'test-token-hash',
+              terminalProvenance: 'restored'
+            }
+          : null
+    )
     const recreateWorktree = vi
       .spyOn(restartedRuntime, 'createManagedWorktree')
       .mockRejectedValue(new Error('replay recreated the worktree'))
@@ -646,6 +686,11 @@ describe('orchestration new-worktree workers', () => {
       ...request,
       id: 'rpc_worker_start_retry',
       authToken: 'caller-token-after-restart',
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term_coord_reminted',
+        paneKey: `tab_coord_reminted:${coordinatorPaneKey.split(':')[1]}`,
+        launchToken: 'coordinator-launch-token-after-restart'
+      },
       params: { ...(request.params as Record<string, unknown>), from: 'term_coord_reminted' }
     })
 

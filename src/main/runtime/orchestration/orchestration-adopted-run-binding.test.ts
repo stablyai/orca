@@ -184,8 +184,8 @@ describe('adopted Run binding without --takeover-legacy', () => {
     expect(db.getLegacyCompatibilityPrincipal(principalId)?.status).toBe('revoked')
   })
 
-  // Why: the acknowledgement is per claimant, not one-shot — a prior takeover does not license the next.
-  it('keeps fencing new claimants while legacy work stays live', () => {
+  // Why: the flag authorizes only the legacy-to-current cutover, never a second current coordinator.
+  it('keeps fencing flagged claimants after legacy takeover', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: false })
     db.bindRun({
       runId: adoptedRunId,
@@ -198,24 +198,44 @@ describe('adopted Run binding without --takeover-legacy', () => {
       db.bindRun({
         runId: adoptedRunId,
         coordinatorHandle: 'term_second_coord',
-        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222'
+        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222',
+        takeoverLegacy: true
       })
     ).toThrowError(expect.objectContaining({ code: 'consumer_fenced' }))
   })
 
-  it('lets a later coordinator claim the settled Run once the first one has', () => {
+  it('requires proven exit before a later coordinator replaces a settled Run claimant', () => {
     const { db, adoptedRunId } = createAdoptedFixture({ settleWork: true })
     db.bindRun({
       runId: adoptedRunId,
       coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
-      coordinatorPaneKey: CURRENT_COORDINATOR_PANE
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
+      coordinatorProcessIncarnation: 'pty-current:incarnation-1',
+      coordinatorHostScope: JSON.stringify({ kind: 'local', hostId: 'local' })
     })
+
+    const observation = {
+      coordinatorHandle: CURRENT_COORDINATOR_HANDLE,
+      coordinatorPaneKey: CURRENT_COORDINATOR_PANE,
+      coordinatorProcessIncarnation: 'pty-current:incarnation-1',
+      coordinatorHostScope: JSON.stringify({ kind: 'local', hostId: 'local' }),
+      status: 'live' as const
+    }
+    expect(() =>
+      db.bindRun({
+        runId: adoptedRunId,
+        coordinatorHandle: 'term_second_coord',
+        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222',
+        incumbentObservation: observation
+      })
+    ).toThrowError(expect.objectContaining({ code: 'consumer_fenced' }))
 
     expect(
       db.bindRun({
         runId: adoptedRunId,
         coordinatorHandle: 'term_second_coord',
-        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222'
+        coordinatorPaneKey: 'tab_second:22222222-2222-4222-8222-222222222222',
+        incumbentObservation: { ...observation, status: 'exited' }
       })
     ).toMatchObject({ coordinator_handle: 'term_second_coord', consumer_generation: 2 })
   })
@@ -283,7 +303,9 @@ describe('pane-bound Run lookup', () => {
     const shared = db.createRun({
       objective: 'first',
       coordinatorHandle: 'term_d',
-      coordinatorPaneKey: 'tab_one:99999999-9999-4999-8999-999999999999'
+      coordinatorPaneKey: 'tab_one:99999999-9999-4999-8999-999999999999',
+      coordinatorProcessIncarnation: 'pty-d:incarnation-1',
+      coordinatorHostScope: JSON.stringify({ kind: 'local', hostId: 'local' })
     })
     const untouched = db.createRun({
       objective: 'other pane',
@@ -294,12 +316,16 @@ describe('pane-bound Run lookup', () => {
     const rebound = db.createRun({
       objective: 'second',
       coordinatorHandle: 'term_d',
-      coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999'
+      coordinatorPaneKey: 'tab_reminted:99999999-9999-4999-8999-999999999999',
+      coordinatorProcessIncarnation: 'pty-d:incarnation-1',
+      coordinatorHostScope: JSON.stringify({ kind: 'local', hostId: 'local' })
     })
 
     // createRun binds at generation 1; the unbind fences it to 2.
     expect(db.getRun(shared.id)).toMatchObject({
       coordinator_pane_key: null,
+      coordinator_process_incarnation: null,
+      coordinator_host_scope: null,
       consumer_generation: 2
     })
     expect(db.getRun(untouched.id)).toMatchObject({

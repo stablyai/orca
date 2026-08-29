@@ -162,7 +162,7 @@ describe('legacy coordinator fence jurisdiction', () => {
     expect(harness.db.listTasks({ runId: harness.adoptedRunId })).toHaveLength(1)
   })
 
-  it('lets the post-takeover owner operate the adopted Run without attestation', async () => {
+  it('requires attestation from the post-takeover owner', async () => {
     const harness = createHarness()
     await claimAdoptedRunAsLegacyCoordinator(harness)
     await takeoverAdoptedRun(harness)
@@ -181,8 +181,8 @@ describe('legacy coordinator fence jurisdiction', () => {
     )
 
     expect(response).toMatchObject({
-      ok: true,
-      result: { task: { run_id: harness.adoptedRunId, spec: 'owner assignment' } }
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
     })
   })
 })

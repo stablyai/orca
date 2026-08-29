@@ -53,7 +53,7 @@ describe('orchestration RPC methods', () => {
     })
 
     it('records the caller pane, process, and Run generation when creating a task', async () => {
-      setup()
+      setup(false)
       vi.spyOn(runtime, 'getTerminalPaneKey').mockImplementation((handle) =>
         handle === 'term_creator' ? coordinatorPaneKey : null
       )
@@ -62,9 +62,14 @@ describe('orchestration RPC methods', () => {
         paneKey: coordinatorPaneKey,
         processIncarnation: 'pty-creator:incarnation-a'
       } as never)
+      const created = (await call('orchestration.runCreate', {
+        objective: 'Creator authority',
+        from: 'term_creator'
+      })) as { run: { id: string } }
       const result = (await call('orchestration.taskCreate', {
         spec: 'spawn related workspace',
-        callerTerminalHandle: 'term_creator'
+        callerTerminalHandle: 'term_creator',
+        run: created.run.id
       })) as { task: { id: string } }
 
       expect(db.getTask(result.task.id)).toMatchObject({

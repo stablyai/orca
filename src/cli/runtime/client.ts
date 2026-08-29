@@ -30,6 +30,7 @@ import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
 } from './orchestration-recovery-command'
+import { refreshOrchestrationCallerHandleAfterPaneRemint } from './orchestration-caller-handle-remint'
 
 // Why: for long-poll methods the caller's method-level
 // `params.timeoutMs` is the inner waiter budget; we extend the client-side
@@ -55,9 +56,7 @@ export class RuntimeClient {
   private readonly originalArgs: readonly string[] | undefined
   private readonly remoteCompat: RemoteRuntimeCompatGate
   private orchestrationContractCheck: Promise<void> | null = null
-  private readonly orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(
-    process.env
-  )
+  private orchestrationCompatibility = createOrchestrationCompatibilityEnvelope(process.env)
 
   // Why: browser commands trigger first-time session init (agent-browser connect +
   // CDP proxy setup) which can take 15-30s. 60s accommodates cold start without
@@ -81,6 +80,19 @@ export class RuntimeClient {
 
   get isRemote(): boolean {
     return this.remotePairing !== null
+  }
+
+  refreshOrchestrationCallerHandleAfterPaneRemint(
+    previousHandle: string,
+    paneKey: string,
+    remintedHandle: string
+  ): void {
+    this.orchestrationCompatibility = refreshOrchestrationCallerHandleAfterPaneRemint(
+      this.orchestrationCompatibility,
+      previousHandle,
+      paneKey,
+      remintedHandle
+    )
   }
 
   async call<TResult>(

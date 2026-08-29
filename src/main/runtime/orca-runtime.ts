@@ -2517,6 +2517,7 @@ export type OrchestrationCompatibilityCallerAuthority = Readonly<{
   terminalHandle: string
   processIncarnation: string
   launchTokenHash: string
+  terminalProvenance?: 'current_runtime' | 'restored'
 }>
 
 type RestoredOrchestrationAuthorityReceipt = Readonly<{
@@ -15821,7 +15822,8 @@ export class OrcaRuntimeService {
         terminal.processIncarnation,
         claimedPaneKey,
         terminalHandle,
-        launchTokenHash
+        launchTokenHash,
+        terminalProvenance
       )
     }
     const attestation = this.attestAgentHookCompatibilityAuthorityFn?.({
@@ -15838,7 +15840,8 @@ export class OrcaRuntimeService {
       terminal.processIncarnation,
       attestation.paneKey,
       terminalHandle,
-      launchTokenHash
+      launchTokenHash,
+      terminalProvenance
     )
   }
 
@@ -15847,14 +15850,16 @@ export class OrcaRuntimeService {
     processIncarnation: string,
     paneKey: string,
     terminalHandle: string,
-    launchTokenHash: string
+    launchTokenHash: string,
+    terminalProvenance: 'current_runtime' | 'restored'
   ): OrchestrationCompatibilityCallerAuthority {
     return Object.freeze({
       hostScope: Object.freeze({ ...terminal.hostScope }),
       paneKey,
       terminalHandle,
       processIncarnation,
-      launchTokenHash
+      launchTokenHash,
+      terminalProvenance
     })
   }
 
@@ -19426,8 +19431,11 @@ export class OrcaRuntimeService {
     if (!hostScope || !this.ptyController?.listProcesses) {
       return 'unverifiable'
     }
+    const deadlineMs = Date.now() + PTY_CONTROLLER_LIST_TIMEOUT_MS
     const listed = await withTimeoutResult(
-      this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null),
+      this.ptyController.listProcesses(hostScope.kind === 'ssh' ? hostScope.targetId : null, {
+        deadlineMs
+      }),
       PTY_CONTROLLER_LIST_TIMEOUT_MS
     )
     if (!listed.ok) {

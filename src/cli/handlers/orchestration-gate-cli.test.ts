@@ -158,7 +158,7 @@ describe('orchestration gate commands carry caller identity', () => {
     )
   })
 
-  it('inspects a named Run without resolving a caller terminal', async () => {
+  it('inspects a named Run without requiring a caller terminal', async () => {
     // Why: read-only inspection must stay reachable from a pane with no bound Run.
     getTerminalHandleMock.mockRejectedValue(
       new RuntimeClientError('no_active_terminal', 'no active terminal')
@@ -167,16 +167,21 @@ describe('orchestration gate commands carry caller identity', () => {
       callMock,
       okFixture('req_list', {
         gates: [{ id: 'gate_1', task_id: 'task_1', question: 'ship?', status: 'pending' }],
-        count: 1
+        count: 1,
+        runId: 'run_adopted',
+        binding: { currentConsumer: false }
       })
     )
 
-    await main(['orchestration', 'gate-list', '--run', 'run_adopted', '--json'], '/tmp/repo')
+    await main(['orchestration', 'gate-list', '--run', 'run_adopted'], '/tmp/repo')
 
     expect(process.exitCode).toBe(0)
-    expect(getTerminalHandleMock).not.toHaveBeenCalled()
+    expect(getTerminalHandleMock).toHaveBeenCalled()
     expect(paramsFor('orchestration.gateList')).toEqual(
       expect.objectContaining({ run: 'run_adopted', from: undefined })
+    )
+    expect(logSpy.mock.calls.map((call) => String(call[0])).join('\n')).toContain(
+      'listed read-only'
     )
   })
 

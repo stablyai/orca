@@ -63,7 +63,7 @@ describe('orchestration gate Run authorization', () => {
 
   it('G2 refuses an unattested caller creating a gate on another Run task', async () => {
     const harness = createHarness()
-    const runA = bindCurrentCoordinatorRun(harness)
+    bindCurrentCoordinatorRun(harness)
     const before = adoptedTaskState(harness)
 
     const response = await harness.dispatcher.dispatch(
@@ -78,8 +78,8 @@ describe('orchestration gate Run authorization', () => {
     expect(response).toMatchObject({
       ok: false,
       error: {
-        code: 'task_not_found',
-        message: `Task ${harness.taskId} was not found in Run ${runA}.`
+        code: 'consumer_fenced',
+        data: { effectsApplied: false }
       }
     })
     expect(adoptedTaskState(harness)).toEqual(before)
@@ -214,7 +214,10 @@ describe('orchestration gate Run authorization', () => {
       )
     )
 
-    expect(response).toMatchObject({ ok: false, error: { message: `Gate not found: ${gate.id}` } })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+    })
     expect(harness.db.getGate(gate.id)?.status).toBe('pending')
     expect(harness.db.getTask(harness.taskId)?.status).toBe('blocked')
   })
@@ -237,7 +240,12 @@ describe('orchestration gate Run authorization', () => {
 
     expect(response).toMatchObject({
       ok: true,
-      result: { runId: runA, count: 1, gates: [{ id: ownGate.id }] }
+      result: {
+        runId: runA,
+        binding: { currentConsumer: true },
+        count: 1,
+        gates: [{ id: ownGate.id }]
+      }
     })
   })
 

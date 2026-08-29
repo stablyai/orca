@@ -6,7 +6,10 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { RpcContext, RpcRequest } from '../core'
 import { RpcDispatcher } from '../dispatcher'
 import { ORCHESTRATION_METHODS } from './orchestration'
-import { createOrchestrationRpcHarness } from './orchestration-rpc-test-harness'
+import {
+  COORDINATOR_PANE_KEY,
+  createOrchestrationRpcHarness
+} from './orchestration-rpc-test-harness'
 import { createRootDispatch } from '../../orchestration/db/root-dispatch-test-fixture'
 
 type SendWarning = { code: string; recipient: string; message: string }
@@ -249,7 +252,8 @@ describe('orchestration recipient routing oracle', () => {
     db.bindRun({
       runId: senderRunId,
       coordinatorHandle: 'term_current',
-      coordinatorPaneKey: 'tab_current:leaf_current'
+      coordinatorPaneKey: 'tab_current:leaf_current',
+      authorityContinuity: true
     })
     mockTerminalPaneKeys((handle) =>
       handle === 'term_current' ? 'tab_current:leaf_current' : null
@@ -330,7 +334,8 @@ describe('orchestration recipient routing oracle', () => {
     db.bindRun({
       runId: foreignRun.id,
       coordinatorHandle: 'term_foreign_second',
-      coordinatorPaneKey: 'tab_foreign_second:leaf_foreign_second'
+      coordinatorPaneKey: 'tab_foreign_second:leaf_foreign_second',
+      authorityContinuity: true
     })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [
@@ -363,12 +368,14 @@ describe('orchestration recipient routing oracle', () => {
     db.bindRun({
       runId: senderRunId,
       coordinatorHandle: 'term_middle',
-      coordinatorPaneKey: 'tab_middle:leaf_middle'
+      coordinatorPaneKey: 'tab_middle:leaf_middle',
+      authorityContinuity: true
     })
     db.bindRun({
       runId: senderRunId,
       coordinatorHandle: 'term_sender',
-      coordinatorPaneKey: 'tab_sender:leaf_sender'
+      coordinatorPaneKey: 'tab_sender:leaf_sender',
+      authorityContinuity: true
     })
     vi.spyOn(runtime, 'listTerminals').mockResolvedValue({
       terminals: [
@@ -578,6 +585,11 @@ function request(
     method: 'orchestration.send',
     params: { from: 'term_coord', to, subject: 'retry', ...extraParams },
     orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
-    orchestrationRequestId: requestId
+    orchestrationRequestId: requestId,
+    orchestrationCompatibilityEvidence: {
+      terminalHandle: 'term_coord',
+      paneKey: COORDINATOR_PANE_KEY,
+      launchToken: 'coordinator-launch-token'
+    }
   }
 }

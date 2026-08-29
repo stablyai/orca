@@ -264,9 +264,10 @@ describe('orchestration mailbox routing races', () => {
     const harness = createRuntime(db)
     const run = db.createRun({
       objective: 'Split Run handles',
-      coordinatorHandle: 'term_previous_coordinator',
+      coordinatorHandle: TERMINAL_HANDLE,
       coordinatorPaneKey: PANE_KEY
     })
+    db.rememberRunCoordinatorHandle(run.id, 'term_previous_coordinator')
     const current = insertDirectRunMessage(db, run.id, 'Current handle')
     const previous = db.insertMessage({
       from: 'term_worker',

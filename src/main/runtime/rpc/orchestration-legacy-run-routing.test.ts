@@ -43,7 +43,7 @@ describe('legacy coordinator gate run routing', () => {
     }
   )
 
-  it('routes an unnamed Run to the caller binding even when attestation fails', async () => {
+  it('does not route an unnamed Run from an unattested caller', async () => {
     const harness = createHarness()
     const run = harness.db.createRun({
       objective: 'current work',
@@ -64,9 +64,10 @@ describe('legacy coordinator gate run routing', () => {
     )
 
     expect(response).toMatchObject({
-      ok: true,
-      result: { task: { run_id: run.id, spec: 'fresh assignment' } }
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
     })
+    expect(harness.db.listTasks({ runId: run.id })).toHaveLength(0)
   })
 
   it('lets a current coordinator rebind the unclaimed adopted Run with actionable guidance', async () => {

@@ -31,7 +31,7 @@ describe('orchestration RPC methods', () => {
       setup()
       const original = db.insertMessage({
         from: 'a',
-        to: 'b',
+        to: `run:${activeRunId}`,
         subject: 'question',
         runId: activeRunId
       })
@@ -39,7 +39,7 @@ describe('orchestration RPC methods', () => {
       const result = (await call('orchestration.reply', {
         id: original.id,
         body: 'answer',
-        from: 'b'
+        from: 'term_coord'
       })) as {
         message: { to_handle: string; subject: string; thread_id: string; run_id: string }
       }

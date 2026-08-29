@@ -4,7 +4,10 @@ import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { abbreviateOrchestrationTasks } from '../../../shared/orchestration-task-summary'
 import { callOrchestrationMutation } from './mutation-request'
-import { resolveCoordinatorTerminalHandle } from './terminal-identity'
+import {
+  resolveCoordinatorTerminalHandle,
+  resolveOptionalCoordinatorTerminalHandle
+} from './terminal-identity'
 
 const TASK_STATUS_VALUES = [
   'pending',
@@ -39,7 +42,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
     const brief = flags.has('brief')
     const run = getOptionalStringFlag(flags, 'run')
     const callerTerminalHandle = run
-      ? undefined
+      ? await resolveOptionalCoordinatorTerminalHandle(flags, cwd, client)
       : await resolveCoordinatorTerminalHandle(flags, cwd, client)
     const result = await client.call<{
       tasks: {
@@ -55,6 +58,7 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
       count: number
       runId?: string
       legacyReadOnly?: boolean
+      binding?: { currentConsumer: boolean }
     }>('orchestration.taskList', {
       status: getOptionalStringFlag(flags, 'status'),
       ready: flags.has('ready') ? true : undefined,
@@ -72,8 +76,15 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
         }
       : result
     printResult(output, json, (r) => {
+      const nonOwnerNotice =
+        r.binding?.currentConsumer === false
+          ? `Run ${r.runId} is not bound to this terminal; listed read-only. Mutations require the owning coordinator.`
+          : undefined
       if (r.count === 0) {
-        return r.legacyReadOnly ? 'No legacy tasks (read-only).' : 'No tasks.'
+        if (r.legacyReadOnly) {
+          return 'No legacy tasks (read-only).'
+        }
+        return nonOwnerNotice ? `${nonOwnerNotice}\nNo tasks.` : 'No tasks.'
       }
       const tasks = r.tasks
         .map((task) => {
@@ -85,7 +96,10 @@ export const ORCHESTRATION_TASK_HANDLERS: Record<string, CommandHandler> = {
           return head
         })
         .join('\n')
-      return r.legacyReadOnly ? `Legacy Run ${r.runId} (read-only)\n${tasks}` : tasks
+      if (r.legacyReadOnly) {
+        return `Legacy Run ${r.runId} (read-only)\n${tasks}`
+      }
+      return nonOwnerNotice ? `${nonOwnerNotice}\n${tasks}` : tasks
     })
   },
 

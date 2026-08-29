@@ -1,3 +1,7 @@
+import {
+  isWorkerStartTimeoutWithinTimerLimit,
+  resolveWorkerStartReadinessTimeoutMs
+} from '../../../../shared/orchestration-timing-budgets'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { buildDispatchPreamble } from '../../orchestration/preamble'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
@@ -22,10 +26,7 @@ import { failWorkerStartWithReceipt } from './orchestration-worker-start-receipt
 import { prepareLocalWorkerStart } from './orchestration-worker-start-validation'
 import { resolveDispatchCreator } from './orchestration-dispatch-creator'
 import { resolveOrchestrationCaller } from './orchestration-run-scope'
-import {
-  isWorkerStartTimeoutWithinTimerLimit,
-  resolveWorkerStartReadinessTimeoutMs
-} from '../../../../shared/orchestration-timing-budgets'
+import { isCallerCurrentRunCoordinator } from './orchestration-coordinator-caller'
 
 export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
   defineMethod({
@@ -50,7 +51,11 @@ export const ORCHESTRATION_WORKER_START_METHODS: RpcMethod[] = [
         callerEvidence: orchestrationCompatibilityEvidence
       })
       const run = coordinatorPane ? db.getCurrentRunForPane(coordinatorPane) : undefined
-      if (!run || (params.run && params.run !== run.id)) {
+      if (
+        !run ||
+        !isCallerCurrentRunCoordinator(runtime, run, params.from, coordinatorPane) ||
+        (params.run && params.run !== run.id)
+      ) {
         throw new OrchestrationError(
           'consumer_fenced',
           'worker-start requires the coordinator terminal currently bound to the Task Run.'

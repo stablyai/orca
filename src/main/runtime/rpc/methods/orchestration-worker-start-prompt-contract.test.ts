@@ -105,7 +105,23 @@ async function createPromptContractHarness(
         : null
   )
   vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockImplementation((candidate) =>
-    candidate === handle ? `runtime_test:${handle}:1` : null
+    candidate === handle
+      ? `runtime_test:${handle}:1`
+      : candidate === 'term_coord'
+        ? 'runtime_test:term_coord:1'
+        : null
+  )
+  vi.spyOn(runtime, 'verifyOrchestrationCompatibilityCaller').mockImplementation((evidence) =>
+    evidence?.terminalHandle === 'term_coord' && evidence.paneKey === COORDINATOR_PANE_KEY
+      ? {
+          terminalHandle: evidence.terminalHandle,
+          paneKey: evidence.paneKey,
+          processIncarnation: 'runtime_test:term_coord:1',
+          hostScope: { kind: 'local', hostId: 'local' },
+          launchTokenHash: 'test-token-hash',
+          terminalProvenance: 'current_runtime'
+        }
+      : null
   )
   vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
   vi.spyOn(runtime, 'showTerminal').mockResolvedValue({
@@ -139,6 +155,11 @@ async function createPromptContractHarness(
       authToken: 'caller-token',
       orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
       orchestrationRequestId: `${REQUEST_ID}_${outcome}`,
+      orchestrationCompatibilityEvidence: {
+        terminalHandle: 'term_coord',
+        paneKey: COORDINATOR_PANE_KEY,
+        launchToken: 'coordinator-launch-token'
+      },
       method: 'orchestration.workerStart',
       params: {
         task: task.id,

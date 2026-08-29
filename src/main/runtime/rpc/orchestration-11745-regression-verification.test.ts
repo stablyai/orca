@@ -137,7 +137,10 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
       )
     )
 
-    expect(response).toMatchObject({ ok: false, error: { code: 'task_not_found' } })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+    })
     expect(adoptedGraph(harness)).toEqual(before)
   })
 
@@ -175,7 +178,10 @@ describe('#11745 H1 — gate methods authorize the caller Run', () => {
       )
     )
 
-    expect(response).toMatchObject({ ok: false, error: { message: `Gate not found: ${gate.id}` } })
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
+    })
     expect(harness.db.getGate(gate.id)).toMatchObject({ status: 'pending', resolution: null })
     expect(adoptedGraph(harness)).toEqual(before)
     expect(before.task).toBe('blocked')
@@ -558,7 +564,7 @@ describe('#11745 H3 — adopted Run claimed by the legacy coordinator', () => {
 })
 
 describe('#11745 H4 — unattested caller on a taken-over adopted Run', () => {
-  it('DOCUMENTS the accepted behaviour: the binding alone grants authority', async () => {
+  it('requires attestation after a current coordinator takes over an adopted Run', async () => {
     const harness = createHarness()
     await legacyClaimsAdoptedRun(harness, 'v-h4')
     await currentCoordinatorTakesOver(harness, 'v-h4')
@@ -577,8 +583,8 @@ describe('#11745 H4 — unattested caller on a taken-over adopted Run', () => {
     )
 
     expect(response).toMatchObject({
-      ok: true,
-      result: { task: { run_id: harness.adoptedRunId } }
+      ok: false,
+      error: { code: 'consumer_fenced', data: { effectsApplied: false } }
     })
   })
 

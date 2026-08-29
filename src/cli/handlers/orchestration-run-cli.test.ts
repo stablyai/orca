@@ -119,6 +119,75 @@ describe('lightweight Run CLI handlers', () => {
       takeoverLegacy: true
     })
   })
+
+  it('discloses a non-owner run-show as read-only', async () => {
+    const response = {
+      result: {
+        run: {
+          id: 'run_1',
+          objective: 'Inspect work',
+          consumer_generation: 1,
+          legacy: 0,
+          created_at: '2026-08-27 20:00:00'
+        },
+        binding: { currentConsumer: false }
+      }
+    }
+    callMock.mockResolvedValue(response)
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration run-show']({
+      flags: new Map([['id', 'run_1']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: false
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runShow', {
+      id: 'run_1',
+      from: 'term_coord'
+    })
+    const format = vi.mocked(printResult).mock.calls[0]?.[2] as (result: {
+      run: {
+        id: string
+        objective: string
+        consumer_generation: number
+        legacy: number
+        created_at: string
+      }
+      binding: { currentConsumer: boolean }
+    }) => string
+    expect(format(response.result)).toContain('shown read-only')
+  })
+
+  it('discloses headless run-show inspection as read-only', async () => {
+    delete process.env.ORCA_TERMINAL_HANDLE
+    getTerminalHandleMock.mockRejectedValue({ code: 'no_active_terminal' })
+    callMock.mockResolvedValue({
+      result: {
+        run: {
+          id: 'run_1',
+          objective: 'Inspect headlessly',
+          consumer_generation: 1,
+          legacy: 0,
+          created_at: '2026-08-27 20:00:00'
+        },
+        binding: { currentConsumer: false }
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration run-show']({
+      flags: new Map([['id', 'run_1']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith('orchestration.runShow', {
+      id: 'run_1',
+      from: undefined
+    })
+  })
 })
 
 describe('orchestration reset CLI handler', () => {
@@ -174,6 +243,69 @@ describe('orchestration reset CLI handler', () => {
 })
 
 describe('orchestration task-list brief output', () => {
+  it('keeps explicit Run inspection available without an active terminal', async () => {
+    delete process.env.ORCA_TERMINAL_HANDLE
+    getTerminalHandleMock.mockRejectedValue({ code: 'no_active_terminal' })
+    callMock.mockReset().mockResolvedValue({
+      result: {
+        tasks: [],
+        count: 0,
+        runId: 'run_1',
+        binding: { currentConsumer: false }
+      }
+    })
+
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map([['run', 'run_1']]),
+      client: { call: callMock },
+      cwd: '/tmp/repo',
+      json: true
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.taskList',
+      expect.objectContaining({ run: 'run_1', callerTerminalHandle: undefined })
+    )
+  })
+
+  it('discloses non-owner inspection even when the Run has no tasks', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_inspector'
+    callMock.mockReset().mockResolvedValue({
+      result: {
+        tasks: [],
+        count: 0,
+        runId: 'run_1',
+        binding: { currentConsumer: false }
+      }
+    })
+    vi.mocked(printResult).mockClear()
+
+    await ORCHESTRATION_HANDLERS['orchestration task-list']({
+      flags: new Map([['run', 'run_1']]),
+      client: { call: callMock },
+      json: false
+    } as never)
+
+    expect(callMock).toHaveBeenCalledWith(
+      'orchestration.taskList',
+      expect.objectContaining({ run: 'run_1', callerTerminalHandle: 'term_inspector' })
+    )
+    const format = vi.mocked(printResult).mock.calls[0]?.[2] as (result: {
+      count: number
+      runId: string
+      tasks: never[]
+      binding: { currentConsumer: boolean }
+    }) => string
+    expect(
+      format({
+        count: 0,
+        runId: 'run_1',
+        tasks: [],
+        binding: { currentConsumer: false }
+      })
+    ).toContain('not bound to this terminal')
+  })
+
   it('requests server-side brief and falls back client-side for older runtimes', async () => {
     callMock.mockReset().mockResolvedValue({
       result: {
