@@ -182,6 +182,28 @@ describe('PiTitlebarExtensionService', () => {
     expectPiHomeIntact()
   })
 
+  // Why: the spinner ships to both Pi and OMP, which share the session-replacement
+  // lifecycle that crashed the agent — so the fix has to reach both launch paths,
+  // not just Pi's (STA-4246). Prime's exclusion is asserted in the Prime spec above.
+  it('installs the session-replacement-safe titlebar spinner for both Pi and OMP', () => {
+    const svc = new PiTitlebarExtensionService()
+
+    for (const kind of ['pi', 'omp'] as const) {
+      svc.buildPtyEnv(`pty-spinner-${kind}`, piHome, kind)
+      const source = readFileSync(join(piHome, 'extensions', 'orca-titlebar-spinner.ts'), 'utf-8')
+      expect(source).toContain("pi.on('session_start'")
+
+      // The crashing frame read the session handle on every tick; it must not anymore.
+      const bodyStart = source.indexOf('timer = setInterval(')
+      const bodyEnd = source.indexOf('}, FRAME_INTERVAL_MS)')
+      expect(bodyStart).toBeGreaterThan(-1)
+      expect(bodyEnd).toBeGreaterThan(bodyStart)
+      expect(source.slice(bodyStart, bodyEnd)).not.toContain('pi.getSessionName()')
+    }
+
+    expectPiHomeIntact()
+  })
+
   it('uses the same source dir for multiple PTYs with the same Pi dir', () => {
     const svc = new PiTitlebarExtensionService()
     const firstEnv = svc.buildPtyEnv('pty-shared-1', piHome, 'pi')
