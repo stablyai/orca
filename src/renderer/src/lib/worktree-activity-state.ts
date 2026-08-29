@@ -9,6 +9,8 @@ import { resolveAgentStatusWorktreeId } from './agent-status-worktree-attributio
 type TerminalLikeTab = Pick<TerminalTab, 'id'>
 type BrowserLikeTab = { id: string }
 
+const EMPTY_WORKTREE_ID_SET: ReadonlySet<string> = new Set()
+
 type TabsByWorktree = Record<string, readonly TerminalLikeTab[]>
 type PtyIdsByTabId = Record<string, string[]>
 type BrowserTabsByWorktree = Record<string, readonly BrowserLikeTab[]>
@@ -74,7 +76,8 @@ export function hasActiveWorkspaceActivity(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>,
+  pendingReconnectWorktreeIds: ReadonlySet<string> = EMPTY_WORKTREE_ID_SET
 ): boolean {
   const tabs = tabsByWorktree?.[worktreeId] ?? []
   const hasLiveTerminal =
@@ -83,7 +86,10 @@ export function hasActiveWorkspaceActivity(
   // Why: a running agent keeps the workspace visible through brief PTY gaps
   // such as an SSH reconnect or an unmounted remote pane. #7197
   const hasLiveAgent = worktreeIdsWithLiveAgent.has(worktreeId)
-  return hasLiveTerminal || hasBrowser || hasLiveAgent
+  // Startup hydrates tabs before reconnect restores their ptyIds; without this a
+  // workspace awake at shutdown reads as asleep until then. #16247
+  const isReattaching = pendingReconnectWorktreeIds.has(worktreeId)
+  return hasLiveTerminal || hasBrowser || hasLiveAgent || isReattaching
 }
 
 export function isInactiveWorkspace(
@@ -91,13 +97,15 @@ export function isInactiveWorkspace(
   tabsByWorktree: TabsByWorktree | null | undefined,
   ptyIdsByTabId: PtyIdsByTabId | null | undefined,
   browserTabsByWorktree: BrowserTabsByWorktree | null | undefined,
-  worktreeIdsWithLiveAgent: ReadonlySet<string>
+  worktreeIdsWithLiveAgent: ReadonlySet<string>,
+  pendingReconnectWorktreeIds: ReadonlySet<string> = EMPTY_WORKTREE_ID_SET
 ): boolean {
   return !hasActiveWorkspaceActivity(
     worktreeId,
     tabsByWorktree,
     ptyIdsByTabId,
     browserTabsByWorktree,
-    worktreeIdsWithLiveAgent
+    worktreeIdsWithLiveAgent,
+    pendingReconnectWorktreeIds
   )
 }

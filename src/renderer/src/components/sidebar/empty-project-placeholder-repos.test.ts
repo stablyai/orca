@@ -40,13 +40,15 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [repo],
           worktreesByRepo: { [repo.id]: [] },
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([repo.id])
   })
 
-  it('treats missing worktreesByRepo keys as empty for the current render', () => {
+  it('treats a missing worktreesByRepo key as empty once startup has settled', () => {
+    // A failed scan never writes a key; the header must still come back. #16247
     expect(
       Array.from(
         getEmptyProjectPlaceholderRepoIds({
@@ -54,10 +56,71 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [repo],
           worktreesByRepo: {},
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([repo.id])
+  })
+
+  it('does not placeholder an unscanned repo while startup is still refreshing', () => {
+    // Repos land before their scans; reading `undefined` as empty paints all of them. #16247
+    expect(
+      getEmptyProjectPlaceholderRepoIds({
+        groupBy: 'repo',
+        repos: [repo],
+        worktreesByRepo: {},
+        visibleWorktrees: [],
+        filterRepoIds: [],
+        startupWorktreeRefreshCompleted: false
+      }).size
+    ).toBe(0)
+  })
+
+  it('placeholders a scanned-empty repo during startup', () => {
+    // `[]` is settled even mid-startup, so an empty project appears as soon as it scans.
+    expect(
+      Array.from(
+        getEmptyProjectPlaceholderRepoIds({
+          groupBy: 'repo',
+          repos: [repo],
+          worktreesByRepo: { [repo.id]: [] },
+          visibleWorktrees: [],
+          filterRepoIds: [],
+          startupWorktreeRefreshCompleted: false
+        })
+      )
+    ).toEqual([repo.id])
+  })
+
+  it('converges monotonically as scans land during startup', () => {
+    const scanned: Repo = { ...repo, id: 'repo-scanned' }
+    const unscanned: Repo = { ...repo, id: 'repo-unscanned' }
+    const repos = [scanned, unscanned]
+
+    const duringStartup = getEmptyProjectPlaceholderRepoIds({
+      groupBy: 'repo',
+      repos,
+      worktreesByRepo: { [scanned.id]: [] },
+      visibleWorktrees: [],
+      filterRepoIds: [],
+      startupWorktreeRefreshCompleted: false
+    })
+    const afterSecondScan = getEmptyProjectPlaceholderRepoIds({
+      groupBy: 'repo',
+      repos,
+      worktreesByRepo: { [scanned.id]: [], [unscanned.id]: [] },
+      visibleWorktrees: [],
+      filterRepoIds: [],
+      startupWorktreeRefreshCompleted: false
+    })
+
+    expect(Array.from(duringStartup)).toEqual([scanned.id])
+    // The list only grows: no header is painted and then withdrawn.
+    for (const id of duringStartup) {
+      expect(afterSecondScan.has(id)).toBe(true)
+    }
+    expect(Array.from(afterSecondScan)).toEqual([scanned.id, unscanned.id])
   })
 
   it('applies repo filters to empty placeholder candidates', () => {
@@ -71,7 +134,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [selectedRepo, hiddenRepo],
           worktreesByRepo: { [selectedRepo.id]: [], [hiddenRepo.id]: [] },
           visibleWorktrees: [],
-          filterRepoIds: [selectedRepo.id]
+          filterRepoIds: [selectedRepo.id],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([selectedRepo.id])
@@ -84,7 +148,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         repos: [repo],
         worktreesByRepo: { [repo.id]: [] },
         visibleWorktrees: [],
-        filterRepoIds: []
+        filterRepoIds: [],
+        startupWorktreeRefreshCompleted: true
       }).size
     ).toBe(0)
   })
@@ -96,7 +161,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         repos: [repo],
         worktreesByRepo: { [repo.id]: [worktree] },
         visibleWorktrees: [],
-        filterRepoIds: []
+        filterRepoIds: [],
+        startupWorktreeRefreshCompleted: true
       }).size
     ).toBe(0)
   })
@@ -112,7 +178,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           repos: [groupedRepo],
           worktreesByRepo: { [groupedRepo.id]: [groupedWorktree] },
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([groupedRepo.id])
@@ -128,7 +195,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
         repos: [groupedRepo],
         worktreesByRepo: { [groupedRepo.id]: [groupedWorktree] },
         visibleWorktrees: [groupedWorktree],
-        filterRepoIds: []
+        filterRepoIds: [],
+        startupWorktreeRefreshCompleted: true
       }).size
     ).toBe(0)
   })
@@ -151,7 +219,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
           // Why: simulate Hide sleeping removing every card while the project
           // filter still intentionally excludes `filteredOut`.
           visibleWorktrees: [],
-          filterRepoIds: [selected.id]
+          filterRepoIds: [selected.id],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([selected.id])
@@ -173,7 +242,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
             [awake.id]: [awakeWt]
           },
           visibleWorktrees: [awakeWt],
-          filterRepoIds: []
+          filterRepoIds: [],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([sleeping.id])
@@ -195,7 +265,8 @@ describe('getEmptyProjectPlaceholderRepoIds', () => {
             [ungrouped.id]: [ungroupedWt]
           },
           visibleWorktrees: [],
-          filterRepoIds: []
+          filterRepoIds: [],
+          startupWorktreeRefreshCompleted: true
         })
       )
     ).toEqual([grouped.id])

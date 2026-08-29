@@ -123,6 +123,46 @@ describe('worktree activity state', () => {
       isInactiveWorkspace('wt-1', { 'wt-1': [makeTab('tab-1')] }, { 'tab-1': [] }, {}, new Set())
     ).toBe(true)
   })
+
+  it('keeps a workspace awake while startup reconnect still owes it a PTY', () => {
+    // Tabs present, no live pty: every restored workspace for a second. #16247
+    expect(
+      isInactiveWorkspace(
+        'wt-1',
+        { 'wt-1': [makeTab('tab-1')] },
+        { 'tab-1': [] },
+        {},
+        new Set(),
+        new Set(['wt-1'])
+      )
+    ).toBe(false)
+  })
+
+  it('does not exempt a workspace outside the pending reconnect set', () => {
+    expect(
+      isInactiveWorkspace(
+        'wt-2',
+        { 'wt-2': [makeTab('tab-2')] },
+        { 'tab-2': [] },
+        {},
+        new Set(),
+        new Set(['wt-1'])
+      )
+    ).toBe(true)
+  })
+
+  it('sleeps again once reconnect drains the pending set', () => {
+    expect(
+      isInactiveWorkspace(
+        'wt-1',
+        { 'wt-1': [makeTab('tab-1')] },
+        { 'tab-1': [] },
+        {},
+        new Set(),
+        new Set()
+      )
+    ).toBe(true)
+  })
 })
 
 describe('getWorktreeIdsWithLiveAgent', () => {

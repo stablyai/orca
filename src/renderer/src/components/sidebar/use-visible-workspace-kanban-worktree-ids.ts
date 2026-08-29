@@ -63,6 +63,17 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         )
       : EMPTY_WORKTREE_ID_SET
   }, [agentStatusEpoch, showSleepingWorkspaces, tabsByWorktree])
+  // Same startup-reconnect exemption as the sidebar, so the two agree. #16247
+  const pendingReconnectWorktreeIdList = useAppStore((s) =>
+    showSleepingWorkspaces ? null : s.pendingReconnectWorktreeIds
+  )
+  const pendingReconnectWorktreeIds = useMemo(
+    () =>
+      pendingReconnectWorktreeIdList?.length
+        ? new Set(pendingReconnectWorktreeIdList)
+        : EMPTY_WORKTREE_ID_SET,
+    [pendingReconnectWorktreeIdList]
+  )
 
   return useMemo(() => {
     // Why: the board has its own status ordering, but visibility must match
@@ -76,6 +87,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
         ptyIdsByTabId,
         browserTabsByWorktree,
         worktreeIdsWithLiveAgent,
+        pendingReconnectWorktreeIds,
         hideDefaultBranchWorkspace,
         hideAutomationGeneratedWorkspaces,
         hideCliCreatedWorkspaces,
@@ -115,6 +127,7 @@ export function useVisibleWorkspaceKanbanWorktreeIds({
     showSleepingWorkspaces,
     tabsByWorktree,
     worktreeIdsWithLiveAgent,
+    pendingReconnectWorktreeIds,
     worktreesByRepo
   ])
 }
