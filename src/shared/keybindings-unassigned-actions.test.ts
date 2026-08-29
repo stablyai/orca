@@ -215,6 +215,45 @@ describe('keybindings', () => {
     )
   })
 
+  it('keeps project navigation unassigned until users customize it', () => {
+    const actionIds = ['project.navigateNext', 'project.navigatePrevious'] as const
+
+    for (const actionId of actionIds) {
+      expect(getEffectiveKeybindingsForAction(actionId, 'darwin')).toEqual([])
+      expect(getEffectiveKeybindingsForAction(actionId, 'linux')).toEqual([])
+      expect(getEffectiveKeybindingsForAction(actionId, 'win32')).toEqual([])
+    }
+
+    const binding = {
+      key: 'p',
+      code: 'KeyP',
+      control: false,
+      meta: true,
+      alt: true,
+      shift: false
+    }
+    expect(keybindingMatchesAction('project.navigateNext', binding, 'darwin')).toBe(false)
+    expect(
+      keybindingMatchesAction('project.navigateNext', binding, 'darwin', {
+        'project.navigateNext': ['Mod+Alt+P']
+      })
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'project.navigateNext',
+        { ...binding, control: true, meta: false },
+        'win32',
+        { 'project.navigateNext': ['Mod+Alt+P'] }
+      )
+    ).toBe(true)
+
+    const next = getKeybindingDefinition('project.navigateNext')
+    expect(next?.title).toBe('Next project')
+    expect(next?.group).toBe('Global')
+    expect(next?.searchKeywords).toEqual(expect.arrayContaining(['project', 'switch']))
+    expect(getKeybindingDefinition('project.navigatePrevious')?.title).toBe('Previous project')
+  })
+
   it('leaves floating workspace minimize unassigned because floating terminal toggle owns show and hide', () => {
     const platforms: readonly KeybindingPlatform[] = ['darwin', 'linux', 'win32']
     const minimizeAction = 'floatingWorkspace.minimize' as KeybindingActionId

@@ -58,6 +58,7 @@ export type VirtualizedWorktreeViewportProps = {
   agentSendTargetWorktreeId: string | null
   worktrees: Worktree[]
   folderWorkspaces: readonly FolderWorkspace[]
+  navigationFolderWorkspaces: readonly FolderWorkspace[]
   selectedWorktreeIds: ReadonlySet<string>
   selectedWorktrees: readonly Worktree[]
   onSelectionGesture: (event: React.MouseEvent<HTMLElement>, worktree: Worktree) => boolean
@@ -80,6 +81,7 @@ export type VirtualizedWorktreeViewportProps = {
   workspaceStatuses: readonly WorkspaceStatusDefinition[]
   projectGrouping?: ProjectGroupingModel
   projectGroups?: readonly ProjectGroup[]
+  navigationProjectGroups: readonly ProjectGroup[]
   onMoveWorktreeToStatus: (worktreeId: string, status: WorkspaceStatus) => void
   onMoveWorktreesToStatus: (worktreeIds: readonly string[], status: WorkspaceStatus) => void
   onMoveWorktreesToStatusAtIndex: (args: WorktreeStatusDropAtIndexArgs) => void

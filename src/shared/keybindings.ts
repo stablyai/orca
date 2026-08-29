@@ -31,6 +31,8 @@ export type KeybindingActionId =
   | 'worktree.palette'
   | 'worktree.navigateUp'
   | 'worktree.navigateDown'
+  | 'project.navigateNext'
+  | 'project.navigatePrevious'
   | 'app.settings'
   | 'app.forceReload'
   | 'workspace.create'
@@ -255,6 +257,32 @@ export const KEYBINDING_DEFINITIONS: readonly KeybindingDefinition[] = [
     scope: 'global',
     searchKeywords: ['shortcut', 'global', 'worktree', 'next', 'down'],
     defaultBindings: platformBindings(['Mod+Shift+ArrowDown'])
+  },
+  {
+    id: 'project.navigateNext',
+    title: 'Next project',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'project', 'repo', 'project group', 'next', 'switch'],
+    // Existing project/worktree chords leave no conflict-free default.
+    defaultBindings: platformBindings([])
+  },
+  {
+    id: 'project.navigatePrevious',
+    title: 'Previous project',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'project',
+      'repo',
+      'project group',
+      'previous',
+      'switch'
+    ],
+    // Existing project/worktree chords leave no conflict-free default.
+    defaultBindings: platformBindings([])
   },
   {
     id: 'workspace.create',

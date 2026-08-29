@@ -2,8 +2,16 @@ import { useCallback, useEffect } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import {
+  activateAndRevealFolderWorkspace,
+  activateAndRevealWorktree
+} from '@/lib/worktree-activation'
+import type { AppState } from '@/store/types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import type { FolderWorkspace } from '../../../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../../../shared/project-group-types'
+import type { Repo } from '../../../../../../shared/repo-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../../../shared/worktree/types'
 import {
   composeWorktreeHostIdentity,
   getWorktreeHostIdentity
@@ -11,10 +19,17 @@ import {
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { keybindingMatchesAction } from '../../../../../../shared/keybindings'
 import type { HostSectionRow } from '../../host-section-rows'
-import type { PinnedWorktreeDisplayPolicy } from '../grouping/row-types'
+import type { PinnedWorktreeDisplayPolicy, WorktreeGroupBy } from '../grouping/row-types'
+import type { ProjectGroupingModel } from '../grouping/project-grouping'
 import type { RenderRow } from '../listing/render-row'
 import { getCyclableWorktrees, resolveCycledWorktreeId } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
+import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
+import {
+  buildSidebarProjectNavigationOrder,
+  getActiveProjectKey,
+  selectProjectNavigationTarget
+} from '../../project-navigation'
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) {
@@ -39,6 +54,14 @@ function isEditableTarget(target: EventTarget | null): boolean {
 export function useWorktreeListKeyboardNavigation(args: {
   rows: HostSectionRow[]
   renderRows: RenderRow[]
+  groupBy: WorktreeGroupBy
+  worktrees: readonly Worktree[]
+  folderWorkspaces: readonly FolderWorkspace[]
+  repoMap: Map<string, Repo>
+  prCache: AppState['prCache'] | null
+  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  projectGroups: readonly ProjectGroup[]
+  projectGrouping?: ProjectGroupingModel
   activeWorktreeId: string | null
   activeWorkspaceExecutionHostId: ExecutionHostId | null
   pinnedDisplayPolicy: PinnedWorktreeDisplayPolicy
@@ -50,6 +73,14 @@ export function useWorktreeListKeyboardNavigation(args: {
   const {
     rows,
     renderRows,
+    groupBy,
+    worktrees,
+    folderWorkspaces,
+    repoMap,
+    prCache,
+    workspaceStatuses,
+    projectGroups,
+    projectGrouping,
     activeWorktreeId,
     activeWorkspaceExecutionHostId,
     pinnedDisplayPolicy,
@@ -59,6 +90,8 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
+  const settings = useAppStore((s) => s.settings)
+  const lastVisitedAtByWorktreeId = useAppStore((s) => s.lastVisitedAtByWorktreeId)
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
@@ -112,6 +145,73 @@ export function useWorktreeListKeyboardNavigation(args: {
     ]
   )
 
+  const navigateProject = useCallback(
+    (direction: 'up' | 'down') => {
+      const order = buildSidebarProjectNavigationOrder({
+        rows,
+        groupBy,
+        worktrees,
+        folderWorkspaces,
+        repoMap,
+        prCache,
+        workspaceStatuses,
+        settings,
+        projectGroups,
+        projectGrouping
+      })
+      const target = selectProjectNavigationTarget({
+        ...order,
+        activeProjectKey: getActiveProjectKey(
+          order,
+          activeWorktreeId,
+          activeWorkspaceExecutionHostId
+        ),
+        activeWorktreeId,
+        activeWorkspaceExecutionHostId,
+        lastVisitedAtByWorktreeId,
+        direction
+      })
+      if (!target) {
+        return
+      }
+
+      const targetScope = parseWorkspaceKey(target.id)
+      if (targetScope?.type === 'folder') {
+        activateAndRevealFolderWorkspace(targetScope.folderWorkspaceId, {
+          executionHostId: target.hostId
+        })
+      } else {
+        activateAndRevealWorktree(target.id, { executionHostId: target.hostId })
+      }
+      const rowIndex = findPreferredRenderRowIndexForWorktreeIdentity(
+        renderRows,
+        target,
+        pinnedDisplayPolicy
+      )
+      if (rowIndex !== -1) {
+        virtualizer.scrollToIndex(rowIndex, { align: 'auto' })
+      }
+    },
+    [
+      rows,
+      groupBy,
+      worktrees,
+      folderWorkspaces,
+      repoMap,
+      prCache,
+      workspaceStatuses,
+      settings,
+      projectGroups,
+      projectGrouping,
+      activeWorktreeId,
+      activeWorkspaceExecutionHostId,
+      lastVisitedAtByWorktreeId,
+      renderRows,
+      pinnedDisplayPolicy,
+      virtualizer
+    ]
+  )
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (activeModal !== 'none' || isEditableTarget(e.target)) {
@@ -134,12 +234,36 @@ export function useWorktreeListKeyboardNavigation(args: {
         markDirectScrollInput()
         navigateWorktree(direction)
         e.preventDefault()
+        return
+      }
+
+      const projectDirection = keybindingMatchesAction(
+        'project.navigatePrevious',
+        e,
+        platform,
+        keybindings
+      )
+        ? 'up'
+        : keybindingMatchesAction('project.navigateNext', e, platform, keybindings)
+          ? 'down'
+          : null
+      if (projectDirection) {
+        markDirectScrollInput()
+        navigateProject(projectDirection)
+        e.preventDefault()
       }
     }
 
     window.addEventListener('keydown', handleKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', handleKeyDown, { capture: true })
-  }, [activeModal, keybindings, markDirectScrollInput, navigateWorktree, scrollRef])
+  }, [
+    activeModal,
+    keybindings,
+    markDirectScrollInput,
+    navigateProject,
+    navigateWorktree,
+    scrollRef
+  ])
 
   const handleContainerKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
