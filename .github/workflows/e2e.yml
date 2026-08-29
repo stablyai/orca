@@ -81,26 +81,33 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: '1/10'
-            shard_name: 1-of-10
-          - shard: '2/10'
-            shard_name: 2-of-10
-          - shard: '3/10'
-            shard_name: 3-of-10
-          - shard: '4/10'
-            shard_name: 4-of-10
-          - shard: '5/10'
-            shard_name: 5-of-10
-          - shard: '6/10'
-            shard_name: 6-of-10
-          - shard: '7/10'
-            shard_name: 7-of-10
-          - shard: '8/10'
-            shard_name: 8-of-10
-          - shard: '9/10'
-            shard_name: 9-of-10
-          - shard: '10/10'
-            shard_name: 10-of-10
+          # Last-week scheduled runs averaged ~24 runner-minutes per shard;
+          # shards 4 and 9 repeatedly hit the 30-minute cap. Twelve-way
+          # Playwright sharding targets ~20 minutes without changing coverage.
+          - shard: '1/12'
+            shard_name: 1-of-12
+          - shard: '2/12'
+            shard_name: 2-of-12
+          - shard: '3/12'
+            shard_name: 3-of-12
+          - shard: '4/12'
+            shard_name: 4-of-12
+          - shard: '5/12'
+            shard_name: 5-of-12
+          - shard: '6/12'
+            shard_name: 6-of-12
+          - shard: '7/12'
+            shard_name: 7-of-12
+          - shard: '8/12'
+            shard_name: 8-of-12
+          - shard: '9/12'
+            shard_name: 9-of-12
+          - shard: '10/12'
+            shard_name: 10-of-12
+          - shard: '11/12'
+            shard_name: 11-of-12
+          - shard: '12/12'
+            shard_name: 12-of-12
 
     steps:
       - name: Checkout
@@ -108,18 +115,10 @@ jobs:
         with:
           ref: ${{ inputs.ref || github.ref }}
 
-      # Why: pnpm install used to rebuild native modules here; the composite
-      # action restores them from cache and only compiles on a miss. The
-      # toolchain is still required for that miss path, and for paired Quick
-      # Open coverage which exercises the resource-bounded host search.
-      - name: Install native build tools
-        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep zsh
-
-      # Why: Electron on Linux needs an X display even when the app
-      # suppresses mainWindow.show() via ORCA_E2E_HEADLESS. xvfb provides a
-      # virtual framebuffer so Chromium can initialize without a real display.
-      - name: Install xvfb
-        run: sudo apt-get install -y xvfb
+      # Native cache misses need the compiler, Electron needs Xvfb, and paired
+      # Quick Open needs ripgrep. Install them in one apt transaction per shard.
+      - name: Install native build and headless UI tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential fonts-noto-cjk python3 ripgrep xvfb zsh
 
       - uses: ./.github/actions/install-node-dependencies
         with:

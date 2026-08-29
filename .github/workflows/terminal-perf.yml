@@ -75,6 +75,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
+          version: 10.24.0
           run_install: false
 
       # Why: this scheduled/manual workflow uses the same native install path as

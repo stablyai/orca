@@ -53,6 +53,7 @@ jobs:
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
         with:
+          version: 10.24.0
           run_install: false
 
       # Why: the mobile typecheck imports shared types from ../src/shared, and

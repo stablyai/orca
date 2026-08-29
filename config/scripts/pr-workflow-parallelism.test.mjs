@@ -232,6 +232,23 @@ describe('PR workflow parallelism', () => {
     expect(steps[requestedNodeIndex].with.cache).toBe('pnpm')
   })
 
+  it('pins every direct pnpm setup to the repository package-manager version', () => {
+    const packageManagerVersion = /^pnpm@([^+]+)/.exec(packageJson.packageManager)?.[1]
+    const directSetups = globSync('.github/workflows/*.yml').flatMap((workflowPath) => {
+      const parsed = parse(readFileSync(workflowPath, 'utf8'))
+      return Object.values(parsed.jobs ?? {}).flatMap((job) =>
+        (job.steps ?? [])
+          .filter((step) => step.uses === 'pnpm/action-setup@v6')
+          .map((step) => ({ workflowPath, step }))
+      )
+    })
+
+    expect(directSetups.length).toBeGreaterThan(0)
+    for (const { workflowPath, step } of directSetups) {
+      expect(step.with?.version, workflowPath).toBe(packageManagerVersion)
+    }
+  })
+
   it('restores Electron downloads before preparing the package runtime', () => {
     const steps = workflow.jobs.package.steps
     const cacheIndex = steps.findIndex((step) => step.name === 'Cache electron-builder downloads')
