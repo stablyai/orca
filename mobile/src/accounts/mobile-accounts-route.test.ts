@@ -70,7 +70,7 @@ describe('mobile accounts route', () => {
               {
                 key: 'host-index',
                 name: '[hostId]/index',
-                params: { hostId: encodeURIComponent('host/one') }
+                params: { hostId: 'host/one' }
               }
             ]
           }

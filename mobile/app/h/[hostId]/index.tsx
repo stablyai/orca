@@ -58,7 +58,11 @@ import type { RepoIcon } from '../../../../src/shared/repo-icon'
 import { PickerModal } from '../../../src/components/PickerModal'
 import { ActionSheetContent } from '../../../src/components/ActionSheetModal'
 import { buildWorktreeNavigationActions } from '../../../src/agent-history/worktree-navigation-actions'
-import { floatingWorkspaceSessionPath } from '../../../src/session/floating-workspace'
+import {
+  FLOATING_WORKSPACE_WORKTREE_ID,
+  floatingWorkspaceSessionPath
+} from '../../../src/session/floating-workspace'
+import { useConvergeOnMountedSession } from '../../../src/session/use-converge-on-mounted-session'
 import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
@@ -657,6 +661,8 @@ export function HostScreen({
     [embedded, hostId, pathname, router]
   )
 
+  const convergeOnMountedSession = useConvergeOnMountedSession()
+
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
       setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
@@ -669,17 +675,26 @@ export function HostScreen({
           })
           .catch(() => null)
       }
+      // Why: a host-level push stacks a second host list above a live session, so the
+      // row tap would mount that worktree's session a second time. Activation above
+      // still runs — only the navigation that would duplicate is skipped.
+      if (convergeOnMountedSession({ hostId, worktreeId: item.worktreeId })) {
+        return
+      }
       const target = `/h/${hostId}/session/${encodeURIComponent(item.worktreeId)}?name=${encodeURIComponent(item.displayName || item.repo)}`
       navigateFromHostList(target)
     },
-    [client, connState, hostId, navigateFromHostList]
+    [client, connState, convergeOnMountedSession, hostId, navigateFromHostList]
   )
 
   const openFloatingWorkspace = useCallback(() => {
     // Why: no worktree.activate here — the floating sentinel has no worktree
     // record; session.tabs.list hydrates its host-owned tabs on open.
+    if (convergeOnMountedSession({ hostId, worktreeId: FLOATING_WORKSPACE_WORKTREE_ID })) {
+      return
+    }
     navigateFromHostList(floatingWorkspaceSessionPath(hostId))
-  }, [hostId, navigateFromHostList])
+  }, [convergeOnMountedSession, hostId, navigateFromHostList])
 
   const handleSortChange = useCallback(
     (value: MobileSortMode) => {

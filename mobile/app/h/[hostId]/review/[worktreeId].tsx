@@ -8,6 +8,7 @@ import {
 import { normalizeReviewAreaParam } from '../../../../src/session/mobile-diff-review-positioning'
 import { useMobileDiffReviewController } from '../../../../src/session/use-mobile-diff-review-controller'
 import { useForceReconnect, useHostClient } from '../../../../src/transport/client-context'
+import { useConvergeOnMountedSession } from '../../../../src/session/use-converge-on-mounted-session'
 
 export default function MobileDiffReviewScreen() {
   const params = useLocalSearchParams<{
@@ -32,12 +33,19 @@ export default function MobileDiffReviewScreen() {
   const { client, state: connState } = useHostClient(hostId)
   const forceReconnect = useForceReconnect()
 
+  const convergeOnMountedSession = useConvergeOnMountedSession()
+
   const openSession = useCallback(() => {
+    // Why: this screen is reached from Source Control stacked above a live session, so
+    // replacing here would mint a second session route for the same worktree.
+    if (convergeOnMountedSession({ hostId, worktreeId, name })) {
+      return
+    }
     const query = name ? `?${new URLSearchParams({ name }).toString()}` : ''
     router.replace(
       `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(worktreeId)}${query}`
     )
-  }, [hostId, name, router, worktreeId])
+  }, [convergeOnMountedSession, hostId, name, router, worktreeId])
 
   const controller = useMobileDiffReviewController({
     client,

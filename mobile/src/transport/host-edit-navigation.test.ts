@@ -61,7 +61,7 @@ describe('mobile host edit navigation', () => {
     harness.setState({ index: 1, routes: [{ name: 'index' }, { name: 'h' }] })
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
-    harness.setState(committedHostState('host%2F1'))
+    harness.setState(committedHostState('host/1'))
 
     expect(harness.unsubscribeState).toHaveBeenCalledOnce()
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({

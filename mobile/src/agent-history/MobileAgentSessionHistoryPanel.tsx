@@ -34,6 +34,7 @@ import {
   type MobileAiVaultResumeProjectGroup,
   type MobileAiVaultResumeRepo
 } from './agent-history-resume-target'
+import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
 
@@ -55,6 +56,9 @@ export function MobileAgentSessionHistoryPanel({
   name = ''
 }: MobileAgentSessionHistoryPanelProps) {
   const router = useRouter()
+  // Why: raw pushes stack a second copy of a session that is already mounted below
+  // this screen; the shared owner converges on the live one instead.
+  const openMobileSession = useOpenMobileSession()
   const { client, state: connState } = useHostClient(hostId)
   const [worktrees, setWorktrees] = useState<Worktree[]>([])
   const [worktreesLoaded, setWorktreesLoaded] = useState(false)
@@ -214,11 +218,7 @@ export function MobileAgentSessionHistoryPanel({
         resumeMutationRegistryRef.current.releaseOnSuccess(session.id)
         triggerSuccess()
         setResumeMessage('Agent session queued.')
-        router.push(
-          `/h/${encodeURIComponent(hostId)}/session/${encodeURIComponent(target.worktreeId)}` as Parameters<
-            typeof router.push
-          >[0]
-        )
+        openMobileSession({ hostId, worktreeId: target.worktreeId })
       } catch (err) {
         triggerError()
         setResumeMessage(err instanceof Error ? err.message : 'Failed to resume session.')
@@ -233,7 +233,7 @@ export function MobileAgentSessionHistoryPanel({
       hostId,
       hostPlatform,
       hostTerminalWindowsShell,
-      router,
+      openMobileSession,
       worktreeId,
       worktrees
     ]

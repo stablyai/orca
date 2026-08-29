@@ -80,7 +80,7 @@ describe('notification route coordination', () => {
                 {
                   key: 'host-index',
                   name: '[hostId]/index',
-                  params: { hostId: encodeURIComponent('host/one') }
+                  params: { hostId: 'host/one' }
                 }
               ]
             }

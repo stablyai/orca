@@ -1,3 +1,5 @@
+import { hostStackConvergenceActions, type HostStackPopToAction } from './host-stack-route-identity'
+
 export type HostStackNavigationState = Readonly<{
   key?: string
   index: number
@@ -7,7 +9,7 @@ export type HostStackNavigationState = Readonly<{
 export type HostStackNavigationRoute = Readonly<{
   key?: string
   name: string
-  params?: Readonly<{ hostId?: unknown }>
+  params?: Readonly<Record<string, unknown>>
   state?: HostStackNavigationState
 }>
 
@@ -27,7 +29,7 @@ export type HostStackReplaceAction = Readonly<{
 
 export type HostStackRootNavigation = {
   addListener: (event: 'state', listener: () => void) => () => void
-  dispatch: (action: HostStackReplaceAction) => void
+  dispatch: (action: HostStackReplaceAction | HostStackPopToAction) => void
   // Why: the root layout's navigator has no committed state until it hydrates, and a
   // notification tap can arm the transition before that first commit.
   getState: () => HostStackNavigationState | undefined
@@ -64,20 +66,14 @@ export function hostStackRouteHref(target: HostStackRouteTarget): HostStackRoute
   return { pathname: `/h/${target.name}`, params: target.params }
 }
 
-// Why: the host is pushed as an encoded segment, so the committed route may hold
-// either form — an id with `/`, `#`, or `%` must still match its own push.
+// Why: a host id is canonical DECODED. Percent-encoding exists only in the URL segment —
+// applied here by `hostStackHostRoute`, and undone by expo-router's `getStateFromPath`,
+// which runs every dynamic segment through `safelyDecodeURIComponent` before the param
+// reaches navigation state. So `/h/${encodeURIComponent(id)}` commits `id` verbatim and
+// this stays a raw comparison: decoding a hydrated param would let a host literally named
+// `a%2Fb` answer for the host named `a/b` and strand the transition on the wrong stack.
 function hostParamMatches(param: unknown, expectedHostId: string): boolean {
-  if (typeof param !== 'string') {
-    return false
-  }
-  if (param === expectedHostId) {
-    return true
-  }
-  try {
-    return decodeURIComponent(param) === expectedHostId
-  } catch {
-    return false // Lone `%` — not our encoding.
-  }
+  return typeof param === 'string' && param === expectedHostId
 }
 
 /** The focused `h` route, however deep the caller's navigator sits above it: a screen
@@ -115,6 +111,39 @@ function mountedHostStack(
   return { key: hostState.key, routeKey: hostRoute.key }
 }
 
+function completedHostStackNavigation(): HostStackNavigationController {
+  return { cancel: () => {}, isActive: () => false, retarget: () => {} }
+}
+
+/** The invariant: one live screen per target. If the target is already mounted
+ *  anywhere in the tree, focus THAT one — pushing and replacing would mount a second
+ *  copy for the same worktree, and the two then contend for the one input lease the
+ *  host keeps per (terminal, client). */
+function convergeOnMountedRoute(
+  navigation: HostStackRootNavigation,
+  target: HostStackRouteTarget
+): 'absent' | 'converging' | 'settled' {
+  const state = navigation.getState()
+  const actions = state && hostStackConvergenceActions(state, target)
+  if (!actions) {
+    return 'absent'
+  }
+  for (const action of actions) {
+    navigation.dispatch(action)
+  }
+  return actions.length > 0 ? 'converging' : 'settled'
+}
+
+/** Focus an already-mounted instance of `target` if the tree holds one. Returns
+ *  whether it converged, so a caller that owns its own cold-start navigation can
+ *  fall through to it unchanged and only skip the branch that would duplicate. */
+export function convergeOnMountedHostStackRoute(
+  navigation: HostStackRootNavigation,
+  target: HostStackRouteTarget
+): boolean {
+  return convergeOnMountedRoute(navigation, target) !== 'absent'
+}
+
 /** Opens a deep host route by mounting `/h/[hostId]` first and replacing it once
  *  its stack is committed. A cold push straight to a nested route resolves to the
  *  host index without the dynamic id, which lands on a blank host screen. */
@@ -124,8 +153,14 @@ export function navigateToHostStackRoute(
   hostId: string,
   target: HostStackRouteTarget
 ): HostStackNavigationController {
+  // Nothing else is in flight yet, so a hit here settles the whole request.
+  if (convergeOnMountedRoute(navigation, target) !== 'absent') {
+    return completedHostStackNavigation()
+  }
+
   let active = true
   let hostRouteSeen = false
+  let hostIndexSeen = false
   let selectedTarget = target
   let unsubscribeState = () => {}
   const dispose = () => {
@@ -153,6 +188,18 @@ export function navigateToHostStackRoute(
       return
     }
     const hostStack = hostContainer && mountedHostStack(hostContainer, hostId)
+    hostIndexSeen ||= hostStack !== null
+    // Why: the target can already be mounted under the route this transition pushed —
+    // completing the REPLACE then mounts the second copy this owner exists to prevent.
+    const converged = convergeOnMountedRoute(navigation, selectedTarget)
+    if (converged !== 'absent') {
+      // Why: stay armed until the `[hostId]/index` we pushed lands, or it settles on
+      // top of the very screen we just converged on.
+      if (converged === 'settled' && hostIndexSeen) {
+        dispose()
+      }
+      return
+    }
     if (!hostStack) {
       if (hostContainer && hostParamMatches(hostContainer.params?.hostId, hostId)) {
         dispose()

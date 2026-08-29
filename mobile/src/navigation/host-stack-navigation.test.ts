@@ -66,15 +66,20 @@ function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNaviga
 }
 
 describe('host stack navigation', () => {
-  it('matches a host committed as the encoded segment it was pushed as', () => {
+  it('matches the host id expo-router decodes the pushed segment back to', () => {
+    // The round trip that defines the canonical form: the id is encoded into the URL
+    // segment here, and expo-router's getStateFromPath decodes it back before it lands
+    // in navigation state — verified against expo-router@55, which runs every dynamic
+    // segment through `safelyDecodeURIComponent`. Nothing downstream decodes again.
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
 
     navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', TARGET)
     expect(push).toHaveBeenCalledWith(hostStackHostRoute('host/one'))
+    expect(hostStackHostRoute('host/one')).toBe('/h/host%2Fone')
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
 
-    harness.setState(committedHostState(encodeURIComponent('host/one')))
+    harness.setState(committedHostState('host/one'))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
     expect(harness.navigation.dispatch).toHaveBeenCalledWith({
@@ -138,6 +143,23 @@ describe('host stack navigation', () => {
     expect(harness.listenerCount()).toBe(0)
   })
 
+  it('does not replace through Expo Router for a host route that merely encodes to ours', () => {
+    // Same rule at the second reader: the `h` container's own param is decoded too, so an
+    // aliased container is a different host and must not capture the pending transition.
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const replace = vi.fn()
+
+    navigateToHostStackRoute(harness.navigation, { push: vi.fn(), replace }, 'host/one', TARGET)
+    harness.setState({
+      index: 0,
+      routes: [{ name: 'h', params: { hostId: 'host%2Fone' } }]
+    })
+
+    expect(replace).not.toHaveBeenCalled()
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    expect(harness.listenerCount()).toBe(1)
+  })
+
   it('abandons the transition when navigation leaves the host route it was waiting on', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
 
@@ -155,6 +177,20 @@ describe('host stack navigation', () => {
     expect(harness.listenerCount()).toBe(0)
   })
 
+  it('ignores a host whose id merely percent-encodes to the one being opened', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
+    harness.setState(committedHostState('host%2Fone'))
+
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+  })
+
   it('ignores a different host whose id merely decodes badly', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
 
@@ -167,6 +203,28 @@ describe('host stack navigation', () => {
     harness.setState(committedHostState('100%'))
 
     expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('still matches a host whose own id is undecodable', () => {
+    // expo-router's `safelyDecodeURIComponent` hands a lone `%` back unchanged, so `100%`
+    // reaches state as itself. Raw comparison matches it with no try/catch to get wrong.
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const target = { name: '[hostId]/tasks', params: { hostId: '100%' } } as const
+
+    navigateToHostStackRoute(
+      harness.navigation,
+      { push: vi.fn(), replace: vi.fn() },
+      '100%',
+      target
+    )
+    harness.setState(committedHostState('100%'))
+
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith({
+      type: 'REPLACE',
+      target: '/h',
+      source: 'host-index',
+      payload: target
+    })
   })
 
   it('stops listening and never replaces once canceled', () => {
