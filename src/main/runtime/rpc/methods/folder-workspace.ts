@@ -7,6 +7,7 @@ import { WorkspaceLinkedItemSchema } from '../../../../shared/workspace-linked-i
 import { isWorkspaceLinkedItemSourceContextMatch } from '../../../../shared/workspace-linked-item-source-context'
 import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
 import { DiffCommentSchema } from '../../../../shared/diff-comment-schema'
+import { assertNoPaperclipRuntimeLink } from '../../../paperclip/paperclip-workspace-admission'
 
 const FolderWorkspaceLinkedTask = WorkspaceLinkedItemSchema.nullable()
 
@@ -97,19 +98,31 @@ export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'folderWorkspace.create',
     params: FolderWorkspaceCreate,
-    handler: async (params, context) => ({
-      folderWorkspace: await context.runtime.createFolderWorkspace({
-        ...params,
-        creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
-      })
-    })
+    handler: async (params, context) => {
+      assertNoPaperclipRuntimeLink(params.linkedTask, params.linkedTaskSourceContext)
+      return {
+        folderWorkspace: await context.runtime.createFolderWorkspace({
+          ...params,
+          creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+        })
+      }
+    }
   }),
   defineMethod({
     name: 'folderWorkspace.update',
     params: FolderWorkspaceUpdate,
-    handler: async (params, { runtime }) => ({
-      folderWorkspace: await runtime.updateFolderWorkspace(params.folderWorkspaceId, params.updates)
-    })
+    handler: async (params, { runtime }) => {
+      assertNoPaperclipRuntimeLink(
+        params.updates.linkedTask,
+        params.updates.linkedTaskSourceContext
+      )
+      return {
+        folderWorkspace: await runtime.updateFolderWorkspace(
+          params.folderWorkspaceId,
+          params.updates
+        )
+      }
+    }
   }),
   defineMethod({
     name: 'folderWorkspace.delete',

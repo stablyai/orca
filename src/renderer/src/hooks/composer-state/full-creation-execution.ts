@@ -18,6 +18,8 @@ export type FullCreationExecutionInput = Pick<
   | 'prepareFullSubmit'
   | 'resolvedInitialWorkspaceStatus'
   | 'selectedRepoIsGit'
+  | 'selectedRepoIsRemote'
+  | 'selectedRepoSettings'
   | 'setSidebarOpen'
   | 'sparseEnabled'
   | 'taskSourceContext'
@@ -35,6 +37,8 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
+import { assertPaperclipSubmitAdmission } from './paperclip-submit-admission'
+import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 
 export function useFullCreationExecution(input: FullCreationExecutionInput) {
   const {
@@ -54,6 +58,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
     prepareFullSubmit,
     resolvedInitialWorkspaceStatus,
     selectedRepoIsGit,
+    selectedRepoIsRemote,
+    selectedRepoSettings,
     setSidebarOpen,
     sparseEnabled,
     taskSourceContext,
@@ -119,6 +125,11 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       if (isSubmissionCancelled()) {
         return
       }
+
+      await assertPaperclipSubmitAdmission(
+        submitLinkedWorkItem,
+        !selectedRepoIsRemote && getActiveRuntimeTarget(selectedRepoSettings).kind === 'local'
+      )
 
       const result = await createWorktree(
         repoId,
@@ -260,6 +271,8 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       prepareFullSubmit,
       resolvedInitialWorkspaceStatus,
       selectedRepoIsGit,
+      selectedRepoIsRemote,
+      selectedRepoSettings,
       setSidebarOpen,
       sparseEnabled,
       taskSourceContext,

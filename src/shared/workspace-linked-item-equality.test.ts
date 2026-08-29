@@ -44,4 +44,30 @@ describe('areWorkspaceLinkedItemsEqual', () => {
     )
     expect(areWorkspaceLinkedItemsEqual(item, { ...item, repoId: 'repo-2' })).toBe(false)
   })
+
+  it('compares immutable Paperclip issue and scope fields', () => {
+    const paperclip: WorkspaceLinkedItem = {
+      provider: 'paperclip',
+      type: 'issue',
+      number: 0,
+      title: 'PAP-12 Connect Paperclip',
+      url: 'https://paperclip.example/acme/issues/PAP-12',
+      paperclipIssueId: 'issue-12',
+      paperclipIdentifier: 'PAP-12',
+      paperclipConnectionId: 'connection-1',
+      paperclipCompanyId: 'company-1',
+      paperclipProjectId: 'project-1'
+    }
+
+    expect(areWorkspaceLinkedItemsEqual(paperclip, { ...paperclip })).toBe(true)
+    expect(
+      areWorkspaceLinkedItemsEqual(paperclip, { ...paperclip, paperclipIssueId: 'issue-13' })
+    ).toBe(false)
+    expect(
+      areWorkspaceLinkedItemsEqual(paperclip, {
+        ...paperclip,
+        paperclipConnectionId: 'connection-2'
+      })
+    ).toBe(false)
+  })
 })

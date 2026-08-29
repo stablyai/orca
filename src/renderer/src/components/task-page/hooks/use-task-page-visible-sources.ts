@@ -30,6 +30,7 @@ export function useTaskPageVisibleSources({
   preflightStatusCurrent,
   preflightStatus,
   linearConnected,
+  paperclipConnected,
   updateSettings,
   pageData
 }: {
@@ -37,6 +38,7 @@ export function useTaskPageVisibleSources({
   preflightStatusCurrent: boolean
   preflightStatus: PreflightStatus | null
   linearConnected: boolean
+  paperclipConnected: boolean
   updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
   pageData: { taskSource?: TaskProvider }
 }) {
@@ -51,13 +53,15 @@ export function useTaskPageVisibleSources({
         preferredVisibleTaskProviders,
         {
           gitlabInstalled: preflightStatusCurrent && preflightStatus?.glab?.installed === true,
-          linearConnected: linearConnected === true
+          linearConnected: linearConnected === true,
+          paperclipConnected: paperclipConnected === true
         },
         defaultTaskSource
       ),
     [
       defaultTaskSource,
       linearConnected,
+      paperclipConnected,
       preferredVisibleTaskProviders,
       preflightStatusCurrent,
       preflightStatus?.glab?.installed

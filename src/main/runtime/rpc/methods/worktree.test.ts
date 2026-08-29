@@ -147,6 +147,35 @@ describe('worktree RPC methods', () => {
     })
   })
 
+  it('rejects Paperclip linkage at the runtime mutation boundary', async () => {
+    const runtime = {
+      getRuntimeId: () => 'test-runtime',
+      dedupeWorktreeCreate: passthroughDedupe,
+      showRepo: vi.fn().mockResolvedValue(repo),
+      createManagedWorktree: vi.fn()
+    } as unknown as OrcaRuntimeService
+    const response = await new RpcDispatcher({ runtime, methods: WORKTREE_METHODS }).dispatch(
+      makeRequest('worktree.create', {
+        repo: 'repo-1',
+        name: 'paperclip-task',
+        linkedWorkItem: {
+          provider: 'paperclip',
+          type: 'issue',
+          number: 0,
+          title: 'Paperclip issue',
+          url: 'http://127.0.0.1:3100/issues/issue-1',
+          paperclipIssueId: 'issue-1',
+          paperclipConnectionId: 'connection-1',
+          paperclipCompanyId: 'company-1',
+          paperclipProjectId: 'project-1'
+        }
+      })
+    )
+    expect(response).toMatchObject({ ok: false })
+    expect(runtime.showRepo).not.toHaveBeenCalled()
+    expect(runtime.createManagedWorktree).not.toHaveBeenCalled()
+  })
+
   it('mints automation provenance from a valid dispatch request on worktree creation', async () => {
     const dispatchToken = createAutomationDispatchToken('automation-1', 'run-1')
     const runtime = {

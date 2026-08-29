@@ -36,6 +36,7 @@ import { saveLinearIssueView } from './linear-issue-view-storage'
 import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../shared/gitlab-types'
+import type { PaperclipIssue } from '../../../shared/paperclip-types'
 
 import type { LinearIssue } from '../../../shared/linear/issue-types'
 import type {
@@ -195,6 +196,13 @@ export default function TaskPage(): React.JSX.Element {
     jiraStatusReady,
     linearConnected,
     jiraConnected,
+    paperclipStatus,
+    paperclipIssues,
+    paperclipIssuesLoading,
+    paperclipError,
+    loadPaperclipIssues,
+    getPaperclipLaunchAdmission,
+    paperclipConnected,
     submitShortcutLabel,
     eligibleRepos
   } = useTaskPageStoreBindings()
@@ -243,6 +251,7 @@ export default function TaskPage(): React.JSX.Element {
     preflightStatusCurrent,
     preflightStatus,
     linearConnected,
+    paperclipConnected,
     updateSettings,
     pageData
   })
@@ -3093,6 +3102,86 @@ export default function TaskPage(): React.JSX.Element {
     jiraConnectOpen,
     setJiraConnectOpen
   }
+  const handleUsePaperclipIssue = async (issue: PaperclipIssue): Promise<void> => {
+    const connection = paperclipStatus.connection
+    if (!connection) {
+      return
+    }
+    const admission = await getPaperclipLaunchAdmission({
+      issueId: issue.id,
+      connectionId: connection.id,
+      companyId: connection.companyId,
+      projectId: connection.projectId
+    })
+    if (!admission.allowed) {
+      toast.error(
+        admission.reason === 'active_run'
+          ? translate(
+              'auto.components.TaskPage.paperclipActiveRun',
+              'Paperclip already has an active run for this issue.'
+            )
+          : admission.reason === 'claim_markers'
+            ? translate(
+                'auto.components.TaskPage.paperclipClaimMarkers',
+                'This Paperclip issue still has active claim markers.'
+              )
+            : translate(
+                'auto.components.TaskPage.paperclipUnknownRun',
+                'Paperclip run state could not be verified. Launch is blocked.'
+              )
+      )
+      return
+    }
+    if (
+      !window.confirm(
+        translate(
+          'auto.components.TaskPage.paperclipNonExclusiveConfirm',
+          'Orca cannot reserve this Paperclip issue. Start a non-exclusive workspace anyway?'
+        )
+      )
+    ) {
+      return
+    }
+    const issueUrl = `${connection.origin}/issues/${encodeURIComponent(issue.id)}`
+    openModal('new-workspace-composer', {
+      linkedWorkItem: {
+        provider: 'paperclip',
+        type: 'issue',
+        number: 0,
+        title: issue.title,
+        url: issueUrl,
+        paperclipIssueId: issue.id,
+        paperclipIdentifier: issue.identifier,
+        paperclipConnectionId: connection.id,
+        paperclipCompanyId: connection.companyId,
+        paperclipProjectId: connection.projectId
+      },
+      taskSourceContext: {
+        kind: 'task-source',
+        provider: 'paperclip',
+        projectId: primaryRepo?.id ?? connection.projectId,
+        hostId: 'local',
+        accountLabel: connection.projectName,
+        providerIdentity: {
+          provider: 'paperclip',
+          connectionId: connection.id,
+          companyId: connection.companyId,
+          projectId: connection.projectId
+        }
+      },
+      prefilledName: `${issue.identifier}-${issue.title}`,
+      ...(primaryRepo ? { initialRepoId: primaryRepo.id } : {}),
+      telemetrySource: 'sidebar'
+    })
+  }
+  const paperclipList = {
+    connected: paperclipConnected,
+    issues: paperclipIssues,
+    loading: paperclipIssuesLoading,
+    error: paperclipError,
+    onLoad: loadPaperclipIssues,
+    onUse: (issue: PaperclipIssue) => void handleUsePaperclipIssue(issue)
+  }
 
   return (
     <TaskPageLayout
@@ -3116,6 +3205,7 @@ export default function TaskPage(): React.JSX.Element {
       primaryRepo={primaryRepo}
       gitlabList={gitlabList}
       jiraList={jiraList}
+      paperclipList={paperclipList}
       linearViews={linearViews}
       newGithubIssue={newGithubIssue}
       newLinearProject={newLinearProject}

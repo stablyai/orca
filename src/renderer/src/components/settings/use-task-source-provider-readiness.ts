@@ -27,6 +27,8 @@ export function useTaskSourceProviderReadiness(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const paperclipStatus = useAppStore((s) => s.paperclipStatus) ?? { connected: false }
+  const paperclipStatusChecked = useAppStore((s) => s.paperclipStatusChecked)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -89,6 +91,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      paperclip: {
+        connected: paperclipStatus.connected,
+        checking: !paperclipStatusChecked,
+        visible: visible.has('paperclip')
       }
     }
   }, [
@@ -101,6 +108,8 @@ export function useTaskSourceProviderReadiness(
     linearSkillInstalled,
     linearSkillLoading,
     linearSkillSettled,
+    paperclipStatus.connected,
+    paperclipStatusChecked,
     reviewChecking,
     reviewUnavailable,
     visibleProvidersKey

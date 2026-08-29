@@ -17,6 +17,10 @@ import {
   FolderWorkspaceUpdateArgs,
   parseProjectGroupIpcArgs
 } from './repo-ipc-arg-schemas'
+import {
+  assertNoPaperclipRuntimeLink,
+  withPaperclipWorkspaceAdmission
+} from '../../paperclip/paperclip-workspace-admission'
 
 export function registerFolderWorkspaceHandlers(mainWindow: BrowserWindow, store: Store): void {
   ipcMain.handle('folderWorkspaces:list', (): FolderWorkspace[] => store.getFolderWorkspaces())
@@ -58,9 +62,16 @@ export function registerFolderWorkspaceHandlers(mainWindow: BrowserWindow, store
         { getSshFilesystemProvider }
       )
       assertFolderWorkspacePathUsable(status)
-      const workspace = store.createFolderWorkspace({
-        ...args,
-        creatorProvenance: { kind: 'host' }
+      const workspace = await withPaperclipWorkspaceAdmission({
+        linkedWorkItem: args.linkedTask,
+        linkedTaskSourceContext: args.linkedTaskSourceContext,
+        store,
+        localTarget: !(args.connectionId ?? group.connectionId),
+        create: () =>
+          store.createFolderWorkspace({
+            ...args,
+            creatorProvenance: { kind: 'host' }
+          })
       })
       notifyReposChanged(mainWindow)
       return workspace
@@ -75,6 +86,7 @@ export function registerFolderWorkspaceHandlers(mainWindow: BrowserWindow, store
         rawArgs,
         'invalid_folder_workspace_update_args'
       )
+      assertNoPaperclipRuntimeLink(args.updates.linkedTask, args.updates.linkedTaskSourceContext)
       if (
         typeof args.updates.folderPath === 'string' &&
         args.updates.folderPath.trim().length > 0

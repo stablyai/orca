@@ -11,8 +11,10 @@ export function useIntegrationProviderStatusRefresh(): void {
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const paperclipStatusChecked = useAppStore((s) => s.paperclipStatusChecked)
   const checkLinearConnection = useAppStore((s) => s.checkLinearConnection)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const checkPaperclipConnection = useAppStore((s) => s.checkPaperclipConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const expectedPreflightContextKey = useAppStore((s) =>
     localPreflightContextKey(getLocalPreflightContext(s))
@@ -29,18 +31,23 @@ export function useIntegrationProviderStatusRefresh(): void {
     if (!jiraStatusCurrent || !jiraStatusChecked) {
       void checkJiraConnection()
     }
+    if (!paperclipStatusChecked) {
+      void checkPaperclipConnection()
+    }
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()
     }
   }, [
     checkJiraConnection,
     checkLinearConnection,
+    checkPaperclipConnection,
     jiraStatusChecked,
     jiraStatusCurrent,
     jiraStatusContextKey,
     linearStatusChecked,
     linearStatusCurrent,
     linearStatusContextKey,
+    paperclipStatusChecked,
     expectedPreflightContextKey,
     preflightStatusChecked,
     preflightStatusContextKey,

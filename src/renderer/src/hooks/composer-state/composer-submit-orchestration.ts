@@ -104,6 +104,8 @@ export function useComposerSubmitOrchestration(
     prepareFullSubmit: fullSubmitPreparation.prepareFullSubmit,
     resolvedInitialWorkspaceStatus: target.initialTargetState.resolvedInitialWorkspaceStatus,
     selectedRepoIsGit: target.runtimeTargetSelection.selectedRepoIsGit,
+    selectedRepoIsRemote: target.runtimeTargetSelection.selectedRepoIsRemote,
+    selectedRepoSettings: target.runtimeTargetSelection.selectedRepoSettings,
     setSidebarOpen: target.composerTargetStore.setSidebarOpen,
     sparseEnabled: target.asyncComposerState.sparseEnabled,
     taskSourceContext: target.sourceContextState.taskSourceContext,

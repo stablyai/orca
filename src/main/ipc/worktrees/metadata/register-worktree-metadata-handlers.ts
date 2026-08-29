@@ -14,6 +14,7 @@ import { readBranchRenameFailureOutputForDisplay } from '../../../agent-hooks/br
 import { normalizeLinkedWorkItemFields } from '../ipc-context-schemas'
 import { listDesktopLineageForHost } from './host-lineage-listing'
 import type { WorktreeIpcContext } from '../worktree-ipc-context'
+import { assertNoPaperclipRuntimeLink } from '../../../paperclip/paperclip-workspace-admission'
 
 export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): void {
   const { mainWindow, store, runtime } = context
@@ -35,6 +36,10 @@ export function registerWorktreeMetadataHandlers(context: WorktreeIpcContext): v
         throw new Error('Invalid execution host identity.')
       }
       const validatedUpdates = normalizeLinkedWorkItemFields(args.updates)
+      assertNoPaperclipRuntimeLink(
+        validatedUpdates.linkedWorkItem,
+        validatedUpdates.linkedTaskSourceContext
+      )
       const updates =
         validatedUpdates.displayName !== undefined
           ? {
