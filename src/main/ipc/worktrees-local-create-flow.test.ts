@@ -339,6 +339,35 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
+  it('preserves slashes in the branch name while flattening the worktree path', async () => {
+    listWorktreesMock.mockResolvedValue([
+      {
+        path: '/workspace/feature-something',
+        head: 'abc123',
+        branch: 'refs/heads/feature/something',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await handlers['worktrees:create'](null, {
+      repoId: 'repo-1',
+      name: 'feature/something'
+    })
+
+    expect(addWorktreeMock).toHaveBeenCalledWith(
+      '/workspace/repo',
+      '/workspace/feature-something',
+      'feature/something',
+      'origin/main',
+      false
+    )
+    expect(store.setWorktreeMeta).toHaveBeenCalledWith(
+      'repo-1::/workspace/feature-something',
+      expect.objectContaining({ displayName: 'feature/something' })
+    )
+  })
+
   it('uses a repo-specific worktree base path when creating local worktrees', async () => {
     store.getRepo.mockReturnValue({
       id: 'repo-1',
