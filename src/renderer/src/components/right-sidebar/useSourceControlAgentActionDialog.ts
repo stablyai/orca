@@ -143,6 +143,14 @@ export function useSourceControlAgentActionDialog({
         disabledAgents
       })
       const finalAgent = fallbackAgent ?? savedAgentId ?? null
+      if (finalAgent !== (savedAgentId ?? null)) {
+        setArgsDirty(false)
+        if (finalAgent) {
+          setAgentArgs(resolveTuiAgentLaunchArgs(finalAgent, settings?.agentDefaultArgs))
+        } else {
+          setAgentArgs('')
+        }
+      }
       setSelectedAgent(finalAgent)
       setDetectedOpenCycle(cycle)
     })

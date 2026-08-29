@@ -501,7 +501,7 @@ describe('SourceControlAgentActionDialog', () => {
     expect(agentCombobox.value).toBe('codex')
   })
 
-  it('falls back to detected agent but preserves edited arguments if only arguments changed during deferred detection', async () => {
+  it('falls back to detected agent and resets to its default arguments if only arguments changed during deferred detection', async () => {
     let resolveDetection: (value: TuiAgent[]) => void = () => {}
     const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
       resolveDetection = resolve
@@ -517,7 +517,7 @@ describe('SourceControlAgentActionDialog', () => {
     })
 
     await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
-    
+
     const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
     expect(input).not.toBeNull()
 
@@ -538,7 +538,48 @@ describe('SourceControlAgentActionDialog', () => {
     expect(agentCombobox).not.toBeNull()
     expect(agentCombobox.value).toBe('gemini')
 
-    // The edited arguments ('--verbose') must be preserved!
+    // The edited arguments ('--verbose') must be reset to the fallback agent's default args ('--yolo')!
+    expect(input.value).toBe('--yolo')
+  })
+
+  it('preserves edited arguments if agent does not change during deferred detection', async () => {
+    let resolveDetection: (value: TuiAgent[]) => void = () => {}
+    const detectionPromise = new Promise<TuiAgent[]>((resolve) => {
+      resolveDetection = resolve
+    })
+    mocks.ensureDetectedAgents.mockReturnValue(detectionPromise)
+    mocks.ensureRemoteDetectedAgents.mockReturnValue(detectionPromise)
+
+    resetStore(settingsWithGlobalRecipe(null))
+
+    renderControlledDialog({
+      savedAgentId: 'gemini',
+      savedAgentArgs: null
+    })
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Launch agent'))
+
+    const input = container.querySelector('#source-control-agent-cli-args') as HTMLInputElement
+    expect(input).not.toBeNull()
+
+    // User edits the CLI arguments while detection is pending
+    act(() => {
+      fireEvent.change(input, { target: { value: '--verbose' } })
+    })
+    expect(input.value).toBe('--verbose')
+
+    // Resolve deferred detection with 'gemini' still enabled
+    act(() => {
+      resolveDetection(['gemini'])
+    })
+    await flushEffects()
+
+    // The selected agent must remain 'gemini'
+    const agentCombobox = container.querySelector('[data-testid="agent-combobox"]') as HTMLInputElement
+    expect(agentCombobox).not.toBeNull()
+    expect(agentCombobox.value).toBe('gemini')
+
+    // Since the agent did not change, the edited arguments ('--verbose') must be preserved!
     expect(input.value).toBe('--verbose')
   })
 })
