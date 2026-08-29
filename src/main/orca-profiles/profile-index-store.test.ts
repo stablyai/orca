@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../../config/scripts/vitest-host-ports-setup'
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
+  createDefaultLocalOrcaProfile,
   DEFAULT_LOCAL_ORCA_PROFILE_ID,
   DEFAULT_LOCAL_ORCA_PROFILE_NAME,
   ORCA_PROFILE_INDEX_SCHEMA_VERSION,
@@ -11,11 +13,10 @@ import {
 
 const testState = { dir: '' }
 
-vi.mock('electron', () => ({
-  app: {
-    getPath: () => testState.dir
-  }
-}))
+// Why the port and not vi.mock('electron'): profile path resolution reads AppEnvironment
+// now, so an electron mock would be inert and every case would share the global fake's
+// one temp dir instead of its own.
+installFakeAppEnvironment({ getPath: () => testState.dir })
 
 async function loadProfileIndexStore() {
   vi.resetModules()
@@ -29,6 +30,8 @@ function readJson(path: string): unknown {
 describe('profile index store', () => {
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-profile-test-'))
+    // Why re-install per test: the global setup's beforeEach reinstates its own fake.
+    installFakeAppEnvironment({ getPath: () => testState.dir })
   })
 
   afterEach(() => {
@@ -152,6 +155,27 @@ describe('profile index store', () => {
     const { setActiveOrcaProfile } = await loadProfileIndexStore()
 
     expect(() => setActiveOrcaProfile('missing-profile')).toThrow('unknown_orca_profile')
+  })
+
+  const posixIt = process.platform === 'win32' ? it.skip : it
+  posixIt('writes a fresh profile index when umask removes owner-write permission', async () => {
+    const store = await loadProfileIndexStore()
+    const indexPath = store.getOrcaProfileIndexPath()
+    const profile = createDefaultLocalOrcaProfile(1)
+    const index: OrcaProfileIndex = {
+      schemaVersion: ORCA_PROFILE_INDEX_SCHEMA_VERSION,
+      activeProfileId: profile.id,
+      profiles: [profile]
+    }
+    const originalUmask = process.umask(0o200)
+
+    try {
+      expect(() => store.writeProfileIndex(indexPath, index)).not.toThrow()
+    } finally {
+      process.umask(originalUmask)
+    }
+
+    expect(readJson(indexPath)).toEqual(index)
   })
 
   it('recovers a corrupted profile index from the backup copy', async () => {

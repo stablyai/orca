@@ -3,7 +3,7 @@ import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
-import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { RetainedAgentEntry } from '@/store/slices/agent-status'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
@@ -265,6 +265,27 @@ describe('buildWorktreeAgentRows', () => {
     const done = rows.find((r) => r.paneKey === PANE_KEY_2)
     expect(working?.state).toBe('idle')
     expect(done?.state).toBe('done')
+  })
+
+  it('decays a restored-unconfirmed working entry to idle even while recent', () => {
+    // Why: a hydrated nonterminal row may describe a turn that ended while no
+    // receiver was up; it must never render as confirmed working, however new.
+    const updatedAt = 2_000
+    const now = updatedAt + 1
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1'), makeTab('tab-2')],
+      entries: [
+        makeEntry(PANE_KEY_1, updatedAt, { state: 'working', restoredUnconfirmed: true }),
+        makeEntry(PANE_KEY_2, updatedAt, { state: 'working' })
+      ],
+      retained: [],
+      now
+    })
+
+    const unconfirmed = rows.find((r) => r.paneKey === PANE_KEY_1)
+    const confirmed = rows.find((r) => r.paneKey === PANE_KEY_2)
+    expect(unconfirmed?.state).toBe('idle')
+    expect(confirmed?.state).toBe('working')
   })
 
   it('renders live worktree-attributed entries even when their tab is absent', () => {

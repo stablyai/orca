@@ -29,11 +29,11 @@ afterEach(() => {
 })
 
 function renderHeader({
-  canUnlinkPullRequest = true,
+  canUnlinkReview = true,
   provider = 'github',
   modifierHintDestination = 'system-browser'
 }: {
-  canUnlinkPullRequest?: boolean
+  canUnlinkReview?: boolean
   provider?: 'github' | 'gitlab'
   modifierHintDestination?: ChecksPanelHostedReviewModifierDestination
 } = {}): string {
@@ -53,12 +53,12 @@ function renderHeader({
         mergeable: 'UNKNOWN'
       }}
       isRefreshing={false}
-      canUnlinkPullRequest={canUnlinkPullRequest}
+      canUnlinkReview={canUnlinkReview}
       modifierHintDestination={modifierHintDestination}
       onRefresh={vi.fn()}
       onOpenReview={vi.fn()}
-      onUnlinkPullRequest={vi.fn()}
-      onLinkAnotherPullRequest={vi.fn()}
+      onUnlinkReview={vi.fn()}
+      onLinkAnotherReview={vi.fn()}
     />
   )
 }
@@ -109,19 +109,19 @@ describe('ChecksPanelReviewHeader', () => {
   })
 
   it('disables unlinking when the displayed PR is not manually linked', () => {
-    const markup = renderHeader({ canUnlinkPullRequest: false })
+    const markup = renderHeader({ canUnlinkReview: false })
 
     expect(markup).toContain('data-disabled="true"')
     expect(markup).toContain('unlink PR')
   })
 
-  it('shows GitLab MR identity without GitHub-only link management actions', () => {
+  it('shows GitLab MR identity with provider-appropriate link management actions', () => {
     const markup = renderHeader({ provider: 'gitlab' })
 
     expect(markup).toContain('Open on GitLab')
     expect(markup).toContain('!31')
-    expect(markup).not.toContain('More PR actions')
-    expect(markup).not.toContain('unlink PR')
-    expect(markup).not.toContain('Link another PR')
+    expect(markup).toContain('More MR actions')
+    expect(markup).toContain('Unlink MR')
+    expect(markup).toContain('Link another MR')
   })
 })

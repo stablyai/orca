@@ -90,7 +90,6 @@ export default function PdfViewer({
 
     setPdfError(null)
     let cancelled = false
-    let pdfDocument: pdfjsLib.PDFDocumentProxy | null = null
 
     let binary: string
     try {
@@ -246,10 +245,9 @@ export default function PdfViewer({
     loadingTask.promise
       .then((doc) => {
         if (cancelled) {
-          doc.destroy()
+          loadingTask.destroy().catch(() => {})
           return
         }
-        pdfDocument = doc
         viewer.setDocument(doc)
         linkService.setDocument(doc)
         findController.setDocument(doc)
@@ -278,10 +276,9 @@ export default function PdfViewer({
       eventBus.off('updateviewarea', handleUpdateViewArea)
       eventBus.off('find', markUserMoved)
       setFindOpen(false)
+      // Why: pdf.js 6 dropped PDFDocumentProxy.destroy(); destroying the loading
+      // task is what tears the document and its worker transport down.
       loadingTask.destroy().catch(() => {})
-      if (pdfDocument) {
-        pdfDocument.destroy()
-      }
       // Why: setDocument(null) is the proper teardown — it cancels active
       // renders, clears the find controller, and dispatches pagesdestroy.
       // The runtime accepts null but the types only declare PDFDocumentProxy.

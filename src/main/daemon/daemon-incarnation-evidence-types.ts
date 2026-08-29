@@ -54,6 +54,11 @@ export type DaemonProcessEvidence =
 
 export type ProcessSignalEvidence = 'occupied' | 'permission_denied' | 'missing' | 'unavailable'
 
+export type ProcessLivenessVerdict =
+  | { status: 'live' }
+  | { status: 'unverifiable'; reason: string }
+  | { status: 'exited' }
+
 export type LinuxStatEvidence =
   | { status: 'present'; value: string }
   | { status: 'missing' }

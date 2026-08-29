@@ -6,6 +6,7 @@ import {
   AGENT_HOOK_SHED_FIELDS_KEY,
   ORCA_FEATURE_REMOTE_AGENT_HOOKS_ENV,
   createShedSubagentsField,
+  isAgentHookSource,
   isRemoteAgentHooksEnabled,
   restoreShedStatusFields,
   type AgentHookRelayEnvelope
@@ -22,8 +23,11 @@ describe('agent-hook-relay wire shape', () => {
       connectionId: null,
       env: 'production',
       version: '1',
+      providerPromptId: '11111111-1111-4111-8111-111111111111',
+      compactTrigger: 'manual',
       payload: {
         state: 'working',
+        workingMode: 'monitoring',
         prompt: 'roundtrip',
         agentType: 'claude'
       }
@@ -33,12 +37,22 @@ describe('agent-hook-relay wire shape', () => {
     expect(decoded).toEqual(envelope)
     expect(decoded.connectionId).toBeNull()
     expect(decoded.payload.prompt).toBe('roundtrip')
+    expect(decoded.payload.workingMode).toBe('monitoring')
   })
 
   it('exposes stable JSON-RPC method names', () => {
     expect(AGENT_HOOK_NOTIFICATION_METHOD).toBe('agent.hook')
     expect(AGENT_HOOK_REQUEST_REPLAY_METHOD).toBe('agent_hook.requestReplay')
     expect(AGENT_HOOK_INSTALL_PLUGINS_METHOD).toBe('agent_hook.installPlugins')
+  })
+
+  it('validates hook sources crossing persisted and relay trust boundaries', () => {
+    expect(isAgentHookSource('claude')).toBe(true)
+    expect(isAgentHookSource('kimi')).toBe(true)
+    expect(isAgentHookSource('prime-agent')).toBe(true)
+    expect(isAgentHookSource('claude\0codex')).toBe(false)
+    expect(isAgentHookSource('unknown')).toBe(false)
+    expect(isAgentHookSource({ source: 'claude' })).toBe(false)
   })
 })
 

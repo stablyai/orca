@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveVisibleCreatePrHeaderAction } from './source-control-create-pr-intent-state'
+import { resolveVisibleCreatePrHeaderAction } from './source-control/review/create-pr-intent-state'
 import type { PrimaryAction } from './source-control-primary-action-types'
 
 const disabledCreatePrAction: PrimaryAction = {

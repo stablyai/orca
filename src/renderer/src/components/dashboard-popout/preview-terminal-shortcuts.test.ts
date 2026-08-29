@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
+import { _setLayoutMapForTests } from '../../lib/keyboard-layout/layout-base-character'
 import {
   resolvePreviewShortcutAction,
   type PreviewShortcutContext
@@ -11,6 +12,7 @@ const LOCAL_MAC: DashboardCardTerminalInput = {
   hostPlatform: 'darwin',
   localWindowsConpty: false,
   windowsShiftEnterEncoding: 'alt-enter',
+  ctrlEnterCsiU: false,
   kittyKeyboardAdvertised: true
 }
 
@@ -20,10 +22,10 @@ function contextFor(
   return {
     clientPlatform: 'darwin',
     macOptionAsAlt: 'false',
-    optionKeyLocation: 0,
+    optionKeyLocations: 0,
     keybindings: undefined,
     terminalInput: LOCAL_MAC,
-    kittyKeyboardActive: () => overrides.kitty === true,
+    getKittyKeyboardFlags: () => (overrides.kitty === true ? 1 : 0),
     terminalShortcutPolicy: 'orca-first',
     ...overrides
   }
@@ -34,6 +36,10 @@ function keydown(init: KeyboardEventInit): KeyboardEvent {
 }
 
 describe('resolvePreviewShortcutAction', () => {
+  afterEach(() => {
+    _setLayoutMapForTests(null)
+  })
+
   it('kills the previous word on Ctrl+Backspace instead of deleting one character', () => {
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Backspace', ctrlKey: true }), contextFor())
@@ -66,6 +72,27 @@ describe('resolvePreviewShortcutAction', () => {
     ).toEqual({ type: 'sendInput', data: '\x1b\x7f' })
   })
 
+  it('preserves exact kitty flags for Option-composed text', () => {
+    _setLayoutMapForTests({ get: (code) => (code === 'KeyQ' ? 'q' : undefined), size: 1 })
+    const composed = keydown({ key: '@', code: 'KeyQ', altKey: true })
+
+    expect(
+      resolvePreviewShortcutAction(composed, contextFor({ getKittyKeyboardFlags: () => 1 }))
+    ).toEqual({ type: 'sendInput', data: '@' })
+    expect(
+      resolvePreviewShortcutAction(composed, contextFor({ getKittyKeyboardFlags: () => 8 }))
+    ).toEqual({ type: 'sendInput', data: '\x1b[113;3u' })
+  })
+
+  it('tracks native Option dead keys without consuming their keydown', () => {
+    expect(
+      resolvePreviewShortcutAction(
+        keydown({ key: 'Dead', code: 'KeyE', altKey: true }),
+        contextFor({ getKittyKeyboardFlags: () => 2 })
+      )
+    ).toEqual({ type: 'trackNativeOptionDeadKey' })
+  })
+
   it('withholds the Ctrl+arrow translation on a local ConPTY pty, where PSReadLine binds it', () => {
     const conpty = contextFor({
       clientPlatform: 'win32',
@@ -73,6 +100,7 @@ describe('resolvePreviewShortcutAction', () => {
         hostPlatform: 'win32',
         localWindowsConpty: true,
         windowsShiftEnterEncoding: 'alt-enter',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: false
       }
     })
@@ -94,6 +122,7 @@ describe('resolvePreviewShortcutAction', () => {
         hostPlatform: 'win32',
         localWindowsConpty: false,
         windowsShiftEnterEncoding: 'csi-u',
+        ctrlEnterCsiU: false,
         kittyKeyboardAdvertised: true
       }
     })
@@ -103,6 +132,44 @@ describe('resolvePreviewShortcutAction', () => {
     expect(
       resolvePreviewShortcutAction(keydown({ key: 'Enter', shiftKey: true }), contextFor())
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+  })
+
+  it('protects local ConPTY shells while preserving trusted Ctrl+Enter consumers', () => {
+    const conpty = contextFor({
+      clientPlatform: 'win32',
+      terminalInput: {
+        hostPlatform: 'win32',
+        localWindowsConpty: true,
+        windowsShiftEnterEncoding: 'alt-enter',
+        ctrlEnterCsiU: false,
+        kittyKeyboardAdvertised: false
+      }
+    })
+    expect(
+      resolvePreviewShortcutAction(keydown({ key: 'Enter', ctrlKey: true }), {
+        ...conpty,
+        getKittyKeyboardFlags: () => 1
+      })
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
+    expect(resolvePreviewShortcutAction(keydown({ key: 'Enter', ctrlKey: true }), conpty)).toEqual({
+      type: 'sendInput',
+      data: '\r'
+    })
+    expect(
+      resolvePreviewShortcutAction(
+        keydown({ key: 'Enter', ctrlKey: true }),
+        contextFor({
+          clientPlatform: 'win32',
+          terminalInput: {
+            hostPlatform: 'win32',
+            localWindowsConpty: true,
+            windowsShiftEnterEncoding: 'alt-enter',
+            ctrlEnterCsiU: true,
+            kittyKeyboardAdvertised: false
+          }
+        })
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
   })
 
   it('reports pane-scoped chords so the caller can swallow them', () => {

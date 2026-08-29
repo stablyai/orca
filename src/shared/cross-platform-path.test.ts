@@ -1,11 +1,54 @@
 import { describe, expect, it } from 'vitest'
 import {
+  areLocalWindowsWslPathAliases,
+  isCaseInsensitiveRuntimeRoot,
   isPathInsideOrEqual,
   isRuntimePathAbsolute,
   normalizeRuntimePathForComparison,
   relativePathInsideRoot,
   resolveRuntimePath
 } from './cross-platform-path'
+
+describe('local Windows WSL aliases', () => {
+  it('matches UNC aliases and mounted drives without folding Linux path case', () => {
+    expect(
+      areLocalWindowsWslPathAliases(
+        '//wsl.localhost/Ubuntu/home/Alice/file.ts',
+        '\\\\wsl$\\ubuntu\\home\\Alice\\file.ts'
+      )
+    ).toBe(true)
+    expect(
+      areLocalWindowsWslPathAliases(
+        '//wsl.localhost/Ubuntu/home/Alice/file.ts',
+        '\\\\wsl.localhost\\Ubuntu\\home\\alice\\file.ts'
+      )
+    ).toBe(false)
+    expect(
+      areLocalWindowsWslPathAliases(
+        '//wsl.localhost/Ubuntu/mnt/c/repo/file.ts',
+        'C:\\repo\\file.ts'
+      )
+    ).toBe(true)
+    expect(
+      areLocalWindowsWslPathAliases('//server/share/file.ts', '\\\\server\\share\\file.ts')
+    ).toBe(false)
+  })
+})
+
+describe('isCaseInsensitiveRuntimeRoot', () => {
+  it('folds Windows drive and plain UNC roots', () => {
+    expect(isCaseInsensitiveRuntimeRoot('C:\\repos\\app')).toBe(true)
+    expect(isCaseInsensitiveRuntimeRoot('c:/repos/app')).toBe(true)
+    expect(isCaseInsensitiveRuntimeRoot('\\\\server\\share\\app')).toBe(true)
+  })
+
+  it('keeps WSL UNC and POSIX roots case-sensitive', () => {
+    expect(isCaseInsensitiveRuntimeRoot('\\\\wsl.localhost\\Ubuntu\\home\\ada\\app')).toBe(false)
+    expect(isCaseInsensitiveRuntimeRoot('//wsl$/Ubuntu/home/ada/app')).toBe(false)
+    expect(isCaseInsensitiveRuntimeRoot('/home/ada/app')).toBe(false)
+    expect(isCaseInsensitiveRuntimeRoot('/Users/ada/app')).toBe(false)
+  })
+})
 
 describe('cross-platform path containment', () => {
   it('keeps POSIX sibling prefixes outside the root', () => {

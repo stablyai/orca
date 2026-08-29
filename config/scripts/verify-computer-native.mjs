@@ -28,6 +28,12 @@ const checks = [
     enabled: true
   },
   {
+    name: 'Linux snapshot renderer tests',
+    command: 'python3',
+    args: ['native/computer-use-linux/runtime_render_test.py'],
+    enabled: true
+  },
+  {
     name: 'native provider argument guardrails',
     run: verifyNativeArgumentGuardrails,
     enabled: true
@@ -67,6 +73,19 @@ const checks = [
   {
     name: 'Windows provider handshake',
     run: verifyWindowsProviderHandshake,
+    enabled: process.platform === 'win32'
+  },
+  {
+    name: 'Windows snapshot renderer tests',
+    command: 'powershell.exe',
+    args: [
+      '-NoLogo',
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      'native/computer-use-windows/runtime-render.test.ps1'
+    ],
     enabled: process.platform === 'win32'
   },
   {
@@ -470,11 +489,11 @@ function verifyNativeArgumentGuardrails() {
 
 function powerShellFunctionBody(source, name) {
   const start = source.indexOf(`function ${name}`)
-  if (start < 0) {
+  if (start === -1) {
     return null
   }
   const bodyStart = source.indexOf('{', start)
-  if (bodyStart < 0) {
+  if (bodyStart === -1) {
     return null
   }
   let depth = 0
@@ -494,11 +513,11 @@ function powerShellFunctionBody(source, name) {
 
 function swiftFunctionBody(source, name) {
   const start = source.indexOf(`func ${name}`)
-  if (start < 0) {
+  if (start === -1) {
     return null
   }
   const bodyStart = source.indexOf('{', start)
-  if (bodyStart < 0) {
+  if (bodyStart === -1) {
     return null
   }
   let depth = 0

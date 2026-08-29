@@ -1,6 +1,6 @@
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { resolvePaneAgentActivity } from '@/lib/pane-agent-evidence'
 import { detectAgentSendTitleStatus } from './agent-send-title-status'
@@ -71,7 +71,9 @@ export function deriveRunningAgentSendTargets(
     const liveTitleStatus = ptyId
       ? detectLiveAgentPaneStatus(state, parsed.tabId, parsed.leafId, tab.title)
       : null
-    if (decision.hookState === null) {
+    if (entry.restoredUnconfirmed) {
+      disabledReason = 'Agent status is stale'
+    } else if (decision.hookState === null) {
       if (liveTitleStatus === 'permission') {
         disabledReason = 'Agent needs permission'
       } else if (liveTitleStatus === null) {

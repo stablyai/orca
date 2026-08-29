@@ -4,11 +4,11 @@ import type {
   RuntimeMobileSessionTabsSnapshot,
   RuntimeMobileSessionTerminalTab
 } from '../../shared/runtime-types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
-  TabGroupLayoutNode,
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
-} from '../../shared/types'
+} from '../../shared/terminal-tab-types'
 
 export type RetiredTerminalSurface = {
   worktreeId: string

@@ -1,17 +1,20 @@
+import type { HostStackRouteTarget } from '../navigation/host-stack-navigation'
+
 export type MobileSessionRouteParams = {
   hostId: string
   worktreeId: string
   name?: string
 }
 
-export type MobileSessionHref = {
-  pathname: '/h/[hostId]/session/[worktreeId]'
-  params: MobileSessionRouteParams
-}
-
-export function createMobileSessionHref(params: MobileSessionRouteParams): MobileSessionHref {
+/** Identities stay raw — the navigator owns the params, so pre-encoding a
+ *  workspace id would reach the session screen still escaped. */
+export function mobileSessionRouteTarget({
+  hostId,
+  worktreeId,
+  name
+}: MobileSessionRouteParams): HostStackRouteTarget {
   return {
-    pathname: '/h/[hostId]/session/[worktreeId]',
-    params
+    name: '[hostId]/session/[worktreeId]',
+    params: name ? { hostId, worktreeId, name } : { hostId, worktreeId }
   }
 }

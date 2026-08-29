@@ -134,6 +134,7 @@ describe('isRelayAlreadyInstalled', () => {
     const cmd = mockExec.mock.calls.at(-1)?.[1] ?? ''
     expect(cmd).toContain('relay.js')
     expect(cmd).toContain('relay-watcher.js')
+    expect(cmd).toContain('relay-ai-vault-service.js')
     expect(cmd).toContain('managed-hook-runtime.js')
     expect(cmd).toContain('.install-complete')
   })

@@ -60,7 +60,7 @@ function resolvePasteMetadata(
   return {
     pasteOnNewLine: emptySelectionClipboard && metadata.isFromEmptySelection === true,
     multicursorText:
-      typeof metadata.multicursorText !== 'undefined' ? (metadata.multicursorText ?? null) : null,
+      metadata.multicursorText !== undefined ? (metadata.multicursorText ?? null) : null,
     mode: metadata.mode ?? null
   }
 }

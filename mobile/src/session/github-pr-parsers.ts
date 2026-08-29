@@ -1,15 +1,19 @@
 import type {
-  GitHubAssignableUser,
-  GitHubPRReviewSummary,
-  GitHubWorkItem,
-  GitHubWorkItemDetails,
   PRCheckAnnotation,
   PRCheckDetail,
   PRCheckJob,
   PRCheckRunDetails,
-  PRCheckStep,
+  PRCheckStep
+} from '../../../src/shared/github/check-types'
+import type {
+  GitHubAssignableUser,
+  GitHubPRReviewSummary,
   PRInfo
-} from '../../../src/shared/types'
+} from '../../../src/shared/github/pull-request-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../src/shared/github/work-item-types'
 import { readPRComments } from './github-pr-comment-parsers'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {

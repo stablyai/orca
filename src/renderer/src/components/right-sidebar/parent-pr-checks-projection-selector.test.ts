@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { Repo, Worktree } from '../../../../shared/types'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import { buildParentPrChecksProjection } from './parent-pr-checks-rows'
 import { createParentPrChecksProjectionSelector } from './parent-pr-checks-projection-selector'
 

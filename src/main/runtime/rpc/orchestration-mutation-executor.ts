@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto'
 import { isOrchestrationMutation } from '../../../shared/orchestration-rpc-contract'
+import { parsePaneKey } from '../../../shared/stable-pane-id'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { OrchestrationError } from '../orchestration/orchestration-error'
 import type { RpcRequest } from './core'
@@ -22,16 +23,24 @@ export class OrchestrationMutationExecutor {
   async run(
     request: RpcRequest,
     params: unknown,
-    invoke: (mutation?: DurableMutationInvocation) => Promise<unknown> | unknown,
+    invoke: (mutation?: DurableMutationInvocation) => unknown,
     callerFingerprintOverride?: string
   ): Promise<unknown> {
     const requestId = request.orchestrationRequestId
     if (!requestId || !isOrchestrationMutation(request.method, params)) {
       return await invoke()
     }
-    const callerFingerprint = callerFingerprintOverride ?? authenticatedCallerFingerprint(request)
+    const callerFingerprint =
+      callerFingerprintOverride ?? this.getLocalAuthenticatedCallerFingerprint()
     const payloadHash = createHash('sha256')
-      .update(JSON.stringify(canonicalize({ method: request.method, params })))
+      .update(
+        JSON.stringify(
+          canonicalize({
+            method: request.method,
+            params: replayStableCallerParams(this.runtime, params)
+          })
+        )
+      )
       .digest('hex')
     const key = `${callerFingerprint}:${requestId}`
     const db = this.runtime.getOrchestrationDb()
@@ -54,6 +63,8 @@ export class OrchestrationMutationExecutor {
           return { disposition: row.state, row }
         })()
       : db.beginMutationReceipt(identity)
+    const resumedPendingMutation =
+      begun.disposition === 'pending' && request.method === 'orchestration.workerRelease'
 
     if (begun.disposition === 'completed') {
       const active = this.inFlight.get(key)
@@ -67,33 +78,35 @@ export class OrchestrationMutationExecutor {
       if (active) {
         return attachMutationReceipt(await active, requestId, true)
       }
-      const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
-      throw new OrchestrationError(
-        'operation_unknown',
-        recovery
-          ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
-          : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
-        recovery
-          ? {
-              requestId,
-              dispatchId: recovery.dispatchId,
-              recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
-            }
-          : { requestId }
-      )
+      if (request.method !== 'orchestration.workerRelease') {
+        const recovery = getPendingWorkerStartRecovery(request.method, begun.row.receipt)
+        throw new OrchestrationError(
+          'operation_unknown',
+          recovery
+            ? `Worker start ${requestId} was accepted as Dispatch ${recovery.dispatchId} before restart. Inspect that Dispatch; do not start another worker.`
+            : `Mutation ${requestId} may have been accepted before restart. Retry inspection or recovery with the same request ID.`,
+          recovery
+            ? {
+                requestId,
+                dispatchId: recovery.dispatchId,
+                recoveryCommand: `orca orchestration worker-show --dispatch ${recovery.dispatchId} --json`
+              }
+            : { requestId }
+        )
+      }
     }
 
     const recordReceipt = (result: unknown): void => {
       db.completeMutationReceipt({
         ...identity,
-        receipt: JSON.stringify(attachMutationReceipt(result, requestId, false))
+        receipt: JSON.stringify(attachMutationReceipt(result, requestId, resumedPendingMutation))
       })
     }
     const active = Promise.resolve().then(() => invoke({ identity, recordReceipt }))
     this.inFlight.set(key, active)
     try {
       const result = await active
-      const receipted = attachMutationReceipt(result, requestId, false)
+      const receipted = attachMutationReceipt(result, requestId, resumedPendingMutation)
       db.completeMutationReceipt({ ...identity, receipt: JSON.stringify(receipted) })
       return receipted
     } catch (error) {
@@ -104,6 +117,10 @@ export class OrchestrationMutationExecutor {
     } finally {
       this.inFlight.delete(key)
     }
+  }
+
+  getLocalAuthenticatedCallerFingerprint(): string {
+    return this.runtime.getOrchestrationDb().getOrCreateLocalMutationCallerFingerprint()
   }
 }
 
@@ -121,12 +138,31 @@ export function getOrchestrationMutationExecutor(
   return executor
 }
 
-export function authenticatedCallerFingerprint(request: RpcRequest): string {
-  const callerToken =
-    request.authToken ||
-    (request as RpcRequest & { deviceToken?: string }).deviceToken ||
-    'authenticated_transport'
-  return createHash('sha256').update(callerToken).digest('hex')
+export function fingerprintAuthenticatedPairingCredential(token: string): string {
+  return createHash('sha256').update(token).digest('hex')
+}
+
+function replayStableCallerParams(runtime: OrcaRuntimeService, params: unknown): unknown {
+  if (!params || typeof params !== 'object' || Array.isArray(params)) {
+    return params
+  }
+  const source = params as Record<string, unknown>
+  const result = { ...source }
+  for (const property of ['from', 'callerTerminalHandle'] as const) {
+    const handle = source[property]
+    if (typeof handle !== 'string') {
+      continue
+    }
+    const paneKey =
+      property === 'from' && typeof source.senderPaneKey === 'string'
+        ? source.senderPaneKey
+        : runtime.getTerminalPaneKey(handle)
+    if (paneKey) {
+      const leafId = parsePaneKey(paneKey)?.leafId
+      result[property] = leafId ? { paneLeafId: leafId } : { paneKey }
+    }
+  }
+  return result
 }
 
 function canonicalize(value: unknown): unknown {

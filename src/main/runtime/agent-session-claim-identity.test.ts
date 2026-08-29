@@ -1,4 +1,7 @@
 import { describe, expect, it } from 'vitest'
+import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   canonicalizeAgentSessionIdentity,
   createEphemeralAgentSessionClaimSigner
@@ -39,5 +42,30 @@ describe('agent session claim identity', () => {
     expect(() =>
       canonicalizeAgentSessionIdentity('blank', { key: 'session_id', id: 'session-1' })
     ).toThrow('agent_session_identity_required')
+  })
+
+  it('canonicalizes Prime identity by its transcript path', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'orca-prime-claim-'))
+    const transcriptPath = join(dir, 'session.jsonl')
+    try {
+      writeFileSync(transcriptPath, '{}\n')
+      const canonicalTranscriptPath = realpathSync(transcriptPath)
+      expect(
+        canonicalizeAgentSessionIdentity('prime-agent', {
+          key: 'session_id',
+          id: 'prime-session-1',
+          transcriptPath
+        })
+      ).toEqual({
+        agent: 'prime-agent',
+        providerSession: {
+          key: 'session_id',
+          id: 'prime-session-1',
+          transcriptPath: canonicalTranscriptPath
+        }
+      })
+    } finally {
+      rmSync(dir, { recursive: true, force: true })
+    }
   })
 })

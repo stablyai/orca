@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   deriveGlobalWindowsRuntimeDefaultFromLegacySettings,
   normalizeGlobalWindowsRuntimeDefault
@@ -8,6 +8,7 @@ import {
   quotePowerShellNativeArgument
 } from '../../../../shared/powershell-native-argument'
 import { buildWslLoginShellCommand } from '../../../../shared/wsl-login-shell-command'
+import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { resolveWindowsShellStartupFamily } from '../../../../shared/windows-terminal-shell'
 import { getProjectAgentSkillTerminalShellOverride } from '@/lib/project-skill-runtime'
 import { useAppStore } from '@/store'
@@ -95,19 +96,7 @@ export function buildSkillCommandForRuntime(
       'copied-command'
     )
   }
-
-  const distroArg = resolvedRuntime.wslDistro?.trim()
-    ? ` -d ${quotePowerShellLiteral(resolvedRuntime.wslDistro.trim())}`
-    : ''
-  // Why: encoding preserves the user's configured login-shell PATH while
-  // avoiding raw multiline and nested quotes at the copy/paste boundary.
-  const encodedScript = encodeWslLoginShellScript(normalizedCommand)
-  const visibleCommand = normalizedCommand.replace(/[\r\n]+/g, ' ')
-  const shellScript = `eval "\`printf %s ${encodedScript} | base64 -d\`"`
-  const wslCommand = `wsl.exe${distroArg} -- sh -c ${quotePowerShellNativeArgument(shellScript)}`
-  // Why: scope Legacy argv parsing to this invocation so Windows PowerShell
-  // 5.1 and PowerShell 7 pass the same embedded quotes to wsl.exe.
-  return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
+  return normalizedCommand
 }
 
 function normalizeWindowsSkillUpdateCommand(
@@ -138,23 +127,82 @@ function normalizeWindowsSkillUpdateCommand(
 type SkillCommandTarget = 'copied-command' | 'orca-setup-terminal'
 
 /**
- * Re-adds the npx preflight for Orca's own setup terminal, which
- * `getAgentSkillTerminalShellOverride` forces onto powershell.exe. The copied
- * string stays bare for POSIX-family shells; only the executed one is wrapped.
+ * Adapts a copied skill command for Orca's inline setup terminal auto-paste.
+ * Host Windows installs may gain an npx preflight; WSL-targeted PowerShell wrappers
+ * must become bash-native because the daemon forces wsl.exe for WSL worktrees.
  */
 export function buildSkillSetupTerminalCommand(
   copiedCommand: string,
-  terminalShellOverride: string | undefined,
+  effectiveShell: string | undefined,
+  runtime?: LocalAgentRuntime,
   currentPlatform = getSkillCommandPlatform()
 ): string {
-  if (!isSetupTerminalForcedToPowerShell(terminalShellOverride)) {
+  // Why: the created tab is authoritative when project runtime replaces the requested shell.
+  const wslNative = isWslShellName(effectiveShell)
+    ? decodeWslSetupTerminalCommand(copiedCommand)
+    : null
+  if (wslNative) {
+    return wslNative
+  }
+  if (!isSetupTerminalForcedToPowerShell(effectiveShell)) {
     return copiedCommand
+  }
+  if (runtime?.runtime === 'wsl' && currentPlatform === 'win32') {
+    return buildPowerShellWslSkillCommand(copiedCommand, runtime)
   }
   return wrapWindowsSkillCommandWithNpxPrerequisite(
     copiedCommand,
     currentPlatform,
     'orca-setup-terminal'
   )
+}
+
+function buildPowerShellWslSkillCommand(command: string, runtime: LocalAgentRuntime): string {
+  const distroArg = runtime.wslDistro?.trim()
+    ? ` -d ${quotePowerShellLiteral(runtime.wslDistro.trim())}`
+    : ''
+  // Why: encoding preserves the user's configured login-shell PATH across the Windows argv boundary.
+  const encodedScript = encodeWslLoginShellScript(command)
+  const visibleCommand = command.replace(/[\r\n]+/g, ' ')
+  // Why $(...) and not a backtick eval: PowerShell treats ` as its own escape
+  // character, so the old `eval "\`printf ...\`"` had the payload's quotes
+  // interacting with two escaping layers and dash saw `case  in` -- the
+  // `word unexpected (expecting "in")` in #14292. Credit: #14785.
+  //
+  // Why not a plain pipe into sh: that hands the payload the pipe as its stdin,
+  // so a setup command that reads input gets base64 remnants instead. Command
+  // substitution runs in a subshell and leaves the terminal's stdin intact.
+  const shellScript = `sh -c "$(printf %s ${encodedScript} | base64 -d)"`
+  // Why --exec: `--` makes wsl.exe expand $name in the argv it forwards to the guest.
+  const wslCommand = `wsl.exe${distroArg} --exec sh -c ${quotePowerShellNativeArgument(shellScript)}`
+  return `& { $PSNativeCommandArgumentPassing = 'Legacy'; ${wslCommand} } # Runs: ${visibleCommand}`
+}
+
+function decodeWslSetupTerminalCommand(command: string): string | null {
+  if (
+    !command.startsWith("& { $PSNativeCommandArgumentPassing = 'Legacy'; wsl.exe") ||
+    !command.includes(' } # Runs: ')
+  ) {
+    return null
+  }
+
+  // Why both separators: commands persisted before the --exec switch must still decode.
+  const encoded =
+    // Both shapes: commands persisted before the pipe switch still decode.
+    /(?:--|--exec) sh -c '(?:eval \\"`|sh -c \\"\$\()?printf %s ([A-Za-z0-9+/=]+) \| base64 -d/.exec(
+      command
+    )?.[1]
+  if (!encoded) {
+    return null
+  }
+
+  try {
+    const binary = atob(encoded)
+    const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0))
+    return new TextDecoder().decode(bytes)
+  } catch {
+    return null
+  }
 }
 
 function isSetupTerminalForcedToPowerShell(terminalShellOverride: string | undefined): boolean {
@@ -193,9 +241,8 @@ function wrapWindowsSkillCommandWithNpxPrerequisite(
 }
 
 function isPosixFamilyWindowsShellConfigured(): boolean {
-  return (
-    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell) ===
-    'posix'
+  return ['posix', 'unix'].includes(
+    resolveWindowsShellStartupFamily(useAppStore.getState().settings?.terminalWindowsShell)
   )
 }
 
@@ -280,7 +327,14 @@ export async function ensureWslCliAvailableForAgentSkillTerminal(
           'auto.components.settings.CliSkillRuntimeSetup.windowsPathUnknown',
           'WSL shell command PATH could not be checked'
         ),
-        { description: status.detail ?? 'Refresh CLI registration status and try again.' }
+        {
+          description:
+            status.detail ??
+            translate(
+              'auto.components.settings.CliSkillRuntimeSetup.refreshCliRegistration',
+              'Refresh CLI registration status and try again.'
+            )
+        }
       )
       return status
     }

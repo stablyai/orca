@@ -84,16 +84,12 @@ export function resolveWindowsShellOverride(
  * local pane from a serve pane, so callers gate it with `isLocalNativeWindowsConpty`.
  */
 export function isLocalNativeWindowsPty(context: WindowsPtyCompatibilityContext): boolean {
-  if (!isWindowsUserAgent(context.userAgent)) {
-    return false
-  }
-  if (context.connectionId !== null) {
-    return false
-  }
-  if (isWslCwd(context.cwd) || isWslShellOverride(context.shellOverride)) {
-    return false
-  }
-  return true
+  return (
+    isWindowsUserAgent(context.userAgent) &&
+    context.connectionId === null &&
+    !isWslCwd(context.cwd) &&
+    !isWslShellOverride(context.shellOverride)
+  )
 }
 
 /**

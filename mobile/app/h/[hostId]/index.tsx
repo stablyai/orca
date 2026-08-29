@@ -1,14 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
-import {
-  View,
-  Text,
-  StyleSheet,
-  SectionList,
-  Pressable,
-  ActivityIndicator,
-  Alert,
-  RefreshControl
-} from 'react-native'
+import { View, Text, SectionList, Pressable, Alert, RefreshControl } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useLocalSearchParams, usePathname, useRouter } from 'expo-router'
 import {
@@ -34,13 +25,21 @@ import { loadHosts, updateLastConnected } from '../../../src/transport/host-stor
 import { removeHostAndCloseClient } from '../../../src/transport/host-removal-lifecycle'
 import {
   useHostClient,
-  useCloseHost,
+  useForgetHostClient,
   useForceReconnect
 } from '../../../src/transport/client-context'
 import { useWorktreeResync } from '../../../src/transport/use-worktree-resync'
 import { startHostWorktreeRefresh } from '../../../src/worktree/host-worktree-refresh'
 import {
+  applyWorktreeRowDisplayState,
+  clearConfirmedActiveWorktreeIdentity,
+  getWorktreeRowIdentity,
+  removeWorktreeRow,
+  retainLiveSleptWorktreeIdentities
+} from '../../../src/worktree/worktree-host-row-identity'
+import {
   useLastConnectedAt,
+  useRelayRecoveryStatus,
   useReconnectAttempt
 } from '../../../src/transport/client-context-connection-metrics'
 import {
@@ -64,22 +63,27 @@ import { ConfirmModal } from '../../../src/components/ConfirmModal'
 import { BottomDrawer } from '../../../src/components/BottomDrawer'
 import { useHostProtocolGates } from '../../../src/components/HostProtocolGate'
 import { AuthFailedBanner } from '../../../src/components/AuthFailedBanner'
+import { HostDiagnosticsLink } from '../../../src/components/HostDiagnosticsLink'
+import { HostRouteNoticeBanner } from '../../../src/components/HostRouteNoticeBanner'
+import { visibleHostRouteNotice } from '../../../src/host-route-notice'
 import { MobileSearchField } from '../../../src/components/MobileSearchField'
 import { WorkspaceDetailPlaceholder } from '../../../src/components/WorkspaceDetailPlaceholder'
 import { getCachedWorktrees, setCachedWorktrees } from '../../../src/cache/worktree-cache'
 import { setCachedRepos } from '../../../src/cache/repo-cache'
-import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
+import { colors, spacing } from '../../../src/theme/mobile-theme'
 import { useResponsiveLayout } from '../../../src/layout/responsive-layout'
+import { hostScreenStyles as styles } from '../../../src/host-screen/host-screen-styles'
 import { leaveHostRoute } from '../../../src/host-route-exit'
 import { loadPinnedIds, savePinnedIds } from '../../../src/storage/preferences'
 import {
   createInitialHostRouteActionState,
+  hostNewWorktreeSessionRoute,
   resolveHostRouteActionState,
   setHostRouteNewWorktreeVisible
 } from '../../../src/host-route-action-state'
 import {
   applyDesktopViewSettings,
-  groupModeToDesktop,
+  buildWorkspaceViewSettingsUpdate,
   type MobileGroupMode,
   type MobileSortMode,
   type MobileViewState,
@@ -95,13 +99,14 @@ import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sectio
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-catalog-snapshot-client'
+import { HostWorkspaceListStates } from '../../../src/worktree/host-workspace-list-states'
 import { repoColor } from '../../../src/worktree/repo-color'
 import {
   WORKSPACE_GROUP_OPTIONS as GROUP_OPTIONS,
   WORKSPACE_SORT_OPTIONS as SORT_OPTIONS
 } from '../../../src/worktree/workspace-list-picker-options'
 import type { RepoSummary } from '../../../src/worktree/host-worktree-rpc-types'
-import type { WorkspaceStatusDefinition } from '../../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../../src/shared/worktree/types'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from '../../../src/worktree/mobile-workspace-statuses'
 
 function isErrorVerdict(v: ConnectionVerdict): boolean {
@@ -125,9 +130,12 @@ export function HostScreen({
   action: actionProp,
   onHideSidebar
 }: HostScreenProps = {}) {
-  const params = useLocalSearchParams<{ hostId: string; action?: string }>()
+  const params = useLocalSearchParams<{ hostId: string; action?: string; notice?: string }>()
   const hostId = hostIdProp ?? params.hostId
   const action = actionProp ?? params.action
+  const [dismissedNotice, setDismissedNotice] = useState<string | null>(null)
+  const noticeParam = params.notice?.trim()
+  const routeNotice = visibleHostRouteNotice(embedded, noticeParam, dismissedNotice)
   const router = useRouter()
   const pathname = usePathname()
   const insets = useSafeAreaInsets()
@@ -140,6 +148,7 @@ export function HostScreen({
   const { client, state: connState } = useHostClient(hostId)
   const reconnectAttempts = useReconnectAttempt(hostId)
   const lastConnectedAt = useLastConnectedAt(hostId)
+  const relayRecovery = useRelayRecoveryStatus(hostId)
   const clientRef = useRef<RpcClient | null>(null)
   const fetchWorktreesInFlightRef = useRef(false)
   // Why: useRef, not useMemo — React may discard memoized values, which would silently
@@ -150,12 +159,17 @@ export function HostScreen({
   const repoMetadataFetchedAtRef = useRef(0)
   const newWorktreeModalRef = useRef<{ open: () => void }>(null)
   const newWorktreeModalVisibleRef = useRef(false)
-  const closeHostClient = useCloseHost()
+  const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [worktrees, setWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [worktreesLoaded, setWorktreesLoaded] = useState(initialCache != null)
+  // Why (STA-3123): error code of the last failed worktree.ps, so a broken catalog
+  // path renders as a failure instead of an empty host. Cleared on the next success.
+  const [catalogError, setCatalogError] = useState<string | null>(null)
   // Why: track the locally-opened worktree so the active-row highlight moves instantly instead of waiting for the next poll.
-  const [optimisticActiveWorktreeId, setOptimisticActiveWorktreeId] = useState<string | null>(null)
+  const [optimisticActiveWorktreeIdentity, setOptimisticActiveWorktreeIdentity] = useState<
+    string | null
+  >(null)
   // One tick drives every visible agent row's relative timestamp.
   const now = useNow(30_000)
   const [repoColorsByName, setRepoColorsByName] = useState<Map<string, string>>(new Map())
@@ -169,7 +183,8 @@ export function HostScreen({
   const [filters, setFilters] = useState<FilterState>({
     filterRepoIds: new Set(),
     hideSleeping: false,
-    hideDefaultBranch: false
+    hideDefaultBranch: false,
+    alwaysShowDefaultBranch: true
   })
   const [groupMode, setGroupMode] = useState<MobileGroupMode>('repo')
   const [workspaceStatuses, setWorkspaceStatuses] = useState<readonly WorkspaceStatusDefinition[]>(
@@ -200,6 +215,7 @@ export function HostScreen({
     sortMode: 'recent',
     hideSleeping: false,
     hideDefaultBranch: false,
+    alwaysShowDefaultBranch: true,
     filterRepoIds: [],
     collapsedGroups: [],
     workspaceStatuses: DEFAULT_MOBILE_WORKSPACE_STATUSES
@@ -211,6 +227,7 @@ export function HostScreen({
       sortMode,
       hideSleeping: filters.hideSleeping,
       hideDefaultBranch: filters.hideDefaultBranch,
+      alwaysShowDefaultBranch: filters.alwaysShowDefaultBranch !== false,
       filterRepoIds: [...filters.filterRepoIds],
       collapsedGroups: [...collapsedGroups],
       workspaceStatuses
@@ -227,11 +244,12 @@ export function HostScreen({
     setFilters({
       filterRepoIds: new Set(next.filterRepoIds),
       hideSleeping: next.hideSleeping,
-      hideDefaultBranch: next.hideDefaultBranch
+      hideDefaultBranch: next.hideDefaultBranch,
+      alwaysShowDefaultBranch: next.alwaysShowDefaultBranch
     })
   }, [])
 
-  // Apply the change locally, then push full settings to the desktop's shared store (ui.set) so both apps stay in sync.
+  // Apply the change locally, then patch the desktop's shared store (ui.set) so both apps stay in sync.
   const persistViewSettings = useCallback(
     (patch: Partial<MobileViewState>) => {
       const next: MobileViewState = { ...viewStateRef.current, ...patch }
@@ -239,13 +257,12 @@ export function HostScreen({
       if (!client) {
         return
       }
-      const payload: WorkspaceViewSettings = {
-        groupBy: groupModeToDesktop(next.groupMode),
-        sortBy: next.sortMode,
-        hideSleepingWorkspaces: next.hideSleeping,
-        hideDefaultBranchWorkspace: next.hideDefaultBranch,
-        filterRepoIds: next.filterRepoIds,
-        collapsedGroups: next.collapsedGroups
+      // Send only the touched fields: the host merges partial updates, so a stale
+      // mirror can no longer revert sibling settings another client just changed
+      // (STA-5781; supersedes the #8873 whole-payload special case).
+      const payload: WorkspaceViewSettings = buildWorkspaceViewSettingsUpdate(patch, next)
+      if (Object.keys(payload).length === 0) {
+        return
       }
       void client.sendRequest('ui.set', payload).catch(() => {
         // Best-effort: view settings are a convenience preference.
@@ -326,6 +343,7 @@ export function HostScreen({
     repoMetadataFetchedAtRef.current = 0
     // Why: useState initializer runs only on first mount, so re-seed the cache when Expo Router reuses this screen for a new hostId.
     const freshCache = hostId ? (getCachedWorktrees(hostId) as Worktree[] | null) : null
+    setCatalogError(null)
     if (freshCache) {
       setWorktrees(freshCache)
       setLastKnownWorktrees(freshCache)
@@ -427,17 +445,27 @@ export function HostScreen({
       const requestHostId = hostId
 
       try {
-        const pendingCatalog = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
+        const fetched = await worktreeCatalogRef.current.fetch(requestClient, requestHostId)
         if (clientRef.current !== requestClient || hostId !== requestHostId) {
           return
         }
         if (!options.allowDuringModal && newWorktreeModalVisibleRef.current) {
           return
         }
+        // Why (STA-3123): a failed catalog request must not pass for "0 worktrees";
+        // surface it so a broken remote host is diagnosable instead of looking empty.
+        if (fetched.kind === 'request_failed') {
+          setCatalogError(fetched.code)
+          return
+        }
+        if (fetched.pending.admission.kind === 'invalid') {
+          setCatalogError('invalid_response')
+        }
         // Why: unchanged responses still yield the confirmed rows, so every poll reasserts
         // host truth over optimistic local edits regardless of payload size.
-        const confirmed = worktreeCatalogRef.current.admit(pendingCatalog)
+        const confirmed = worktreeCatalogRef.current.admit(fetched.pending)
         if (confirmed) {
+          setCatalogError(null)
           // Why: reuse the existing array on identical snapshots to keep SectionList/sort rebuilds off the tap path.
           setWorktrees((current) =>
             areWorktreeListsEqual(current, confirmed) ? current : confirmed
@@ -448,29 +476,15 @@ export function HostScreen({
           setWorktreesLoaded(true)
           // Why (#8498): overwrite the home-written cache with the confirmed snapshot so a reconnect/remount can't serve a stale list.
           if (hostId) {
-            setCachedWorktrees(hostId, confirmed)
+            setCachedWorktrees(hostId, confirmed, { proven: true })
           }
           // Drop the optimistic active override once the host reports it active, so later desktop changes win.
-          setOptimisticActiveWorktreeId((pending) =>
-            pending && confirmed.some((w) => w.worktreeId === pending && w.isActive)
-              ? null
-              : pending
+          setOptimisticActiveWorktreeIdentity((pending) =>
+            clearConfirmedActiveWorktreeIdentity(pending, confirmed)
           )
 
           // Clear optimistic sleep overrides once the server confirms inactive (liveTerminalCount === 0).
-          setSleptIds((prev) => {
-            if (prev.size === 0) {
-              return prev
-            }
-            const still = new Set<string>()
-            for (const id of prev) {
-              const wt = confirmed.find((w) => w.worktreeId === id)
-              if (wt && wt.liveTerminalCount > 0) {
-                still.add(id)
-              }
-            }
-            return still.size === prev.size ? prev : still
-          })
+          setSleptIds((prev) => retainLiveSleptWorktreeIdentities(prev, confirmed))
 
           // Sync pin state from server so desktop-initiated pins reflect without relying on stale AsyncStorage.
           const serverPinned = new Set(confirmed.filter((w) => w.isPinned).map((w) => w.worktreeId))
@@ -486,6 +500,9 @@ export function HostScreen({
         }
       } catch {
         // Will retry on reconnect
+        if (clientRef.current === requestClient && hostId === requestHostId) {
+          setCatalogError('network_error')
+        }
       } finally {
         fetchWorktreesInFlightRef.current = false
       }
@@ -496,7 +513,8 @@ export function HostScreen({
   useFocusEffect(
     useCallback(() => {
       // Why: focus nudges reconnect and probes a possibly half-open socket; empty deps fire per focus, not per state flip (which defeats backoff).
-      clientRef.current?.notifyForeground()
+      // 'focus' keeps a healthy relay green — probe, never suspend (S2 grey blink).
+      clientRef.current?.notifyForeground('focus')
     }, [])
   )
 
@@ -585,8 +603,7 @@ export function HostScreen({
         return
       }
 
-      const removeFromList = (list: Worktree[]) =>
-        list.filter((w) => w.worktreeId !== item.worktreeId)
+      const removeFromList = (list: Worktree[]) => removeWorktreeRow(list, item)
       setWorktrees(removeFromList)
       setLastKnownWorktrees(removeFromList)
 
@@ -613,14 +630,14 @@ export function HostScreen({
       return
     }
     try {
-      await removeHostAndCloseClient(hostId, closeHostClient)
+      await removeHostAndCloseClient(hostId, forgetHostClient)
       leaveHost()
     } catch {
       // Why: removal can fail while still paired; re-open confirm (ConfirmModal closes on confirm).
       setConfirmRemoveHost(true)
       Alert.alert('Could not remove host', 'Please try again.')
     }
-  }, [hostId, leaveHost, closeHostClient])
+  }, [hostId, leaveHost, forgetHostClient])
 
   const navigateFromHostList = useCallback(
     (target: string) => {
@@ -642,7 +659,7 @@ export function HostScreen({
 
   const openWorktreeSession = useCallback(
     (item: Worktree) => {
-      setOptimisticActiveWorktreeId(item.worktreeId)
+      setOptimisticActiveWorktreeIdentity(getWorktreeRowIdentity(item))
       if (client && connState === 'connected') {
         void client
           .sendRequest('worktree.activate', {
@@ -718,25 +735,11 @@ export function HostScreen({
   )
 
   const displayWorktrees = useMemo(() => {
-    const base =
-      connState === 'disconnected' || connState === 'reconnecting' || connState === 'auth-failed'
-        ? lastKnownWorktrees
-        : worktrees
-    if (sleptIds.size === 0 && optimisticActiveWorktreeId === null) {
-      return base
-    }
-    return base.map((w) => {
-      const slept = sleptIds.has(w.worktreeId)
-        ? { liveTerminalCount: 0, hasAttachedPty: false, status: 'inactive' as const }
-        : null
-      // Force the just-opened worktree active until the next poll confirms it, so the highlight doesn't lag.
-      const active =
-        optimisticActiveWorktreeId !== null
-          ? { isActive: w.worktreeId === optimisticActiveWorktreeId }
-          : null
-      return slept || active ? { ...w, ...slept, ...active } : w
-    })
-  }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeId])
+    // Why: live `worktrees` is authoritative only while connected; under the amber
+    // mount default, connecting/handshaking must keep the pre-reconnect list too.
+    const base = connState === 'connected' ? worktrees : lastKnownWorktrees
+    return applyWorktreeRowDisplayState(base, sleptIds, optimisticActiveWorktreeIdentity)
+  }, [connState, worktrees, lastKnownWorktrees, sleptIds, optimisticActiveWorktreeIdentity])
 
   const toggleCollapsed = useCallback(
     (key: string) => {
@@ -749,7 +752,7 @@ export function HostScreen({
     [persistViewSettings]
   )
   const toggleWorktreeLineage = useCallback(
-    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item.worktreeId)),
+    (item: Worktree) => toggleCollapsed(getMobileWorkspaceLineageGroupKey(item)),
     [toggleCollapsed]
   )
   const { sections, rawSections, uniqueRepos, uniqueRepoColors } = useWorkspaceSections({
@@ -795,7 +798,8 @@ export function HostScreen({
             const headerVerdict = classifyConnection({
               state: connState,
               reconnectAttempts,
-              lastConnectedAt
+              lastConnectedAt,
+              ...relayRecovery
             })
             return (
               <>
@@ -1074,13 +1078,32 @@ export function HostScreen({
         )}
       </View>
 
-      {/* Auth failed banner */}
-      {connState === 'auth-failed' && (
+      {/* Auth failed: a latched relay rejection must reach the same re-pair affordance. */}
+      {(connState === 'auth-failed' || relayRecovery.pairingRejected) && (
         <AuthFailedBanner
           canRetry={!!hostId}
           onRetry={() => hostId && void forceReconnectHost(hostId)}
           onRepair={() => router.push('/pair-scan')}
           onRemove={() => setConfirmRemoveHost(true)}
+        />
+      )}
+
+      {connState !== 'connected' &&
+      !relayRecovery.pairingRejected &&
+      reconnectAttempts >= 3 &&
+      hostId ? (
+        <HostDiagnosticsLink
+          onPress={() =>
+            router.push({ pathname: '/connection-log', params: { hostId: String(hostId) } })
+          }
+        />
+      ) : null}
+
+      {/* Why a bounced route landed here (e.g. the workspace was deleted on the desktop). */}
+      {routeNotice && (
+        <HostRouteNoticeBanner
+          message={routeNotice}
+          onDismiss={() => setDismissedNotice(noticeParam ?? null)}
         />
       )}
 
@@ -1099,33 +1122,21 @@ export function HostScreen({
         </View>
       )}
 
-      {/* Loading state */}
-      {((connState === 'connecting' || connState === 'reconnecting') &&
-        displayWorktrees.length === 0) ||
-      (connState === 'connected' && !worktreesLoaded && displayWorktrees.length === 0) ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-        </View>
-      ) : null}
-
-      {/* Empty state */}
-      {connState === 'connected' && worktreesLoaded && sections.length === 0 && (
-        <View style={styles.centered}>
-          <Text style={styles.emptyText}>
-            {search
-              ? 'No matching worktrees'
-              : activeFilterCount > 0
-                ? 'No worktrees match filters'
-                : 'No worktrees'}
-          </Text>
-        </View>
-      )}
+      <HostWorkspaceListStates
+        connState={connState}
+        worktreesLoaded={worktreesLoaded}
+        displayCount={displayWorktrees.length}
+        sectionCount={sections.length}
+        catalogError={catalogError}
+        search={search}
+        activeFilterCount={activeFilterCount}
+      />
 
       {sections.length > 0 && (
         <SectionList
           ref={sectionListRef}
           sections={sections}
-          keyExtractor={(w) => w.sectionListKey ?? w.worktreeId}
+          keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
           stickySectionHeadersEnabled={false}
           // Why: keep the search IME up while tapping clear / scrolling results.
           keyboardShouldPersistTaps="handled"
@@ -1334,7 +1345,9 @@ export function HostScreen({
                       icon: Moon,
                       onPress: () => {
                         if (client) {
-                          setSleptIds((prev) => new Set(prev).add(actionTarget.worktreeId))
+                          setSleptIds((prev) =>
+                            new Set(prev).add(getWorktreeRowIdentity(actionTarget))
+                          )
                           void client
                             .sendRequest('worktree.sleep', {
                               worktree: `id:${actionTarget.worktreeId}`
@@ -1386,10 +1399,7 @@ export function HostScreen({
         }}
         onCreated={(worktreeId, worktreeName) => {
           void fetchWorktrees({ allowDuringModal: true })
-          const params = new URLSearchParams({ name: worktreeName, created: '1' })
-          navigateFromHostList(
-            `/h/${hostId}/session/${encodeURIComponent(worktreeId)}?${params.toString()}`
-          )
+          navigateFromHostList(hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName))
         }}
         onRouteVisibleChange={setShowNewWorktreeVisible}
       />
@@ -1409,310 +1419,3 @@ export default function HostWorktreeRoute() {
 function ListSeparator() {
   return <View style={styles.separator} />
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase
-  },
-  topChrome: {
-    backgroundColor: colors.bgPanel,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  statusBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 34,
-    paddingTop: spacing.xs,
-    paddingHorizontal: spacing.lg
-  },
-  backButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.xs
-  },
-  sidebarCollapseButton: {
-    width: 24,
-    height: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button,
-    marginLeft: spacing.xs
-  },
-  hostIdentity: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    minWidth: 0,
-    marginRight: spacing.md
-  },
-  hostNameText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  reconnectButton: {
-    paddingVertical: 4,
-    paddingHorizontal: spacing.sm,
-    borderRadius: radii.button,
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  reconnectButtonText: {
-    color: colors.textPrimary,
-    fontSize: typography.metaSize,
-    fontWeight: '600'
-  },
-  toolbar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    gap: spacing.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  embeddedToolbar: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.sm,
-    gap: spacing.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.borderSubtle
-  },
-  embeddedToolbarRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm
-  },
-  embeddedFilterChip: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  embeddedModeButton: {
-    flex: 1,
-    minWidth: 0,
-    height: 30,
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xs,
-    paddingVertical: 0
-  },
-  filterChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.xs,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  filterChipActive: {
-    borderColor: colors.textSecondary,
-    backgroundColor: colors.bgRaised
-  },
-  filterChipText: {
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  filterChipTextActive: {
-    color: colors.textPrimary
-  },
-  modeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexShrink: 1,
-    minWidth: 0,
-    gap: 4,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  sortLabel: {
-    flexShrink: 1,
-    minWidth: 0,
-    fontSize: 12,
-    color: colors.textSecondary
-  },
-  toolbarSpacer: {
-    flex: 1
-  },
-  floatingWorkspaceHeaderButton: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: spacing.xs
-  },
-  embeddedToolbarIconButton: {
-    flex: 1,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radii.button
-  },
-  toolbarIconDisabled: {
-    opacity: 0.6
-  },
-  searchToggle: {
-    padding: spacing.xs
-  },
-  searchBar: {
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderSubtle,
-    backgroundColor: colors.bgPanel
-  },
-  centered: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    color: colors.textSecondary,
-    fontSize: typography.bodySize
-  },
-  errorText: {
-    color: colors.statusRed,
-    fontSize: typography.bodySize
-  },
-  list: {
-    paddingBottom: spacing.lg
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.lg,
-    paddingTop: spacing.md,
-    paddingBottom: spacing.xs
-  },
-  sectionIcon: {
-    marginRight: spacing.xs
-  },
-  sectionRepoIcon: {
-    marginRight: spacing.xs
-  },
-  sectionTitle: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5
-  },
-  sectionCount: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginLeft: spacing.xs
-  },
-  separator: {
-    height: 1,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg + 24,
-    marginRight: spacing.lg
-  },
-  filterModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  filterModalTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  clearFiltersText: {
-    fontSize: 13,
-    color: colors.textSecondary
-  },
-  filterSectionLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  filterGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: spacing.md
-  },
-  filterRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2,
-    gap: spacing.sm
-  },
-  filterRowText: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
-  },
-  filterSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  filterRepoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4
-  },
-  confirmContent: {
-    paddingBottom: spacing.lg
-  },
-  confirmTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  confirmMessage: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    marginTop: spacing.xs,
-    lineHeight: 20
-  },
-  confirmButtons: {
-    flexDirection: 'row',
-    gap: spacing.sm
-  },
-  confirmBtn: {
-    flex: 1,
-    paddingVertical: spacing.sm + 2,
-    borderRadius: 10,
-    alignItems: 'center'
-  },
-  confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
-  },
-  confirmBtnDestructive: {
-    backgroundColor: colors.statusRed
-  },
-  confirmBtnPressed: {
-    opacity: 0.7
-  },
-  confirmBtnCancelText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: colors.textSecondary
-  },
-  confirmBtnDestructiveText: {
-    fontSize: typography.bodySize,
-    fontWeight: '600',
-    color: '#fff'
-  }
-})

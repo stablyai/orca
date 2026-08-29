@@ -3,14 +3,17 @@
 // spawn, forwarding envelopes into ingestRemote and installing guest hooks.
 import type { ChildProcessWithoutNullStreams } from 'node:child_process'
 
-import { installWslGuestHooks } from './wsl-hook-fs-adapter'
+import {
+  runWslRelayGuestInstall,
+  maybeRerunWslRelayGuestInstall
+} from './wsl-hook-relay-guest-install'
 import { buildWslRelaySpawnEnv, launchWslRelayWithInstall } from './wsl-hook-relay-launch'
 import {
   defaultWslHookRelayDeps,
+  isWslHookRelayAllowed,
   FAILURE_COOLDOWN_BASE_MS,
   FAILURE_COOLDOWN_MAX_MS,
   NO_NODE_COOLDOWN_MS,
-  REINSTALL_MIN_INTERVAL_MS,
   REINSTALL_ONE_SHOT_DELAY_MS,
   RUNNING_TEARDOWN_COOLDOWN_MS,
   STABLE_UPTIME_MS,
@@ -19,7 +22,6 @@ import {
 import { wireWslRelayLink } from './wsl-hook-relay-link'
 import { WslRelayRecovery } from './wsl-hook-relay-recovery'
 import { wslHookRelayStateKey } from './wsl-hook-relay-state-key'
-import { requestGuestOpenCodeOverlayDir } from './wsl-guest-plugin-install'
 import { SshChannelMultiplexer, type MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import { AGENT_HOOK_REQUEST_REPLAY_METHOD } from '../../shared/agent-hook-relay'
 import {
@@ -27,6 +29,10 @@ import {
   WSL_HOOK_FS_METHODS,
   wslHookRelayEndpointFilePath
 } from '../../shared/wsl-hook-relay-contract'
+import {
+  recordManagedWslCodexHome,
+  wslRuntimeHomePathsEqual
+} from '../codex/managed-wsl-codex-home-registry'
 
 type DistroState = {
   /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
@@ -35,6 +41,7 @@ type DistroState = {
   child?: ChildProcessWithoutNullStreams
   mux?: SshChannelMultiplexer
   guestHome?: string
+  codexHomePath?: string
   guestEndpointFilePath?: string
   opencodeOverlayDir?: string
   failures: number
@@ -49,6 +56,8 @@ export class WslHookRelayManager {
   private deps: WslHookRelayManagerDeps
   private recovery: WslRelayRecovery
   private states = new Map<string, DistroState>()
+  /** Distros a hooks-off teardown stopped, so re-enabling can put them back. */
+  private stoppedByHooksOff = new Map<string, string | undefined>()
   private defaultDistro: string | null = null
   private disposed = false
   private warnedBundleMissing = false
@@ -60,7 +69,7 @@ export class WslHookRelayManager {
       warn: (message) => this.deps.warn(message),
       isDisposed: () => this.disposed,
       isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro),
+      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
       dropState: (state) => {
         // Why: identity-guarded — a fresh ensure() may own this key by now;
         // deleting by key alone would orphan its live relay child.
@@ -77,14 +86,13 @@ export class WslHookRelayManager {
   }
 
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
-  ensureForDistro(distro: string | null): void {
-    if (this.disposed || this.deps.platform() !== 'win32' || !this.deps.remoteHooksEnabled()) {
+  ensureForDistro(distro: string | null, codexHomePath?: string | null): void {
+    if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
-    void this.ensureInternal(distro).catch((err) => {
-      this.deps.warn(
-        `[agent-hooks] WSL hook relay ensure failed: ${err instanceof Error ? err.message : String(err)}`
-      )
+    void this.ensureInternal(distro, codexHomePath ?? undefined).catch((err) => {
+      const detail = err instanceof Error ? err.message : String(err)
+      this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
   }
 
@@ -106,26 +114,61 @@ export class WslHookRelayManager {
     return this.stateFor(distro)?.opencodeOverlayDir ?? null
   }
 
-  disposeAll(): void {
-    this.disposed = true
+  /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
+   *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
+  disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
+    this.disposed ||= permanent
     for (const state of this.states.values()) {
       this.recovery.clearTimers(state)
       state.mux?.dispose()
       state.child?.kill()
+      if (!permanent) {
+        this.stoppedByHooksOff.set(state.distro, state.codexHomePath)
+      }
     }
     this.states.clear()
   }
 
-  private async ensureInternal(requestedDistro: string | null): Promise<void> {
+  /** Restarts what a hooks-off teardown stopped. Skips distros the user has since shut
+   *  down: `wsl -d` BOOTS a stopped distro, and nothing in it is waiting on status. */
+  resumeStoppedRelays(): void {
+    const distros = [...this.stoppedByHooksOff]
+    this.stoppedByHooksOff.clear()
+    for (const [distro, codexHomePath] of distros) {
+      void this.deps
+        .isDistroRunning(distro)
+        .then((running) => {
+          if (running) {
+            this.ensureForDistro(distro, codexHomePath)
+          }
+        })
+        .catch(() => undefined)
+    }
+  }
+
+  private async ensureInternal(
+    requestedDistro: string | null,
+    requestedCodexHomePath?: string
+  ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
     if (!distro || this.disposed) {
       return
     }
     const key = wslHookRelayStateKey(distro)
     const existing = this.states.get(key)
+    if (requestedCodexHomePath) {
+      recordManagedWslCodexHome(distro, requestedCodexHomePath)
+    }
     if (existing) {
+      if (
+        requestedCodexHomePath &&
+        !wslRuntimeHomePathsEqual(existing.codexHomePath, requestedCodexHomePath)
+      ) {
+        existing.codexHomePath = requestedCodexHomePath
+        existing.lastInstallAt = 0
+      }
       if (existing.phase === 'running') {
-        void this.maybeReinstallHooks(existing)
+        void maybeRerunWslRelayGuestInstall(this.deps, existing)
         return
       }
       if (existing.phase !== 'failed' || Date.now() < existing.cooldownUntil) {
@@ -159,6 +202,7 @@ export class WslHookRelayManager {
       // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
       // crash — dropping it would blank status on panes spawned mid-relaunch.
       opencodeOverlayDir: existing?.opencodeOverlayDir,
+      codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0
     }
     this.states.set(key, state)
@@ -172,7 +216,9 @@ export class WslHookRelayManager {
         bundleJsPath: bundle.jsPath,
         version: bundle.version,
         io: this.deps,
-        isDisposed: () => this.disposed,
+        // Why the identity half: a hooks-off teardown drops this state and kills its child, but
+        // that kill reads as a startup failure and the retry loop would respawn an untracked relay.
+        isDisposed: () => this.disposed || this.states.get(key) !== state,
         onChild: (child) => {
           state.child = child
         },
@@ -252,7 +298,7 @@ export class WslHookRelayManager {
     }
     state.guestHome = homeResult.home
     state.guestEndpointFilePath = wslHookRelayEndpointFilePath(homeResult.home, instanceKey)
-    await this.runInstallers(state, mux, homeResult.home)
+    await runWslRelayGuestInstall(this.deps, state, mux, homeResult.home)
 
     if (state.phase === 'failed' || state.mux !== mux) {
       // Child died while installing — already recorded; don't revive.
@@ -263,56 +309,11 @@ export class WslHookRelayManager {
     // Why: one-shot catch-up so a single-spawn session (no later ensure)
     // still writes Codex's deferred trust after the launch path seeds config.toml.
     this.recovery.scheduleOneShotReinstall(state, REINSTALL_ONE_SHOT_DELAY_MS, () => {
-      void this.maybeReinstallHooks(state)
+      void maybeRerunWslRelayGuestInstall(this.deps, state)
     })
     void mux.request(AGENT_HOOK_REQUEST_REPLAY_METHOD).catch(() => {
       // Fresh relays have nothing to replay; tolerate.
     })
-  }
-
-  private async runInstallers(
-    state: DistroState,
-    mux: SshChannelMultiplexer,
-    guestHome: string
-  ): Promise<void> {
-    state.lastInstallAt = Date.now()
-    await installWslGuestHooks({
-      mux,
-      guestHome,
-      distro: state.distro,
-      installHooks: this.deps.installHooks,
-      settings: this.deps.managedHookSettings(),
-      warn: this.deps.warn
-    })
-    // Why: ship OpenCode's status plugin and record the guest overlay dir the
-    // PTY env points OPENCODE_CONFIG_DIR at; identity-guarded against teardown.
-    const overlay = await requestGuestOpenCodeOverlayDir(mux, this.deps, state.distro)
-    if (state.mux === mux && overlay.kind !== 'unavailable') {
-      // Clearing on 'none' matters: a rebuild that failed after wiping leaves the dir
-      // present but plugin-less, and advertising it would hide the user's own config.
-      state.opencodeOverlayDir = overlay.kind === 'dir' ? overlay.dir : undefined
-    }
-  }
-
-  private async maybeReinstallHooks(state: DistroState): Promise<void> {
-    const mux = state.mux
-    const guestHome = state.guestHome
-    if (
-      !mux ||
-      !guestHome ||
-      mux.isDisposed() ||
-      Date.now() - (state.lastInstallAt ?? 0) < REINSTALL_MIN_INTERVAL_MS
-    ) {
-      return
-    }
-    try {
-      // Why: runInstallers also re-ships the plugin source so a mid-session Orca upgrade refreshes it.
-      await this.runInstallers(state, mux, guestHome)
-    } catch (err) {
-      this.deps.warn(
-        `[agent-hooks] WSL hook reinstall for '${state.distro}' failed: ${err instanceof Error ? err.message : String(err)}`
-      )
-    }
   }
 
   /** Records + breadcrumbs the failure and always arms the restart timer —

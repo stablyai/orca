@@ -242,6 +242,61 @@ describe('agent process recognition', () => {
     ).toEqual({ agent: 'pi', processName: 'pi' })
   })
 
+  it('recognizes Prime Agent by its binary and npm entrypoint', () => {
+    expect(recognizeAgentProcess('prime-agent')).toEqual({
+      agent: 'prime-agent',
+      processName: 'prime-agent'
+    })
+    expect(recognizeAgentProcess('/opt/homebrew/bin/prime-agent')).toEqual({
+      agent: 'prime-agent',
+      processName: 'prime-agent'
+    })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        'node /opt/homebrew/lib/node_modules/prime-agent/dist/bundle/cli.js'
+      )
+    ).toEqual({ agent: 'prime-agent', processName: 'prime-agent' })
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`node.exe C:\Users\dev\AppData\Roaming\npm\node_modules\prime-agent\dist\bundle\cli.js`
+      )
+    ).toEqual({ agent: 'prime-agent', processName: 'prime-agent' })
+  })
+
+  it('does not recognize Prime Agent headless one-shot commands as interactive agents', () => {
+    expect(recognizeAgentProcessFromCommandLine('prime-agent -p "summarize this diff"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('prime-agent --print "review this"')).toBeNull()
+    expect(recognizeAgentProcessFromCommandLine('prime-agent --resume abc123')).toEqual({
+      agent: 'prime-agent',
+      processName: 'prime-agent'
+    })
+    // Why: past `--` nothing is a flag, so this is the interactive pane Orca itself launches.
+    expect(
+      recognizeAgentProcessFromCommandLine('prime-agent -- "--print the release notes"')
+    ).toEqual({ agent: 'prime-agent', processName: 'prime-agent' })
+  })
+
+  it('does not recognize Prime Agent non-interactive --mode runs as interactive agents', () => {
+    for (const mode of ['json', 'rpc', 'acp', 'daemon']) {
+      expect(recognizeAgentProcessFromCommandLine(`prime-agent --mode ${mode}`)).toBeNull()
+    }
+    // Why: `text` is the interactive TUI mode Orca hosts.
+    expect(recognizeAgentProcessFromCommandLine('prime-agent --mode text')).toEqual({
+      agent: 'prime-agent',
+      processName: 'prime-agent'
+    })
+    // Why: the CLI only parses `--mode <value>` as separate tokens, so `--mode=json`
+    // is ignored by it and still starts the interactive mode.
+    expect(recognizeAgentProcessFromCommandLine('prime-agent --mode=json')).toEqual({
+      agent: 'prime-agent',
+      processName: 'prime-agent'
+    })
+    expect(recognizeAgentProcessFromCommandLine('prime-agent -- --mode rpc')).toEqual({
+      agent: 'prime-agent',
+      processName: 'prime-agent'
+    })
+  })
+
   it('recognizes only the agent subcommand of the generic Orca CLI', () => {
     expect(recognizeAgentProcessFromCommandLine('orca claude-teams')).toEqual({
       agent: 'claude-agent-teams',
@@ -303,6 +358,22 @@ describe('agent process recognition', () => {
     expect(isAgentForegroundWrapperProcess('python3.12.exe')).toBe(true)
     expect(isAgentForegroundWrapperProcess('bash')).toBe(false)
     expect(isAgentForegroundWrapperProcess('vim.exe')).toBe(false)
+  })
+
+  it('recognizes the Antigravity CLI from bare, POSIX and Windows command lines', () => {
+    const agy = { agent: 'antigravity', processName: 'agy' }
+
+    expect(recognizeAgentProcess('agy')).toEqual(agy)
+    expect(recognizeAgentProcess('/Users/dev/.local/bin/agy')).toEqual(agy)
+    expect(recognizeAgentProcess(String.raw`C:\Users\dev\AppData\Local\agy\bin\agy.exe`)).toEqual(
+      agy
+    )
+    expect(
+      recognizeAgentProcessFromCommandLine(
+        String.raw`"C:\Users\dev\AppData\Local\agy\bin\agy.exe" --dangerously-skip-permissions`
+      )
+    ).toEqual(agy)
+    expect(recognizeAgentProcessFromCommandLine('agy --dangerously-skip-permissions')).toEqual(agy)
   })
 
   it('recognizes versioned Grok process names observed from the installed CLI', () => {

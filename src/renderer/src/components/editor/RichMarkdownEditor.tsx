@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { useEditorState, type Editor } from '@tiptap/react'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
 import { selectWorktreeDiffComments } from '@/store/worktree-diff-comments-selector'
 import { useLocalImagePick } from './useLocalImagePick'
@@ -21,6 +21,7 @@ import { useRichMarkdownReviewController } from './useRichMarkdownReviewControll
 import { useRichMarkdownReviewEditorEffects } from './useRichMarkdownReviewEditorEffects'
 import {
   isRichMarkdownContextCommandTarget,
+  isRichMarkdownTableContextCommand,
   runRichMarkdownContextCommand
 } from './rich-markdown-context-command-routing'
 import { useRichMarkdownSpellcheckAttribute } from './rich-markdown-spellcheck'
@@ -323,12 +324,16 @@ export default function RichMarkdownEditor({
   useEffect(() => {
     return window.api.ui.onRichMarkdownContextCommand((payload) => {
       const ed = editorRef.current
-      if (!ed || !isRichMarkdownContextCommandTarget(payload, rootRef.current)) {
+      if (
+        !ed ||
+        isRichMarkdownTableContextCommand(payload.command) ||
+        !isRichMarkdownContextCommandTarget(payload, rootRef.current)
+      ) {
         return
       }
 
       runRichMarkdownContextCommand({
-        command: payload.command,
+        payload,
         editor: ed,
         toggleLink: toggleLinkFromToolbar,
         pickImage: handleLocalImagePick

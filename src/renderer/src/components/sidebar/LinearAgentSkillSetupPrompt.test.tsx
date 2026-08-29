@@ -68,11 +68,8 @@ vi.mock('@/lib/agent-skill-cli-prerequisite', () => ({
 vi.mock('../settings/CliSkillRuntimeSetup', () => ({
   buildSkillCommandForRuntime: (
     command: string,
-    runtime: { runtime: string; wslDistro?: string | null }
-  ) =>
-    runtime.runtime === 'wsl'
-      ? `wsl.exe${runtime.wslDistro ? ` -d '${runtime.wslDistro}'` : ''} -- bash -lc '${command}'`
-      : command,
+    _runtime: { runtime: string; wslDistro?: string | null }
+  ) => command,
   ensureWslCliAvailableForAgentSkillTerminal: mocks.ensureWslCli,
   getWslCliDistroRequest: (runtime?: { runtime: string; wslDistro?: string | null }) =>
     runtime?.runtime === 'wsl' && runtime.wslDistro?.trim()
@@ -344,12 +341,12 @@ describe('LinearAgentSkillSetupPrompt', () => {
     })
     await settleRender()
 
-    expect(document.body.textContent).toContain("wsl.exe -d 'Fedora' -- bash -lc 'npx skills add")
+    expect(document.body.textContent).toContain('npx skills add')
     expect(mocks.panelProps.at(-1)).toEqual(
       expect.objectContaining({
-        installedCommand:
-          "wsl.exe -d 'Fedora' -- bash -lc 'npx skills update orca-linear --global'",
+        installedCommand: 'npx skills update orca-linear --global',
         terminalShellOverride: 'powershell.exe',
+        terminalRuntime: expect.objectContaining({ runtime: 'wsl', wslDistro: 'Fedora' }),
         getPrerequisiteStatus: expect.any(Function)
       })
     )
@@ -892,7 +889,10 @@ describe('LinearAgentSkillSetupPrompt', () => {
         ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     await settleRender()
-    expect(mocks.panelProps.at(-1)?.command).toContain("wsl.exe -d 'Ubuntu'")
+    expect(mocks.panelProps.at(-1)?.command).toContain('npx skills add')
+    expect(mocks.panelProps.at(-1)?.terminalRuntime).toEqual(
+      expect.objectContaining({ runtime: 'wsl', wslDistro: 'Ubuntu' })
+    )
   })
 
   it('uses remote-safe success copy for remote workspaces', async () => {

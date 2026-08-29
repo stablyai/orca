@@ -3,7 +3,7 @@ import type {
   RemoteWorkspacePatchResult,
   RemoteWorkspaceSnapshot
 } from '../../../shared/remote-workspace-types'
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import type { DirectSshAuthority } from '../../../shared/ssh-types'
 import { translate } from '@/i18n/i18n'
 import { buildWorkspaceSessionPayload } from '../lib/workspace-session'
@@ -16,7 +16,6 @@ import type {
 import { buildDirectSshSnapshotApplyToken } from './direct-ssh-reconnect-coordinator'
 import { resolveDirectSshTargetScope } from '../lib/direct-ssh-target-scope'
 import { applyDirectSshRemoteWorkspaceSnapshot } from './remote-workspace-snapshot-apply'
-export { isDirectSshRemoteWorkspaceApplyInProgress } from './remote-workspace-snapshot-apply'
 
 const WORKSPACE_HYDRATION_TIMEOUT_MS = 10_000
 
@@ -231,18 +230,19 @@ export function createRemoteWorkspaceTargetSync(
       return
     }
     const applyToken = buildDirectSshSnapshotApplyToken(prepared.token, snapshot.revision)
-    if (applyToken) {
-      await applyDirectSshRemoteWorkspaceSnapshot({
-        store: deps.store,
-        snapshot,
-        token: applyToken,
-        arrival,
-        isArrivalCurrent,
-        isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
-        waitForWorkspaceSessionReady,
-        finalizeHydratedTerminals: deps.finalizeHydratedTerminals
-      })
+    if (!applyToken) {
+      return
     }
+    await applyDirectSshRemoteWorkspaceSnapshot({
+      store: deps.store,
+      snapshot,
+      token: applyToken,
+      arrival,
+      isArrivalCurrent,
+      isPreparationTokenCurrent: deps.isPreparationTokenCurrent,
+      waitForWorkspaceSessionReady,
+      finalizeHydratedTerminals: deps.finalizeHydratedTerminals
+    })
   }
 
   return {

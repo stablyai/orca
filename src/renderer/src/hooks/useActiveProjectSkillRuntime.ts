@@ -4,7 +4,10 @@ import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-
 import type { SkillDiscoveryTarget } from '../../../shared/skills'
 import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
+import {
+  getGlobalWindowsExecutionRuntimeContext,
+  getLocalProjectExecutionRuntimeContext
+} from '@/lib/local-preflight-context'
 import {
   getProjectAgentSkillRuntime,
   getProjectAgentSkillTerminalShellOverride,
@@ -36,6 +39,10 @@ export function shouldUseLocalSkillFreshness(
   return runtimeTarget?.kind === 'local' && agentRuntime?.runtime !== 'wsl'
 }
 
+export function hasLocalSkillRuntimeAuthority(runtimeTarget: RuntimeClientTarget | null): boolean {
+  return runtimeTarget?.kind === 'local'
+}
+
 // Why: on Windows the runtime resolution is rebuilt from scratch on every
 // worktree-store change, so a same-runtime result still arrives with a fresh
 // identity. Downstream skill discovery keys effects off `discoveryTarget`, so
@@ -44,6 +51,17 @@ export function shouldUseLocalSkillFreshness(
 // honest if the resolution grows a field the runtime cache keys do not encode.
 function activeProjectSkillRuntimeIdentity(runtime: ActiveProjectSkillRuntime): string {
   return JSON.stringify(runtime)
+}
+
+/** Keeps only a WSL-targeting resolution; a windows-host one is the same as having none here. */
+function wslOnly(
+  resolution: ProjectExecutionRuntimeResolution | undefined
+): ProjectExecutionRuntimeResolution | undefined {
+  if (!resolution) {
+    return undefined
+  }
+  const targetsWsl = resolution.status === 'repair-required' || resolution.runtime.kind === 'wsl'
+  return targetsWsl ? resolution : undefined
 }
 
 export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
@@ -62,23 +80,38 @@ export function useActiveProjectSkillRuntime(): ActiveProjectSkillRuntime {
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
 
   const resolved = useMemo(() => {
-    const projectRuntime = getLocalProjectExecutionRuntimeContext(
-      runtimeState,
-      undefined,
-      currentPlatform,
-      {
-        wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
-        availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
-      }
-    )
+    const wslContext = {
+      wslAvailable: windowsCapabilities.isLoading ? undefined : windowsCapabilities.wslAvailable,
+      availableWslDistros: windowsCapabilities.isLoading ? null : windowsCapabilities.wslDistros
+    }
+    const projectRuntime =
+      getLocalProjectExecutionRuntimeContext(
+        runtimeState,
+        undefined,
+        currentPlatform,
+        wslContext
+      ) ??
+      // Global WSL is the only no-project default that changes the install target (#12103).
+      (hasLocalSkillRuntimeAuthority(runtimeTarget)
+        ? wslOnly(
+            getGlobalWindowsExecutionRuntimeContext(
+              runtimeState,
+              undefined,
+              currentPlatform,
+              wslContext
+            )
+          )
+        : undefined)
     if (!projectRuntime) {
       // Why: buildSkillCommandForRuntime still builds a Windows host command
       // without a project runtime, so the terminal has to match that shell.
-      const terminalShellOverride = getProjectAgentSkillTerminalShellOverride(
-        currentPlatform,
-        runtimeState.settings,
-        undefined
-      )
+      const terminalShellOverride = hasLocalSkillRuntimeAuthority(runtimeTarget)
+        ? getProjectAgentSkillTerminalShellOverride(
+            currentPlatform,
+            runtimeState.settings,
+            undefined
+          )
+        : undefined
       const canUseLocalSkillFreshness = shouldUseLocalSkillFreshness(runtimeTarget)
       if (!terminalShellOverride && !canUseLocalSkillFreshness) {
         return EMPTY_ACTIVE_PROJECT_SKILL_RUNTIME

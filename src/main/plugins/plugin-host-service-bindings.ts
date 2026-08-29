@@ -3,6 +3,10 @@ import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-hos
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from './plugin-secrets-store'
 import { PluginKvStore } from './plugin-storage-store'
+import {
+  describeAgentSessionPtyWriteRefusal,
+  isAgentSessionPtyWriteRefusedError
+} from '../../shared/agent-session-pty-write-admission'
 
 /** Structural subset of OrcaRuntimeService exposed to plugin facade bindings. */
 export type PluginRuntimeDelegate = {
@@ -14,7 +18,8 @@ export type PluginRuntimeDelegate = {
   } | null>
   listTerminals(
     worktreeSelector?: string,
-    limit?: number
+    limit?: number,
+    opts?: { includeVisualLayouts?: boolean }
   ): Promise<{ terminals: { handle: string; title: string | null }[] }>
   sendTerminal(
     handle: string,
@@ -50,15 +55,25 @@ export function bindPluginHostServices(input: {
     listWorktreeTerminals: async (worktreeId) => {
       const result = await delegate.listTerminals(
         `id:${worktreeId}`,
-        PLUGIN_WORKSPACE_TERMINAL_LIMIT
+        PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+        { includeVisualLayouts: false }
       )
       return result.terminals
         .slice(0, PLUGIN_WORKSPACE_TERMINAL_LIMIT)
         .map((terminal) => ({ id: terminal.handle }))
     },
     sendTerminalText: async (terminalId, action) => {
-      const result = await delegate.sendTerminal(terminalId, action)
-      return { accepted: result.accepted }
+      try {
+        const result = await delegate.sendTerminal(terminalId, action)
+        return { accepted: result.accepted }
+      } catch (error) {
+        // Why: the plugin API carries only `accepted`, so a lease refusal would read as a silent
+        // drop; restate it as the message idiom plugin methods already surface to callers.
+        if (isAgentSessionPtyWriteRefusedError(error)) {
+          throw new Error(describeAgentSessionPtyWriteRefusal(error.refusal))
+        }
+        throw error
+      }
     },
     dispatchPluginNotification: (notification) => delegate.dispatchPluginNotification(notification),
     storage: {

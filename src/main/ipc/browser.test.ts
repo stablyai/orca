@@ -4,6 +4,7 @@ const {
   removeHandlerMock,
   handleMock,
   registerGuestMock,
+  attachGuestPoliciesMock,
   unregisterGuestMock,
   getGuestWebContentsIdMock,
   getWebContentsIdByTabIdMock,
@@ -20,6 +21,7 @@ const {
   removeHandlerMock: vi.fn(),
   handleMock: vi.fn(),
   registerGuestMock: vi.fn(),
+  attachGuestPoliciesMock: vi.fn(),
   unregisterGuestMock: vi.fn(),
   getGuestWebContentsIdMock: vi.fn(),
   getWebContentsIdByTabIdMock: vi.fn(() => new Map()),
@@ -53,6 +55,7 @@ vi.mock('../browser/browser-manager', () => ({
   },
   browserManager: {
     registerGuest: registerGuestMock,
+    attachGuestPolicies: attachGuestPoliciesMock,
     unregisterGuest: unregisterGuestMock,
     getGuestWebContentsId: getGuestWebContentsIdMock,
     getWebContentsIdByTabId: getWebContentsIdByTabIdMock,
@@ -65,13 +68,12 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
+import { registerBrowserHandlers, setAgentBrowserBridgeRef } from './browser'
 import {
-  registerBrowserHandlers,
-  setAgentBrowserBridgeRef,
   waitForAnyTabRegistration,
   waitForTabRegistration,
   waitForWorktreeTabRegistration
-} from './browser'
+} from './browser-tab-registration-wait'
 
 describe('registerBrowserHandlers', () => {
   beforeEach(() => {
@@ -80,6 +82,7 @@ describe('registerBrowserHandlers', () => {
     handleMock.mockReset()
     registerGuestMock.mockReset()
     registerGuestMock.mockReturnValue(true)
+    attachGuestPoliciesMock.mockReset()
     unregisterGuestMock.mockReset()
     getGuestWebContentsIdMock.mockReset()
     getWebContentsIdByTabIdMock.mockReset()
@@ -160,6 +163,93 @@ describe('registerBrowserHandlers', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  it('validates exact live guest registration only for the trusted renderer', () => {
+    getGuestWebContentsIdMock.mockReturnValue(123)
+    registerBrowserHandlers()
+    const validateHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:isGuestRegistered'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => boolean
+    const trustedSender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+
+    expect(
+      validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 123 })
+    ).toBe(true)
+    expect(
+      validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 124 })
+    ).toBe(false)
+
+    webContentsFromIdMock.mockReturnValue({ isDestroyed: () => true })
+    expect(
+      validateHandler({ sender: trustedSender }, { browserPageId: 'page-1', webContentsId: 123 })
+    ).toBe(false)
+    expect(
+      validateHandler(
+        {
+          sender: {
+            id: 92,
+            isDestroyed: () => false,
+            getType: () => 'webview',
+            getURL: () => 'https://example.com'
+          } as Electron.WebContents
+        },
+        { browserPageId: 'page-1', webContentsId: 123 }
+      )
+    ).toBe(false)
+  })
+
+  it('repairs only a live webview owned by the trusted renderer', () => {
+    registerBrowserHandlers()
+    const repairHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:repairGuestRegistration'
+    )?.[1] as (
+      event: { sender: Electron.WebContents },
+      args: {
+        browserPageId: string
+        workspaceId: string
+        worktreeId: string
+        webContentsId: number
+      }
+    ) => boolean
+    const trustedSender = {
+      id: 91,
+      isDestroyed: () => false,
+      getType: () => 'window',
+      getURL: () => 'file:///renderer/index.html'
+    } as Electron.WebContents
+    const guest = {
+      id: 123,
+      hostWebContents: trustedSender,
+      isDestroyed: () => false,
+      getType: () => 'webview'
+    } as Electron.WebContents
+    webContentsFromIdMock.mockReturnValue(guest)
+    const args = {
+      browserPageId: 'page-1',
+      workspaceId: 'workspace-1',
+      worktreeId: 'worktree-1',
+      webContentsId: 123
+    }
+
+    expect(repairHandler({ sender: trustedSender }, args)).toBe(true)
+    expect(attachGuestPoliciesMock).toHaveBeenCalledWith(guest)
+    expect(registerGuestMock).toHaveBeenCalledWith({
+      ...args,
+      rendererWebContentsId: trustedSender.id
+    })
+
+    webContentsFromIdMock.mockReturnValue({
+      ...guest,
+      hostWebContents: { id: 92 }
+    })
+    expect(repairHandler({ sender: trustedSender }, args)).toBe(false)
+    expect(registerGuestMock).toHaveBeenCalledTimes(1)
   })
 
   it('authorizes browser download cancellation through the owning renderer', () => {
@@ -704,6 +794,8 @@ describe('registerBrowserHandlers', () => {
 
   it('validates annotation viewport bridge requests before syncing to the guest', async () => {
     registerBrowserHandlers()
+    const guest = { isDestroyed: () => false } as Electron.WebContents
+    getAuthorizedGuestMock.mockReturnValue(guest)
 
     const syncHandler = handleMock.mock.calls.find(
       ([channel]) => channel === 'browser:setAnnotationViewportBridge'
@@ -728,12 +820,52 @@ describe('registerBrowserHandlers', () => {
     )
 
     expect(result).toBe(true)
-    expect(setAnnotationViewportBridgeMock).toHaveBeenCalledWith('page-1', {
-      emitViewport: false,
-      enabled: true,
-      markers: [],
-      token: 'annotationviewporttoken'
-    })
+    expect(setAnnotationViewportBridgeMock).toHaveBeenCalledWith(
+      'page-1',
+      {
+        emitViewport: false,
+        enabled: true,
+        markers: [],
+        token: 'annotationviewporttoken'
+      },
+      // Why a resolver and not the guest: the op is serialized per page, so it has to read the
+      // registry when it runs — a navigation while it waited may have swapped the contents.
+      // Which guest it then resolves is pinned in browser-manager-annotation-bridge.test.ts.
+      expect.any(Function)
+    )
+  })
+
+  // Why this is new: the channel used to hand a page id straight to the manager, so any trusted
+  // renderer could drive any page's guest. It now resolves through the same authority the grab
+  // channels use, which pins the request to the renderer that registered the page.
+  it('refuses an annotation viewport bridge request from a renderer that does not own the page', async () => {
+    registerBrowserHandlers()
+    getAuthorizedGuestMock.mockReturnValue(null)
+
+    const syncHandler = handleMock.mock.calls.find(
+      ([channel]) => channel === 'browser:setAnnotationViewportBridge'
+    )?.[1] as (event: { sender: Electron.WebContents }, args: unknown) => Promise<boolean> | boolean
+
+    const result = await syncHandler(
+      {
+        sender: {
+          id: 91,
+          isDestroyed: () => false,
+          getType: () => 'window',
+          getURL: () => 'file:///renderer/index.html'
+        } as Electron.WebContents
+      },
+      {
+        browserPageId: 'page-1',
+        emitViewport: false,
+        enabled: true,
+        markers: [],
+        token: 'annotationviewporttoken'
+      }
+    )
+
+    expect(result).toBe(false)
+    expect(setAnnotationViewportBridgeMock).not.toHaveBeenCalled()
   })
 
   it('rejects invalid annotation viewport bridge requests', async () => {

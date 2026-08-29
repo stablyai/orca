@@ -15,6 +15,7 @@ export {
   isCursorNativeAgentTitle,
   isGeminiTerminalTitle,
   isPiTerminalTitle,
+  shouldSuppressCursorNativeTitle,
   STRONG_IDLE_KEYWORDS_RE,
   STRONG_WORKING_KEYWORDS_RE
 } from './agent-title-core'
@@ -24,6 +25,7 @@ export {
   clearWorkingIndicators,
   createAgentStatusTracker,
   detectAgentStatusFromTitle,
+  isQuarterCircleSpinnerOnlyAgentTitle,
   normalizeTerminalTitle
 } from './agent-title-status'
 

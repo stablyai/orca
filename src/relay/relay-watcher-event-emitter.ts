@@ -104,7 +104,7 @@ function publishWatcherBatchToClient(
   const publish = (events: readonly MappedWatcherEvent[]): boolean =>
     dispatcher.publishProducerNotification(clientId, 'fs.changed', { events })
 
-  // Fast path: publish the whole batch first — two encodes, the same cost as an unchunked emit.
+  // Fast path: publish the whole batch before paying to group or size individual events.
   // logDrop:false because rejection here is a measurement, not an outcome: the batch is re-sent in
   // chunks below, so logging it would report a drop for events that all arrive.
   if (
@@ -244,7 +244,7 @@ function publishOverflowMarker(
       // it through onClientDetached, which fires after this settlement.
       retainOverflowMarker(dispatcher, state, clientId, rootPath, frameBytes)
     },
-    { controlOverflow: 'reject', estimatedBytes: frameBytes }
+    { controlOverflow: 'reject' }
   )
   if (accepted || settled) {
     return

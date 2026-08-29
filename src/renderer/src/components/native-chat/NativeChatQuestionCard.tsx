@@ -10,6 +10,7 @@ export type NativeChatQuestionCardProps = {
   isSubmitting?: boolean
   /** Deliver the chosen answer (per-question option indices + free text). */
   onAnswer: (selections: AskAnswerSelection[]) => void
+  allowOther?: boolean
   /** Dismiss the prompt (sends Escape to the agent). */
   onCancel: () => void
   /** Exposes the free-text row so pane-level Paste can target it while the
@@ -20,7 +21,7 @@ export type NativeChatQuestionCardProps = {
 /**
  * Native renderer for an agent's AskUserQuestion prompt: a numbered pick-list
  * (mobile/Claude-Code parity) with a header + close, a hover-highlighted row per
- * option, and an always-present free-text row for a custom answer. Single-select
+ * option, and an optional free-text row for a custom answer. Single-select
  * commits on click; multi-select toggles and confirms via the trailing action.
  * Multi-question prompts step through tabs across the top. Neutral shadcn tokens.
  */
@@ -28,6 +29,7 @@ export function NativeChatQuestionCard({
   prompt,
   isSubmitting = false,
   onAnswer,
+  allowOther = true,
   onCancel,
   answerInputRef
 }: NativeChatQuestionCardProps): React.JSX.Element {
@@ -184,32 +186,38 @@ export function NativeChatQuestionCard({
               />
             ))}
             <div className="flex items-center gap-3 px-3.5 py-2.5">
-              <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
-                <Pencil className="size-3.5" />
-              </span>
-              <input
-                ref={answerInputRef}
-                disabled={isSubmitting}
-                value={otherText[index]}
-                onChange={(e) => setOther(index, e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    confirm(true)
-                  }
-                }}
-                placeholder={translate(
-                  'components.native-chat.question.otherPlaceholder',
-                  'Type your answer'
-                )}
-                className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
-              />
+              {allowOther ? (
+                <>
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
+                    <Pencil className="size-3.5" />
+                  </span>
+                  <input
+                    ref={answerInputRef}
+                    disabled={isSubmitting}
+                    value={otherText[index]}
+                    onChange={(e) => setOther(index, e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault()
+                        confirm(true)
+                      }
+                    }}
+                    placeholder={translate(
+                      'components.native-chat.question.otherPlaceholder',
+                      'Type your answer'
+                    )}
+                    className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground/60 disabled:cursor-default disabled:opacity-50"
+                  />
+                </>
+              ) : (
+                <span className="flex-1" />
+              )}
               <button
                 type="button"
                 disabled={isSubmitting}
                 onClick={() => confirm()}
                 className={cn(
-                  'w-24 shrink-0 rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
+                  'shrink-0 whitespace-nowrap rounded-md px-3 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50',
                   currentAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
@@ -219,7 +227,7 @@ export function NativeChatQuestionCard({
                   ? translate('components.native-chat.question.sending', 'Sending…')
                   : currentAnswered
                     ? isLast
-                      ? translate('components.native-chat.question.send', 'Send answer')
+                      ? translate('components.native-chat.question.send', 'Submit')
                       : translate('components.native-chat.question.next', 'Next')
                     : translate('components.native-chat.question.skip', 'Skip')}
               </button>

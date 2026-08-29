@@ -1,46 +1,76 @@
 import { homedir } from 'node:os'
-import { join } from 'node:path'
+import { basename, extname, join, win32 } from 'node:path'
 import {
   buildManagedCommandHook,
   createManagedCommandMatcher,
   getSharedManagedScriptPath,
   isPlainObject,
+  MANAGED_HOOK_TIMEOUT_SECONDS,
+  quotePowerShellString,
   removeManagedCommands,
-  wrapPosixHookCommand,
-  wrapWindowsGitBashHookCommand,
+  wrapWindowsPowerShellEncodedCommand,
+  type HookCommandConfig,
   type HookDefinition,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
+import { wrapRuntimeHomeHookCommand } from '../agent-hooks/runtime-home-hook-command'
 
 export type ClaudeCompatibleHookSettings = {
   configDirName: '.claude' | '.openclaude'
   scriptBaseName: 'claude-hook' | 'openclaude-hook'
+  usesWindowsPowerShellLauncher: boolean
 }
 
 export const CLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.claude',
-  scriptBaseName: 'claude-hook'
+  scriptBaseName: 'claude-hook',
+  usesWindowsPowerShellLauncher: true
 }
 
 export const OPENCLAUDE_HOOK_SETTINGS: ClaudeCompatibleHookSettings = {
   configDirName: '.openclaude',
-  scriptBaseName: 'openclaude-hook'
+  scriptBaseName: 'openclaude-hook',
+  usesWindowsPowerShellLauncher: false
 }
 
 export const CLAUDE_EVENTS = [
-  { eventName: 'UserPromptSubmit', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'Stop', definition: { hooks: [{ type: 'command', command: '' }] } },
+  // Why: SessionStart is the only event a resumed/idle session emits before the
+  // first prompt; without it the sidebar row can't exist until the user types (STA-3386).
+  {
+    eventName: 'SessionStart',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'UserPromptSubmit',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'Stop',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: OpenClaude skips normal Stop hooks after API/model errors and emits
   // StopFailure instead; without this hook Orca leaves the turn spinning.
-  { eventName: 'StopFailure', definition: { hooks: [{ type: 'command', command: '' }] } },
+  {
+    eventName: 'StopFailure',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: subagent/teammate lifecycle feeds the sidebar's child rows and keeps
   // a pane 'working' while background children outlive the lead's turn.
   // TeammateIdle parks turn-based teammates without trusting their permanently
   // "running" background_tasks entry to gate the pane.
   // Older Claude builds ignore unregistered event names (StopFailure precedent).
-  { eventName: 'SubagentStart', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'SubagentStop', definition: { hooks: [{ type: 'command', command: '' }] } },
-  { eventName: 'TeammateIdle', definition: { hooks: [{ type: 'command', command: '' }] } },
+  {
+    eventName: 'SubagentStart',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'SubagentStop',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
+  {
+    eventName: 'TeammateIdle',
+    definition: { hooks: [{ type: 'command', command: '' }] }
+  },
   // Why: PreToolUse gives the dashboard a live readout of the in-flight tool
   // (name + input preview) before it completes.
   {
@@ -58,6 +88,14 @@ export const CLAUDE_EVENTS = [
   {
     eventName: 'PermissionRequest',
     definition: { matcher: '*', hooks: [{ type: 'command', command: '' }] }
+  },
+  // Why: a manual /compact ends at an idle prompt without emitting Stop, so PostCompact is the only
+  // signal that can clear the pane (STA-2915). PreCompact is deliberately NOT registered: it fires
+  // before the compact is validated, and an aborted compact emits it alone — mapping it to 'working'
+  // would strand the pane exactly as this registration is meant to prevent (STA-4613).
+  {
+    eventName: 'PostCompact',
+    definition: { hooks: [{ type: 'command', command: '' }] }
   }
 ] as const
 
@@ -101,19 +139,62 @@ export function getRemoteConfigPath(remoteHome: string, settings = CLAUDE_HOOK_S
   return `${remoteHome.replace(/\/$/, '')}/${settings.configDirName}/settings.json`
 }
 
-export function getManagedCommand(scriptPath: string): string {
-  return process.platform === 'win32'
-    ? wrapWindowsGitBashHookCommand(scriptPath)
-    : wrapPosixHookCommand(scriptPath)
+export function getManagedCommand(
+  scriptPath: string,
+  options: { neutralJsonWhenMissing?: boolean } = {}
+): string {
+  const scriptFileName = basename(scriptPath)
+  const extension = extname(scriptFileName)
+  return wrapRuntimeHomeHookCommand(
+    extension ? scriptFileName.slice(0, -extension.length) : scriptFileName,
+    options
+  )
+}
+
+export function getManagedLifecycleHook(
+  scriptPath: string,
+  settings = CLAUDE_HOOK_SETTINGS
+): HookCommandConfig {
+  if (process.platform !== 'win32' || !settings.usesWindowsPowerShellLauncher) {
+    return buildManagedCommandHook(getManagedCommand(scriptPath, { neutralJsonWhenMissing: true }))
+  }
+  return getWindowsManagedLifecycleHook(scriptPath)
+}
+
+// Why: some Claude-compatible consumers ignore `args`, so the invocation must be self-contained.
+export function getWindowsManagedLifecycleHook(scriptPath: string): HookCommandConfig {
+  const scriptFileName = win32.basename(scriptPath)
+  // Why: runtime profile resolution keeps the managed entry portable across users (STA-3348).
+  const quotedRelativePath = quotePowerShellString(`.orca\\agent-hooks\\${scriptFileName}`)
+  // Why: compat consumers require neutral JSON even when the managed script is missing (#14818).
+  const innerCommand =
+    `$scriptPath = Join-Path $env:USERPROFILE ${quotedRelativePath}; ` +
+    'if (Test-Path -LiteralPath $scriptPath -PathType Leaf) { & $scriptPath; exit $LASTEXITCODE }; ' +
+    "[Console]::In.ReadToEnd() | Out-Null; Write-Output '{}'; exit 0"
+  return {
+    type: 'command',
+    command: wrapWindowsPowerShellEncodedCommand(innerCommand),
+    timeout: MANAGED_HOOK_TIMEOUT_SECONDS
+  }
+}
+
+export function hasSameManagedHookInvocation(
+  actual: HookCommandConfig,
+  expected: HookCommandConfig
+): boolean {
+  return (
+    actual.command === expected.command &&
+    JSON.stringify(actual.args ?? []) === JSON.stringify(expected.args ?? [])
+  )
 }
 
 export function getRemoteManagedCommand(scriptPath: string): string {
-  return wrapPosixHookCommand(scriptPath)
+  return getManagedCommand(scriptPath, { neutralJsonWhenMissing: true })
 }
 
 export function applyManagedHooks(
   config: HooksConfig,
-  command: string,
+  hook: HookCommandConfig,
   scriptFileName = getManagedScriptFileName()
 ): HooksConfig {
   const nextHooks = { ...config.hooks }
@@ -124,7 +205,7 @@ export function applyManagedHooks(
     const cleaned = removeManagedCommands(current, isManagedCommand)
     const definition: HookDefinition = {
       ...event.definition,
-      hooks: [buildManagedCommandHook(command)]
+      hooks: [hook]
     }
     nextHooks[event.eventName] = [...cleaned, definition]
   }

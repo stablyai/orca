@@ -10,7 +10,13 @@ import type {
   ExternalAutomationManager,
   ExternalAutomationRun
 } from '../../../../shared/automations-types'
-import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
+import type { ExternalAutomationScope } from './external-automation-scope-client'
+import { externalAutomationScopeKey } from './external-automation-scope-keys'
+import {
+  formatExternalDate,
+  getExternalRunStatusLabel,
+  getExternalRunStatusVariant
+} from './external-automation-display'
 import {
   createExternalAutomationRunTableState,
   resolveExternalAutomationFetchedRuns,
@@ -27,6 +33,8 @@ export type ExternalAutomationRunPage = {
 }
 
 export type FetchExternalAutomationRuns = (input: {
+  /** The host the rows are read from; a manager ID alone cannot name one. */
+  scope: ExternalAutomationScope
   manager: ExternalAutomationManager
   job: ExternalAutomationJob
   page: number
@@ -34,46 +42,12 @@ export type FetchExternalAutomationRuns = (input: {
 }) => Promise<ExternalAutomationRun[] | ExternalAutomationRunPage>
 
 type ExternalAutomationRunTableProps = {
+  scope: ExternalAutomationScope
   manager: ExternalAutomationManager
   job: ExternalAutomationJob
   now: number
   onFetchRuns?: FetchExternalAutomationRuns
   onOpenRun?: (run: ExternalAutomationRun) => void
-}
-
-function formatExternalDate(value: string | null, now: number): string {
-  if (!value) {
-    return 'Never'
-  }
-  const parsed = Date.parse(value)
-  if (!Number.isFinite(parsed)) {
-    return value
-  }
-  return formatAutomationDateTimeWithRelative(parsed, now)
-}
-
-function getRunStatusLabel(run: ExternalAutomationRun): string {
-  switch (run.status) {
-    case 'completed':
-      return 'Completed'
-    case 'failed':
-      return 'Failed'
-    case 'unknown':
-      return 'Unknown'
-  }
-}
-
-function getRunStatusVariant(
-  run: ExternalAutomationRun
-): React.ComponentProps<typeof Badge>['variant'] {
-  switch (run.status) {
-    case 'completed':
-      return 'secondary'
-    case 'failed':
-      return 'destructive'
-    case 'unknown':
-      return 'outline'
-  }
 }
 
 function getRunSummary(run: ExternalAutomationRun): string {
@@ -90,6 +64,7 @@ function normalizeRunPage(
 }
 
 export function ExternalAutomationRunTable({
+  scope,
   manager,
   job,
   now,
@@ -98,11 +73,16 @@ export function ExternalAutomationRunTable({
 }: ExternalAutomationRunTableProps): React.JSX.Element {
   const [tableState, setTableState] = useState(() => createExternalAutomationRunTableState(job))
   const [isLoading, setIsLoading] = useState(false)
+  const scopeRef = useRef(scope)
   const managerRef = useRef(manager)
   const jobRef = useRef(job)
 
+  scopeRef.current = scope
   managerRef.current = manager
   jobRef.current = job
+  // Refetch when the host changes, not just the job: the same manager and job ID
+  // can be a different machine's cron entry.
+  const scopeKey = externalAutomationScopeKey(scope)
 
   const resolvedTableState = resolveExternalAutomationRunTableState(tableState, job)
   if (resolvedTableState !== tableState) {
@@ -123,6 +103,7 @@ export function ExternalAutomationRunTable({
       fetchError: null
     }))
     void onFetchRuns({
+      scope: scopeRef.current,
       manager: managerRef.current,
       job: jobRef.current,
       page,
@@ -155,7 +136,7 @@ export function ExternalAutomationRunTable({
     return () => {
       cancelled = true
     }
-  }, [job.id, manager.id, onFetchRuns, page])
+  }, [job.id, manager.id, onFetchRuns, page, scopeKey])
 
   const fallbackRuns = job.runs
   const visibleRuns = onFetchRuns
@@ -263,7 +244,9 @@ export function ExternalAutomationRunTable({
                   <span className="min-w-0 truncate text-xs text-muted-foreground">
                     {getRunSummary(run)}
                   </span>
-                  <Badge variant={getRunStatusVariant(run)}>{getRunStatusLabel(run)}</Badge>
+                  <Badge variant={getExternalRunStatusVariant(run)}>
+                    {getExternalRunStatusLabel(run)}
+                  </Badge>
                 </button>
               ))}
             </div>

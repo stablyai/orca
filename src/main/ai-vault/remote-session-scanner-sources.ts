@@ -12,9 +12,12 @@ import { parseGeminiSessionContent } from './session-scanner-gemini-parsers'
 import { parseCopilotSessionContent } from './session-scanner-copilot-parser'
 import { parseCursorSessionContent } from './session-scanner-cursor-parser'
 import { parseHermesSessionContent } from './session-scanner-hermes-parser'
+import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
+import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexTitles } from './remote-session-scanner-codex-index'
+import { remoteClineSource } from './remote-session-scanner-cline-source'
 import type {
   RemoteParserOptions,
   RemoteScannerContext,
@@ -25,7 +28,9 @@ type RemoteContentParser = (
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  // Line-based parsers iterate cancellably; whole-document parsers ignore it.
+  signal?: AbortSignal
 ) => Promise<AiVaultSession | null> | AiVaultSession | null
 
 export function remoteSessionSources(
@@ -47,7 +52,7 @@ export function remoteSessionSources(
       // subagent counts instead. Partitioning also prunes the subagent
       // transcripts themselves, which would otherwise list as phantom
       // top-level sessions carrying the parent's sessionId.
-      collectSubagentSiblingCounts: true
+      partitionSubagentTranscripts: partitionSubagentTranscriptPaths
     },
     remoteAntigravitySource(remoteHome, hostPlatform),
     source(
@@ -73,6 +78,7 @@ export function remoteSessionSources(
       parseCursorSessionContent,
       (path) => remotePathSegments(path).includes('agent-transcripts')
     ),
+    remoteClineSource(remoteHome, hostPlatform),
     source(
       'hermes',
       remoteHome,
@@ -90,7 +96,20 @@ export function remoteSessionSources(
       parseDevinSessionContent
     ),
     jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
-    jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+    {
+      ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
+      // Same posture as Claude above: OMP stores task-subagent transcripts in
+      // the session's same-named artifact dir; the walk supplies counts and the
+      // partition keeps the children out of the top-level list (#9330).
+      partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
+    },
+    jsonlSource(
+      'prime-agent',
+      remoteHome,
+      hostPlatform,
+      remotePrimeAgentSessionsSegments(),
+      primeAgentParser
+    ),
     jsonlSource(
       'droid',
       remoteHome,
@@ -126,7 +145,8 @@ function remoteAntigravitySource(
         file,
         content,
         context.hostPlatform.os,
-        parserOptions(context)
+        parserOptions(context),
+        context.signal
       )
       return session ? context.antigravityWorkspaceResolver.enrich(session, historyPath) : null
     }
@@ -150,7 +170,9 @@ function source(
     filePredicate,
     directoryPredicate,
     parse: (file, content, context) =>
-      Promise.resolve(parseContent(file, content, context.hostPlatform.os, parserOptions(context)))
+      Promise.resolve(
+        parseContent(file, content, context.hostPlatform.os, parserOptions(context), context.signal)
+      )
   }
 }
 
@@ -193,13 +215,15 @@ function remoteCodexSources(
         codexHome,
         executionHostId: context.executionHostId,
         executionHostPlatform: context.hostPlatform.os,
+        signal: context.signal,
         readIndexedTitle: async (sessionId) =>
           (
             await remoteCodexIndexTitles({
               provider: context.provider,
               codexHome,
               hostPlatform,
-              titleCaches: context.titleCaches
+              titleCaches: context.titleCaches,
+              signal: context.signal
             })
           ).get(sessionId) ?? null
       })
@@ -233,27 +257,40 @@ function piParser(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('pi', file, content, platform, options)
+  return parseMessageGraphSessionContent('pi', file, content, platform, options, signal)
 }
 
 function ompParser(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('omp', file, content, platform, options)
+  return parseMessageGraphSessionContent('omp', file, content, platform, options, signal)
+}
+
+function primeAgentParser(
+  file: FileWithMtime,
+  content: string,
+  platform: NodeJS.Platform,
+  options: RemoteParserOptions,
+  signal?: AbortSignal
+): Promise<AiVaultSession | null> {
+  return parseMessageGraphSessionContent('prime-agent', file, content, platform, options, signal)
 }
 
 function openClawParser(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: RemoteParserOptions
+  options: RemoteParserOptions,
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
-  return parseMessageGraphSessionContent('openclaw', file, content, platform, options)
+  return parseMessageGraphSessionContent('openclaw', file, content, platform, options, signal)
 }
 
 function remotePathSegments(path: string): string[] {
@@ -266,4 +303,11 @@ function remotePiSessionsSegments(): string[] {
 
 function remoteOmpSessionsSegments(): string[] {
   return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
+}
+
+// Why: remote roots are posix regardless of the client platform, so these stay literal
+// rather than round-tripping through a local-platform path join that would emit
+// backslashes on a Windows client and collapse into a single bogus segment.
+function remotePrimeAgentSessionsSegments(): string[] {
+  return ['.prime', 'agent', 'sessions']
 }

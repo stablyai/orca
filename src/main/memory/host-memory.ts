@@ -1,8 +1,8 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { readFile } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
-import type { HostAvailableMemorySource, HostMemory } from '../../shared/types'
+import type { HostAvailableMemorySource, HostMemory } from '../../shared/process-stats-types'
 
 const MEMORY_PRESSURE_TIMEOUT_MS = 1_000
 const MEMORY_PRESSURE_MAX_BUFFER = 64 * 1024
@@ -85,10 +85,18 @@ async function readAvailableMemory(
 
 async function readDarwinAvailableMemory(total: number): Promise<number | null> {
   try {
-    const stdout = await execFileText('/usr/bin/memory_pressure', ['-Q'])
-    const available = parseDarwinAvailableMemory(stdout, total)
-    if (available !== null) {
-      return available
+    const result = await runProcess({
+      program: '/usr/bin/memory_pressure',
+      args: ['-Q'],
+      env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
+      maxOutputBytes: MEMORY_PRESSURE_MAX_BUFFER,
+      timeoutMs: MEMORY_PRESSURE_TIMEOUT_MS
+    })
+    if (result.code === 0 && !result.timedOut) {
+      const available = parseDarwinAvailableMemory(result.stdout, total)
+      if (available !== null) {
+        return available
+      }
     }
   } catch {
     // The built-in command is unavailable on older or restricted hosts.
@@ -109,28 +117,6 @@ async function readLinuxAvailableMemory(): Promise<number | null> {
   }
   linuxAvailabilitySupported = false
   return null
-}
-
-function execFileText(file: string, args: string[]): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      file,
-      args,
-      {
-        encoding: 'utf8',
-        env: { ...process.env, LC_ALL: 'C', LANG: 'C' },
-        maxBuffer: MEMORY_PRESSURE_MAX_BUFFER,
-        timeout: MEMORY_PRESSURE_TIMEOUT_MS
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(String(stdout))
-      }
-    )
-  })
 }
 
 function nonNegativeNumber(value: unknown): number {

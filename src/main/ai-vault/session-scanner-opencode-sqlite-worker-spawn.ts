@@ -9,27 +9,23 @@ import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-wo
 // the client class stays free of Electron (require'd lazily here) and the
 // scanner call sites depend only on the two routing functions below.
 
-function resolveWorkerEntryPath(): string {
-  let app: { isPackaged: boolean } | null = null
-  try {
-    app = require('electron').app ?? null
-  } catch {
-    app = null
-  }
-  if (app?.isPackaged) {
-    return join(
-      process.resourcesPath,
-      'app.asar',
-      'out',
-      'main',
-      'session-scanner-opencode-sqlite-worker-entry.js'
-    )
-  }
-  return join(__dirname, 'session-scanner-opencode-sqlite-worker-entry.js')
+const WORKER_ENTRY_FILENAME = 'session-scanner-opencode-sqlite-worker-entry.js'
+
+export function resolveOpenCodeSqliteWorkerEntryPath(
+  runtimeDir = __dirname,
+  pathExists: (path: string) => boolean = existsSync
+): string {
+  const candidates = [
+    join(runtimeDir, WORKER_ENTRY_FILENAME),
+    // Rollup factors this launcher into out/main/chunks when the outer scanner
+    // worker and main entry both import it; worker entries remain in out/main.
+    join(runtimeDir, '..', WORKER_ENTRY_FILENAME)
+  ]
+  return candidates.find(pathExists) ?? candidates[0]!
 }
 
 function defaultWorkerFactory(): Worker {
-  const workerPath = resolveWorkerEntryPath()
+  const workerPath = resolveOpenCodeSqliteWorkerEntryPath()
   // Why: a missing built entry must throw synchronously so the client can fail
   // closed before it waits on a worker that can never post a result.
   if (!existsSync(workerPath)) {

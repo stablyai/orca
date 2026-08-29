@@ -3,7 +3,7 @@ import type {
   AgentStatusState,
   AgentType
 } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 
 export type DashboardAgentRow = {
   /** Row identity. For 'subagent' rows this is a synthetic key (the child has
@@ -23,6 +23,7 @@ export type DashboardAgentRow = {
   startedAt: number
   lineage?: {
     depth: 0 | 1
+    parentPaneKey?: string
     isFirstSibling: boolean
     isLastSibling: boolean
     childCount: number

@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 import { homedir } from 'node:os'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   resolveCodexHomeProcessLockKey,
   resolveCodexHomeProcessLockKeyForSpawnEnv,
@@ -68,6 +68,30 @@ describe('withCodexHomeProcessLock', () => {
     ).rejects.toThrow('boom')
 
     await expect(withCodexHomeProcessLock('home-a', async () => 'after')).resolves.toBe('after')
+  })
+
+  it('does not release a running lock based on elapsed time', async () => {
+    vi.useFakeTimers()
+    try {
+      const events: string[] = []
+      const gate = deferred()
+      const first = withCodexHomeProcessLock('home-long-running', async () => {
+        events.push('first:start')
+        await gate.promise
+      })
+      const second = withCodexHomeProcessLock('home-long-running', async () => {
+        events.push('second:start')
+      })
+
+      await vi.advanceTimersByTimeAsync(60 * 60_000)
+      expect(events).toEqual(['first:start'])
+
+      gate.resolve()
+      await Promise.all([first, second])
+      expect(events).toEqual(['first:start', 'second:start'])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('keys explicit and default host homes consistently', () => {

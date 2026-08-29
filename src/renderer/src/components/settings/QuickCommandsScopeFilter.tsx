@@ -1,6 +1,6 @@
 import { Check, ChevronsUpDown } from 'lucide-react'
 import type { Dispatch, SetStateAction } from 'react'
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import { Button } from '../ui/button'
 import { Command, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
@@ -21,7 +21,7 @@ function ScopeTriggerLabel({
 }: {
   showAll: boolean
   effectiveSelection: ReadonlySet<string>
-  repos: Repo[]
+  repos: readonly Repo[]
 }): React.JSX.Element {
   if (showAll) {
     return (
@@ -57,7 +57,7 @@ export function QuickCommandsScopeFilter({
   handleSelectAll,
   toggleScope
 }: {
-  repos: Repo[]
+  repos: readonly Repo[]
   effectiveSelection: ReadonlySet<string>
   showAll: boolean
   scopePopoverOpen: boolean

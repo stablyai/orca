@@ -1,23 +1,36 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  createNativeChatTranscriptRetention,
+  encodeNativeChatTranscriptIdentity
+} from '../../../src/shared/native-chat-transcript-retention'
+import { createNativeChatMerger, replaceList } from '../../../src/shared/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 import { buildNativeChatSubscriptionId } from '../../../src/shared/native-chat-stream-unsubscribe'
 import type { RpcClient } from '../transport/rpc-client'
-import { createNativeChatMerger, replaceList } from './mobile-native-chat-merge'
 import {
   applyMobileNativeChatStreamFrame,
   type MobileNativeChatStreamFrame
 } from './mobile-native-chat-stream-frame'
 
-export type MobileNativeChatStatus = 'idle' | 'loading' | 'waiting-session' | 'ready' | 'error'
+export type MobileNativeChatStatus =
+  | 'idle'
+  | 'loading'
+  | 'waiting-session'
+  /** The host answered, but the session has no transcript file yet — render the
+   *  empty chat instead of a spinner while the read stays open. */
+  | 'awaiting-transcript'
+  | 'ready'
+  | 'error'
 
 export type MobileNativeChatSession = {
   messages: NativeChatMessage[]
   status: MobileNativeChatStatus
   /** True while `messages` cannot be trusted as this session's real history:
-   *  the read is in flight, OR the subscription effect has not yet caught up to
-   *  a just-changed agent/session, so `messages`/`status` still describe the
-   *  previous tab. Consumers that decide something from an empty transcript
-   *  (the launch-draft seed) must wait for this to clear. */
+   *  the read is in flight, the transcript has not been written yet, OR the
+   *  subscription effect has not yet caught up to a just-changed agent/session,
+   *  so `messages`/`status` still describe the previous tab. Consumers that
+   *  decide something from an empty transcript (the launch-draft seed) must
+   *  wait for this to clear. */
   transcriptLoading: boolean
   error?: string
   /** True when an older page may exist (the last read filled the window). */
@@ -27,9 +40,6 @@ export type MobileNativeChatSession = {
   /** Grow the window to page in older history. */
   loadEarlier: () => void
 }
-
-// Stable empty reference so a not-yet-current read doesn't churn consumers.
-const EMPTY_MESSAGES: NativeChatMessage[] = []
 
 // Small first page for a fast first paint; grows by a page as the user scrolls.
 const INITIAL_LIMIT = 40
@@ -45,13 +55,20 @@ type ReadSessionResult =
  *  an ordered tail); live appends merge by id so order stays stable. */
 export function useMobileNativeChatSession(args: {
   client: RpcClient | null
+  /** Stable host/workspace source; unlike `client`, it survives manual reconnect. */
+  sourceIdentity: string
   agent: string | null
   sessionId: string | null
   transcriptPath: string | null
 }): MobileNativeChatSession {
-  const { client, agent, sessionId, transcriptPath } = args
+  const { client, sourceIdentity, agent, sessionId, transcriptPath } = args
   const [messages, setMessages] = useState<NativeChatMessage[]>([])
-  const identity = `${agent ?? ''}\0${sessionId ?? ''}\0${transcriptPath ?? ''}`
+  const identity = encodeNativeChatTranscriptIdentity([
+    sourceIdentity,
+    agent,
+    sessionId,
+    transcriptPath
+  ])
   // Pre-read status is a pure function of the props, so derive it rather than
   // letting the effect write it a commit later.
   const initialStatus: MobileNativeChatStatus =
@@ -92,6 +109,16 @@ export function useMobileNativeChatSession(args: {
   const sessionIdRef = useRef<string | null>(sessionId)
   sessionIdRef.current = sessionId
   const streamGenerationRef = useRef(0)
+  // Whether this subscription already delivered its base snapshot; later
+  // snapshots on the same subscription are reconnect replays, not fresh bases.
+  const snapshotSeenRef = useRef(false)
+  const transcriptRetentionRef = useRef(createNativeChatTranscriptRetention())
+  const settledReady = settled?.status === 'ready'
+  useEffect(() => {
+    if (settledReady) {
+      transcriptRetentionRef.current.capture(identity, messages)
+    }
+  }, [identity, messages, settledReady])
 
   // Replace the base list (read results are an ordered tail). Resets the merger
   // cache so the index is rebuilt once over the new base.
@@ -107,6 +134,7 @@ export function useMobileNativeChatSession(args: {
     streamGenerationRef.current += 1
     limitRef.current = INITIAL_LIMIT
     loadingEarlierRef.current = false
+    snapshotSeenRef.current = false
     setLoadingEarlier(false)
     setList([])
     setError(undefined)
@@ -126,6 +154,7 @@ export function useMobileNativeChatSession(args: {
         sessionId,
         limit: limitRef.current,
         subscriptionId: buildNativeChatSubscriptionId(agent, sessionId),
+        capabilities: { transcriptPending: 1 },
         ...(transcriptPath ? { transcriptPath } : {})
       },
       (raw) => {
@@ -133,20 +162,11 @@ export function useMobileNativeChatSession(args: {
           return
         }
         const frame = raw as MobileNativeChatStreamFrame
-        if (frame.type === 'replacement' || frame.type === 'snapshot') {
-          // Why: replacement and reconnect snapshots are authoritative windows;
-          // stale page limits/results must not constrain the fresh generation.
-          streamGenerationRef.current += 1
-          limitRef.current = INITIAL_LIMIT
-          loadingEarlierRef.current = false
-          setLoadingEarlier(false)
-        }
-        const replaceSnapshot = frame.type === 'snapshot'
         const applied = applyMobileNativeChatStreamFrame({
           merger: mergerRef.current,
           frame,
           limit: limitRef.current,
-          replaceSnapshot
+          replaceSnapshot: !snapshotSeenRef.current
         })
         if (applied.kind === 'ignored') {
           return
@@ -156,11 +176,30 @@ export function useMobileNativeChatSession(args: {
           setError(applied.error)
           return
         }
+        if (frame.type === 'snapshot' && !applied.pending) {
+          // A pending window has no transcript behind it, so the snapshot that
+          // follows is still this subscription's base, not a reconnect replay.
+          snapshotSeenRef.current = true
+        }
+        if (applied.windowReplaced || frame.type === 'snapshot') {
+          // Why: any authoritative window (and any replay merge) invalidates an
+          // in-flight older-page request; stale results must not land on it.
+          streamGenerationRef.current += 1
+          loadingEarlierRef.current = false
+          setLoadingEarlier(false)
+        }
+        if (applied.windowReplaced) {
+          // Only a genuinely fresh window resets the grown read window — an
+          // overlapping reconnect replay keeps the paged-in history and limit.
+          limitRef.current = INITIAL_LIMIT
+          beforeOffsetRef.current = applied.beforeOffset ?? null
+          setHasMore(applied.hasMore ?? applied.messages.length >= INITIAL_LIMIT)
+        }
         setMessages(applied.messages)
-        if (applied.hasMore != null) {
+        if (!applied.windowReplaced && applied.hasMore != null) {
           setHasMore(applied.hasMore)
         }
-        if (applied.beforeOffset != null) {
+        if (!applied.windowReplaced && applied.beforeOffset != null) {
           beforeOffsetRef.current = applied.beforeOffset
         }
         if (applied.cursorInvalidated) {
@@ -171,7 +210,7 @@ export function useMobileNativeChatSession(args: {
           setLoadingEarlier(false)
           beforeOffsetRef.current = null
         }
-        setRead({ client, identity, status: 'ready' })
+        setRead({ client, identity, status: applied.pending ? 'awaiting-transcript' : 'ready' })
       }
     )
 
@@ -246,12 +285,20 @@ export function useMobileNativeChatSession(args: {
     })()
   }, [client, agent, sessionId, transcriptPath, hasMore, setList])
 
+  // Held for any unsettled read, not just an in-flight one: a stream error or a
+  // dropped client would otherwise trade the conversation for an error card.
+  const visibleMessages = transcriptRetentionRef.current.visible({
+    identity,
+    messages,
+    settled: settledReady
+  })
+
   return {
     // Withheld until the settled read belongs to this identity: the effect that
     // clears the previous tab's list is passive, so `messages` lags a commit.
-    messages: settled ? messages : EMPTY_MESSAGES,
+    messages: visibleMessages,
     status,
-    transcriptLoading: status === 'loading',
+    transcriptLoading: status === 'loading' || status === 'awaiting-transcript',
     error,
     hasMore,
     loadingEarlier,

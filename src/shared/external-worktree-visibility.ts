@@ -1,5 +1,10 @@
 import { normalizeRuntimePathSeparators } from './cross-platform-path'
-import type { ExternalWorktreeVisibility, Repo } from './types'
+import {
+  normalizeCustomWorktreeVisibilitySources,
+  normalizeWorktreeVisibilitySourcePreferences
+} from './worktree/visibility-sources'
+import type { WorktreeVisibilityDefaults } from './global-settings-types'
+import type { ExternalWorktreeVisibility, Repo } from './repo-types'
 
 export const EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT = Date.UTC(2026, 4, 23)
 export const UNKNOWN_EXTERNAL_WORKTREE_PARENT_PATH = 'Unknown location'
@@ -30,7 +35,7 @@ export function getExternalWorktreeParentPath(worktreePath: string | undefined):
     return `//${parts.slice(0, -1).join('/')}`
   }
   const lastSeparatorIndex = normalized.lastIndexOf('/')
-  if (lastSeparatorIndex < 0) {
+  if (lastSeparatorIndex === -1) {
     return UNKNOWN_EXTERNAL_WORKTREE_PARENT_PATH
   }
   if (lastSeparatorIndex === 0) {
@@ -60,10 +65,75 @@ export function isLegacyRepoForExternalWorktreeVisibility(repo: Repo): boolean {
 
 export function effectiveExternalWorktreeVisibility(
   repo: Pick<Repo, 'externalWorktreeVisibility'>,
-  isLegacyRepoForVisibility: boolean
+  isLegacyRepoForVisibility: boolean,
+  defaults?: WorktreeVisibilityDefaults
 ): ExternalWorktreeVisibility {
   if (repo.externalWorktreeVisibility) {
     return repo.externalWorktreeVisibility
   }
+  if (defaults?.external === 'show' || defaults?.external === 'hide') {
+    return defaults.external
+  }
   return isLegacyRepoForVisibility ? 'show' : 'hide'
+}
+
+export function normalizeWorktreeVisibilityDefaults(
+  value: unknown
+): WorktreeVisibilityDefaults | undefined {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return undefined
+  }
+  const {
+    external,
+    customSources: rawCustomSources,
+    sourcePreferences: rawSourcePreferences,
+    ...futureDefaults
+  } = value as WorktreeVisibilityDefaults & Record<string, unknown>
+  if (external !== 'show' && external !== 'hide') {
+    return undefined
+  }
+  const customSources = normalizeCustomWorktreeVisibilitySources(rawCustomSources)
+  const sourcePreferences = normalizeWorktreeVisibilitySourcePreferences(rawSourcePreferences)
+  return {
+    ...futureDefaults,
+    external,
+    ...(customSources !== undefined ? { customSources } : {}),
+    ...(sourcePreferences !== undefined ? { sourcePreferences } : {})
+  }
+}
+
+export function migrateExternalWorktreeVisibilityDefaults(
+  repos: readonly Repo[],
+  value: unknown
+): {
+  repos: Repo[]
+  defaults: WorktreeVisibilityDefaults
+  changed: boolean
+} {
+  const defaults = normalizeWorktreeVisibilityDefaults(value)
+  if (defaults) {
+    return { repos: [...repos], defaults, changed: false }
+  }
+  const migratedRepos = repos.map((repo) => {
+    if (
+      repo.kind === 'folder' ||
+      repo.externalWorktreeVisibility !== undefined ||
+      !isLegacyRepoForExternalWorktreeVisibility(repo)
+    ) {
+      return repo
+    }
+    return {
+      ...repo,
+      externalWorktreeVisibility: 'show' as const,
+      externalWorktreeVisibilityLegacy: true
+    }
+  })
+  return { repos: migratedRepos, defaults: { external: 'hide' }, changed: true }
+}
+
+export function effectiveAgentWorktreeVisibility(
+  repo: Pick<Repo, 'agentWorktreeVisibility'>
+): ExternalWorktreeVisibility {
+  // Why: scratch worktrees have always defaulted hidden, including for legacy repos.
+  return repo.agentWorktreeVisibility === 'show' ? 'show' : 'hide'
 }

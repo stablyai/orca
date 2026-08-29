@@ -371,9 +371,10 @@ export const LOCALE_PHRASE_FIXES = {
     { pattern: /指挥进展/g, replacement: 'Conductor 进度', whenEnIncludes: 'Conductor Progress' },
     { pattern: /指挥评论/g, replacement: 'Conductor 评审', whenEnIncludes: 'Conductor Review' },
     { pattern: /指挥完成/g, replacement: 'Conductor 完成', whenEnIncludes: 'Conductor Done' },
-    { pattern: /琥珀色/g, replacement: 'Amber', whenEnIncludes: 'Amber' },
-    { pattern: /蓝色的/g, replacement: 'Blue', whenEnIncludes: 'Blue' },
-    { pattern: /中性的/g, replacement: 'Neutral', whenEnIncludes: 'Neutral' },
+    // Swatch labels want the bare color noun, not the adjectival 的 form — and not English.
+    { pattern: /琥珀色/g, replacement: '琥珀', whenEnIncludes: 'Amber' },
+    { pattern: /蓝色的/g, replacement: '蓝色', whenEnIncludes: 'Blue' },
+    { pattern: /中性的/g, replacement: '中性', whenEnIncludes: 'Neutral' },
     { pattern: /破坏性的/g, replacement: 'destructive', whenEnIncludes: 'destructive' },
     { pattern: /注解/g, replacement: '批注', whenEnIncludes: 'Annotation' },
     ...ZH_PHRASE_FIXES_ROUND5

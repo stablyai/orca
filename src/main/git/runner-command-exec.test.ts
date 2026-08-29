@@ -17,6 +17,7 @@ import {
   commandExecFileAsync,
   ghExecFileAsync,
   gitExecFileAsync,
+  glabExecFileAsync,
   gitStreamStdout,
   translateWslOutputPaths,
   wslAwareSpawn
@@ -179,8 +180,8 @@ describe('commandExecFileAsync Windows command shims', () => {
 describe('runner execFile timeout handling', () => {
   beforeEach(() => {
     execFileMock.mockReset()
-    execFileSyncMock.mockReset()
     spawnMock.mockReset()
+    execFileSyncMock.mockReset()
     vi.useFakeTimers()
   })
 
@@ -218,6 +219,50 @@ describe('runner execFile timeout handling', () => {
     expect(child.kill).toHaveBeenCalled()
   })
 
+  it.skipIf(process.platform === 'win32')(
+    'keeps a barrier Git abort pending until the process group closes',
+    async () => {
+      const child = createMockChildProcess(1234)
+      spawnMock.mockImplementation((command: string) => {
+        if (command !== 'ps') {
+          return child
+        }
+        const probe = createMockChildProcess(4321)
+        queueMicrotask(() => probe.emit('close', 0, null))
+        return probe
+      })
+      const processKill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+      const controller = new AbortController()
+      try {
+        const pending = gitExecFileAsync(['status'], {
+          cwd: '/repo',
+          signal: controller.signal,
+          terminationBarrier: true
+        })
+        let settled = false
+        void pending.then(
+          () => {
+            settled = true
+          },
+          () => {
+            settled = true
+          }
+        )
+
+        controller.abort()
+        child.emit('close', 0, null)
+        await vi.advanceTimersByTimeAsync(1_999)
+        expect(settled).toBe(false)
+        await vi.advanceTimersByTimeAsync(1)
+        expect(processKill).toHaveBeenCalledWith(-1234, 'SIGKILL')
+
+        await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+      } finally {
+        processKill.mockRestore()
+      }
+    }
+  )
+
   it('rejects gh executions that never call back using the default timeout', async () => {
     const child = createMockChildProcess(1234)
     execFileMock.mockReturnValue(child)
@@ -227,6 +272,58 @@ describe('runner execFile timeout handling', () => {
     })
     const rejection = expect(promise).rejects.toThrow('gh timed out.')
     await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('rejects glab executions that never call back using the default timeout', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+
+    const promise = glabExecFileAsync(['api', 'projects/stablyai%2Forca/issues'], {
+      cwd: '/repo'
+    })
+    const rejection = expect(promise).rejects.toThrow('glab timed out.')
+    await vi.advanceTimersByTimeAsync(30_000)
+
+    await rejection
+    expect(child.kill).toHaveBeenCalled()
+  })
+
+  it('aborts glab retry backoff instead of starting another attempt', async () => {
+    const controller = new AbortController()
+    const transient = Object.assign(new Error('glab failed'), {
+      stderr: 'HTTP 503 Service Unavailable'
+    })
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(transient)
+      return createMockChildProcess(1234)
+    })
+
+    const promise = glabExecFileAsync(['api', 'projects'], {
+      cwd: '/repo',
+      signal: controller.signal
+    })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+    await vi.waitFor(() => expect(execFileMock).toHaveBeenCalledTimes(1))
+    controller.abort()
+
+    await rejection
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('kills an active gh execution when its caller aborts', async () => {
+    const child = createMockChildProcess(1234)
+    execFileMock.mockReturnValue(child)
+    const controller = new AbortController()
+    const promise = ghExecFileAsync(['api', 'repos/stablyai/orca/issues/5388'], {
+      cwd: '/repo',
+      signal: controller.signal
+    })
+    const rejection = expect(promise).rejects.toMatchObject({ name: 'AbortError' })
+
+    controller.abort()
 
     await rejection
     expect(child.kill).toHaveBeenCalled()
@@ -280,7 +377,10 @@ describe('runner execFile timeout handling', () => {
       return child
     })
 
-    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], { cwd: '/home5/Brian' })
+    await gitExecFileAsync(['worktree', 'list', '--porcelain', '-z'], {
+      cwd: '/home5/Brian',
+      env: { ...process.env, GIT_ASKPASS: undefined, SSH_ASKPASS: undefined }
+    })
 
     expect(capturedEnv?.GIT_TERMINAL_PROMPT).toBe('0')
     expect(capturedEnv?.GIT_ASKPASS).toBe('')
@@ -487,13 +587,16 @@ describe('runner execFile timeout handling', () => {
 
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'sh', '-lc', expect.any(String)],
+        ['-d', 'Ubuntu', '--exec', 'sh', '-lc', expect.any(String)],
         expect.objectContaining({ cwd: undefined }),
         expect.any(Function)
       )
-      const shellCommand = execFileMock.mock.calls[0]?.[1]?.[5] as string
+      // A read also warms the direct-git environment probe in the background, so
+      // pick the git call rather than assuming it is the first spawn.
+      const gitCall = execFileMock.mock.calls.find((call) => String(call[1]?.[5]).includes("'git'"))
+      const shellCommand = gitCall?.[1]?.[5] as string
       expect(shellCommand).toContain('getent passwd')
-      expect(shellCommand).toContain('exec "\\$_orca_wsl_shell" -ilc')
+      expect(shellCommand).toContain('exec "$_orca_wsl_shell" -ilc')
       expect(shellCommand).toContain('/mnt/c/repo')
       expect(shellCommand).toContain("'git'")
       expect(shellCommand).toContain('status')
@@ -517,7 +620,7 @@ describe('runner execFile timeout handling', () => {
 
       expect(execFileMock).toHaveBeenCalledWith(
         'wsl.exe',
-        ['-d', 'Ubuntu', '--', 'bash', '-c', expect.any(String)],
+        ['-d', 'Ubuntu', '--exec', 'bash', '-c', expect.any(String)],
         expect.objectContaining({ cwd: undefined }),
         expect.any(Function)
       )

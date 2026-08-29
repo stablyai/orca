@@ -1,5 +1,5 @@
 import { getProviderChecksLabel } from '../../../shared/provider-check-summary'
-import type { ProviderCheckSummary } from '../../../shared/types'
+import type { ProviderCheckSummary } from '../../../shared/github/pull-request-types'
 
 type ChecksPillItem = { checksSummary?: ProviderCheckSummary }
 

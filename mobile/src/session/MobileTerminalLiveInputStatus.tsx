@@ -10,11 +10,13 @@ type DictationStatus = {
 type MobileTerminalLiveInputStatusProps = {
   readonly dictation: DictationStatus
   readonly isAttaching: boolean
+  readonly liveInputText: string
 }
 
 export function MobileTerminalLiveInputStatus({
   dictation,
-  isAttaching
+  isAttaching,
+  liveInputText
 }: MobileTerminalLiveInputStatusProps) {
   const title = dictation.isRecording
     ? 'Listening'
@@ -31,14 +33,14 @@ export function MobileTerminalLiveInputStatus({
         ? 'Preparing microphone'
         : isAttaching
           ? 'Uploading image to host'
-          : 'Tap to show keyboard'
+          : liveInputText || 'Tap to show keyboard'
 
   return (
     <View style={styles.status}>
       <Text style={styles.title} numberOfLines={1}>
         {title}
       </Text>
-      <Text style={styles.detail} numberOfLines={1}>
+      <Text style={styles.detail} numberOfLines={1} ellipsizeMode="head">
         {detail}
       </Text>
     </View>

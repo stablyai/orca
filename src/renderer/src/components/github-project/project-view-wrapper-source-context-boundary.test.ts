@@ -1,9 +1,7 @@
-// @vitest-environment happy-dom
-
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import type { GitHubProjectRow } from '../../../../shared/github-project-types'
+import type { GitHubProjectRow } from '../../../../shared/github/project-types'
 
 const COMPONENT_ROOT = __dirname
 
@@ -21,7 +19,7 @@ function sourceBetween(source: string, startPattern: string, endPattern: string)
 
 describe('ProjectViewWrapper GitHub source context boundary', () => {
   it('builds project work items with a host-pinned repository identity', async () => {
-    const { buildProjectWorkItem } = await import('./ProjectViewWrapper')
+    const { buildProjectWorkItem } = await import('./project-work-item')
     const row: GitHubProjectRow = {
       id: 'PVTI_1',
       itemType: 'PULL_REQUEST',
@@ -53,17 +51,18 @@ describe('ProjectViewWrapper GitHub source context boundary', () => {
   })
 
   it('passes the matched repo source context into the repo-backed GitHub dialog', () => {
-    const source = componentSource('ProjectViewWrapper.tsx')
+    const actionSource = componentSource('useProjectRowActions.ts')
+    const wrapperSource = componentSource('ProjectViewWrapper.tsx')
     const contextSection = sourceBetween(
-      source,
-      'const resolvedDialogRepo = resolvedDialogRepoItem',
-      'const resolvedMissingRepoDialogs'
+      actionSource,
+      'const dialogRepo = resolvedDialogRepoItem',
+      'const missingDialogs'
     )
-    const dialogSection = sourceBetween(source, '<GitHubItemDialog', 'onUse={(item) => {')
+    const dialogSection = sourceBetween(wrapperSource, '<GitHubItemDialog', 'onUse={(item) => {')
 
-    expect(source).toContain('buildTaskSourceContextFromRepo')
+    expect(actionSource).toContain('buildTaskSourceContextFromRepo')
     expect(contextSection).toContain("provider: 'github'")
-    expect(contextSection).toContain('repo: resolvedDialogRepo')
-    expect(dialogSection).toContain('sourceContext={resolvedDialogSourceContext}')
+    expect(contextSection).toContain('repo: dialogRepo')
+    expect(dialogSection).toContain('sourceContext={rowActions.dialogSourceContext}')
   })
 })

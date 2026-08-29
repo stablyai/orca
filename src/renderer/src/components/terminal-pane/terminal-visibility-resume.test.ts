@@ -8,6 +8,10 @@ import {
 vi.mock('@/lib/pane-manager/pane-manager-registry', () => ({
   resetAndRefreshAllTerminalWebglAtlases: vi.fn()
 }))
+const presentPaneViewport = vi.fn()
+vi.mock('@/lib/pane-manager/pane-webgl-renderer', () => ({
+  presentPaneViewport: (pane: unknown) => presentPaneViewport(pane)
+}))
 vi.mock('@/lib/pane-manager/pane-terminal-output-scheduler', () => ({
   flushTerminalOutput: vi.fn(),
   requestTerminalBacklogRecovery: vi.fn()
@@ -21,11 +25,14 @@ vi.mock('./pane-helpers', () => ({
   fitPanes: vi.fn(),
   focusActivePane: vi.fn()
 }))
-const scheduleTabRevealWebglAtlasRecovery = vi.fn()
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  // Why: the light-tab reveal must recover the atlas immediately, decoupled from
-  // the terminal-output debounce (which a background stream could otherwise defer).
-  scheduleTabRevealWebglAtlasRecovery: () => scheduleTabRevealWebglAtlasRecovery()
+const flushDeferredPaneMetricOptionsIfMeasurable = vi.fn((_pane: unknown) => false)
+vi.mock('@/lib/pane-manager/pane-fit', () => ({
+  flushDeferredPaneMetricOptionsIfMeasurable: (pane: unknown) =>
+    flushDeferredPaneMetricOptionsIfMeasurable(pane)
+}))
+const repairPaneWebglCanvasDprMismatch = vi.fn((_pane: unknown) => false)
+vi.mock('@/lib/pane-manager/terminal-canvas-dpr-repair', () => ({
+  repairPaneWebglCanvasDprMismatch: (pane: unknown) => repairPaneWebglCanvasDprMismatch(pane)
 }))
 const resetTerminalLinkifierHoverState = vi.fn()
 const isTerminalLinkifierHoverActive = vi.fn((_terminal: unknown) => false)
@@ -70,20 +77,19 @@ function resumeArgs(manager: FakeManager, shouldUseLightTabResume: boolean) {
 describe('resumeTerminalVisibility reveal repaint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    repairPaneWebglCanvasDprMismatch.mockReturnValue(false)
   })
 
-  it('schedules a pane-scoped repaint on a light tab reveal', () => {
+  it('schedules an atlas-preserving present on a light tab reveal', () => {
     // The light path is the "click the tab that was not open" gesture: it has
     // no rendering resume or fit, so without this repaint a hidden-while-
     // working pane keeps compositing pre-hide pixels.
     const manager = createManager()
     resumeTerminalVisibility(resumeArgs(manager, true))
 
-    expect(manager.scheduleRevealRepaint).toHaveBeenCalledTimes(1)
+    expect(manager.scheduleRevealRepaint).not.toHaveBeenCalled()
+    expect(manager.scheduleRevealPresent).toHaveBeenCalledTimes(1)
     expect(manager.resumeRendering).not.toHaveBeenCalled()
-    // Reveal recovery is immediate (not the terminal-output debounce), so a
-    // background stream in another pane cannot defer this tab's atlas rebuild.
-    expect(scheduleTabRevealWebglAtlasRecovery).toHaveBeenCalledTimes(1)
   })
 
   it('captures native trim movement before enforcing viewport intent', async () => {
@@ -131,12 +137,72 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
   })
 
+  it('leaves heavy metric flushing to the reveal fit after rendering resumes', () => {
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: {} }])
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(manager.resumeRendering).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
+    expect(flushDeferredPaneMetricOptionsIfMeasurable).not.toHaveBeenCalled()
+  })
+
+  it('defers a heavy-reveal dpr present until the shared atlas recovery', async () => {
+    const pane = { terminal: {} }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([pane])
+    repairPaneWebglCanvasDprMismatch.mockReturnValueOnce(true)
+    const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
+      await import('@/lib/pane-manager/pane-manager-registry')
+    )
+
+    resumeTerminalVisibility(resumeArgs(manager, false))
+
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledWith(pane)
+    expect(presentPaneViewport).not.toHaveBeenCalled()
+    expect(resetAndRefreshAllTerminalWebglAtlases).toHaveBeenCalledTimes(1)
+    const atlasResetCallOrder = resetAndRefreshAllTerminalWebglAtlases.mock.invocationCallOrder[0]
+    if (atlasResetCallOrder === undefined) {
+      throw new Error('Shared atlas recovery call order missing')
+    }
+    expect(repairPaneWebglCanvasDprMismatch.mock.invocationCallOrder[0]).toBeLessThan(
+      atlasResetCallOrder
+    )
+  })
+
   it('does not fit on a light tab reveal', () => {
     const manager = createManager()
     resumeTerminalVisibility(resumeArgs(manager, true))
 
     expect(manager.fitAllRevealedPanes).not.toHaveBeenCalled()
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('checks each pane for a stale WebGL backing on a light tab reveal', () => {
+    const first = { terminal: { name: 'pane-a' } }
+    const second = { terminal: { name: 'pane-b' } }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([first, second])
+
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledTimes(2)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(1, first)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(2, second)
+  })
+
+  it('flushes hidden-era metric options on reveal and refits the light path', () => {
+    // A font change while hidden must land and refit on reveal, or cols/rows
+    // stay pinned to the old metrics.
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([{ terminal: {} }])
+    flushDeferredPaneMetricOptionsIfMeasurable.mockReturnValueOnce(true)
+
+    resumeTerminalVisibility(resumeArgs(manager, true))
+
+    expect(flushDeferredPaneMetricOptionsIfMeasurable).toHaveBeenCalledTimes(1)
+    expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
   })
 
   it('fits window wake recovery through the stable path, not the sync fit', () => {
@@ -149,6 +215,27 @@ describe('resumeTerminalVisibility reveal repaint', () => {
 
     expect(manager.fitAllRevealedPanes).toHaveBeenCalledTimes(1)
     expect(manager.fitAllPanes).not.toHaveBeenCalled()
+  })
+
+  it('repairs WebGL canvas backing-store dpr on window wake', () => {
+    // Clamshell undock: dpr changes while the pane stayed "visible" with a
+    // stale backing store; tab-reveal is not in the path.
+    const first = { terminal: { name: 'pane-a' } }
+    const second = { terminal: { name: 'pane-b' } }
+    const manager = createManager()
+    manager.getPanes.mockReturnValue([first, second])
+    repairPaneWebglCanvasDprMismatch.mockReturnValueOnce(true)
+
+    recoverVisibleTerminalWindowWake({
+      manager: manager as never as PaneManager,
+      isActive: true,
+      clearGlyphAtlases: false
+    })
+
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenCalledTimes(2)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(1, first)
+    expect(repairPaneWebglCanvasDprMismatch).toHaveBeenNthCalledWith(2, second)
+    expect(presentPaneViewport).toHaveBeenCalledWith(first)
   })
 
   it('latches viewport intent before refocus recovery flushes streaming output', async () => {
@@ -257,8 +344,8 @@ describe('resumeTerminalVisibility reveal repaint', () => {
     // every refocus forces a mass re-rasterization that can hit xterm's atlas
     // page-merge race (#4480) and garble streaming panes. Focus recovery must
     // resume rendering and present WITHOUT the atlas-clearing reveal repaint —
-    // scheduleRevealRepaint clears each pane's (shared) atlas, so the refocus
-    // path must route to the atlas-preserving present instead.
+    // scheduleRevealRepaint runs shared-atlas recovery, so the refocus path
+    // must route to the atlas-preserving present instead.
     const { resetAndRefreshAllTerminalWebglAtlases } = vi.mocked(
       await import('@/lib/pane-manager/pane-manager-registry')
     )

@@ -214,6 +214,7 @@ export type WorktreeRemoveStage =
   | 'git_remove'
   | 'metadata_purge'
   | 'pty_sweep'
+  | 'trash_rename'
   | 'watcher_gate'
 
 /** Wrap one stage of a worktree removal. Children share the parent's `kind` so `kind`-filtered

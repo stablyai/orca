@@ -178,6 +178,7 @@ export function computeWorktreeSidebarDropPreview(args: {
   groupIds: readonly string[]
   draggedIds: readonly string[]
   draggingWorktreeId?: string | null
+  fallbackGap?: number
   // Where the card was grabbed, so the drop follows the card rather than the bare
   // pointer. Omitted for native HTML5 drags, which have no reliable grab offset.
   grab?: WorktreeSidebarDragGrab | null
@@ -194,10 +195,13 @@ export function computeWorktreeSidebarDropPreview(args: {
   }
 
   const localY = args.pointerY - args.containerTop + args.scrollTop
-  const activeIndex = args.draggingWorktreeId
-    ? rects.findIndex((rect) => rect.worktreeId === args.draggingWorktreeId)
+  const activeGroupIndex = args.draggingWorktreeId
+    ? args.groupIds.indexOf(args.draggingWorktreeId)
     : -1
-  const activeRect = activeIndex >= 0 ? rects[activeIndex]! : null
+  const activeRect =
+    activeGroupIndex >= 0
+      ? (rects.find((rect) => rect.worktreeId === args.draggingWorktreeId) ?? null)
+      : null
   const referenceY = getWorktreeSidebarDragReferenceY({
     localY,
     grab: args.grab ?? null,
@@ -217,15 +221,19 @@ export function computeWorktreeSidebarDropPreview(args: {
   }
 
   const heldIndex = args.anchor
-    ? resolveWorktreeSidebarDropAnchorIndex({ anchor: args.anchor, rects })
+    ? resolveWorktreeSidebarDropAnchorIndex({ anchor: args.anchor, groupIds: args.groupIds })
     : null
   let dropIndex: number
   if (heldIndex !== null) {
     dropIndex = heldIndex
   } else if (boundaryDrop.kind === 'drop') {
     dropIndex = boundaryDrop.dropIndex
-  } else if (activeRect) {
-    dropIndex = getWorktreeSidebarClosestCenterDropIndex({ referenceY, rects, activeIndex })
+  } else if (activeGroupIndex >= 0) {
+    dropIndex = getWorktreeSidebarClosestCenterDropIndex({
+      referenceY,
+      rects,
+      activeIndex: activeGroupIndex
+    })
   } else {
     dropIndex = getWorktreeSidebarPointerDropIndex({ referenceY, rects })
   }
@@ -234,6 +242,8 @@ export function computeWorktreeSidebarDropPreview(args: {
     groupIds: args.groupIds,
     draggedIds: args.draggedIds,
     draggingWorktreeId: args.draggingWorktreeId,
+    draggedPreviewHeight: args.grab?.height,
+    fallbackGap: args.fallbackGap,
     dropIndex,
     rects
   })
@@ -246,6 +256,6 @@ export function computeWorktreeSidebarDropPreview(args: {
       activeRect
     }),
     previewOffsetsByWorktreeId: offsets,
-    dropAnchorId: getWorktreeSidebarDropAnchorId({ rects, dropIndex })
+    dropAnchorId: getWorktreeSidebarDropAnchorId({ groupIds: args.groupIds, dropIndex })
   }
 }

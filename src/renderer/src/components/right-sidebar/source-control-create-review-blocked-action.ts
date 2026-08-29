@@ -33,6 +33,9 @@ export function resolveHostedReviewAuthInstruction(provider: HostedReviewProvide
   if (provider === 'gitea') {
     return 'Set ORCA_GITEA_TOKEN'
   }
+  if (provider === 'bitbucket') {
+    return 'Connect Bitbucket in Settings > Integrations'
+  }
   return 'Run gh auth login'
 }
 

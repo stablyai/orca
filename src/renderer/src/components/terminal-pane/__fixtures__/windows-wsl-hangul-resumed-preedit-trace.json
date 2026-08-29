@@ -1,0 +1,2159 @@
+{
+  "recordedFrom": "11919-windows-wsl-current/11919-current-owner.json",
+  "inputFramework": "windows-ime",
+  "engine": "microsoft-korean",
+  "note": "Dispatch-phase events only. The capture logs each event twice (immediate + a batched raf re-log); keeping both fabricates resumed compositions that the IME never emitted.",
+  "compositionUpdates": 37,
+  "compositionSessions": 11,
+  "dom": [
+    {
+      "type": "keyup",
+      "key": "HangulMode",
+      "code": "",
+      "keyCode": 21,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅁ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "data": "ㅁ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "data": "ㅁ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "",
+      "keyCode": 65,
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "무",
+      "value": "ㅁ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "무",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "무",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "무",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "무",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "n",
+      "code": "",
+      "keyCode": 78,
+      "isComposing": true,
+      "value": "무",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "무",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "문",
+      "value": "무",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "문",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "무",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "문",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "묹",
+      "value": "문",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "묹",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "묹",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "묹",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "묹",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "w",
+      "code": "",
+      "keyCode": 87,
+      "isComposing": true,
+      "value": "묹",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "묹",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "문",
+      "value": "묹",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "문",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "묹",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "문",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "문",
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "제",
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "제",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "제",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문제",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "문제",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "p",
+      "code": "",
+      "keyCode": 80,
+      "isComposing": true,
+      "value": "문제",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "문제",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "제",
+      "value": "문제",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "제",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문제",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "제",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "문제",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionend",
+      "data": "제",
+      "value": "문제",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅁ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "data": "ㅁ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "data": "ㅁ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "a",
+      "code": "",
+      "keyCode": 65,
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "모",
+      "value": "ㅁ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "모",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "ㅁ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "모",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "h",
+      "code": "",
+      "keyCode": 72,
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "몰",
+      "value": "모",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "몰",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "몰",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "몰",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "몰",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "f",
+      "code": "",
+      "keyCode": 70,
+      "isComposing": true,
+      "value": "몰",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "몰",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "모",
+      "value": "몰",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "모",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "몰",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "모",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "모",
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "르",
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "르",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "르",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "m",
+      "code": "",
+      "keyCode": 77,
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "륵",
+      "value": "모르",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "륵",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "륵",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모륵",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모륵",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "r",
+      "code": "",
+      "keyCode": 82,
+      "isComposing": true,
+      "value": "모륵",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모륵",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "르",
+      "value": "모륵",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "르",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모륵",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "르",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionend",
+      "data": "르",
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "게",
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "게",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "게",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "p",
+      "code": "",
+      "keyCode": 80,
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Shift",
+      "code": "",
+      "keyCode": 16,
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "겠",
+      "value": "모르게",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "겠",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르게",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "겠",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "T",
+      "code": "",
+      "keyCode": 84,
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Shift",
+      "code": "",
+      "keyCode": 16,
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "겠",
+      "value": "모르겠",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "겠",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "겠",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionend",
+      "data": "겠",
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄴ",
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "ㄴ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "ㄴ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠ㄴ",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠ㄴ",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "모르겠ㄴ",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠ㄴ",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionupdate",
+      "data": "네",
+      "value": "모르겠ㄴ",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "beforeinput",
+      "data": "네",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠ㄴ",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "input",
+      "data": "네",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠네",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠네",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "p",
+      "code": "",
+      "keyCode": 80,
+      "isComposing": true,
+      "value": "모르겠네",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "모르겠네",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionupdate",
+      "data": "네",
+      "value": "모르겠네",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "beforeinput",
+      "data": "네",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠네",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "input",
+      "data": "네",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "모르겠네",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionend",
+      "data": "네",
+      "value": "모르겠네",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅇ",
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "beforeinput",
+      "data": "ㅇ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "input",
+      "data": "ㅇ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "ㅇ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅇ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "d",
+      "code": "",
+      "keyCode": 68,
+      "isComposing": true,
+      "value": "ㅇ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "ㅇ",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "아",
+      "value": "ㅇ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "아",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "ㅇ",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "아",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "아",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "아",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "아",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "아",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "안",
+      "value": "아",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "안",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "아",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "안",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "안",
+      "value": "안",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "안",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 0,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "안",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionend",
+      "data": "안",
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㄴ",
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "beforeinput",
+      "data": "ㄴ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안",
+      "selectionStart": 1,
+      "selectionEnd": 1
+    },
+    {
+      "type": "input",
+      "data": "ㄴ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안ㄴ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안ㄴ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "s",
+      "code": "",
+      "keyCode": 83,
+      "isComposing": true,
+      "value": "안ㄴ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안ㄴ",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "녀",
+      "value": "안ㄴ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "녀",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안ㄴ",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "녀",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녀",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녀",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "u",
+      "code": "",
+      "keyCode": 85,
+      "isComposing": true,
+      "value": "안녀",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녀",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "녕",
+      "value": "안녀",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "녕",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녀",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "녕",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keyup",
+      "key": "d",
+      "code": "",
+      "keyCode": 68,
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "녕",
+      "value": "안녕",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "녕",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 1,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "녕",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionend",
+      "data": "녕",
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "compositionupdate",
+      "data": "ㅎ",
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "beforeinput",
+      "data": "ㅎ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕",
+      "selectionStart": 2,
+      "selectionEnd": 2
+    },
+    {
+      "type": "input",
+      "data": "ㅎ",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕ㅎ",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕ㅎ",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "g",
+      "code": "",
+      "keyCode": 71,
+      "isComposing": true,
+      "value": "안녕ㅎ",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕ㅎ",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "안녕ㅎ",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "하",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕ㅎ",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "k",
+      "code": "",
+      "keyCode": 75,
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "핫",
+      "value": "안녕하",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "핫",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "핫",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕핫",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕핫",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keyup",
+      "key": "t",
+      "code": "",
+      "keyCode": 84,
+      "isComposing": true,
+      "value": "안녕핫",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕핫",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "하",
+      "value": "안녕핫",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "하",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕핫",
+      "selectionStart": 2,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "하",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionend",
+      "data": "하",
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "compositionupdate",
+      "data": "세",
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "beforeinput",
+      "data": "세",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하",
+      "selectionStart": 3,
+      "selectionEnd": 3
+    },
+    {
+      "type": "input",
+      "data": "세",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "p",
+      "code": "",
+      "keyCode": 80,
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionupdate",
+      "data": "셍",
+      "value": "안녕하세",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "beforeinput",
+      "data": "셍",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "input",
+      "data": "셍",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하셍",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하셍",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keyup",
+      "key": "d",
+      "code": "",
+      "keyCode": 68,
+      "isComposing": true,
+      "value": "안녕하셍",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하셍",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionupdate",
+      "data": "세",
+      "value": "안녕하셍",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "beforeinput",
+      "data": "세",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하셍",
+      "selectionStart": 3,
+      "selectionEnd": 4
+    },
+    {
+      "type": "input",
+      "data": "세",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionend",
+      "data": "세",
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionstart",
+      "data": "",
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "compositionupdate",
+      "data": "요",
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "beforeinput",
+      "data": "요",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세",
+      "selectionStart": 4,
+      "selectionEnd": 4
+    },
+    {
+      "type": "input",
+      "data": "요",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세요",
+      "selectionStart": 5,
+      "selectionEnd": 5
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하세요",
+      "selectionStart": 5,
+      "selectionEnd": 5
+    },
+    {
+      "type": "keyup",
+      "key": "y",
+      "code": "",
+      "keyCode": 89,
+      "isComposing": true,
+      "value": "안녕하세요",
+      "selectionStart": 5,
+      "selectionEnd": 5
+    },
+    {
+      "type": "keydown",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": true,
+      "value": "안녕하세요",
+      "selectionStart": 5,
+      "selectionEnd": 5
+    },
+    {
+      "type": "compositionupdate",
+      "data": "요",
+      "value": "안녕하세요",
+      "selectionStart": 4,
+      "selectionEnd": 5
+    },
+    {
+      "type": "beforeinput",
+      "data": "요",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세요",
+      "selectionStart": 4,
+      "selectionEnd": 5
+    },
+    {
+      "type": "input",
+      "data": "요",
+      "inputType": "insertCompositionText",
+      "isComposing": true,
+      "value": "안녕하세요",
+      "selectionStart": 5,
+      "selectionEnd": 5
+    },
+    {
+      "type": "compositionend",
+      "data": "요",
+      "value": "안녕하세요",
+      "selectionStart": 5,
+      "selectionEnd": 5
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Process",
+      "code": "",
+      "keyCode": 229,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "h",
+      "code": "",
+      "keyCode": 72,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "h",
+      "code": "",
+      "keyCode": 72,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "e",
+      "code": "",
+      "keyCode": 69,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "e",
+      "code": "",
+      "keyCode": 69,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "l",
+      "code": "",
+      "keyCode": 76,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "l",
+      "code": "",
+      "keyCode": 76,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "l",
+      "code": "",
+      "keyCode": 76,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "l",
+      "code": "",
+      "keyCode": 76,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "o",
+      "code": "",
+      "keyCode": 79,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "o",
+      "code": "",
+      "keyCode": 79,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keydown",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    },
+    {
+      "type": "keyup",
+      "key": "Enter",
+      "code": "",
+      "keyCode": 13,
+      "isComposing": false,
+      "value": "",
+      "selectionStart": 0,
+      "selectionEnd": 0
+    }
+  ]
+}

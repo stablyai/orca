@@ -3,13 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import Database from '../sqlite/sync-database'
-import {
-  attributeOpenCodeUsageEvent,
-  listOpenCodeDatabases,
-  parseOpenCodeUsageDatabase,
-  parseOpenCodeUsageRow,
-  scanOpenCodeUsageDatabases
-} from './scanner'
+import { listOpenCodeDatabases } from './opencode-database-discovery'
+import { parseOpenCodeUsageRow } from './opencode-usage-row-parsing'
+import { attributeOpenCodeUsageEvent } from './opencode-usage-worktree-attribution'
+import { parseOpenCodeUsageDatabase, scanOpenCodeUsageDatabases } from './scanner'
 
 const WORKTREE = '/workspace/repo'
 

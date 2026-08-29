@@ -1,9 +1,8 @@
 /* eslint-disable max-lines -- Why: keeps file/Keychain/snapshot/env-patch auth semantics together so PTY launch and quota-fetch paths can't drift. */
-import { execFileSync } from 'node:child_process'
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { app } from 'electron'
-import type { ClaudeManagedAccount } from '../../shared/types'
+import type { ClaudeManagedAccount } from '../../shared/managed-account-types'
 import type { Store } from '../persistence'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
 import type { ClaudeEnvPatch } from './environment'
@@ -15,7 +14,9 @@ import {
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveLocalAccountRuntimeTarget } from '../../shared/local-account-runtime'
 import { getDefaultWslDistro, getWslHome, toWindowsWslPath } from '../wsl'
-import { buildEncodedWslBashCommand } from '../wsl-bash-command'
+const OWNERSHIP_PROBE_TIMEOUT = 'orca-wsl-ownership-probe-timeout'
+
+import { runWslProcess } from '../wsl/wsl-runner'
 import { hasLiveClaudePtys } from './live-pty-gate'
 import { isOauthTokenExpiring, refreshClaudeOauthCredentials } from './oauth-refresh'
 import { ClaudeRuntimePathResolver } from './runtime-paths'
@@ -142,7 +143,7 @@ export class ClaudeRuntimeAuthService {
         )
         await this.restoreSystemDefaultSnapshot(
           previousAccount ? await this.readManagedCredentials(previousAccount) : null,
-          previousAccount ? this.readManagedOauthAccount(previousAccount) : undefined
+          previousAccount ? await this.readManagedOauthAccount(previousAccount) : undefined
         )
         this.lastSyncedAccountId = null
         return
@@ -151,8 +152,8 @@ export class ClaudeRuntimeAuthService {
     })
   }
 
-  getRuntimeConfigDir(): string {
-    return this.pathResolver.getRuntimePaths().configDir
+  getRuntimeConfigDir(target?: ClaudeAccountSelectionTarget): string {
+    return this.getPreparation(target).configDir
   }
 
   private initializeLastSyncedState(): void {
@@ -189,7 +190,7 @@ export class ClaudeRuntimeAuthService {
       ? await this.readManagedCredentials(previousAccount)
       : null
     const previousManagedOauthAccount = previousAccount
-      ? this.readManagedOauthAccount(previousAccount)
+      ? await this.readManagedOauthAccount(previousAccount)
       : null
     if (previousAccount && previousAccount.id !== activeAccount?.id) {
       if (previousManagedCredentialsJson) {
@@ -256,7 +257,7 @@ export class ClaudeRuntimeAuthService {
     }
 
     if (activeAccount.managedAuthRuntime === 'wsl') {
-      if (!this.getOwnedManagedAuthPath(activeAccount)) {
+      if (!(await this.getOwnedManagedAuthPath(activeAccount))) {
         console.warn(
           '[claude-runtime-auth] Active WSL managed account is not owned by Orca, restoring system default'
         )
@@ -294,7 +295,7 @@ export class ClaudeRuntimeAuthService {
       return
     }
 
-    if (!this.getOwnedManagedAuthPath(activeAccount)) {
+    if (!(await this.getOwnedManagedAuthPath(activeAccount))) {
       console.warn(
         '[claude-runtime-auth] Active managed account is not owned by Orca, restoring system default'
       )
@@ -303,7 +304,7 @@ export class ClaudeRuntimeAuthService {
           previousAccount &&
           (previousAccount.id !== activeAccount.id ||
             this.hasMaterializedRuntimeAuth ||
-            this.runtimeOauthAccountMatches(this.readManagedOauthAccount(previousAccount)))
+            this.runtimeOauthAccountMatches(await this.readManagedOauthAccount(previousAccount)))
         ) {
           await this.restoreSystemDefaultSnapshotForMissingManagedCredentials(
             previousAccount,
@@ -380,7 +381,7 @@ export class ClaudeRuntimeAuthService {
               readBackResult.runtimeCredentialsJson,
               activeAccount,
               credentialsJson,
-              this.readManagedOauthAccount(activeAccount)
+              await this.readManagedOauthAccount(activeAccount)
             )
           ) {
             // Why: this Claude launched under the active managed account, but persistence still needs positive account proof.
@@ -427,12 +428,12 @@ export class ClaudeRuntimeAuthService {
       } catch (error) {
         await this.restoreSystemDefaultSnapshot(
           credentialsJson,
-          this.readManagedOauthAccount(activeAccount)
+          await this.readManagedOauthAccount(activeAccount)
         )
         throw error
       }
     }
-    const managedOauthAccount = this.readManagedOauthAccount(activeAccount)
+    const managedOauthAccount = await this.readManagedOauthAccount(activeAccount)
     if (this.writeRuntimeOauthAccount(managedOauthAccount)) {
       this.lastWrittenOauthAccount = managedOauthAccount
       this.hasLastWrittenOauthAccount = true
@@ -718,7 +719,7 @@ export class ClaudeRuntimeAuthService {
         runtimeOauthAccount,
         account,
         managedCredentialsJson,
-        this.readManagedOauthAccount(account)
+        await this.readManagedOauthAccount(account)
       )
       if (match === 'match') {
         matches.push({ account, managedCredentialsJson })
@@ -1008,7 +1009,7 @@ export class ClaudeRuntimeAuthService {
   }
 
   private async readManagedCredentials(account: ClaudeManagedAccount): Promise<string | null> {
-    const managedAuthPath = this.getOwnedManagedAuthPath(account)
+    const managedAuthPath = await this.getOwnedManagedAuthPath(account)
     if (!managedAuthPath) {
       return null
     }
@@ -1022,7 +1023,7 @@ export class ClaudeRuntimeAuthService {
     account: ClaudeManagedAccount,
     credentialsJson: string
   ): Promise<void> {
-    const managedAuthPath = this.getOwnedManagedAuthPath(account)
+    const managedAuthPath = await this.getOwnedManagedAuthPath(account)
     if (!managedAuthPath) {
       throw new Error('Managed Claude auth storage is not owned by Orca.')
     }
@@ -1061,8 +1062,8 @@ export class ClaudeRuntimeAuthService {
     return refreshed
   }
 
-  private readManagedOauthAccount(account: ClaudeManagedAccount): unknown {
-    const managedAuthPath = this.getOwnedManagedAuthPath(account)
+  private async readManagedOauthAccount(account: ClaudeManagedAccount): Promise<unknown> {
+    const managedAuthPath = await this.getOwnedManagedAuthPath(account)
     if (!managedAuthPath) {
       return null
     }
@@ -1074,7 +1075,7 @@ export class ClaudeRuntimeAuthService {
     }
   }
 
-  private getOwnedManagedAuthPath(account: ClaudeManagedAccount): string | null {
+  private async getOwnedManagedAuthPath(account: ClaudeManagedAccount): Promise<string | null> {
     const wslInfo = parseWslUncPath(account.managedAuthPath)
     if (wslInfo) {
       if (
@@ -1085,31 +1086,38 @@ export class ClaudeRuntimeAuthService {
       }
       if (process.platform === 'win32') {
         try {
-          const canonicalLinuxPath = execFileSync(
-            'wsl.exe',
-            [
-              '-d',
-              wslInfo.distro,
-              '--',
-              'bash',
-              '-lc',
-              buildEncodedWslBashCommand(
-                [
-                  'set -euo pipefail',
-                  `candidate=${shellQuote(wslInfo.linuxPath)}`,
-                  'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
-                  'candidate_real=$(readlink -f -- "$candidate")',
-                  'managed_root_real=$(readlink -f -- "$managed_root")',
-                  'test -f "$candidate_real/.orca-managed-claude-auth"',
-                  `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(account.id)}`,
-                  'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
-                ].join('\n')
-              )
-            ],
-            { encoding: 'utf-8', timeout: 5000 }
-          ).trim()
+          const owned = await runWslProcess({
+            distro: wslInfo.distro,
+            loginPath: 'none',
+            shell: 'bash',
+            script: [
+              'set -euo pipefail',
+              `candidate=${shellQuote(wslInfo.linuxPath)}`,
+              'managed_root="${HOME%/}/.local/share/orca/claude-accounts"',
+              'candidate_real=$(readlink -f -- "$candidate")',
+              'managed_root_real=$(readlink -f -- "$managed_root")',
+              'test -f "$candidate_real/.orca-managed-claude-auth"',
+              `test "$(cat "$candidate_real/.orca-managed-claude-auth")" = ${shellQuote(account.id)}`,
+              'case "$candidate_real" in "$managed_root_real"/*/auth) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+            ].join('\n'),
+            timeoutMs: 5000
+          })
+          if (owned.timedOut) {
+            throw new Error(OWNERSHIP_PROBE_TIMEOUT)
+          }
+          if (owned.code !== 0) {
+            return null
+          }
+          const canonicalLinuxPath = owned.stdout.trim()
           return canonicalLinuxPath ? toWindowsWslPath(canonicalLinuxPath, wslInfo.distro) : null
-        } catch {
+        } catch (error) {
+          // Why rethrow a timeout: null means "not owned by Orca", and the
+          // caller persists that -- clearing the user's account selection. A
+          // slow distro must not decide ownership. Swallowing it here is what
+          // made the previous guard dead code.
+          if (error instanceof Error && error.message === OWNERSHIP_PROBE_TIMEOUT) {
+            throw error
+          }
           return null
         }
       }

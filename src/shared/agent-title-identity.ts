@@ -3,7 +3,7 @@ import {
   CLAUDE_IDLE,
   DROID_AGENT_NAME_RE,
   HERMES_AGENT_NAME_RE,
-  containsBrailleSpinner,
+  containsAgentSpinnerGlyph,
   isClaudeManagementTitle,
   isCursorAgentTitle,
   isGeminiTerminalTitle,
@@ -31,7 +31,7 @@ export function isClaudeAgent(title: string): boolean {
   if (title.startsWith('. ') || title.startsWith('* ')) {
     return true
   }
-  if (containsBrailleSpinner(title)) {
+  if (containsAgentSpinnerGlyph(title)) {
     // Why: named non-Claude agents carry braille spinners too. Gate Cursor by its
     // identity title, not the token, so a Claude title mentioning a cursor stays Claude.
     return !isCursorAgentTitle(title) && !lower.includes('openclaude')

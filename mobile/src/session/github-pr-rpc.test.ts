@@ -353,13 +353,49 @@ describe('fetch wrappers', () => {
   })
 
   it('fetchPRForBranch threads linkedPRNumber as authoritative resolver', async () => {
-    const { client, sendRequest } = mockClient(okResponse({ number: 4, state: 'open' }))
+    const { client, sendRequest } = mockClient(
+      okResponse({
+        kind: 'found',
+        pr: { number: 4, state: 'merged' },
+        fetchedAt: 1
+      })
+    )
     const out = await fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat', linkedPRNumber: 4 })
     expect(out.ok).toBe(true)
+    expect(out.ok && out.result).toMatchObject({ number: 4, state: 'merged' })
     const [method, params] = sendRequest.mock.calls[0]!
     expect(method).toBe('github.prForBranch')
     expect(params).toMatchObject({ branch: 'feat', linkedPRNumber: 4 })
     expect('prRepo' in (params as object)).toBe(false)
+  })
+
+  it('fetchPRForBranch preserves legacy flat responses', async () => {
+    const { client } = mockClient(okResponse({ number: 4, state: 'open' }))
+    const out = await fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })
+    expect(out.ok && out.result).toMatchObject({ number: 4, state: 'open' })
+  })
+
+  it('fetchPRForBranch maps a classified no-pr response to null', async () => {
+    const { client } = mockClient(okResponse({ kind: 'no-pr', fetchedAt: 1 }))
+    await expect(fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })).resolves.toEqual({
+      ok: true,
+      result: null
+    })
+  })
+
+  it('fetchPRForBranch propagates classified upstream errors', async () => {
+    const { client } = mockClient(
+      okResponse({
+        kind: 'upstream-error',
+        errorType: 'network',
+        message: 'network unavailable',
+        fetchedAt: 1
+      })
+    )
+    await expect(fetchPRForBranch(client, WORKTREE_ID, { branch: 'feat' })).resolves.toEqual({
+      ok: false,
+      error: 'network unavailable'
+    })
   })
 
   it('fetchPRChecks forwards headSha + prRepo', async () => {

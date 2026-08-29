@@ -1,4 +1,5 @@
 import { runCoalescedProbe, type CoalescedProbes } from '../git/coalesced-probe'
+import { NEGATIVE_ENTRY_TTL_MS } from '../git/remote-ref-probe-cache'
 import { glabExecFileAsync } from '../git/runner'
 import { getSshGitProviderGeneration } from '../providers/ssh-git-dispatch'
 import { DEFAULT_GITLAB_HOSTS, normalizeGitLabHost } from './project-ref-parser'
@@ -8,8 +9,10 @@ export type LocalGitExecOptions = {
 }
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
+const UNAUTHENTICATED_HOSTS_MAX_ENTRIES = 128
 const knownHostsCacheByExecutionContext = new Map<string, readonly string[]>()
 const knownHostsInFlightByExecutionContext: CoalescedProbes<readonly string[]> = new Map()
+const unauthenticatedHostExpiries = new Map<string, number>()
 
 function knownHostsExecutionKey(
   connectionId?: string | null,
@@ -26,6 +29,63 @@ function knownHostsExecutionKey(
 export function _resetKnownHostsCache(): void {
   knownHostsCacheByExecutionContext.clear()
   knownHostsInFlightByExecutionContext.clear()
+  unauthenticatedHostExpiries.clear()
+}
+
+/** @internal - exposed for tests only */
+export function _resetGlabUnauthenticatedHosts(): void {
+  unauthenticatedHostExpiries.clear()
+}
+
+function unauthenticatedHostKey(
+  host: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): string {
+  return `${knownHostsExecutionKey(connectionId, localGitOptions)}\0${normalizeGitLabHost(host)}`
+}
+
+/**
+ * Why: `glab auth status --hostname` is how a self-hosted instance that plain
+ * `glab auth status` did not list gets discovered, so a remote that is not
+ * GitLab at all runs it too. Project-ref negatives expire now, and without this
+ * that becomes one `glab` spawn per repo per interval on the hosted-review poll.
+ * The answer is per host, not per repo, and expires on the same clock so a
+ * login still lands within an interval.
+ */
+export function isGlabHostKnownUnauthenticated(
+  host: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): boolean {
+  const key = unauthenticatedHostKey(host, connectionId, localGitOptions)
+  const expiresAt = unauthenticatedHostExpiries.get(key)
+  if (expiresAt === undefined) {
+    return false
+  }
+  if (expiresAt > Date.now()) {
+    return true
+  }
+  unauthenticatedHostExpiries.delete(key)
+  return false
+}
+
+export function rememberGlabHostUnauthenticated(
+  host: string,
+  connectionId?: string | null,
+  localGitOptions: LocalGitExecOptions = {}
+): void {
+  unauthenticatedHostExpiries.set(
+    unauthenticatedHostKey(host, connectionId, localGitOptions),
+    Date.now() + NEGATIVE_ENTRY_TTL_MS
+  )
+  while (unauthenticatedHostExpiries.size > UNAUTHENTICATED_HOSTS_MAX_ENTRIES) {
+    const oldestKey = unauthenticatedHostExpiries.keys().next().value
+    if (oldestKey === undefined) {
+      return
+    }
+    unauthenticatedHostExpiries.delete(oldestKey)
+  }
 }
 
 export function rememberGlabKnownHost(
@@ -52,6 +112,9 @@ export function rememberGlabKnownHosts(
     }
     seen.add(normalizedHost)
     additions.push(normalizedHost)
+    unauthenticatedHostExpiries.delete(
+      unauthenticatedHostKey(normalizedHost, connectionId, localGitOptions)
+    )
   }
   if (additions.length === 0) {
     return

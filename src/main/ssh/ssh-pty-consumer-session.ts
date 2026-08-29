@@ -27,6 +27,13 @@ export type SshPtyLegacyFallbackState = {
 
 export type SshPtyConsumerSessionState = SshPtyConsumerOwnerState | SshPtyLegacyFallbackState
 
+export type SshPtyConsumerAdmission = {
+  state: SshPtyConsumerSessionState
+  // Why not on the owner state itself: this describes one admission's outcome, not the persisted
+  // claim, and it must never round-trip through the recovery record.
+  resumed: boolean
+}
+
 export type OpenSshPtyConsumerSessionOptions = {
   clientInstanceId: string
   expectedServerBuildId: string | undefined
@@ -68,6 +75,11 @@ function validateGrant(
   ) {
     throw new Error('Remote relay did not grant an authenticated PTY session owner')
   }
+  // Why not treated as a legacy relay: client and relay ship in one build, and the build id was already
+  // matched above — a missing `resumed` here is corruption, not an older peer.
+  if (typeof grant.resumed !== 'boolean') {
+    throw new Error('Remote relay owner grant did not state whether the claim was resumed')
+  }
   const requestedFlow = options.outputFlowControl
   const grantedFlow = grant.capabilities?.outputFlowControl
   if (requestedFlow) {
@@ -88,7 +100,7 @@ function validateGrant(
 export async function openSshPtyConsumerSession(
   mux: SshChannelMultiplexer,
   options: OpenSshPtyConsumerSessionOptions
-): Promise<SshPtyConsumerSessionState> {
+): Promise<SshPtyConsumerAdmission> {
   let result: unknown
   try {
     result = await mux.request(
@@ -119,23 +131,29 @@ export async function openSshPtyConsumerSession(
       typeof options.expectedServerBuildId === 'string' &&
       options.expectedServerBuildId.length > 0
     ) {
-      return Object.freeze({
-        mode: 'legacy-fallback',
-        clientInstanceId: options.clientInstanceId,
-        serverBuildId: options.expectedServerBuildId
-      })
+      return {
+        state: Object.freeze({
+          mode: 'legacy-fallback',
+          clientInstanceId: options.clientInstanceId,
+          serverBuildId: options.expectedServerBuildId
+        }),
+        resumed: false
+      }
     }
     throw error
   }
   const grant = validateGrant(result, options)
   return {
-    mode: 'negotiated',
-    clientInstanceId: options.clientInstanceId,
-    clientGeneration: grant.clientGeneration,
-    ownerGeneration: grant.ownerGeneration!,
-    ownerLease: grant.ownerLease!,
-    ...(grant.capabilities?.outputFlowControl
-      ? { outputFlowControl: grant.capabilities.outputFlowControl }
-      : {})
+    state: {
+      mode: 'negotiated',
+      clientInstanceId: options.clientInstanceId,
+      clientGeneration: grant.clientGeneration,
+      ownerGeneration: grant.ownerGeneration!,
+      ownerLease: grant.ownerLease!,
+      ...(grant.capabilities?.outputFlowControl
+        ? { outputFlowControl: grant.capabilities.outputFlowControl }
+        : {})
+    },
+    resumed: grant.resumed!
   }
 }

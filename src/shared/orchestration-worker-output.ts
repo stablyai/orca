@@ -1,6 +1,7 @@
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { AgentType, NativeChatMessage } from './native-chat-types'
 import type { RuntimeTerminalRead, RuntimeTerminalState } from './runtime-types'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
 
 export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const
 export type OrchestrationWorkerReadSource = (typeof ORCHESTRATION_WORKER_READ_SOURCES)[number]
@@ -41,9 +42,12 @@ export type OrchestrationWorkerReadTranscriptResult = {
   status: {
     worker: string
     terminal: RuntimeTerminalState
+    liveness?: PtyLivenessVerdict['status']
   }
   fallbackReason: null
   warnings: string[]
+  // The live PTY was released; output comes from the frozen archive source.
+  archived?: boolean
 }
 
 export type OrchestrationWorkerReadTerminalResult = {
@@ -55,9 +59,12 @@ export type OrchestrationWorkerReadTerminalResult = {
   status: {
     worker: string
     terminal: RuntimeTerminalState
+    liveness?: PtyLivenessVerdict['status']
   }
   fallbackReason: OrchestrationWorkerReadFallbackReason | null
   warnings: string[]
+  // The live PTY was released; output comes from the frozen archive source.
+  archived?: boolean
 }
 
 export type OrchestrationWorkerReadResult =

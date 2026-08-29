@@ -1,8 +1,8 @@
-import { execFile } from 'node:child_process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { existsSync } from 'node:fs'
 import { userInfo } from 'node:os'
+import { basename } from 'node:path'
 import {
-  classifyLoginPreflightError,
   runMacosLoginSessionPtyProbe,
   type LoginPreflightOutcome
 } from './macos-login-session-pty-probe'
@@ -10,8 +10,10 @@ import {
 export type { LoginPreflightOutcome } from './macos-login-session-pty-probe'
 
 const MACOS_LOGIN_PATH = '/usr/bin/login'
-const MACOS_ENV_PATH = '/usr/bin/env'
+const MACOS_BASH_PATH = '/bin/bash'
 const MACOS_PRINTF_PATH = '/usr/bin/printf'
+const LOGIN_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -l -- "$@"'
+const DIRECT_SHELL_TRAMPOLINE = 'export SHELL="$1"; shift; exec -- "$@"'
 const LOGIN_PREFLIGHT_TIMEOUT_MS = 500
 // Why: the death-watch probe runs off the spawn path, so it can afford a bound
 // that outlasts a PAM stack answering slowly rather than misreading it as a hang.
@@ -59,50 +61,40 @@ function loginPreflightRetryDelayMs(failureCount: number): number {
 // Fidelity limit: the probe runs over pipes while production shells run under a
 // real PTY, so a tty-sensitive PAM stack could diverge. It fails safe — a probe
 // pass with a prod failure only degrades to today's direct spawn (no wrapper).
-function runLoginPreflight(
+async function runLoginPreflight(
   username: string,
   accountHome: string,
   timeoutMs = LOGIN_PREFLIGHT_TIMEOUT_MS,
   signal?: AbortSignal
 ): Promise<LoginPreflightOutcome> {
-  return new Promise((resolve) => {
-    try {
-      const child = execFile(
-        MACOS_LOGIN_PATH,
-        ['-flpq', username, MACOS_PRINTF_PATH, LOGIN_PREFLIGHT_MARKER],
-        {
-          // Why: detached daemons can outlive their launch worktree. The PAM
-          // probe must not inherit a deleted cwd before PTY spawn repairs it.
-          cwd: accountHome,
-          encoding: 'utf8',
-          // Why: PAM policy can wait indefinitely. Bound both child lifetime and
-          // captured diagnostics without blocking the PTY host's event loop.
-          killSignal: 'SIGKILL',
-          maxBuffer: LOGIN_PREFLIGHT_MAX_BUFFER_BYTES,
-          signal,
-          timeout: timeoutMs
-        },
-        (error, stdout) => {
-          if (error === null) {
-            // login(1) can return zero after an EOF-driven failed prompt, so only the
-            // requested child program's output plus a clean exit proves PAM accepted it.
-            resolve(
-              stdout === LOGIN_PREFLIGHT_MARKER
-                ? { ok: true, conclusive: true, reason: 'accepted' }
-                : { ok: false, conclusive: true, reason: 'rejected' }
-            )
-            return
-          }
-          resolve(classifyLoginPreflightError(error))
-        }
-      )
-      // Why: login(1) must see immediate EOF, not an interactive pipe, so a PAM
-      // rejection exits instead of waiting at `login:` until the timeout.
-      child.stdin?.end()
-    } catch {
-      resolve({ ok: false, conclusive: false, reason: 'error' })
+  try {
+    const result = await runProcess({
+      program: MACOS_LOGIN_PATH,
+      args: ['-flpq', username, MACOS_PRINTF_PATH, LOGIN_PREFLIGHT_MARKER],
+      // Why: detached daemons can outlive their launch worktree. The PAM
+      // probe must not inherit a deleted cwd before PTY spawn repairs it.
+      cwd: accountHome,
+      maxOutputBytes: LOGIN_PREFLIGHT_MAX_BUFFER_BYTES,
+      signal,
+      timeoutMs
+    })
+    if (result.timedOut) {
+      return { ok: false, conclusive: false, reason: 'timeout' }
     }
-  })
+    if (result.code === null) {
+      return { ok: false, conclusive: false, reason: 'error' }
+    }
+    if (result.code !== 0) {
+      return { ok: false, conclusive: true, reason: 'rejected' }
+    }
+    // login(1) can return zero after an EOF-driven failed prompt, so only the
+    // requested child program's output plus a clean exit proves PAM accepted it.
+    return result.stdout === LOGIN_PREFLIGHT_MARKER
+      ? { ok: true, conclusive: true, reason: 'accepted' }
+      : { ok: false, conclusive: true, reason: 'rejected' }
+  } catch {
+    return { ok: false, conclusive: false, reason: 'error' }
+  }
 }
 
 async function verifyRejectedLoginPreflightUnderPty(
@@ -306,15 +298,29 @@ export async function probeMacosLoginSessionAlive(
  * Wrap a macOS shell spawn in `/usr/bin/login -flpq <user> …` so terminal children
  * get their own TCC identity instead of collapsing into Orca's bundle id — signed
  * CLIs like `op` otherwise re-prompt every launch because tccd attributes the grant
- * to Orca and never persists it (#6996). This mirrors how Terminal.app spawns shells.
+ * to Orca and never persists it (#6996, #8985).
  *
- * Why the env(1) interposition: login(1) overwrites SHELL from the account DB even
- * under -p, so `/usr/bin/env SHELL=<shell>` re-asserts the shell Orca actually runs
- * without disturbing login's attribution (skipped when the shell path contains `=`).
+ * A clean bash trampoline restores SHELL after login(1) overwrites it, then replaces
+ * itself with the configured shell. Values stay positional so custom paths and
+ * arguments are never interpreted as shell source.
  *
  * No-op off macOS, when already wrapped, when disabled via {@link DISABLE_ENV_VAR},
  * or when the login(1) PAM preflight rejects this process's user.
  */
+/**
+ * Whether a PTY spawned on `file` reports its own child's exit status.
+ *
+ * login(1) forks the shell, waits, then exits with its own status — it forwards
+ * neither the shell's exit code nor its signal. Proved with node-pty: a raw
+ * `sh -c 'exit 42'` reports `{exitCode: 42}` and a self-SIGKILL reports
+ * `{signal: 9}`, while the same commands behind this wrapper both report
+ * `{exitCode: 0, signal: 0}`. Callers must not read a status from a wrapped
+ * spawn — say `unknown` instead (STA-4536).
+ */
+export function hostReportsChildExitStatus(file: string): boolean {
+  return file !== MACOS_LOGIN_PATH
+}
+
 export function wrapShellSpawnForMacosTccAttribution(
   file: string,
   args: string[],
@@ -346,13 +352,29 @@ export function wrapShellSpawnForMacosTccAttribution(
   }
 
   const shellEnvValue = env?.SHELL || file
-  const interposedShellEnv =
-    !file.includes('=') && existsSync(MACOS_ENV_PATH)
-      ? [MACOS_ENV_PATH, `SHELL=${shellEnvValue}`]
-      : []
+  // Why: Bash ignores --rcfile when argv[0] marks it as a login shell; Orca's
+  // rcfile already reproduces login startup and must remain the active wrapper.
+  const trampoline =
+    basename(file).toLowerCase() === 'bash' && args.includes('--rcfile')
+      ? DIRECT_SHELL_TRAMPOLINE
+      : LOGIN_SHELL_TRAMPOLINE
 
+  // Why: -p blocks login(1)-preserved BASH_ENV and imported functions before the fixed trampoline runs.
   return {
     file: MACOS_LOGIN_PATH,
-    args: ['-flpq', username, ...interposedShellEnv, file, ...args]
+    args: [
+      '-flpq',
+      username,
+      MACOS_BASH_PATH,
+      '--noprofile',
+      '--norc',
+      '-p',
+      '-c',
+      trampoline,
+      'orca-tcc-login',
+      shellEnvValue,
+      file,
+      ...args
+    ]
   }
 }

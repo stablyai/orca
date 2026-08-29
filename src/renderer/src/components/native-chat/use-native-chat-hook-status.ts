@@ -6,7 +6,12 @@ export function useNativeChatHookStatus(
 ): readonly [AgentStatusState | null, number | null, boolean] {
   // Why: primitive selectors keep unrelated pane/status updates from rerendering
   // native chat while still exposing the three fields used for reconciliation.
-  const state = useAppStore((store) => store.agentStatusByPaneKey[paneKey]?.state ?? null)
+  const state = useAppStore((store) => {
+    const entry = store.agentStatusByPaneKey[paneKey]
+    return entry?.state === 'working' && entry.workingMode === 'monitoring'
+      ? null
+      : (entry?.state ?? null)
+  })
   const stateStartedAt = useAppStore(
     (store) => store.agentStatusByPaneKey[paneKey]?.stateStartedAt ?? null
   )

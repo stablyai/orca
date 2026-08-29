@@ -24,6 +24,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       first.result.current.setSort('created')
       first.result.current.setGroup('folder')
       first.result.current.setHideEmptySessions(true)
+      first.result.current.setSessionLimit('unlimited')
     })
     first.unmount()
 
@@ -32,6 +33,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.sort).toBe('created')
     expect(restored.result.current.group).toBe('folder')
     expect(restored.result.current.hideEmptySessions).toBe(true)
+    expect(restored.result.current.sessionLimit).toBe('unlimited')
   })
 
   it('allows clearing every agent so a single agent can be re-enabled', () => {
@@ -81,6 +83,7 @@ describe('usePersistedAiVaultViewOptions', () => {
       hook.result.current.setSort('created')
       hook.result.current.setGroup('agent')
       hook.result.current.setHideEmptySessions(true)
+      hook.result.current.setSessionLimit(1000)
       hook.result.current.resetViewOptions()
     })
 
@@ -88,6 +91,7 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(hook.result.current.sort).toBe('updated')
     expect(hook.result.current.group).toBe('project')
     expect(hook.result.current.hideEmptySessions).toBe(false)
+    expect(hook.result.current.sessionLimit).toBe(250)
 
     hook.unmount()
     const restored = renderHook(() => usePersistedAiVaultViewOptions())
@@ -95,5 +99,6 @@ describe('usePersistedAiVaultViewOptions', () => {
     expect(restored.result.current.sort).toBe('updated')
     expect(restored.result.current.group).toBe('project')
     expect(restored.result.current.hideEmptySessions).toBe(false)
+    expect(restored.result.current.sessionLimit).toBe(250)
   })
 })

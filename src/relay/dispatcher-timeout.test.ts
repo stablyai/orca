@@ -28,4 +28,29 @@ describe('RelayDispatcher request timeout validation', () => {
       expect(writes).toHaveLength(0)
     }
   )
+
+  it('rejects an oversized forwarded request without closing the relay client', async () => {
+    let closes = 0
+    dispatcher.dispose()
+    dispatcher = new RelayDispatcher(
+      (data) => {
+        writes.push(Buffer.from(data))
+      },
+      {
+        close: () => {
+          closes += 1
+        }
+      }
+    )
+
+    await expect(
+      dispatcher.requestPrimary(
+        'orca.cli',
+        { stdin: '\\'.repeat(600 * 1024) },
+        { timeoutMs: 1_000 }
+      )
+    ).rejects.toThrow(/exceeded the relay control transport capacity/)
+    expect(writes).toHaveLength(0)
+    expect(closes).toBe(0)
+  })
 })

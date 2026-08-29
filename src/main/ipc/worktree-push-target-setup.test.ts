@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, type Mock } from 'vitest'
-import type { GitPushTarget } from '../../shared/types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitRemoteExec } from './worktree-push-target-cleanup'
 import {
   configureCreatedWorktreePushTargetWithExec,
@@ -30,6 +30,10 @@ function makeRepoExec(remotes: Record<string, string>): ExecMock {
     }
     if (args[0] === 'remote' && args[1] === 'add') {
       remotes[args[2]!] = args[3]!
+      return { stdout: '', stderr: '' }
+    }
+    if (args[0] === 'remote' && args[1] === 'remove') {
+      delete remotes[args[2]!]
       return { stdout: '', stderr: '' }
     }
     return { stdout: '', stderr: '' }
@@ -182,5 +186,78 @@ describe('configureCreatedWorktreePushTargetWithExec', () => {
       '/wt/path'
     )
     expect(result).toBe(target)
+  })
+})
+
+describe('prepareWorktreePushTargetWithExec rollback', () => {
+  it('removes the remote it just added when the fetch fails', async () => {
+    const remotes: Record<string, string> = { origin: 'git@github.com:stablyai/orca.git' }
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'fetch') {
+        throw new Error('network unreachable')
+      }
+      return makeRepoExec(remotes)(args, REPO)
+    })
+
+    await expect(
+      prepareWorktreePushTargetWithExec(
+        exec,
+        REPO,
+        { remoteName: 'pr-contributor-orca', branchName: 'contributor/fix', remoteUrl: FORK_SSH },
+        () => false
+      )
+    ).rejects.toThrow('network unreachable')
+
+    expect(callsMatching(exec, ['remote', 'remove'])).toEqual([
+      ['remote', 'remove', 'pr-contributor-orca']
+    ])
+    expect(remotes).not.toHaveProperty('pr-contributor-orca')
+  })
+
+  it('keeps a reused remote Orca did not add when the fetch fails', async () => {
+    const remotes: Record<string, string> = {
+      origin: 'git@github.com:stablyai/orca.git',
+      existing: FORK_SSH
+    }
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'fetch') {
+        throw new Error('network unreachable')
+      }
+      return makeRepoExec(remotes)(args, REPO)
+    })
+
+    await expect(
+      prepareWorktreePushTargetWithExec(
+        exec,
+        REPO,
+        { remoteName: 'pr-contributor-orca', branchName: 'contributor/fix', remoteUrl: FORK_SSH },
+        () => false
+      )
+    ).rejects.toThrow('network unreachable')
+
+    expect(callsMatching(exec, ['remote', 'remove'])).toEqual([])
+    expect(remotes.existing).toBe(FORK_SSH)
+  })
+
+  // Regression: the rollback used to fire on inherited ownership, deleting a
+  // remote a live sibling worktree was still pushing through.
+  it('keeps a reused remote a sibling worktree owns when the fetch fails', async () => {
+    const remotes: Record<string, string> = {
+      origin: 'git@github.com:stablyai/orca.git',
+      'pr-contributor-orca': FORK_HTTPS
+    }
+    const exec = vi.fn<GitRemoteExec>(async (args: string[]) => {
+      if (args[0] === 'fetch') {
+        throw new Error('network unreachable')
+      }
+      return makeRepoExec(remotes)(args, REPO)
+    })
+
+    await expect(
+      prepareWorktreePushTargetWithExec(exec, REPO, forkTarget(), () => true)
+    ).rejects.toThrow('network unreachable')
+
+    expect(callsMatching(exec, ['remote', 'remove'])).toEqual([])
+    expect(remotes['pr-contributor-orca']).toBe(FORK_HTTPS)
   })
 })

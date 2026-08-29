@@ -1,15 +1,15 @@
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { RuntimeRpcCallError, getActiveRuntimeTarget } from './runtime-rpc-client'
 import { getRemoteRuntimeTerminalMultiplexer } from './remote-runtime-terminal-multiplexer'
+import { parseRemoteRuntimePtyId } from '../../../shared/remote-runtime-pty-id'
 
-const REMOTE_PTY_ID_PREFIX = 'remote:'
-const REMOTE_PTY_OWNER_SEPARATOR = '@@'
+export {
+  parseRemoteRuntimePtyId,
+  toRemoteRuntimePtyId,
+  type RemoteRuntimePtyIdParts
+} from '../../../shared/remote-runtime-pty-id'
+
 const LIVE_TAIL_SUBSCRIPTION_TIMEOUT_MS = 10_000
-
-export type RemoteRuntimePtyIdParts = {
-  environmentId: string | null
-  handle: string
-}
 
 export type RuntimeTerminalDataSubscriptionOptions = {
   startAtLiveTail?: boolean
@@ -17,33 +17,6 @@ export type RuntimeTerminalDataSubscriptionOptions = {
   onEnd?: () => void
   onError?: (message: string) => void
   onTransportClose?: (event: { recoverable: boolean; retryWithBackoff?: boolean }) => void
-}
-
-export function toRemoteRuntimePtyId(handle: string, environmentId?: string | null): string {
-  const owner = environmentId?.trim()
-  if (!owner) {
-    return `${REMOTE_PTY_ID_PREFIX}${handle}`
-  }
-  return `${REMOTE_PTY_ID_PREFIX}${encodeURIComponent(owner)}${REMOTE_PTY_OWNER_SEPARATOR}${encodeURIComponent(handle)}`
-}
-
-export function parseRemoteRuntimePtyId(ptyId: string): RemoteRuntimePtyIdParts | null {
-  if (!ptyId.startsWith(REMOTE_PTY_ID_PREFIX)) {
-    return null
-  }
-  const rest = ptyId.slice(REMOTE_PTY_ID_PREFIX.length)
-  const separatorIndex = rest.indexOf(REMOTE_PTY_OWNER_SEPARATOR)
-  if (separatorIndex === -1) {
-    return { environmentId: null, handle: rest }
-  }
-  try {
-    return {
-      environmentId: decodeURIComponent(rest.slice(0, separatorIndex)),
-      handle: decodeURIComponent(rest.slice(separatorIndex + REMOTE_PTY_OWNER_SEPARATOR.length))
-    }
-  } catch {
-    return null
-  }
 }
 
 export function getRemoteRuntimeTerminalHandle(ptyId: string): string | null {

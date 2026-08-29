@@ -1,5 +1,5 @@
-import type { JiraClientForSite } from './client'
-import { JiraApiError, apiBasePath, jiraRequestBinary } from './client'
+import type { JiraClientForSite } from './authenticated-request'
+import { JiraApiError, apiBasePath, jiraRequestBinary } from './authenticated-request'
 import type { JiraAdfMediaAttrs, JiraAdfMediaResolver } from './adf-markdown'
 import { escapeMarkdownAlt, unresolvedMediaPlaceholder } from './adf-markdown'
 import { escapeMarkdownLinkDestination } from './adf-media-destination'
@@ -191,7 +191,7 @@ export function createMediaMarkdownResolver(
     }
     const index = queue.findIndex((entry) => entry.id === image.id)
     // Why: already-consumed images must not re-emit; fall through to positional pairing.
-    if (index < 0) {
+    if (index === -1) {
       return null
     }
     queue.splice(index, 1)

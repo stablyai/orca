@@ -27,6 +27,7 @@ vi.mock('./mobile-e2ee-v2-physical-channel', () => ({
 }))
 
 import { connectMobileRelayForPairing, RelayOuterError } from './mobile-relay-physical-client'
+import type { ConnectionLogEntry } from './types'
 
 class FakeSocket {
   readonly OPEN = 1
@@ -131,5 +132,110 @@ describe('mobile relay physical pairing client', () => {
 
     await expect(status).rejects.toEqual(new RelayOuterError(4404))
     expect(fakes.start).not.toHaveBeenCalled()
+  })
+
+  it('keeps the typed close code when transport error precedes close', async () => {
+    const socket = new FakeSocket()
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket
+    })
+    const status = client.sendRequest('status.get')
+    socket.onerror?.()
+    socket.onclose?.({ code: 4409 })
+
+    await expect(status).rejects.toEqual(new RelayOuterError(4409))
+  })
+
+  it('classifies an opaque close after transport error as 1006', async () => {
+    const socket = new FakeSocket()
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket
+    })
+    const status = client.sendRequest('status.get')
+    socket.onerror?.()
+    socket.onclose?.({ code: 0 })
+
+    await expect(status).rejects.toEqual(new RelayOuterError(1006))
+  })
+
+  it('settles after an error when the platform never emits close', async () => {
+    vi.useFakeTimers()
+    try {
+      const socket = new FakeSocket()
+      const client = connectMobileRelayForPairing({
+        relay,
+        deviceToken: 'device-token',
+        desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+        createSocket: () => socket as unknown as WebSocket
+      })
+      const status = client.sendRequest('status.get')
+      const rejected = expect(status).rejects.toEqual(new RelayOuterError(1006))
+      socket.onerror?.()
+      await vi.advanceTimersByTimeAsync(250)
+
+      await rejected
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('narrates dial, outer auth, handshake and authentication without leaking the invite', async () => {
+    const socket = new FakeSocket()
+    const entries: ConnectionLogEntry[] = []
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket,
+      onLog: (entry) => entries.push(entry)
+    })
+    socket.onopen?.()
+    socket.receive(
+      JSON.stringify({
+        type: 'relay-hello',
+        ok: true,
+        credentialKind: 'invite',
+        leaseExpiresAt: Date.now() + 60_000
+      })
+    )
+    await vi.waitFor(() => expect(fakes.start).toHaveBeenCalledOnce())
+    fakes.channelOptions!.onAuthenticated()
+    client.close()
+
+    expect(entries.map((entry) => `${entry.level}|${entry.message}|${entry.detail}`)).toEqual([
+      'info|Relay: dialing cell|relay-c1.onorca.dev',
+      'info|Relay: cell socket open|Sending relay credential',
+      'info|Relay: cell accepted credential|Starting E2EE handshake',
+      'success|Relay: authenticated|Channel ready for RPC',
+      'info|Relay: pairing socket closed|relay-c1.onorca.dev'
+    ])
+    expect(JSON.stringify(entries)).not.toContain(relay.inviteToken)
+  })
+
+  it('logs the relay close code when the cell rejects the credential', async () => {
+    const socket = new FakeSocket()
+    const entries: ConnectionLogEntry[] = []
+    const client = connectMobileRelayForPairing({
+      relay,
+      deviceToken: 'device-token',
+      desktopPublicKeyB64: 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=',
+      createSocket: () => socket as unknown as WebSocket,
+      onLog: (entry) => entries.push(entry)
+    })
+    const status = client.sendRequest('status.get')
+    socket.receive(JSON.stringify({ type: 'relay-hello', ok: false, code: 4404 }))
+
+    await expect(status).rejects.toEqual(new RelayOuterError(4404))
+    expect(entries.at(-1)).toMatchObject({
+      level: 'warn',
+      message: 'Relay: pairing socket closed',
+      detail: 'relay close code 4404'
+    })
   })
 })

@@ -5,6 +5,7 @@ import {
   normalizeRuntimePathForComparison
 } from '../../shared/cross-platform-path'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
+import { streamCodexSessionLedgerRecords } from './codex-session-ledger-stream'
 
 // State files for the session index heal: which backfilled rollouts exist
 // (the backfill audit ledger), which thread ids this pass already processed
@@ -50,10 +51,14 @@ export type HealMarkerSummary = {
  * Diffs the backfill audit ledger against the heal ledger: every hardlinked or
  * copied rollout whose thread id has not been processed yet, most recent first.
  */
-export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): PendingHealThread[] {
-  const processed = readProcessedHealThreads(paths)
+export async function collectPendingHealThreads(
+  paths: CodexSessionIndexHealPaths
+): Promise<PendingHealThread[]> {
+  const processed = await readProcessedHealThreads(paths)
   const pendingByThreadId = new Map<string, PendingHealThread>()
-  for (const line of readJsonlLines(paths.auditLogPath, true)) {
+  for await (const line of streamCodexSessionLedgerRecords(paths.auditLogPath, {
+    throwOnReadFailure: true
+  })) {
     if (line.action !== 'hardlink' && line.action !== 'copy' && line.action !== 'existing') {
       continue
     }
@@ -72,10 +77,11 @@ export function collectPendingHealThreads(paths: CodexSessionIndexHealPaths): Pe
     const threadId = match[2].toLowerCase()
     const auditRecordId = typeof line.recordId === 'string' ? line.recordId : null
     if (
-      processed.healedThreadIds.has(threadId) ||
-      (auditRecordId
-        ? processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
-        : processed.legacyMissingThreadIds.has(threadId))
+      auditRecordId
+        ? processed.healedAuditRecords.has(`${threadId}\0${auditRecordId}`) ||
+          processed.missingAuditRecords.has(`${threadId}\0${auditRecordId}`)
+        : processed.legacyHealedThreadIds.has(threadId) ||
+          processed.legacyMissingThreadIds.has(threadId)
     ) {
       // Why: only the newest publication event for a thread matters. A later
       // processed event must displace an older pending event from this scan.
@@ -93,16 +99,18 @@ function lastPathSegment(filePath: string): string {
   return filePath.split(/[\\/]/).at(-1) ?? ''
 }
 
-function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
-  healedThreadIds: Set<string>
+async function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): Promise<{
+  healedAuditRecords: Set<string>
+  legacyHealedThreadIds: Set<string>
   missingAuditRecords: Set<string>
   legacyMissingThreadIds: Set<string>
-} {
-  const healedThreadIds = new Set<string>()
+}> {
+  const healedAuditRecords = new Set<string>()
+  const legacyHealedThreadIds = new Set<string>()
   const missingAuditRecords = new Set<string>()
   const legacyMissingThreadIds = new Set<string>()
   const expectedRoot = normalizeRuntimePathForComparison(paths.systemSessionsRoot)
-  for (const line of readJsonlLines(paths.healLedgerPath)) {
+  for await (const line of streamCodexSessionLedgerRecords(paths.healLedgerPath)) {
     if (
       line.v === CODEX_SESSION_INDEX_HEAL_VERSION &&
       typeof line.threadId === 'string' &&
@@ -112,7 +120,11 @@ function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
     ) {
       const threadId = line.threadId.toLowerCase()
       if (line.outcome === 'healed') {
-        healedThreadIds.add(threadId)
+        if (typeof line.auditRecordId === 'string') {
+          healedAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
+        } else {
+          legacyHealedThreadIds.add(threadId)
+        }
       } else if (typeof line.auditRecordId === 'string') {
         missingAuditRecords.add(`${threadId}\0${line.auditRecordId}`)
       } else {
@@ -120,7 +132,12 @@ function readProcessedHealThreads(paths: CodexSessionIndexHealPaths): {
       }
     }
   }
-  return { healedThreadIds, missingAuditRecords, legacyMissingThreadIds }
+  return {
+    healedAuditRecords,
+    legacyHealedThreadIds,
+    missingAuditRecords,
+    legacyMissingThreadIds
+  }
 }
 
 export function appendHealLedgerRecord(
@@ -151,35 +168,6 @@ export function appendHealLedgerRecord(
     console.warn('[codex-session-index-heal] Failed to append heal ledger record:', error)
     return false
   }
-}
-
-function readJsonlLines(filePath: string, throwOnReadFailure = false): Record<string, unknown>[] {
-  let contents: string
-  try {
-    contents = readFileSync(filePath, 'utf-8')
-  } catch (error) {
-    if (throwOnReadFailure && !isNotFoundError(error)) {
-      // Why: the audit is the heal work queue. Treating EACCES/EIO as empty
-      // would write a completion marker that permanently skips every session.
-      throw error
-    }
-    return []
-  }
-  const lines: Record<string, unknown>[] = []
-  for (const raw of contents.split('\n')) {
-    if (!raw.trim()) {
-      continue
-    }
-    try {
-      const parsed: unknown = JSON.parse(raw)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        lines.push(parsed as Record<string, unknown>)
-      }
-    } catch {
-      // Skip torn/corrupt lines; both ledgers are append-only diagnostics.
-    }
-  }
-  return lines
 }
 
 export function readAuditLogSize(auditLogPath: string): number {
@@ -213,9 +201,13 @@ export function isHealMarkerCurrent(
       unsupportedAt?: unknown
       retryableFailureAt?: unknown
     }
+    // Why: one Windows directory has several spellings (drive case, separators),
+    // so a raw compare re-drives the whole heal for what is the same target.
     if (
       marker.version !== CODEX_SESSION_INDEX_HEAL_VERSION ||
-      marker.systemSessionsRoot !== paths.systemSessionsRoot
+      typeof marker.systemSessionsRoot !== 'string' ||
+      normalizeRuntimePathForComparison(marker.systemSessionsRoot) !==
+        normalizeRuntimePathForComparison(paths.systemSessionsRoot)
     ) {
       return false
     }

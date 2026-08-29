@@ -81,6 +81,26 @@ describe('runQuickCommandInNewTab', () => {
     expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith('group-1', 'build')
   })
 
+  it('records a host-qualified history id when provided', () => {
+    runQuickCommandInNewTab({
+      command: {
+        id: 'build',
+        label: 'Build',
+        action: 'terminal-command',
+        command: 'pnpm build',
+        appendEnter: true
+      },
+      worktreeId: 'wt-1',
+      groupId: 'group-1',
+      historyId: 'runtime:server\0build'
+    })
+
+    expect(mockState.setRecentQuickCommandForGroup).toHaveBeenCalledWith(
+      'group-1',
+      'runtime:server\0build'
+    )
+  })
+
   it('keeps single-line quick commands unchanged', () => {
     runQuickCommandInNewTab({
       command: {

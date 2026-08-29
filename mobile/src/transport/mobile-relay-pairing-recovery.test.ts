@@ -220,4 +220,53 @@ describe('mobile relay pairing recovery', () => {
     expect(saved.metadata.authorizationMode).toBe('authenticated-direct')
     expect(deps.updateJournal).toHaveBeenCalledTimes(2)
   })
+  // Why: a journal stranded by a relay outage used to block every later pairing
+  // with "recovery pending" forever, because recovery only ever deferred.
+  it('abandons a journal once its invite expired and no credential can reconcile', async () => {
+    const saved = journal()
+    const unreachable = client(async () => {
+      throw new Error('relay unreachable')
+    })
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay: vi.fn(() => unreachable) }),
+      now: () => saved.metadata.relay.inviteExpiresAt + 10 * 60 * 1000 + 1
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('abandoned')
+    expect(deps.clearJournal).toHaveBeenCalledWith(saved.metadata.journalId)
+  })
+
+  it('keeps a just-expired journal so a brief outage cannot discard it', async () => {
+    const saved = journal()
+    const unreachable = client(async () => {
+      throw new Error('relay unreachable')
+    })
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay: vi.fn(() => unreachable) }),
+      now: () => saved.metadata.relay.inviteExpiresAt + 1
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+  })
+
+  // Why: a committed install whose local persistence failed is the one case the
+  // journal must survive — it is the only record left to retry the write from.
+  it('keeps a journal when the server committed but the local write failed', async () => {
+    const saved = journal()
+    const directInstalled = installed(saved, 'authenticated-direct')
+    const committed = client(async () =>
+      response(endpoints(saved, { state: 'committed', result: directInstalled }))
+    )
+    const deps = {
+      ...dependencies({ journal: saved, connectRelay: vi.fn(() => committed) }),
+      now: () => saved.metadata.relay.inviteExpiresAt + 10 * 60 * 1000 + 1,
+      writeCredentialBundle: vi.fn(async () => {
+        throw new Error('keychain unavailable')
+      })
+    }
+
+    await expect(recoverMobileRelayPairing(deps)).resolves.toBe('deferred')
+    expect(deps.clearJournal).not.toHaveBeenCalled()
+  })
 })

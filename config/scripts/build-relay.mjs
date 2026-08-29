@@ -10,14 +10,38 @@
  */
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync
+} from 'node:fs'
 import { join } from 'node:path'
+import {
+  RELAY_BUILD_PLATFORMS,
+  RELAY_VERSION_FILENAME,
+  RELAY_WINDOWS_PROCESS_TREE_FILENAME,
+  relayOptionalArtifactFilenames,
+  isWindowsRelayPlatform,
+  relayArtifactFilenames
+} from '../../src/shared/relay-artifacts.ts'
 
 const __dirname = import.meta.dirname
 // Why: the script lives under config/scripts, so go two levels up to reach the repo root.
 const ROOT = join(__dirname, '..', '..')
 const RELAY_ENTRY = join(ROOT, 'src', 'relay', 'relay.ts')
 const WATCHER_ENTRY = join(ROOT, 'src', 'main', 'ipc', 'parcel-watcher-process-entry.ts')
+const AI_VAULT_SERVICE_ENTRY = join(ROOT, 'src', 'relay', 'ai-vault-service-entry.ts')
+const WSL_TRANSCRIPT_FS_PROCESS_ENTRY = join(
+  ROOT,
+  'src',
+  'main',
+  'native-chat',
+  'wsl-transcript-fs-process-entry.ts'
+)
 const MANAGED_HOOK_RUNTIME_ENTRY = join(
   ROOT,
   'src',
@@ -33,20 +57,50 @@ const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   'relay-assets',
   NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
 )
+// Written by build-windows-process-tree-relay-addon.mjs, which only runs on a
+// Windows machine.
+const WINDOWS_PROCESS_TREE_BUILD_DIR = join(ROOT, '.build', 'windows-process-tree')
 
-const PLATFORMS = [
-  'linux-x64',
-  'linux-arm64',
-  'darwin-x64',
-  'darwin-arm64',
-  'win32-x64',
-  'win32-arm64'
-]
+// Which Windows arches must have the addon, as a comma-separated list ('all' for
+// every arch). Per-arch rather than a flag because arm64 needs the MSVC ARM64
+// cross toolset, an optional VS component: where it is absent that relay should
+// fall back to the scan, not fail the release the x64 relay is riding on.
+const REQUIRED_ADDON_ARCHES = (process.env.ORCA_REQUIRE_RELAY_NATIVE_ADDONS ?? '')
+  .split(',')
+  .map((value) => value.trim())
+  .filter(Boolean)
+
+function stageWindowsProcessTreeAddon(platform, outDir) {
+  if (!isWindowsRelayPlatform(platform)) {
+    return
+  }
+  const arch = platform.slice('win32-'.length)
+  const source = join(WINDOWS_PROCESS_TREE_BUILD_DIR, arch, RELAY_WINDOWS_PROCESS_TREE_FILENAME)
+  if (!existsSync(source)) {
+    if (REQUIRED_ADDON_ARCHES.includes(arch) || REQUIRED_ADDON_ARCHES.includes('all')) {
+      throw new Error(
+        `Relay ${platform} needs ${source}. Run: node config/scripts/build-windows-process-tree-relay-addon.mjs --arch=${arch} (Windows only).`
+      )
+    }
+    console.log(
+      `Relay ${platform}: no ${RELAY_WINDOWS_PROCESS_TREE_FILENAME}; relay will use the PowerShell scan.`
+    )
+    return
+  }
+  copyFileSync(source, join(outDir, RELAY_WINDOWS_PROCESS_TREE_FILENAME))
+}
+
+// Why: lets the packaging contract test build into a temp tree instead of
+// clobbering a developer's out/relay or racing tests that read it.
+const OUT_ROOT = process.env.ORCA_RELAY_OUT_ROOT ?? join(ROOT, 'out', 'relay')
 
 const RELAY_VERSION = '0.1.0'
 
-for (const platform of PLATFORMS) {
-  const outDir = join(ROOT, 'out', 'relay', platform)
+for (const platform of RELAY_BUILD_PLATFORMS) {
+  const outDir = join(OUT_ROOT, platform)
+  // Why: a stale companion left by an earlier build would otherwise satisfy the
+  // manifest check and be hashed into .version, shipping mixed-generation bytes.
+  rmSync(outDir, { recursive: true, force: true })
   mkdirSync(outDir, { recursive: true })
 
   await build({
@@ -66,12 +120,13 @@ for (const platform of PLATFORMS) {
     }
   })
 
-  if (platform.startsWith('win32-')) {
+  if (isWindowsRelayPlatform(platform)) {
     copyFileSync(
       NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
       join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
     )
   }
+  stageWindowsProcessTreeAddon(platform, outDir)
 
   await build({
     entryPoints: [WATCHER_ENTRY],
@@ -81,6 +136,38 @@ for (const platform of PLATFORMS) {
     format: 'cjs',
     outfile: join(outDir, 'relay-watcher.js'),
     external: ['@parcel/watcher'],
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+
+  await build({
+    entryPoints: [AI_VAULT_SERVICE_ENTRY],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'relay-ai-vault-service.js'),
+    external: ['electron'],
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+
+  // Why beside the service: the spawn resolves this child next to its own
+  // bundle, and a relay host has no desktop out/main to fall back to.
+  await build({
+    entryPoints: [WSL_TRANSCRIPT_FS_PROCESS_ENTRY],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'wsl-transcript-fs-process-entry.js'),
+    external: ['electron'],
     sourcemap: false,
     minify: true,
     define: {
@@ -105,22 +192,47 @@ for (const platform of PLATFORMS) {
     }
   })
 
-  // Why: include a content hash so the deploy check detects code changes
-  // even when RELAY_VERSION hasn't been bumped. Hash every executable module
-  // so a companion-only change always deploys beside the matching relay host.
-  const relayContent = readFileSync(join(outDir, 'relay.js'))
-  const watcherContent = readFileSync(join(outDir, 'relay-watcher.js'))
-  const managedHookRuntimeContent = readFileSync(join(outDir, 'managed-hook-runtime.js'))
+  // Why: include a content hash so the deploy check detects code changes even
+  // when RELAY_VERSION hasn't been bumped. Hashing the whole manifest means a
+  // companion-only change still selects a fresh immutable relay directory.
+  const expected = relayArtifactFilenames(isWindowsRelayPlatform(platform))
   const hash = createHash('sha256')
-    .update(relayContent)
-    .update(watcherContent)
-    .update(managedHookRuntimeContent)
-  // Why: changing the remote node-pty patch must select a fresh immutable Windows relay directory.
-  if (platform.startsWith('win32-')) {
-    hash.update(readFileSync(join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)))
+  for (const filename of expected) {
+    const artifactPath = join(outDir, filename)
+    if (!existsSync(artifactPath)) {
+      throw new Error(
+        `Relay ${platform} declares ${filename} in RELAY_ARTIFACTS but never emitted it. ` +
+          'Add the build step, or drop it from src/shared/relay-artifacts.ts.'
+      )
+    }
+    hash.update(readFileSync(artifactPath))
+  }
+  // Why hashed only when present: a relay carrying the native addon answers
+  // differently from one that falls back to the scan, so the two must not share
+  // an immutable directory -- but a build without it is still valid.
+  for (const filename of relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))) {
+    const artifactPath = join(outDir, filename)
+    if (existsSync(artifactPath)) {
+      hash.update(readFileSync(artifactPath))
+    }
   }
   const contentHash = hash.digest('hex').slice(0, 12)
-  writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${contentHash}`)
+
+  // Close the loop: an artifact emitted here but absent from the manifest would
+  // ship unhashed and unprobed — exactly how the WSL helper went missing.
+  const emitted = readdirSync(outDir).filter((name) => name !== RELAY_VERSION_FILENAME)
+  const declared = [
+    ...expected,
+    ...relayOptionalArtifactFilenames(isWindowsRelayPlatform(platform))
+  ]
+  const undeclared = emitted.filter((name) => !declared.includes(name))
+  if (undeclared.length > 0) {
+    throw new Error(
+      `Relay ${platform} emitted undeclared artifacts: ${undeclared.join(', ')}. ` +
+        'Add them to RELAY_ARTIFACTS in src/shared/relay-artifacts.ts.'
+    )
+  }
+  writeFileSync(join(outDir, RELAY_VERSION_FILENAME), `${RELAY_VERSION}+${contentHash}`)
 
   console.log(`Built relay for ${platform} → ${outDir}/relay.js`)
 }
@@ -130,11 +242,12 @@ for (const platform of PLATFORMS) {
 // so a single platform-independent bundle suffices; it ships inside the
 // Windows app via the same out/relay extraResources mapping.
 {
-  const wslEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
-  const outDir = join(ROOT, 'out', 'relay', 'wsl')
+  const wslHookEntry = join(ROOT, 'src', 'relay', 'wsl-agent-hook-relay.ts')
+  const wslBrowserNetworkEntry = join(ROOT, 'src', 'relay', 'wsl-browser-network-relay.ts')
+  const outDir = join(OUT_ROOT, 'wsl')
   mkdirSync(outDir, { recursive: true })
   await build({
-    entryPoints: [wslEntry],
+    entryPoints: [wslHookEntry],
     bundle: true,
     platform: 'node',
     target: 'node18',
@@ -150,6 +263,27 @@ for (const platform of PLATFORMS) {
   const hash = createHash('sha256').update(content).digest('hex').slice(0, 12)
   writeFileSync(join(outDir, '.version'), `${RELAY_VERSION}+${hash}`)
   console.log(`Built WSL hook relay → ${outDir}/wsl-agent-hook-relay.js`)
+
+  await build({
+    entryPoints: [wslBrowserNetworkEntry],
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(outDir, 'wsl-browser-network-relay.js'),
+    sourcemap: false,
+    minify: true,
+    define: {
+      'process.env.NODE_ENV': '"production"'
+    }
+  })
+  const browserNetworkContent = readFileSync(join(outDir, 'wsl-browser-network-relay.js'))
+  const browserNetworkHash = createHash('sha256')
+    .update(browserNetworkContent)
+    .digest('hex')
+    .slice(0, 12)
+  writeFileSync(join(outDir, '.browser-network-version'), `${RELAY_VERSION}+${browserNetworkHash}`)
+  console.log(`Built WSL browser network relay → ${outDir}/wsl-browser-network-relay.js`)
 }
 
 console.log('Relay build complete.')

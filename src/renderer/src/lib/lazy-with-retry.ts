@@ -130,6 +130,13 @@ function recordReloadBreadcrumb(
 
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
+/** Recovery is spent, so name the failure in the one way the boundary can contain. */
+function containedChunkFailure(lastError: unknown, reloadKey: string): unknown {
+  return isKnownDynamicImportFailure(lastError)
+    ? new LazyChunkLoadError(lastError, reloadKey)
+    : lastError
+}
+
 function isKnownDynamicImportFailure(error: unknown): boolean {
   if (!(error instanceof Error)) {
     return false
@@ -140,11 +147,14 @@ function isKnownDynamicImportFailure(error: unknown): boolean {
   }
 
   // Why: a stale/truncated/corrupt chunk parses as invalid JS, so import()
-  // rejects with a native SyntaxError ("Unexpected token ')'", "Unexpected end
-  // of input", …). That reaches this catch only from the chunk's fetch+parse
-  // phase — a recoverable corrupt-chunk failure. Genuine module-evaluation
-  // logic bugs throw ordinary Errors (still surfaced raw) or fail later during
-  // React render (outside this load path), so they are unaffected.
+  // rejects with a native SyntaxError ("Unexpected token '}'", "Unexpected
+  // string", "Illegal return statement", …  — all four observed in shipped
+  // reports). That reaches this catch only from the chunk's fetch+parse phase.
+  // Trade-off: a SyntaxError thrown while *evaluating* a lazily imported module
+  // (e.g. a top-level JSON.parse) is indistinguishable here by message, so it is
+  // contained too. Stack-frame discrimination was tried and rejected: parser
+  // errors carry no frames today, but that is not guaranteed across V8 versions
+  // and a false negative silently restores the crash this guards against.
   if (error.name === 'SyntaxError') {
     return true
   }
@@ -190,6 +200,7 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
     reloadRequestsThisDocument < MAX_RELOAD_REQUESTS_PER_DOCUMENT
   ) {
     if (!markChunkReloadAttempted()) {
+      // No recovery was attempted, so keep normal reporting rather than containing.
       throw lastError
     }
     reloadRequestsThisDocument += 1
@@ -204,29 +215,38 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
       clearChunkReloadGuard()
       recordReloadBreadcrumb('lazy_chunk_reload_vetoed', reloadKey, failureMessage, outcome)
     }
-    throw lastError
+    // The reload was this document's last recovery step for this chunk, whether it
+    // was refused outright or simply never navigated.
+    throw containedChunkFailure(lastError, reloadKey)
   }
 
-  if (reloadGuardState === 'reload-landed' && isKnownDynamicImportFailure(lastError)) {
-    throw new LazyChunkLoadError(lastError, reloadKey)
+  if (reloadGuardState === 'reload-landed') {
+    throw containedChunkFailure(lastError, reloadKey)
   }
 
-  if (
-    reloadGuardState === 'reload-not-landed' &&
-    !reloadRequestInFlight &&
-    isKnownDynamicImportFailure(lastError)
-  ) {
-    // Record the veto beside the resulting crash report before the ring can evict it.
-    clearChunkReloadGuard()
-    recordReloadBreadcrumb(
-      'lazy_chunk_reload_vetoed',
-      reloadKey,
-      failureMessage,
-      'guard-not-landed'
-    )
+  if (reloadGuardState === 'reload-not-landed') {
+    // A sibling failing under a pending reload must not clear the guard, and an
+    // unrelated failure must not clear a guard it did not set.
+    if (!reloadRequestInFlight && isKnownDynamicImportFailure(lastError)) {
+      // Record the veto before the ring can evict it; the failure is then contained.
+      clearChunkReloadGuard()
+      recordReloadBreadcrumb(
+        'lazy_chunk_reload_vetoed',
+        reloadKey,
+        failureMessage,
+        'guard-not-landed'
+      )
+    }
+    throw containedChunkFailure(lastError, reloadKey)
   }
 
-  // Without a proven reload, preserve normal error-reporting behavior.
+  if (reloadGuardState === 'not-attempted') {
+    // The per-document reload cap is spent; further failures cannot recover.
+    throw containedChunkFailure(lastError, reloadKey)
+  }
+
+  // No window or no usable storage: recovery was never attempted, so preserve
+  // normal error reporting instead of containing a failure we never acted on.
   throw lastError
 }
 

@@ -289,8 +289,7 @@ async function main() {
     ORCA_E2E_USER_DATA_DIR: fixtureDir,
     HOME: isolatedHome,
     USERPROFILE: isolatedHome,
-    ORCA_E2E_HOME_DIR: isolatedHome,
-    ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0'
+    ORCA_E2E_HOME_DIR: isolatedHome
   }
   delete env.CODEX_HOME
   delete env.ORCA_CODEX_HOME

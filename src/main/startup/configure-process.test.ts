@@ -77,6 +77,66 @@ describe('patchPackagedProcessPath', () => {
     expect(segments).toContain(join('/Users/tester', 'bin'))
   })
 
+  it('omits Linux-only snap/Linuxbrew dirs but keeps Nix on packaged darwin runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('darwin')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/Users/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    // Why: neither has a macOS installer, so both are phantom PATH entries.
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    // Why: Nix does ship a macOS default profile, so it stays seeded.
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/opt/homebrew/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
+  it('keeps snap, Linuxbrew, and Nix dirs for packaged linux runs', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('linux')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).toContain('/snap/bin')
+    expect(segments).toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments.indexOf('/usr/local/sbin')).toBeLessThan(segments.indexOf('/snap/bin'))
+    expect(segments.indexOf('/home/linuxbrew/.linuxbrew/bin')).toBeLessThan(
+      segments.indexOf('/nix/var/nix/profiles/default/bin')
+    )
+  })
+
+  it('omits snap/Linuxbrew but keeps Nix on non-Linux POSIX platforms', async () => {
+    const { app } = await import('electron')
+    const { patchPackagedProcessPath } = await import('./configure-process')
+
+    setPlatform('freebsd')
+    Object.defineProperty(app, 'isPackaged', { configurable: true, value: true })
+    process.env.HOME = '/home/tester'
+    process.env.PATH = '/usr/bin:/bin'
+
+    patchPackagedProcessPath()
+
+    const segments = (process.env.PATH ?? '').split(':')
+    expect(segments).not.toContain('/snap/bin')
+    expect(segments).not.toContain('/home/linuxbrew/.linuxbrew/bin')
+    expect(segments).toContain('/nix/var/nix/profiles/default/bin')
+    expect(segments).toContain('/usr/local/bin')
+  })
+
   it('leaves PATH untouched when the app is not packaged', async () => {
     const { app } = await import('electron')
     const { patchPackagedProcessPath } = await import('./configure-process')
@@ -333,6 +393,81 @@ describe('configureElectronNetworkCompatibility', () => {
     configureElectronNetworkCompatibility({ env: {}, userDataPath })
 
     expect(app.commandLine.appendSwitch).toHaveBeenCalledWith('disable-http2')
+  })
+})
+
+const EXPECTED_DISABLED_FEATURES =
+  'FedCm,DirectSockets,DirectSocketsInSharedWorkers,DirectSocketsInServiceWorkers'
+
+describe('disableUnsupportedChromiumFeatures', () => {
+  it('matches the shared list the real-Electron egress probes launch with', async () => {
+    const { DISABLED_CHROMIUM_FEATURES } = await import('./disabled-chromium-features')
+
+    expect(DISABLED_CHROMIUM_FEATURES.join(',')).toBe(EXPECTED_DISABLED_FEATURES)
+  })
+
+  it('disables FedCM before Chromium sessions are created', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      EXPECTED_DISABLED_FEATURES
+    )
+  })
+
+  it('disables every Direct Sockets surface so a hostile page cannot kill its renderer', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    const disabled = vi
+      .mocked(app.commandLine.appendSwitch)
+      .mock.calls.find(([name]) => name === 'disable-features')?.[1]
+      ?.split(',')
+
+    expect(disabled).toEqual(
+      expect.arrayContaining([
+        'DirectSockets',
+        'DirectSocketsInSharedWorkers',
+        'DirectSocketsInServiceWorkers'
+      ])
+    )
+  })
+
+  it('preserves existing disabled Chromium features', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce('ExistingFeature')
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+  })
+
+  it('does not duplicate features when disable-features already includes them', async () => {
+    const { app } = await import('electron')
+    const { disableUnsupportedChromiumFeatures } = await import('./configure-process')
+
+    vi.mocked(app.commandLine.getSwitchValue).mockReturnValueOnce(
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
+    vi.mocked(app.commandLine.appendSwitch).mockClear()
+    disableUnsupportedChromiumFeatures()
+
+    expect(app.commandLine.appendSwitch).toHaveBeenCalledWith(
+      'disable-features',
+      `${EXPECTED_DISABLED_FEATURES},ExistingFeature`
+    )
   })
 })
 

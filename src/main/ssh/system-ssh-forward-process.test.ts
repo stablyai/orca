@@ -27,7 +27,9 @@ vi.mock('net', () => ({
 
 import {
   SYSTEM_SSH_FORWARD_LISTENER_PROBE_INTERVAL_MS,
+  SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS,
   SYSTEM_SSH_FORWARD_STARTUP_GRACE_MS,
+  SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS,
   spawnSystemSshPortForward,
   startSystemSshPortForwardProcess,
   waitForSystemSshForwardStartup,
@@ -316,5 +318,67 @@ describe('system SSH forward process', () => {
     child.emit('exit', null)
     await pending
     expect(resolved).toBe(true)
+  })
+
+  it('resolves stop after the post-kill bound when the child never reports exit', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    let resolved = false
+    const pending = waitForSystemSshForwardStop(child as never).then(() => {
+      resolved = true
+    })
+
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
+    expect(child.kill).toHaveBeenNthCalledWith(2, 'SIGKILL')
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_POST_KILL_TIMEOUT_MS - 1)
+    expect(resolved).toBe(false)
+
+    await vi.advanceTimersByTimeAsync(1)
+
+    // Why asserted before awaiting `pending`: dropping the post-kill bound is the regression this
+    // test exists to catch, and awaiting a promise that then never settles reports it as a 30s suite
+    // timeout instead of a failed assertion.
+    // Why this is not a death claim: the promise resolving bounds teardown; nothing here records the
+    // child as gone or drops state that assumes it is.
+    expect(resolved).toBe(true)
+    expect(child.kill).toHaveBeenCalledTimes(2)
+    await pending
+  })
+
+  it('clears the post-kill timer once the child exits after SIGKILL', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    const pending = waitForSystemSshForwardStop(child as never)
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS)
+    child.emit('exit', null)
+    await expect(pending).resolves.toBeUndefined()
+
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('sends no signal to a child that already exited', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+    child.exitCode = 0
+
+    await expect(waitForSystemSshForwardStop(child as never)).resolves.toBeUndefined()
+
+    expect(child.kill).not.toHaveBeenCalled()
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
+  it('sends no SIGKILL or post-kill timer when the child exits after SIGTERM', async () => {
+    vi.useFakeTimers()
+    const child = createFakeProcess()
+
+    const pending = waitForSystemSshForwardStop(child as never)
+    await vi.advanceTimersByTimeAsync(SYSTEM_SSH_FORWARD_STOP_TIMEOUT_MS - 1)
+    child.emit('exit', null)
+    await expect(pending).resolves.toBeUndefined()
+
+    expect(child.kill).toHaveBeenCalledExactlyOnceWith('SIGTERM')
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

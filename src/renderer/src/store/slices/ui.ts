@@ -2,35 +2,35 @@
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import { normalizeRightSidebarRoute } from '../right-sidebar-route'
+import { settleEvictedModalData } from './modal-slot-dismissal'
 import {
   findPrevLiveNonTaskStackHistoryIndex,
-  findPrevLiveWorktreeHistoryIndex
+  rewindHistoryIndexPastView
 } from './worktree-nav-history'
+import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import type { JiraIssue } from '../../../../shared/jira-types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { PersistedTrustedOrcaHooks } from '../../../../shared/orca-yaml-hook-types'
+import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
+import type { CustomPet } from '../../../../shared/pet-types'
+import type { TaskProvider } from '../../../../shared/task-providers'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
-  ChangelogData,
-  CustomPet,
-  GitHubWorkItem,
-  JiraIssue,
-  LinearIssue,
+  AgentActivityDisplayMode,
   ManualRepoOrderEntry,
-  PersistedTrustedOrcaHooks,
-  PersistedUIState,
+  ProjectOrderBy,
   StatusBarItem,
-  TaskProvider,
   TaskResumeState,
   TaskViewPresetId,
-  TuiAgent,
-  UpdateStatus,
-  WorkspaceStatusDefinition,
-  AgentActivityDisplayMode,
-  ProjectOrderBy,
-  WorktreeCardProperty,
-  WorktreeCardMode,
+  TopLevelView,
+  VisibleWorkspaceHostIds,
   WorkspaceHostOrder,
   WorkspaceHostScope,
-  VisibleWorkspaceHostIds,
-  TopLevelView
-} from '../../../../shared/types'
+  WorktreeCardMode,
+  WorktreeCardProperty
+} from '../../../../shared/ui-chrome-types'
+import type { ChangelogData, UpdateStatus } from '../../../../shared/update-status-types'
+import type { WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   applyManualRepoOrder,
   normalizeManualRepoOrder
@@ -50,11 +50,12 @@ import {
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { LaunchSource } from '../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
-import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/types'
+import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../shared/pet-types'
 import {
   WORKSPACE_CLEANUP_CLASSIFIER_VERSION,
   type WorkspaceCleanupDismissal
 } from '../../../../shared/workspace-cleanup'
+import { normalizeWorkspaceCleanupBrowseState } from '../../../../shared/workspace-cleanup-browse-state'
 import { normalizeFeatureTipIds, type FeatureTipId } from '../../../../shared/feature-tips'
 import {
   hasFeatureInteraction,
@@ -88,6 +89,12 @@ import {
   normalizeBrowserPageZoomLevel
 } from '../../../../shared/browser-page-zoom'
 import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
+import {
+  ALL_AUTOMATION_HOSTS_FILTER,
+  parsePersistedAutomationHostFilter,
+  toPersistedAutomationHostFilter,
+  type AutomationHostFilter
+} from '../../../../shared/automation-host-filter'
 import {
   normalizeExecutionHostOrder,
   normalizeExecutionHostScope,
@@ -133,9 +140,15 @@ import { buildAgentNotificationId } from '../../../../shared/agent-notification-
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import { translate } from '@/i18n/i18n'
 import { getRepoHostIdentity } from './repo-host-identity'
+import {
+  capturePersistedUIWriteBaseline,
+  diffPersistedUIWriteFields,
+  type PersistedUIWriteBaseline
+} from './persisted-ui-write-baseline'
 
 export type PendingSidebarWorktreeReveal = {
   worktreeId: string
+  executionHostId?: ExecutionHostId
   behavior: 'auto' | 'smooth'
   highlight?: boolean
   beginRename?: boolean
@@ -319,7 +332,8 @@ const VALID_LINEAR_PRESETS = new Set<NonNullable<TaskResumeState['linearPreset']
 const VALID_LINEAR_MODES = new Set<NonNullable<TaskResumeState['linearMode']>>([
   'issues',
   'projects',
-  'views'
+  'views',
+  'in-orca'
 ])
 const VALID_JIRA_PRESETS = new Set<NonNullable<TaskResumeState['jiraPreset']>>([
   'assigned',
@@ -361,6 +375,23 @@ function collectAcknowledgedAgentNotificationId({
   if (id) {
     ids.add(id)
   }
+}
+
+function usableTimestamp(value: unknown): number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0 ? value : 0
+}
+
+/** Newest turn timestamp an unread check can compare against for one agent row. */
+function latestAgentTurnTimestamp(entry: {
+  stateStartedAt?: number
+  stateHistory?: { startedAt?: number }[]
+}): number {
+  let latest = usableTimestamp(entry.stateStartedAt)
+  // Why history too: Activity renders one event per stateHistory entry, each with its own unread check.
+  for (const history of entry.stateHistory ?? []) {
+    latest = Math.max(latest, usableTimestamp(history.startedAt))
+  }
+  return latest
 }
 
 function isPlainPersistedRecord(value: unknown): value is Record<string, unknown> {
@@ -616,6 +647,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSettings:
     | 'terminal'
@@ -624,6 +656,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeActivity:
     | 'terminal'
@@ -632,6 +665,7 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeAutomations:
     | 'terminal'
@@ -640,6 +674,7 @@ export type UISlice = {
     | 'activity'
     | 'space'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSpace:
     | 'terminal'
@@ -648,6 +683,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'skills'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeSkills:
     | 'terminal'
@@ -656,6 +692,7 @@ export type UISlice = {
     | 'activity'
     | 'automations'
     | 'space'
+    | 'artifacts'
     | 'mobile'
   previousViewBeforeMobile:
     | 'terminal'
@@ -665,6 +702,16 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'artifacts'
+  previousViewBeforeArtifacts:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
     preselectedRepoId?: string
@@ -682,6 +729,8 @@ export type UISlice = {
   }
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void
+  taskListPosition: { contextKey: string; page: number; scrollTop: number } | null
+  setTaskListPosition: (position: UISlice['taskListPosition']) => void
   githubTaskDrawerWorkItem: GitHubWorkItem | null
   setGithubTaskDrawerWorkItem: (item: GitHubWorkItem | null) => void
   newWorkspaceDraft: {
@@ -743,6 +792,15 @@ export type UISlice = {
   closeSpacePage: () => void
   openSkillsPage: () => void
   closeSkillsPage: () => void
+  pendingSkillShareId: string | null
+  openSkillShare: (shareId: string) => void
+  clearPendingSkillShare: () => void
+  /** Set when another surface links straight to the page's shared-links view. */
+  pendingSkillsSharedView: boolean
+  openSkillsSharedLinks: () => void
+  clearPendingSkillsSharedView: () => void
+  openArtifactsPage: () => void
+  closeArtifactsPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
@@ -771,6 +829,7 @@ export type UISlice = {
     | 'create-worktree'
     | 'edit-meta'
     | 'delete-worktree'
+    | 'preserved-branch-review'
     | 'forget-ssh-workspace'
     | 'confirm-add-project-from-folder'
     | 'confirm-non-git-folder'
@@ -831,7 +890,7 @@ export type UISlice = {
   ) => void
   markOrcaHookRepoAlwaysTrusted: (repoId: string) => void
   clearOrcaHookTrustForRepo: (repoId: string) => void
-  setupScriptPromptDismissedRepoIds: string[]
+  setupScriptPromptDismissedRepoIds: readonly string[]
   dismissSetupScriptPrompt: (repoHostIdentity: string) => void
   setupGuideSidebarDismissed: boolean
   setSetupGuideSidebarDismissed: (dismissed: boolean) => void
@@ -866,6 +925,9 @@ export type UISlice = {
   setVisibleWorkspaceHostIds: (ids: VisibleWorkspaceHostIds) => void
   workspaceHostOrder: WorkspaceHostOrder
   setWorkspaceHostOrder: (ids: WorkspaceHostOrder) => void
+  /** Automations page host filter, in stable form. Never written from an unhydrated catalog. */
+  automationHostFilter: AutomationHostFilter
+  setAutomationHostFilter: (filter: AutomationHostFilter) => void
   manualRepoOrder: ManualRepoOrderEntry[]
   hideDefaultBranchWorkspace: boolean
   setHideDefaultBranchWorkspace: (v: boolean) => void
@@ -875,11 +937,15 @@ export type UISlice = {
   setHideCliCreatedWorkspaces: (v: boolean) => void
   hideDetachedHeadWorkspaces: boolean
   setHideDetachedHeadWorkspaces: (v: boolean) => void
+  hideWorkspacesFromOtherDevices: boolean
+  setHideWorkspacesFromOtherDevices: (v: boolean) => void
+  alwaysShowDefaultBranchWorkspace: boolean
+  setAlwaysShowDefaultBranchWorkspace: (v: boolean) => void
   showDotfilesByWorktree: Record<string, boolean>
   setShowDotfilesForWorktree: (worktreeId: string, showDotfiles: boolean) => void
   toggleShowDotfilesForWorktree: (worktreeId: string) => void
-  filterRepoIds: string[]
-  setFilterRepoIds: (ids: string[]) => void
+  filterRepoIds: readonly string[]
+  setFilterRepoIds: (ids: readonly string[]) => void
   collapsedGroups: Set<string>
   toggleCollapsedGroup: (key: string) => void
   worktreeCardProperties: WorktreeCardProperty[]
@@ -941,6 +1007,7 @@ export type UISlice = {
       behavior?: PendingSidebarWorktreeReveal['behavior']
       highlight?: boolean
       beginRename?: boolean
+      executionHostId?: ExecutionHostId
     }
   ) => void
   revealSidebarRow: (
@@ -956,6 +1023,19 @@ export type UISlice = {
   scrollToDiffCommentId: string | null
   setScrollToDiffCommentId: (id: string | null) => void
   persistedUIReady: boolean
+  /** Writer-owned fields as last hydrated from main or flushed by the writer; the debounced writer diffs against this so it only persists fields this client changed (STA-5781). */
+  persistedUIWriteBaseline: PersistedUIWriteBaseline | null
+  /** Fields with a ui.set round-trip in flight; hydration keeps the mirror's value for them so an echo of the in-flight write can't revert a newer flip-back. */
+  persistedUIWriteInFlightCounts: Partial<Record<keyof PersistedUIWriteBaseline, number>>
+  /** Bumped whenever hydration replaces the baseline; an ack whose write predates the bump must not fold, or it would erase a remote write that landed during the round trip. */
+  persistedUIWriteBaselineGeneration: number
+  notePersistedUIWriteStarted: (fields: readonly (keyof PersistedUIWriteBaseline)[]) => void
+  /** Settle an in-flight write: fold the acked patch into the baseline (null = rejected, leaving the fields dirty so the next change re-flushes them). */
+  notePersistedUIWriteSettled: (
+    fields: readonly (keyof PersistedUIWriteBaseline)[],
+    flushed: Partial<PersistedUIWriteBaseline> | null,
+    options?: { sentAtGeneration: number }
+  ) => void
   uiZoomLevel: number
   setUIZoomLevel: (level: number) => void
   editorFontZoomLevel: number
@@ -1170,10 +1250,15 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         return s
       }
       const now = Date.now()
-      // Why: only reallocate if an ack advances; compare prev<now not !== — Date.now() ticks every ms and !== would rewrite the map every call.
+      const migrationUnsupported = Object.values(s.migrationUnsupportedByPtyId ?? {})
+      // Why: only reallocate if an ack advances; compare prev<stamp not !== — the stamp ticks every ms and !== would rewrite the map every call.
       let next: Record<string, number> | null = null
       for (const key of paneKeys) {
         const prev = s.acknowledgedAgentsByPaneKey[key] ?? 0
+        // Why not plain Date.now(): a remote/SSH execution host can stamp a turn ahead of this clock,
+        // and every unread rule is `ackAt < turnTimestamp`. A behind-the-turn ack can never clear the
+        // row, so its auto-ack effect re-fires on each new millisecond forever (React #185).
+        let stamp = now
         const liveEntry = s.agentStatusByPaneKey?.[key]
         if (liveEntry) {
           collectAcknowledgedAgentNotificationId({
@@ -1183,6 +1268,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             stateStartedAt: liveEntry.stateStartedAt,
             previousAckAt: prev
           })
+          stamp = Math.max(stamp, latestAgentTurnTimestamp(liveEntry))
         }
         const retained = s.retainedAgentsByPaneKey?.[key]
         if (retained) {
@@ -1193,12 +1279,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             stateStartedAt: retained.entry.stateStartedAt,
             previousAckAt: prev
           })
+          stamp = Math.max(stamp, latestAgentTurnTimestamp(retained.entry))
         }
-        if (prev < now) {
+        for (const unsupported of migrationUnsupported) {
+          // Why: Activity synthesizes a blocked row from this entry, stamped by the pane's host like any turn.
+          if (unsupported.paneKey === key) {
+            stamp = Math.max(stamp, usableTimestamp(unsupported.updatedAt))
+          }
+        }
+        if (prev < stamp) {
           if (next === null) {
             next = { ...s.acknowledgedAgentsByPaneKey }
           }
-          next[key] = now
+          next[key] = stamp
         }
       }
       return next ? { acknowledgedAgentsByPaneKey: next } : s
@@ -1232,10 +1325,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   previousViewBeforeAutomations: 'terminal',
   previousViewBeforeSpace: 'terminal',
   previousViewBeforeSkills: 'terminal',
+  pendingSkillShareId: null,
+  pendingSkillsSharedView: false,
   previousViewBeforeMobile: 'terminal',
+  previousViewBeforeArtifacts: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
+  taskListPosition: null,
   githubTaskDrawerWorkItem: null,
   newWorkspaceDraft: null,
   openTaskPage: (data = {}, options = {}) => {
@@ -1390,6 +1487,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
       window.api.ui.set({ taskResumeState: next }).catch(console.error)
       return { taskResumeState: next }
     }),
+  setTaskListPosition: (taskListPosition) => set({ taskListPosition }),
   setGithubTaskDrawerWorkItem: (item) => set({ githubTaskDrawerWorkItem: item }),
   closeTaskPage: () =>
     set((state) => {
@@ -1442,20 +1540,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     }))
   },
   closeAutomationsPage: () =>
-    set((state) => {
-      const currentEntry = state.worktreeNavHistory[state.worktreeNavHistoryIndex]
-      let nextHistoryIndex = state.worktreeNavHistoryIndex
-      if (currentEntry === 'automations') {
-        const prev = findPrevLiveWorktreeHistoryIndex(state)
-        if (prev !== null) {
-          nextHistoryIndex = prev
-        }
-      }
-      return {
-        activeView: state.previousViewBeforeAutomations,
-        worktreeNavHistoryIndex: nextHistoryIndex
-      }
-    }),
+    set((state) => ({
+      activeView: state.previousViewBeforeAutomations,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'automations')
+    })),
   openSpacePage: () => {
     get().recordFeatureInteraction?.('workspace-cleanup')
     set((state) => ({
@@ -1468,15 +1556,51 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeSpace
     })),
-  openSkillsPage: () =>
+  openSkillsPage: () => {
+    get().recordViewVisit('skills')
     set((state) => ({
       activeView: 'skills',
       previousViewBeforeSkills:
         state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView
-    })),
+    }))
+  },
   closeSkillsPage: () =>
     set((state) => ({
-      activeView: state.previousViewBeforeSkills
+      activeView: state.previousViewBeforeSkills,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'skills')
+    })),
+  openSkillShare: (shareId) => {
+    get().recordViewVisit('skills')
+    set((state) => ({
+      activeView: 'skills',
+      previousViewBeforeSkills:
+        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
+      pendingSkillShareId: shareId
+    }))
+  },
+  clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
+  openSkillsSharedLinks: () => {
+    get().recordViewVisit('skills')
+    set((state) => ({
+      activeView: 'skills',
+      previousViewBeforeSkills:
+        state.activeView === 'skills' ? state.previousViewBeforeSkills : state.activeView,
+      pendingSkillsSharedView: true
+    }))
+  },
+  clearPendingSkillsSharedView: () => set({ pendingSkillsSharedView: false }),
+  openArtifactsPage: () => {
+    get().recordViewVisit('artifacts')
+    set((state) => ({
+      activeView: 'artifacts',
+      previousViewBeforeArtifacts:
+        state.activeView === 'artifacts' ? state.previousViewBeforeArtifacts : state.activeView
+    }))
+  },
+  closeArtifactsPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeArtifacts,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
     })),
   openMobilePage: () =>
     set((state) => ({
@@ -1555,12 +1679,18 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     if (modal === 'add-repo' || modal === 'create-worktree') {
       get().recordFeatureInteraction?.('workspace-creation')
     }
+    const evicted = get().modalData
     set({
       activeModal: modal,
       modalData: data
     })
+    settleEvictedModalData(evicted)
   },
-  closeModal: () => set({ activeModal: 'none', modalData: {} }),
+  closeModal: () => {
+    const evicted = get().modalData
+    set({ activeModal: 'none', modalData: {} })
+    settleEvictedModalData(evicted)
+  },
   featureTipsSeenIds: [],
   markFeatureTipsSeen: (ids) =>
     set((s) => {
@@ -2043,6 +2173,13 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({ workspaceHostOrder })
     window.api.ui.set({ workspaceHostOrder }).catch(console.error)
   },
+  automationHostFilter: ALL_AUTOMATION_HOSTS_FILTER,
+  setAutomationHostFilter: (filter) => {
+    window.api.ui
+      .set({ automationHostFilter: toPersistedAutomationHostFilter(filter) })
+      .catch(console.error)
+    set({ automationHostFilter: filter })
+  },
   manualRepoOrder: [],
 
   hideDefaultBranchWorkspace: false,
@@ -2053,6 +2190,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   setHideCliCreatedWorkspaces: (v) => set({ hideCliCreatedWorkspaces: v }),
   hideDetachedHeadWorkspaces: false,
   setHideDetachedHeadWorkspaces: (v) => set({ hideDetachedHeadWorkspaces: v }),
+  hideWorkspacesFromOtherDevices: false,
+  setHideWorkspacesFromOtherDevices: (v) => set({ hideWorkspacesFromOtherDevices: v }),
+  alwaysShowDefaultBranchWorkspace: true,
+  setAlwaysShowDefaultBranchWorkspace: (v) => set({ alwaysShowDefaultBranchWorkspace: v }),
 
   showDotfilesByWorktree: {},
   setShowDotfilesForWorktree: (worktreeId, showDotfiles) =>
@@ -2333,6 +2474,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set({
       pendingRevealWorktree: {
         worktreeId,
+        ...(options?.executionHostId ? { executionHostId: options.executionHostId } : {}),
         behavior: options?.behavior ?? 'smooth',
         ...(options?.highlight ? { highlight: true } : {}),
         ...(options?.beginRename ? { beginRename: true } : {})
@@ -2351,6 +2493,47 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   scrollToDiffCommentId: null,
   setScrollToDiffCommentId: (id) => set({ scrollToDiffCommentId: id }),
   persistedUIReady: false,
+  persistedUIWriteBaseline: null,
+  persistedUIWriteInFlightCounts: {},
+  notePersistedUIWriteStarted: (fields) =>
+    set((s) => {
+      const counts = { ...s.persistedUIWriteInFlightCounts }
+      for (const field of fields) {
+        counts[field] = (counts[field] ?? 0) + 1
+      }
+      return { persistedUIWriteInFlightCounts: counts }
+    }),
+  persistedUIWriteBaselineGeneration: 0,
+  notePersistedUIWriteSettled: (fields, flushed, options) =>
+    set((s) => {
+      const counts = { ...s.persistedUIWriteInFlightCounts }
+      for (const field of fields) {
+        const next = (counts[field] ?? 0) - 1
+        if (next > 0) {
+          counts[field] = next
+        } else {
+          delete counts[field]
+        }
+      }
+      // Why the generation guard: a hydration during the round trip made the
+      // baseline authoritative for state NEWER than this write; folding the
+      // sent values over it would blank the mirror-vs-baseline diff and leave
+      // mirror and authority divergent with nothing left to reconcile them.
+      // Skipping the fold keeps the diff alive so the trailing flush re-sends.
+      // Why options is required for folding: an unguarded fold from a future
+      // caller could silently erase a remote write that landed mid-round-trip.
+      const foldable =
+        flushed &&
+        s.persistedUIWriteBaseline &&
+        options !== undefined &&
+        options.sentAtGeneration === s.persistedUIWriteBaselineGeneration
+      return {
+        persistedUIWriteInFlightCounts: counts,
+        ...(foldable
+          ? { persistedUIWriteBaseline: { ...s.persistedUIWriteBaseline!, ...flushed } }
+          : {})
+      }
+    }),
   uiZoomLevel: 0,
   setUIZoomLevel: (level) => set({ uiZoomLevel: level }),
   editorFontZoomLevel: 0,
@@ -2452,6 +2635,8 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceHostScope: normalizeExecutionHostScope(ui.workspaceHostScope),
         visibleWorkspaceHostIds: normalizeHydratedVisibleWorkspaceHostIds(ui),
         workspaceHostOrder: normalizeExecutionHostOrder(ui.workspaceHostOrder),
+        // Why: a malformed or legacy filter value must degrade to All hosts, never throw during hydration.
+        automationHostFilter: parsePersistedAutomationHostFilter(ui.automationHostFilter),
         manualRepoOrder,
         // Why: apply the desktop-owned overlay immediately since UI state can arrive after a catalog or from another client.
         repos: orderedRepos,
@@ -2459,6 +2644,10 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         hideAutomationGeneratedWorkspaces: ui.hideAutomationGeneratedWorkspaces === true,
         hideCliCreatedWorkspaces: ui.hideCliCreatedWorkspaces === true,
         hideDetachedHeadWorkspaces: ui.hideDetachedHeadWorkspaces === true,
+        hideWorkspacesFromOtherDevices: ui.hideWorkspacesFromOtherDevices === true,
+        // Why !== false: profiles written before #8873 have no key, and they are
+        // precisely the ones showing the bug, so absence must mean "exempt".
+        alwaysShowDefaultBranchWorkspace: ui.alwaysShowDefaultBranchWorkspace !== false,
         showDotfilesByWorktree: sanitizeShowDotfilesByWorktree(ui.showDotfilesByWorktree),
         // Why: startup hydrates UI before repo catalogs, so defer repo-filter validation to the all-host refresh.
         filterRepoIds:
@@ -2547,6 +2736,14 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
         workspaceCleanupDismissals: sanitizeWorkspaceCleanupDismissals(
           ui.workspaceCleanup?.dismissals
         ),
+        // Why the normalizer rather than a cast: this blob is hand-editable and
+        // may come from an older or newer build; it degrades field by field
+        // instead of bricking the cleanup dialog.
+        // Why: a sync broadcast can carry stale browse state while its writer is debounced.
+        workspaceCleanupBrowse:
+          source === 'startup'
+            ? normalizeWorkspaceCleanupBrowseState(ui.workspaceCleanup?.browse)
+            : s.workspaceCleanupBrowse,
         // Why: restore only on startup; on 'sync' broadcasts it would clobber the window's current per-window view.
         activeView:
           source === 'startup'
@@ -2554,8 +2751,60 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
             : s.activeView,
         persistedUIReady: true
       }
+      // The incoming payload is authoritative for the writer-owned fields, so it becomes the
+      // writer's new diff baseline — but fields with an unflushed local edit (mirror diverged
+      // from the previous baseline) keep the local value so a broadcast arriving inside the
+      // writer's debounce window can't silently revert what the user just toggled (STA-5781).
+      // Order matters: capture the baseline BEFORE overlaying pending edits, or the baseline
+      // would equal the pending value, the diff would go empty, and the toggle would be dropped.
+      // Note the width sanitizers above fall back to the CURRENT store value only for
+      // non-numeric input (numbers are clamped in place), so a captured width can differ
+      // from what main holds only for garbage payloads; at worst main keeps an
+      // out-of-range width until the next drag re-writes it.
+      const nextWriteBaseline = capturePersistedUIWriteBaseline(hydrated)
+      const previousBaseline = s.persistedUIWriteBaseline
+      if (previousBaseline) {
+        const pendingLocalEdits = diffPersistedUIWriteFields(
+          capturePersistedUIWriteBaseline(s),
+          previousBaseline
+        )
+        Object.assign(hydrated, pendingLocalEdits)
+        // In-flight fields too: a flip-back to the baseline value diffs empty,
+        // yet the in-flight write's echo must not revert it (PR#17057 review).
+        for (const field of Object.keys(
+          s.persistedUIWriteInFlightCounts
+        ) as (keyof PersistedUIWriteBaseline)[]) {
+          ;(hydrated as Record<string, unknown>)[field] = s[field]
+        }
+      }
       // Why: return the same ref on identical hydration so App's debounced writer doesn't echo it back to main.
-      return hydratedUIPartialMatchesState(s, hydrated) ? s : hydrated
+      // The baseline must still advance when it moved (a remote same-field write during an in-flight
+      // ack pins the only visibly differing field, and our own echo precedes every ack) — but only
+      // the two baseline keys, or every ordinary write's echo would churn the store's collection
+      // identities and re-render identity-compared selectors once per write.
+      // Why the generation bumps only on baseline movement: an unrelated-field
+      // broadcast during an in-flight write would otherwise void that write's
+      // fold and cost a redundant trailing re-send of identical values.
+      const writeBaselineMoved =
+        !previousBaseline ||
+        Object.keys(diffPersistedUIWriteFields(nextWriteBaseline, previousBaseline)).length > 0
+      const nextWriteBaselineGeneration = writeBaselineMoved
+        ? s.persistedUIWriteBaselineGeneration + 1
+        : s.persistedUIWriteBaselineGeneration
+      if (hydratedUIPartialMatchesState(s, hydrated)) {
+        if (!writeBaselineMoved) {
+          return s
+        }
+        return {
+          persistedUIWriteBaseline: nextWriteBaseline,
+          persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
+        }
+      }
+      return {
+        ...hydrated,
+        persistedUIWriteBaseline: nextWriteBaseline,
+        persistedUIWriteBaselineGeneration: nextWriteBaselineGeneration
+      }
     }),
 
   updateStatus: { state: 'idle' },

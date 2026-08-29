@@ -1,29 +1,46 @@
 import type * as FsPromises from 'node:fs/promises'
 import { sep } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 const {
   existsSyncMock,
   mkdirSyncMock,
   writeFileSyncMock,
   readFileSyncMock,
+  lstatSyncMock,
   rmSyncMock,
   renameSyncMock,
   readdirSyncMock,
   statSyncMock,
+  openSyncMock,
+  fstatSyncMock,
+  closeSyncMock,
   getPathMock,
-  rmAsyncMock
+  rmAsyncMock,
+  deleteWslFishHistoryFileMock
 } = vi.hoisted(() => ({
   existsSyncMock: vi.fn(),
   mkdirSyncMock: vi.fn(),
   writeFileSyncMock: vi.fn(),
   readFileSyncMock: vi.fn(),
+  lstatSyncMock: vi.fn(),
   rmSyncMock: vi.fn(),
   renameSyncMock: vi.fn(),
   readdirSyncMock: vi.fn(),
   statSyncMock: vi.fn(),
+  openSyncMock: vi.fn((_path?: string | Buffer) => 1),
+  fstatSyncMock: vi.fn(() => ({
+    dev: 1n,
+    ino: 2n,
+    birthtimeNs: 3n,
+    isFile: () => true,
+    isDirectory: () => true
+  })),
+  closeSyncMock: vi.fn(),
   getPathMock: vi.fn(),
-  rmAsyncMock: vi.fn(async () => undefined)
+  rmAsyncMock: vi.fn(async () => undefined),
+  deleteWslFishHistoryFileMock: vi.fn(async () => undefined)
 }))
 
 vi.mock('fs', () => ({
@@ -31,10 +48,14 @@ vi.mock('fs', () => ({
   mkdirSync: mkdirSyncMock,
   writeFileSync: writeFileSyncMock,
   readFileSync: readFileSyncMock,
+  lstatSync: lstatSyncMock,
   rmSync: rmSyncMock,
   renameSync: renameSyncMock,
   readdirSync: readdirSyncMock,
-  statSync: statSyncMock
+  statSync: statSyncMock,
+  openSync: openSyncMock,
+  fstatSync: fstatSyncMock,
+  closeSync: closeSyncMock
 }))
 
 // Spread the real module: this factory replaces node:fs/promises for the whole import graph, so a
@@ -42,12 +63,6 @@ vi.mock('fs', () => ({
 vi.mock('node:fs/promises', async () => ({
   ...(await vi.importActual<typeof FsPromises>('node:fs/promises')),
   rm: rmAsyncMock
-}))
-
-vi.mock('electron', () => ({
-  app: {
-    getPath: getPathMock
-  }
 }))
 
 const { parseWslPathMock, toLinuxPathMock } = vi.hoisted(() => ({
@@ -60,21 +75,34 @@ vi.mock('./wsl', () => ({
   toLinuxPath: toLinuxPathMock
 }))
 
+vi.mock('./wsl-fish-history-cleanup', () => ({
+  deleteWslFishHistoryFile: deleteWslFishHistoryFileMock
+}))
+
 import {
   resolveShellKind,
   ensureHistoryDir,
   injectHistoryEnv,
-  updateHistFileForFallback
+  injectWslFishHistoryEnv,
+  MAX_HISTORY_META_BYTES,
+  updateHistoryEnvForFallback,
+  type HistoryInjectionResult
 } from './terminal-history'
+import { fishHistorySessionName, relayFishHistorySessionName } from './fish-history-session'
 import { hashWorktreeId } from './terminal-history-paths'
 import {
+  cancelPendingHistoryTreeRemovalRetries,
   deleteWorktreeHistoryDir,
   flushPendingWorktreeHistoryDeletions
 } from './terminal-history-deletion'
+
 import { runHistoryGc, scheduleHistoryGc } from './terminal-history-gc'
+
+const OTHER_WORKTREE_HASH = hashWorktreeId('repo-1::/path/other-wt')
 
 describe('terminal-history', () => {
   afterEach(() => {
+    cancelPendingHistoryTreeRemovalRetries()
     vi.useRealTimers()
   })
 
@@ -82,9 +110,31 @@ describe('terminal-history', () => {
     vi.clearAllMocks()
     // Why: clearAllMocks keeps implementations, so a throwing rename from one test would leak forward.
     renameSyncMock.mockReset()
+    readFileSyncMock.mockReset()
+    readdirSyncMock.mockReset()
+    rmAsyncMock.mockReset()
+    rmAsyncMock.mockResolvedValue(undefined)
     getPathMock.mockReturnValue('/fake/userData')
+    installFakeAppEnvironment({ getPath: getPathMock })
     existsSyncMock.mockReturnValue(true)
     statSyncMock.mockReturnValue({ isDirectory: () => true, size: 100 })
+    openSyncMock.mockImplementation(() => 1)
+    fstatSyncMock.mockReturnValue({
+      dev: 1n,
+      ino: 2n,
+      birthtimeNs: 3n,
+      isFile: () => true,
+      isDirectory: () => true
+    })
+    lstatSyncMock.mockReturnValue({
+      dev: 1n,
+      ino: 2n,
+      birthtimeNs: 3n,
+      size: 100,
+      isDirectory: () => true,
+      isFile: () => true,
+      isSymbolicLink: () => false
+    })
   })
 
   describe('resolveShellKind', () => {
@@ -228,12 +278,176 @@ describe('terminal-history', () => {
       expect(result.histFile).toBeNull()
     })
 
-    it('does not inject HISTFILE for fish (Phase 2)', () => {
+    it('scopes fish by session name instead of HISTFILE, which fish ignores', () => {
       const env: Record<string, string> = {}
       const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
 
       expect(env.HISTFILE).toBeUndefined()
       expect(result.shell).toBe('fish')
+      expect(result.fishSession).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(result.fishSession)
+      // Deletion can only find the out-of-tree fish file through this record.
+      expect(writeFileSyncMock).toHaveBeenCalledWith(
+        expect.stringContaining('meta.json'),
+        expect.stringContaining(`"fishSession":"${result.fishSession}"`),
+        expect.anything()
+      )
+    })
+
+    it('records the history DIRECTORY from the SPAWN env, not this process env', () => {
+      // The file is written by the PTY's fish, and the two envs disagree whenever
+      // Orca was launched with a different XDG_DATA_HOME than the shells it spawns.
+      // Pinned so the assertion cannot accidentally read the developer's own value.
+      const originalDataHome = process.env.XDG_DATA_HOME
+      process.env.XDG_DATA_HOME = ['', 'main', 'process', 'data'].join(sep)
+      try {
+        const env: Record<string, string> = { XDG_DATA_HOME: ['', 'spawn', 'data'].join(sep) }
+        injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+        const meta = JSON.parse(writeFileSyncMock.mock.calls.at(-1)?.[1] as string) as Record<
+          string,
+          string
+        >
+
+        expect(meta.fishHistoryDir).toBe(['', 'spawn', 'data', 'fish'].join(sep))
+      } finally {
+        if (originalDataHome === undefined) {
+          delete process.env.XDG_DATA_HOME
+        } else {
+          process.env.XDG_DATA_HOME = originalDataHome
+        }
+      }
+    })
+
+    it('replaces oversized metadata without parsing it', () => {
+      statSyncMock.mockReturnValue({ isDirectory: () => true, size: MAX_HISTORY_META_BYTES + 1 })
+      const env = { XDG_DATA_HOME: ['', 'active'].join(sep) }
+
+      injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+
+      expect(readFileSyncMock).not.toHaveBeenCalled()
+      const meta = JSON.parse(writeFileSyncMock.mock.calls.at(-1)?.[1] as string) as Record<
+        string,
+        string
+      >
+      expect(meta.fishHistoryDir).toBe(['', 'active', 'fish'].join(sep))
+    })
+
+    it('gives two fish worktrees different history sessions', () => {
+      const envA: Record<string, string> = {}
+      injectHistoryEnv(envA, 'repo-1::/path/wt-a', '/usr/bin/fish', '/path/wt-a')
+      const envB: Record<string, string> = {}
+      injectHistoryEnv(envB, 'repo-1::/path/wt-b', '/usr/bin/fish', '/path/wt-b')
+
+      expect(envA.fish_history).not.toBe(envB.fish_history)
+    })
+
+    it('drops an ORCA_HISTFILE inherited from a parent Orca PTY', () => {
+      // Why: an Orca terminal opened from inside another Orca terminal inherits
+      // it, and the zsh wrapper would then re-export the PARENT worktree's
+      // history path here. Credit: caught by @innocarpe in #11146.
+      const env: Record<string, string> = {
+        ORCA_HISTFILE: ['', 'other', 'wt', 'zsh_history'].join(sep)
+      }
+
+      injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.ORCA_HISTFILE).toBe(env.HISTFILE)
+      expect(env.ORCA_HISTFILE).not.toContain('other')
+    })
+
+    it('drops an inherited ORCA_HISTFILE even when it injects nothing', () => {
+      // The dangerous variant: the early return would otherwise leave the stale
+      // value pointing the wrapper at another worktree, overriding HISTFILE.
+      const env: Record<string, string> = {
+        HISTFILE: ['', 'mine', 'zsh_history'].join(sep),
+        ORCA_HISTFILE: ['', 'other', 'wt', 'zsh_history'].join(sep)
+      }
+
+      injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.HISTFILE).toBe(['', 'mine', 'zsh_history'].join(sep))
+      expect(env.ORCA_HISTFILE).toBeUndefined()
+    })
+
+    it.each([
+      [
+        'desktop',
+        ['', 'fake', 'userData', 'terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
+      ],
+      [
+        'relay',
+        [
+          '',
+          'home',
+          'me',
+          '.orca-remote',
+          'terminal-history',
+          `${OTHER_WORKTREE_HASH}-zsh_history`
+        ].join(sep)
+      ]
+    ])('drops a %s HISTFILE inherited from a parent Orca pane', (_kind, inherited) => {
+      // HISTFILE stays EXPORTED once the wrapper restores it, so an Orca launched
+      // from a pane in another worktree would otherwise hit the check-before-set
+      // early return in EVERY pane and append into that one worktree's file.
+      const env: Record<string, string> = { HISTFILE: inherited }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(result.histFile).toBe(env.HISTFILE)
+      expect(env.HISTFILE).toContain(hashWorktreeId('repo-1::/path/wt'))
+      expect(env.HISTFILE).not.toContain(OTHER_WORKTREE_HASH)
+    })
+
+    it.each([
+      ['an ordinary path', ['', 'home', 'me', '.zsh_history'].join(sep)],
+      // Orca only ever mints absolute paths, so the same shape relative to the
+      // user's cwd is theirs.
+      [
+        'a relative path of Orca’s shape',
+        ['terminal-history', OTHER_WORKTREE_HASH, 'zsh_history'].join(sep)
+      ]
+    ])('preserves %s the user set as HISTFILE', (_kind, histFile) => {
+      // Only a path Orca minted is droppable; everything else is the user's.
+      const env: Record<string, string> = { HISTFILE: histFile }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.HISTFILE).toBe(histFile)
+      expect(result.histFile).toBeNull()
+    })
+
+    it('preserves a caller-supplied fish_history', () => {
+      const env: Record<string, string> = { fish_history: 'mine' }
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+
+      expect(env.fish_history).toBe('mine')
+      expect(result.fishSession).toBeNull()
+    })
+
+    it.each([
+      ['desktop', fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))],
+      ['relay', relayFishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))]
+    ])('replaces a %s fish_history inherited from a parent Orca', (_kind, inherited) => {
+      // fish EXPORTS fish_history, so an Orca launched from a fish pane hands the
+      // LAUNCHING worktree's session to every pane here — panes in every other
+      // worktree included, which would all then write one worktree's history file.
+      const env: Record<string, string> = { fish_history: inherited }
+
+      const result = injectHistoryEnv(env, 'repo-1::/path/wt', '/usr/bin/fish', '/path/wt')
+
+      expect(result.fishSession).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(result.fishSession)
+    })
+
+    it('drops an inherited fish_history even when the shell is not fish', () => {
+      // A fish started by hand inside this zsh pane must not adopt the parent's session.
+      const env: Record<string, string> = {
+        fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
+      }
+
+      injectHistoryEnv(env, 'repo-1::/path/wt', '/bin/zsh', '/path/wt')
+
+      expect(env.fish_history).toBeUndefined()
     })
 
     it('degrades gracefully when directory creation fails', () => {
@@ -249,12 +463,44 @@ describe('terminal-history', () => {
     })
   })
 
-  describe('updateHistFileForFallback', () => {
+  describe('injectWslFishHistoryEnv', () => {
+    // clearAllMocks keeps implementations: drop the throwing mkdir left by the degrade test.
+    beforeEach(() => {
+      mkdirSyncMock.mockReset()
+    })
+
+    it('replaces an inherited Orca fish_history with this worktree session', () => {
+      const env: Record<string, string> = {
+        fish_history: fishHistorySessionName(hashWorktreeId('repo-1::/path/other-wt'))
+      }
+
+      const session = injectWslFishHistoryEnv(env, 'repo-1::/path/wt', 'Ubuntu')
+
+      expect(session).toBe(fishHistorySessionName(hashWorktreeId('repo-1::/path/wt')))
+      expect(env.fish_history).toBe(session)
+    })
+
+    it('preserves a caller-supplied fish_history', () => {
+      const env: Record<string, string> = { fish_history: 'mine' }
+
+      expect(injectWslFishHistoryEnv(env, 'repo-1::/path/wt', 'Ubuntu')).toBeNull()
+      expect(env.fish_history).toBe('mine')
+    })
+  })
+
+  describe('updateHistoryEnvForFallback', () => {
+    const zshInjection = (): HistoryInjectionResult => ({
+      shell: 'zsh',
+      histFile: '/fake/userData/terminal-history/abc123/zsh_history',
+      fishSession: null,
+      historyDir: '/fake/userData/terminal-history/abc123'
+    })
+
     it('updates HISTFILE to match fallback shell', () => {
       const env: Record<string, string> = {
         HISTFILE: '/fake/userData/terminal-history/abc123/zsh_history'
       }
-      updateHistFileForFallback(env, '/bin/bash')
+      updateHistoryEnvForFallback(env, '/bin/bash', zshInjection())
       expect(env.HISTFILE).toBe('/fake/userData/terminal-history/abc123/bash_history')
     })
 
@@ -262,18 +508,45 @@ describe('terminal-history', () => {
       const env: Record<string, string> = {
         HISTFILE: '/fake/userData/terminal-history/abc123/zsh_history'
       }
-      updateHistFileForFallback(env, '/bin/sh')
+      updateHistoryEnvForFallback(env, '/bin/sh', zshInjection())
       expect(env.HISTFILE).toBeUndefined()
     })
 
-    it('is a no-op when HISTFILE is not set', () => {
+    it('is a no-op when nothing was injected', () => {
       const env: Record<string, string> = {}
-      updateHistFileForFallback(env, '/bin/bash')
+      updateHistoryEnvForFallback(env, '/bin/bash', {
+        shell: 'unknown',
+        histFile: null,
+        fishSession: null,
+        historyDir: null
+      })
       expect(env.HISTFILE).toBeUndefined()
+    })
+
+    it('swaps an injected fish session for the fallback shell HISTFILE', () => {
+      const env: Record<string, string> = { fish_history: 'orca_abc123' }
+      updateHistoryEnvForFallback(env, '/bin/bash', {
+        shell: 'fish',
+        histFile: null,
+        fishSession: 'orca_abc123',
+        historyDir: '/fake/userData/terminal-history/abc123'
+      })
+      expect(env.fish_history).toBeUndefined()
+      expect(env.HISTFILE).toBe('/fake/userData/terminal-history/abc123/bash_history')
+    })
+
+    it('keeps a caller-supplied fish_history the injection never claimed', () => {
+      const env: Record<string, string> = { fish_history: 'mine' }
+      updateHistoryEnvForFallback(env, '/bin/bash', zshInjection())
+      expect(env.fish_history).toBe('mine')
     })
   })
 
   describe('deleteWorktreeHistoryDir', () => {
+    const worktreeId = 'repo-1::/path/wt'
+    const session = fishHistorySessionName(hashWorktreeId(worktreeId))
+    const historyFilename = `${session}_history`
+
     it('tombstones then async-removes the history directory without recursive rmSync', async () => {
       existsSyncMock.mockReturnValue(true)
       deleteWorktreeHistoryDir('repo-1::/path/wt')
@@ -284,6 +557,84 @@ describe('terminal-history', () => {
         expect.objectContaining({ recursive: true, force: true })
       )
       await flushPendingWorktreeHistoryDeletions()
+    })
+
+    it('deletes the fish history file in the directory meta.json recorded', async () => {
+      const recordedDir = ['', 'spawn', 'data', 'fish'].join(sep)
+      existsSyncMock.mockReturnValue(true)
+      lstatSyncMock.mockReturnValue({ isFile: () => true })
+      readFileSyncMock.mockReturnValue(
+        JSON.stringify({ worktreeId, fishSession: session, fishHistoryDir: recordedDir })
+      )
+
+      deleteWorktreeHistoryDir('repo-1::/path/wt')
+
+      expect(rmSyncMock).toHaveBeenCalledWith([recordedDir, historyFilename].join(sep))
+      await flushPendingWorktreeHistoryDeletions()
+    })
+
+    it('also tries this process fish dir, for meta written before that field', async () => {
+      const originalDataHome = process.env.XDG_DATA_HOME
+      process.env.XDG_DATA_HOME = ['', 'main', 'data'].join(sep)
+      try {
+        existsSyncMock.mockReturnValue(true)
+        lstatSyncMock.mockReturnValue({ isFile: () => true })
+        readFileSyncMock.mockReturnValue(JSON.stringify({ worktreeId, fishSession: session }))
+
+        deleteWorktreeHistoryDir('repo-1::/path/wt')
+
+        expect(rmSyncMock).toHaveBeenCalledWith(
+          ['', 'main', 'data', 'fish', historyFilename].join(sep)
+        )
+      } finally {
+        if (originalDataHome === undefined) {
+          delete process.env.XDG_DATA_HOME
+        } else {
+          process.env.XDG_DATA_HOME = originalDataHome
+        }
+      }
+      await flushPendingWorktreeHistoryDeletions()
+    })
+
+    it('ignores a fishSession that does not belong to this history directory', async () => {
+      // Why: the session name is re-derived from the directory's own hash, so a
+      // tampered meta.json naming someone else's session cannot steer the delete.
+      existsSyncMock.mockReturnValue(true)
+      lstatSyncMock.mockReturnValue({ isFile: () => true })
+      readFileSyncMock.mockReturnValue(
+        JSON.stringify({ worktreeId, fishSession: 'orca_deadbeefdeadbeef' })
+      )
+
+      deleteWorktreeHistoryDir('repo-1::/path/wt')
+
+      expect(rmSyncMock).not.toHaveBeenCalledWith(expect.stringContaining('orca_deadbeefdeadbeef'))
+      await flushPendingWorktreeHistoryDeletions()
+    })
+
+    it('refuses to unlink a fish history path that is not a regular file', async () => {
+      existsSyncMock.mockReturnValue(true)
+      lstatSyncMock.mockReturnValue({ isFile: () => false })
+      readFileSyncMock.mockReturnValue(JSON.stringify({ worktreeId, fishSession: session }))
+
+      deleteWorktreeHistoryDir('repo-1::/path/wt')
+
+      expect(rmSyncMock).not.toHaveBeenCalled()
+      await flushPendingWorktreeHistoryDeletions()
+    })
+
+    it('cleans WSL Fish history through the owning distro before removing metadata', async () => {
+      readFileSyncMock.mockReturnValue(JSON.stringify({ worktreeId, fishSession: session }))
+      readdirSyncMock.mockImplementation((path: string) => {
+        if (path.endsWith('terminal-history-wsl')) {
+          return ['Ubuntu']
+        }
+        return []
+      })
+
+      deleteWorktreeHistoryDir(worktreeId)
+      await flushPendingWorktreeHistoryDeletions()
+
+      expect(deleteWslFishHistoryFileMock).toHaveBeenCalledWith('Ubuntu', session)
     })
 
     it('leaves the live directory alone when the tombstone rename fails', async () => {
@@ -309,6 +660,7 @@ describe('terminal-history', () => {
     })
 
     it('retries pending tombstones on flush after a failed async rm (app-quit durability)', async () => {
+      let leftoverTombstonePresent = true
       existsSyncMock.mockImplementation((p: string) => {
         const path = String(p)
         if (path.includes('.pending-delete') && !path.endsWith('.pending-delete')) {
@@ -321,11 +673,13 @@ describe('terminal-history', () => {
       })
       readdirSyncMock.mockImplementation((p: string) => {
         if (String(p).endsWith('.pending-delete')) {
-          return ['leftover-tombstone']
+          return leftoverTombstonePresent ? ['leftover-tombstone'] : []
         }
         return []
       })
-      rmAsyncMock.mockResolvedValue(undefined)
+      rmAsyncMock.mockImplementation(async () => {
+        leftoverTombstonePresent = false
+      })
       await flushPendingWorktreeHistoryDeletions()
       expect(rmAsyncMock).toHaveBeenCalledWith(
         expect.stringContaining('leftover-tombstone'),
@@ -388,6 +742,64 @@ describe('terminal-history', () => {
       )
     })
 
+    // Why: an empty live set is what a store that fell back to default state
+    // looks like, and it is indistinguishable from a user with no worktrees —
+    // who has no history to collect either. Treating it as "everything is
+    // orphaned" turns a recoverable bad load into deleted shell history.
+    it('refuses to prune anything when the live set is empty', () => {
+      existsSyncMock.mockImplementation((p: string) => !p.includes('terminal-history-wsl'))
+      readdirSyncMock.mockImplementation((dir: string) => {
+        if (dir.endsWith('.pending-delete')) {
+          return []
+        }
+        if (dir.endsWith('terminal-history')) {
+          return ['dir1', 'dir2']
+        }
+        return ['meta.json']
+      })
+      statSyncMock.mockReturnValue({ isDirectory: () => true, size: 100 })
+      readFileSyncMock.mockReturnValue(
+        JSON.stringify({
+          worktreeId: 'some-wt',
+          createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString()
+        })
+      )
+
+      runHistoryGc(new Set())
+
+      expect(renameSyncMock).not.toHaveBeenCalled()
+      expect(rmSyncMock).not.toHaveBeenCalled()
+      expect(rmAsyncMock).not.toHaveBeenCalled()
+    })
+
+    it('continues GC after one orphan tombstone fails', async () => {
+      existsSyncMock.mockImplementation((path: string) => !path.includes('terminal-history-wsl'))
+      readdirSyncMock.mockImplementation((dir: string) => {
+        if (dir.endsWith('.pending-delete')) {
+          return []
+        }
+        if (dir.endsWith('terminal-history')) {
+          return ['broken', 'healthy']
+        }
+        return ['meta.json']
+      })
+      statSyncMock.mockReturnValue({ isDirectory: () => true, size: 100 })
+      readFileSyncMock.mockReturnValue(
+        JSON.stringify({
+          worktreeId: 'orphan',
+          createdAt: new Date(Date.now() - 10 * 60 * 1000).toISOString()
+        })
+      )
+      renameSyncMock.mockImplementationOnce(() => {
+        throw new Error('busy')
+      })
+
+      expect(() => runHistoryGc(new Set(['live-wt']))).not.toThrow()
+      expect(renameSyncMock).toHaveBeenCalledTimes(2)
+      expect(rmAsyncMock).toHaveBeenCalledTimes(1)
+      await flushPendingWorktreeHistoryDeletions()
+    })
+
     it('skips recently-created directories to avoid TOCTOU race', () => {
       existsSyncMock.mockImplementation((p: string) => {
         if (p.includes('terminal-history-wsl')) {
@@ -407,7 +819,7 @@ describe('terminal-history', () => {
         JSON.stringify({ worktreeId: 'unknown-wt', createdAt: new Date().toISOString() })
       )
 
-      runHistoryGc(new Set())
+      runHistoryGc(new Set(['live-wt']))
 
       // Should NOT prune because the directory is too young
       expect(rmSyncMock).not.toHaveBeenCalled()
@@ -416,15 +828,16 @@ describe('terminal-history', () => {
 
     it('does not throw when history root does not exist', () => {
       existsSyncMock.mockReturnValue(false)
-      expect(() => runHistoryGc(new Set())).not.toThrow()
-      expect(readdirSyncMock).not.toHaveBeenCalled()
+      expect(() => runHistoryGc(new Set(['live-wt']))).not.toThrow()
+      expect(readdirSyncMock).not.toHaveBeenCalledWith('/fake/userData/terminal-history')
     })
 
     it('drains delete tombstones asynchronously instead of scanning them as worktrees', async () => {
+      let tombstonePresent = true
       existsSyncMock.mockImplementation((p: string) => !String(p).includes('terminal-history-wsl'))
       readdirSyncMock.mockImplementation((dir: string) => {
         if (String(dir).endsWith('.pending-delete')) {
-          return ['abc123.1700000000000.deadbeef']
+          return tombstonePresent ? ['abc123.1700000000000.deadbeef'] : []
         }
         if (String(dir).endsWith('terminal-history')) {
           return ['.pending-delete']
@@ -432,8 +845,11 @@ describe('terminal-history', () => {
         return ['meta.json']
       })
       statSyncMock.mockReturnValue({ isDirectory: () => true, size: 100 })
+      rmAsyncMock.mockImplementation(async () => {
+        tombstonePresent = false
+      })
 
-      runHistoryGc(new Set())
+      runHistoryGc(new Set(['live-wt']))
 
       // The tombstone queue is drained off-thread; GC must never rmSync it or count it as a worktree.
       expect(rmSyncMock).not.toHaveBeenCalled()

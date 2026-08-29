@@ -39,6 +39,25 @@ export type RpcResponse = RpcSuccess | RpcFailure
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
+export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
+
+export type ConnectionDiagnosticCode =
+  | 'client-session-started'
+  | 'app-resumed'
+  | 'network-changed'
+  | 'connect-timeout'
+  | 'handshake-timeout'
+  | 'authentication-rejected'
+  | 'socket-closed'
+  | 'liveness-timeout'
+  | 'retry-scheduled'
+  | 'relay-dial-failed'
+  | 'relay-session-failed'
+  | 'relay-connected'
+  | 'direct-connected'
+  | 'relay-credential-unavailable'
+  | 'host-open-failed'
+
 export type ConnectionLogEntry = {
   id: string
   ts: number
@@ -47,9 +66,18 @@ export type ConnectionLogEntry = {
   message: string
   // Optional second line for endpoint/error/elapsed detail.
   detail?: string
+  code?: ConnectionDiagnosticCode
+  path?: MobileConnectionDiagnosticPath
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void
+
+export type ConnectionLogEmitter = (
+  level: ConnectionLogLevel,
+  message: string,
+  detail?: string,
+  evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+) => void
 
 export type ConnectionState =
   | 'connecting'
@@ -58,6 +86,10 @@ export type ConnectionState =
   | 'disconnected'
   | 'reconnecting'
   | 'auth-failed'
+
+// Why: a user-attention nudge must not tear down a healthy relay (probe it); only a
+// network-change nudge marks the socket suspect enough to replace it.
+export type ForegroundNudgeReason = 'focus' | 'app-resume' | 'network-change'
 
 export type HostProfile = {
   id: string
@@ -69,6 +101,13 @@ export type HostProfile = {
   endpoints?: MobileAccessEndpoint[]
   relayHostId?: MobileRelayHostOverlay['relayHostId']
   relay?: MobileRelayHostOverlay['relay']
+}
+
+export type HostCredentialStatus = 'ready' | 'temporarily-unavailable' | 'missing'
+
+export type HostCatalogEntry = Omit<HostProfile, 'deviceToken'> & {
+  credentialStatus: HostCredentialStatus
+  profile: HostProfile | null
 }
 
 export const HostProfileSchema = z.object({

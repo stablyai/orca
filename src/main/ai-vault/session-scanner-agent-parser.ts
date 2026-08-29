@@ -2,6 +2,7 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
 import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
+import { parseClineSessionFile } from './session-scanner-cline-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
@@ -68,8 +69,12 @@ export async function parseAgentSessionFile(
       return parseMessageGraphSessionFile('pi', candidate.file, platform)
     case 'omp':
       return parseMessageGraphSessionFile('omp', candidate.file, platform)
+    case 'prime-agent':
+      return parseMessageGraphSessionFile('prime-agent', candidate.file, platform)
     case 'droid':
       return parseDroidSessionFile(candidate.file, platform)
+    case 'cline':
+      return parseClineSessionFile(candidate.file, platform)
     case 'devin':
       return parseDevinSessionFile(candidate.file, platform)
     case 'kimi':

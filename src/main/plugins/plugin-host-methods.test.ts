@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../shared/plugins/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
+import { AgentSessionPtyWriteRefusedError } from '../../shared/agent-session-pty-write-admission'
 
 function createServices(storageSet: PluginHostServices['storage']['set']): PluginHostServices {
   return {
@@ -172,7 +173,8 @@ describe('terminal.sendText explicit worktree routing', () => {
     expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
     expect(delegate.listTerminals).toHaveBeenCalledWith(
       'id:worktree-1',
-      PLUGIN_WORKSPACE_TERMINAL_LIMIT
+      PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+      { includeVisualLayouts: false }
     )
     expect(delegate.sendTerminal).not.toHaveBeenCalled()
   })
@@ -189,7 +191,8 @@ describe('terminal.sendText explicit worktree routing', () => {
       expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
       expect(delegate.listTerminals).toHaveBeenCalledWith(
         'id:worktree-1',
-        PLUGIN_WORKSPACE_TERMINAL_LIMIT
+        PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+        { includeVisualLayouts: false }
       )
       expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
       expect(delegate.sendTerminal).toHaveBeenCalledWith(terminalId, {
@@ -228,5 +231,36 @@ describe('terminal.sendText explicit worktree routing', () => {
       PLUGIN_WORKSPACE_TERMINAL_LIMIT
     )
     expect(delegate.listTerminals).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('terminal.sendText under a refusing agent-session lease', () => {
+  it('reports who holds the session instead of an accepted-looking result', async () => {
+    const { delegate, services } = createTerminalHarness(['terminal:local:one'])
+    vi.mocked(delegate.sendTerminal).mockRejectedValue(
+      new AgentSessionPtyWriteRefusedError({
+        code: 'agent_session_conflict',
+        sessionId: 'session-alpha-1',
+        ownerRuntimeKind: 'native',
+        handoffStage: null,
+        ownerPid: 4242,
+        runtimeFence: 7
+      })
+    )
+
+    const outcome = await sendTerminalText(services, 'terminal:local:one')
+
+    expect(outcome).toMatchObject({ ok: false, code: 'action_failed' })
+    expect(outcome.ok ? '' : outcome.error).toContain('session-alpha-1')
+    expect(outcome.ok ? '' : outcome.error).toContain('native chat')
+  })
+
+  it('sends unchanged when no lease refuses, which is every plugin send today', async () => {
+    const { delegate, services } = createTerminalHarness(['terminal:local:one'])
+
+    const outcome = await sendTerminalText(services, 'terminal:local:one')
+
+    expect(outcome).toEqual({ ok: true, value: { accepted: true } })
+    expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
   })
 })

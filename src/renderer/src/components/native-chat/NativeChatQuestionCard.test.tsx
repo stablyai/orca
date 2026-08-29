@@ -25,9 +25,20 @@ afterEach(() => {
   container.remove()
 })
 
-function render(prompt: AskPrompt, onAnswer: (s: AskAnswerSelection[]) => void): void {
+function render(
+  prompt: AskPrompt,
+  onAnswer: (s: AskAnswerSelection[]) => void,
+  allowOther = true
+): void {
   act(() => {
-    root.render(<NativeChatQuestionCard prompt={prompt} onAnswer={onAnswer} onCancel={() => {}} />)
+    root.render(
+      <NativeChatQuestionCard
+        prompt={prompt}
+        onAnswer={onAnswer}
+        onCancel={() => {}}
+        allowOther={allowOther}
+      />
+    )
   })
 }
 
@@ -75,7 +86,7 @@ describe('NativeChatQuestionCard', () => {
     render(tabsOrSpaces, onAnswer)
 
     clickOption('Spaces')
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
@@ -97,7 +108,7 @@ describe('NativeChatQuestionCard', () => {
 
     clickOption('Cherry')
     clickOption('Apple')
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [0, 2], other: '' }])
   })
@@ -118,7 +129,7 @@ describe('NativeChatQuestionCard', () => {
     )
 
     clickOptionAt(1)
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [1], other: '' }])
   })
@@ -133,8 +144,15 @@ describe('NativeChatQuestionCard', () => {
       setter.call(input, 'four spaces')
       input.dispatchEvent(new Event('input', { bubbles: true }))
     })
-    clickAction('Send answer')
+    clickAction('Submit')
 
     expect(onAnswer).toHaveBeenCalledWith([{ indices: [], other: 'four spaces' }])
+  })
+
+  it('hides free text when the provider requires a listed option', () => {
+    render(tabsOrSpaces, vi.fn(), false)
+
+    expect(container.querySelector('input')).toBeNull()
+    expect(container.textContent).not.toContain('Type your answer')
   })
 })

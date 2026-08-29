@@ -158,6 +158,33 @@ export function excerptAgentFailureOutput(stdout: string, stderr: string): strin
   return composeTwoEndExcerpt(headLines, tailLine)
 }
 
+export function sanitizeAgentFailureDetail(detail: string | null): string | null {
+  // Cf covers bidi overrides that could visually reorder persisted, client-synced text.
+  const trimmed = detail
+    ?.replace(/[\p{Cc}\p{Cf}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!trimmed) {
+    return null
+  }
+  const redacted = trimmed
+    .replace(
+      /\\\\[^\s"'`<>\\]+\\(?:[^\s"'`<>\\]+(?:\s+[^\s"'`<>\\]+)*(?=\\)\\)*[^\s"'`<>\\]+/g,
+      '[path]'
+    )
+    // JSON may double Windows separators; URL separators must remain single.
+    .replace(
+      /[A-Za-z]:(?:\\+|\/)(?:[^\s"'`<>\\/|:*?]+(?:\s+[^\s"'`<>\\/|:*?]+)*(?=[\\/])(?:\\+|\/))*[^\s"'`<>\\/|:*?]+/g,
+      '[path]'
+    )
+    // Keep single-segment remedies such as /login while redacting filesystem paths.
+    .replace(
+      /(^|[\s"'`(=:,])\/(?:[^\s"'`<>/]+(?:\s+[^\s"'`<>/]+)*(?=\/)\/)+[^\s"'`<>/]+/g,
+      '$1[path]'
+    )
+  return redacted.length > 240 ? `${redacted.slice(0, 240).trimEnd()}...` : redacted
+}
+
 function composeTwoEndExcerpt(headLines: string[], tailLine: string | null): string {
   const headPart = truncateExcerptPart(headLines.join(' '), FAILURE_EXCERPT_HEAD_BUDGET)
   // Repeated lines (spinner/retry frames) would otherwise show twice.

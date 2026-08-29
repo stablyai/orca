@@ -5,9 +5,12 @@ import { createContext, useContext } from 'react'
 export type ConfirmationDialogOptions = {
   title: string
   description?: string
+  descriptionClassName?: string
   confirmLabel?: string
   cancelLabel?: string
   confirmVariant?: 'default' | 'destructive'
+  /** Renders a "Don't ask again" checkbox. `onConfirmed` runs only when the user confirms with it checked. */
+  dontAskAgain?: { label?: string; onConfirmed: () => void }
 }
 
 export type ConfirmationDialogContextValue = (

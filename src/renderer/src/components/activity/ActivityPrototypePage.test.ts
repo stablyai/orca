@@ -1,191 +1,34 @@
-/* eslint-disable max-lines -- Activity feed builders share realistic fixture
-coverage in one file so status grouping stays tied to the event/thread adapter. */
 import { describe, expect, it } from 'vitest'
 import {
   AGENT_STATUS_STALE_AFTER_MS,
   type AgentStatusEntry
 } from '../../../../shared/agent-status-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { Repo, TerminalTab, Worktree } from '../../../../shared/types'
-import { formatAgentTypeLabel } from '@/lib/agent-status'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   ACTIVITY_SEARCH_QUERY_MAX_BYTES,
   activityThreadResponseRenderPreview,
   activityThreadMatchesSearchQuery,
-  handleActivityFilterFocusShortcut,
-  isActivityFilterFocusShortcut,
-  shouldIgnoreActivityFilterFocusShortcutTarget,
-  buildActivityThreadGroups,
   buildActivityEvents,
   buildAgentPaneThreads,
-  getActivityThreadGroup,
   groupActivityThreadsByStatus,
   isActivitySearchQueryTooLarge
 } from './ActivityPrototypePage'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-
-const LEAF_ID = '11111111-1111-4111-8111-111111111111'
-const LEAF_ID_2 = '22222222-2222-4222-8222-222222222222'
-const LEAF_ID_3 = '33333333-3333-4333-8333-333333333333'
-const LEAF_ID_UNKNOWN = '44444444-4444-4444-8444-444444444444'
-const LEAF_ID_A1 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1'
-const LEAF_ID_B1 = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1'
-const LEAF_ID_A2 = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa2'
-const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
-const PANE_KEY_2 = makePaneKey('tab-2', LEAF_ID_2)
-const PANE_KEY_3 = makePaneKey('tab-3', LEAF_ID_3)
-const UNKNOWN_PANE_KEY = makePaneKey('tab-unknown', LEAF_ID_UNKNOWN)
-const PANE_KEY_A1 = makePaneKey('tab-a1', LEAF_ID_A1)
-const PANE_KEY_B1 = makePaneKey('tab-b1', LEAF_ID_B1)
-const PANE_KEY_A2 = makePaneKey('tab-a2', LEAF_ID_A2)
-
-function makeRepo(): Repo {
-  return {
-    id: 'repo-1',
-    path: '/repo',
-    displayName: 'Repo',
-    badgeColor: '#000',
-    addedAt: 1
-  }
-}
-
-function makeWorktree(): Worktree {
-  return {
-    id: 'wt-1',
-    repoId: 'repo-1',
-    path: '/repo/wt-1',
-    head: 'abc123',
-    branch: 'feature',
-    isBare: false,
-    isMainWorktree: false,
-    displayName: 'feature',
-    comment: '',
-    linkedIssue: null,
-    linkedPR: null,
-    linkedLinearIssue: null,
-    isArchived: false,
-    isUnread: false,
-    isPinned: false,
-    sortOrder: 0,
-    lastActivityAt: 1
-  }
-}
-
-function makeTab(): TerminalTab {
-  return {
-    id: 'tab-1',
-    ptyId: 'pty-1',
-    worktreeId: 'wt-1',
-    title: 'Claude',
-    customTitle: null,
-    color: null,
-    sortOrder: 0,
-    createdAt: 1
-  }
-}
-
-function makeWorktreeWithId(id: string, repoId = 'repo-1', displayName = id): Worktree {
-  return {
-    ...makeWorktree(),
-    id,
-    repoId,
-    path: `/repo/${id}`,
-    displayName
-  }
-}
-
-function makeTabWithIds(id: string, worktreeId: string, title = id): TerminalTab {
-  return {
-    ...makeTab(),
-    id,
-    ptyId: `pty-${id}`,
-    worktreeId,
-    title
-  }
-}
-
-function makeWorkingEntryWithPriorDone(): AgentStatusEntry {
-  return {
-    state: 'working',
-    prompt: 'Second prompt',
-    updatedAt: 2_000,
-    stateStartedAt: 2_000,
-    paneKey: PANE_KEY,
-    terminalTitle: 'Claude',
-    stateHistory: [
-      {
-        state: 'done',
-        prompt: 'First prompt',
-        startedAt: 1_000
-      }
-    ],
-    agentType: 'claude'
-  }
-}
-
-function makeWorkingEntryWithoutHistory(): AgentStatusEntry {
-  return {
-    state: 'working',
-    prompt: 'New run',
-    updatedAt: 3_000,
-    stateStartedAt: 3_000,
-    paneKey: PANE_KEY,
-    terminalTitle: 'Claude',
-    stateHistory: [],
-    agentType: 'claude'
-  }
-}
-
-function makeRetainedDoneEntry(tab: TerminalTab): RetainedAgentEntry {
-  return {
-    entry: {
-      state: 'done',
-      prompt: 'Retained prior run',
-      updatedAt: 1_000,
-      stateStartedAt: 1_000,
-      paneKey: PANE_KEY,
-      terminalTitle: 'Claude',
-      stateHistory: [],
-      agentType: 'claude',
-      lastAssistantMessage: 'Retained response preview'
-    },
-    worktreeId: 'wt-1',
-    tab,
-    agentType: 'claude',
-    startedAt: 1_000
-  }
-}
-
-function makeActivityResult(args: {
-  entries?: Record<string, AgentStatusEntry>
-  retained?: Record<string, RetainedAgentEntry>
-  tab?: TerminalTab
-  now?: number
-}): ReturnType<typeof buildActivityEvents> {
-  const repo = makeRepo()
-  const worktree = makeWorktree()
-  const tab = args.tab ?? makeTab()
-
-  return buildActivityEvents({
-    agentStatusByPaneKey: args.entries ?? {},
-    retainedAgentsByPaneKey: args.retained ?? {},
-    tabsByWorktree: {
-      [worktree.id]: [tab]
-    },
-    worktreeMap: new Map([[worktree.id, worktree]]),
-    repoMap: new Map([[repo.id, repo]]),
-    acknowledgedAgentsByPaneKey: {},
-    now: args.now ?? 3_000
-  })
-}
-
-function makeThreads(result: ReturnType<typeof buildActivityEvents>) {
-  return buildAgentPaneThreads({
-    events: result.events,
-    liveAgentByPaneKey: result.liveAgentByPaneKey
-  })
-}
+import {
+  makeActivityResult,
+  makeRepo,
+  makeRetainedDoneEntry,
+  makeTab,
+  makeTabWithIds,
+  makeThreads,
+  makeWorkingEntryWithPriorDone,
+  makeWorkingEntryWithoutHistory,
+  makeWorktree,
+  PANE_KEY,
+  PANE_KEY_2,
+  PANE_KEY_3
+} from './ActivityPrototypePage-test-fixtures'
 
 describe('buildActivityEvents', () => {
   it('keeps every pane visible before applying the global activity cap', () => {
@@ -261,6 +104,25 @@ describe('buildActivityEvents', () => {
     expect(threads[0].events[0].entry.prompt).toBe('First prompt')
   })
 
+  it('does not turn a session boundary into an Agent finished event', () => {
+    const result = makeActivityResult({
+      entries: {
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          state: 'done',
+          prompt: '',
+          sessionBoundary: true,
+          stateHistory: [{ state: 'done', prompt: 'Real turn', startedAt: 1_000 }]
+        }
+      }
+    })
+
+    // Why: the displaced real completion stays visible; the idle SessionStart does not add a second finish.
+    expect(result.events).toHaveLength(1)
+    expect(result.events[0]).toMatchObject({ state: 'done', timestamp: 1_000 })
+    expect(result.events[0].entry.prompt).toBe('Real turn')
+  })
+
   it('does not keep showing a stale live agent as running', () => {
     const result = makeActivityResult({
       entries: {
@@ -291,6 +153,27 @@ describe('buildActivityEvents', () => {
       latestTimestamp: 3_000,
       latestEvent: null,
       unread: false
+    })
+  })
+
+  it('projects monitoring into thread rows and status groups', () => {
+    const result = makeActivityResult({
+      entries: {
+        [PANE_KEY]: {
+          ...makeWorkingEntryWithoutHistory(),
+          workingMode: 'monitoring'
+        }
+      }
+    })
+    const threads = makeThreads(result)
+    const groups = groupActivityThreadsByStatus(threads)
+
+    expect(result.liveAgentByPaneKey[PANE_KEY].state).toBe('monitoring')
+    expect(threads[0].currentAgentState).toBe('monitoring')
+    expect(groups[0]).toMatchObject({
+      id: 'monitoring',
+      label: 'Monitoring background tasks',
+      state: 'monitoring'
     })
   })
 
@@ -565,350 +448,5 @@ describe('buildActivityEvents', () => {
       [PANE_KEY_2],
       [PANE_KEY_3]
     ])
-  })
-})
-
-describe('activity thread grouping', () => {
-  it('status grouping separates interrupted done from normal done and keeps Interrupted label', () => {
-    const repo = makeRepo()
-    const worktree = makeWorktree()
-    const tab1 = makeTabWithIds('tab-1', worktree.id)
-    const tab2 = makeTabWithIds('tab-2', worktree.id)
-    const sharedDone: Omit<
-      AgentStatusEntry,
-      'paneKey' | 'interrupted' | 'updatedAt' | 'stateStartedAt'
-    > = {
-      state: 'done',
-      prompt: 'Prompt',
-      terminalTitle: 'Claude',
-      stateHistory: [],
-      agentType: 'claude'
-    }
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [PANE_KEY]: {
-          ...sharedDone,
-          paneKey: PANE_KEY,
-          interrupted: true,
-          updatedAt: 3_000,
-          stateStartedAt: 3_000
-        },
-        [PANE_KEY_2]: {
-          ...sharedDone,
-          paneKey: PANE_KEY_2,
-          interrupted: false,
-          updatedAt: 2_000,
-          stateStartedAt: 2_000
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [worktree.id]: [tab1, tab2] },
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map([[repo.id, repo]]),
-      acknowledgedAgentsByPaneKey: {},
-      now: 3_000
-    })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-    const groups = buildActivityThreadGroups(threads, 'status')
-
-    expect(groups).toHaveLength(2)
-    expect(groups[0].key).toBe('done:interrupted')
-    expect(groups[0].label).toBe('Interrupted')
-    expect(groups[1].key).toBe('done')
-    expect(groups[1].label).toBe('Done')
-  })
-
-  it('project grouping falls back to unknown project when repo is missing', () => {
-    const worktree = makeWorktreeWithId('wt-unknown', 'missing-repo', 'unknown-wt')
-    const tab = makeTabWithIds('tab-unknown', worktree.id)
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [UNKNOWN_PANE_KEY]: {
-          state: 'done',
-          prompt: 'Prompt',
-          updatedAt: 1_000,
-          stateStartedAt: 1_000,
-          paneKey: UNKNOWN_PANE_KEY,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [worktree.id]: [tab] },
-      worktreeMap: new Map([[worktree.id, worktree]]),
-      repoMap: new Map(),
-      acknowledgedAgentsByPaneKey: {},
-      now: 1_000
-    })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-    const group = getActivityThreadGroup(threads[0], 'project')
-
-    expect(group).toEqual({ key: 'project:unknown', label: 'Unknown project' })
-  })
-
-  it('worktree and agent grouping use expected keys and labels', () => {
-    const result = makeActivityResult({
-      entries: {
-        [PANE_KEY]: makeWorkingEntryWithoutHistory()
-      }
-    })
-    const threads = makeThreads(result)
-
-    expect(getActivityThreadGroup(threads[0], 'worktree')).toEqual({
-      key: 'worktree:wt-1',
-      label: 'feature'
-    })
-    expect(getActivityThreadGroup(threads[0], 'agent')).toEqual({
-      key: 'agent:claude',
-      label: formatAgentTypeLabel('claude')
-    })
-  })
-
-  it('keeps first-appearance group order and preserves intra-group thread order', () => {
-    const repo = makeRepo()
-    const wtA = makeWorktreeWithId('wt-a', repo.id, 'alpha')
-    const wtB = makeWorktreeWithId('wt-b', repo.id, 'beta')
-    const tabA1 = makeTabWithIds('tab-a1', wtA.id)
-    const tabB1 = makeTabWithIds('tab-b1', wtB.id)
-    const tabA2 = makeTabWithIds('tab-a2', wtA.id)
-    const { events, liveAgentByPaneKey } = buildActivityEvents({
-      agentStatusByPaneKey: {
-        [PANE_KEY_A1]: {
-          state: 'done',
-          prompt: 'A1',
-          updatedAt: 3_000,
-          stateStartedAt: 3_000,
-          paneKey: PANE_KEY_A1,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        },
-        [PANE_KEY_B1]: {
-          state: 'done',
-          prompt: 'B1',
-          updatedAt: 2_000,
-          stateStartedAt: 2_000,
-          paneKey: PANE_KEY_B1,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        },
-        [PANE_KEY_A2]: {
-          state: 'done',
-          prompt: 'A2',
-          updatedAt: 1_000,
-          stateStartedAt: 1_000,
-          paneKey: PANE_KEY_A2,
-          terminalTitle: 'Claude',
-          stateHistory: [],
-          agentType: 'claude'
-        }
-      },
-      retainedAgentsByPaneKey: {},
-      tabsByWorktree: { [wtA.id]: [tabA1, tabA2], [wtB.id]: [tabB1] },
-      worktreeMap: new Map([
-        [wtA.id, wtA],
-        [wtB.id, wtB]
-      ]),
-      repoMap: new Map([[repo.id, repo]]),
-      acknowledgedAgentsByPaneKey: {},
-      now: 3_000
-    })
-    const threads = buildAgentPaneThreads({ events, liveAgentByPaneKey })
-    const groups = buildActivityThreadGroups(threads, 'worktree')
-
-    expect(groups.map((group) => group.key)).toEqual(['worktree:wt-a', 'worktree:wt-b'])
-    expect(groups[0].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_A1, PANE_KEY_A2])
-    expect(groups[1].threads.map((thread) => thread.paneKey)).toEqual([PANE_KEY_B1])
-  })
-
-  it('returns no groups for empty thread input', () => {
-    expect(buildActivityThreadGroups([], 'status')).toEqual([])
-  })
-})
-
-describe('activity filter focus shortcut', () => {
-  it('matches Cmd+F on Mac and Ctrl+F elsewhere without extra modifiers', () => {
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: false, shiftKey: false, altKey: false },
-        true
-      )
-    ).toBe(true)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'F', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false },
-        false
-      )
-    ).toBe(true)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: false, ctrlKey: true, shiftKey: false, altKey: false },
-        true
-      )
-    ).toBe(false)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: false, shiftKey: true, altKey: false },
-        true
-      )
-    ).toBe(false)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
-        true
-      )
-    ).toBe(false)
-    expect(
-      isActivityFilterFocusShortcut(
-        { key: 'f', metaKey: true, ctrlKey: true, shiftKey: false, altKey: false },
-        false
-      )
-    ).toBe(false)
-  })
-
-  it('prevents default, focuses, and selects only for handled filter shortcuts', () => {
-    let prevented = 0
-    let stopped = 0
-    let stoppedImmediate = 0
-    let focused = 0
-    let selected = 0
-    const input = {
-      focus: () => {
-        focused += 1
-      },
-      select: () => {
-        selected += 1
-      }
-    } as Pick<HTMLInputElement, 'focus' | 'select'>
-    const activeElement = {
-      classList: { contains: () => false }
-    } as unknown as Element
-    const terminalElement = {
-      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
-    } as unknown as Element
-    const terminalPortalTarget = {
-      contains: (target: Element) => target === terminalElement
-    } as unknown as HTMLElement
-
-    expect(
-      handleActivityFilterFocusShortcut({
-        activeElement,
-        event: {
-          key: 'f',
-          metaKey: true,
-          ctrlKey: false,
-          shiftKey: false,
-          altKey: false,
-          preventDefault: () => {
-            prevented += 1
-          },
-          stopPropagation: () => {
-            stopped += 1
-          },
-          stopImmediatePropagation: () => {
-            stoppedImmediate += 1
-          }
-        },
-        input,
-        isMac: true,
-        terminalPortalTargets: []
-      })
-    ).toBe(true)
-    expect(prevented).toBe(1)
-    expect(stopped).toBe(1)
-    expect(stoppedImmediate).toBe(1)
-    expect(focused).toBe(1)
-    expect(selected).toBe(1)
-
-    expect(
-      handleActivityFilterFocusShortcut({
-        activeElement: terminalElement,
-        event: {
-          key: 'f',
-          metaKey: true,
-          ctrlKey: false,
-          shiftKey: false,
-          altKey: false,
-          preventDefault: () => {
-            prevented += 1
-          },
-          stopPropagation: () => {
-            stopped += 1
-          },
-          stopImmediatePropagation: () => {
-            stoppedImmediate += 1
-          }
-        },
-        input,
-        isMac: true,
-        terminalPortalTargets: [terminalPortalTarget]
-      })
-    ).toBe(false)
-    expect(prevented).toBe(1)
-    expect(stopped).toBe(1)
-    expect(stoppedImmediate).toBe(1)
-    expect(focused).toBe(1)
-    expect(selected).toBe(1)
-  })
-
-  it('does not prevent default when the filter input is unavailable', () => {
-    let prevented = 0
-    const activeElement = {
-      classList: { contains: () => false }
-    } as unknown as Element
-
-    expect(
-      handleActivityFilterFocusShortcut({
-        activeElement,
-        event: {
-          key: 'f',
-          metaKey: true,
-          ctrlKey: false,
-          shiftKey: false,
-          altKey: false,
-          preventDefault: () => {
-            prevented += 1
-          },
-          stopPropagation: () => {
-            throw new Error('unavailable input must not stop propagation')
-          },
-          stopImmediatePropagation: () => {
-            throw new Error('unavailable input must not stop immediate propagation')
-          }
-        },
-        input: null,
-        isMac: true,
-        terminalPortalTargets: []
-      })
-    ).toBe(false)
-    expect(prevented).toBe(0)
-  })
-
-  it('ignores shortcut handling while terminal-owned elements have focus', () => {
-    const terminalTextarea = {
-      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
-    } as unknown as Element
-    const portalChild = {
-      classList: { contains: () => false }
-    } as unknown as Element
-    const outside = {
-      classList: { contains: () => false }
-    } as unknown as Element
-    const portalTarget = {
-      contains: (target: Element) => target === portalChild || target === terminalTextarea
-    } as unknown as HTMLElement
-    const hiddenWorkbenchTerminal = {
-      classList: { contains: (className: string) => className === 'xterm-helper-textarea' }
-    } as unknown as Element
-    expect(shouldIgnoreActivityFilterFocusShortcutTarget(terminalTextarea, [portalTarget])).toBe(
-      true
-    )
-    expect(shouldIgnoreActivityFilterFocusShortcutTarget(portalChild, [portalTarget])).toBe(true)
-    expect(shouldIgnoreActivityFilterFocusShortcutTarget(outside, [portalTarget])).toBe(false)
-    expect(
-      shouldIgnoreActivityFilterFocusShortcutTarget(hiddenWorkbenchTerminal, [portalTarget])
-    ).toBe(false)
   })
 })

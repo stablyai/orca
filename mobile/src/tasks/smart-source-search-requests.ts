@@ -1,9 +1,7 @@
-import type {
-  BaseRefSearchResult,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  LinearIssue
-} from '../../../src/shared/types'
+import type { GitHubWorkItem } from '../../../src/shared/github/work-item-types'
+import type { GitLabWorkItem } from '../../../src/shared/gitlab-types'
+import type { LinearIssue } from '../../../src/shared/linear/issue-types'
+import type { BaseRefSearchResult } from '../../../src/shared/repo-types'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcSuccess } from '../transport/types'
 import { extractLinearIssueReadItems } from './linear-mobile-issue-read'

@@ -88,20 +88,20 @@ describe('formatAdhocReleaseName', () => {
     formatAdhocReleaseName('1.4.163-adhoc.x', label, commit, new Date(iso))
 
   it('renders version, label, Pacific timestamp, and short sha', () => {
-    expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • wasm-terminal • 07-31 13:54 • e698241')
+    expect(name('2026-07-31T20:54:00Z')).toBe('1.4.163 • wasm-terminal • Jul 31, 1:54PM • e698241')
   })
 
   // Why both sides of DST: the tag's stamp is UTC and the title is Pacific, so
   // the offset between them is not a constant. A test pinned to one season would
   // pass all summer and start failing in November.
   it('follows the Pacific offset across DST', () => {
-    expect(name('2026-01-15T02:30:00Z')).toContain(' 01-14 18:30 ')
-    expect(name('2026-07-31T07:00:00Z')).toContain(' 07-31 00:00 ')
+    expect(name('2026-01-15T02:30:00Z')).toContain(' Jan 14, 6:30PM ')
+    expect(name('2026-07-31T07:00:00Z')).toContain(' Jul 31, 12:00AM ')
   })
 
   it('sanitizes the label before it reaches the title', () => {
     expect(name('2026-07-31T20:54:00Z', 'refs/heads/fix • now')).toBe(
-      '1.4.163 • fix-now • 07-31 13:54 • e698241'
+      '1.4.163 • fix-now • Jul 31, 1:54PM • e698241'
     )
   })
 

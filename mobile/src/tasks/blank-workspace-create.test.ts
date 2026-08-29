@@ -1,8 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
 import { createBlankWorkspace } from './blank-workspace-create'
+import { WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS } from './worktree-create-idempotency-policy'
 
 type Call = { method: string; params: unknown }
+
+const IDEMPOTENT_CREATE_SUPPORT = {
+  dedupeTtlMs: WORKTREE_CREATE_DEDUPE_TTL_LEGACY_HOST_MS
+}
 
 function fakeClient(script: (method: string, call: number) => unknown, calls: Call[]): RpcClient {
   return {
@@ -34,7 +39,8 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'inherit',
-      supportsIdempotentCutoverRetry: true
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ worktreeId: 'wt-1', name: 'octopus' })
@@ -56,6 +62,25 @@ describe('createBlankWorkspace', () => {
     expect('comment' in params).toBe(false)
   })
 
+  it('marks the name as generated only when the user typed nothing', async () => {
+    // Why: the host retires generated names permanently; a name the user chose must stay reusable.
+    const calls: Call[] = []
+    const client = fakeClient(() => ({ worktree: { id: 'wt-3' } }), calls)
+
+    await createBlankWorkspace({
+      client,
+      repoId: 'repo-1',
+      baseName: 'octopus',
+      createdWithAgentId: undefined,
+      comment: undefined,
+      setupDecision: 'inherit',
+      nameWasGenerated: true,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
+    })
+
+    expect(calls[0]?.params).toMatchObject({ nameWasGenerated: true })
+  })
+
   it('sends startupAgent (not a pre-built command) so the host resolves launch args', async () => {
     // Why: regression — the modal used to send a bare startupCommand ('claude')
     // that skipped the host's default `--dangerously-skip-permissions`.
@@ -69,7 +94,8 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: 'claude',
       comment: 'spike',
       setupDecision: 'run',
-      supportsIdempotentCutoverRetry: true
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     const params = calls[0]?.params as Record<string, unknown>
@@ -100,7 +126,8 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'inherit',
-      supportsIdempotentCutoverRetry: true
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ worktreeId: 'wt-3', name: 'octopus-2' })
@@ -125,7 +152,8 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'inherit',
-      supportsIdempotentCutoverRetry: true
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ worktreeId: 'wt-4', name: 'octopus-2' })
@@ -143,7 +171,8 @@ describe('createBlankWorkspace', () => {
       createdWithAgentId: undefined,
       comment: undefined,
       setupDecision: 'skip',
-      supportsIdempotentCutoverRetry: true
+      nameWasGenerated: false,
+      worktreeCreateIdempotency: IDEMPOTENT_CREATE_SUPPORT
     })
 
     expect(result).toEqual({ error: 'SSH connection is not available' })

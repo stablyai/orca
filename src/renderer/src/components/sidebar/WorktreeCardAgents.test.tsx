@@ -771,7 +771,9 @@ describe('WorktreeCardAgents', () => {
     const markup = renderToStaticMarkup(<WorktreeCardAgents worktreeId="wt-1" />)
     const iconTitles = [...markup.matchAll(/title="([^"]+)"/g)].map((match) => match[1])
 
+    // Variety icons stay identity-free; the state label belongs to the shared tooltip.
     expect(iconTitles).toEqual([])
+    expect(markup).toContain('>Working<')
     expect(markup).not.toContain('>5 working<')
     expect(markup).toContain('>+2<')
   })

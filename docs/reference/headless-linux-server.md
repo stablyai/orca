@@ -17,22 +17,58 @@ differ on other Debian-derived releases.
 
 ## Ubuntu and Debian prerequisites
 
-Install the AppImage runtime dependency and Xvfb:
+Install the CLI tools, Xvfb, and the shared libraries Electron links against.
+A minimal server or container image ships none of the Electron libraries, and
+`orca serve` then fails before Electron starts:
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y curl file jq xvfb zlib1g-dev
+sudo apt-get install -y \
+  curl file jq xvfb zlib1g-dev ca-certificates git \
+  libgtk-3-0t64 libnss3 libatk1.0-0t64 libatk-bridge2.0-0t64 libgbm1 libasound2t64 \
+  libxtst6 libcups2t64 libdrm2 libxkbcommon0 libpango-1.0-0 libcairo2 libatspi2.0-0t64 \
+  libxcomposite1 libxdamage1 libxfixes3 libxrandr2 libxrender1 libx11-xcb1 \
+  libxcb-dri3-0 libxss1
 ```
 
-On Ubuntu 22.04, install `libfuse2` to execute the AppImage through FUSE. On
-Ubuntu 24.04 and Debian, the equivalent package may be `libfuse2t64`. FUSE is
+That command is for Ubuntu 24.04 and newer and Debian 13 and newer. Those
+releases carried out the 64-bit `time_t` transition, which renamed six of the
+packages with a `t64` suffix. On Ubuntu 20.04, Ubuntu 22.04, and Debian 12,
+substitute the unsuffixed names:
+
+- `libgtk-3-0t64` becomes `libgtk-3-0`
+- `libatk1.0-0t64` becomes `libatk1.0-0`
+- `libatk-bridge2.0-0t64` becomes `libatk-bridge2.0-0`
+- `libasound2t64` becomes `libasound2`
+- `libcups2t64` becomes `libcups2`
+- `libatspi2.0-0t64` becomes `libatspi2.0-0`
+
+The other names are identical on every supported release. The substitution is not
+symmetric, so use the list that matches the release. A `t64` name on Ubuntu 20.04,
+Ubuntu 22.04, or Debian 12 fails immediately with `E: Unable to locate package
+libgtk-3-0t64`. In the other direction the old names mostly still resolve, because
+each renamed package declares `Provides:` its unsuffixed name — except `libasound2`
+on Ubuntu 24.04, where `liboss4-salsa-asound2` in `universe` claims that name too.
+apt will not choose between two providers and exits with `E: Package 'libasound2'
+has no installation candidate`, which aborts the entire install line and leaves none
+of the libraries installed.
+
+On Ubuntu 20.04 and 22.04, install `libfuse2` to execute the AppImage through
+FUSE. On Ubuntu 24.04 and Debian 13 the package is `libfuse2t64`, though the plain
+`libfuse2` name also resolves there because nothing else provides it. FUSE is
 optional: without it, use the AppImage's supported extraction path:
 
 ```bash
 cd /opt/orca
 ./orca-linux.AppImage --appimage-extract
+sudo chmod -R a+rX /opt/orca/squashfs-root
 /opt/orca/squashfs-root/AppRun serve --port 6768
 ```
+
+The `chmod` is required whenever the extraction runs as a different user than
+the server: `--appimage-extract` creates `squashfs-root` as `drwx------` owned by
+the extracting user, so anyone else — including a dedicated service user — cannot
+even traverse it, and the run fails before Electron starts.
 
 Docker commonly has no FUSE device. Use `--appimage-extract` once or
 `--appimage-extract-and-run`; neither requires a privileged container. The
@@ -144,7 +180,14 @@ AppImage, but must not be able to replace it or the rollback artifacts.
 sudo useradd --system --create-home --shell /usr/sbin/nologin orca
 sudo chown root:root /opt/orca /opt/orca/orca-linux.AppImage
 sudo chmod 755 /opt/orca /opt/orca/orca-linux.AppImage
+# Only if you ran --appimage-extract: extraction leaves squashfs-root root-only.
+sudo chmod -R a+rX /opt/orca/squashfs-root
 ```
+
+The last line matters because the two halves of this guide combine badly without
+it. `--appimage-extract` writes `squashfs-root` as `drwx------ root root`, so the
+`orca` service user cannot read or traverse the extracted tree and the unit fails
+at startup. `chmod 755 /opt/orca` alone does not reach into it.
 
 For most hosts, one `orca serve` service is enough because Orca starts Xvfb on
 display `:99` when no display exists:
@@ -155,6 +198,8 @@ display `:99` when no display exists:
 Description=Orca runtime server
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -164,7 +209,9 @@ Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
 StandardOutput=journal
 StandardError=journal
+KillMode=mixed
 Restart=on-failure
+RestartPreventExitStatus=3
 RestartSec=5
 
 [Install]
@@ -173,6 +220,23 @@ WantedBy=multi-user.target
 
 Replace `100.64.1.20` with the LAN, Tailscale, tunnel, or public hostname that
 clients should use.
+
+`KillMode=mixed` sends the graceful stop signal only to Orca's main process,
+then retains systemd's cgroup-wide `SIGKILL` fallback if shutdown times out.
+This lets Orca keep its owned Xvfb alive until Electron disconnects cleanly.
+
+Exit status `3` means another process already owns this userData profile, so
+`RestartPreventExitStatus=3` stops the unit instead of retrying a launch that
+cannot succeed. Any other permanent startup fault is capped at 5 starts per
+5 minutes; systemd's defaults (10s window, 5 starts) can never trip at
+`RestartSec=5`, which is how one bad launch could restart thousands of times.
+The start limit counts operator-initiated starts too, so once it trips systemd
+refuses a plain `systemctl start` until the 5-minute window rolls over. Run
+`sudo systemctl reset-failed orca-serve.service` first to clear it — the
+[Upgrade](#upgrade-steps) and [Roll back](#roll-back) scripts already do.
+On systemd older than 230 those two directives are spelled
+`StartLimitInterval=`/`StartLimitBurst=` and belong in `[Service]`; Ubuntu
+20.04, Orca's oldest supported base, ships systemd 245.
 
 Enable the service:
 
@@ -228,6 +292,8 @@ Then add the display dependency to the Orca service:
 Description=Orca runtime server
 After=network-online.target orca-xvfb.service
 Wants=network-online.target orca-xvfb.service
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
@@ -237,6 +303,7 @@ Environment=DISPLAY=:99
 Environment=LIBGL_ALWAYS_SOFTWARE=1
 ExecStart=/opt/orca/orca-linux.AppImage serve --port 6768 --pairing-address 100.64.1.20
 Restart=on-failure
+RestartPreventExitStatus=3
 RestartSec=5
 
 [Install]
@@ -415,6 +482,8 @@ recover_failed_upgrade() {
     sudo rm -f /opt/orca/orca-linux.AppImage.recovering \
       /opt/orca/VERSION.recovering
     if ((recovery_ok)); then
+      # A tripped StartLimitBurst refuses a plain start
+      sudo systemctl reset-failed orca-serve.service || true
       sudo systemctl start orca-serve.service || true
     else
       echo 'Upgrade recovery failed; service remains stopped' >&2
@@ -482,6 +551,8 @@ sudo mv "$ORCA_ROLLBACK_NEW" "$ORCA_ROLLBACK"
 ORCA_BINARY_PROMOTED=1
 sudo mv -f /opt/orca/orca-linux.AppImage.new /opt/orca/orca-linux.AppImage
 sudo mv -f /opt/orca/VERSION.new /opt/orca/VERSION
+# Clears a start-limit hit left by the version being replaced
+sudo systemctl reset-failed orca-serve.service
 sudo systemctl start orca-serve.service
 ORCA_SERVICE_STOPPED=0
 trap - EXIT
@@ -614,6 +685,8 @@ restart_after_rollback_error() {
       fi
     fi
     if ((recovery_ok)); then
+      # A tripped StartLimitBurst refuses a plain start
+      sudo systemctl reset-failed orca-serve.service || true
       sudo systemctl start orca-serve.service || true
     else
       echo 'Rollback recovery failed; service remains stopped' >&2
@@ -714,6 +787,8 @@ if ((ORCA_ROLLBACK_HAS_VERSION)); then
 else
   sudo rm -f /opt/orca/VERSION
 fi
+# The crash-looping build you are rolling back from tripped StartLimitBurst
+sudo systemctl reset-failed orca-serve.service
 sudo systemctl start orca-serve.service
 ORCA_SERVICE_STOPPED=0
 sudo rm -rf -- "$ORCA_RESTORE"
@@ -802,12 +877,31 @@ refuse to run there and print the command to run on the machine you want.
 - GPU or DRI warnings on a VPS: keep `LIBGL_ALWAYS_SOFTWARE=1` in the service
   environment.
 - Chromium sandbox errors: confirm the service is running as the non-root
-  `orca` user and that `/opt/orca` is readable by that user.
+  `orca` user and that `/opt/orca` is readable by that user, including
+  `/opt/orca/squashfs-root` if you extracted the AppImage.
 - Clients cannot connect: make sure `--pairing-address` is an address reachable
   from the client, and make sure firewalls allow the selected `--port`.
+- Journal shows `Another Orca instance is already running for this userData
+profile` and the unit exits `3`: another process already owns the profile, so
+  `RestartPreventExitStatus=3` leaves the unit `failed` on purpose. Find the
+  owner with `systemctl status orca-serve` and `pgrep -af orca`. Stop it (or
+  keep it and leave the unit down), then run
+  `sudo systemctl reset-failed orca-serve && sudo systemctl start orca-serve` —
+  `reset-failed` clears the failed state and any start-limit counter. If no owner
+  exists, the lock is stale (Chromium recorded a pid that
+  has since been reused): remove `SingletonLock` and `SingletonSocket` from the
+  userData directory and start again. If an earlier crash-loop already leaked
+  AppImage mounts, list them with `findmnt -rn -t fuse.orca-linux.AppImage` and
+  release only the ones with no live owner using `fusermount -uz <target>` (or
+  `umount -l <target>`), leaving the running instance's mount alone.
 - Service crash-loops right after an upgrade: use [Roll back](#roll-back) with
   the pre-upgrade `.ready` bundle. Do not rerun the upgrade first; doing so would
-  make the crashing version the next rollback binary.
+  make the crashing version the next rollback binary. The loop trips
+  `StartLimitBurst`, so any manual `systemctl start` outside that script needs
+  `sudo systemctl reset-failed orca-serve.service` first.
 - Diagnosing other missing libraries: extract the AppImage without launching it
   with `./orca-linux.AppImage --appimage-extract`, then run
-  `ldd squashfs-root/orca` to list any shared libraries the host is missing.
+  `ldd squashfs-root/orca-ide` to list any shared libraries the host is missing.
+  The Electron binary is `orca-ide`, not `orca`; `ldd` on a path that does not
+  exist prints nothing and exits cleanly, which reads as a clean result in
+  exactly the situation where you are hunting a missing library.

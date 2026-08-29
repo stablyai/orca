@@ -35,7 +35,6 @@ const RESTRICTED_E2E_ENV_KEYS = new Set([
   'USERPROFILE',
   'CODEX_HOME',
   'ORCA_CODEX_HOME',
-  'ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME',
   'ORCA_E2E_HOME_DIR',
   'ORCA_E2E_USER_DATA_DIR'
 ])
@@ -92,8 +91,7 @@ export async function launchInstalledApp({
       ORCA_E2E_USER_DATA_DIR: userDataDir,
       HOME: isolatedHome,
       USERPROFILE: isolatedHome,
-      ORCA_E2E_HOME_DIR: isolatedHome,
-      ORCA_CODEX_SYSTEM_DEFAULT_REAL_HOME: '0'
+      ORCA_E2E_HOME_DIR: isolatedHome
     }
   })
   // If firstWindow times out (the launched main never shows a window), the

@@ -183,6 +183,57 @@ describe('closeTerminalTab', () => {
     isWebTerminalSurfaceTabIdMock.mockReturnValue(false)
   })
 
+  it('retires exact resume authority when explicit cleanup arrives after the tab disappeared', () => {
+    const closeTab = vi.fn()
+    const onClosed = vi.fn()
+    getStateMock.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('retired-worker-tab', {
+      hostCloseReason: 'cleanup',
+      localPtyTeardownOwnedExternally: true,
+      onClosed
+    })
+
+    expect(closeTab).toHaveBeenCalledWith('retired-worker-tab', {
+      reason: 'cleanup',
+      localPtyTeardownOwnedExternally: true
+    })
+    expect(onClosed).toHaveBeenCalledOnce()
+  })
+
+  it('retires exact resume authority when a user close arrives after the tab disappeared', () => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('retired-worker-tab')
+
+    expect(closeTab).toHaveBeenCalledWith('retired-worker-tab', { reason: 'user' })
+  })
+
+  it.each([
+    ['local PTY exit', { reason: 'pty-exit' as const }],
+    ['paired host PTY exit', { hostCloseReason: 'pty-exit' as const }]
+  ])('preserves missing-tab recovery authority for %s', (_label, options) => {
+    const closeTab = vi.fn()
+    getStateMock.mockReturnValue({
+      tabsByWorktree: {},
+      unifiedTabsByWorktree: {},
+      closeTab
+    })
+
+    closeTerminalTab('unexpectedly-lost-tab', options)
+
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
   it('delegates host-backed terminal closes to the paired runtime', () => {
     const closeTab = vi.fn()
     isWebRuntimeSessionActiveMock.mockReturnValue(true)
@@ -390,6 +441,7 @@ describe('closeTerminalTab', () => {
       activeTabId: 'terminal-entity-1',
       openFiles: [],
       browserTabsByWorktree: {},
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
       closeTab,
       closeUnifiedTab,
       setActiveTab: vi.fn(),
@@ -402,7 +454,7 @@ describe('closeTerminalTab', () => {
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
 
-  it('activates the next unified terminal tab when closing the active unified-only tab', () => {
+  it('defers successor selection for unified terminal tabs to the unified close contract', () => {
     const closeTab = vi.fn()
     const closeUnifiedTab = vi.fn()
     const setActiveTab = vi.fn()
@@ -453,7 +505,10 @@ describe('closeTerminalTab', () => {
 
     closeTerminalTab('terminal-entity-1')
 
-    expect(setActiveTab).toHaveBeenCalledWith('terminal-entity-2')
+    // Why: a unified terminal must not pre-pick a terminal-only successor — the
+    // store's closeUnifiedTab owns the MRU/neighbor repair (which may land on an
+    // agent-session tab); terminal-tab-actions-unified-close.test.ts covers it.
+    expect(setActiveTab).not.toHaveBeenCalled()
     expect(closeTab).toHaveBeenCalledWith('terminal-entity-1', { reason: undefined })
     expect(closeUnifiedTab).not.toHaveBeenCalled()
   })
@@ -522,6 +577,7 @@ describe('closeTerminalTab', () => {
       activeTabId: 'pinned-entity-1',
       openFiles: [],
       browserTabsByWorktree: {},
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 0 })),
       closeTab: vi.fn(),
       closeUnifiedTab: vi.fn(),
       setActiveTab: vi.fn(),

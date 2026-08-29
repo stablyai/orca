@@ -1,3 +1,5 @@
+import type { SshPendingPtyKill } from './ssh-pending-pty-kill'
+
 // ─── SSH Connection Types ───────────────────────────────────────────
 
 export const MIN_SSH_RELAY_GRACE_PERIOD_SECONDS = 60
@@ -53,10 +55,18 @@ export type SshTarget = {
   /** Reuse a system OpenSSH connection across setup commands. Undefined means
    *  enabled; false is an explicit per-target compatibility opt-out. */
   systemSshConnectionReuse?: boolean
+  /** Durable registration incarnation. Advances on create / re-create / explicit
+   *  re-adopt only, so automations fenced on an old registration cannot run on a
+   *  later target that happens to reuse the id. Never advanced by connect state. */
+  generation?: number
 }
 
+/** Renderer-authored target fields; registration generations are allocated and owned by main. */
+export type SshTargetCreateInput = Omit<SshTarget, 'id' | 'generation'>
+export type SshTargetUpdateInput = Partial<SshTargetCreateInput>
+
 /** Public target identity safe to mirror to a paired client. */
-export type SshTargetSummary = Pick<SshTarget, 'id' | 'label'>
+export type SshTargetSummary = Pick<SshTarget, 'id' | 'label' | 'generation'>
 
 /** Identity of a removed SSH target, recorded so that re-adding the same host
  *  can re-point orphaned repos/worktrees from the old (deleted) target id to
@@ -90,6 +100,54 @@ export type SshTargetAddResult = {
 export type SshConfigImportResult = {
   targets: SshTarget[]
   repoReadoptions: SshRepoReadoption[]
+}
+
+/** Concrete Host entry from ~/.ssh/config, for pickers that prefill the add-host form. */
+export type SshConfigHostSummary = {
+  alias: string
+  hostname: string
+  port: number
+  username: string
+  identityFile?: string
+  proxyCommand?: string
+  jumpHost?: string
+  /** True when an Orca SSH target already uses this config alias. */
+  alreadyInOrca: boolean
+  /**
+   * True when the user deleted this alias from Orca (tombstone). Still listed so they
+   * can re-pick it; passive import and "Add all" keep it out until re-adopt / save.
+   */
+  previouslyRemoved?: boolean
+}
+
+/** Max hosts one picker query returns; shared so the renderer's copy cannot drift. */
+export const SSH_CONFIG_HOST_RESULT_LIMIT = 100
+
+export type SshConfigHostListResult = {
+  hosts: SshConfigHostSummary[]
+  totalHostCount: number
+  newHostCount: number
+  matchCount: number
+  hasMore: boolean
+}
+
+/** `refresh` re-reads ~/.ssh/config; filter keystrokes reuse the cached parse. */
+export type SshConfigHostListArgs = { query?: string; refresh?: boolean }
+
+/** Effective OpenSSH values used to prefill one manually managed target. */
+export type SshConfigHostResolution = {
+  alias: string
+  hostname: string
+  port: number
+  username: string
+  identityFiles: string[]
+  identityAgent?: string
+  identitiesOnly: boolean
+  forwardAgent: boolean
+  gssapiAuthentication?: boolean
+  proxyCommand?: string
+  proxyUseFdpass: boolean
+  jumpHost?: string
 }
 
 export type SavedPortForward = {
@@ -155,6 +213,9 @@ export type SshRemotePtyLease = {
   updatedAt: number
   lastAttachedAt?: number
   lastDetachedAt?: number
+  /** A stop this client asked for and could not confirm, replayed on the next handshake to this
+   *  same target. See `shared/ssh-pending-pty-kill.ts`. Never on the wire — client-local. */
+  pendingKill?: SshPendingPtyKill
 }
 
 /** Main-owned relay lease needed to reclaim PTY delivery after a desktop restart. */

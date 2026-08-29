@@ -20,14 +20,18 @@ on:
       - 'config/scripts/computer-use-smoke.mjs'
       - 'config/scripts/computer-use-smoke.test.mjs'
       - 'config/scripts/daemon-boot-smoke.mjs'
+      - 'config/scripts/daemon-endpoint-handover-smoke.mjs'
       - 'config/scripts/windows-daemon-workspace-close-repro.mjs'
       - 'config/scripts/verify-computer-native.mjs'
       # Why: the native-smoke job boots the built terminal daemon under plain
       # Node, so any change to the daemon bundle graph or the main build must
       # re-run it (the v1.4.129-rc.1 daemon outage shipped with green CI).
       - 'electron.vite.config.ts'
-      - 'build-plugins/**'
+      - 'config/build-plugins/**'
       - 'src/main/daemon/**'
+      - 'src/main/providers/local-pty-provider.ts'
+      - 'src/main/providers/windows-shell-args.ts'
+      - 'src/main/providers/windows-shell-preflight-runtime.windows.test.ts'
       - 'native/computer-use-macos/**'
       - 'native/computer-use-linux/**'
       - 'native/computer-use-windows/**'
@@ -67,30 +71,17 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
       - if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y python3 python3-gi gir1.2-atspi-2.0 at-spi2-core gedit xvfb xclip xdotool
-      # Why: pnpm's bundled node-gyp can ship gyp_main.py without execute
-      # permission on Linux runners; node-pty's install fallback then fails
-      # before this smoke job can exercise the native package.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        if: runner.os == 'Linux'
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: node
       # Why: without --config, bare vitest ignores config/vitest.config.ts (there
       # is no root config) and falls back to the 5s default timeout with no
       # Windows worker cap, so the real csc.exe launcher-compile tests time out
       # on hosted Windows. Use the shared config so this job matches pnpm test.
       - run: >-
           pnpm vitest run --config config/vitest.config.ts
-          config/scripts/build-windows-cli-launcher.test.mjs
           src/main/ssh/ssh-remote-cli-launcher.test.ts
           config/scripts/computer-e2e-workflow.test.mjs
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
@@ -105,6 +96,7 @@ jobs:
           src/main/computer/macos-native-provider-socket.test.ts
           src/main/computer/macos-computer-use-permissions.test.ts
           src/main/computer/macos-computer-use-permission-status.test.ts
+          src/main/providers/windows-shell-preflight-runtime.windows.test.ts
           src/main/computer/desktop-script-provider-client.test.ts
           src/main/computer/desktop-script-provider-cache.test.ts
           src/main/computer/desktop-script-provider-actions.test.ts
@@ -135,6 +127,11 @@ jobs:
       # the PR when the built daemon cannot start on ubuntu-22.04 / windows.
       - name: Daemon boot smoke
         run: node config/scripts/daemon-boot-smoke.mjs
+      # Why: a daemon that lost its endpoint name used to delete the replacement's
+      # socket on exit, stranding a live daemon that hosts PTYs nothing can reach.
+      # Only two real processes racing the same endpoint reproduce it.
+      - name: Daemon endpoint handover smoke
+        run: node config/scripts/daemon-endpoint-handover-smoke.mjs
       # Why: workspace removal overlaps graceful renderer teardown with the
       # forced main-process sweep; exercise that exact pair against real ConPTY.
       - name: Windows daemon workspace-close repro
@@ -149,13 +146,9 @@ jobs:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-      - uses: actions/setup-node@v6
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-      - run: pnpm install --frozen-lockfile
+          native-runtime: electron
       - name: Owner-loss benchmark process cleanup
         run: >-
           pnpm vitest run

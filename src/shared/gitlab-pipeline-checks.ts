@@ -1,5 +1,5 @@
 import type { GitLabPipelineJob } from './gitlab-types'
-import type { PRCheckDetail } from './types'
+import type { PRCheckDetail } from './github/check-types'
 
 export function mapGitLabPipelineJobStatusToCheckStatus(status: string): PRCheckDetail['status'] {
   const s = status.toLowerCase()
@@ -62,6 +62,8 @@ export function gitLabPipelineJobsToPRChecks(jobs: GitLabPipelineJob[]): PRCheck
     name: job.stage ? `${job.stage}: ${job.name}` : job.name,
     status: mapGitLabPipelineJobStatusToCheckStatus(job.status),
     conclusion: mapGitLabPipelineJobStatusToConclusion(job.status),
-    url: job.webUrl || null
+    url: job.webUrl || null,
+    // Truthiness, not != null: the runtime RPC schema requires a positive int.
+    ...(job.id ? { gitlabJobId: job.id } : {})
   }))
 }

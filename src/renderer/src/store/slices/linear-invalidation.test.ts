@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import type { LinearConnectionStatus, LinearIssue, LinearTeam } from '../../../../shared/types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearConnectionStatus, LinearTeam } from '../../../../shared/linear/workspace-types'
 import { createLinearSlice } from './linear'
 
 const linearStatus = vi.fn()
@@ -15,14 +16,27 @@ vi.mock('@/runtime/runtime-linear-client', () => ({
   linearConnect: (...args: unknown[]) => linearConnect(...args),
   linearDisconnect: vi.fn(),
   linearDisconnectWorkspace: vi.fn(),
-  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args),
   isLinearIssueAttributeFilterUnsupportedError: () => false,
   linearListIssues: (...args: unknown[]) => linearListIssues(...args),
-  linearListTeams: (...args: unknown[]) => linearListTeams(...args),
   linearSearchIssues: (...args: unknown[]) => linearSearchIssues(...args),
   linearSelectWorkspace: vi.fn(),
   linearStatus: (...args: unknown[]) => linearStatus(...args),
   linearTestConnection: vi.fn()
+}))
+
+vi.mock('@/runtime/runtime-linear-issue-mutations', () => ({
+  linearGetIssue: (...args: unknown[]) => linearGetIssue(...args)
+}))
+
+vi.mock('@/runtime/runtime-linear-project-client', () => ({
+  linearGetCustomView: vi.fn(),
+  linearGetProject: vi.fn(),
+  linearListCustomViewIssues: vi.fn(),
+  linearListCustomViewProjects: vi.fn(),
+  linearListCustomViews: vi.fn(),
+  linearListProjectIssues: vi.fn(),
+  linearListProjects: vi.fn(),
+  linearListTeams: (...args: unknown[]) => linearListTeams(...args)
 }))
 
 vi.mock('../../hooks/useIssueMetadata', () => ({

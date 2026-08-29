@@ -1,6 +1,12 @@
 import { readFile, stat } from 'node:fs/promises'
-import type { GitHubRepositoryIdentity, RepoKind } from '../shared/types'
-import { faviconUrlFromWebsite, githubAvatarIcon, type RepoIcon } from '../shared/repo-icon'
+import type { GitHubRepositoryIdentity } from '../shared/github/pull-request-types'
+import type { RepoKind } from '../shared/repo-types'
+import {
+  faviconUrlFromWebsite,
+  githubAvatarIcon,
+  githubAvatarSlug,
+  type RepoIcon
+} from '../shared/repo-icon'
 import { getRepoSlug, getRepoUpstream } from './github/client'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import type { IFilesystemProvider } from './providers/types'
@@ -71,14 +77,13 @@ async function detectRemotePackageHomepageIcon(
   }
 }
 
-async function detectGitHubAvatarIcon(
+export async function detectGitHubAvatarIcon(
   repoPath: string,
   connectionId?: string | null,
   upstream?: GitHubRepositoryIdentity | null
 ): Promise<RepoIcon | null> {
   try {
-    // Why: a fork's origin is the personal copy, so prefer the upstream owner.
-    const slug = upstream ?? (await getRepoSlug(repoPath, connectionId))
+    const slug = githubAvatarSlug(await getRepoSlug(repoPath, connectionId), upstream)
     return slug ? githubAvatarIcon(slug) : null
   } catch {
     return null
@@ -98,16 +103,20 @@ export async function detectRepoIcon({
 }): Promise<RepoIcon | undefined> {
   try {
     const fsProvider = connectionId ? getSshFilesystemProvider(connectionId) : undefined
-    const fileIcon = await detectRepoFileIcon(repoPath, fsProvider)
-    if (fileIcon) {
-      return fileIcon
-    }
+    // Why: a remote repoPath with no provider must not be probed on the client
+    // filesystem — a same-named local path answers for the wrong repository.
+    if (fsProvider || !connectionId) {
+      const fileIcon = await detectRepoFileIcon(repoPath, { connectionId, fsProvider })
+      if (fileIcon) {
+        return fileIcon
+      }
 
-    const homepageIcon = fsProvider
-      ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
-      : await detectLocalPackageHomepageIcon(repoPath)
-    if (homepageIcon) {
-      return homepageIcon
+      const homepageIcon = fsProvider
+        ? await detectRemotePackageHomepageIcon(repoPath, fsProvider)
+        : await detectLocalPackageHomepageIcon(repoPath)
+      if (homepageIcon) {
+        return homepageIcon
+      }
     }
 
     if (kind === 'git') {

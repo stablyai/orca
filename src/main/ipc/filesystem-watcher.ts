@@ -3,7 +3,7 @@ import { ipcMain, type WebContents } from 'electron'
 import * as path from 'node:path'
 import { stat } from 'node:fs/promises'
 import type { Event as WatcherEvent } from '@parcel/watcher'
-import type { FsChangeEvent, FsChangedPayload } from '../../shared/types'
+import type { FsChangeEvent, FsChangedPayload } from '../../shared/filesystem-entry-types'
 import {
   isWindowsAbsolutePathLike,
   normalizeRuntimePathForComparison
@@ -39,6 +39,7 @@ import {
 } from './watcher-removal-drain'
 // Why: suppress high-churn dirs at the watcher level (separate from the File Explorer display filter, which only hides rows).
 import { WATCHER_IGNORE_DIRS, buildParcelWatcherIgnoreOptions } from './filesystem-watcher-ignore'
+import type { WorktreeWatcherRemoval } from './worktree-watcher-removal'
 
 // ── Per-root watcher state ───────────────────────────────────────────
 // WatchedRoot/WatcherSubscription live in filesystem-watcher-wsl.ts so native and WSL watchers share one shape.
@@ -1958,4 +1959,17 @@ export async function closeAllWatchers(): Promise<void> {
     }
   }
   remoteWatchers.clear()
+}
+
+/** The desktop binding for {@link WorktreeWatcherRemoval}. Installed during startup. */
+export const desktopWorktreeWatcherRemoval: WorktreeWatcherRemoval = {
+  closeLocal: (worktreePath, deadline) =>
+    deadline
+      ? closeLocalWatcherForWorktreePath(worktreePath, deadline)
+      : closeLocalWatcherForWorktreePath(worktreePath),
+  restoreLocal: restoreLocalWatcherAfterFailedRemoval,
+  forgetLocal: forgetLocalWatcherRemovalSnapshot,
+  closeRemote: closeRemoteWatcherForWorktreePath,
+  restoreRemote: restoreRemoteWatcherAfterFailedRemoval,
+  forgetRemote: forgetRemoteWatcherRemovalSnapshot
 }

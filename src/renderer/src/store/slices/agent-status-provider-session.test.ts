@@ -6,12 +6,13 @@ import { createTestStore, makeTab } from './store-test-helpers'
 
 const PI_COMPATIBLE_CASES = [
   { agent: 'pi' as const, label: 'Pi' },
-  { agent: 'omp' as const, label: 'OMP' }
+  { agent: 'omp' as const, label: 'OMP' },
+  { agent: 'prime-agent' as const, label: 'Prime Agent' }
 ]
 
-function makePiCompatibleProviderSession(agent: 'pi' | 'omp') {
+function makePiCompatibleProviderSession(agent: 'pi' | 'omp' | 'prime-agent') {
   const session = { key: 'session_id' as const, id: `${agent}-session-1` }
-  return agent === 'pi' ? { ...session, transcriptPath: '/tmp/pi-session-1.jsonl' } : session
+  return agent === 'omp' ? session : { ...session, transcriptPath: `/tmp/${agent}-session-1.jsonl` }
 }
 
 describe('recordAgentProviderSession', () => {
@@ -121,7 +122,7 @@ describe('recordAgentProviderSession', () => {
     expect(store.getState().agentStatusByPaneKey['tab-1:leaf-1']?.providerSession).toBeUndefined()
   })
 
-  it('uses the session file as part of Pi resume ownership only', () => {
+  it('uses the session file as part of transcript-based resume ownership only', () => {
     const base = {
       paneKey: 'tab-1:leaf-1',
       tabId: 'tab-1',
@@ -133,7 +134,7 @@ describe('recordAgentProviderSession', () => {
       origin: 'live' as const
     }
     const makeRecord = (
-      agent: 'pi' | 'claude',
+      agent: 'pi' | 'prime-agent' | 'claude',
       transcriptPath: string
     ): SleepingAgentSessionRecord => ({
       ...base,
@@ -143,6 +144,9 @@ describe('recordAgentProviderSession', () => {
 
     expect(getProviderSessionClaimKey(makeRecord('pi', '/tmp/first.jsonl'))).not.toBe(
       getProviderSessionClaimKey(makeRecord('pi', '/tmp/second.jsonl'))
+    )
+    expect(getProviderSessionClaimKey(makeRecord('prime-agent', '/tmp/first.jsonl'))).not.toBe(
+      getProviderSessionClaimKey(makeRecord('prime-agent', '/tmp/second.jsonl'))
     )
     expect(getProviderSessionClaimKey(makeRecord('claude', '/tmp/first.jsonl'))).toBe(
       getProviderSessionClaimKey(makeRecord('claude', '/tmp/second.jsonl'))
@@ -367,7 +371,7 @@ describe('recordAgentProviderSession', () => {
         agent,
         providerSession,
         connectionId: 'ssh-connection-1',
-        state: 'working',
+        state: 'done',
         origin: 'live'
       })
 
@@ -390,6 +394,120 @@ describe('recordAgentProviderSession', () => {
       })
     }
   )
+
+  it('does not turn a completed recovery record back into working on a same-session update', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = makePiCompatibleProviderSession('pi')
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finish the task', agentType: 'pi', interrupted: true },
+        'Pi',
+        { updatedAt: 30, stateStartedAt: 30 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 40 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
+      )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      providerSession,
+      state: 'done',
+      interrupted: true,
+      origin: 'live'
+    })
+  })
+
+  it('does not downgrade a quit recovery record on a same-session update', () => {
+    const store = createTestStore()
+    store.setState({
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1' })]
+      }
+    } as Partial<AppState>)
+    const providerSession = makePiCompatibleProviderSession('pi')
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 10 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'working', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 20, stateStartedAt: 20 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store
+      .getState()
+      .setAgentStatus(
+        'tab-1:leaf-1',
+        { state: 'done', prompt: 'finish the task', agentType: 'pi' },
+        'Pi',
+        { updatedAt: 30, stateStartedAt: 30 },
+        { tabId: 'tab-1', worktreeId: 'wt-1' },
+        { providerSession }
+      )
+    store.getState().captureAllSleepingAgentSessions('quit')
+
+    store
+      .getState()
+      .recordAgentProviderSession(
+        'tab-1:leaf-1',
+        'pi',
+        providerSession,
+        { updatedAt: 40 },
+        { tabId: 'tab-1', worktreeId: 'wt-1', connectionId: 'ssh-connection-1' }
+      )
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toMatchObject({
+      providerSession,
+      state: 'done',
+      origin: 'quit'
+    })
+  })
 
   it.each(PI_COMPATIBLE_CASES)(
     'keeps a completed $label session resumable through quit capture',
@@ -446,7 +564,7 @@ describe('recordAgentProviderSession', () => {
         agent,
         providerSession,
         connectionId: 'ssh-connection-1',
-        state: 'working',
+        state: 'done',
         origin: 'quit'
       })
 

@@ -3,7 +3,9 @@ import { track } from '@/lib/telemetry'
 import { useAppStore } from '@/store'
 import { ONBOARDING_FINAL_STEP, ONBOARDING_FLOW_VERSION } from '../../../../shared/constants'
 import type { EventProps } from '../../../../shared/telemetry-events'
-import type { GlobalSettings, OnboardingState, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { applyAgentPermissionMode } from '../../../../shared/tui-agent-permissions'
 import type { StepId, StepNumber } from './use-onboarding-flow-types'
 
@@ -35,7 +37,6 @@ export function buildCompletedOnboardingNotificationSettings(
 
 type CloseWithDeps = {
   onOnboardingChange: (state: OnboardingState) => void
-  onboardingChecklist: OnboardingState['checklist']
   startTimeRef: { current: number }
   setError: (msg: string | null) => void
 }
@@ -67,12 +68,7 @@ export function trackOnboardingDismissed(
   track('onboarding_dismissed', buildOnboardingDismissedPayload(lastStepReached, dismissedExtras))
 }
 
-export function useCloseWith({
-  onOnboardingChange,
-  onboardingChecklist,
-  startTimeRef,
-  setError
-}: CloseWithDeps) {
+export function useCloseWith({ onOnboardingChange, startTimeRef, setError }: CloseWithDeps) {
   // Why: onboarding closes exactly once. On the final notifications step both
   // the "Add your first project" handoff (completed) and a click-off/Escape
   // dismissal (dismissed) can reach closeWith, and next()'s persist window
@@ -83,9 +79,8 @@ export function useCloseWith({
   return useCallback(
     async (
       outcome: 'completed' | 'dismissed',
-      checklist: Partial<OnboardingState['checklist']>,
       lastStepReached: StepNumber,
-      completedPath?: 'open_folder' | 'clone_url' | 'add_project_modal',
+      completedPath?: 'add_project_modal',
       dismissedExtras?: DismissedExtras
     ): Promise<boolean> => {
       if (closedRef.current) {
@@ -94,18 +89,12 @@ export function useCloseWith({
       closedRef.current = true
       let nextState: OnboardingState
       try {
-        // Why: main-process updateOnboarding already merges with current state,
-        // so spreading the local (potentially stale) onboarding.checklist would
-        // overwrite concurrent updates.
         nextState = await window.api.onboarding.update({
           flowVersion: ONBOARDING_FLOW_VERSION,
           closedAt: Date.now(),
           outcome,
           lastCompletedStep: outcome === 'completed' ? ONBOARDING_FINAL_STEP : -1,
-          checklist: {
-            ...checklist,
-            dismissed: outcome === 'dismissed'
-          }
+          checklist: { dismissed: outcome === 'dismissed' }
         })
       } catch (err) {
         // Why: the persist failed, so onboarding did not actually close — clear
@@ -124,22 +113,6 @@ export function useCloseWith({
           path: completedPath,
           total_duration_ms: total
         })
-        // Why: checklist items completed by the wizard itself must fire
-        // `activation_checklist_item_completed` so the post-wizard panel and
-        // analytics agree. Other items (ranFirstAgent, triedCmdJ, …) emit
-        // from their own product surfaces.
-        if (checklist.addedRepo && !onboardingChecklist.addedRepo) {
-          track('activation_checklist_item_completed', {
-            item: 'addedRepo',
-            time_since_completed_ms: 0
-          })
-        }
-        if (checklist.addedFolder && !onboardingChecklist.addedFolder) {
-          track('activation_checklist_item_completed', {
-            item: 'addedFolder',
-            time_since_completed_ms: 0
-          })
-        }
       }
       if (outcome === 'completed') {
         // Why: closeWith updates parent state synchronously from this hook's
@@ -152,7 +125,7 @@ export function useCloseWith({
       }
       return true
     },
-    [onOnboardingChange, onboardingChecklist, startTimeRef, setError]
+    [onOnboardingChange, startTimeRef, setError]
   )
 }
 

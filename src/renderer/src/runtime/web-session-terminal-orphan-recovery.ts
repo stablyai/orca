@@ -3,7 +3,7 @@ import type {
   RuntimeTerminalListResult,
   RuntimeTerminalOrphanAdoptionResult
 } from '../../../shared/runtime-types'
-import type { TerminalTab } from '../../../shared/types'
+import type { TerminalTab } from '../../../shared/terminal-tab-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { parseRemoteRuntimePtyId } from './runtime-terminal-stream'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
@@ -91,7 +91,8 @@ async function recoverTerminalOrphans(
     params: {
       worktree: toRuntimeWorktreeSelector(snapshot.worktree),
       handles: [...candidateHandles],
-      requireFreshPtyLiveness: true
+      requireFreshPtyLiveness: true,
+      includeVisualLayouts: false
     },
     timeoutMs: 15_000
   })
