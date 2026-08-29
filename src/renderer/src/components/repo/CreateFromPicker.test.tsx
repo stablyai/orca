@@ -11,7 +11,19 @@ import {
 } from '@/runtime/runtime-repo-client'
 
 vi.mock('@/components/ui/popover', () => ({
-  Popover: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  // Why: the real popover owns open state; expose onOpenChange so a test can open the list.
+  Popover: ({
+    children,
+    onOpenChange
+  }: {
+    children: React.ReactNode
+    onOpenChange?: (open: boolean) => void
+  }) => (
+    <div>
+      <button type="button" data-testid="open-popover" onClick={() => onOpenChange?.(true)} />
+      {children}
+    </div>
+  ),
   PopoverContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   PopoverTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>
 }))
@@ -98,6 +110,28 @@ describe('CreateFromPicker host routing', () => {
     expect(getRuntimeRepoBaseRefDefault).toHaveBeenCalledWith(
       { activeRuntimeEnvironmentId: 'owner-runtime' },
       repo.id
+    )
+  })
+
+  // Why: the composer's Branch tab already lists on an empty query; a minimum-length gate left
+  // this picker showing only the default ref and branches that happen to have a worktree.
+  it('lists the repo branches as soon as it opens, with no query typed', async () => {
+    const repo = makeRepo({ executionHostId: 'local' })
+    storeState.repos = [repo]
+
+    await renderPicker(repo)
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('[data-testid="open-popover"]')?.click()
+    })
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+    })
+
+    expect(searchRuntimeRepoBaseRefs).toHaveBeenCalledWith(
+      { activeRuntimeEnvironmentId: null },
+      repo.id,
+      '',
+      30
     )
   })
 
