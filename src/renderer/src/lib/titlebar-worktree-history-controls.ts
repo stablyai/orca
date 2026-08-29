@@ -6,6 +6,7 @@ export function shouldShowWorktreeHistoryControls(activeView: UISlice['activeVie
     activeView === 'tasks' ||
     activeView === 'automations' ||
     activeView === 'artifacts' ||
-    activeView === 'skills'
+    activeView === 'skills' ||
+    activeView === 'github'
   )
 }

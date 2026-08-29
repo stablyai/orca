@@ -5214,7 +5214,8 @@
           "fee535205b": "Tasks",
           "d599269755": "Hide from sidebar",
           "artifacts": "Artifacts",
-          "skills": "Skills"
+          "skills": "Skills",
+          "github": "My GitHub"
         },
         "SidebarRepositoryFilterSection": {
           "d3a9c4cea1": "Clear",
@@ -16425,6 +16426,54 @@
           "externalLinkTitle": "Open link to {{host}}?",
           "externalLinkConfirm": "Open link",
           "externalLinkCancel": "Cancel"
+        }
+      },
+      "github-panel": {
+        "GitHubPage": {
+          "title": "My GitHub",
+          "envAccount": "via environment token",
+          "disconnect": "Disconnect",
+          "loading": "Loading…"
+        },
+        "GitHubRepoList": {
+          "private": "Private",
+          "fork": "Fork",
+          "pushed": "pushed {{when}}",
+          "addedActions": "Added — project actions",
+          "added": "Added",
+          "removeFromOrca": "Remove from Orca",
+          "cleanupFiles": "Remove and move files to {{trashName}}",
+          "clone": "Clone",
+          "loadFailed": "Could not load repositories.",
+          "noWorkspaceDir": "Set a workspace directory in Settings first.",
+          "cloned": "Repository cloned",
+          "cleanupTitle": "Remove project and delete files?",
+          "cleanupDescription": "“{{path}}” will be moved to the {{trashName}}, and the project will be removed from Orca.",
+          "cleanupConfirm": "Move to {{trashName}}",
+          "cleanupFailed": "Could not delete the repository files.",
+          "cleanedUp": "Repository files moved to the {{trashName}}",
+          "searchPlaceholder": "Search repositories",
+          "refresh": "Refresh",
+          "retry": "Retry",
+          "loading": "Loading repositories…",
+          "noMatches": "No repositories match your search.",
+          "empty": "No repositories found for this account."
+        },
+        "GitHubSignInPanel": {
+          "codeExpired": "The sign-in code expired. Start over to get a new one.",
+          "enterCode": "GitHub should have opened in your browser. Enter this code there:",
+          "copyCode": "Copy code",
+          "waiting": "Waiting for authorization…",
+          "openGithub": "Open GitHub again",
+          "cancel": "Cancel",
+          "signIn": "Sign in with GitHub",
+          "connectFailed": "Could not connect. Try again.",
+          "tokenPlaceholder": "Personal access token",
+          "connect": "Connect",
+          "createToken": "Create a token with the repo scope on GitHub",
+          "title": "Connect your GitHub account",
+          "subtitle": "List your repositories, clone them locally, and add them as Orca projects.",
+          "or": "or"
         }
       }
     },

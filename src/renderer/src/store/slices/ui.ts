@@ -649,6 +649,7 @@ export type UISlice = {
     | 'skills'
     | 'artifacts'
     | 'mobile'
+    | 'github'
   previousViewBeforeSettings:
     | 'terminal'
     | 'tasks'
@@ -658,6 +659,7 @@ export type UISlice = {
     | 'skills'
     | 'artifacts'
     | 'mobile'
+    | 'github'
   previousViewBeforeActivity:
     | 'terminal'
     | 'settings'
@@ -667,6 +669,7 @@ export type UISlice = {
     | 'skills'
     | 'artifacts'
     | 'mobile'
+    | 'github'
   previousViewBeforeAutomations:
     | 'terminal'
     | 'settings'
@@ -676,6 +679,7 @@ export type UISlice = {
     | 'skills'
     | 'artifacts'
     | 'mobile'
+    | 'github'
   previousViewBeforeSpace:
     | 'terminal'
     | 'settings'
@@ -685,6 +689,7 @@ export type UISlice = {
     | 'skills'
     | 'artifacts'
     | 'mobile'
+    | 'github'
   previousViewBeforeSkills:
     | 'terminal'
     | 'settings'
@@ -694,6 +699,7 @@ export type UISlice = {
     | 'space'
     | 'artifacts'
     | 'mobile'
+    | 'github'
   previousViewBeforeMobile:
     | 'terminal'
     | 'settings'
@@ -703,6 +709,7 @@ export type UISlice = {
     | 'space'
     | 'skills'
     | 'artifacts'
+    | 'github'
   previousViewBeforeArtifacts:
     | 'terminal'
     | 'settings'
@@ -711,6 +718,17 @@ export type UISlice = {
     | 'automations'
     | 'space'
     | 'skills'
+    | 'mobile'
+    | 'github'
+  previousViewBeforeGithub:
+    | 'terminal'
+    | 'settings'
+    | 'tasks'
+    | 'activity'
+    | 'automations'
+    | 'space'
+    | 'skills'
+    | 'artifacts'
     | 'mobile'
   setActiveView: (view: UISlice['activeView']) => void
   taskPageData: {
@@ -801,6 +819,8 @@ export type UISlice = {
   clearPendingSkillsSharedView: () => void
   openArtifactsPage: () => void
   closeArtifactsPage: () => void
+  openGithubPage: () => void
+  closeGithubPage: () => void
   openMobilePage: () => void
   closeMobilePage: () => void
   setNewWorkspaceDraft: (draft: NonNullable<UISlice['newWorkspaceDraft']>) => void
@@ -1329,6 +1349,7 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
   pendingSkillsSharedView: false,
   previousViewBeforeMobile: 'terminal',
   previousViewBeforeArtifacts: 'terminal',
+  previousViewBeforeGithub: 'terminal',
   setActiveView: (view) => set({ activeView: view }),
   taskPageData: {},
   taskResumeState: undefined,
@@ -1601,6 +1622,19 @@ export const createUISlice: StateCreator<AppState, [], [], UISlice> = (set, get)
     set((state) => ({
       activeView: state.previousViewBeforeArtifacts,
       worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
+    })),
+  openGithubPage: () => {
+    get().recordViewVisit('github')
+    set((state) => ({
+      activeView: 'github',
+      previousViewBeforeGithub:
+        state.activeView === 'github' ? state.previousViewBeforeGithub : state.activeView
+    }))
+  },
+  closeGithubPage: () =>
+    set((state) => ({
+      activeView: state.previousViewBeforeGithub,
+      worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'github')
     })),
   openMobilePage: () =>
     set((state) => ({

@@ -1872,6 +1872,28 @@ const api = {
     status: (): Promise<unknown> => ipcRenderer.invoke('bitbucket:status')
   },
 
+  githubAuth: {
+    status: (): Promise<unknown> => ipcRenderer.invoke('githubAuth:status'),
+
+    connectWithToken: (args: { token: string }): Promise<unknown> =>
+      ipcRenderer.invoke('githubAuth:connectWithToken', args),
+
+    startDeviceFlow: (): Promise<unknown> => ipcRenderer.invoke('githubAuth:startDeviceFlow'),
+
+    pollDeviceFlow: (args: { deviceCode: string }): Promise<unknown> =>
+      ipcRenderer.invoke('githubAuth:pollDeviceFlow', args),
+
+    disconnect: (): Promise<void> => ipcRenderer.invoke('githubAuth:disconnect'),
+
+    listRepos: (): Promise<unknown> => ipcRenderer.invoke('githubAuth:listRepos'),
+
+    cloneRepo: (args: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('githubAuth:cloneRepo', args),
+
+    deleteClonedRepoFiles: (args: unknown): Promise<unknown> =>
+      ipcRenderer.invoke('githubAuth:deleteClonedRepoFiles', args)
+  },
+
   linear: {
     connect: (args: {
       apiKey: string

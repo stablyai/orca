@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getCloneDestinationAutoFill, getDefaultCloneParent } from './clone-defaults'
+import { getDefaultProjectsCloneParent } from '../../../../shared/clone-destination'
 
 describe('getDefaultCloneParent', () => {
   it('strips a POSIX workspaces suffix', () => {
@@ -42,6 +43,58 @@ describe('getDefaultCloneParent', () => {
 
   it('does not strip a similar-looking final segment', () => {
     expect(getDefaultCloneParent('/Users/mvanhorn/orca/project-workspaces')).toBe(
+      '/Users/mvanhorn/orca/project-workspaces'
+    )
+  })
+})
+
+describe('getDefaultProjectsCloneParent', () => {
+  it('maps a POSIX workspaces suffix to a sibling projects directory', () => {
+    expect(getDefaultProjectsCloneParent('/Users/mvanhorn/orca/workspaces')).toBe(
+      '/Users/mvanhorn/orca/projects'
+    )
+  })
+
+  it('maps a POSIX workspaces suffix with a trailing slash', () => {
+    expect(getDefaultProjectsCloneParent('/Users/mvanhorn/orca/workspaces/')).toBe(
+      '/Users/mvanhorn/orca/projects'
+    )
+  })
+
+  it('maps a Windows workspaces suffix keeping backslash separators', () => {
+    expect(getDefaultProjectsCloneParent('C:\\Users\\mvanhorn\\orca\\workspaces')).toBe(
+      'C:\\Users\\mvanhorn\\orca\\projects'
+    )
+  })
+
+  it('leaves input without a workspaces suffix unchanged', () => {
+    expect(getDefaultProjectsCloneParent('/Users/mvanhorn/projects')).toBe(
+      '/Users/mvanhorn/projects'
+    )
+  })
+
+  it('returns empty input unchanged', () => {
+    expect(getDefaultProjectsCloneParent('')).toBe('')
+  })
+
+  it('maps workspaces alone to a relative projects directory', () => {
+    expect(getDefaultProjectsCloneParent('workspaces')).toBe('projects')
+  })
+
+  it('maps an absolute root workspaces path to root-level projects', () => {
+    expect(getDefaultProjectsCloneParent('/workspaces')).toBe('/projects')
+  })
+
+  it('maps a Windows root workspaces path to drive-level projects', () => {
+    expect(getDefaultProjectsCloneParent('C:\\workspaces')).toBe('C:\\projects')
+  })
+
+  it('strips repeated trailing separators before matching the suffix', () => {
+    expect(getDefaultProjectsCloneParent('D:\\orca\\workspaces\\\\')).toBe('D:\\orca\\projects')
+  })
+
+  it('does not map a similar-looking final segment', () => {
+    expect(getDefaultProjectsCloneParent('/Users/mvanhorn/orca/project-workspaces')).toBe(
       '/Users/mvanhorn/orca/project-workspaces'
     )
   })

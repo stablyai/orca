@@ -8,6 +8,7 @@ describe('shouldShowWorktreeHistoryControls', () => {
     expect(shouldShowWorktreeHistoryControls('automations')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('artifacts')).toBe(true)
     expect(shouldShowWorktreeHistoryControls('skills')).toBe(true)
+    expect(shouldShowWorktreeHistoryControls('github')).toBe(true)
   })
 
   it('hides controls on full-page views outside the history stack', () => {
