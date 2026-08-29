@@ -11,19 +11,21 @@ import {
 const isWindows = process.platform === 'win32'
 const e2eOptIn = process.env.ORCA_COMPUTER_E2E === '1'
 
-describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Store apps)', () => {
-  test('Store app windows are discoverable by title and clickable', async () => {
+describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)', () => {
+  test('Calculator windows are discoverable by title and clickable', async () => {
     await ensureOrcaRuntimeLaunched()
     await launchCalculator()
     try {
       const apps = parseJsonOutput<{ result: ComputerListAppsResult }>(
         (await runOrcaCli(['computer', 'list-apps', '--json'])).stdout
       )
-      expect(apps.result.apps).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ name: 'Calculator', bundleId: 'ApplicationFrameHost' })
-        ])
+      // Windows 2025 hosts Calculator as win32calc; older images use ApplicationFrameHost.
+      const calculatorApp = apps.result.apps.find(
+        (app) =>
+          (app.name === 'Calculator' && app.bundleId === 'ApplicationFrameHost') ||
+          (app.name === 'win32calc' && app.bundleId === 'win32calc')
       )
+      expect(calculatorApp).toMatchObject({ isRunning: true })
 
       let state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
         (
@@ -86,6 +88,7 @@ async function killCalculator(): Promise<void> {
     [
       '$processes = @()',
       '$processes += Get-Process -Name CalculatorApp -ErrorAction SilentlyContinue',
+      '$processes += Get-Process -Name win32calc -ErrorAction SilentlyContinue',
       '$processes += Get-Process -Name ApplicationFrameHost -ErrorAction SilentlyContinue |',
       '  Where-Object { $_.MainWindowTitle -eq "Calculator" }',
       'foreach ($process in $processes) {',

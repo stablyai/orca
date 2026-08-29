@@ -46,8 +46,6 @@ on:
       - 'src/main/ssh/ssh-remote-cli-launcher.test.ts'
       - 'src/shared/computer-use-*.ts'
       - 'tests/e2e/computer-linux.e2e.ts'
-      - 'tests/e2e/computer-mac.e2e.ts'
-      - 'tests/e2e/computer-mac-safari.e2e.ts'
       - 'tests/e2e/computer-windows.e2e.ts'
       - 'tests/e2e/computer-windows-store.e2e.ts'
       - 'tests/e2e/helpers/computer-cli-driver.ts'
@@ -137,8 +135,9 @@ jobs:
       - name: Windows daemon workspace-close repro
         if: runner.os == 'Windows'
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
+  # Hosted macOS runners cannot receive persistent Accessibility/Screen Recording
+  # grants. Keep the real native build/owner-loss checks on every trigger instead.
   mac-native-owner-smoke:
-    if: github.event_name == 'pull_request'
     runs-on: macos-15
     permissions:
       contents: read
@@ -159,28 +158,6 @@ jobs:
       - name: Swift tests and signed universal helper verification
         run: pnpm verify:computer-native
 
-  mac:
-    # macOS Accessibility and Screen Recording require user-granted TCC entries.
-    # Keep this on manual/scheduled permission-bearing runners instead of PR CI.
-    if: github.event_name != 'pull_request'
-    runs-on: macos-15
-    env:
-      ORCA_COMPUTER_E2E: '1'
-    steps:
-      - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
-        with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build:computer-macos
-      - run: pnpm verify:computer-native
-      - run: pnpm build:cli
-      - run: pnpm build:electron-vite
-      - run: pnpm test:e2e:computer --reporter=verbose tests/e2e/computer-mac.e2e.ts tests/e2e/computer-mac-safari.e2e.ts
-
   linux:
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-22.04
@@ -189,20 +166,12 @@ jobs:
       ACCESSIBILITY_ENABLED: '1'
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
         with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
-        with:
-          run_install: false
+          persist-credentials: false
       - run: sudo apt-get update && sudo apt-get install -y build-essential python3 python3-gi gir1.2-atspi-2.0 gedit at-spi2-core xvfb xclip xdotool
-      # Why: keep scheduled Linux e2e on the same native install path as PR
-      # smoke and pr.yml's verify job.
-      - name: Use external node-gyp to avoid pnpm's bundled copy (Linux only)
-        run: |
-          npm install -g node-gyp@11.5.0
-          echo "npm_config_node_gyp=$(npm root -g)/node-gyp/bin/node-gyp.js" >> "$GITHUB_ENV"
-      - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
@@ -215,13 +184,11 @@ jobs:
       ORCA_COMPUTER_E2E: '1'
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
         with:
-          node-version-file: package.json
-      - uses: pnpm/action-setup@v6
+          persist-credentials: false
+      - uses: ./.github/actions/install-node-dependencies
         with:
-          run_install: false
-      - run: pnpm install --frozen-lockfile
+          native-runtime: electron
       - run: pnpm verify:computer-native
       - run: pnpm build:cli
       - run: pnpm build:electron-vite
