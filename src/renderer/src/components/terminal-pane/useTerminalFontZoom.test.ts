@@ -1,7 +1,15 @@
 // @vitest-environment happy-dom
 import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { TerminalLeafId } from '../../../../shared/stable-pane-id'
 import { useTerminalFontZoom } from './useTerminalFontZoom'
+import {
+  hydrateTerminalFontSizeOverride,
+  resetTerminalFontSizeOverridesForTest
+} from './terminal-font-size-overrides'
+
+const TEST_LEAF_ID = '00000000-0000-4000-8000-000000000001' as TerminalLeafId
+const OTHER_TEST_LEAF_ID = '00000000-0000-4000-8000-000000000002' as TerminalLeafId
 
 const mocks = vi.hoisted(() => ({
   captureScrollState: vi.fn(() => ({ wasAtBottom: true })),
@@ -35,6 +43,7 @@ describe('useTerminalFontZoom', () => {
     terminalZoomListeners = []
     document.body.replaceChildren()
     vi.clearAllMocks()
+    resetTerminalFontSizeOverridesForTest()
     vi.stubGlobal('window', {
       api: {
         ui: {
@@ -61,7 +70,7 @@ describe('useTerminalFontZoom', () => {
       containerRef: { current: container },
       managerRef: {
         current: {
-          getActivePane: () => ({ id: 1, terminal })
+          getActivePane: () => ({ id: 1, leafId: TEST_LEAF_ID, terminal })
         }
       } as never,
       paneFontSizesRef: { current: new Map() },
@@ -95,6 +104,22 @@ describe('useTerminalFontZoom', () => {
     expect(mocks.dispatchZoomLevelChanged).toHaveBeenCalledWith('terminal', 107)
   })
 
+  it('retains a pane font override when the pane remounts with a new runtime id', () => {
+    const helper = document.createElement('textarea')
+    helper.className = 'xterm-helper-textarea'
+    const { listener } = useMountedTerminalFontZoom(helper)
+
+    listener('in')
+
+    const remountedFontSizes = new Map<number, number>()
+    hydrateTerminalFontSizeOverride({ id: 9, leafId: TEST_LEAF_ID }, remountedFontSizes)
+    expect(remountedFontSizes.get(9)).toBe(15)
+
+    listener('reset')
+    hydrateTerminalFontSizeOverride({ id: 9, leafId: TEST_LEAF_ID }, remountedFontSizes)
+    expect(remountedFontSizes.has(9)).toBe(false)
+  })
+
   it('only lets the pane owning the focused helper apply terminal font zoom', () => {
     const inactiveContainer = document.createElement('div')
     const activeContainer = document.createElement('div')
@@ -111,7 +136,11 @@ describe('useTerminalFontZoom', () => {
       containerRef: { current: inactiveContainer },
       managerRef: {
         current: {
-          getActivePane: () => ({ id: 1, terminal: inactiveTerminal })
+          getActivePane: () => ({
+            id: 1,
+            leafId: TEST_LEAF_ID,
+            terminal: inactiveTerminal
+          })
         }
       } as never,
       paneFontSizesRef: { current: new Map() },
@@ -122,7 +151,11 @@ describe('useTerminalFontZoom', () => {
       containerRef: { current: activeContainer },
       managerRef: {
         current: {
-          getActivePane: () => ({ id: 2, terminal: activeTerminal })
+          getActivePane: () => ({
+            id: 2,
+            leafId: OTHER_TEST_LEAF_ID,
+            terminal: activeTerminal
+          })
         }
       } as never,
       paneFontSizesRef: { current: new Map() },

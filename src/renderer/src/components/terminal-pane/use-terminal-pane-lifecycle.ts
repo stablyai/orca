@@ -161,6 +161,10 @@ import {
   resolveTabTitleAfterPaneClose,
   shouldClearLaunchAgentForClosedPane
 } from './terminal-pane-close-identity'
+import {
+  clearTerminalFontSizeOverride,
+  hydrateTerminalFontSizeOverride
+} from './terminal-font-size-overrides'
 
 export function resetTerminalKeyboardProtocolAfterInterrupt(terminal: Terminal): void {
   // Guarded output path so a throwing xterm can't escape the key handler.
@@ -1012,6 +1016,7 @@ export function useTerminalPaneLifecycle({
     const manager = new PaneManager(container, {
       // `spawnHints.cwd` (from Split actions) lets the new PTY inherit the source pane's cwd — see docs/ssh-split-pane-inherit-cwd.md.
       onPaneCreated: (pane, spawnHints) => {
+        hydrateTerminalFontSizeOverride(pane, paneFontSizesRef.current)
         // OSC 52 — TUI-initiated clipboard writes (Zellij/tmux/nvim/fzf/ssh).
         // Why: read settingsRef at fire time so mid-session gate toggles apply; return true in both paths so xterm doesn't fall through.
         const osc52Disposable = pane.terminal.parser.registerOscHandler(
@@ -1511,6 +1516,7 @@ export function useTerminalPaneLifecycle({
           // Why: revoke only this pane's authority; an exact tombstone blocks queued hooks without suppressing siblings.
           const paneKey = makePaneKey(tabId, leafId)
           useAppStore.getState().retireAgentPaneAuthority(paneKey)
+          clearTerminalFontSizeOverride(leafId)
         }
         if (transport && !isRetiredSurface) {
           if (isDetachedToTab) {
@@ -1922,6 +1928,23 @@ export function useTerminalPaneLifecycle({
       const tabStillExists = Boolean(
         currentWorktreeTabs?.some((candidate) => candidate.id === tabId)
       )
+      if (!tabStillExists) {
+        for (const pane of manager.getPanes()) {
+          const ptyId = paneTransports.get(pane.id)?.getPtyId() ?? null
+          // Why: a mirrored replacement can take ownership during this unmount;
+          // preserve its zoom just as the transport path preserves its PTY.
+          if (
+            !shouldDetachPaneTransportOnUnmount({
+              tabStillExists,
+              tabId,
+              ptyId,
+              worktreeTabs: currentWorktreeTabs
+            })
+          ) {
+            clearTerminalFontSizeOverride(pane.leafId)
+          }
+        }
+      }
       unregisterRuntimeTab()
       if (resizeRaf !== null) {
         cancelAnimationFrame(resizeRaf)
