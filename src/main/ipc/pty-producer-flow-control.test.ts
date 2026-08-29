@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   PRODUCER_FLOW_HIGH_WATERMARK_CHARS,
   PRODUCER_FLOW_LOW_WATERMARK_CHARS,
+  PRODUCER_PAUSE_MAX_HOLD_MS,
   PRODUCER_PAUSE_REASSERT_INTERVAL_MS,
   PtyProducerFlowController
 } from './pty-producer-flow-control'
@@ -133,5 +134,109 @@ describe('PtyProducerFlowController', () => {
     expect(resumeProducer).toHaveBeenCalledTimes(1)
     expect(controller.isPaused('pty-1')).toBe(false)
     expect(controller.isPaused('pty-2')).toBe(true)
+  })
+
+  // A provider without its own failsafe (LocalPtyProvider) would otherwise keep
+  // the child blocked on write forever once renderer ACKs stop arriving.
+  describe('pause ceiling', () => {
+    it('resumes a pty held past the ceiling with no further reports', () => {
+      controller.update('pty-1', HIGH + 1)
+      expect(controller.isPaused('pty-1')).toBe(true)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS - 1)
+      expect(resumeProducer).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(1)
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+      expect(resumeProducer).toHaveBeenCalledWith('pty-1')
+      expect(controller.isPaused('pty-1')).toBe(false)
+    })
+
+    it('does not extend the ceiling when a re-assert re-pauses the same span', () => {
+      controller.update('pty-1', HIGH + 1)
+      // Re-assert fires at the failsafe interval, before the ceiling.
+      vi.advanceTimersByTime(PRODUCER_PAUSE_REASSERT_INTERVAL_MS)
+      controller.update('pty-1', HIGH * 4)
+      expect(pauseProducer).toHaveBeenCalledTimes(2)
+
+      // The ceiling still expires measured from the original pause.
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS - PRODUCER_PAUSE_REASSERT_INTERVAL_MS)
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+      expect(controller.isPaused('pty-1')).toBe(false)
+    })
+
+    it('re-pauses a still-flooded pty after the ceiling released it', () => {
+      controller.update('pty-1', HIGH + 1)
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS)
+      expect(controller.isPaused('pty-1')).toBe(false)
+
+      controller.update('pty-1', HIGH + 1)
+      expect(pauseProducer).toHaveBeenCalledTimes(2)
+      expect(controller.isPaused('pty-1')).toBe(true)
+    })
+
+    it('does not resume twice when pending drains before the ceiling', () => {
+      controller.update('pty-1', HIGH + 1)
+      controller.update('pty-1', LOW - 1)
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS * 2)
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not resume after release cancelled the ceiling', () => {
+      controller.update('pty-1', HIGH + 1)
+      controller.release('pty-1')
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS * 2)
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not resume after releaseAll cancelled the ceiling', () => {
+      controller.update('pty-1', HIGH + 1)
+      controller.update('pty-2', HIGH + 1)
+      controller.releaseAll()
+      expect(resumeProducer).toHaveBeenCalledTimes(2)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS * 2)
+      expect(resumeProducer).toHaveBeenCalledTimes(2)
+    })
+
+    it('bounds each pty on its own ceiling', () => {
+      controller.update('pty-1', HIGH + 1)
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS / 2)
+      controller.update('pty-2', HIGH + 1)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS / 2)
+      expect(resumeProducer).toHaveBeenCalledTimes(1)
+      expect(resumeProducer).toHaveBeenCalledWith('pty-1')
+      expect(controller.isPaused('pty-2')).toBe(true)
+
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS / 2)
+      expect(resumeProducer).toHaveBeenCalledTimes(2)
+      expect(resumeProducer).toHaveBeenCalledWith('pty-2')
+    })
+
+    it('reports the exceeded ceiling for diagnostics', () => {
+      const onPauseCeilingExceeded = vi.fn<(id: string, heldMs: number) => void>()
+      const observed = new PtyProducerFlowController(
+        { pauseProducer, resumeProducer },
+        { onPauseCeilingExceeded }
+      )
+      observed.update('pty-1', HIGH + 1)
+      vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS)
+      expect(onPauseCeilingExceeded).toHaveBeenCalledTimes(1)
+      expect(onPauseCeilingExceeded).toHaveBeenCalledWith('pty-1', PRODUCER_PAUSE_MAX_HOLD_MS)
+    })
+
+    it('keeps bookkeeping consistent when the ceiling resume throws', () => {
+      resumeProducer.mockImplementation(() => {
+        throw new Error('provider gone')
+      })
+      controller.update('pty-1', HIGH + 1)
+      expect(() => vi.advanceTimersByTime(PRODUCER_PAUSE_MAX_HOLD_MS)).not.toThrow()
+      expect(controller.isPaused('pty-1')).toBe(false)
+    })
   })
 })
