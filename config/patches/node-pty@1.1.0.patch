@@ -215,7 +215,18 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..383df0c9c48355547c65e6c9bbba593d
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -237,13 +258,23 @@ pty_getproc(int, char *);
+@@ -169,6 +190,10 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+         }
+       }
+     }
++    // Orca: each PTY exit watcher owns one kqueue descriptor.
++    if (kq != -1) {
++      close(kq);
++    }
+ #else
+     while (true) {
+       errno = 0;
+@@ -237,13 +262,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
