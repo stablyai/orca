@@ -10,6 +10,7 @@ import {
   RotateCw,
   Terminal,
   Trash2,
+  Undo2,
   X
 } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
@@ -79,6 +80,7 @@ import {
   selectUnboundDaemonSessions,
   type ResourceSessionBindingInputs
 } from './resource-session-bindings'
+import { clampResourceManagerPosition } from './resource-manager-drag-bounds'
 import { useResourceSessionInventory } from './use-resource-session-inventory'
 import { translate } from '@/i18n/i18n'
 
@@ -86,9 +88,34 @@ const POLL_MS = 2_000
 
 type SortOption = 'memory' | 'cpu' | 'name'
 
+type FloatingPosition = {
+  x: number
+  y: number
+}
+
+type FloatingDragState = {
+  pointerId: number
+  startX: number
+  startY: number
+  originX: number
+  originY: number
+  activated: boolean
+}
+
 const METRIC_COLUMNS_CLS = 'flex items-center shrink-0 tabular-nums'
 const CPU_COLUMN_CLS = 'w-12 text-right'
 const MEM_COLUMN_CLS = 'w-16 text-right'
+const FLOATING_DRAG_THRESHOLD_PX = 4
+const FLOATING_PANEL_VIEWPORT_MARGIN_PX = 8
+const FLOATING_PANEL_RECOVERY_HEIGHT_PX = 32
+const FLOATING_KEYBOARD_STEP_PX = 8
+const FLOATING_KEYBOARD_COARSE_FACTOR = 5
+const FLOATING_KEYBOARD_DELTAS: Record<string, FloatingPosition | undefined> = {
+  ArrowLeft: { x: -1, y: 0 },
+  ArrowRight: { x: 1, y: 0 },
+  ArrowUp: { x: 0, y: -1 },
+  ArrowDown: { x: 0, y: 1 }
+}
 // Why: every row and the header reserve this trailing gutter so CPU/Memory columns align whether or not the row has a kill-X.
 const ROW_TRAILING_GUTTER_CLS = 'w-5 shrink-0 flex items-center justify-end'
 
@@ -745,6 +772,8 @@ export function ResourceUsageStatusSegment({
   const workspaceSpaceScanning = useAppStore((s) => s.workspaceSpaceScanning)
 
   const [open, setOpen] = useState(false)
+  const [floatingPosition, setFloatingPosition] = useState<FloatingPosition | null>(null)
+  const [floatingDragging, setFloatingDragging] = useState(false)
   const [sortOption, setSortOption] = useState<SortOption>('memory')
   const [collapsedRepos, setCollapsedRepos] = useState<Set<string>>(new Set())
   const [collapsedWorktrees, setCollapsedWorktrees] = useState<Set<string>>(new Set())
@@ -802,9 +831,69 @@ export function ResourceUsageStatusSegment({
   )
 
   // Why: after a kill unmounts the session, focus would fall to <body>; park a ref on the popover body to restore it stably for keyboard users.
+  const floatingDragRef = useRef<FloatingDragState | null>(null)
+  const floatingDragFrameRef = useRef<number | null>(null)
+  const pendingFloatingPositionRef = useRef<FloatingPosition | null>(null)
+  const floatingPositionRef = useRef<FloatingPosition | null>(floatingPosition)
+  const floatingPanelRef = useRef<HTMLDivElement | null>(null)
   const popoverBodyRef = useRef<HTMLDivElement | null>(null)
   const popoverBodyFocusFrameRef = useRef<number | null>(null)
   const mountedRef = useMountedRef()
+
+  const clampFloatingOffset = useCallback(
+    (position: FloatingPosition, current: FloatingPosition): FloatingPosition => {
+      const panel = floatingPanelRef.current
+      if (!panel) {
+        return current
+      }
+      return clampResourceManagerPosition({
+        current,
+        proposed: position,
+        rect: panel.getBoundingClientRect(),
+        viewportWidth: window.innerWidth,
+        viewportHeight: window.innerHeight,
+        margin: FLOATING_PANEL_VIEWPORT_MARGIN_PX,
+        recoveryHeight: FLOATING_PANEL_RECOVERY_HEIGHT_PX
+      })
+    },
+    []
+  )
+
+  const stopDragEvent = useCallback((event: React.PointerEvent<HTMLElement>): void => {
+    event.stopPropagation()
+    event.preventDefault()
+  }, [])
+
+  const applyFloatingPosition = useCallback(
+    (proposed: FloatingPosition): FloatingPosition => {
+      const current = floatingPositionRef.current ?? { x: 0, y: 0 }
+      const next = clampFloatingOffset(proposed, current)
+      floatingPositionRef.current = next
+      floatingPanelRef.current?.style.setProperty('--resource-manager-x', `${next.x}px`)
+      floatingPanelRef.current?.style.setProperty('--resource-manager-y', `${next.y}px`)
+      return next
+    },
+    [clampFloatingOffset]
+  )
+
+  useEffect(() => {
+    floatingPositionRef.current = floatingPosition
+    const panel = floatingPanelRef.current
+    if (!panel) {
+      return
+    }
+    panel.style.setProperty('--resource-manager-x', `${floatingPosition?.x ?? 0}px`)
+    panel.style.setProperty('--resource-manager-y', `${floatingPosition?.y ?? 0}px`)
+  }, [floatingPosition])
+
+  useEffect(
+    () => () => {
+      if (floatingDragFrameRef.current !== null) {
+        cancelAnimationFrame(floatingDragFrameRef.current)
+      }
+    },
+    []
+  )
 
   const cancelPopoverBodyFocusFrame = useCallback((): void => {
     if (popoverBodyFocusFrameRef.current === null) {
@@ -824,6 +913,207 @@ export function ResourceUsageStatusSegment({
     },
     [cancelPopoverBodyFocusFrame]
   )
+
+  const handleFloatingDragStart = useCallback(
+    (event: React.PointerEvent<HTMLElement>): void => {
+      if (
+        event.button !== 0 ||
+        (event.target instanceof Element && event.target.closest('button'))
+      ) {
+        return
+      }
+      const origin = floatingPositionRef.current ?? { x: 0, y: 0 }
+      floatingDragRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        originX: origin.x,
+        originY: origin.y,
+        activated: false
+      }
+      setFloatingDragging(true)
+      event.currentTarget.setPointerCapture(event.pointerId)
+      stopDragEvent(event)
+    },
+    [stopDragEvent]
+  )
+
+  const handleFloatingDragMove = useCallback(
+    (event: React.PointerEvent<HTMLElement>): void => {
+      const drag = floatingDragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return
+      }
+      const deltaX = event.clientX - drag.startX
+      const deltaY = event.clientY - drag.startY
+      if (!drag.activated && Math.hypot(deltaX, deltaY) < FLOATING_DRAG_THRESHOLD_PX) {
+        stopDragEvent(event)
+        return
+      }
+      drag.activated = true
+      pendingFloatingPositionRef.current = {
+        x: drag.originX + deltaX,
+        y: drag.originY + deltaY
+      }
+      if (floatingDragFrameRef.current === null) {
+        floatingDragFrameRef.current = requestAnimationFrame(() => {
+          floatingDragFrameRef.current = null
+          const pending = pendingFloatingPositionRef.current
+          pendingFloatingPositionRef.current = null
+          if (pending) {
+            applyFloatingPosition(pending)
+          }
+        })
+      }
+      stopDragEvent(event)
+    },
+    [applyFloatingPosition, stopDragEvent]
+  )
+
+  const handleFloatingDragEnd = useCallback(
+    (event: React.PointerEvent<HTMLElement>): void => {
+      const drag = floatingDragRef.current
+      if (!drag || drag.pointerId !== event.pointerId) {
+        return
+      }
+      if (floatingDragFrameRef.current !== null) {
+        cancelAnimationFrame(floatingDragFrameRef.current)
+        floatingDragFrameRef.current = null
+      }
+      const pending = pendingFloatingPositionRef.current
+      pendingFloatingPositionRef.current = null
+      const finalPosition = pending ? applyFloatingPosition(pending) : floatingPositionRef.current
+      floatingDragRef.current = null
+      setFloatingDragging(false)
+      if (drag.activated && finalPosition) {
+        setFloatingPosition(finalPosition)
+      }
+      if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
+      stopDragEvent(event)
+    },
+    [applyFloatingPosition, stopDragEvent]
+  )
+
+  // Why: the draggable header also needs a keyboard path. Arrow steps commit
+  // straight to state because there is no pointer stream to coalesce.
+  const handleFloatingDragKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLElement>): void => {
+      if (event.target !== event.currentTarget) {
+        return
+      }
+      const step =
+        FLOATING_KEYBOARD_STEP_PX * (event.shiftKey ? FLOATING_KEYBOARD_COARSE_FACTOR : 1)
+      const delta = FLOATING_KEYBOARD_DELTAS[event.key]
+      if (!delta) {
+        return
+      }
+      event.preventDefault()
+      event.stopPropagation()
+      const origin = floatingPositionRef.current ?? { x: 0, y: 0 }
+      setFloatingPosition(
+        applyFloatingPosition({ x: origin.x + delta.x * step, y: origin.y + delta.y * step })
+      )
+    },
+    [applyFloatingPosition]
+  )
+
+  const cancelFloatingDrag = useCallback((): void => {
+    if (floatingDragFrameRef.current !== null) {
+      cancelAnimationFrame(floatingDragFrameRef.current)
+      floatingDragFrameRef.current = null
+    }
+    floatingDragRef.current = null
+    pendingFloatingPositionRef.current = null
+    setFloatingDragging(false)
+  }, [])
+
+  const resetFloatingPosition = useCallback((): void => {
+    cancelFloatingDrag()
+    floatingPositionRef.current = null
+    floatingPanelRef.current?.style.setProperty('--resource-manager-x', '0px')
+    floatingPanelRef.current?.style.setProperty('--resource-manager-y', '0px')
+    setFloatingPosition(null)
+  }, [cancelFloatingDrag])
+
+  const setResourceManagerOpen = useCallback(
+    (nextOpen: boolean): void => {
+      if (nextOpen) {
+        resetFloatingPosition()
+      } else {
+        cancelFloatingDrag()
+      }
+      setOpen(nextOpen)
+    },
+    [cancelFloatingDrag, resetFloatingPosition]
+  )
+
+  const handleFloatingExitAnimationEnd = useCallback(
+    (event: React.AnimationEvent<HTMLDivElement>): void => {
+      if (
+        event.target !== event.currentTarget ||
+        event.animationName !== 'exit' ||
+        event.currentTarget.dataset.state !== 'closed'
+      ) {
+        return
+      }
+      resetFloatingPosition()
+    },
+    [resetFloatingPosition]
+  )
+
+  const handleFloatingExitAnimationCancel = useCallback(
+    (event: AnimationEvent): void => {
+      const panel = event.currentTarget as HTMLDivElement
+      if (
+        event.target !== panel ||
+        event.animationName !== 'exit' ||
+        panel.dataset.state !== 'closed'
+      ) {
+        return
+      }
+      resetFloatingPosition()
+    },
+    [resetFloatingPosition]
+  )
+
+  const setFloatingPanelElement = useCallback(
+    (node: HTMLDivElement | null): void => {
+      const previous = floatingPanelRef.current
+      if (previous) {
+        previous.removeEventListener('animationcancel', handleFloatingExitAnimationCancel)
+      }
+      floatingPanelRef.current = node
+      if (node) {
+        node.addEventListener('animationcancel', handleFloatingExitAnimationCancel)
+      }
+    },
+    [handleFloatingExitAnimationCancel]
+  )
+
+  useEffect(() => {
+    if (!open) {
+      return
+    }
+    const keepPanelReachable = (): void => {
+      setFloatingPosition((current) => {
+        if (!current) {
+          return current
+        }
+        const clamped = clampFloatingOffset(current, current)
+        return clamped.x === current.x && clamped.y === current.y ? current : clamped
+      })
+    }
+    // Why: Radix can choose a new anchor placement when the popover reopens;
+    // revalidate the saved offset against that live surface before reuse.
+    const frameId = requestAnimationFrame(keepPanelReachable)
+    window.addEventListener('resize', keepPanelReachable)
+    return () => {
+      cancelAnimationFrame(frameId)
+      window.removeEventListener('resize', keepPanelReachable)
+    }
+  }, [clampFloatingOffset, open])
 
   const daemonActions = useDaemonActions({
     onRestartSettled: () => {
@@ -1054,31 +1344,34 @@ export function ResourceUsageStatusSegment({
     (tabId: string, paneKey: string | null) => {
       navigateResourceSessionToTab(tabId, paneKey, {
         tabsByWorktree,
-        setOpen,
+        setOpen: setResourceManagerOpen,
         setActiveView,
         activateAndRevealWorktree,
         activateTabAndFocusPane
       })
     },
-    [tabsByWorktree, setActiveView]
+    [setActiveView, setResourceManagerOpen, tabsByWorktree]
   )
 
-  const deleteWorktree = useCallback((worktreeId: string): void => {
-    const target = resolveResourceManagerWorktreeTarget(
-      worktreeId,
-      getAllWorktreesFromState(useAppStore.getState())
-    )
-    if (!target) {
-      return
-    }
-    setOpen(false)
-    runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
-  }, [])
+  const deleteWorktree = useCallback(
+    (worktreeId: string): void => {
+      const target = resolveResourceManagerWorktreeTarget(
+        worktreeId,
+        getAllWorktreesFromState(useAppStore.getState())
+      )
+      if (!target) {
+        return
+      }
+      setResourceManagerOpen(false)
+      runWorktreeDelete(worktreeId, { expectedHostId: target.hostId })
+    },
+    [setResourceManagerOpen]
+  )
 
   const handleOpenWorkspaceCleanup = useCallback((): void => {
-    setOpen(false)
+    setResourceManagerOpen(false)
     queueMicrotask(() => openModal('workspace-cleanup'))
-  }, [openModal])
+  }, [openModal, setResourceManagerOpen])
 
   const handleKillSession = useCallback(
     (session: UnifiedSessionRow): void => {
@@ -1147,9 +1440,9 @@ export function ResourceUsageStatusSegment({
   }, [cancelPopoverBodyFocusFrame, killConfirm, mountedRef, refreshSessions, removeSession])
 
   const openSpaceResults = useCallback((): void => {
-    setOpen(false)
+    setResourceManagerOpen(false)
     openSpacePage()
-  }, [openSpacePage])
+  }, [openSpacePage, setResourceManagerOpen])
 
   return (
     <Popover
@@ -1158,7 +1451,7 @@ export function ResourceUsageStatusSegment({
         if (nextOpen) {
           recordFeatureInteraction('resource-manager')
         }
-        setOpen(nextOpen)
+        setResourceManagerOpen(nextOpen)
       }}
     >
       <Tooltip delayDuration={150}>
@@ -1236,16 +1529,41 @@ export function ResourceUsageStatusSegment({
       </Tooltip>
 
       <PopoverContent
+        ref={setFloatingPanelElement}
         side="top"
         align="end"
         sideOffset={8}
         {...STATUS_BAR_CONTEXT_MENU_EXEMPT_PROPS}
         className="w-[26rem] max-w-[calc(100vw-2rem)] p-0"
+        style={{
+          translate: 'var(--resource-manager-x, 0px) var(--resource-manager-y, 0px)'
+        }}
+        onAnimationEnd={handleFloatingExitAnimationEnd}
         onOpenAutoFocus={(event) => event.preventDefault()}
         // Why: activating a tab focuses xterm's DOM node; Radix would read that as focus-outside and close. Outside-click and Escape still close.
         onFocusOutside={(event) => event.preventDefault()}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-border px-3 py-1.5">
+        <div
+          role="group"
+          tabIndex={0}
+          aria-label={translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.0f41c4e8d1',
+            'Move Resource Manager'
+          )}
+          title={translate(
+            'auto.components.status.bar.ResourceUsageStatusSegment.0f41c4e8d1',
+            'Move Resource Manager'
+          )}
+          onPointerDown={handleFloatingDragStart}
+          onPointerMove={handleFloatingDragMove}
+          onPointerUp={handleFloatingDragEnd}
+          onPointerCancel={handleFloatingDragEnd}
+          onKeyDown={handleFloatingDragKeyDown}
+          className={cn(
+            'flex touch-none select-none items-center justify-between gap-2 border-b border-border px-3 py-1.5 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring [&_button]:cursor-pointer [&_button:disabled]:cursor-not-allowed',
+            floatingDragging ? 'cursor-grabbing' : 'cursor-grab'
+          )}
+        >
           <div className="flex min-w-0 items-center gap-1.5 text-[11px] font-medium text-foreground">
             <MemoryStick className="size-3 shrink-0 text-muted-foreground" />
             <span className="truncate">
@@ -1254,6 +1572,29 @@ export function ResourceUsageStatusSegment({
           </div>
 
           <div className="flex items-center gap-0.5">
+            {floatingPosition && (
+              <Tooltip delayDuration={200}>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={resetFloatingPosition}
+                    aria-label={translate(
+                      'auto.components.status.bar.ResourceUsageStatusSegment.b2f6b4c0b4',
+                      'Reset Resource Manager position'
+                    )}
+                    className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  >
+                    <Undo2 className="size-3" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={6}>
+                  {translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.b2f6b4c0b4',
+                    'Reset Resource Manager position'
+                  )}
+                </TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip delayDuration={200}>
               <TooltipTrigger asChild>
                 <button
@@ -1295,6 +1636,27 @@ export function ResourceUsageStatusSegment({
                 {translate(
                   'auto.components.status.bar.ResourceUsageStatusSegment.bd19fd7a59',
                   'Kill all sessions'
+                )}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip delayDuration={200}>
+              <TooltipTrigger asChild>
+                <button
+                  type="button"
+                  onClick={() => setResourceManagerOpen(false)}
+                  aria-label={translate(
+                    'auto.components.status.bar.ResourceUsageStatusSegment.17a6a2c4f3',
+                    'Close Resource Manager'
+                  )}
+                  className="inline-flex size-6 items-center justify-center rounded text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={6}>
+                {translate(
+                  'auto.components.status.bar.ResourceUsageStatusSegment.17a6a2c4f3',
+                  'Close Resource Manager'
                 )}
               </TooltipContent>
             </Tooltip>
