@@ -22,6 +22,7 @@ import { hermesHookService } from '../hermes/hook-service'
 import { devinHookService } from '../devin/hook-service'
 import { kimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
+import { getZcodeHookStatus } from './agent-hooks-zcode-status'
 import { registerAgentPaneAuthorityIpcHandlers } from './agent-pane-authority-ipc'
 import { registerAgentStatusRowTeardownIpcHandlers } from './agent-status-row-teardown-ipc'
 import { createAgentPaneAuthorityOwnership } from './agent-pane-authority-ownership'
@@ -62,6 +63,7 @@ export function registerAgentHookHandlers(
   ipcMain.removeHandler('agentHooks:hermesStatus')
   ipcMain.removeHandler('agentHooks:devinStatus')
   ipcMain.removeHandler('agentHooks:kimiStatus')
+  ipcMain.removeHandler('agentHooks:zcodeStatus')
   ipcMain.removeHandler('agentStatus:getSnapshot')
   ipcMain.removeHandler('agentStatus:inferInterrupt')
   ipcMain.removeHandler('agentStatus:inferQuestionAnswered')
@@ -286,4 +288,5 @@ export function registerAgentHookHandlers(
       }
     }
   })
+  ipcMain.handle('agentHooks:zcodeStatus', getZcodeHookStatus)
 }

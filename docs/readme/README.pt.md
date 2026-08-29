@@ -198,6 +198,7 @@ Funciona com **qualquer agente CLI** — se roda em um terminal, roda no Orca.
   <a href="https://docs.factory.ai/cli/getting-started/quickstart"><kbd><img src="../assets/droid-logo.svg" alt="Logotipo do Droid" width="16" valign="middle" /> Droid</kbd></a> &nbsp;
   <a href="https://kilo.ai/docs/cli"><kbd><img src="https://raw.githubusercontent.com/Kilo-Org/kilocode/main/packages/kilo-vscode/assets/icons/kilo-light.svg" alt="Logotipo do Kilocode" width="16" valign="middle" /> Kilocode</kbd></a> &nbsp;
   <a href="https://www.kimi.com/code/docs/en/kimi-code-cli/getting-started.html"><kbd><img src="https://www.google.com/s2/favicons?domain=moonshot.cn&sz=64" alt="Logotipo do Kimi" width="16" valign="middle" /> Kimi</kbd></a> &nbsp;
+  <a href="https://zcode.z.ai/en/docs/welcome"><kbd><img src="https://www.google.com/s2/favicons?domain=z.ai&sz=64" alt="Logotipo do ZCode" width="16" valign="middle" /> ZCode</kbd></a> &nbsp;
   <a href="https://kiro.dev/docs/cli/"><kbd><img src="https://www.google.com/s2/favicons?domain=kiro.dev&sz=64" alt="Logotipo do Kiro" width="16" valign="middle" /> Kiro</kbd></a> &nbsp;
   <a href="https://github.com/mistralai/mistral-vibe"><kbd><img src="https://www.google.com/s2/favicons?domain=mistral.ai&sz=64" alt="Logotipo do Mistral Vibe" width="16" valign="middle" /> Mistral Vibe</kbd></a> &nbsp;
   <a href="https://github.com/QwenLM/qwen-code"><kbd><img src="https://www.google.com/s2/favicons?domain=qwenlm.github.io&sz=64" alt="Logotipo do Qwen Code" width="16" valign="middle" /> Qwen Code</kbd></a> &nbsp;

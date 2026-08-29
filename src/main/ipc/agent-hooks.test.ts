@@ -102,6 +102,9 @@ vi.mock('../devin/hook-service', () => ({
 vi.mock('../kimi/hook-service', () => ({
   kimiHookService: { getStatus: vi.fn(() => ({ agent: 'kimi', state: 'absent' })) }
 }))
+vi.mock('../zcode/hook-service', () => ({
+  zcodeHookService: { getStatus: vi.fn(() => ({ agent: 'zcode', state: 'absent' })) }
+}))
 
 beforeEach(() => {
   dropStatusEntry.mockReset()
@@ -271,6 +274,17 @@ describe('agentHooks:kimiStatus IPC', () => {
     const handler = handleHandlers.get('agentHooks:kimiStatus')
     expect(handler).toBeDefined()
     expect(handler!({})).toEqual({ agent: 'kimi', state: 'absent' })
+  })
+})
+
+describe('agentHooks:zcodeStatus IPC', () => {
+  it('returns ZCode hook installation status', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = handleHandlers.get('agentHooks:zcodeStatus')
+    expect(handler).toBeDefined()
+    expect(handler!({})).toEqual({ agent: 'zcode', state: 'absent' })
   })
 })
 
