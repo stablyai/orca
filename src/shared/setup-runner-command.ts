@@ -5,7 +5,7 @@ import {
 } from './windows-cmd-runner-delayed-launch'
 
 export type SetupRunnerCommandPlatform = 'windows' | 'posix'
-export type SetupRunnerShellFamily = 'posix' | 'cmd'
+export type SetupRunnerShellFamily = 'posix' | 'cmd' | 'powershell'
 export type SetupRunnerCommandShell = 'posix' | 'windows'
 export type SetupRunnerShell = {
   family: SetupRunnerShellFamily
@@ -61,7 +61,20 @@ export function resolveSetupRunnerCommand(
       }
     }
     // Why: `shell` is the shell that types the command; the runner file's own extension decides
-    // what can execute it. A batch runner never goes to bash even from a Git Bash pane.
+    // what can execute it. A batch runner never goes to bash, and a .ps1 runner always invokes PowerShell.
+    const psRunnerFile = isWindowsPowerShellRunnerPath(runnerScriptPath)
+    if (psRunnerFile) {
+      const rawExecutable = shell?.executable?.trim()
+      const executable = rawExecutable || 'powershell.exe'
+      const quotedExecutable = isWindowsAbsolutePathLike(executable) || /\s/.test(executable)
+        ? quoteWindowsArg(executable)
+        : executable
+      return {
+        command: `${quotedExecutable} -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ${quoteWindowsArg(runnerScriptPath)}`,
+        runnerScriptPathForShell: runnerScriptPath,
+        shell: 'windows'
+      }
+    }
     const cmdRunnerFile = isWindowsCmdRunnerPath(runnerScriptPath)
     if (!cmdRunnerFile && (shell?.family === 'posix' || /\.sh$/i.test(runnerScriptPath))) {
       // Why: WSL shells need /mnt/... paths, while Git Bash expects /c/... when replaying deferred setup scripts.
@@ -106,6 +119,11 @@ export function resolveSetupRunnerCommand(
 /** True when the runner file is a batch script, which only cmd can execute. */
 export function isWindowsCmdRunnerPath(runnerScriptPath: string): boolean {
   return /\.(cmd|bat)$/i.test(runnerScriptPath)
+}
+
+/** True when the runner file is a PowerShell script. */
+export function isWindowsPowerShellRunnerPath(runnerScriptPath: string): boolean {
+  return /\.ps1$/i.test(runnerScriptPath)
 }
 
 export function isWslUncPath(path: string): boolean {

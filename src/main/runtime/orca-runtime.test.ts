@@ -504,6 +504,7 @@ vi.mock('../hooks', () => ({
 
 vi.mock('../setup-runner-script-text', () => ({
   buildPosixRunnerScript: (script: string) => `#!/usr/bin/env bash\nset -e\n${script}\n`,
+  buildPowerShellRunnerScript: (script: string) => `$ErrorActionPreference = 'Stop'\r\n${script}\r\n`,
   buildWindowsRunnerScript: (script: string) => `@echo off\r\n${script}\r\n`
 }))
 

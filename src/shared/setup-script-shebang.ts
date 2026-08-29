@@ -2,6 +2,7 @@
 // not of the user's terminal preference, so a `#!` line is how a project declares it.
 
 const POSIX_SHELL_BASENAMES = new Set(['sh', 'bash', 'zsh', 'dash', 'ksh', 'ash'])
+const POWERSHELL_SHELL_BASENAMES = new Set(['pwsh', 'powershell'])
 // Why: only the letters `set` itself accepts (`set [--abefhkmnptuvxBCHP] [-o option]`). An
 // invocation-only flag such as `-l` or `-r` makes `set` exit 2, which under the runner's `set -e`
 // aborts setup before its first line runs.
@@ -10,10 +11,11 @@ const SET_OPTION_FLAG_PATTERN = /^[-+][abefhkmnptuvxBCHP]+$/
 // `set` dump the whole shell-option table into the setup terminal instead.
 const SET_LONG_OPTION_FLAG_PATTERN = /^[-+][abefhkmnptuvxBCHP]*o$/
 const SHELL_OPTION_NAME_PATTERN = /^[a-z_]+$/
-
 export type SetupScriptShebang = {
   /** Lowercased interpreter basename, e.g. `bash` for `#!/usr/bin/env -S bash -e`. */
   interpreter: string
+  /** Raw interpreter path or name declared in the shebang token, e.g. `C:\tools\pwsh.exe` or `bash`. */
+  interpreterPath: string
   /** Interpreter flags the generated runner replays through `set`, e.g. `['-euo', 'pipefail']`. */
   shellOptions: string[]
 }
@@ -30,14 +32,15 @@ export function parseSetupScriptShebang(script: string): SetupScriptShebang | nu
     return null
   }
 
-  const tokens = firstLine.trim().slice(2).trim().split(/\s+/).filter(Boolean)
+  const tokens = tokenizeShebangLine(firstLine)
   const interpreterIndex = findInterpreterIndex(tokens)
   if (interpreterIndex === -1) {
     return null
   }
-
+  const rawToken = tokens[interpreterIndex]
   return {
-    interpreter: executableBasename(tokens[interpreterIndex]),
+    interpreter: executableBasename(rawToken),
+    interpreterPath: rawToken,
     shellOptions: parseShellOptions(tokens.slice(interpreterIndex + 1))
   }
 }
@@ -48,6 +51,23 @@ export function scriptDeclaresPosixShell(script: string): boolean {
   return shebang !== null && POSIX_SHELL_BASENAMES.has(shebang.interpreter)
 }
 
+/** True when the script's first line is a `#!` line naming PowerShell. */
+export function scriptDeclaresPowerShell(script: string): boolean {
+  const shebang = parseSetupScriptShebang(script)
+  return shebang !== null && POWERSHELL_SHELL_BASENAMES.has(shebang.interpreter)
+}
+
+/** Returns the executable name ('pwsh.exe' or 'powershell.exe') when the script names PowerShell, or null. */
+export function getPowerShellInterpreterExecutable(script: string): string | null {
+  const shebang = parseSetupScriptShebang(script)
+  if (!shebang || !POWERSHELL_SHELL_BASENAMES.has(shebang.interpreter)) {
+    return null
+  }
+  if (shebang.interpreterPath.includes('/') || shebang.interpreterPath.includes('\\')) {
+    return shebang.interpreterPath
+  }
+  return shebang.interpreter === 'pwsh' ? 'pwsh.exe' : 'powershell.exe'
+}
 /** Drops a leading `#!` line; the generated runner carries its own interpreter line. */
 export function stripLeadingShebangLine(script: string): string {
   if (!isShebangLine(script.split('\n', 1)[0] ?? '')) {
@@ -55,6 +75,22 @@ export function stripLeadingShebangLine(script: string): string {
   }
   const lineEnd = script.indexOf('\n')
   return lineEnd === -1 ? '' : script.slice(lineEnd + 1)
+}
+
+function tokenizeShebangLine(firstLine: string): string[] {
+  const text = firstLine.trim().slice(2).trim()
+  const tokens: string[] = []
+  const regex = /(?:[^\s"']+|"[^"]*"|'[^']*')+/g
+  let match: RegExpExecArray | null
+  while ((match = regex.exec(text)) !== null) {
+    const raw = match[0]
+    if ((raw.startsWith('"') && raw.endsWith('"')) || (raw.startsWith("'") && raw.endsWith("'"))) {
+      tokens.push(raw.slice(1, -1))
+    } else {
+      tokens.push(raw)
+    }
+  }
+  return tokens
 }
 
 function findInterpreterIndex(tokens: string[]): number {

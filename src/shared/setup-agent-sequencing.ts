@@ -1,5 +1,6 @@
 import { encodePowerShellCommand } from './powershell-command-encoding'
 import {
+  isWindowsPowerShellRunnerPath,
   nativeWindowsPathToPosixShellPath,
   resolveSetupRunnerCommand,
   type SetupRunnerCommandPlatform,
@@ -61,7 +62,8 @@ export function createSequencedSetupAgentCommands(args: {
       setupCommand: buildWindowsSetupCommand(
         resolution.runnerScriptPathForShell,
         markerPath,
-        nonce
+        nonce,
+        args.shell
       ),
       startupCommand: buildWindowsStartupCommand(markerPath, nonce, waitTimeoutSeconds),
       startupEnv: {
@@ -188,9 +190,28 @@ function hasUnquotedPosixCommandSeparator(command: string): boolean {
 function buildWindowsSetupCommand(
   runnerScriptPath: string,
   markerPath: string,
-  nonce: string
+  nonce: string,
+  shell?: SetupRunnerShell
 ): string {
-  // Why: delayed expansion keeps path metacharacters as data when cmd invokes the batch runner.
+  const isPowerShell = isWindowsPowerShellRunnerPath(runnerScriptPath)
+  const rawExecutable = shell?.executable?.trim()
+  const psExecutable =
+    rawExecutable && /pwsh(\.exe)?$/i.test(rawExecutable) ? rawExecutable : 'powershell.exe'
+
+  const processSetupLines = isPowerShell
+    ? [
+        `$processInfo.FileName = ${quotePowerShellString(psExecutable)}`,
+        `$processInfo.Arguments = '-NoProfile -NonInteractive -ExecutionPolicy Bypass -File "' + $runner + '"'`,
+        '$processInfo.UseShellExecute = $false'
+      ]
+    : [
+        '$processInfo.FileName = $env:ComSpec',
+        "if (-not $processInfo.FileName) { $processInfo.FileName = 'cmd.exe' }",
+        '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
+        '$processInfo.UseShellExecute = $false',
+        '$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner'
+      ]
+
   const script = [
     `$runner = ${quotePowerShellString(runnerScriptPath)}`,
     `$marker = ${quotePowerShellString(markerPath)}`,
@@ -198,10 +219,7 @@ function buildWindowsSetupCommand(
     `$nonce = ${quotePowerShellString(nonce)}`,
     'Remove-Item -LiteralPath $marker, $tmp -Force -ErrorAction SilentlyContinue',
     '$processInfo = [System.Diagnostics.ProcessStartInfo]::new()',
-    '$processInfo.FileName = $env:ComSpec',
-    '$processInfo.Arguments = \'/d /s /v:on /c ""!ORCA_SETUP_RUNNER!""\'',
-    '$processInfo.UseShellExecute = $false',
-    '$processInfo.EnvironmentVariables["ORCA_SETUP_RUNNER"] = $runner',
+    ...processSetupLines,
     '$process = [System.Diagnostics.Process]::Start($processInfo)',
     '$process.WaitForExit()',
     '$setupStatus = $process.ExitCode',

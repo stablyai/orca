@@ -247,6 +247,25 @@ describe('createSequencedSetupAgentCommands', () => {
     })
   })
 
+  it('wraps native Windows PowerShell runners in a PowerShell-pinned setup gate', () => {
+    const result = createSequencedSetupAgentCommands({
+      runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.ps1',
+      startupCommand: "codex --model gpt-5 'fix !PATH! & test'",
+      platform: 'windows',
+      nonce: 'nonce-ps',
+      waitTimeoutSeconds: 3
+    })
+    const setupPowerShell = decodePowerShellScript(result.setupCommand)
+
+    expect(result.setupCommand).toContain(
+      'powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand'
+    )
+    expect(setupPowerShell).toContain("$runner = 'C:\\repo\\.git\\orca\\setup-runner.ps1'")
+    expect(setupPowerShell).toContain("$processInfo.FileName = 'powershell.exe'")
+    expect(setupPowerShell).toContain("-File \"' + $runner + '\"")
+    expect(setupPowerShell).not.toContain('$env:ComSpec')
+  })
+
   it('launches a batch runner through the cmd launcher inside a Git Bash gate', () => {
     // Regression (#6896): a Git Bash terminal with a batch setup script still gets a .cmd
     // runner, and the gate must not hand that runner to bash. The gate itself stays POSIX

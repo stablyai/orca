@@ -71,6 +71,17 @@ export function buildPosixRunnerScript(script: string): string {
   return `#!/usr/bin/env bash\nset -e\n${declaredOptions}${normalizeCrlfScriptLineEndings(body)}\n`
 }
 
+export function buildPowerShellRunnerScript(script: string): string {
+  // Why: UTF-8 BOM ensures Windows PowerShell 5.1 decodes non-ASCII scripts correctly without falling back to ANSI.
+  // $ErrorActionPreference = 'Stop' aborts setup on cmdlet errors; $PSNativeCommandUseErrorActionPreference extends that to native commands on PS 7.3+.
+  const shebang = parseSetupScriptShebang(script)
+  const body = shebang ? stripLeadingShebangLine(script) : script
+  const normalizedBody = normalizeCrlfScriptLineEndings(body).replaceAll('\n', '\r\n')
+  const header =
+    "\uFEFF$ErrorActionPreference = 'Stop'\r\nif (Test-Path Variable:\\PSNativeCommandUseErrorActionPreference) { $PSNativeCommandUseErrorActionPreference = $true }\r\n"
+  return `${header}${normalizedBody}\r\n`
+}
+
 function normalizeCrlfScriptLineEndings(script: string): string {
   let crlfStart = script.indexOf('\r\n')
   if (crlfStart === -1) {

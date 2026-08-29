@@ -1,8 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import {
+  getPowerShellInterpreterExecutable,
   isShebangLine,
   parseSetupScriptShebang,
   scriptDeclaresPosixShell,
+  scriptDeclaresPowerShell,
   stripLeadingShebangLine
 } from './setup-script-shebang'
 
@@ -35,20 +37,72 @@ describe('scriptDeclaresPosixShell', () => {
   })
 })
 
+describe('scriptDeclaresPowerShell', () => {
+  it('accepts the common env, absolute-path, and Windows forms for pwsh and powershell', () => {
+    expect(scriptDeclaresPowerShell('#!/usr/bin/env pwsh\nWrite-Host 1')).toBe(true)
+    expect(scriptDeclaresPowerShell('#!/usr/bin/env powershell\nWrite-Host 1')).toBe(true)
+    expect(scriptDeclaresPowerShell('#!/usr/bin/env -S pwsh -NoProfile\nWrite-Host 1')).toBe(true)
+    expect(scriptDeclaresPowerShell('#!pwsh\nWrite-Host 1')).toBe(true)
+    expect(scriptDeclaresPowerShell('#!powershell.exe\nWrite-Host 1')).toBe(true)
+    expect(scriptDeclaresPowerShell('#!C:\\tools\\pwsh\\pwsh.exe\r\nWrite-Host 1')).toBe(true)
+    expect(scriptDeclaresPowerShell('#!"C:\\Program Files\\PowerShell\\7\\pwsh.exe"\r\nWrite-Host 1')).toBe(
+      true
+    )
+    expect(scriptDeclaresPowerShell("#!'C:\\Program Files\\PowerShell\\7\\pwsh.exe'\r\nWrite-Host 1")).toBe(
+      true
+    )
+  })
+
+  it('rejects POSIX shell and non-PowerShell scripts', () => {
+    expect(scriptDeclaresPowerShell('#!/usr/bin/env bash\npnpm install')).toBe(false)
+    expect(scriptDeclaresPowerShell('#!/bin/sh\npnpm install')).toBe(false)
+    expect(scriptDeclaresPowerShell('#!/usr/bin/env node\nconsole.log(1)')).toBe(false)
+    expect(scriptDeclaresPowerShell('Write-Host 1')).toBe(false)
+  })
+})
+
+describe('getPowerShellInterpreterExecutable', () => {
+  it('resolves pwsh to pwsh.exe and powershell to powershell.exe', () => {
+    expect(getPowerShellInterpreterExecutable('#!/usr/bin/env pwsh\nWrite-Host 1')).toBe('pwsh.exe')
+    expect(getPowerShellInterpreterExecutable('#!/usr/bin/env powershell\nWrite-Host 1')).toBe(
+      'powershell.exe'
+    )
+    expect(getPowerShellInterpreterExecutable('#!pwsh\nWrite-Host 1')).toBe('pwsh.exe')
+    expect(getPowerShellInterpreterExecutable('#!powershell.exe\nWrite-Host 1')).toBe('powershell.exe')
+    expect(getPowerShellInterpreterExecutable('#!/usr/bin/env bash\npnpm install')).toBeNull()
+    expect(getPowerShellInterpreterExecutable('Write-Host 1')).toBeNull()
+  })
+
+  it('preserves declared explicit and quoted interpreter paths', () => {
+    expect(
+      getPowerShellInterpreterExecutable('#!"C:\\Program Files\\PowerShell\\7\\pwsh.exe"\nWrite-Host 1')
+    ).toBe('C:\\Program Files\\PowerShell\\7\\pwsh.exe')
+    expect(
+      getPowerShellInterpreterExecutable('#!C:\\tools\\pwsh\\pwsh.exe\nWrite-Host 1')
+    ).toBe('C:\\tools\\pwsh\\pwsh.exe')
+    expect(
+      getPowerShellInterpreterExecutable('#!/opt/microsoft/powershell/7/pwsh\nWrite-Host 1')
+    ).toBe('/opt/microsoft/powershell/7/pwsh')
+  })
+})
+
 describe('parseSetupScriptShebang', () => {
   it('keeps the interpreter flags a script declares', () => {
     // Regression: the runner is launched as `bash <path>`, so flags survive only if they are
     // parsed out here and replayed with `set` — otherwise `pipefail` is silently lost.
     expect(parseSetupScriptShebang('#!/usr/bin/env -S bash -euo pipefail\nmake')).toEqual({
       interpreter: 'bash',
+      interpreterPath: 'bash',
       shellOptions: ['-euo', 'pipefail']
     })
     expect(parseSetupScriptShebang('#!/bin/bash -e -x\nmake')).toEqual({
       interpreter: 'bash',
+      interpreterPath: '/bin/bash',
       shellOptions: ['-e', '-x']
     })
     expect(parseSetupScriptShebang('#!/bin/sh\nmake')).toEqual({
       interpreter: 'sh',
+      interpreterPath: '/bin/sh',
       shellOptions: []
     })
   })

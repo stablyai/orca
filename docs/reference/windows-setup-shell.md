@@ -4,13 +4,21 @@ On native Windows, Orca writes the `orca.yaml` setup script (and the issue comma
 runner file and types a launch command into a terminal. The runner is a **`.cmd` batch file by
 default**, exactly as it has been since setup hooks shipped.
 
-A script opts into bash by starting with a `#!` interpreter line:
+A script opts into bash or PowerShell by starting with a `#!` interpreter line:
 
 ```yaml
 scripts:
   setup: |
     #!/usr/bin/env bash
     [ -f .env ] || cp .env.example .env
+    pnpm install
+```
+
+```yaml
+scripts:
+  setup: |
+    #!/usr/bin/env pwsh
+    if (-not (Test-Path .env)) { Copy-Item .env.example .env }
     pnpm install
 ```
 
@@ -41,32 +49,32 @@ POSIX one-liner stored there needs its own `#!` line to run under bash on Window
 
 ## What the `#!` line does and does not select
 
-The generated runner is always executed by bash (`bash <runner>`; Git Bash on native Windows), on
-every platform. The `#!` line therefore does two things:
+For POSIX scripts, the generated runner is executed by bash (`bash <runner>`; Git Bash on native
+Windows). The `#!` line therefore:
 
-- It declares the script is written for a POSIX shell, which is what selects the bash runner.
-- Its option flags are replayed with `set`, so `#!/usr/bin/env -S bash -euo pipefail` really does
-  get `pipefail`. Without that replay the flags would be silently dropped, because `bash <runner>`
-  never parses the interpreter line. Only the flags `set` itself accepts
-  (`[--abefhkmnptuvxBCHP] [-o option]`) are replayed; invocation-only ones such as `-l` are
-  dropped, because `set -l` exits 2 and would abort the runner before its first line.
+- Declares the script is written for a POSIX shell, selecting the bash runner.
+- Replays valid option flags through `set`, so `#!/usr/bin/env -S bash -euo pipefail` really gets
+  `pipefail`. Only the flags `set` itself accepts (`[--abefhkmnptuvxBCHP] [-o option]`) are
+  replayed; invocation-only ones such as `-l` are dropped.
+- Treats `#!/bin/sh` and `#!/bin/zsh` as bash, matching macOS and Linux behavior.
 
-The interpreter name itself is not honored beyond "is this a POSIX shell": `#!/bin/sh` and
-`#!/bin/zsh` scripts run under bash, exactly as they already did on macOS and Linux.
+For PowerShell (`pwsh` or `powershell`), the generated runner is written as `.ps1` with
+`$ErrorActionPreference = 'Stop'` and `$PSNativeCommandUseErrorActionPreference = $true` (on
+PowerShell 7.3+) for fail-fast execution, and executed via PowerShell.
 
 ## Requirements for the bash runner
 
-A `#!` line only takes effect when Orca can actually launch bash from the configured terminal — the
-terminal shell must resolve to Git Bash (`resolveWindowsGitBashShellPath`). The generated runner
-uses MSYS `/c/...` paths, which Cygwin and the WSL shim do not accept, and the launch command is
-typed into whatever shell the terminal opened with.
+A POSIX `#!` line only takes effect when Orca can actually launch bash from the configured
+terminal — the terminal shell must resolve to Git Bash (`resolveWindowsGitBashShellPath`). The
+generated runner uses MSYS `/c/...` paths, which Cygwin and the WSL shim do not accept, and the
+launch command is typed into whatever shell the terminal opened with.
 
-When bash is not available (a PowerShell/cmd terminal, or an SSH-to-Windows host, which always uses
-the remote's `.cmd` runner) the `#!` script is **not** executed under cmd. The generated `.cmd`
-runner prints why and exits 1, because running the interpreter-agnostic prefix of a bash script
-(`pnpm install`, `git submodule update`) and only failing at the first bash-only line leaves a
-half-set-up worktree that looks finished.
-
+When bash is not available (such as a CMD terminal attempting to run a bash `#!` script) the
+POSIX `#!` script is **not** executed under cmd. The generated `.cmd` runner prints why and exits 1,
+because running the interpreter-agnostic prefix of a bash script (`pnpm install`, `git submodule
+update`) and only failing at the first bash-only line leaves a half-set-up worktree that looks
+finished. Remote Windows SSH hosts support `.cmd` runners and `.ps1` runners (when declared with a
+PowerShell shebang).
 ## Launching a `.cmd` runner from a Git Bash terminal
 
 The runner format and the shell that types the launch command are independent: a Git Bash terminal

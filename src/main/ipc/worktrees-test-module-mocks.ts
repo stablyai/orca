@@ -69,6 +69,7 @@ export const getDefaultTabsLaunchMock: ModuleMock = vi.fn()
 export const parseOrcaYamlMock: ModuleMock = vi.fn()
 export const shouldRunSetupForCreateMock: ModuleMock = vi.fn()
 export const buildPosixRunnerScriptMock: StringArgMock = vi.fn()
+export const buildPowerShellRunnerScriptMock: StringArgMock = vi.fn()
 export const buildWindowsRunnerScriptMock: StringArgMock = vi.fn()
 export const getSetupRunnerEnvVarsMock: Mock<
   (repo: { path: string }, worktreePath: string) => Record<string, string>
@@ -203,6 +204,7 @@ export const hooksModuleMock = () => ({
 export const setupRunnerScriptTextModuleMock = (actual: Record<string, unknown>) => ({
   ...actual,
   buildPosixRunnerScript: buildPosixRunnerScriptMock,
+  buildPowerShellRunnerScript: buildPowerShellRunnerScriptMock,
   buildWindowsRunnerScript: buildWindowsRunnerScriptMock
 })
 

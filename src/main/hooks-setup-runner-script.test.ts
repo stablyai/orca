@@ -80,6 +80,16 @@ describe('runner script builders', () => {
       replaceSpy.mockRestore()
     }
   })
+
+  it('builds PowerShell runners with $ErrorActionPreference and stripped shebang', async () => {
+    const { buildPowerShellRunnerScript } = await import('./setup-runner-script-text')
+    const script = '#!/usr/bin/env pwsh\n$val = 42\nWrite-Host $val'
+    const result = buildPowerShellRunnerScript(script)
+
+    expect(result).toBe(
+      "\uFEFF$ErrorActionPreference = 'Stop'\r\nif (Test-Path Variable:\\PSNativeCommandUseErrorActionPreference) { $PSNativeCommandUseErrorActionPreference = $true }\r\n$val = 42\r\nWrite-Host $val\r\n"
+    )
+  })
 })
 
 describe('createSetupRunnerScript', () => {
@@ -124,6 +134,43 @@ describe('createSetupRunnerScript', () => {
       expect(result).toMatchObject({
         runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.sh',
         shell: { family: 'posix' }
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+  })
+
+  it('writes PowerShell setup runners for pwsh shebang scripts on native Windows paths', async () => {
+    gitExecFileSyncMock.mockReset()
+    gitExecFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\setup-runner.ps1\n')
+    const fs = await import('node:fs')
+    const writeFileSyncMock = vi.mocked(fs.writeFileSync)
+    writeFileSyncMock.mockClear()
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      const { createSetupRunnerScript } = await import('./worktree-runner-script')
+      const result = createSetupRunnerScript(
+        makeRepo(),
+        'C:\\repo-worktree',
+        '#!/usr/bin/env pwsh\r\nWrite-Host "Setup running"\r\npnpm install',
+        undefined,
+        { family: 'powershell' }
+      )
+
+      expect(gitExecFileSyncMock).toHaveBeenCalledWith(
+        ['rev-parse', '--git-path', 'orca/setup-runner.ps1'],
+        { cwd: 'C:\\repo-worktree' }
+      )
+      expect(writeFileSyncMock).toHaveBeenCalledWith(
+        'C:\\repo\\.git\\orca\\setup-runner.ps1',
+        "\uFEFF$ErrorActionPreference = 'Stop'\r\nif (Test-Path Variable:\\PSNativeCommandUseErrorActionPreference) { $PSNativeCommandUseErrorActionPreference = $true }\r\nWrite-Host \"Setup running\"\r\npnpm install\r\n",
+        'utf-8'
+      )
+      expect(result).toMatchObject({
+        runnerScriptPath: 'C:\\repo\\.git\\orca\\setup-runner.ps1',
+        shell: { family: 'powershell', executable: 'pwsh.exe' }
       })
     } finally {
       Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })

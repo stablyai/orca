@@ -50,7 +50,12 @@ import type {
 } from '../runtime/orca-runtime'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
 import { getEffectiveHooks, loadHooks, parseOrcaYaml } from '../hooks'
-import { buildPosixRunnerScript, buildWindowsRunnerScript } from '../setup-runner-script-text'
+import {
+  buildPosixRunnerScript,
+  buildPowerShellRunnerScript,
+  buildWindowsRunnerScript
+} from '../setup-runner-script-text'
+import { getPowerShellInterpreterExecutable, scriptDeclaresPowerShell } from '../../shared/setup-script-shebang'
 import { createSetupRunnerScript, resolveSetupRunnerShell } from '../worktree-runner-script'
 import { getSetupRunnerEnvVars } from '../setup-hook-env-vars'
 import {
@@ -1262,9 +1267,17 @@ async function createRemoteSetupRunnerScript(
   fsProvider: IFilesystemProvider
 ): Promise<CreateWorktreeResult['setup']> {
   const useWindowsFormat = isWindowsAbsolutePathLike(worktreePath)
+  const declaredPowerShellExe = useWindowsFormat
+    ? getPowerShellInterpreterExecutable(script)
+    : null
+  const isPowerShell = declaredPowerShellExe !== null
   // Why: SSH terminals choose their shell on the remote host; local Windows
   // preferences cannot safely select a remote runner format or launch command.
-  const runnerRelativePath = useWindowsFormat ? 'orca/setup-runner.cmd' : 'orca/setup-runner.sh'
+  const runnerRelativePath = isPowerShell
+    ? 'orca/setup-runner.ps1'
+    : useWindowsFormat
+      ? 'orca/setup-runner.cmd'
+      : 'orca/setup-runner.sh'
   const { stdout } = await gitProvider.exec(
     ['rev-parse', '--git-path', runnerRelativePath],
     worktreePath
@@ -1276,11 +1289,16 @@ async function createRemoteSetupRunnerScript(
   await fsProvider.createDir(runnerDir)
   await fsProvider.writeFile(
     runnerScriptPath,
-    useWindowsFormat ? buildWindowsRunnerScript(script) : buildPosixRunnerScript(script)
+    isPowerShell
+      ? buildPowerShellRunnerScript(script)
+      : useWindowsFormat
+        ? buildWindowsRunnerScript(script)
+        : buildPosixRunnerScript(script)
   )
   return {
     runnerScriptPath,
     envVars: getSetupRunnerEnvVars(repo, worktreePath),
+    ...(isPowerShell ? { shell: { family: 'powershell', executable: declaredPowerShellExe } } : {}),
     ...(shouldWaitForSetupBeforeAgentStartup(repo.hookSettings?.setupAgentStartupPolicy)
       ? { waitForAgentStartup: true }
       : {})
