@@ -6,7 +6,7 @@
  *  has no layout engine, so real pixel growth is covered by app validation. */
 
 import { createRef } from 'react'
-import { cleanup, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -23,10 +23,19 @@ vi.mock('./NativeChatAutocompleteMenus', () => ({
 }))
 
 import { NativeChatComposerField } from './NativeChatComposerField'
+import type { NativeChatComposerFieldProps } from './NativeChatComposerField'
 
 afterEach(() => cleanup())
 
-function renderField(draft: string): HTMLTextAreaElement {
+function renderField(
+  draft: string,
+  overrides: Partial<
+    Pick<
+      NativeChatComposerFieldProps,
+      'onDraftChange' | 'onTextareaSelect' | 'onCompositionStart' | 'onCompositionEnd'
+    >
+  > = {}
+): HTMLTextAreaElement {
   render(
     <NativeChatComposerField
       textareaRef={createRef<HTMLTextAreaElement>()}
@@ -44,11 +53,11 @@ function renderField(draft: string): HTMLTextAreaElement {
       dictationDisabled={false}
       isDictating={false}
       isDictationHoldMode={false}
-      onDraftChange={vi.fn()}
-      onTextareaSelect={vi.fn()}
+      onDraftChange={overrides.onDraftChange ?? vi.fn()}
+      onTextareaSelect={overrides.onTextareaSelect ?? vi.fn()}
       onKeyDown={vi.fn()}
-      onCompositionStart={vi.fn()}
-      onCompositionEnd={vi.fn()}
+      onCompositionStart={overrides.onCompositionStart ?? vi.fn()}
+      onCompositionEnd={overrides.onCompositionEnd ?? vi.fn()}
       onPaste={vi.fn()}
       pickerListboxId="picker"
       onChoosePickerItem={vi.fn()}
@@ -94,5 +103,23 @@ describe('native chat composer autogrow', () => {
     // A JS measure pass writes style.height and only re-measures on the next
     // value change, so a re-wrap from a window/pane resize would strand it.
     expect(renderField('a\n'.repeat(6)).style.height).toBe('')
+  })
+
+  it('keeps IME preedit text out of draft callbacks until compositionend', () => {
+    const onDraftChange = vi.fn()
+    const onTextareaSelect = vi.fn()
+    const onCompositionEnd = vi.fn()
+    const textarea = renderField('', { onDraftChange, onTextareaSelect, onCompositionEnd })
+
+    fireEvent.compositionStart(textarea)
+    fireEvent.change(textarea, { target: { value: 'ni' } })
+    fireEvent.select(textarea)
+
+    expect(onDraftChange).not.toHaveBeenCalled()
+    expect(onTextareaSelect).not.toHaveBeenCalled()
+
+    fireEvent.compositionEnd(textarea, { data: '你好' })
+
+    expect(onCompositionEnd).toHaveBeenCalledOnce()
   })
 })
