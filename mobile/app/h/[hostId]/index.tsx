@@ -96,6 +96,7 @@ import {
   type Worktree
 } from '../../../src/worktree/workspace-list-sections'
 import { useWorkspaceSections } from '../../../src/worktree/use-workspace-sections'
+import { useWorkspaceSearch } from '../../../src/worktree/use-workspace-search'
 import { getMobileWorkspaceLineageGroupKey } from '../../../src/worktree/mobile-workspace-lineage'
 import { areWorktreeListsEqual } from '../../../src/worktree/worktree-list-snapshot'
 import { WorktreeCatalogSnapshotClient } from '../../../src/worktree/worktree-catalog-snapshot-client'
@@ -177,8 +178,7 @@ export function HostScreen({
   const [hostName, setHostName] = useState('')
   const [error, setError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
-  const [search, setSearch] = useState('')
-  const [showSearch, setShowSearch] = useState(false)
+  const { search, setSearch, showSearch, toggleSearch } = useWorkspaceSearch()
   const [sortMode, setSortMode] = useState<MobileSortMode>('recent')
   const [filters, setFilters] = useState<FilterState>({
     filterRepoIds: new Set(),
@@ -991,7 +991,7 @@ export function HostScreen({
 
               <Pressable
                 style={styles.embeddedToolbarIconButton}
-                onPress={() => setShowSearch((s) => !s)}
+                onPress={toggleSearch}
                 accessibilityRole="button"
                 accessibilityLabel={showSearch ? 'Close search' : 'Search workspaces'}
               >
@@ -1067,7 +1067,7 @@ export function HostScreen({
               />
             </Pressable>
 
-            <Pressable style={styles.searchToggle} onPress={() => setShowSearch((s) => !s)}>
+            <Pressable style={styles.searchToggle} onPress={toggleSearch}>
               {showSearch ? (
                 <X size={16} color={colors.textSecondary} />
               ) : (
