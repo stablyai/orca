@@ -12,6 +12,7 @@ import type { ProjectExecutionRuntimeResolution } from '../../../../shared/proje
 import type { EventProps } from '../../../../shared/telemetry-events'
 import type { TerminalOscColorQueryReplyColors } from '../../../../shared/terminal-osc-color-reply'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { PtyDataMeta } from './pty-dispatcher'
 import type { RemoteRuntimeSnapshotOutcome } from '../../runtime/remote-runtime-terminal-multiplexer'
@@ -68,6 +69,8 @@ export type LocalPtySessionMetadata = {
 
 export type PtyConnectResult = {
   id: string
+  /** Opaque process identity behind a reusable PTY id; absence is unknown. */
+  incarnationId?: PtyIncarnationId
   /** The requested session exited while it had no primary pane handler. Its
    *  buffered final data/exit were delivered, so callers must not fresh-spawn. */
   exitedBeforeAttach?: boolean
@@ -253,9 +256,9 @@ export type IpcPtyTransportOptions = {
   telemetry?: EventProps<'agent_started'>
   onPtyExit?: (ptyId: string, exitCode?: number) => void
   onTitleChange?: (title: string, rawTitle: string) => void
-  onPtySpawn?: (ptyId: string) => void
+  onPtySpawn?: (ptyId: string, incarnationId?: PtyIncarnationId) => void
   /** Rebind an existing pane after its provider replaces the PTY identity. */
-  onPtyRebind?: (ptyId: string, replacedPtyId: string) => void
+  onPtyRebind?: (ptyId: string, replacedPtyId: string, incarnationId?: PtyIncarnationId) => void
   onBell?: () => void
   onAgentBecameIdle?: (title: string) => void
   onAgentBecameWorking?: () => void

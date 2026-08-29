@@ -106,6 +106,7 @@ function startParkedTabWatchers(
     worktreeId,
     tabPtyId: tab.ptyId,
     paneIdByPtyId: new Map(),
+    incarnationIdByPtyId: new Map(),
     disposersByPtyId: new Map()
   }
   parkedWatchersByTabId.set(tab.id, entry)
@@ -131,10 +132,16 @@ function reconcileParkedTabWatchers(
   const state = useAppStore.getState()
   const expectedPanes = watchablePanes(worktreeId, tab)
   const expectedPtyIds = new Set(expectedPanes.keys())
+  const expectedIncarnationIdByPtyId = new Map(
+    Array.from(expectedPanes, ([ptyId, pane]) => [ptyId, pane.incarnationId] as const)
+  )
+  const currentIncarnationIdByPtyId = entry.incarnationIdByPtyId ?? new Map()
   const reconciliation = reconcileParkedWatcherPtyIds({
     currentTabPtyId: tab.ptyId,
     entryTabPtyId: entry.tabPtyId,
     paneIdByPtyId: entry.paneIdByPtyId,
+    incarnationIdByPtyId: currentIncarnationIdByPtyId,
+    expectedIncarnationIdByPtyId,
     expectedPtyIds
   })
   if (reconciliation.restartAll) {
@@ -154,11 +161,13 @@ function reconcileParkedTabWatchers(
     startParkedTabWatchers(worktreeId, tab, restoreTitleOnRegister)
     return
   }
+  const replacedPtyIds = new Set(reconciliation.replacedPtyIds)
   for (const [ptyId, paneId] of Array.from(entry.paneIdByPtyId)) {
-    if (expectedPtyIds.has(ptyId)) {
+    if (expectedPtyIds.has(ptyId) && !replacedPtyIds.has(ptyId)) {
       continue
     }
     entry.paneIdByPtyId.delete(ptyId)
+    entry.incarnationIdByPtyId?.delete(ptyId)
     const dispose = entry.disposersByPtyId.get(ptyId)
     entry.disposersByPtyId.delete(ptyId)
     dispose?.()
@@ -166,6 +175,19 @@ function reconcileParkedTabWatchers(
   }
   const restorePolicy = parkRestorePolicyFromState(useAppStore.getState())
   for (const ptyId of reconciliation.addedPtyIds) {
+    const pane = expectedPanes.get(ptyId)
+    if (pane) {
+      startParkedPtyWatcher({
+        worktreeId,
+        tab,
+        pane,
+        entry,
+        restoreTitleOnRegister,
+        restorePolicy
+      })
+    }
+  }
+  for (const ptyId of reconciliation.replacedPtyIds) {
     const pane = expectedPanes.get(ptyId)
     if (pane) {
       startParkedPtyWatcher({

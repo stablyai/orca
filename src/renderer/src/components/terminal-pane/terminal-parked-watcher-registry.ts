@@ -10,9 +10,12 @@
 import { discardPreHandlerPtyState, hasPreHandlerPtyExit } from './pty-pre-handler-buffer'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime-pty-id'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import type { PtyIncarnationId } from '../../../../shared/pty-incarnation'
 
 export type ParkedTerminalPaneCapture = {
   ptyId: string | null
+  /** Process identity carried across the mounted-to-parked handoff. */
+  incarnationId?: PtyIncarnationId | null
   /** PaneManager numeric pane id the live pane used for runtime titles. */
   paneId: number
   /** Stable terminal-layout leaf UUID (paneKey attribution). */
@@ -49,6 +52,8 @@ export type ParkedTabWatcherEntry = {
   /** Runtime-title slot each watcher writes, so parked PTY-exit handling can
    *  clear the dead leaf's slot (no live pane will ever overwrite it). */
   paneIdByPtyId: Map<string, number>
+  /** Known process identity for each watcher; same PTY ids may be re-minted. */
+  incarnationIdByPtyId?: Map<string, PtyIncarnationId | null>
   disposersByPtyId: Map<string, () => void>
 }
 

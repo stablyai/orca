@@ -110,6 +110,7 @@ describe('PTY provider dispatch', () => {
       acknowledgeDataEvent: vi.fn(),
       hasChildProcesses: vi.fn(),
       getForegroundProcess: vi.fn(),
+      inspectProcess: vi.fn(),
       serialize: vi.fn(),
       revive: vi.fn(),
       listProcesses: vi.fn(),

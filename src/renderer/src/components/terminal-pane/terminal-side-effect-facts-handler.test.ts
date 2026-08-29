@@ -430,6 +430,75 @@ describe('registerTerminalSideEffectFactConsumer', () => {
     expect(second.events).toEqual([['bell'], ['bell']])
   })
 
+  it('drops a host-confirmed exit when the parked consumer identity is stale', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      incarnationId: 'inc-old',
+      callbacks
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([
+        {
+          kind: 'agent-exited',
+          executionHostConfirmed: true,
+          incarnationId: 'inc-new'
+        }
+      ])
+    )
+
+    expect(events).toEqual([])
+  })
+
+  it('keeps host-confirmed exits fail-closed when identity is unknown', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'agent-exited', executionHostConfirmed: true, incarnationId: 'inc-new' }])
+    )
+
+    expect(events).toEqual([])
+  })
+
+  it('keeps host-confirmed exits fail-closed when attribution is unknown', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      incarnationId: 'inc-new',
+      callbacks
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'agent-exited', executionHostConfirmed: true, incarnationId: 'inc-new' }])
+    )
+
+    expect(events).toEqual([])
+  })
+
+  it('keeps host-confirmed exits fail-closed when pane attribution is stale', () => {
+    const { callbacks, events } = createCallbackRecorder()
+    registerTerminalSideEffectFactConsumer({
+      ptyId: PTY_ID,
+      incarnationId: 'inc-new',
+      paneKey: 'tab-1:leaf-new',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      callbacks
+    })
+
+    _dispatchTerminalSideEffectBatchForTest(
+      batch([{ kind: 'agent-exited', executionHostConfirmed: true, incarnationId: 'inc-new' }], {
+        paneKey: 'tab-1:leaf-old',
+        tabId: 'tab-1',
+        worktreeId: 'wt-1'
+      })
+    )
+
+    expect(events).toEqual([])
+  })
+
   it('stops routing after the consumer unregisters', () => {
     const { callbacks, events } = createCallbackRecorder()
     const dispose = registerTerminalSideEffectFactConsumer({ ptyId: PTY_ID, callbacks })

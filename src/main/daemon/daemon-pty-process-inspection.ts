@@ -2,6 +2,7 @@ import { isShellProcess } from '../../shared/agent-detection'
 import { DaemonPtyBufferSnapshots } from './daemon-pty-buffer-snapshots'
 import { parsePtySessionId } from './pty-session-id'
 import {
+  AUTHORITATIVE_COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   type ListSessionsResult,
@@ -27,22 +28,27 @@ export abstract class DaemonPtyProcessInspection extends DaemonPtyBufferSnapshot
       return { foregroundProcess: null, hasChildProcesses: true, unavailable: true }
     }
     if (this.protocolVersion < COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION) {
-      // Why: pre-v27 daemons survive an in-place app update; compose the inspection client-side from the
-      // one call they do support instead of throwing, or completion detection stays dead until recreate.
-      // Requests directly (not via getForegroundProcess) so a dead socket still rejects rather than
-      // reading as an idle foreground and dispatching a false completion.
+      // Why: pre-v27 daemons expose only a best-effort read that swallows scan failures into null.
+      // Preserve positive evidence, but never turn its shell/null result into completion authority.
       const { foregroundProcess } = await this.client.request<{
         foregroundProcess: string | null
       }>('getForegroundProcess', { sessionId: id })
       return {
         foregroundProcess,
-        hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess)
+        hasChildProcesses: this.hasChildProcessesFromForeground(foregroundProcess),
+        unavailable: true
       }
     }
-    return this.client.request<{
+    const inspection = await this.client.request<{
       foregroundProcess: string | null
       hasChildProcesses: boolean
     }>('inspectProcess', { sessionId: id })
+    return {
+      ...inspection,
+      ...(this.protocolVersion < AUTHORITATIVE_COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION
+        ? { unavailable: true as const }
+        : {})
+    }
   }
 
   async getForegroundProcess(id: string): Promise<string | null> {

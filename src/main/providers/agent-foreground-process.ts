@@ -27,11 +27,81 @@ export type AgentForegroundProcessResolution = {
   anchorPidForeign?: boolean
 }
 
+export type AgentPtyProcessInspection = AgentForegroundProcessResolution & {
+  hasChildProcesses: boolean
+}
+
 type ShellForegroundConfirmationOptions = {
   readWindowsPtyJobProcessIds?: () =>
     | ReadonlySet<number>
     | null
     | Promise<ReadonlySet<number> | null>
+}
+
+export async function inspectPtyChildProcesses(
+  shellPid: number | null | undefined,
+  options: ShellForegroundConfirmationOptions = {}
+): Promise<{ hasChildProcesses: boolean; available: boolean }> {
+  if (!shellPid) {
+    return { hasChildProcesses: false, available: false }
+  }
+  if (process.platform === 'win32') {
+    try {
+      const processIds = await options.readWindowsPtyJobProcessIds?.()
+      return processIds
+        ? { hasChildProcesses: processIds.size > 1, available: processIds.has(shellPid) }
+        : { hasChildProcesses: false, available: false }
+    } catch {
+      return { hasChildProcesses: false, available: false }
+    }
+  }
+  try {
+    const rows = await getFreshProcessTableSnapshot()
+    if (!rows.some((row) => row.pid === shellPid)) {
+      return { hasChildProcesses: false, available: false }
+    }
+    return { hasChildProcesses: collectDescendants(rows, shellPid).length > 0, available: true }
+  } catch {
+    return { hasChildProcesses: false, available: false }
+  }
+}
+
+export async function inspectAgentPtyProcess(
+  shellPid: number | null | undefined,
+  fallbackProcess: string | null,
+  options: AgentForegroundResolutionOptions & ShellForegroundConfirmationOptions = {}
+): Promise<AgentPtyProcessInspection> {
+  if (!shellPid) {
+    return { available: false, processName: fallbackProcess, hasChildProcesses: false }
+  }
+  if (process.platform === 'win32') {
+    const [foreground, processIds] = await Promise.all([
+      resolveAgentForegroundProcessWithAvailability(shellPid, fallbackProcess, {
+        ...options,
+        fresh: true
+      }),
+      Promise.resolve(options.readWindowsPtyJobProcessIds?.() ?? null).catch(() => null)
+    ])
+    const childInspectionAvailable = processIds?.has(shellPid) === true
+    return {
+      ...foreground,
+      available: foreground.available && childInspectionAvailable,
+      hasChildProcesses: childInspectionAvailable && processIds!.size > 1
+    }
+  }
+  try {
+    const rows = await getFreshProcessTableSnapshot()
+    if (!rows.some((row) => row.pid === shellPid)) {
+      return { available: false, processName: fallbackProcess, hasChildProcesses: false }
+    }
+    return {
+      available: true,
+      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess,
+      hasChildProcesses: collectDescendants(rows, shellPid).length > 0
+    }
+  } catch {
+    return { available: false, processName: fallbackProcess, hasChildProcesses: false }
+  }
 }
 
 function collectDescendants<Row extends { pid: number; ppid: number }>(

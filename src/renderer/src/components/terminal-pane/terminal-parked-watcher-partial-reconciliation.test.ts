@@ -29,6 +29,7 @@ vi.mock('./terminal-parked-pty-watcher', () => ({
     const dispose = vi.fn()
     startedWatchers.push({ pane: args.pane, dispose })
     args.entry.paneIdByPtyId.set(args.pane.ptyId, args.pane.paneId)
+    args.entry.incarnationIdByPtyId?.set(args.pane.ptyId, args.pane.incarnationId ?? null)
     args.entry.disposersByPtyId.set(args.pane.ptyId, dispose)
   }
 }))
@@ -108,4 +109,49 @@ it('retains a continuing watcher and title while reconciling a reminted split le
   })
   expect(state.clearRuntimePaneTitle).toHaveBeenCalledWith(TAB_ID, 2)
   expect(state.clearRuntimePaneTitle).not.toHaveBeenCalledWith(TAB_ID, 1)
+})
+
+it('replaces only the same-PTY watcher whose process incarnation changed', () => {
+  captureParkedTerminalPaneCandidates(TAB_ID, WORKTREE_ID, [
+    {
+      ptyId: FIRST_PTY_ID,
+      paneId: 1,
+      leafId: FIRST_LEAF_ID,
+      drivesTabTitle: true,
+      incarnationId: 'inc-old'
+    },
+    {
+      ptyId: OLD_SECOND_PTY_ID,
+      paneId: 2,
+      leafId: SECOND_LEAF_ID,
+      drivesTabTitle: false,
+      incarnationId: 'inc-sibling'
+    }
+  ])
+  sync()
+
+  captureParkedTerminalPaneCandidates(TAB_ID, WORKTREE_ID, [
+    {
+      ptyId: FIRST_PTY_ID,
+      paneId: 1,
+      leafId: FIRST_LEAF_ID,
+      drivesTabTitle: true,
+      incarnationId: 'inc-new'
+    },
+    {
+      ptyId: OLD_SECOND_PTY_ID,
+      paneId: 2,
+      leafId: SECOND_LEAF_ID,
+      drivesTabTitle: false,
+      incarnationId: 'inc-sibling'
+    }
+  ])
+  sync()
+
+  expect(startedWatchers[0].dispose).toHaveBeenCalledOnce()
+  expect(startedWatchers[1].dispose).not.toHaveBeenCalled()
+  expect(startedWatchers[2].pane).toMatchObject({
+    ptyId: FIRST_PTY_ID,
+    incarnationId: 'inc-new'
+  })
 })

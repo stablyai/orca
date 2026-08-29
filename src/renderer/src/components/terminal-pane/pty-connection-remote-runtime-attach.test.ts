@@ -394,7 +394,7 @@ describe('connectPanePty', () => {
     expect(deps.updateTabPtyId).toHaveBeenCalledWith('tab-1', freshPtyId)
     expect(window.api.pty.reportRendererSerializerReady).toHaveBeenCalledWith(freshPtyId)
     expect(transport.sendInput).not.toHaveBeenCalled()
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.clearSleepingAgentSessionsByPaneKey).toHaveBeenCalledWith([paneKey])
   })
 
   it('does not let a restored encoded PTY override the current worktree owner', async () => {

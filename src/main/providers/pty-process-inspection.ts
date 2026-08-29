@@ -6,8 +6,37 @@ export type PtyProcessInspection = {
   unavailable?: true
 }
 
-type CompletionSensitivePtyProvider = IPtyProvider & {
-  inspectProcess?: (id: string) => Promise<PtyProcessInspection>
+function unavailablePtyProcessInspection(
+  value?: Partial<PtyProcessInspection>
+): PtyProcessInspection {
+  return {
+    foregroundProcess:
+      typeof value?.foregroundProcess === 'string' ? value.foregroundProcess : null,
+    hasChildProcesses: value?.hasChildProcesses === true,
+    unavailable: true
+  }
+}
+
+export function normalizePtyProcessInspection(value: unknown): PtyProcessInspection {
+  if (typeof value !== 'object' || value === null) {
+    return unavailablePtyProcessInspection()
+  }
+  const inspection = value as Partial<PtyProcessInspection>
+  const foregroundProcess = inspection.foregroundProcess
+  const hasChildProcesses = inspection.hasChildProcesses
+  const unavailable = inspection.unavailable
+  if (
+    (foregroundProcess !== null && typeof foregroundProcess !== 'string') ||
+    typeof hasChildProcesses !== 'boolean' ||
+    (unavailable !== undefined && unavailable !== true)
+  ) {
+    return unavailablePtyProcessInspection({ foregroundProcess, hasChildProcesses })
+  }
+  return {
+    foregroundProcess,
+    hasChildProcesses,
+    ...(unavailable === true ? { unavailable: true } : {})
+  }
 }
 
 export async function inspectPtyProviderProcess(
@@ -17,13 +46,10 @@ export async function inspectPtyProviderProcess(
   if (provider.hasPty?.(ptyId) === false) {
     throw new Error('terminal_gone')
   }
-  const inspectProcess = (provider as CompletionSensitivePtyProvider).inspectProcess
-  if (inspectProcess) {
-    return inspectProcess.call(provider, ptyId)
+  if (typeof provider.inspectProcess !== 'function') {
+    return unavailablePtyProcessInspection()
   }
-  const foregroundProcess = await provider.getForegroundProcess(ptyId)
-  const hasChildProcesses = await provider.hasChildProcesses(ptyId)
-  return { foregroundProcess, hasChildProcesses }
+  return normalizePtyProcessInspection(await provider.inspectProcess(ptyId))
 }
 
 export async function inspectPtyProviderProcessForRenderer(

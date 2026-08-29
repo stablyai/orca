@@ -1,6 +1,10 @@
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
-import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import {
+  ptyOwnership,
+  replacePtyIncarnation,
+  deletePtyOwnership
+} from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { getRelayPtyId } from '../provider/registry'
 import {
@@ -61,9 +65,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     const owner = ctx.result.agentSessionEnsure.owner
     ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
     ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
-    if (ctx.result.incarnationId) {
-      ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-    }
+    replacePtyIncarnation(ctx.result.id, ctx.result.incarnationId)
     ctx.deps.runtime?.registerPty(
       ctx.result.id,
       owner.surface.worktreeId,
@@ -100,9 +102,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     }
   }
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
-  if (ctx.result.incarnationId) {
-    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-  }
+  replacePtyIncarnation(ctx.result.id, ctx.result.incarnationId)
   // Why: record the native-Windows-local-PTY determination before any byte reaches the emulator, so its ConPTY DA1 override exists from byte zero.
   if (
     isNativeWindowsLocalPtySpawn({

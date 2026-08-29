@@ -407,6 +407,20 @@ describe('registerPtyHandlers', () => {
     expect(isCurrentPtyExit({ id: ptyId, incarnationId: 'incarnation-current' })).toBe(true)
     clearProviderPtyState(ptyId)
   })
+  it('forgets stale incarnation proof when a replacement spawn omits identity', async () => {
+    const ptyId = 'pty-legacy-replacement'
+    restorePtyIncarnation(ptyId, 'incarnation-old')
+    const provider = createAgentClaimProvider({
+      spawn: vi.fn(async () => ({ id: ptyId }))
+    })
+    setLocalPtyProvider(provider as never)
+    const controller = registerAgentClaimController()
+
+    await controller.spawn({ cols: 80, rows: 24, worktreeId: 'repo::/tmp/legacy-replacement' })
+
+    expect(isCurrentPtyExit({ id: ptyId })).toBe(true)
+    clearProviderPtyState(ptyId)
+  })
   it('fails closed when a recovered claimed owner omits incarnation proof', async () => {
     const owner: AgentSessionOwnerBinding = {
       claim: {

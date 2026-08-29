@@ -12,6 +12,7 @@ import {
   resolveDefaultCwd,
   resolveProcessCwd,
   processHasChildren,
+  inspectProcessChildren,
   getForegroundProcessName,
   isProcessAlive,
   listShellProfiles
@@ -2218,6 +2219,7 @@ export class PtyHandler {
   private async inspectProcess(params: Record<string, unknown>): Promise<{
     foregroundProcess: string | null
     hasChildProcesses: boolean
+    unavailable?: true
   }> {
     const id = params.id as string
     const managed = this.ptys.get(id)
@@ -2228,9 +2230,10 @@ export class PtyHandler {
       managed.pty.pid,
       managed.pty.process || null
     )
+    const childInspection = await inspectProcessChildren(managed.pty.pid)
     return {
       foregroundProcess,
-      hasChildProcesses: await processHasChildren(managed.pty.pid)
+      ...childInspection
     }
   }
 

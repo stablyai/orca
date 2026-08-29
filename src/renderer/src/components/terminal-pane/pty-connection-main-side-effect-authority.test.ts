@@ -5,6 +5,7 @@ import { flushAsyncTicks } from './pty-connection-test-async'
 import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from './pty-connection-test-constants'
 import {
   LEAF_1,
+  LEAF_2,
   createMockTransport,
   createPane,
   createManager,
@@ -391,6 +392,154 @@ describe('connectPanePty', () => {
       expect(mockStoreState.removeAgentStatus).not.toHaveBeenCalled()
     })
 
+    it('retires only the confirmed agent-exit resume record before immediate PTY teardown', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport('pty-agent-exit')
+      transport.connect.mockResolvedValue({
+        id: 'pty-agent-exit',
+        incarnationId: 'inc-agent-exit'
+      })
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const duplicatePaneKey = 'tab-1:1'
+      const siblingPaneKey = makePaneKey('tab-1', LEAF_2)
+      const record = {
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'claude' as const,
+        providerSession: { key: 'session_id' as const, id: 'session-1' },
+        prompt: 'finish the task',
+        state: 'working' as const,
+        capturedAt: 1,
+        updatedAt: 1,
+        origin: 'live' as const
+      }
+      const duplicateRecord = {
+        ...record,
+        paneKey: duplicatePaneKey,
+        capturedAt: 2,
+        updatedAt: 2
+      }
+      const siblingRecord = {
+        ...record,
+        paneKey: siblingPaneKey,
+        providerSession: { key: 'session_id' as const, id: 'session-2' }
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey = {
+        [paneKey]: record,
+        [duplicatePaneKey]: duplicateRecord,
+        [siblingPaneKey]: siblingRecord
+      }
+      const deps = createDeps()
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (
+        ptyId: string,
+        incarnationId?: string
+      ) => void
+      onPtySpawn('pty-agent-exit', 'inc-agent-exit')
+      await flushAsyncTicks()
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-agent-exit',
+        seq: 1,
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        facts: [
+          {
+            kind: 'agent-exited',
+            executionHostConfirmed: true,
+            incarnationId: 'older-incarnation'
+          }
+        ]
+      })
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBe(record)
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-agent-exit',
+        seq: 2,
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        facts: [
+          {
+            kind: 'agent-exited',
+            executionHostConfirmed: true,
+            incarnationId: 'inc-agent-exit'
+          }
+        ]
+      })
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+      const onPtyExit = createdTransportOptions[0]?.onPtyExit as (ptyId: string) => void
+      onPtyExit('pty-agent-exit')
+
+      expect(mockStoreState.clearSleepingAgentSessionsByPaneKey).toHaveBeenCalledWith([
+        paneKey,
+        duplicatePaneKey
+      ])
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[duplicatePaneKey]).toBeUndefined()
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[siblingPaneKey]).toBe(siblingRecord)
+      expect(deps.onAgentExitedRef.current).toHaveBeenCalledWith(LEAF_1)
+      const clearCallOrder =
+        mockStoreState.clearSleepingAgentSessionsByPaneKey.mock.invocationCallOrder[0]
+      expect(clearCallOrder).toBeLessThan(deps.onAgentExitedRef.current.mock.invocationCallOrder[0])
+    })
+
+    it('retires resume authority when the agent-exited fact arrives after PTY teardown', async () => {
+      enableMainAuthority()
+      const { connectPanePty } = await import('./pty-connection')
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const transport = createMockTransport('pty-late-exit')
+      transport.connect.mockResolvedValue({
+        id: 'pty-late-exit',
+        incarnationId: 'inc-late-exit'
+      })
+      transportFactoryQueue.push(transport)
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const record = {
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'claude' as const,
+        providerSession: { key: 'session_id' as const, id: 'session-late' },
+        prompt: 'finish the task',
+        state: 'working' as const,
+        capturedAt: 1,
+        updatedAt: 1,
+        origin: 'live' as const
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey = { [paneKey]: record }
+
+      connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+      const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+      onPtySpawn('pty-late-exit')
+      await flushAsyncTicks()
+      const onPtyExit = createdTransportOptions[0]?.onPtyExit as (ptyId: string) => void
+      onPtyExit('pty-late-exit')
+
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-late-exit',
+        seq: 1,
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        facts: [
+          {
+            kind: 'agent-exited',
+            executionHostConfirmed: true,
+            incarnationId: 'inc-late-exit'
+          }
+        ]
+      })
+
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBeUndefined()
+    })
+
     it('routes pr-link facts to the worktree PR observer', async () => {
       enableMainAuthority()
       const { connectPanePty } = await import('./pty-connection')
@@ -676,6 +825,32 @@ describe('connectPanePty', () => {
       const onBell = createdTransportOptions[0]?.onBell as () => void
       onBell()
       expect(deps.markWorktreeUnread).toHaveBeenCalledTimes(1)
+
+      const paneKey = makePaneKey('tab-1', LEAF_1)
+      const record = {
+        paneKey,
+        tabId: 'tab-1',
+        worktreeId: 'wt-1',
+        agent: 'claude' as const,
+        providerSession: { key: 'session_id' as const, id: 'session-byte-mode' },
+        prompt: 'finish the task',
+        state: 'working' as const,
+        capturedAt: 1,
+        updatedAt: 1,
+        origin: 'live' as const
+      }
+      mockStoreState.sleepingAgentSessionsByPaneKey = { [paneKey]: record }
+      const onPtyExit = createdTransportOptions[0]?.onPtyExit as (ptyId: string) => void
+      onPtyExit('pty-prehydration')
+
+      // Why: main still emits the confirmed fact after the byte-mode pane consumer is gone.
+      handler._dispatchTerminalSideEffectBatchForTest({
+        ptyId: 'pty-prehydration',
+        seq: 2,
+        paneKey,
+        facts: [{ kind: 'agent-exited' }]
+      })
+      expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBe(record)
     })
   })
 })

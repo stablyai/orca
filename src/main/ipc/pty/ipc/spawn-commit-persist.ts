@@ -9,7 +9,11 @@ import {
   pendingPtyIdBySerializerGeneration,
   rendererSerializerReadiness
 } from '../pane/serializer-state'
-import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import {
+  ptyOwnership,
+  replacePtyIncarnation,
+  deletePtyOwnership
+} from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { clearProviderPtyState } from '../provider/state-cleanup'
 import type { PtyIpcSpawnState } from './spawn-state'
@@ -52,9 +56,7 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
     settings: ctx.deps.getSettings?.()
   })
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
-  if (ctx.result.incarnationId) {
-    ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-  }
+  replacePtyIncarnation(ctx.result.id, ctx.result.incarnationId)
   if (ctx.initiallyHidden) {
     // Why marked synchronously here: provider data events dispatch on later tasks, so this still lands ahead of the first byte's delivery decision (idempotent if already marked pre-spawn).
     ctx.deps.transitionSpawnHiddenRendererPtyDeliveryState(ctx.result.id, true)

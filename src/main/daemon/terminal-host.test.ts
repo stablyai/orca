@@ -93,8 +93,8 @@ describe('TerminalHost', () => {
     }
   })
 
-  it('rejects missing strict inspection', () =>
-    expect(() => host.inspectProcess('missing-session')).toThrow('not found'))
+  it('rejects missing strict inspection', async () =>
+    await expect(host.inspectProcess('missing-session')).rejects.toThrow('not found'))
 
   describe('createOrAttach', () => {
     it('creates a new session when none exists', async () => {

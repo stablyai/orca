@@ -7,6 +7,11 @@ export type SubprocessHandle = {
   /** Live foreground process name of the PTY (node-pty's `.process`), e.g.
    *  'claude' / 'codex' / 'zsh'. Null once the child has exited. */
   getForegroundProcess(): string | null
+  inspectProcess?(): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+  }>
   /** Await process-table evidence captured after this confirmation request. */
   confirmForegroundProcess?(): Promise<string | null>
   /** Proves a fresh post-boundary PTY process tree contains only the shell. */
@@ -43,4 +48,16 @@ export type SubprocessHandle = {
   onExit(cb: (code: number, cause?: TerminalExitCause) => void): void
   /** Release the native PTY handle via node-pty's destroy(). Idempotent; safe to call after exit. */
   dispose(): void
+}
+
+export function inspectSessionSubprocess(handle: SubprocessHandle) {
+  const foregroundProcess = handle.getForegroundProcess()
+  return (
+    handle.inspectProcess?.() ??
+    Promise.resolve({
+      foregroundProcess,
+      hasChildProcesses: foregroundProcess !== null,
+      unavailable: true as const
+    })
+  )
 }

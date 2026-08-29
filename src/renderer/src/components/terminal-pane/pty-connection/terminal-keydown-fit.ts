@@ -9,6 +9,7 @@ import { dispatchAgentHookTerminalLifecycle } from '../agent-hook-terminal-lifec
 import { createCodexAutoApprovalHookCompletionSuppressor } from '../codex-auto-approval-notification-suppression'
 import { resolveCompatibleAgentTypeForOwner } from '../../../../../shared/agent-title-owner'
 import { registerTerminalSideEffectFactConsumer } from '../terminal-side-effect-facts-handler'
+import { retireConfirmedAgentExitResumeRecord } from '@/lib/confirmed-agent-exit-resume-retirement'
 
 import { isAgentTaskCompleteTrackingEnabled } from './agent-task-complete-settings'
 import { isRemoteExecutionHostPtyId } from '../remote-execution-host-pty'
@@ -123,12 +124,24 @@ export function installTerminalKeydownFit(session: ConnectPanePtySession): void 
     session.unregisterSideEffectFactConsumer?.()
     session.unregisterSideEffectFactConsumer = registerTerminalSideEffectFactConsumer({
       ptyId,
+      incarnationId: session.ptyIncarnationId ?? null,
+      paneKey: session.cacheKey,
+      tabId: session.deps.tabId,
+      worktreeId: session.deps.worktreeId,
       callbacks: {
         onTitleChange: session.onTitleChange,
         onBell: session.onBell,
         onAgentBecameIdle: session.onAgentBecameIdle,
         onAgentBecameWorking: session.onAgentBecameWorking,
-        onAgentExited: session.onAgentExited,
+        onAgentExited: (fact) => {
+          if (fact.executionHostConfirmed === true) {
+            const sleepingRecord = session.getSleepingRecordForPane(useAppStore.getState())
+            if (sleepingRecord) {
+              retireConfirmedAgentExitResumeRecord(useAppStore.getState(), sleepingRecord)
+            }
+          }
+          session.onAgentExited()
+        },
         onCommandFinished: session.handleCommandFinished,
         onPrLink: (link) =>
           useAppStore

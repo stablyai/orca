@@ -105,12 +105,16 @@ export async function connectIpcPty(
     }
     context.bind(spawnResult.id)
     if (!spawnResult.isReattach && !spawnResult.coldRestore) {
-      onPtySpawn?.(spawnResult.id)
+      onPtySpawn?.(spawnResult.id, spawnResult.incarnationId)
     }
     handlers.registerData(spawnResult.id)
     const exitedBeforeAttach = handlers.registerExit(spawnResult.id, spawnResult.incarnationId)
     if (exitedBeforeAttach) {
-      return { id: spawnResult.id, exitedBeforeAttach: true }
+      return {
+        id: spawnResult.id,
+        ...(spawnResult.incarnationId ? { incarnationId: spawnResult.incarnationId } : {}),
+        exitedBeforeAttach: true
+      }
     }
     if (!context.isCurrent(spawnResult.id)) {
       return

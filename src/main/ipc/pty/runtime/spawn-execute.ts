@@ -1,5 +1,9 @@
 import type { PtySpawnResult } from '../../../providers/types'
-import { ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
+import {
+  ptyIncarnationById,
+  replacePtyIncarnation,
+  deletePtyOwnership
+} from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
 import { tryGetProviderForAgentSessionOwner } from '../provider/registry'
 import { ensureWslHookRelayForReattach } from '../../../agent-hooks/wsl-hook-relay-reattach'
@@ -90,11 +94,9 @@ export async function executeRuntimePtySpawn(ctx: RuntimePtySpawnState): Promise
             providerResult.id,
             providerResult.incarnationId
           )
-          if (providerResult.incarnationId) {
-            // Why: local providers cannot serialize controller claims, so liveness proof
-            // needs the exact incarnation before the registry promotes the new owner.
-            ptyIncarnationById.set(providerResult.id, providerResult.incarnationId)
-          }
+          // Why: local providers cannot serialize controller claims, so admission must replace
+          // both known and legacy-unknown identity before promoting the new owner.
+          replacePtyIncarnation(providerResult.id, providerResult.incarnationId)
           const providerEnsure = providerResult.agentSessionEnsure
           return {
             ptyId: providerResult.id,

@@ -169,7 +169,7 @@ describe('terminal tab retirement store boundary', () => {
     expect(store.getState().pendingColdRestoreByPtyId['pty-shared']).toBe(coldRestore)
   })
 
-  it('reconciles natural exit without issuing teardown or revoking resume authority', async () => {
+  it('preserves resume authority after an unexpected PTY loss', async () => {
     const store = createRetirementStore()
     const record = sleepingRecord('tab-1:leaf-1', 'tab-1')
     seedStore(store, {
@@ -186,6 +186,27 @@ describe('terminal tab retirement store boundary', () => {
     expect(mockKill).not.toHaveBeenCalled()
     expect(mockRuntimeCall).not.toHaveBeenCalled()
     expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toBe(record)
+  })
+
+  it('does not retire an unverifiable remote pane on PTY-exit tab close', async () => {
+    const store = createRetirementStore()
+    const record: SleepingAgentSessionRecord = {
+      ...sleepingRecord('tab-1:leaf-1', 'tab-1'),
+      connectionId: 'ssh-conn-1',
+      origin: 'live'
+    }
+    seedStore(store, {
+      tabsByWorktree: {
+        'wt-1': [makeTab({ id: 'tab-1', worktreeId: 'wt-1', ptyId: 'ssh:conn-1@@relay-1' })]
+      },
+      ptyIdsByTabId: { 'tab-1': ['ssh:conn-1@@relay-1'] },
+      sleepingAgentSessionsByPaneKey: { 'tab-1:leaf-1': record }
+    })
+
+    store.getState().closeTab('tab-1', { reason: 'pty-exit' })
+    await Promise.resolve()
+
+    expect(store.getState().sleepingAgentSessionsByPaneKey['tab-1:leaf-1']).toEqual(record)
   })
 
   it('does not recreate PTY indexes for a tab that no longer exists', () => {

@@ -104,6 +104,9 @@ export function beginPtyHandlerTest(mocks: PtyHandlerTestMocks): {
     dispose: vi.fn()
   })
   vi.spyOn(ptyShellUtils, 'processHasChildren').mockResolvedValue(false)
+  vi.spyOn(ptyShellUtils, 'inspectProcessChildren').mockResolvedValue({
+    hasChildProcesses: false
+  })
 
   mockPtySpawn.mockReturnValue({ ...mockPtyInstance })
 

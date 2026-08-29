@@ -6,6 +6,7 @@ import { executeTerminalStartupCommandPaste } from '../terminal-startup-command-
 import { getTerminalPasteSshRemotePlatform } from '../terminal-paste-ssh-platform'
 import { resolveTerminalPasteRuntime } from '../terminal-paste-runtime'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
+import { retireConfirmedAgentExitResumeRecord } from '@/lib/confirmed-agent-exit-resume-retirement'
 
 import { shouldKeepHiddenStartupRendererQueriesLive } from './hidden-startup-renderer-query'
 import { createForegroundImmediateBudget } from './foreground-output-budgets'
@@ -39,10 +40,7 @@ export function bindDeferredColdRestoreAndSnapshot(session: ConnectPanePtySessio
     startup: ColdRestoreAgentResumeStartup | null
   ): void => {
     if (startup && !startup.useLiveEntry && startup.sleepingRecordEntry) {
-      session.clearSleepingRecordProviderDuplicates(
-        useAppStore.getState(),
-        startup.sleepingRecordEntry
-      )
+      retireConfirmedAgentExitResumeRecord(useAppStore.getState(), startup.sleepingRecordEntry)
     }
   }
   session.mergeStartupEnvWithPaneIdentity = (

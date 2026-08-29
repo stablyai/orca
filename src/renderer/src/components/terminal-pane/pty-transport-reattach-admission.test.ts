@@ -80,6 +80,18 @@ describe('createIpcPtyTransport', () => {
     expect(onReattachDetermined).not.toHaveBeenCalled()
   })
 
+  it('publishes a fresh spawn incarnation before the pane binds its consumer', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+    spawn.mockResolvedValueOnce({ id: 'fresh-pty', incarnationId: 'fresh-incarnation' })
+    const onPtySpawn = vi.fn()
+    const transport = createIpcPtyTransport({ onPtySpawn })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(onPtySpawn).toHaveBeenCalledExactlyOnceWith('fresh-pty', 'fresh-incarnation')
+  })
+
   it('leaves the transport silently unbound after a failed connect — sendInput drops with no write IPC (frozen-terminal repro)', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

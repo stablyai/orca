@@ -93,6 +93,7 @@ describe('createRemoteRuntimePtyTransport', () => {
               tabId: 'host-tab-1',
               leafId: 'pane:1',
               ptyId: 'ssh-private-pty',
+              incarnationId: 'replacement-incarnation',
               worktreeId: 'wt-1'
             }
           }
@@ -126,7 +127,8 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(latestSubscribePayload()).toMatchObject({ terminal: 'terminal-replacement' })
     expect(onPtyRebind).toHaveBeenCalledWith(
       'remote:hub-env@@terminal-replacement',
-      'remote:hub-env@@terminal-expired'
+      'remote:hub-env@@terminal-expired',
+      'replacement-incarnation'
     )
     expect(onPtyExit).not.toHaveBeenCalled()
     expect(onError).not.toHaveBeenCalled()

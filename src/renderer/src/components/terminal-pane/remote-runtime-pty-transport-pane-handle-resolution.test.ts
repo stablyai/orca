@@ -47,6 +47,7 @@ describe('createRemoteRuntimePtyTransport', () => {
               tabId: 'tab-1',
               leafId,
               ptyId: 'ssh:hub-private@@pty-2',
+              incarnationId: 'hub-incarnation-1',
               worktreeId: 'wt-1',
               executionHostId: 'ssh:hub-private',
               hostPlatform: 'win32'
@@ -57,10 +58,12 @@ describe('createRemoteRuntimePtyTransport', () => {
       throw new Error(`Unexpected method ${request.method}`)
     })
     const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const onPtySpawn = vi.fn()
     const transport = createRemoteRuntimePtyTransport('hub-env', {
       worktreeId: 'wt-1',
       tabId: 'tab-1',
-      leafId
+      leafId,
+      onPtySpawn
     })
 
     const result = await transport.connect({
@@ -73,9 +76,11 @@ describe('createRemoteRuntimePtyTransport', () => {
 
     expect(result).toEqual({
       id: 'remote:hub-env@@hub-terminal-1',
+      incarnationId: 'hub-incarnation-1',
       replay: '',
       isReattach: true
     })
+    expect(onPtySpawn).toHaveBeenCalledWith('remote:hub-env@@hub-terminal-1', 'hub-incarnation-1')
     expect(transport.getPtyId()).toBe('remote:hub-env@@hub-terminal-1')
     expect(transport.getExecutionHostId?.()).toBe('ssh:hub-private')
     expect(transport.getRemotePlatform?.()).toBe('win32')

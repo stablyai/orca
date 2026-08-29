@@ -8,12 +8,13 @@ import {
   SessionTerminationController,
   IMMEDIATE_KILL_PHYSICAL_EXIT_TIMEOUT_MS
 } from './session-termination-controller'
-import type { SubprocessHandle } from './session-subprocess-handle'
+import { inspectSessionSubprocess, type SubprocessHandle } from './session-subprocess-handle'
 import type { JobTerminationOutcome } from '../windows/windows-pty-job'
 import type { SessionOptions } from './session-options'
 import type { TuiAgent } from '../../shared/tui-agent'
 import { randomUUID } from 'node:crypto'
 import { PtyStartupIngress } from '../../shared/pty-startup-ingress'
+import { prepareSessionFinalSnapshot, takeSessionPendingOutput } from './session-snapshot-output'
 
 import type {
   SessionState,
@@ -238,23 +239,23 @@ export class Session {
     includeSnapshot: boolean,
     opts: { teardownSnapshot?: boolean } = {}
   ): TakePendingOutputResult | null {
-    if (this._disposed) {
-      return null
-    }
-    const releasedHeldBytes =
-      includeSnapshot && opts.teardownSnapshot === true ? this.prepareForFinalSnapshot() : ''
-    return this.output.takePendingOutput(includeSnapshot, releasedHeldBytes, () =>
-      this.getSnapshot()
-    )
+    return takeSessionPendingOutput({
+      disposed: this._disposed,
+      includeSnapshot,
+      teardownSnapshot: opts.teardownSnapshot === true,
+      prepareForFinalSnapshot: () => this.prepareForFinalSnapshot(),
+      takePendingOutput: (...args) => this.output.takePendingOutput(...args),
+      getSnapshot: () => this.getSnapshot()
+    })
   }
 
   getCwd(): string | null {
     return this.output.getCwd()
   }
 
-  getForegroundProcess(): string | null {
-    return this.subprocess.getForegroundProcess()
-  }
+  getForegroundProcess = (): string | null => this.subprocess.getForegroundProcess()
+
+  inspectProcess = () => inspectSessionSubprocess(this.subprocess)
 
   async confirmForegroundProcess(): Promise<string | null> {
     return this.subprocess.confirmForegroundProcess?.() ?? this.subprocess.getForegroundProcess()
@@ -275,12 +276,11 @@ export class Session {
   }
 
   prepareForFinalSnapshot(): string {
-    const held = this.shellReady.releaseHeldBytes()
-    this.startupIngress.snapshotBarrier()
-    // Why last: snapshotBarrier can emit held spans into the barrier, and a
-    // teardown checkpoint mid-episode must not lose the barrier's queued bytes.
-    this.recoveryBarrier.flushPending()
-    return held
+    return prepareSessionFinalSnapshot({
+      releaseHeldBytes: () => this.shellReady.releaseHeldBytes(),
+      snapshotIngressBarrier: () => this.startupIngress.snapshotBarrier(),
+      flushRecoveryBarrier: () => this.recoveryBarrier.flushPending()
+    })
   }
 
   dispose(): void {

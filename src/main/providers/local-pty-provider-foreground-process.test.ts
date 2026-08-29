@@ -9,6 +9,7 @@ const {
   writeFileSyncMock,
   spawnMock,
   prepareMacosTccLoginShellMock,
+  inspectAgentPtyProcessMock,
   resolveAgentForegroundProcessMock,
   readWindowsPtyJobProcessIdsMock,
   killWithDescendantSweepMock,
@@ -23,6 +24,7 @@ const {
   writeFileSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   prepareMacosTccLoginShellMock: vi.fn(),
+  inspectAgentPtyProcessMock: vi.fn(),
   resolveAgentForegroundProcessMock: vi.fn(),
   readWindowsPtyJobProcessIdsMock: vi.fn(),
   killWithDescendantSweepMock: vi.fn(),
@@ -80,6 +82,7 @@ vi.mock('./windows-powershell-executable', () => ({
 }))
 
 vi.mock('./agent-foreground-process', () => ({
+  inspectAgentPtyProcess: (...args: unknown[]) => inspectAgentPtyProcessMock(...args),
   resolveAgentForegroundProcessWithAvailability: (...args: unknown[]) =>
     resolveAgentForegroundProcessMock(...args)
 }))
@@ -153,6 +156,14 @@ describe('LocalPtyProvider', () => {
       }
     })
     spawnMock.mockReturnValue(mockProc)
+    inspectAgentPtyProcessMock.mockReset()
+    inspectAgentPtyProcessMock.mockImplementation(
+      async (_pid: number, fallbackProcess: string | null) => ({
+        available: true,
+        processName: fallbackProcess,
+        hasChildProcesses: false
+      })
+    )
 
     provider = new LocalPtyProvider()
   })
@@ -196,10 +207,60 @@ describe('LocalPtyProvider', () => {
         'powershell.exe',
         expect.any(Object)
       )
+      await expect(provider.inspectProcess(id)).resolves.toEqual({
+        foregroundProcess: 'powershell.exe',
+        hasChildProcesses: false
+      })
     })
 
     it('returns null for unknown PTY ids', async () => {
       expect(await provider.getForegroundProcess('nonexistent')).toBeNull()
+    })
+
+    it('marks a degraded local scan unavailable for completion-sensitive inspection', async () => {
+      inspectAgentPtyProcessMock.mockResolvedValue({
+        available: false,
+        processName: 'zsh',
+        hasChildProcesses: false
+      })
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+
+      await expect(provider.inspectProcess(id)).resolves.toEqual({
+        foregroundProcess: 'zsh',
+        hasChildProcesses: false,
+        unavailable: true
+      })
+    })
+
+    it('reports live child evidence in completion-sensitive inspection', async () => {
+      const { id } = await provider.spawn({ cols: 80, rows: 24 })
+      inspectAgentPtyProcessMock.mockResolvedValue({
+        available: true,
+        processName: 'zsh',
+        hasChildProcesses: true
+      })
+
+      await expect(provider.inspectProcess(id)).resolves.toEqual({
+        foregroundProcess: 'zsh',
+        hasChildProcesses: true
+      })
+    })
+
+    it('leaves WSL completion inspection unavailable without distro-side evidence', async () => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const { id } = await provider.spawn({
+        cols: 80,
+        rows: 24,
+        shellOverride: 'wsl.exe',
+        terminalWindowsWslDistro: 'Ubuntu'
+      })
+
+      await expect(provider.inspectProcess(id)).resolves.toEqual({
+        foregroundProcess: 'zsh',
+        hasChildProcesses: false,
+        unavailable: true
+      })
+      expect(inspectAgentPtyProcessMock).not.toHaveBeenCalled()
     })
 
     it('keeps a recognized agent across an unavailable scan without adding probes', async () => {

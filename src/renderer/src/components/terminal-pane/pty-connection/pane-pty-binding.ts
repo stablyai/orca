@@ -1,5 +1,6 @@
 import type { IDisposable } from '@xterm/xterm'
 import type { HasPty } from '../terminal-dead-session-reconcile'
+import type { PtyIncarnationId } from '../../../../../shared/pty-incarnation'
 
 export type PanePtyBinding = IDisposable & {
   syncProcessTracking: () => void
@@ -27,4 +28,6 @@ export type PanePtyBinding = IDisposable & {
    *  preserves on exit. Read at unmount so the parked sidecar can carry the
    *  fact as a plain value instead of a session reference. */
   isUntouchedFreshSpawnPty: (ptyId: string) => boolean
+  /** Captured by parked watchers so confirmed exit facts retain incarnation authority. */
+  getPtyIncarnationId?: (ptyId: string) => PtyIncarnationId | null
 }

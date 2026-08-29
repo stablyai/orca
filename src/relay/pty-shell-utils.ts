@@ -3,6 +3,8 @@ import { existsSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { win32 as pathWin32 } from 'node:path'
 import { promisify } from 'node:util'
+import { inspectProcessChildren } from './pty-child-process-inspection'
+export { inspectProcessChildren } from './pty-child-process-inspection'
 import {
   isAgentForegroundWrapperProcess,
   isExpectedAgentProcess,
@@ -169,15 +171,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
  * Check whether a process has child processes (via pgrep).
  */
 export async function processHasChildren(pid: number): Promise<boolean> {
-  try {
-    const { stdout } = await execFile('pgrep', ['-P', String(pid)], {
-      encoding: 'utf-8',
-      timeout: 3000
-    })
-    return stdout.trim().length > 0
-  } catch {
-    return false
-  }
+  return (await inspectProcessChildren(pid)).hasChildProcesses
 }
 
 // Why: signal 0 probes existence without delivering a signal. Only ESRCH ("no

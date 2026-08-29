@@ -31,7 +31,7 @@ import {
 } from '../../../../shared/terminal-stream-protocol'
 import type { PtyTransport } from './pty-transport-types'
 
-type ResolvePaneOutcome = { handle: string } | { error: Error }
+type ResolvePaneOutcome = { handle: string; incarnationId?: string } | { error: Error }
 
 const PANE_TAB_ID = 'tab-1'
 const PANE_LEAF_ID = 'pane:1'
@@ -117,7 +117,12 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
     return outcomes.length > 1 ? (outcomes.shift() as ResolvePaneOutcome) : outcomes[0]
   }
 
-  function paneResult(handle: string, paneKey: string, worktreeId: string): unknown {
+  function paneResult(
+    handle: string,
+    paneKey: string,
+    worktreeId: string,
+    incarnationId?: string
+  ): unknown {
     const separator = paneKey.indexOf(':')
     return {
       ok: true,
@@ -126,7 +131,8 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
           handle,
           tabId: paneKey.slice(0, separator),
           leafId: paneKey.slice(separator + 1),
-          worktreeId
+          worktreeId,
+          ...(incarnationId ? { incarnationId } : {})
         }
       }
     }
@@ -192,14 +198,19 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
         if ('error' in outcome) {
           throw outcome.error
         }
-        return paneResult(outcome.handle, params.paneKey, params.worktreeId)
+        return paneResult(outcome.handle, params.paneKey, params.worktreeId, outcome.incarnationId)
       }
       if (request.method === 'terminal.recoverPane') {
         const params = request.params as { paneKey: string; worktreeId: string }
         if ('error' in recoverPaneOutcome) {
           throw recoverPaneOutcome.error
         }
-        return paneResult(recoverPaneOutcome.handle, params.paneKey, params.worktreeId)
+        return paneResult(
+          recoverPaneOutcome.handle,
+          params.paneKey,
+          params.worktreeId,
+          recoverPaneOutcome.incarnationId
+        )
       }
       return { ok: true, result: { terminal: { handle: FIRST_HANDLE } } }
     })
@@ -231,13 +242,21 @@ describe('remote runtime resubscribe failure: recovery routing', () => {
 
     // The host fenced this handle during the outage and has already minted its
     // successor; only a require-replacement retry can reach it.
-    failNextResubscribeWith(new Error('terminal_handle_stale'), 'terminal-2')
+    resolvePaneOutcomes = [
+      { error: new Error('terminal_handle_stale') },
+      { handle: 'terminal-2', incarnationId: 'incarnation-2' }
+    ]
+    methodLog = []
     dropMultiplexedStream()
 
     await vi.waitFor(() => expect(subscribedTerminalHandles()).toContain('terminal-2'))
     // Two resolvePane round-trips: the stale one, then the require-replacement retry.
     expect(methodLog.filter((method) => method === 'terminal.resolvePane')).toHaveLength(2)
-    expect(onPtyRebind).toHaveBeenCalledWith('remote:env-1@@terminal-2', FIRST_PTY_ID)
+    expect(onPtyRebind).toHaveBeenCalledWith(
+      'remote:env-1@@terminal-2',
+      FIRST_PTY_ID,
+      'incarnation-2'
+    )
     expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2')
 
     emitSnapshot(latestSubscribePayload().streamId, 'after replacement')

@@ -4,6 +4,14 @@ import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
 export const ptyOwnership = new Map<string, string | null>()
 export const ptyIncarnationById = new Map<string, string>()
 
+export function replacePtyIncarnation(id: string, incarnationId?: string): void {
+  if (incarnationId === undefined) {
+    ptyIncarnationById.delete(id)
+    return
+  }
+  restorePtyIncarnation(id, incarnationId)
+}
+
 export function isCurrentPtyExit(payload: { id: string; incarnationId?: string }): boolean {
   const current = ptyIncarnationById.get(payload.id)
   return !current || payload.incarnationId === current

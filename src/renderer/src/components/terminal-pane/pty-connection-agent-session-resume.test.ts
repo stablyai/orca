@@ -752,6 +752,6 @@ describe('connectPanePty', () => {
     )
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledTimes(1)
     expect(deps.onShowSessionRestoredBanner).toHaveBeenCalledWith(2, 'restored')
-    expect(mockStoreState.clearSleepingAgentSession).toHaveBeenCalledWith(paneKey)
+    expect(mockStoreState.clearSleepingAgentSessionsByPaneKey).toHaveBeenCalledWith([paneKey])
   })
 })

@@ -119,6 +119,7 @@ export function startParkedPtyWatcher(args: {
   const initialTitle = state.runtimePaneTitlesByTabId[tab.id]?.[pane.paneId]
   const disposeWatcher = startParkedTerminalByteWatcher({
     ptyId,
+    ...(pane.incarnationId ? { incarnationId: pane.incarnationId } : {}),
     tabId: tab.id,
     worktreeId,
     leafId: pane.leafId,
@@ -131,6 +132,7 @@ export function startParkedPtyWatcher(args: {
     ? () => {}
     : subscribeToPtyExit(ptyId, handlePtyExit)
   entry.paneIdByPtyId.set(ptyId, pane.paneId)
+  ;(entry.incarnationIdByPtyId ??= new Map()).set(ptyId, pane.incarnationId ?? null)
   entry.disposersByPtyId.set(ptyId, () => {
     unsubscribeExit()
     disposeWatcher()

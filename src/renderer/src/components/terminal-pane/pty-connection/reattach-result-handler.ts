@@ -34,6 +34,7 @@ type ReattachResultSession = ReattachPayloadSession &
     | 'handleReattachResult'
     | 'followsDirectSshReconnect'
     | 'mountFollowsTerminalPark'
+    | 'ptyIncarnationId'
     | 'registerEffectiveLaunchConfig'
     | 'registerPaneSerializerFor'
     | 'registerSideEffectFactConsumerForPty'
@@ -143,6 +144,7 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     if (!isCurrentReattachPayload()) {
       return false
     }
+    session.ptyIncarnationId = connectResult?.incarnationId ?? null
     // Strict precedence snapshot > replay > coldRestore: paint exactly one, else overlapping tails duplicate TUI output on worktree switch.
     const hasStructuralReplay = Boolean(
       connectResult?.snapshot || connectResult?.replay || connectResult?.coldRestore

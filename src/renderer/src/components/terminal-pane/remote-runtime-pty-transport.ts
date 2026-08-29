@@ -202,6 +202,29 @@ export function createRemoteRuntimePtyTransport(
   let attachGeneration = 0
   let subscriptionGeneration = 0
 
+  function notifyPtySpawnForRemote(
+    id: string,
+    incarnationId?: RuntimeTerminalCreate['incarnationId']
+  ): void {
+    if (incarnationId) {
+      onPtySpawn?.(id, incarnationId)
+    } else {
+      onPtySpawn?.(id)
+    }
+  }
+
+  function notifyPtyRebindForRemote(
+    id: string,
+    replacedId: string,
+    incarnationId?: RuntimeTerminalResolvePane['incarnationId']
+  ): void {
+    if (incarnationId) {
+      onPtyRebind?.(id, replacedId, incarnationId)
+    } else {
+      onPtyRebind?.(id, replacedId)
+    }
+  }
+
   function setAttachmentReady(ready: boolean): void {
     attachmentReady = ready
     if (!ready) {
@@ -832,6 +855,7 @@ export function createRemoteRuntimePtyTransport(
       return undefined
     }
 
+    let resolvedIncarnationId: RuntimeTerminalResolvePane['incarnationId']
     if (leafId && worktreeId && !resolvePaneUnavailable) {
       try {
         const resolved = await callRuntime<{ terminal: RuntimeTerminalResolvePane }>(
@@ -846,6 +870,7 @@ export function createRemoteRuntimePtyTransport(
           (!terminal.worktreeId || terminal.worktreeId === worktreeId)
         ) {
           adoptExecutionMetadata(terminal)
+          resolvedIncarnationId = terminal.incarnationId
         }
       } catch (error) {
         if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
@@ -866,7 +891,7 @@ export function createRemoteRuntimePtyTransport(
       rows: options.rows ?? 24
     }
     if (notifySpawn) {
-      onPtySpawn?.(remotePtyId)
+      notifyPtySpawnForRemote(remotePtyId, resolvedIncarnationId)
     }
 
     try {
@@ -882,6 +907,7 @@ export function createRemoteRuntimePtyTransport(
 
     return {
       id: remotePtyId,
+      ...(resolvedIncarnationId ? { incarnationId: resolvedIncarnationId } : {}),
       replay: '',
       isReattach: true
     } satisfies PtyConnectResult
@@ -1149,7 +1175,7 @@ export function createRemoteRuntimePtyTransport(
       rows: options.rows ?? 24
     }
     if (notifySpawn) {
-      onPtySpawn?.(remotePtyId)
+      notifyPtySpawnForRemote(remotePtyId, terminal.incarnationId)
     }
     emitRecoveryState()
     try {
@@ -1167,7 +1193,12 @@ export function createRemoteRuntimePtyTransport(
     ) {
       return undefined
     }
-    return { id: remotePtyId, replay: '', isReattach: true }
+    return {
+      id: remotePtyId,
+      ...(terminal.incarnationId ? { incarnationId: terminal.incarnationId } : {}),
+      replay: '',
+      isReattach: true
+    }
   }
 
   function recoverExpiredHostPane(): void {
@@ -1199,7 +1230,7 @@ export function createRemoteRuntimePtyTransport(
         if (replacedPtyId && replacedPtyId !== remotePtyId) {
           replaceFitOverridePtyId(replacedPtyId, remotePtyId)
           replaceDriverPtyId(replacedPtyId, remotePtyId)
-          onPtyRebind?.(remotePtyId, replacedPtyId)
+          notifyPtyRebindForRemote(remotePtyId, replacedPtyId, terminal.incarnationId)
         }
         await subscribeToHandle()
       })
@@ -1427,7 +1458,10 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  function rebindRemoteTerminalHandle(nextHandle: string): void {
+  function rebindRemoteTerminalHandle(
+    nextHandle: string,
+    incarnationId?: RuntimeTerminalResolvePane['incarnationId']
+  ): void {
     clearPublishedHandleWait()
     const replacedPtyId = remotePtyId
     unregisterShutdownHandlers(replacedPtyId)
@@ -1441,7 +1475,7 @@ export function createRemoteRuntimePtyTransport(
     if (replacedPtyId) {
       replaceFitOverridePtyId(replacedPtyId, remotePtyId)
       replaceDriverPtyId(replacedPtyId, remotePtyId)
-      onPtyRebind?.(remotePtyId, replacedPtyId)
+      notifyPtyRebindForRemote(remotePtyId, replacedPtyId, incarnationId)
     }
   }
 
@@ -1651,7 +1685,7 @@ export function createRemoteRuntimePtyTransport(
         return
       }
       if (resolved.handle !== previousHandle) {
-        rebindRemoteTerminalHandle(resolved.handle)
+        rebindRemoteTerminalHandle(resolved.handle, resolved.incarnationId)
       }
     }
     clearPublishedHandleWait()
@@ -2179,7 +2213,7 @@ export function createRemoteRuntimePtyTransport(
           rows: options.rows ?? 24
         }
         if (createdTerminal.isReattach !== true) {
-          onPtySpawn?.(remotePtyId)
+          notifyPtySpawnForRemote(remotePtyId, createdTerminal.incarnationId)
         }
         emitRecoveryState()
 
@@ -2196,6 +2230,9 @@ export function createRemoteRuntimePtyTransport(
 
         return {
           id: remotePtyId,
+          ...(createdTerminal.incarnationId
+            ? { incarnationId: createdTerminal.incarnationId }
+            : {}),
           replay: '',
           ...(createdTerminal.isReattach === true ? { isReattach: true } : {})
         } satisfies PtyConnectResult

@@ -6,6 +6,7 @@
  */
 
 import type { ParsedAgentStatusPayload } from './agent-status-types'
+import type { PtyIncarnationId } from './pty-incarnation'
 import type { TerminalGitHubPRLink } from './terminal-github-pr-link-detector'
 
 /** Why tagged: stale-clear facts come from main's unthrottled 3s timer, not
@@ -18,7 +19,13 @@ export type TerminalSideEffectFact =
   | { kind: 'bell' }
   | { kind: 'agent-working' }
   | { kind: 'agent-idle'; title: string; staleWorkingTitleClear?: boolean }
-  | { kind: 'agent-exited' }
+  | {
+      kind: 'agent-exited'
+      /** Present only when the execution host positively proved this process ended. */
+      executionHostConfirmed?: true
+      /** Opaque producer identity; absence is unknown across mixed versions. */
+      incarnationId?: PtyIncarnationId
+    }
   /** OSC 133;D — foreground shell command exited (exit code best-effort). */
   | { kind: 'command-finished'; exitCode: number | null }
   /** Carries the parsed link so the renderer store consumer never re-parses

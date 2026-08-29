@@ -11,7 +11,6 @@ import {
   readWindowsPtyJobProcessIds
 } from '../../providers/windows-pty-job-membership'
 
-import { readWindowsConsoleAttachedProcessIds } from '../../providers/windows-console-attached-processes'
 import {
   isAgentForegroundWrapperProcess,
   recognizeAgentProcess,
@@ -24,6 +23,10 @@ import {
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import { resolveFallbackForegroundProcess } from './foreground-fallback-process'
 import { parsePtySessionId } from '../pty-session-id'
+import {
+  inspectTrackedForegroundProcess,
+  inspectTrackedPtyProcess
+} from './foreground-process-inspection'
 
 const FOREGROUND_AGENT_CACHE_TTL_MS = 1000
 const SHELL_FOREGROUND_REFRESH_RETRY_MS = 5_000
@@ -37,6 +40,11 @@ export type PtyForegroundProcessTracker = {
   recordOutput(data: string): void
   markDead(): void
   getForegroundProcess(): string | null
+  inspectProcess(): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+  }>
   confirmForegroundProcess(): Promise<string | null>
   confirmShellForeground(): Promise<boolean>
 }
@@ -203,6 +211,24 @@ export function createPtyForegroundProcessTracker(args: {
       })
   }
 
+  const inspectionArgs = {
+    process: proc,
+    contextPaths,
+    isDead: args.isDead,
+    getFallbackProcess,
+    shouldInspectFallback,
+    cachedAgentName: () => cachedAgentForeground?.processName ?? null,
+    setRecognizedAgent: (processName: string, pid: number | null) => {
+      cachedAgentForeground = { processName, pid, refreshedAt: Date.now() }
+      startupAgentForeground = null
+    },
+    clearAgentEvidence: () => {
+      cachedAgentForeground = null
+      startupAgentForeground = null
+    }
+  }
+  const inspectForegroundProcess = () => inspectTrackedForegroundProcess(inspectionArgs)
+
   return {
     recordOutput: (data) => {
       if (data.length > 0) {
@@ -258,56 +284,10 @@ export function createPtyForegroundProcessTracker(args: {
         return null
       }
     },
+    inspectProcess: () => inspectTrackedPtyProcess(inspectionArgs),
     confirmForegroundProcess: async () => {
-      if (args.isDead() || !proc.pid) {
-        return null
-      }
-      try {
-        const fallbackProcess = getFallbackProcess()
-        const fallbackRecognition = recognizeAgentProcess(fallbackProcess)
-        if (
-          !fallbackProcess ||
-          (fallbackRecognition !== null &&
-            process.platform !== 'win32' &&
-            !shouldInspectOuterWrapperForegroundProcess(fallbackRecognition)) ||
-          (process.platform !== 'win32' && !shouldInspectFallback(fallbackProcess))
-        ) {
-          return fallbackProcess
-        }
-        const resolution = await resolveAgentForegroundProcessWithAvailability(
-          proc.pid,
-          fallbackProcess,
-          {
-            contextPaths,
-            fresh: true,
-            ...(process.platform === 'win32'
-              ? {
-                  forceProcessScan: true,
-                  readWindowsConsoleAttachedProcessIds: () =>
-                    readWindowsConsoleAttachedProcessIds(proc.pid)
-                }
-              : {})
-          }
-        )
-        if (args.isDead() || !resolution.available) {
-          return null
-        }
-        const recognized = recognizeAgentProcess(resolution.processName)
-        if (recognized) {
-          cachedAgentForeground = {
-            processName: recognized.processName,
-            pid: resolution.processId ?? null,
-            refreshedAt: Date.now()
-          }
-          startupAgentForeground = null
-          return recognized.processName
-        }
-        cachedAgentForeground = null
-        startupAgentForeground = null
-        return resolution.processName
-      } catch {
-        return null
-      }
+      const inspection = await inspectForegroundProcess()
+      return inspection.available ? inspection.processName : null
     },
     confirmShellForeground: () =>
       confirmPtyShellForeground({ process: proc, shellPath: args.shellPath, isDead: args.isDead })

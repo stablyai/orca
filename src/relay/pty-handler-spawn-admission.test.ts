@@ -91,6 +91,18 @@ describe('PtyHandler', () => {
     )
   })
 
+  it('preserves an unavailable relay child inspection', async () => {
+    await spawnPty({ cols: 80, rows: 24 })
+    vi.mocked(ptyShellUtils.inspectProcessChildren).mockResolvedValueOnce({
+      hasChildProcesses: false,
+      unavailable: true
+    })
+
+    await expect(dispatcher.callRequest('pty.inspectProcess', { id: 'pty-1' })).resolves.toEqual(
+      expect.objectContaining({ hasChildProcesses: false, unavailable: true })
+    )
+  })
+
   it('spawns a PTY and returns an id', async () => {
     const result = await spawnPty({ cols: 80, rows: 24 })
     expect(result).toEqual({ id: 'pty-1', incarnationId: expect.any(String) })

@@ -61,7 +61,7 @@ describe('PTY provider process inspection', () => {
     await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual(inspection)
   })
 
-  it('falls back to the existing provider process APIs', async () => {
+  it('keeps providers without completion-sensitive inspection unavailable', async () => {
     const getForegroundProcess = vi.fn().mockResolvedValue('codex')
     const hasChildProcesses = vi.fn().mockResolvedValue(true)
     const provider = {
@@ -70,8 +70,57 @@ describe('PTY provider process inspection', () => {
     } as Pick<IPtyProvider, 'getForegroundProcess' | 'hasChildProcesses'> as IPtyProvider
 
     await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual({
-      foregroundProcess: 'codex',
-      hasChildProcesses: true
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      unavailable: true
     })
+    expect(getForegroundProcess).not.toHaveBeenCalled()
+    expect(hasChildProcesses).not.toHaveBeenCalled()
+  })
+
+  it('keeps a partial inspection unavailable', async () => {
+    const provider = {
+      inspectProcess: vi.fn(async () => ({ hasChildProcesses: false }))
+    } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false,
+      unavailable: true
+    })
+  })
+
+  it('preserves positive live evidence from a partial inspection', async () => {
+    const provider = {
+      inspectProcess: vi.fn(async () => ({
+        foregroundProcess: 'codex',
+        hasChildProcesses: 'unknown'
+      }))
+    } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual({
+      foregroundProcess: 'codex',
+      hasChildProcesses: false,
+      unavailable: true
+    })
+  })
+
+  it('snapshots adapter fields once before validating them', async () => {
+    let foregroundReads = 0
+    const provider = {
+      inspectProcess: vi.fn(async () => ({
+        get foregroundProcess() {
+          foregroundReads += 1
+          return foregroundReads === 1 ? null : undefined
+        },
+        hasChildProcesses: false
+      }))
+    } as unknown as IPtyProvider
+
+    await expect(inspectPtyProviderProcess(provider, 'pty-1')).resolves.toEqual({
+      foregroundProcess: null,
+      hasChildProcesses: false
+    })
+    expect(foregroundReads).toBe(1)
   })
 })

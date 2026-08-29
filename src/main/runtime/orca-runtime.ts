@@ -829,6 +829,7 @@ import type {
   PtySpawnResult,
   PtyTransientFact
 } from '../providers/types'
+import { normalizePtyProcessInspection } from '../providers/pty-process-inspection'
 import { ClaudeAgentTeamsService } from './claude-agent-teams-service'
 import type {
   AgentTeamsTmuxCompatRequest,
@@ -1635,6 +1636,8 @@ type RuntimePtyWorktreeRecord = {
   agentSessionOwners: AgentSessionOwnerBinding[]
   foregroundAgent: TuiAgent | null
   connected: boolean
+  /** Host-certified exit survives connected=false until pending title reads settle. */
+  hostExitConfirmed: boolean
   disconnectedAt: number | null
   lastExitCode: number | null
   lastExitCause: TerminalExitCause | null
@@ -1777,12 +1780,14 @@ type PtyForegroundAgentRefresh = {
 type PtyForegroundProcessRead = {
   controller: RuntimePtyController
   process: string | null
+  hasChildProcesses: boolean | null
   available: boolean
 }
 
 type PtyForegroundProcessReadEntry = {
   controller: RuntimePtyController
   startedAfterTitleObservation: number
+  verifiedAbsence: boolean
   promise: Promise<PtyForegroundProcessRead>
 }
 
@@ -1867,6 +1872,8 @@ export type RuntimeTerminalAgentStatusEvent = {
 
 type RuntimePtyTitleTrackerEntry = {
   tracker: TerminalTitleTracker
+  // Why: OSC 133 completion can prove an exit after an early foreground read still sees the agent.
+  pendingAgentExitCandidate: RuntimePtyAgentExitCandidate | null
   // Why: onPtyData batches the mobile session-tab touch to once per chunk;
   // the stale-working-title timer fires between chunks and must touch
   // immediately. This flag routes the tracker callback to the right mode.
@@ -1881,6 +1888,24 @@ type RuntimePtyTitleTrackerEntry = {
   // TUI output. Null when no side-effect consumer exists (headless serve) —
   // the scrape produces facts only.
   commandCodeDetector: { observe: (data: string) => boolean } | null
+}
+
+type RuntimeTerminalSideEffectAttribution = {
+  worktreeId?: string
+  tabId?: string
+  paneKey?: string
+  connectionId?: string | null
+}
+
+type RuntimePtyAgentExitCandidate = {
+  pty: RuntimePtyWorktreeRecord
+  controller: RuntimePtyController | null
+  titleObservedAt: number | null
+  incarnationId: PtyIncarnationId
+  attribution: Required<
+    Pick<RuntimeTerminalSideEffectAttribution, 'worktreeId' | 'tabId' | 'paneKey'>
+  > &
+    Pick<RuntimeTerminalSideEffectAttribution, 'connectionId'>
 }
 
 // Why: the full OSC 9999 payload flows through emitTerminalAgentStatusEvents and
@@ -2297,6 +2322,7 @@ async function waitForAgentPromptDelay(delayMs: number, signal?: AbortSignal): P
 }
 
 const MOBILE_TERMINAL_SURFACE_TIMEOUT_MS = 10_000
+export const PTY_FOREGROUND_PROCESS_READ_TIMEOUT_MS = 10_000
 // Why: the split already failed; the caller waits on this teardown only to learn whether the
 // fallback kill is needed, so keep it short — an unreachable host must not stall the rejection.
 const REJECTED_SPLIT_PTY_STOP_TIMEOUT_MS = 2_000
@@ -12723,9 +12749,9 @@ export class OrcaRuntimeService {
     this.spawnPublishedPtys.add(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
-      if (incarnationId) {
-        pty.incarnationId = incarnationId
-      }
+      pty.hostExitConfirmed = false
+      // Absence is unknown, not a reason to carry a prior process identity.
+      pty.incarnationId = incarnationId ?? null
       pty.connected = true
       pty.disconnectedAt = null
     }
@@ -12755,6 +12781,7 @@ export class OrcaRuntimeService {
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
     this.forgetPtyLivenessVerdict(ptyId)
     this.spawnPublishedPtys.add(ptyId)
+    const wasDisconnected = this.ptysById.get(ptyId)?.connected === false
     // Why: record the renderer pane identity at spawn time so a stalled graph
     // sync can't hide that a live PTY already backs a pending mobile create.
     const paneKey =
@@ -12771,6 +12798,11 @@ export class OrcaRuntimeService {
       ...(binding && paneKey ? { tabId: binding.tabId, paneKey } : {}),
       ...(binding?.incarnationId ? { incarnationId: binding.incarnationId } : {})
     })
+    pty.hostExitConfirmed = false
+    if (wasDisconnected && binding?.incarnationId === undefined) {
+      // Mixed-version hosts may omit identity on a replacement; never retain the dead process's proof.
+      pty.incarnationId = null
+    }
     const agentLaunchAuthority = binding?.agentLaunchAuthority
     if (
       agentLaunchAuthority &&
@@ -13410,6 +13442,7 @@ export class OrcaRuntimeService {
         this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
         return
       case 'command-finished':
+        this.settlePendingPtyAgentExitOnCommandFinished(ptyId)
         this.retirePtyAgentLaunchAuthority(ptyId)
         this.recordTerminalSideEffectFact(ptyId, {
           kind: 'command-finished',
@@ -13496,12 +13529,9 @@ export class OrcaRuntimeService {
 
   /** Same attribution resolution as emitTerminalAgentStatusEvents: prefer the
    *  first mounted leaf, fall back to the spawn-time PTY record binding. */
-  private resolveTerminalSideEffectAttribution(ptyId: string): {
-    worktreeId?: string
-    tabId?: string
-    paneKey?: string
-    connectionId?: string | null
-  } {
+  private resolveTerminalSideEffectAttribution(
+    ptyId: string
+  ): RuntimeTerminalSideEffectAttribution {
     const pty = this.ptysById.get(ptyId)
     const connectionId = pty?.connectionId ?? null
     for (const leaf of this.getLeavesForPty(ptyId)) {
@@ -13645,6 +13675,10 @@ export class OrcaRuntimeService {
           const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
           const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
           const live = this.ptyTitleTrackersByPtyId.get(ptyId)
+          const observedAgentStatus = detectAgentStatusFromTitle(rawTitle)
+          if (live && observedAgentStatus !== null) {
+            live.pendingAgentExitCandidate = null
+          }
           const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
           const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
           if (live) {
@@ -13652,7 +13686,7 @@ export class OrcaRuntimeService {
           }
           const tracksReplicatedStatus =
             live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
-          const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
+          const titleStatus = tracksReplicatedStatus ? observedAgentStatus : null
           if (
             tracksReplicatedStatus &&
             decorativeOnly &&
@@ -13699,6 +13733,7 @@ export class OrcaRuntimeService {
           this.confirmPtyAgentExit(ptyId)
         },
         onCommandFinished: (exitCode: number | null) => {
+          this.settlePendingPtyAgentExitOnCommandFinished(ptyId)
           this.retirePtyAgentLaunchAuthority(ptyId)
           this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
         },
@@ -13721,6 +13756,7 @@ export class OrcaRuntimeService {
     tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
     const entry: RuntimePtyTitleTrackerEntry = {
       tracker,
+      pendingAgentExitCandidate: null,
       applyingChunk: false,
       lastMobileTitleGateKey: null,
       chunkTouchedSessionTabs: false,
@@ -17415,6 +17451,9 @@ export class OrcaRuntimeService {
     this.remoteDesktopViewerRevisions.delete(ptyId)
     this.disposeHeadlessTerminal(ptyId)
     if (pty) {
+      if (processDeathCertified) {
+        pty.hostExitConfirmed = true
+      }
       pty.connected = false
       pty.runtimeSessionOwned = false
       this.setPairedRendererSessionOwnership(pty.ptyId, false)
@@ -20451,6 +20490,7 @@ export class OrcaRuntimeService {
       tabId: parsed?.tabId ?? record?.tabId ?? '',
       leafId: parsed?.leafId ?? record?.leafId ?? '',
       ptyId: record?.ptyId ?? null,
+      ...(pty?.incarnationId ? { incarnationId: pty.incarnationId } : {}),
       connected: pty?.connected === true,
       ...(worktreeId ? { worktreeId } : {}),
       ...this.getPtyExecutionHostMetadata(record?.ptyId ?? pty?.ptyId ?? null)
@@ -20501,6 +20541,7 @@ export class OrcaRuntimeService {
       tabId: parsed.tabId,
       leafId: parsed.leafId,
       ptyId: terminal.ptyId ?? null,
+      ...(terminal.incarnationId ? { incarnationId: terminal.incarnationId } : {}),
       worktreeId: expectedWorktreeId
     }))
     this.terminalPaneRecoveryByIdentity.set(recoveryKey, recovery)
@@ -21095,7 +21136,8 @@ export class OrcaRuntimeService {
 
   private readPtyForegroundProcessFromController(
     ptyId: string,
-    afterTitleObservation = 0
+    afterTitleObservation = 0,
+    verifiedAbsence = false
   ): Promise<PtyForegroundProcessRead> | null {
     const controller = this.ptyController
     if (!controller) {
@@ -21104,32 +21146,64 @@ export class OrcaRuntimeService {
     const pending = this.ptyForegroundProcessReads.get(ptyId)
     if (
       pending?.controller === controller &&
-      pending.startedAfterTitleObservation >= afterTitleObservation
+      pending.startedAfterTitleObservation >= afterTitleObservation &&
+      (!verifiedAbsence || pending.verifiedAbsence)
     ) {
       return pending.promise
     }
     if (pending?.controller === controller) {
-      return pending.promise.then(
-        () =>
-          this.readPtyForegroundProcessFromController(ptyId, afterTitleObservation) ?? {
-            controller,
-            process: null,
-            available: false
-          }
-      )
+      return pending.promise.then((result) => {
+        // A recognized agent disproves exit; every absence claim needs strong inspection.
+        if (
+          (!verifiedAbsence ||
+            pending.verifiedAbsence ||
+            recognizeAgentProcess(result.process) !== null) &&
+          pending.startedAfterTitleObservation >= afterTitleObservation
+        ) {
+          return result
+        }
+        return (
+          this.readPtyForegroundProcessFromController(
+            ptyId,
+            afterTitleObservation,
+            verifiedAbsence
+          ) ?? { controller, process: null, hasChildProcesses: null, available: false }
+        )
+      })
     }
     const unavailable: PtyForegroundProcessRead = {
       controller,
       process: null,
+      hasChildProcesses: null,
       available: false
     }
-    let processRead: Promise<string | null>
+    let processRead: Promise<{
+      process: string | null
+      hasChildProcesses: boolean | null
+      available: boolean
+    }>
     try {
-      processRead = Promise.resolve(controller.getForegroundProcess(ptyId))
+      processRead = verifiedAbsence
+        ? controller.inspectProcess
+          ? Promise.resolve(controller.inspectProcess(ptyId)).then((value) => {
+              const inspection = normalizePtyProcessInspection(value)
+              return {
+                process: inspection.foregroundProcess,
+                hasChildProcesses: inspection.hasChildProcesses,
+                available: inspection.unavailable !== true
+              }
+            })
+          : Promise.resolve({ process: null, hasChildProcesses: null, available: false })
+        : Promise.resolve(controller.getForegroundProcess(ptyId)).then((process) => ({
+            process,
+            hasChildProcesses: null,
+            available: true
+          }))
     } catch {
       const entry: PtyForegroundProcessReadEntry = {
         controller,
         startedAfterTitleObservation: afterTitleObservation,
+        verifiedAbsence,
         promise: Promise.resolve(unavailable)
       }
       entry.promise = entry.promise.finally(() => {
@@ -21141,8 +21215,12 @@ export class OrcaRuntimeService {
       return entry.promise
     }
     let entry: PtyForegroundProcessReadEntry
-    const promise = processRead
-      .then((process) => ({ controller, process, available: true }))
+    const promise = withTimeout(processRead, PTY_FOREGROUND_PROCESS_READ_TIMEOUT_MS, {
+      process: null,
+      hasChildProcesses: null,
+      available: false
+    })
+      .then((result) => ({ controller, ...result }))
       .catch(() => unavailable)
       .finally(() => {
         if (this.ptyForegroundProcessReads.get(ptyId) === entry) {
@@ -21152,23 +21230,144 @@ export class OrcaRuntimeService {
     entry = {
       controller,
       startedAfterTitleObservation: afterTitleObservation,
+      verifiedAbsence,
       promise
     }
     this.ptyForegroundProcessReads.set(ptyId, entry)
     return entry.promise
   }
 
+  private isPtyAgentExitUnverifiable(
+    pty: RuntimePtyWorktreeRecord | undefined,
+    ptyId: string
+  ): boolean {
+    if (this.getPtyLivenessVerdict(ptyId)?.status === 'unverifiable') {
+      return true
+    }
+    return Boolean(pty && !pty.connected && !pty.hostExitConfirmed)
+  }
+
+  private settlePendingPtyAgentExitOnCommandFinished(ptyId: string): void {
+    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
+    const candidate = entry?.pendingAgentExitCandidate
+    if (!entry || !candidate) {
+      return
+    }
+    entry.pendingAgentExitCandidate = null
+    const current = this.ptysById.get(ptyId)
+    if (
+      current !== candidate.pty ||
+      this.ptyController !== candidate.controller ||
+      current.incarnationId !== candidate.incarnationId ||
+      this.isPtyAgentExitUnverifiable(current, ptyId) ||
+      (current.lastOscTitleAt !== candidate.titleObservedAt && current.lastAgentStatus !== null)
+    ) {
+      return
+    }
+    const currentAttribution = this.resolveTerminalSideEffectAttribution(ptyId)
+    if (
+      currentAttribution.worktreeId !== candidate.attribution.worktreeId ||
+      currentAttribution.tabId !== candidate.attribution.tabId ||
+      currentAttribution.paneKey !== candidate.attribution.paneKey ||
+      currentAttribution.connectionId !== candidate.attribution.connectionId
+    ) {
+      return
+    }
+    this.recordTerminalSideEffectFact(ptyId, {
+      kind: 'agent-exited',
+      executionHostConfirmed: true,
+      incarnationId: candidate.incarnationId
+    })
+  }
+
   private confirmPtyAgentExit(ptyId: string): void {
     const pty = this.ptysById.get(ptyId)
+    if (this.isPtyAgentExitUnverifiable(pty, ptyId)) {
+      return
+    }
     const titleObservedAt = pty?.lastOscTitleAt ?? null
-    const foregroundRead = this.readPtyForegroundProcessFromController(ptyId, titleObservedAt ?? 0)
+    const incarnationId = pty?.incarnationId ?? null
+    const controller = this.ptyController
+    const attribution = this.resolveTerminalSideEffectAttribution(ptyId)
+    const trackerEntry = this.ptyTitleTrackersByPtyId.get(ptyId)
+    const pendingCandidate: RuntimePtyAgentExitCandidate | null =
+      pty && incarnationId && attribution.worktreeId && attribution.tabId && attribution.paneKey
+        ? {
+            pty,
+            controller,
+            titleObservedAt,
+            incarnationId,
+            attribution: {
+              worktreeId: attribution.worktreeId,
+              tabId: attribution.tabId,
+              paneKey: attribution.paneKey,
+              connectionId: attribution.connectionId
+            }
+          }
+        : null
+    if (trackerEntry) {
+      trackerEntry.pendingAgentExitCandidate = pendingCandidate
+    }
+    const recordExit = (executionHostConfirmed: boolean): void => {
+      const current = this.ptysById.get(ptyId)
+      if (
+        current !== pty ||
+        this.ptyController !== controller ||
+        current?.incarnationId !== incarnationId ||
+        (current?.lastOscTitleAt !== titleObservedAt && current?.lastAgentStatus !== null)
+      ) {
+        return
+      }
+      const currentAttribution = this.resolveTerminalSideEffectAttribution(ptyId)
+      if (
+        incarnationId &&
+        (currentAttribution.worktreeId !== attribution.worktreeId ||
+          currentAttribution.tabId !== attribution.tabId ||
+          currentAttribution.paneKey !== attribution.paneKey)
+      ) {
+        return
+      }
+      if (pendingCandidate && trackerEntry?.pendingAgentExitCandidate === pendingCandidate) {
+        trackerEntry.pendingAgentExitCandidate = null
+      }
+      this.recordTerminalSideEffectFact(
+        ptyId,
+        executionHostConfirmed && incarnationId
+          ? { kind: 'agent-exited', executionHostConfirmed: true, incarnationId }
+          : { kind: 'agent-exited' }
+      )
+    }
+    const foregroundRead = this.readPtyForegroundProcessFromController(
+      ptyId,
+      titleObservedAt ?? 0,
+      true
+    )
     if (!pty?.connected || !foregroundRead) {
-      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+      // Why: a local PTY that is already gone after a shell-title exit is
+      // `exited`. A remote PTY that we cannot observe is `unverifiable`.
+      if (pty?.connectionId) {
+        return
+      }
+      recordExit(Boolean(pty && !pty.connected))
       return
     }
     void foregroundRead.then((result) => {
       const current = this.ptysById.get(ptyId)
-      if (current !== pty || !current.connected) {
+      if (current !== pty) {
+        return
+      }
+      if (
+        current.connected &&
+        pendingCandidate &&
+        trackerEntry?.pendingAgentExitCandidate !== pendingCandidate
+      ) {
+        return
+      }
+      if (this.isPtyAgentExitUnverifiable(current, ptyId)) {
+        return
+      }
+      if (!current.connected) {
+        recordExit(true)
         return
       }
       if (current.lastOscTitleAt !== titleObservedAt && current.lastAgentStatus !== null) {
@@ -21176,7 +21375,6 @@ export class OrcaRuntimeService {
       }
       if (
         result.controller === this.ptyController &&
-        result.available &&
         recognizeAgentProcess(result.process) !== null
       ) {
         const restoredStatus = this.ptyTitleTrackersByPtyId
@@ -21197,7 +21395,10 @@ export class OrcaRuntimeService {
         }
         return
       }
-      this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-exited' })
+      if ((!result.available || result.hasChildProcesses !== false) && current.connectionId) {
+        return
+      }
+      recordExit(result.available && result.hasChildProcesses === false)
     })
   }
 
@@ -30681,6 +30882,7 @@ export class OrcaRuntimeService {
           tabId,
           paneKey,
           ptyId: result.id,
+          ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
           worktreeId: workspace.id,
           title: pty?.title ?? launchOpts.title ?? null,
           ...this.getPtyExecutionHostMetadata(result.id),
@@ -30763,12 +30965,15 @@ export class OrcaRuntimeService {
     // populates this.leaves may not have arrived yet. Wait for the leaf to
     // appear so we can return a valid handle the caller can use right away.
     const handle = await this.waitForTerminalHandle(reply.tabId)
+    const ptyId = this.handles.get(handle)?.ptyId ?? null
+    const incarnationId = ptyId ? (this.ptysById.get(ptyId)?.incarnationId ?? null) : null
     return {
       handle,
       tabId: reply.tabId,
       worktreeId: worktreeId ?? '',
       title: reply.title,
-      ...this.getPtyExecutionHostMetadata(this.handles.get(handle)?.ptyId ?? null),
+      ...(incarnationId ? { incarnationId } : {}),
+      ...this.getPtyExecutionHostMetadata(ptyId),
       surface: 'visible'
     }
   }
@@ -30852,7 +31057,8 @@ export class OrcaRuntimeService {
     this.adoptControllerTerminalHandle(session.id, terminalHandle)
     const pty = this.recordPtyWorktree(session.id, worktreeId, {
       connected: true,
-      title: session.title
+      title: session.title,
+      ...(session.incarnationId ? { incarnationId: session.incarnationId } : {})
     })
     const adoptedHandle = this.issuePtyHandle(pty)
     if (adoptedHandle !== terminalHandle) {
@@ -30861,6 +31067,7 @@ export class OrcaRuntimeService {
     return {
       handle: adoptedHandle,
       ptyId: session.id,
+      ...(session.incarnationId ? { incarnationId: session.incarnationId } : {}),
       worktreeId,
       title: session.title || null,
       surface: 'background'
@@ -34766,6 +34973,7 @@ export class OrcaRuntimeService {
         agentSessionOwners: (state.agentSessionOwners ?? []).map(cloneAgentSessionOwnerBinding),
         foregroundAgent: null,
         connected: state.connected ?? true,
+        hostExitConfirmed: false,
         disconnectedAt: state.connected === false ? Date.now() : null,
         lastExitCode: null,
         lastExitCause: null,

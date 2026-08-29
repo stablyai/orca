@@ -5,6 +5,7 @@ import { DaemonClient } from './client'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
 import { LIVENESS_PROBE_TIMEOUT_MS } from './daemon-pty-session-control'
 import {
+  AUTHORITATIVE_COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
   GET_FOREGROUND_PROCESS_PROTOCOL_VERSION,
   GET_SIZE_PROTOCOL_VERSION,
@@ -623,7 +624,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: 'codex',
-        hasChildProcesses: true
+        hasChildProcesses: true,
+        unavailable: true
       })
       expect(request).toHaveBeenCalledWith('getForegroundProcess', { sessionId: 'sess-a' })
       expect(request).not.toHaveBeenCalledWith('inspectProcess', expect.anything())
@@ -639,7 +641,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: 'bash',
-        hasChildProcesses: false
+        hasChildProcesses: false,
+        unavailable: true
       })
 
       legacy.dispose()
@@ -653,7 +656,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       expect(await legacy.inspectProcess('sess-a')).toEqual({
         foregroundProcess: null,
-        hasChildProcesses: false
+        hasChildProcesses: false,
+        unavailable: true
       })
 
       legacy.dispose()
@@ -674,8 +678,25 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       legacy.dispose()
     })
 
-    it.each([COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION])(
-      'delegates protocol %s inspection to inspectProcess',
+    it.each([
+      COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION,
+      AUTHORITATIVE_COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION - 1
+    ])('marks protocol %s inspectProcess results unavailable', async (protocolVersion) => {
+      const request = vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false }))
+      const legacy = createInspectionAdapter(protocolVersion, request)
+
+      await expect(legacy.inspectProcess('sess-a')).resolves.toEqual({
+        foregroundProcess: null,
+        hasChildProcesses: false,
+        unavailable: true
+      })
+      expect(request).toHaveBeenCalledWith('inspectProcess', { sessionId: 'sess-a' })
+
+      legacy.dispose()
+    })
+
+    it.each([AUTHORITATIVE_COMPLETION_PROCESS_INSPECTION_PROTOCOL_VERSION, PROTOCOL_VERSION])(
+      'delegates authoritative protocol %s inspection to inspectProcess',
       async (protocolVersion) => {
         const request = vi.fn(async () => ({ foregroundProcess: 'codex', hasChildProcesses: true }))
         const current = createInspectionAdapter(protocolVersion, request)

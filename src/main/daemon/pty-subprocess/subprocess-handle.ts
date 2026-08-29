@@ -70,6 +70,7 @@ export function createDaemonPtySubprocessHandle(args: {
       ? { startupCommandDeliveredInShellArgs: true }
       : {}),
     getForegroundProcess: foreground.getForegroundProcess,
+    inspectProcess: foreground.inspectProcess,
     confirmForegroundProcess: foreground.confirmForegroundProcess,
     confirmShellForeground: foreground.confirmShellForeground,
     write: (data) => {

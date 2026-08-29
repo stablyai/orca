@@ -201,6 +201,35 @@ describe('connectPanePty', () => {
     expect(manager.closePane).not.toHaveBeenCalled()
   })
 
+  it('keeps resume authority after an unexpected PTY loss without a confirmed agent exit', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport('pty-crash')
+    transportFactoryQueue.push(transport)
+    const paneKey = makePaneKey('tab-1', LEAF_1)
+    const record = {
+      paneKey,
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'claude' as const,
+      providerSession: { key: 'session_id' as const, id: 'session-crash' },
+      prompt: 'finish the task',
+      state: 'working' as const,
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live' as const
+    }
+    mockStoreState.sleepingAgentSessionsByPaneKey = { [paneKey]: record }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, createDeps() as never)
+    const onPtySpawn = createdTransportOptions[0]?.onPtySpawn as (ptyId: string) => void
+    onPtySpawn('pty-crash')
+    const onPtyExit = createdTransportOptions[0]?.onPtyExit as (ptyId: string) => void
+    onPtyExit('pty-crash')
+
+    expect(mockStoreState.clearSleepingAgentSession).not.toHaveBeenCalled()
+    expect(mockStoreState.sleepingAgentSessionsByPaneKey[paneKey]).toBe(record)
+  })
+
   it('defers all exit-side state mutation while worktree shutdown verification is pending', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { settleDeferredPtyShutdownExits } = await import('./pty-shutdown-exit-deferral')

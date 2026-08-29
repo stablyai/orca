@@ -1978,10 +1978,17 @@ export function useTerminalPaneLifecycle({
         manager.getPanes().map((capturedPane) => {
           const capturedPtyId = paneTransports.get(capturedPane.id)?.getPtyId() ?? null
           const capturedBinding = panePtyBindings.get(capturedPane.id) as
-            | (IDisposable & { isUntouchedFreshSpawnPty?: (ptyId: string) => boolean })
+            | (IDisposable & {
+                isUntouchedFreshSpawnPty?: (ptyId: string) => boolean
+                getPtyIncarnationId?: (ptyId: string) => string | null
+              })
             | undefined
           return {
             ptyId: capturedPtyId,
+            incarnationId:
+              capturedPtyId !== null
+                ? (capturedBinding?.getPtyIncarnationId?.(capturedPtyId) ?? null)
+                : null,
             paneId: capturedPane.id,
             leafId: capturedPane.leafId,
             drivesTabTitle: manager.getActivePane()?.id === capturedPane.id,

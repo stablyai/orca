@@ -210,6 +210,12 @@ export type IPtyProvider = {
   acknowledgeDataEvent(id: string, charCount: number): void
   hasChildProcesses(id: string): Promise<boolean>
   getForegroundProcess(id: string): Promise<string | null>
+  /** Atomic completion-sensitive inspection; failures must reject or return unavailable. */
+  inspectProcess(id: string): Promise<{
+    foregroundProcess: string | null
+    hasChildProcesses: boolean
+    unavailable?: true
+  }>
   /** Strong process evidence captured after the caller's command boundary. */
   confirmForegroundProcess?: (id: string) => Promise<string | null>
   /** Fresh execution-host proof that the spawned shell owns the PTY foreground. */

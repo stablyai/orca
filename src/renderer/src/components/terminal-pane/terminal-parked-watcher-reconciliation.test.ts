@@ -80,8 +80,28 @@ describe('paired parked-watcher reconciliation', () => {
     ).toEqual({
       restartAll: false,
       addedPtyIds: [NEW_SECOND_PTY_ID],
+      replacedPtyIds: [],
       retainedPtyIds: [FIRST_PTY_ID],
       retiredPaneIds: [2]
+    })
+  })
+
+  it('restarts a same-PTY watcher when the process incarnation changes', () => {
+    expect(
+      reconcileParkedWatcherPtyIds({
+        currentTabPtyId: FIRST_PTY_ID,
+        entryTabPtyId: FIRST_PTY_ID,
+        paneIdByPtyId: new Map([[FIRST_PTY_ID, 1]]),
+        incarnationIdByPtyId: new Map([[FIRST_PTY_ID, 'inc-old']]),
+        expectedIncarnationIdByPtyId: new Map([[FIRST_PTY_ID, 'inc-new']]),
+        expectedPtyIds: new Set([FIRST_PTY_ID])
+      })
+    ).toEqual({
+      restartAll: false,
+      addedPtyIds: [],
+      replacedPtyIds: [FIRST_PTY_ID],
+      retainedPtyIds: [],
+      retiredPaneIds: []
     })
   })
 })
