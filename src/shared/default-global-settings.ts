@@ -199,6 +199,7 @@ export function buildDefaultSettings(args: {
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
+    glmCodingPlanUsage: null,
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },

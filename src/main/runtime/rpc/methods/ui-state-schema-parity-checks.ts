@@ -19,6 +19,7 @@ type MainOwnedUIState =
   | 'starNagCompleted'
   | 'starNagDeferredUntil'
   | 'starNagAgentValueMomentAppVersion'
+  | '_glmStatusBarDefaultAdded'
 const _uiUpdateParity: AssertNoMissingKeys<
   Omit<PersistedUIState, MainOwnedUIState>,
   z.infer<UiUpdateFieldsSchema>

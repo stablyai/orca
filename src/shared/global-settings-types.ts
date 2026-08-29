@@ -361,6 +361,8 @@ export type GlobalSettings = {
   minimaxUsageModels: string
   /** Extract OAuth credentials from the local Gemini CLI for rate-limit fetching. Off by default (explicit opt-in). */
   geminiCliOAuthEnabled: boolean
+  /** GLM Coding Plan usage configuration (Z.AI / Zhipu). */
+  glmCodingPlanUsage: { platform: 'zai' | 'zhipu'; apiKey: string } | null
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */
   agentCmdOverrides: Partial<Record<TuiAgent, string>>
   /** Custom CODEX_HOME for Codex session-history discovery (defaults to ~/.codex).

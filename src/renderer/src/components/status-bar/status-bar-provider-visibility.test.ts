@@ -74,6 +74,7 @@ function usageSettings(overrides: Partial<UsageProviderSettings> = {}): UsagePro
     antigravityUsageConfigured: false,
     minimaxCookieConfigured: false,
     grokAuthConfigured: false,
+    glmCodingPlanUsage: null,
     ...overrides
   }
 }
@@ -373,7 +374,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          glm: null
         },
         usageSettings()
       )
@@ -391,7 +393,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: undefined,
           minimax: undefined,
-          grok: undefined
+          grok: undefined,
+          glm: undefined
         },
         usageSettings()
       )
@@ -409,7 +412,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          glm: null
         },
         usageSettings()
       )
@@ -427,7 +431,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: provider('unavailable', { provider: 'antigravity' }),
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          glm: null
         },
         usageSettings({
           codexManagedAccounts: [
@@ -456,7 +461,8 @@ describe('isUsageEmptyState', () => {
           kimi: null,
           antigravity: null,
           minimax: null,
-          grok: null
+          grok: null,
+          glm: null
         },
         null
       )
@@ -474,7 +480,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           minimax: provider('unavailable', { provider: 'minimax' }),
-          grok: provider('unavailable', { provider: 'grok' })
+          grok: provider('unavailable', { provider: 'grok' }),
+          glm: null
         },
         usageSettings()
       )
@@ -492,7 +499,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          glm: null
         },
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
@@ -512,7 +520,8 @@ describe('isUsageEmptyState', () => {
           kimi: provider('unavailable', { provider: 'kimi' }),
           antigravity: null,
           grok: provider('unavailable', { provider: 'grok' }),
-          minimax: provider('unavailable', { provider: 'minimax' })
+          minimax: provider('unavailable', { provider: 'minimax' }),
+          glm: null
         },
         usageSettings({ antigravityUsageConfigured: true })
       )

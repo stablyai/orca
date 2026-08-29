@@ -114,6 +114,7 @@ export function createSettings(overrides: TestSettingsOverrides = {}): GlobalSet
     minimaxGroupId: '',
     minimaxUsageModels: 'general',
     geminiCliOAuthEnabled: false,
+    glmCodingPlanUsage: null,
     agentCmdOverrides: {},
     keepComputerAwakeWhileAgentsRun: false,
     confirmClosePinnedTab: true,

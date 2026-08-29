@@ -56,6 +56,7 @@ const StatusBarItem = z.enum([
   'kimi',
   'minimax',
   'grok',
+  'glm',
   'ssh',
   'resource-usage',
   'ports'
