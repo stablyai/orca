@@ -171,7 +171,7 @@ function Sidebar({
       <div
         ref={containerRef}
         data-native-file-drop-target={sidebarOpen ? nativeDropTarget : undefined}
-        className="relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
+        className="worktree-sidebar-surface relative min-h-0 flex-shrink-0 bg-worktree-sidebar flex flex-col overflow-hidden scrollbar-sleek-parent"
         style={leftSidebarStyle}
         {...dropHandlers}
       >

@@ -1,4 +1,5 @@
 import { createReadStream } from 'node:fs'
+import { Buffer } from 'node:buffer'
 import { realpath, stat } from 'node:fs/promises'
 import { isAbsolute, relative, resolve, sep } from 'node:path'
 import type { PluginManifest } from '../../shared/plugins/plugin-manifest'
@@ -6,6 +7,7 @@ import {
   parsePluginIconThemeArtifact,
   sanitizePluginIconSvg
 } from '../../shared/plugins/plugin-icon-theme-artifact'
+import { parsePluginAppThemeArtifact } from '../../shared/plugins/plugin-theme-artifact'
 import { parsePluginVmRecipeArtifact } from '../../shared/plugins/plugin-vm-recipe-artifact'
 
 export type PluginArtifactValidationResult = { ok: true } | { ok: false; error: string }
@@ -14,6 +16,8 @@ export const PLUGIN_PANEL_ENTRY_MAX_BYTES = 10 * 1024 * 1024
 export const PLUGIN_WORKER_ENTRY_MAX_BYTES = 50 * 1024 * 1024
 const PLUGIN_ICON_MAX_BYTES = 2 * 1024 * 1024
 export const PLUGIN_THEME_MAX_BYTES = 256 * 1024
+export const PLUGIN_THEME_TEXTURE_MAX_BYTES = 512 * 1024
+export const PLUGIN_THEME_TEXTURE_TOTAL_MAX_BYTES = 1024 * 1024
 export const PLUGIN_ICON_THEME_MAX_BYTES = 512 * 1024
 export const PLUGIN_ICON_SVG_MAX_BYTES = 64 * 1024
 export const PLUGIN_ICON_TOTAL_MAX_BYTES = 8 * 1024 * 1024
@@ -107,6 +111,14 @@ export async function readContainedPluginArtifactText(
   relativePath: string,
   maxBytes: number
 ): Promise<string> {
+  return (await readContainedPluginArtifactBuffer(rootDir, relativePath, maxBytes)).toString('utf8')
+}
+
+export async function readContainedPluginArtifactBuffer(
+  rootDir: string,
+  relativePath: string,
+  maxBytes: number
+): Promise<Buffer> {
   const artifact = await resolveContainedPluginArtifact(rootDir, relativePath, maxBytes)
   const chunks: Buffer[] = []
   let totalBytes = 0
@@ -118,7 +130,34 @@ export async function readContainedPluginArtifactText(
     }
     chunks.push(bytes)
   }
-  return Buffer.concat(chunks, totalBytes).toString('utf8')
+  return Buffer.concat(chunks, totalBytes)
+}
+
+const PNG_SIGNATURE = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+const PNG_MAX_DIMENSION = 4096
+
+export async function readContainedPluginThemeTexture(
+  rootDir: string,
+  relativePath: string
+): Promise<Buffer> {
+  const bytes = await readContainedPluginArtifactBuffer(
+    rootDir,
+    relativePath,
+    PLUGIN_THEME_TEXTURE_MAX_BYTES
+  )
+  if (
+    bytes.byteLength < 24 ||
+    !bytes.subarray(0, PNG_SIGNATURE.byteLength).equals(PNG_SIGNATURE) ||
+    bytes.subarray(12, 16).toString('ascii') !== 'IHDR'
+  ) {
+    throw new Error('is not a valid PNG texture')
+  }
+  const width = bytes.readUInt32BE(16)
+  const height = bytes.readUInt32BE(20)
+  if (width === 0 || height === 0 || width > PNG_MAX_DIMENSION || height > PNG_MAX_DIMENSION) {
+    throw new Error(`PNG dimensions must be between 1 and ${PNG_MAX_DIMENSION} pixels`)
+  }
+  return bytes
 }
 
 async function resolvePathFromRealRoot(
@@ -195,6 +234,30 @@ export async function validatePluginInstallContent(
   rootDir: string,
   manifest: PluginManifest
 ): Promise<PluginArtifactValidationResult> {
+  for (const contribution of manifest.contributes.themes) {
+    try {
+      const parsed = parsePluginAppThemeArtifact(
+        await readContainedPluginArtifactText(rootDir, contribution.path, PLUGIN_THEME_MAX_BYTES)
+      )
+      if (!parsed.ok) {
+        throw new Error(parsed.error)
+      }
+      let textureBytes = 0
+      for (const path of new Set(Object.values(parsed.theme.textureAssets ?? {}))) {
+        textureBytes += (await readContainedPluginThemeTexture(rootDir, path)).byteLength
+        if (textureBytes > PLUGIN_THEME_TEXTURE_TOTAL_MAX_BYTES) {
+          throw new Error(
+            `theme textures exceed ${PLUGIN_THEME_TEXTURE_TOTAL_MAX_BYTES} bytes in total`
+          )
+        }
+      }
+    } catch (error) {
+      return {
+        ok: false,
+        error: `theme "${contribution.id}": ${error instanceof Error ? error.message : String(error)}`
+      }
+    }
+  }
   let iconBytes = 0
   for (const contribution of manifest.contributes.iconThemes) {
     try {

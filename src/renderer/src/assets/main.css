@@ -691,6 +691,15 @@
   height: 100dvh;
   width: 100vw;
   overflow: hidden;
+  background-image: var(--appearance-canvas-background-image, none);
+}
+
+.worktree-sidebar-surface {
+  background-image: var(--appearance-worktree-sidebar-background-image, none);
+}
+
+.right-sidebar-surface {
+  background-image: var(--appearance-right-sidebar-background-image, none);
 }
 
 /* Tab-group split resize handle — wide hit area, visible center line. */

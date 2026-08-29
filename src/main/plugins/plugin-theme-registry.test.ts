@@ -58,6 +58,7 @@ describe('PluginThemeRegistry', () => {
         pluginKey: 'orca-samples.themes',
         contributionId: 'nord',
         label: 'Nord',
+        schemaVersion: 1,
         base: 'dark',
         tokens: { '--background': '#111', '--foreground': '#eee' }
       }
@@ -68,13 +69,13 @@ describe('PluginThemeRegistry', () => {
   it('removes disabled themes and records malformed artifacts as plugin errors', async () => {
     const plugin = await pluginWithTheme({
       base: 'dark',
-      tokens: { '--destructive': '#000' }
+      tokens: { '--not-a-public-token': '#000' }
     })
     const registry = new PluginThemeRegistry(new PluginContentVerifier())
 
     await registry.reconcile([plugin], () => true)
     expect(registry.list()).toEqual([])
-    expect(registry.error(plugin.pluginKey)).toContain('public plugin theme token set')
+    expect(registry.error(plugin.pluginKey)).toContain('public appearance token set')
 
     await registry.reconcile([plugin], () => false)
     expect(registry.list()).toEqual([])

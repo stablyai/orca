@@ -89,8 +89,6 @@ describe('private Git marketplace integration', () => {
         capabilities: []
       }),
       'theme.json': JSON.stringify({
-        id: 'private',
-        label: 'Private',
         base: 'dark',
         tokens: { '--background': '#111111', '--foreground': '#eeeeee' }
       })

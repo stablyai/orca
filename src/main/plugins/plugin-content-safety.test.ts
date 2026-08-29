@@ -232,6 +232,33 @@ describe('declared plugin artifacts', () => {
       error: expect.stringContaining('duplicate VM recipe id "cloud"')
     })
   })
+
+  it('rejects a theme texture whose bytes are not PNG', async () => {
+    const root = await tempRoot()
+    await Promise.all([mkdir(join(root, 'themes')), mkdir(join(root, 'textures'))])
+    await Promise.all([
+      writeFile(
+        join(root, 'themes', 'paper.json'),
+        JSON.stringify({
+          schemaVersion: 4,
+          base: 'light',
+          tokens: { '--background': '#ffffff' },
+          textureAssets: {
+            '--appearance-worktree-sidebar-background-image': 'textures/paper.png'
+          }
+        })
+      ),
+      writeFile(join(root, 'textures', 'paper.png'), 'not a png')
+    ])
+    const pluginManifest = manifest({
+      contributes: { themes: [{ id: 'paper', label: 'Paper', path: 'themes/paper.json' }] }
+    })
+
+    await expect(validatePluginInstallContent(root, pluginManifest)).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('not a valid PNG texture')
+    })
+  })
 })
 
 describe('hash-addressed plugin content', () => {

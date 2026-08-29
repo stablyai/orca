@@ -33,6 +33,7 @@ import { translate } from '@/i18n/i18n'
 import type { UiLanguage } from '../../../../shared/ui-language'
 import { matchesSettingsSearch, normalizeSettingsSearchQuery } from './settings-search'
 import { usePluginThemes } from '@/store/plugin-themes'
+import { getPluginThemeSettingsUpdate } from '@/lib/plugin-theme-terminal-link'
 import { usePluginLanguagePacks } from '@/store/plugin-language-packs'
 import { usePluginIconThemes } from '@/store/plugin-icon-themes'
 
@@ -95,7 +96,10 @@ export function AppearanceInterfaceSection({
               ariaLabel={themeLabel}
               value={settings.theme}
               onChange={(option) => {
-                updateSettings({ theme: option })
+                updateSettings({
+                  theme: option,
+                  pluginAppTheme: null
+                })
                 applyTheme(option)
               }}
               options={[
@@ -174,9 +178,17 @@ export function AppearanceInterfaceSection({
               <Select
                 value={settings.pluginAppTheme ?? 'built-in'}
                 onValueChange={(value) => {
+                  const pluginTheme = pluginThemes.find((themeItem) => themeItem.id === value)
+                  const linkedSettings = pluginTheme
+                    ? getPluginThemeSettingsUpdate(pluginTheme, settings)
+                    : null
                   updateSettings({
-                    pluginAppTheme: value === 'built-in' ? null : (value as `plugin:${string}`)
+                    pluginAppTheme: value === 'built-in' ? null : (value as `plugin:${string}`),
+                    ...linkedSettings
                   })
+                  if (pluginTheme) {
+                    applyTheme(pluginTheme.base)
+                  }
                 }}
               >
                 <SelectTrigger

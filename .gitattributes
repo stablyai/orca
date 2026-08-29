@@ -12,3 +12,4 @@
 /src/cli/bundled-skill-guides.ts text eol=lf
 # Bundled plugin trees are byte-hashed; CRLF checkout would break the pinned hash.
 /resources/plugins/** text eol=lf
+/resources/plugins/**/*.png binary

@@ -1,0 +1,76 @@
+{
+  "manifestVersion": 1,
+  "id": "orca-curated-themes",
+  "publisher": "stablyai",
+  "name": "Curated Themes for Orca",
+  "version": "1.6.0",
+  "description": "Declarative Neo Brutalism, cartoon, synthwave, glass, paper, and stage appearances with matching terminal palettes and local textures.",
+  "repository": "https://github.com/stablyai/orca",
+  "engines": { "orca": ">=1.4.0" },
+  "pluginApi": 1,
+  "contributes": {
+    "themes": [
+      { "id": "neo-light", "label": "Neo Brutalism Light", "path": "themes/neo-light.json" },
+      { "id": "neo-dark", "label": "Neo Brutalism Dark", "path": "themes/neo-dark.json" },
+      {
+        "id": "cupcake-cartoon",
+        "label": "Cupcake Cartoon",
+        "path": "themes/cupcake-cartoon.json"
+      },
+      {
+        "id": "synthwave-future",
+        "label": "Synthwave Future",
+        "path": "themes/synthwave-future.json"
+      },
+      { "id": "aurora-glass", "label": "Aurora Glass", "path": "themes/aurora-glass.json" },
+      {
+        "id": "paper-light",
+        "label": "Paper Light",
+        "path": "themes/paper-light.json"
+      },
+      {
+        "id": "stage-dark",
+        "label": "Stage Dark",
+        "path": "themes/stage-dark.json"
+      }
+    ],
+    "terminalThemes": [
+      {
+        "id": "neo-terminal-light",
+        "label": "Neo Brutalism Light",
+        "path": "terminal/neo-light.json"
+      },
+      {
+        "id": "neo-terminal-dark",
+        "label": "Neo Brutalism Dark",
+        "path": "terminal/neo-dark.json"
+      },
+      {
+        "id": "cupcake-terminal",
+        "label": "Cupcake Cartoon",
+        "path": "terminal/cupcake-cartoon.json"
+      },
+      {
+        "id": "synthwave-terminal",
+        "label": "Synthwave Future",
+        "path": "terminal/synthwave-future.json"
+      },
+      {
+        "id": "aurora-terminal",
+        "label": "Aurora Glass",
+        "path": "terminal/aurora-glass.json"
+      },
+      {
+        "id": "paper-terminal",
+        "label": "Paper Light",
+        "path": "terminal/paper-light.json"
+      },
+      {
+        "id": "stage-terminal",
+        "label": "Stage Dark",
+        "path": "terminal/stage-dark.json"
+      }
+    ]
+  },
+  "capabilities": []
+}

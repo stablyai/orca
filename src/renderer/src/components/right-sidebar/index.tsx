@@ -366,7 +366,7 @@ function RightSidebarInner(): React.JSX.Element {
     >
       {/* Panel content area */}
       <div
-        className="flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
+        className="right-sidebar-surface flex flex-col flex-1 min-w-0 bg-sidebar overflow-hidden"
         style={{
           borderLeft: rightSidebarOpen ? '1px solid var(--sidebar-border)' : 'none'
         }}

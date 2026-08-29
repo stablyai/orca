@@ -184,6 +184,7 @@ describe('document theme', () => {
         pluginKey: 'orca-samples.themes',
         contributionId: 'nord',
         label: 'Nord',
+        schemaVersion: 1,
         base: 'dark',
         tokens: { '--background': '#111', '--foreground': '#eee' }
       },

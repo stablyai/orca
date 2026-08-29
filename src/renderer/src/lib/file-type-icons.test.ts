@@ -19,8 +19,7 @@ import {
   FileVideo
 } from 'lucide-react'
 import { describe, expect, it } from 'vitest'
-import { getFileTypeIcon } from './file-type-icons'
-import { getPluginFileTypeIconImage } from './file-type-icons'
+import { getFileTypeIcon, getPluginFileTypeIconImage } from './file-type-icons'
 
 describe('getFileTypeIcon', () => {
   it('prefers known filenames over generic extensions', () => {
