@@ -44,6 +44,16 @@ export type {
 
 export type RequestContext = {
   clientId: number
+  /**
+   * Which transport incarnation of `clientId` this request arrived on.
+   *
+   * Why: setWrite() reuses the primary client - id included - so a reconnected client is
+   * indistinguishable from the one that never left, and every "is this the same client?" test
+   * answers yes across a reconnect. resetClient() already bumps this on that path. Optional because
+   * it only has meaning for contexts the dispatcher builds; a harness that omits it keeps the
+   * id-only comparison.
+   */
+  transportGeneration?: number
   isStale: () => boolean
   signal?: AbortSignal
   sessionIdentity?: RelayClientSessionIdentity
@@ -1016,6 +1026,7 @@ export class RelayDispatcher {
     }
     const context: RequestContext = {
       clientId: client.id,
+      transportGeneration: gen,
       isStale: () =>
         client.generation !== gen || !this.clients.has(client.id) || abortController.signal.aborted,
       signal: abortController.signal,
@@ -1086,6 +1097,7 @@ export class RelayDispatcher {
       const gen = client.generation
       handler(notif.params ?? {}, {
         clientId: client.id,
+        transportGeneration: gen,
         isStale: () => client.generation !== gen || !this.clients.has(client.id),
         sessionIdentity: client.sessionIdentity,
         onResponseSettled: () => {

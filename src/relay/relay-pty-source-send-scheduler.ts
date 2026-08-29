@@ -1,9 +1,7 @@
-import type {
-  PtySourceDeliveryIdentity,
-  PtySourceDeliverySnapshot
-} from '../shared/pty-source-credit-contract'
-import type { PtySourceRecoveryCheckpoint } from '../shared/pty-source-recovery-contract'
-import type { PtySourceReceivingActivation } from '../shared/pty-source-receiving-activation'
+import type { RelayPtySourceDeliveryRecord } from './relay-pty-source-delivery-record'
+export { sameClientTransport } from './relay-pty-source-delivery-record'
+export type { RelayPtySourceDeliveryRecord } from './relay-pty-source-delivery-record'
+import type { PtySourceDeliverySnapshot } from '../shared/pty-source-credit-contract'
 import type { RelayDispatcher, SinkWriteSettlement } from './dispatcher'
 import {
   PTY_SOURCE_SCHEDULER_MAX_FRAMES,
@@ -11,28 +9,6 @@ import {
 } from './pty-source-credit-scheduler'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import { completePtySourceRecovery } from './relay-pty-source-recovery-completion'
-
-export type RelayPtySourceDeliveryRecord = {
-  clientId: number
-  identity: PtySourceDeliveryIdentity
-  sourceActivation: PtySourceReceivingActivation
-  displayEnd: number
-  activating: boolean
-  activationRecoveryRequest: PtySourceRecoveryCheckpoint | null
-  sealed: boolean
-  legacyExitAccepted: boolean
-  sourceExitState: 'idle' | 'pending' | 'published'
-  sending: boolean
-  turnFrames: number
-  turnSourceSu: number
-  turnScheduled: boolean
-  sendWaiters: Set<() => void>
-  recoveryCheckpointSourceEndSu: number | null
-  recoveryEndSu: number | null
-  recoveryCompletionPending: boolean
-  restoreRequired: boolean
-  rotationPending: boolean
-}
 
 export type RelayPtySourcePublicationCounters = {
   opened: number

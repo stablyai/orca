@@ -7,12 +7,16 @@ import type { PtySourceReceivingActivation } from '../shared/pty-source-receivin
 import {
   createPtySourceReceivingActivation,
   pendingPtySourceRecoveryResult,
-  registerCanceledPtySourceRetirement,
   registerPtySourceActivationSettlement,
   samePtySourceRecoveryRequest
 } from './relay-pty-source-activation'
 import {
+  publishPtySourceRestoreRequired,
+  requirePtySourceRestore
+} from './relay-pty-source-restore-required'
+import {
   RelayPtySourceSendScheduler,
+  sameClientTransport,
   type RelayPtySourceDeliveryRecord,
   type RelayPtySourcePublicationCounters
 } from './relay-pty-source-send-scheduler'
@@ -85,7 +89,8 @@ export class RelayPtySourcePublication {
       return false
     }
     if (
-      current?.clientId === context.clientId &&
+      current !== undefined &&
+      sameClientTransport(current, context) &&
       !current.restoreRequired &&
       current.sourceExitState !== 'pending' &&
       this.deliveryClosedUnderRecord(current)
@@ -96,11 +101,16 @@ export class RelayPtySourcePublication {
       this.onCapacity(id)
       current = undefined
     }
-    if (current?.clientId === context.clientId) {
+    if (current !== undefined && sameClientTransport(current, context)) {
       this.sender.releaseRotationFence(current)
       if (current.activating && current.activationRecoveryRequest) {
         if (!samePtySourceRecoveryRequest(current.activationRecoveryRequest, recovery)) {
-          return this.publishRestoreRequired(id, context, 'checkpointUnavailable')
+          return publishPtySourceRestoreRequired(
+            this.restoreDeps,
+            id,
+            context,
+            'checkpointUnavailable'
+          )
         }
         this.registerActivationSettlement(id, current, context)
         return pendingPtySourceRecoveryResult(current)
@@ -113,7 +123,7 @@ export class RelayPtySourcePublication {
     let recoveryEndSu: number | null = null
     let recoveryWasSealed = false
     if (!current && recovery) {
-      return this.publishRestoreRequired(id, context, 'deliveryUnavailable')
+      return publishPtySourceRestoreRequired(this.restoreDeps, id, context, 'deliveryUnavailable')
     }
     if (current) {
       try {
@@ -127,7 +137,13 @@ export class RelayPtySourcePublication {
           recovery.ownerGeneration !== current.identity.ownerGeneration ||
           recovery.ptyIncarnation !== current.identity.ptyIncarnation
         ) {
-          return this.requireRestore(id, current, context, 'checkpointUnavailable')
+          return requirePtySourceRestore(
+            this.restoreDeps,
+            id,
+            current,
+            context,
+            'checkpointUnavailable'
+          )
         }
         const rotation = this.session.rotateDelivery(
           current.identity,
@@ -141,7 +157,8 @@ export class RelayPtySourcePublication {
         recoveryWasSealed = snapshot.state === 'sealed-unsettled'
         this.counters.rotated++
       } catch (error) {
-        return this.requireRestore(
+        return requirePtySourceRestore(
+          this.restoreDeps,
           id,
           current,
           context,
@@ -162,6 +179,7 @@ export class RelayPtySourcePublication {
     const activationRecoveryEndSu = recoveryEndSu ?? activationSnapshot.receivedEndSu
     const record: RelayPtySourceDeliveryRecord = {
       clientId: context.clientId,
+      clientTransportGeneration: context.transportGeneration,
       identity,
       sourceActivation: createPtySourceReceivingActivation(
         identity,
@@ -295,32 +313,13 @@ export class RelayPtySourcePublication {
     })
   }
 
-  private requireRestore(
-    id: string,
-    current: RelayPtySourceDeliveryRecord,
-    context: RequestContext,
-    reason: string
-  ): Readonly<{ status: 'restoreRequired'; reason: string }> {
-    this.session.cancelDelivery(current.identity, `recovery-${reason}`)
-    current.restoreRequired = true
-    current.activating = false
-    this.sender.wakeSendWaiters(current)
-    registerCanceledPtySourceRetirement(current, context, this.deliveries, this.onCapacity)
-    return this.publishRestoreRequired(id, context, reason)
-  }
-
-  private publishRestoreRequired(
-    id: string,
-    context: RequestContext,
-    reason: string
-  ): Readonly<{ status: 'restoreRequired'; reason: string }> {
-    const result = Object.freeze({ status: 'restoreRequired' as const, reason })
-    context.onResponseSettled?.((settlement) => {
-      if (settlement.ok) {
-        this.dispatcher.notifyClient(context.clientId, 'pty.restoreRequired', { id, reason })
-      }
-    })
-    this.onCapacity(id)
-    return result
+  private get restoreDeps() {
+    return {
+      dispatcher: this.dispatcher,
+      onCapacity: this.onCapacity,
+      session: this.session,
+      sender: this.sender,
+      deliveries: this.deliveries
+    }
   }
 }
