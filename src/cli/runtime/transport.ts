@@ -88,12 +88,12 @@ function sendRequestUsingTransport<TResult>(
       finish({
         ok: false,
         error:
-          transport.kind === 'local-tcp'
-            ? new RuntimeClientError(
+          transport.kind === 'named-pipe' || transport.kind === 'unix'
+            ? mapRuntimeConnectError(error, transport.kind)
+            : new RuntimeClientError(
                 'runtime_unavailable',
                 'Could not connect to the running Orca app. Restart Orca and try again.'
               )
-            : mapRuntimeConnectError(error, transport.kind)
       })
     })
     // Why: a clean peer close (FIN, no 'error') before a terminal frame never
