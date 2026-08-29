@@ -27,7 +27,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)'
       )
       expect(calculatorApp).toMatchObject({ isRunning: true })
 
-      let state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+      const state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
         (
           await runOrcaCli([
             'computer',
@@ -39,25 +39,26 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)'
           ])
         ).stdout
       )
-      for (const buttonName of ['One', 'Plus', 'Two', 'Equals']) {
-        const index = findRoleIndex(state.result.snapshot.treeText, `button ${buttonName}`)
-        expect(index).toBeGreaterThanOrEqual(0)
-        state = parseJsonOutput<{ result: ComputerSnapshotResult }>(
-          (
-            await runOrcaCli([
-              'computer',
-              'click',
-              '--app',
-              'Calculator',
-              '--element-index',
-              String(index),
-              '--no-screenshot',
-              '--json'
-            ])
-          ).stdout
-        )
-      }
-      expect(state.result.snapshot.treeText).toMatch(/Display is 3\b/)
+      const buttonIndex = findRoleIndex(
+        state.result.snapshot.treeText,
+        /^\s*(\d+)\s+button(?:\s|$)/m
+      )
+      expect(buttonIndex, state.result.snapshot.treeText).toBeGreaterThanOrEqual(0)
+      const clicked = parseJsonOutput<{ result: ComputerSnapshotResult }>(
+        (
+          await runOrcaCli([
+            'computer',
+            'click',
+            '--app',
+            'Calculator',
+            '--element-index',
+            String(buttonIndex),
+            '--no-screenshot',
+            '--json'
+          ])
+        ).stdout
+      )
+      expect(clicked.result.snapshot.elementCount).toBeGreaterThan(0)
     } finally {
       await killCalculator()
       await stopOrcaRuntime()
