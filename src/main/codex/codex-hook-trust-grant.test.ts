@@ -66,7 +66,7 @@ function managedEntry(eventLabel: CodexTrustEntry['eventLabel']): CodexTrustEntr
     groupIndex: 0,
     handlerIndex: 0,
     command: MANAGED_COMMAND,
-    timeoutSec: 10
+    timeoutSec: 3
   }
 }
 

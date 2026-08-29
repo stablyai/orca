@@ -9,7 +9,6 @@ import {
   buildWindowsAgentHookCurlPostCommand,
   getSharedManagedScriptPath,
   hookDefinitionHasManagedCommand,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJson,
   readHooksJsonWithRaw,
   removeManagedCommands,
@@ -37,6 +36,8 @@ import {
   buildWindowsHookStdinDrainEpilogue,
   POSIX_HOOK_STDIN_DRAIN_COMMAND
 } from '../agent-hooks/hook-stdin-contract'
+// Why: keep Codex on a tighter hook timeout than the cross-agent default without changing the shared constant.
+const CODEX_MANAGED_HOOK_TIMEOUT_SECONDS = 3
 import {
   codexHookSourcePathsEqual,
   computeTrustKey,
@@ -584,7 +585,7 @@ function removeSystemManagedHookTrustEntries(systemHomePath: string, hooksJsonPa
     sourcePath: hooksJsonPath,
     command: getManagedCommand(getManagedScriptPath()),
     managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
-    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+    timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
   })
 }
 
@@ -760,7 +761,7 @@ function removeRuntimeManagedHookTrustEntries(configPath: string): void {
       sourcePath: configPath,
       command: getManagedCommand(getManagedScriptPath()),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+      timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS,
       sourceUsesExplicitCodexHome: true
     })
   } catch (error) {
@@ -777,7 +778,7 @@ function removeWslRuntimeManagedHookTrustEntries(plan: CodexWslRuntimeHookInstal
       sourcePath: plan.trustConfigPath,
       command: wrapReadablePosixHookCommand(plan.commandScriptPath),
       managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
     })
   } catch (error) {
     // Why: best-effort like host cleanup; stale trust is inert once hooks.json no longer points at us.
@@ -795,7 +796,7 @@ function removeStaleWslRuntimeManagedHookTrustEntries(
     runtimeHomePath: pathWin32.dirname(tomlPath),
     desiredEntries,
     managedEventLabels: CODEX_MANAGED_EVENT_LABELS,
-    timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS,
+    timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS,
     buildManagedCommand: (linuxRuntimeHome) =>
       wrapReadablePosixHookCommand(`${linuxRuntimeHome}/.orca/agent-hooks/codex-hook.sh`),
     priorLedgerHomes
@@ -939,7 +940,7 @@ async function installManagedHooksIntoWslRuntimeExclusively(
       groupIndex: 0,
       handlerIndex: 0,
       command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
     })
   }
 
@@ -1293,7 +1294,7 @@ export class CodexHookService {
         groupIndex: foundGroupIndex,
         handlerIndex: foundHandlerIndex,
         command,
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+        timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
       }
       const trustKey = computeTrustKey(trustInput)
       const validHashes = new Set([computeTrustedHash(trustInput)])
@@ -1440,7 +1441,7 @@ export class CodexHookService {
         groupIndex: 0,
         handlerIndex: 0,
         command,
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+        timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
       })
     }
     const trustEntries: CodexTrustEntry[] = [...mirroredTrustEntries, ...managedTrustEntries]
@@ -1565,7 +1566,7 @@ export class CodexHookService {
           groupIndex: redirectedCodexHome ? 0 : cleaned.length,
           handlerIndex: 0,
           command,
-          timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+          timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
         })
       }
 

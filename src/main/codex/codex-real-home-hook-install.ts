@@ -1,7 +1,6 @@
 import { statSync } from 'node:fs'
 import {
   createManagedCommandMatcher,
-  MANAGED_HOOK_TIMEOUT_SECONDS,
   readHooksJsonWithRaw,
   removeManagedCommands,
   writeHooksJson,
@@ -31,6 +30,9 @@ import type { CodexTrustEntry } from './config-toml-trust'
 import { restoreCodexTrustConfig } from './codex-trust-config-rollback'
 import { mutateRealHomeHooksPreservingUserTrust } from './codex-user-hook-trust-rebase'
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
+
+// Why: keep Codex on a tighter hook timeout than the cross-agent default without changing the shared constant.
+const CODEX_MANAGED_HOOK_TIMEOUT_SECONDS = 3
 
 /**
  * Real-home Codex hook lane for the system-default selection (flag ON).
@@ -152,7 +154,7 @@ async function installRealHomeCodexHook(userDataPath: string): Promise<RealHomeC
       groupIndex: reconciled.groupIndex,
       handlerIndex: reconciled.handlerIndex,
       command: material.command,
-      timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+      timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
     })
   }
   // Why: sweep stale Orca entries out of events the managed lane no longer
@@ -294,7 +296,7 @@ async function sweepRealHomeCodexHook(): Promise<RealHomeCodexHookLane> {
         sourcePath: hooksJsonPath,
         command: material.command,
         managedEventLabels: new Set(Object.values(material.eventLabel)),
-        timeoutSec: MANAGED_HOOK_TIMEOUT_SECONDS
+        timeoutSec: CODEX_MANAGED_HOOK_TIMEOUT_SECONDS
       })
     } catch (error) {
       console.warn('[codex-real-home-hooks] failed to drop Orca trust entries:', error)

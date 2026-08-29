@@ -171,7 +171,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       groupIndex: 0,
       handlerIndex: 0,
       command: wrapPosixHookCommand(join(tmpHome, '.orca', 'agent-hooks', 'codex-hook.sh')),
-      timeoutSec: 10
+      timeoutSec: 3
     })
     expect(trustConfig).not.toContain(selfComputed)
     expect(Object.keys(readCodexTrustGrantLedgerHome(managedHome)!.entries)).toHaveLength(8)
@@ -206,7 +206,7 @@ describe('CodexHookService app-server trust grant lane', () => {
       groupIndex: 0,
       handlerIndex: 0,
       command: material.command,
-      timeoutSec: 10,
+      timeoutSec: 3,
       trustedHash
     }
     const trustKey = computeTrustKey(entry)
