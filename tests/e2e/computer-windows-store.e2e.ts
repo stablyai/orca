@@ -43,7 +43,12 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)'
         state.result.snapshot.treeText,
         /^\s*(\d+)\s+button(?:\s|$)/m
       )
-      expect(buttonIndex, state.result.snapshot.treeText).toBeGreaterThanOrEqual(0)
+      // Classic Calculator exposes only pane nodes; clicking one still proves title routing.
+      const clickIndex =
+        buttonIndex >= 0
+          ? buttonIndex
+          : findRoleIndex(state.result.snapshot.treeText, /^\s*(\d+)\s+pane(?:\s|$)/m)
+      expect(clickIndex, state.result.snapshot.treeText).toBeGreaterThanOrEqual(0)
       const clicked = parseJsonOutput<{ result: ComputerSnapshotResult }>(
         (
           await runOrcaCli([
@@ -52,7 +57,7 @@ describe.skipIf(!isWindows || !e2eOptIn)('computer-use Windows e2e (Calculator)'
             '--app',
             'Calculator',
             '--element-index',
-            String(buttonIndex),
+            String(clickIndex),
             '--no-screenshot',
             '--json'
           ])
