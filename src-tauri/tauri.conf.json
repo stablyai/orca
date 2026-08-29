@@ -1,0 +1,40 @@
+{
+  "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
+  "productName": "Orca",
+  "version": "1.4.104",
+  "identifier": "com.stablyai.orca",
+  "build": {
+    "beforeDevCommand": "node config/scripts/run-desktop-dev-backends.mjs",
+    "devUrl": "http://127.0.0.1:5174",
+    "beforeBuildCommand": "node config/scripts/build-desktop-ui.mjs && node config/scripts/build-desktop-host.mjs",
+    "frontendDist": "../out/desktop-ui"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Orca",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 560,
+        "resizable": true,
+        "decorations": false,
+        "transparent": false,
+        "dragDropEnabled": true
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["deb", "appimage", "dmg", "nsis"],
+    "icon": [
+      "icons/icon.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

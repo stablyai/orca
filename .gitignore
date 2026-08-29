@@ -25,6 +25,7 @@ node_modules
 dist/
 dist-electron/
 out/
+src-tauri/target/
 /build/
 release/
 native/**/.build/

@@ -227,6 +227,9 @@ jobs:
 
       - run: pnpm run typecheck
 
+      - name: Verify Tauri desktop project
+        run: pnpm verify:tauri-desktop
+
   git_compatibility:
     name: Git compatibility
     needs: [code_paths]

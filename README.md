@@ -253,6 +253,21 @@ Pair with your desktop app to monitor and steer your agents from your phone.
 
 Want to contribute or run locally? See our [CONTRIBUTING.md](.github/CONTRIBUTING.md) guide.
 
+Desktop development now uses **Tauri v2** (the same stack as [Pake](https://github.com/tw93/Pake): Tauri + the system webview), not Electron:
+
+```bash
+pnpm install
+pnpm dev
+```
+
+That starts three processes:
+
+1. **Desktop host** — Node sidecar on `ws://127.0.0.1:6769` (never 6768 in dev) for PTY/IPC
+2. **Renderer** — Vite on `http://127.0.0.1:5174`
+3. **Tauri window** — system webview loading the renderer
+
+Packaged desktop: `pnpm build:tauri`. Electron remains in-tree only as a migration shim (`pnpm dev:electron`, `pnpm build:desktop:electron`) while remaining main-process features are ported.
+
 <a href="https://github.com/stablyai/orca/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=stablyai/orca" alt="Orca contributors" />
 </a>

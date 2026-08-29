@@ -1,0 +1,21 @@
+{
+  "extends": "./tsconfig.node.json",
+  // Why: pairing still uses main's E2EEChannel, whose graph now needs the node
+  // project's Electron/build-constant types after the main rebase.
+  "include": [
+    "../src/desktop-host/**/*.ts",
+    "../src/shared/desktop-host-protocol.ts",
+    "../src/shared/pairing.ts",
+    "../src/shared/e2ee-crypto.ts",
+    "../src/shared/protocol-version.ts",
+    "../src/main/runtime/rpc/e2ee-channel.ts",
+    "../src/main/runtime/rpc/e2ee-crypto.ts",
+    "../src/types/build-constants.d.ts"
+  ],
+  "exclude": ["../src/desktop-host/**/*.test.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "types": ["node", "electron", "electron-vite/node"]
+  }
+}
