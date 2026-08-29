@@ -84,6 +84,35 @@ describe('updateHostNameAndEndpoint', () => {
     )
   })
 
+  it('persists primary and alternate direct endpoints', async () => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:hosts' ? JSON.stringify(stored) : '[]'
+    )
+
+    await updateHostNameAndEndpoint('host-1', {
+      routing: {
+        endpoints: [
+          { id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.10:6768' },
+          { id: 'direct-alternate-1', kind: 'tailscale', url: 'ws://100.64.0.5:6768' }
+        ]
+      }
+    })
+
+    expect(AsyncStorage.setItem).toHaveBeenCalledWith(
+      'orca:mobile-relay:host-overlays:v2',
+      JSON.stringify([
+        {
+          v: 2,
+          hostId: 'host-1',
+          endpoints: [
+            { id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.10:6768' },
+            { id: 'direct-alternate-1', kind: 'tailscale', url: 'ws://100.64.0.5:6768' }
+          ]
+        }
+      ])
+    )
+  })
+
   it('throws and writes nothing when the host is missing', async () => {
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('[]')
 

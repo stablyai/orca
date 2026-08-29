@@ -70,7 +70,7 @@ async function renderEditHostRoute(): Promise<ReactTestRenderer> {
 
 function setFieldValue(
   renderer: ReactTestRenderer,
-  accessibilityLabel: 'Name' | 'Address',
+  accessibilityLabel: 'Name' | 'Address' | 'Alternate address',
   value: string
 ): void {
   const input = renderer.root
@@ -137,7 +137,7 @@ describe('edit host handleSave', () => {
     setFieldValue(renderer, 'Address', '  wss://%64esk.example.com:443  ')
     setFieldValue(renderer, 'Name', 'Home Desk')
 
-    expect(findText(renderer, `Connects to ${storedEndpoint}`)).toBe(true)
+    expect(findText(renderer, `Primary: ${storedEndpoint}`)).toBe(true)
     await pressSave(renderer)
 
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
@@ -155,7 +155,10 @@ describe('edit host handleSave', () => {
     await pressSave(renderer)
 
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
-      endpoint: 'ws://192.168.1.20:6768'
+      endpoint: 'ws://192.168.1.20:6768',
+      routing: {
+        endpoints: [{ id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.20:6768' }]
+      }
     })
     expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
     expect(dependencies.back).toHaveBeenCalledTimes(1)
@@ -172,10 +175,46 @@ describe('edit host handleSave', () => {
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledTimes(1)
     expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
       name: 'Home Desk',
-      endpoint: 'ws://192.168.1.20:6768'
+      endpoint: 'ws://192.168.1.20:6768',
+      routing: {
+        endpoints: [{ id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.20:6768' }]
+      }
     })
     expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
     expect(dependencies.back).toHaveBeenCalledTimes(1)
+
+    act(() => renderer.unmount())
+  })
+
+  it('persists LAN and Tailscale addresses with existing relay routing', async () => {
+    dependencies.loadHosts.mockResolvedValueOnce([
+      {
+        ...HOST_FIXTURE,
+        relayHostId: 'relay-host-id-1',
+        relay: { relayHostId: 'relay-host-id-1' },
+        endpoints: [{ id: 'relay-primary', kind: 'relay', url: 'wss://relay.example' }]
+      }
+    ])
+    const renderer = await renderEditHostRoute()
+    setFieldValue(renderer, 'Alternate address', '100.86.153.122:6768')
+    await pressSave(renderer)
+
+    expect(dependencies.updateHostNameAndEndpoint).toHaveBeenCalledWith('host-1', {
+      routing: {
+        endpoints: [
+          { id: 'direct-primary', kind: 'lan', url: 'ws://192.168.1.10:6768' },
+          {
+            id: 'direct-alternate-1',
+            kind: 'tailscale',
+            url: 'ws://100.86.153.122:6768'
+          },
+          { id: 'relay-primary', kind: 'relay', url: 'wss://relay.example' }
+        ],
+        relayHostId: 'relay-host-id-1',
+        relay: { relayHostId: 'relay-host-id-1' }
+      }
+    })
+    expect(dependencies.forceReconnectHost).toHaveBeenCalledWith('host-1')
 
     act(() => renderer.unmount())
   })

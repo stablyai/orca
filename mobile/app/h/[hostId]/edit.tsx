@@ -13,10 +13,15 @@ import {
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useLocalSearchParams, useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
+import { HostAddressFields } from '../../../src/components/HostAddressFields'
 import { colors, radii, spacing, typography } from '../../../src/theme/mobile-theme'
 import { loadHosts, updateHostNameAndEndpoint } from '../../../src/transport/host-store'
 import { displayHostEndpoint } from '../../../src/transport/host-endpoint'
-import { resolveHostEndpointEdit } from '../../../src/transport/host-endpoint-edit'
+import {
+  resolveHostEndpointEdit,
+  sameHostEndpointAuthority
+} from '../../../src/transport/host-endpoint-edit'
+import { isTailscaleEndpoint } from '../../../../src/shared/remote-runtime-tailscale-hint'
 import { useForceReconnect, usePrimeHosts } from '../../../src/transport/client-context'
 import type { HostProfile } from '../../../src/transport/types'
 
@@ -31,6 +36,7 @@ export default function EditHostScreen() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [name, setName] = useState('')
   const [address, setAddress] = useState('')
+  const [alternateAddress, setAlternateAddress] = useState('')
   const [saveError, setSaveError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   // Why: setSaving is async, so a second trigger before the re-render could
@@ -53,6 +59,10 @@ export default function EditHostScreen() {
       setHost(found)
       setName(found.name)
       setAddress(displayHostEndpoint(found.endpoint))
+      const alternate = found.endpoints?.find(
+        ({ kind, url }) => kind !== 'relay' && !sameHostEndpointAuthority(url, found.endpoint)
+      )
+      setAlternateAddress(alternate ? displayHostEndpoint(alternate.url) : '')
       setLoadError(null)
     } catch (err) {
       setLoadError(err instanceof Error ? err.message : 'Failed to load host.')
@@ -68,16 +78,46 @@ export default function EditHostScreen() {
     () => (host ? resolveHostEndpointEdit(host.endpoint, address) : null),
     [address, host]
   )
+  const storedAlternateEndpoint = useMemo(
+    () =>
+      host?.endpoints?.find(
+        ({ kind, url }) => kind !== 'relay' && !sameHostEndpointAuthority(url, host.endpoint)
+      )?.url,
+    [host]
+  )
+  const alternateEndpointEdit = useMemo(() => {
+    if (!host || !alternateAddress.trim()) {
+      return null
+    }
+    return resolveHostEndpointEdit(storedAlternateEndpoint ?? host.endpoint, alternateAddress)
+  }, [alternateAddress, host, storedAlternateEndpoint])
 
   const nameTrimmed = name.trim()
   const nameChanged = host != null && nameTrimmed.length > 0 && nameTrimmed !== host.name
   const endpointChanged = endpointEdit?.kind === 'changed'
+  const alternateEndpoint =
+    alternateEndpointEdit && alternateEndpointEdit.kind !== 'invalid'
+      ? alternateEndpointEdit.endpoint
+      : null
+  const alternateChanged =
+    (storedAlternateEndpoint == null && alternateEndpoint != null) ||
+    (storedAlternateEndpoint != null &&
+      (alternateEndpoint == null ||
+        !sameHostEndpointAuthority(storedAlternateEndpoint, alternateEndpoint)))
+  const duplicateAddresses =
+    endpointEdit != null &&
+    endpointEdit.kind !== 'invalid' &&
+    alternateEndpoint != null &&
+    sameHostEndpointAuthority(endpointEdit.endpoint, alternateEndpoint)
+  const addressesChanged = endpointChanged || alternateChanged
   const canSave =
     host != null &&
     endpointEdit != null &&
     nameTrimmed.length > 0 &&
     endpointEdit.kind !== 'invalid' &&
-    (nameChanged || endpointChanged) &&
+    alternateEndpointEdit?.kind !== 'invalid' &&
+    !duplicateAddresses &&
+    (nameChanged || addressesChanged) &&
     !saving
 
   async function handleSave() {
@@ -93,13 +133,43 @@ export default function EditHostScreen() {
       setSaveError(endpointEdit.error)
       return
     }
+    if (alternateEndpointEdit?.kind === 'invalid') {
+      setSaveError(alternateEndpointEdit.error)
+      return
+    }
+    if (duplicateAddresses) {
+      setSaveError('Use a different alternate address.')
+      return
+    }
 
     const willRename = nextName !== host.name
     const nextEndpoint = endpointEdit.kind === 'changed' ? endpointEdit.endpoint : undefined
-    if (!willRename && nextEndpoint === undefined) {
+    if (!willRename && !addressesChanged) {
       router.back()
       return
     }
+    const resolvedPrimaryEndpoint = nextEndpoint ?? host.endpoint
+    const directEndpoints = [
+      {
+        id: 'direct-primary',
+        kind: isTailscaleEndpoint(resolvedPrimaryEndpoint)
+          ? ('tailscale' as const)
+          : ('lan' as const),
+        url: resolvedPrimaryEndpoint
+      },
+      ...(alternateEndpoint
+        ? [
+            {
+              id: 'direct-alternate-1',
+              kind: isTailscaleEndpoint(alternateEndpoint)
+                ? ('tailscale' as const)
+                : ('lan' as const),
+              url: alternateEndpoint
+            }
+          ]
+        : [])
+    ]
+    const relayEndpoints = host.endpoints?.filter(({ kind }) => kind === 'relay') ?? []
 
     savingRef.current = true
     setSaving(true)
@@ -110,7 +180,16 @@ export default function EditHostScreen() {
       // other, and a host removed mid-edit throws instead of no-oping.
       await updateHostNameAndEndpoint(host.id, {
         ...(willRename ? { name: nextName } : {}),
-        ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {})
+        ...(nextEndpoint !== undefined ? { endpoint: nextEndpoint } : {}),
+        ...(addressesChanged
+          ? {
+              routing: {
+                endpoints: [...directEndpoints, ...relayEndpoints],
+                ...(host.relayHostId ? { relayHostId: host.relayHostId } : {}),
+                ...(host.relay ? { relay: host.relay } : {})
+              }
+            }
+          : {})
       })
     } catch (err) {
       setSaveError(err instanceof Error ? err.message : 'Failed to save host.')
@@ -133,7 +212,7 @@ export default function EditHostScreen() {
     setSaving(false)
     router.back()
 
-    if (nextEndpoint !== undefined) {
+    if (addressesChanged) {
       // Why: reconnect is a follow-on side effect of a save that already
       // committed — its failure or a hang must not be reported as a save
       // failure or block navigating back.
@@ -192,9 +271,8 @@ export default function EditHostScreen() {
             keyboardShouldPersistTaps="handled"
           >
             <Text style={styles.help}>
-              Change the display name or connection address. Address edits only switch where this
-              phone connects — they do not re-pair. Use this when the same desktop is reachable at a
-              different IP (for example home LAN vs Tailscale).
+              Add LAN and Tailscale addresses for the same desktop. Orca uses the first address that
+              connects.
             </Text>
 
             <Text style={styles.label}>Name</Text>
@@ -213,40 +291,24 @@ export default function EditHostScreen() {
               returnKeyType="next"
             />
 
-            <Text style={styles.label}>Address</Text>
-            <TextInput
-              style={styles.input}
-              accessibilityLabel="Address"
-              value={address}
-              onChangeText={(value) => {
+            <HostAddressFields
+              address={address}
+              alternateAddress={alternateAddress}
+              alternateEndpoint={alternateEndpoint}
+              alternateEndpointEdit={alternateEndpointEdit}
+              canSave={canSave}
+              duplicateAddresses={duplicateAddresses}
+              endpointEdit={endpointEdit!}
+              onAddressChange={(value) => {
                 setAddress(value)
                 setSaveError(null)
               }}
-              placeholder="192.168.1.10:6768"
-              placeholderTextColor={colors.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="off"
-              keyboardType="url"
-              returnKeyType="done"
-              onSubmitEditing={() => {
-                if (canSave) {
-                  void handleSave()
-                }
+              onAlternateAddressChange={(value) => {
+                setAlternateAddress(value)
+                setSaveError(null)
               }}
+              onSubmit={() => void handleSave()}
             />
-            <Text style={styles.hint}>
-              Accepts IP, host:port, or ws:// / wss://. Missing port defaults to the current port
-              (or 6768).
-            </Text>
-
-            {endpointEdit == null ? null : endpointEdit.kind !== 'invalid' ? (
-              <Text style={styles.preview} numberOfLines={2}>
-                Connects to {endpointEdit.endpoint}
-              </Text>
-            ) : address.trim().length > 0 ? (
-              <Text style={styles.previewError}>{endpointEdit.error}</Text>
-            ) : null}
 
             {saveError ? <Text style={styles.errorText}>{saveError}</Text> : null}
           </ScrollView>
@@ -327,22 +389,6 @@ const styles = StyleSheet.create({
     fontSize: typography.bodySize,
     paddingHorizontal: spacing.md,
     paddingVertical: Platform.OS === 'ios' ? 12 : 10
-  },
-  hint: {
-    color: colors.textMuted,
-    fontSize: typography.metaSize,
-    lineHeight: 16
-  },
-  preview: {
-    marginTop: spacing.sm,
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: Platform.OS === 'ios' ? 'Menlo' : typography.monoFamily
-  },
-  previewError: {
-    marginTop: spacing.sm,
-    color: colors.statusRed,
-    fontSize: typography.bodySize
   },
   errorText: {
     color: colors.statusRed,

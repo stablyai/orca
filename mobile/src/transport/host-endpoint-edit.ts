@@ -30,9 +30,9 @@ export function resolveHostEndpointEdit(
 
   const normalizedDisplay = normalizeHostEndpoint(displayedEndpoint, options)
   if (
-    sameEndpointAuthority(normalizedInput.endpoint, storedEndpoint) ||
+    sameHostEndpointAuthority(normalizedInput.endpoint, storedEndpoint) ||
     (normalizedDisplay.ok &&
-      sameEndpointAuthority(normalizedInput.endpoint, normalizedDisplay.endpoint))
+      sameHostEndpointAuthority(normalizedInput.endpoint, normalizedDisplay.endpoint))
   ) {
     return { kind: 'unchanged', endpoint: storedEndpoint }
   }
@@ -43,7 +43,7 @@ export function resolveHostEndpointEdit(
   }
 }
 
-function sameEndpointAuthority(left: string, right: string): boolean {
+export function sameHostEndpointAuthority(left: string, right: string): boolean {
   try {
     return new URL(left).origin === new URL(right).origin
   } catch {

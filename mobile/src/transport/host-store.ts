@@ -15,7 +15,9 @@ import {
   loadMobileRelayHostOverlayState,
   removeMobileRelayHostOverlay,
   removeMobileRelayHostOverlays,
-  saveMobileRelayHostOverlay
+  saveHostRouting,
+  saveMobileRelayHostOverlay,
+  type HostRoutingUpdate
 } from './mobile-relay-host-overlay-store'
 import { scheduleOrphanedMobileRelayCleanup } from './mobile-relay-orphan-cleanup'
 import {
@@ -30,6 +32,7 @@ import {
   toStoredHostProfile,
   writeStoredHostProfiles
 } from './host-metadata-store'
+import { updateStoredHostProfile } from './stored-host-profile-update'
 
 async function commitDeviceToken(hostId: string, token: string): Promise<void> {
   markHostCredentialWrite(hostId)
@@ -300,33 +303,27 @@ export async function retryPendingHostCredentialCleanup(): Promise<{
 // Why: single mutation pass commits name + endpoint atomically so a mid-save failure can't persist one without the other.
 export async function updateHostNameAndEndpoint(
   hostId: string,
-  updates: { name?: string; endpoint?: string }
+  updates: { name?: string; endpoint?: string; routing?: HostRoutingUpdate }
 ): Promise<void> {
-  await mutateStoredHosts((hosts) => {
-    const index = hosts.findIndex((host) => host.id === hostId)
-    if (index === -1) {
-      throw new Error('Host not found')
-    }
-    const next = hosts.slice()
-    next[index] = {
-      ...next[index]!,
+  await mutateStoredHosts((hosts) =>
+    updateStoredHostProfile(hosts, hostId, {
       ...(updates.name !== undefined ? { name: updates.name } : {}),
       ...(updates.endpoint !== undefined ? { endpoint: updates.endpoint } : {})
-    }
-    return next
-  })
+    })
+  )
+  if (updates.routing) {
+    await saveHostRouting(hostId, updates.routing)
+    hostListLoads.dropSharedHostListLoad()
+  }
 }
 
 export async function updateLastConnected(hostId: string): Promise<void> {
   try {
     await mutateStoredHosts((hosts) => {
-      const index = hosts.findIndex((h) => h.id === hostId)
-      if (index === -1) {
+      if (!hosts.some(({ id }) => id === hostId)) {
         return hosts
       }
-      const next = hosts.slice()
-      next[index] = { ...next[index]!, lastConnected: Date.now() }
-      return next
+      return updateStoredHostProfile(hosts, hostId, { lastConnected: Date.now() })
     })
   } catch {
     // Why: best-effort timestamp fired with void; swallow so unreadable storage doesn't reject.

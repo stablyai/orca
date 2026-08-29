@@ -4,6 +4,8 @@ import {
   type MobileRelayHostOverlay
 } from './mobile-relay-host-overlay'
 
+export type HostRoutingUpdate = Pick<MobileRelayHostOverlay, 'endpoints' | 'relayHostId' | 'relay'>
+
 const OVERLAY_STORAGE_KEY = 'orca:mobile-relay:host-overlays:v2'
 let overlayMutation: Promise<void> = Promise.resolve()
 
@@ -74,6 +76,10 @@ export async function loadMobileRelayHostOverlayState(
     }
   }
   return { overlays: active, orphanHostIds }
+}
+
+export function saveHostRouting(hostId: string, routing: HostRoutingUpdate): Promise<void> {
+  return saveMobileRelayHostOverlay({ v: 2, hostId, ...routing })
 }
 
 export async function saveMobileRelayHostOverlay(overlay: MobileRelayHostOverlay): Promise<void> {

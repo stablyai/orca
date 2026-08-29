@@ -76,12 +76,16 @@ describe('edit host route accessibility', () => {
     vi.restoreAllMocks()
   })
 
-  it('exposes stable accessible names for both editable fields', async () => {
+  it('exposes stable accessible names for every editable field', async () => {
     const renderer = await renderEditHostRoute()
 
     const inputs = renderer.root.findAllByType('TextInput')
-    expect(inputs).toHaveLength(2)
-    expect(inputs.map((input) => input.props.accessibilityLabel)).toEqual(['Name', 'Address'])
+    expect(inputs).toHaveLength(3)
+    expect(inputs.map((input) => input.props.accessibilityLabel)).toEqual([
+      'Name',
+      'Address',
+      'Alternate address'
+    ])
 
     act(() => renderer.unmount())
   })
