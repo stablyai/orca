@@ -10,6 +10,7 @@ type BranchStartPointActionsInput = Pick<
   | 'lastAutoNoteRef'
   | 'noteRef'
   | 'setBaseBranch'
+  | 'setBaseBranchNamesWorkspace'
   | 'setBranchNameOverride'
   | 'setBranchNameOverridePreservesNameEdits'
   | 'setCompareBaseRef'
@@ -44,6 +45,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
     lastAutoNoteRef,
     noteRef,
     setBaseBranch,
+    setBaseBranchNamesWorkspace,
     setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits,
     setCompareBaseRef,
@@ -91,6 +93,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
     (next: string | undefined): void => {
       smartGitHubPrStartPointSelectionRef.current = null
       setBaseBranch(next)
+      setBaseBranchNamesWorkspace(false)
       setCompareBaseRef(undefined)
       setPushTarget(undefined)
       setBranchNameOverride(undefined)
@@ -105,6 +108,7 @@ export function useBranchStartPointActions(input: BranchStartPointActionsInput) 
     [
       branchAutoNameRef,
       setBaseBranch,
+      setBaseBranchNamesWorkspace,
       setBranchNameOverride,
       setBranchNameOverridePreservesNameEdits,
       setCompareBaseRef,

@@ -140,6 +140,7 @@ export function useComposerSourceState(
     lastAutoNoteRef: target.asyncComposerState.lastAutoNoteRef,
     noteRef: target.asyncComposerState.noteRef,
     setBaseBranch: target.workspaceIdentityState.setBaseBranch,
+    setBaseBranchNamesWorkspace: target.workspaceIdentityState.setBaseBranchNamesWorkspace,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
@@ -220,6 +221,7 @@ export function useComposerSourceState(
     repoId: target.initialTargetState.repoId,
     reuseEligibleBranch: target.workspaceIdentityState.reuseEligibleBranch,
     setBaseBranch: target.workspaceIdentityState.setBaseBranch,
+    setBaseBranchNamesWorkspace: target.workspaceIdentityState.setBaseBranchNamesWorkspace,
     setBranchNameOverride: target.workspaceIdentityState.setBranchNameOverride,
     setBranchNameOverridePreservesNameEdits:
       target.workspaceIdentityState.setBranchNameOverridePreservesNameEdits,
@@ -236,6 +238,7 @@ export function useComposerSourceState(
   })
   const issueSourceActions = useIssueSourceActions({
     baseBranch: target.workspaceIdentityState.baseBranch,
+    baseBranchNamesWorkspace: target.workspaceIdentityState.baseBranchNamesWorkspace,
     branchAutoNameRef: target.asyncComposerState.branchAutoNameRef,
     isProjectGroupTarget: target.runtimeTargetSelection.isProjectGroupTarget,
     lastAutoNameRef: target.asyncComposerState.lastAutoNameRef,

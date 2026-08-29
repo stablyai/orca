@@ -14,6 +14,8 @@ export type ComposerIdentityModel = {
   setLinkedGitLabMR: React.Dispatch<React.SetStateAction<number | null>>
   baseBranch: string | undefined
   setBaseBranch: React.Dispatch<React.SetStateAction<string | undefined>>
+  baseBranchNamesWorkspace: boolean
+  setBaseBranchNamesWorkspace: React.Dispatch<React.SetStateAction<boolean>>
   compareBaseRef: string | undefined
   setCompareBaseRef: React.Dispatch<React.SetStateAction<string | undefined>>
   branchNameOverride: string | undefined

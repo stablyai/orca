@@ -91,6 +91,9 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
   const [baseBranch, setBaseBranch] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.baseBranch : initialBaseBranch
   )
+  // Why: a branch picked to name the workspace shows as a source pill; a base ref chosen in
+  // the composer's own picker must not, or it would hide the name the user typed.
+  const [baseBranchNamesWorkspace, setBaseBranchNamesWorkspace] = useState(true)
 
   const [compareBaseRef, setCompareBaseRef] = useState<string | undefined>(
     persistDraft ? newWorkspaceDraft?.compareBaseRef : undefined
@@ -193,6 +196,8 @@ export function useWorkspaceIdentityState(input: WorkspaceIdentityStateInput) {
     setLinkedGitLabMR,
     baseBranch,
     setBaseBranch,
+    baseBranchNamesWorkspace,
+    setBaseBranchNamesWorkspace,
     compareBaseRef,
     setCompareBaseRef,
     branchNameOverride,
