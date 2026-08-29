@@ -107,6 +107,7 @@ function resolveTerminalWheelCellHeight(terminal: TerminalWheelTarget): number |
   return rect.height / terminal.rows
 }
 
+/** Returns whether a mouse-reporting wheel event should use Orca's multiplier. */
 export function shouldMultiplyTerminalMouseWheel(
   event: WheelEvent,
   terminalElement: HTMLElement | null | undefined
