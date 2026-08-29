@@ -151,8 +151,19 @@ export function useTaskPageSourceAvailability({
   const jiraTaskSourceScopeKey = jiraTaskSourceContext
     ? getTaskSourceCacheScope(jiraTaskSourceContext)
     : providerRuntimeContextKey
+  const voloTaskSourceContext = useMemo(
+    () =>
+      normalizeTaskSourceContext({
+        provider: 'volo',
+        projectId: fallbackTaskSourceProjectId,
+        hostId: accountBackedTaskSourceHostId,
+        providerIdentity: { provider: 'volo' },
+        accountLabel: 'Volo'
+      }),
+    [accountBackedTaskSourceHostId, fallbackTaskSourceProjectId]
+  )
   const accountBackedTaskSourceHostAvailability = useMemo<TaskSourceHostAvailability[]>(() => {
-    if (taskSource !== 'linear' && taskSource !== 'jira') {
+    if (taskSource !== 'linear' && taskSource !== 'jira' && taskSource !== 'volo') {
       return []
     }
     const host = hostRegistryById.get(accountBackedTaskSourceHostId)
@@ -168,6 +179,7 @@ export function useTaskPageSourceAvailability({
     linearListInvalidationVersionForSource,
     jiraTaskSourceContext,
     jiraTaskSourceScopeKey,
+    voloTaskSourceContext,
     accountBackedTaskSourceHostAvailability
   }
 }

@@ -9,11 +9,12 @@ import {
 } from '../../../../shared/task-providers'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { VoloIcon } from '@/components/icons/VoloIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
-import { CodeHostSetupSteps, JiraSetupSteps } from './TaskSourceSimpleSetup'
+import { CodeHostSetupSteps, JiraSetupSteps, VoloSetupSteps } from './TaskSourceSimpleSetup'
 import { TaskSourceLinearSetup } from './TaskSourceLinearSetup'
 import { TaskSourceProviderCard } from './TaskSourceProviderCard'
 import {
@@ -22,7 +23,8 @@ import {
 } from './task-source-setup-state'
 import {
   JIRA_INTEGRATION_SECTION_ID,
-  LINEAR_INTEGRATION_SECTION_ID
+  LINEAR_INTEGRATION_SECTION_ID,
+  VOLO_INTEGRATION_SECTION_ID
 } from './task-provider-integration-section-ids'
 import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
@@ -89,6 +91,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  volo: {
+    get label() {
+      return translate('auto.components.settings.TasksPane.voloLabel', 'Volo')
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.voloDescription',
+        'Connect Volo and show boards and tasks in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <VoloIcon className={className} />
   }
 }
 
@@ -97,6 +111,7 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const checkVoloConnection = useAppStore((s) => s.checkVoloConnection)
   const refreshPreflightStatus = useAppStore((s) => s.refreshPreflightStatus)
   const readinessByProvider = useTaskSourceProviderReadiness(visibleProviders)
   useIntegrationProviderStatusRefresh()
@@ -226,6 +241,16 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'volo' ? (
+                  <VoloSetupSteps
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider('volo')}
+                    onConnected={() => void checkVoloConnection()}
+                    onOpenIntegrations={() => openIntegrations(VOLO_INTEGRATION_SECTION_ID)}
                   />
                 ) : (
                   <CodeHostSetupSteps

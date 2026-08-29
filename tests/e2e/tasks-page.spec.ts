@@ -22,7 +22,8 @@ const TASK_SOURCE_BY_LABEL: Record<string, string> = {
   GitHub: 'github',
   GitLab: 'gitlab',
   Linear: 'linear',
-  Jira: 'jira'
+  Jira: 'jira',
+  Volo: 'volo'
 }
 
 async function openTasksPage(page: Parameters<typeof getStoreState>[0]): Promise<void> {

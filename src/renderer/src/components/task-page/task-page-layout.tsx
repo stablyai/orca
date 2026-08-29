@@ -23,6 +23,10 @@ import {
   type TaskPageJiraFiltersProps
 } from '@/components/task-page/chrome/task-page-jira-filters'
 import {
+  TaskPageVoloFilters,
+  type TaskPageVoloFiltersProps
+} from '@/components/task-page/chrome/task-page-volo-filters'
+import {
   TaskPageGitlabFilters,
   type TaskPageGitlabFiltersProps
 } from '@/components/task-page/chrome/task-page-gitlab-filters'
@@ -44,6 +48,10 @@ import {
   type JiraIssueListHostProps
 } from '@/components/task-page/jira/jira-issue-list-host'
 import {
+  VoloTaskListHost,
+  type VoloTaskListHostProps
+} from '@/components/task-page/volo/volo-task-list-host'
+import {
   NewGithubIssueDialog,
   type NewGithubIssueDialogProps
 } from '@/components/task-page/dialogs/new-github-issue-dialog'
@@ -59,6 +67,10 @@ import {
   NewJiraIssueDialog,
   type NewJiraIssueDialogProps
 } from '@/components/task-page/dialogs/new-jira-issue-dialog'
+import {
+  NewVoloTaskDialog,
+  type NewVoloTaskDialogProps
+} from '@/components/task-page/dialogs/new-volo-task-dialog'
 import {
   TaskPageConnectDialogs,
   type TaskPageConnectDialogsProps
@@ -82,6 +94,8 @@ export function TaskPageLayout({
   linearFilters,
   jiraConnected,
   jiraFilters,
+  voloConnected,
+  voloFilters,
   gitlabFilters,
   githubDetail,
   repoSelection,
@@ -92,11 +106,13 @@ export function TaskPageLayout({
   primaryRepo,
   gitlabList,
   jiraList,
+  voloList,
   linearViews,
   newGithubIssue,
   newLinearProject,
   newLinearIssue,
   newJiraIssue,
+  newVoloTask,
   connectDialogs
 }: {
   taskPageListChromeHidden: boolean
@@ -109,6 +125,8 @@ export function TaskPageLayout({
   linearFilters: TaskPageLinearFiltersProps
   jiraConnected: boolean
   jiraFilters: TaskPageJiraFiltersProps
+  voloConnected: boolean
+  voloFilters: TaskPageVoloFiltersProps
   gitlabFilters: TaskPageGitlabFiltersProps
   githubDetail: GithubDetailHostProps | null
   repoSelection: ReadonlySet<string>
@@ -119,11 +137,13 @@ export function TaskPageLayout({
   primaryRepo: Repo | null
   gitlabList: GitlabWorkItemListProps
   jiraList: JiraIssueListHostProps
+  voloList: VoloTaskListHostProps
   linearViews: LinearViewsHostProps
   newGithubIssue: NewGithubIssueDialogProps
   newLinearProject: NewLinearProjectDialogProps
   newLinearIssue: NewLinearIssueDialogProps
   newJiraIssue: NewJiraIssueDialogProps
+  newVoloTask: NewVoloTaskDialogProps
   connectDialogs: TaskPageConnectDialogsProps
 }): React.JSX.Element {
   return (
@@ -144,6 +164,8 @@ export function TaskPageLayout({
                   <TaskPageLinearFilters {...linearFilters} />
                 ) : taskSource === 'jira' && jiraConnected ? (
                   <TaskPageJiraFilters {...jiraFilters} />
+                ) : taskSource === 'volo' && voloConnected ? (
+                  <TaskPageVoloFilters {...voloFilters} />
                 ) : taskSource === 'gitlab' ? (
                   <TaskPageGitlabFilters {...gitlabFilters} />
                 ) : null}
@@ -168,6 +190,8 @@ export function TaskPageLayout({
             <GitlabWorkItemList {...gitlabList} />
           ) : taskSource === 'jira' ? (
             <JiraIssueListHost {...jiraList} />
+          ) : taskSource === 'volo' ? (
+            <VoloTaskListHost {...voloList} />
           ) : taskSource === 'linear' ? (
             <LinearViewsHost {...linearViews} />
           ) : null}
@@ -177,6 +201,7 @@ export function TaskPageLayout({
       <NewLinearProjectDialog {...newLinearProject} />
       <NewLinearIssueDialog {...newLinearIssue} />
       <NewJiraIssueDialog {...newJiraIssue} />
+      <NewVoloTaskDialog {...newVoloTask} />
       <TaskPageConnectDialogs {...connectDialogs} />
     </div>
   )

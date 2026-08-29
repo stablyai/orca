@@ -242,6 +242,16 @@ describe('feature interaction writer boundaries', () => {
     }
   })
 
+  it('records Volo provider-depth for workspace use', () => {
+    expect(
+      sourceBetween(
+        componentSource('task-page/hooks/use-task-page-volo-actions.ts'),
+        'const handleUseVoloItem',
+        'return { handleUseVoloItem }'
+      )
+    ).toContain("recordFeatureInteraction('volo-tasks')")
+  })
+
   it('records Jira provider-depth for workspace use', () => {
     const jiraWriter = "recordFeatureInteraction('jira-tasks')"
 

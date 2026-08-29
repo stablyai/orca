@@ -45,7 +45,7 @@ vi.mock('@/hooks/useInstalledAgentSkills', () => ({
   useInstalledAgentSkillNames: () => mocks.skill
 }))
 
-const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira']
+const ALL_PROVIDERS: readonly TaskProvider[] = ['github', 'gitlab', 'linear', 'jira', 'volo']
 
 let root: Root | null = null
 let container: HTMLDivElement | null = null
@@ -83,6 +83,9 @@ beforeEach(() => {
     jiraStatus: { connected: true },
     jiraStatusChecked: true,
     jiraStatusContextKey: 'local',
+    voloStatus: { connected: true },
+    voloStatusChecked: true,
+    voloStatusContextKey: 'local',
     linearStatusChecked: true,
     linearStatusContextKey: 'local',
     linearConnected: true

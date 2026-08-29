@@ -77,11 +77,13 @@ import type { TaskPageGithubModeBarProps } from '@/components/task-page/chrome/t
 import type { TaskPageGithubItemFiltersProps } from '@/components/task-page/chrome/task-page-github-item-filters'
 import type { TaskPageLinearFiltersProps } from '@/components/task-page/chrome/task-page-linear-filters'
 import type { TaskPageJiraFiltersProps } from '@/components/task-page/chrome/task-page-jira-filters'
+import type { TaskPageVoloFiltersProps } from '@/components/task-page/chrome/task-page-volo-filters'
 import type { TaskPageGitlabFiltersProps } from '@/components/task-page/chrome/task-page-gitlab-filters'
 import type { GithubDetailHostProps } from '@/components/task-page/github/github-detail-host'
 import type { GithubWorkItemTableProps } from '@/components/task-page/github/github-work-item-table'
 import type { GitlabWorkItemListProps } from '@/components/task-page/gitlab/gitlab-work-item-list'
 import type { JiraIssueListHostProps } from '@/components/task-page/jira/jira-issue-list-host'
+import type { VoloTaskListHostProps } from '@/components/task-page/volo/volo-task-list-host'
 import type { NewGithubIssueDialogProps } from '@/components/task-page/dialogs/new-github-issue-dialog'
 import type { NewLinearProjectDialogProps } from '@/components/task-page/dialogs/new-linear-project-dialog'
 import type { NewLinearIssueDialogProps } from '@/components/task-page/dialogs/new-linear-issue-dialog'
@@ -101,6 +103,7 @@ import { useTaskPageGitLabListState } from '@/components/task-page/hooks/use-tas
 import { useTaskPageGitHubListState } from '@/components/task-page/hooks/use-task-page-github-list-state'
 import { useTaskPageLinearListState } from '@/components/task-page/hooks/use-task-page-linear-list-state'
 import { useTaskPageJiraListState } from '@/components/task-page/hooks/use-task-page-jira-list-state'
+import { useTaskPageVoloListState } from '@/components/task-page/hooks/use-task-page-volo-list-state'
 import { useTaskPageGitLabFetch } from '@/components/task-page/hooks/use-task-page-gitlab-fetch'
 import { useTaskPageGitHubNewIssueState } from '@/components/task-page/hooks/use-task-page-github-new-issue-state'
 import { useTaskPageSessionResume } from '@/components/task-page/hooks/use-task-page-session-resume'
@@ -117,6 +120,8 @@ import { useTaskPageLinearIssueWindow } from '@/components/task-page/hooks/use-t
 import { useTaskPageLinearActions } from '@/components/task-page/hooks/use-task-page-linear-actions'
 import { useTaskPageJiraFetch } from '@/components/task-page/hooks/use-task-page-jira-fetch'
 import { useTaskPageJiraActions } from '@/components/task-page/hooks/use-task-page-jira-actions'
+import { useTaskPageVoloFetch } from '@/components/task-page/hooks/use-task-page-volo-fetch'
+import { useTaskPageVoloActions } from '@/components/task-page/hooks/use-task-page-volo-actions'
 import { useTaskPageGitHubFilteredItems } from '@/components/task-page/hooks/use-task-page-github-filtered-items'
 import { useTaskPageGitHubPageLoader } from '@/components/task-page/hooks/use-task-page-github-page-loader'
 import { useTaskPageCreateLinearSubmits } from '@/components/task-page/hooks/use-task-page-create-linear-submits'
@@ -188,13 +193,16 @@ export default function TaskPage(): React.JSX.Element {
     searchJiraIssues,
     listJiraIssues,
     checkJiraConnection,
+    checkVoloConnection,
     providerRuntimeContextKey,
     providerRuntimeContextKeyRef,
     preflightStatusCurrent,
     linearStatusReady,
     jiraStatusReady,
+    voloStatusReady,
     linearConnected,
     jiraConnected,
+    voloConnected,
     submitShortcutLabel,
     eligibleRepos
   } = useTaskPageStoreBindings()
@@ -227,6 +235,7 @@ export default function TaskPage(): React.JSX.Element {
     githubModeButtons,
     linearModeOptions,
     jiraPresets,
+    voloPresets,
     gitLabIssueFilters,
     gitLabMRFilters,
     linearViewOptions,
@@ -273,6 +282,7 @@ export default function TaskPage(): React.JSX.Element {
     linearListInvalidationVersionForSource,
     jiraTaskSourceContext,
     jiraTaskSourceScopeKey,
+    voloTaskSourceContext,
     accountBackedTaskSourceHostAvailability
   } = useTaskPageSourceAvailability({
     taskSource,
@@ -1017,6 +1027,33 @@ export default function TaskPage(): React.JSX.Element {
     settings
   })
 
+  const {
+    voloBoards,
+    setVoloBoards,
+    voloBoardsLoading,
+    setVoloBoardsLoading,
+    selectedVoloBoardId,
+    setSelectedVoloBoardId,
+    selectedVoloBoard,
+    voloTasks,
+    setVoloTasks,
+    voloLoading,
+    setVoloLoading,
+    voloError,
+    setVoloError,
+    voloSearchInput,
+    setVoloSearchInput,
+    activeVoloPreset,
+    setActiveVoloPreset,
+    voloRefreshNonce,
+    setVoloRefreshNonce,
+    selectedVoloTask,
+    setSelectedVoloTask,
+    displayedVoloTasks,
+    newVoloTaskOpen,
+    setNewVoloTaskOpen
+  } = useTaskPageVoloListState()
+
   useTaskPageSessionResume({
     persistedUIReady,
     settings,
@@ -1316,6 +1353,7 @@ export default function TaskPage(): React.JSX.Element {
   })
 
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
+  const [voloConnectOpen, setVoloConnectOpen] = useState(false)
   useContextualTour(
     'tasks',
     !dialogWorkItem &&
@@ -1326,6 +1364,7 @@ export default function TaskPage(): React.JSX.Element {
       !newLinearIssueOpen &&
       !linearConnectOpen &&
       !jiraConnectOpen &&
+      !voloConnectOpen &&
       activeModal === 'none',
     'tasks_open'
   )
@@ -1963,12 +2002,17 @@ export default function TaskPage(): React.JSX.Element {
     if (!jiraStatusReady) {
       void checkJiraConnection()
     }
+    if (!voloStatusReady) {
+      void checkVoloConnection()
+    }
   }, [
     checkJiraConnection,
+    checkVoloConnection,
     checkLinearConnection,
     expectedPreflightContextKey,
     jiraStatusContextKey,
     jiraStatusReady,
+    voloStatusReady,
     linearStatusContextKey,
     linearStatusReady,
     providerRuntimeContextKey,
@@ -2571,11 +2615,34 @@ export default function TaskPage(): React.JSX.Element {
     openModal
   })
 
+  const { moveSelectedVoloTask } = useTaskPageVoloFetch({
+    taskSource,
+    voloConnected,
+    settings,
+    voloTaskSourceContext,
+    selectedVoloBoardId,
+    setSelectedVoloBoardId,
+    setVoloBoards,
+    setVoloBoardsLoading,
+    setVoloTasks,
+    setVoloLoading,
+    setVoloError,
+    activeVoloPreset,
+    voloRefreshNonce,
+    setSelectedVoloTask
+  })
+
+  const { handleUseVoloItem } = useTaskPageVoloActions({
+    voloTaskSourceContext,
+    openModal
+  })
+
   const taskPageListChromeHidden = shouldHideTaskPageListChrome({
     taskSource,
     hasGitHubDetail: Boolean(dialogWorkItem),
     hasGitLabDetail: Boolean(gitlabDialogItem),
     hasJiraDetail: Boolean(selectedJiraIssue),
+    hasVoloDetail: Boolean(selectedVoloTask),
     hasLinearIssueDetail: Boolean(selectedLinearIssue),
     hasLinearProjectContext: Boolean(selectedLinearProject),
     hasLinearViewContext: Boolean(selectedLinearCustomView)
@@ -2727,6 +2794,20 @@ export default function TaskPage(): React.JSX.Element {
     jiraProjectsLoading,
     jiraLoading
   }
+  const voloFilters: TaskPageVoloFiltersProps = {
+    voloPresets,
+    voloSearchInput,
+    activeVoloPreset,
+    setVoloSearchInput,
+    setActiveVoloPreset,
+    setVoloRefreshNonce,
+    voloBoards,
+    selectedVoloBoardId,
+    setSelectedVoloBoardId,
+    setNewVoloTaskOpen,
+    voloBoardsLoading,
+    voloLoading
+  }
   const gitlabFilters: TaskPageGitlabFiltersProps = {
     gitlabView,
     setGitlabView,
@@ -2838,6 +2919,34 @@ export default function TaskPage(): React.JSX.Element {
     displayedJiraStatusOrder,
     closeTaskDetailPage,
     jiraDetailSourceContext
+  }
+  const voloList: VoloTaskListHostProps = {
+    voloStatusReady,
+    voloConnected,
+    setVoloConnectOpen,
+    hideTaskSource,
+    voloLoading,
+    voloError,
+    voloTasks,
+    displayedVoloTasks,
+    voloSearchInput,
+    selectedVoloTask,
+    selectedVoloBoard,
+    openVoloDetailPage: (task) => setSelectedVoloTask(task),
+    handleUseVoloItem,
+    closeTaskDetailPage: () => {
+      setSelectedVoloTask(null)
+      closeTaskDetailPage()
+    },
+    voloDetailSourceContext: voloTaskSourceContext,
+    onMoveVoloTask: async (task, columnId) => {
+      try {
+        await moveSelectedVoloTask(task, columnId)
+        setVoloRefreshNonce((n) => n + 1)
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : 'Could not move the Volo task.')
+      }
+    }
   }
   const linearViews: LinearViewsHostProps = {
     selectedLinearIssue,
@@ -3091,7 +3200,9 @@ export default function TaskPage(): React.JSX.Element {
     selectedLinearWorkspace,
     handleLinearAccessConnected,
     jiraConnectOpen,
-    setJiraConnectOpen
+    setJiraConnectOpen,
+    voloConnectOpen,
+    setVoloConnectOpen
   }
 
   return (
@@ -3106,6 +3217,8 @@ export default function TaskPage(): React.JSX.Element {
       linearFilters={linearFilters}
       jiraConnected={jiraConnected}
       jiraFilters={jiraFilters}
+      voloConnected={voloConnected}
+      voloFilters={voloFilters}
       gitlabFilters={gitlabFilters}
       githubDetail={githubDetail}
       repoSelection={repoSelection}
@@ -3116,11 +3229,19 @@ export default function TaskPage(): React.JSX.Element {
       primaryRepo={primaryRepo}
       gitlabList={gitlabList}
       jiraList={jiraList}
+      voloList={voloList}
       linearViews={linearViews}
       newGithubIssue={newGithubIssue}
       newLinearProject={newLinearProject}
       newLinearIssue={newLinearIssue}
       newJiraIssue={newJiraIssue}
+      newVoloTask={{
+        open: newVoloTaskOpen,
+        onOpenChange: setNewVoloTaskOpen,
+        board: selectedVoloBoard,
+        sourceContext: voloTaskSourceContext,
+        onCreated: () => setVoloRefreshNonce((n) => n + 1)
+      }}
       connectDialogs={connectDialogs}
     />
   )

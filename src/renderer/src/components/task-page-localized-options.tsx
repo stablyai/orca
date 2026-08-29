@@ -2,6 +2,7 @@ import React from 'react'
 import { Github, Gitlab, LayoutGrid, List } from 'lucide-react'
 
 import { JiraIcon } from '@/components/icons/JiraIcon'
+import { VoloIcon } from '@/components/icons/VoloIcon'
 import { createLocalizedCatalog } from '@/i18n/localized-catalog'
 import { translate } from '@/i18n/i18n'
 import {
@@ -38,6 +39,8 @@ export type SourceOption = {
 
 export type JiraPresetId = 'assigned' | 'reported' | 'all' | 'done'
 export type JiraPreset = { id: JiraPresetId; label: string }
+export type VoloPresetId = 'assigned' | 'all' | 'done'
+export type VoloPreset = { id: VoloPresetId; label: string }
 
 export type GitHubModeButton = { id: GitHubTaskKind | 'project'; label: string }
 
@@ -131,12 +134,23 @@ export const getSourceOptions = createLocalizedCatalog((): SourceOption[] => [
     id: 'jira',
     label: translate('auto.components.TaskPage.9cd11ba218', 'Jira'),
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  {
+    id: 'volo',
+    label: translate('auto.components.TaskPage.voloSource', 'Volo'),
+    Icon: ({ className }) => <VoloIcon className={className} />
   }
 ])
 
 export const getJiraPresets = createLocalizedCatalog((): JiraPreset[] => [
   { id: 'assigned', label: translate('auto.components.TaskPage.1301d376f1', 'Assigned') },
   { id: 'reported', label: translate('auto.components.TaskPage.bd9965df51', 'Reported') },
+  { id: 'all', label: translate('auto.components.TaskPage.4b6e40e42c', 'All Open') },
+  { id: 'done', label: translate('auto.components.TaskPage.18451e99df', 'Done') }
+])
+
+export const getVoloPresets = createLocalizedCatalog((): VoloPreset[] => [
+  { id: 'assigned', label: translate('auto.components.TaskPage.1301d376f1', 'Assigned') },
   { id: 'all', label: translate('auto.components.TaskPage.4b6e40e42c', 'All Open') },
   { id: 'done', label: translate('auto.components.TaskPage.18451e99df', 'Done') }
 ])

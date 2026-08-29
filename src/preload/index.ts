@@ -2109,6 +2109,59 @@ const api = {
     }): Promise<JiraProjectStatusOrder> => ipcRenderer.invoke('jira:getProjectStatusOrder', args)
   },
 
+  volo: {
+    connect: (args: {
+      apiUrl?: string
+      apiToken: string
+      webUrl?: string
+    }): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('volo:connect', args),
+    connectFromSavedCredentials: (): Promise<
+      { ok: true; viewer: unknown } | { ok: false; error: string }
+    > => ipcRenderer.invoke('volo:connectFromSavedCredentials'),
+    loginWithGoogle: (args?: {
+      apiUrl?: string
+    }): Promise<
+      { ok: true; viewer: unknown; apiToken: string; apiUrl: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('volo:loginWithGoogle', args),
+    disconnect: (): Promise<{ ok: true }> => ipcRenderer.invoke('volo:disconnect'),
+    status: (): Promise<unknown> => ipcRenderer.invoke('volo:status'),
+    readStatus: (): Promise<unknown> => ipcRenderer.invoke('volo:readStatus'),
+    testConnection: (): Promise<{ ok: true; viewer: unknown } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('volo:testConnection'),
+    listBoards: (): Promise<unknown[]> => ipcRenderer.invoke('volo:listBoards'),
+    listMembers: (args: { boardId: string }): Promise<unknown[]> =>
+      ipcRenderer.invoke('volo:listMembers', args),
+    listTasks: (args: {
+      boardId: string
+      filter?: 'assigned' | 'all' | 'done'
+    }): Promise<unknown[]> => ipcRenderer.invoke('volo:listTasks', args),
+    getTask: (args: { taskCode: string }): Promise<unknown> =>
+      ipcRenderer.invoke('volo:getTask', args),
+    createTask: (args: {
+      boardId: string
+      title: string
+      columnId: string
+      description?: string
+      priority?: string
+      assigneeId?: string | null
+    }): Promise<
+      { ok: true; id: string; taskCode: string; url: string } | { ok: false; error: string }
+    > => ipcRenderer.invoke('volo:createTask', args),
+    updateTask: (args: {
+      boardId: string
+      taskId: string
+      updates: unknown
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('volo:updateTask', args),
+    moveTask: (args: {
+      boardId: string
+      taskId: string
+      columnId: string
+    }): Promise<{ ok: true } | { ok: false; error: string }> =>
+      ipcRenderer.invoke('volo:moveTask', args)
+  },
+
   starNag: {
     onShow: (
       callback: (payload?: { mode?: 'gh' | 'web'; surface?: 'card' | 'toast' }) => void

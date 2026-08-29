@@ -18,6 +18,7 @@ export function areWorkspaceLinkedItemsEqual(
     a.url === b.url &&
     (a.linearIdentifier ?? null) === (b.linearIdentifier ?? null) &&
     (a.jiraIdentifier ?? null) === (b.jiraIdentifier ?? null) &&
+    (a.voloIdentifier ?? null) === (b.voloIdentifier ?? null) &&
     (a.repoId ?? null) === (b.repoId ?? null)
   )
 }
@@ -31,7 +32,8 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
     raw.provider !== 'github' &&
     raw.provider !== 'gitlab' &&
     raw.provider !== 'linear' &&
-    raw.provider !== 'jira'
+    raw.provider !== 'jira' &&
+    raw.provider !== 'volo'
   ) {
     return null
   }
@@ -59,6 +61,9 @@ export function normalizeWorkspaceLinkedItem(value: unknown): WorkspaceLinkedIte
       : {}),
     ...(typeof raw.jiraIdentifier === 'string' && raw.jiraIdentifier.trim().length > 0
       ? { jiraIdentifier: raw.jiraIdentifier.trim() }
+      : {}),
+    ...(typeof raw.voloIdentifier === 'string' && raw.voloIdentifier.trim().length > 0
+      ? { voloIdentifier: raw.voloIdentifier.trim() }
       : {}),
     ...(typeof raw.repoId === 'string' && raw.repoId.trim().length > 0
       ? { repoId: raw.repoId.trim() }

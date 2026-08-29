@@ -7,6 +7,7 @@ import {
   getGitLabIssueFilters,
   getGitLabMRFilters,
   getJiraPresets,
+  getVoloPresets,
   getLinearDisplayProperties,
   getLinearGroupOptions,
   getLinearModeOptions,
@@ -67,6 +68,7 @@ export function useTaskPageVisibleSources({
   const githubModeButtons = getGitHubModeButtons()
   const linearModeOptions = getLinearModeOptions()
   const jiraPresets = getJiraPresets()
+  const voloPresets = getVoloPresets()
   const gitLabIssueFilters = getGitLabIssueFilters()
   const gitLabMRFilters = getGitLabMRFilters()
   const linearViewOptions = getLinearViewOptions()
@@ -118,6 +120,7 @@ export function useTaskPageVisibleSources({
     githubModeButtons,
     linearModeOptions,
     jiraPresets,
+    voloPresets,
     gitLabIssueFilters,
     gitLabMRFilters,
     linearViewOptions,

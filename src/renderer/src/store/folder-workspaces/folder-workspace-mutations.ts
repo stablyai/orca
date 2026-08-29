@@ -67,12 +67,14 @@ export function createFolderWorkspaceMutationActions(
         if (
           target.kind === 'environment' &&
           (args.linkedTask?.provider === 'jira' ||
-            args.linkedTaskSourceContext?.provider === 'jira')
+            args.linkedTask?.provider === 'volo' ||
+            args.linkedTaskSourceContext?.provider === 'jira' ||
+            args.linkedTaskSourceContext?.provider === 'volo')
         ) {
           await assertRuntimeEnvironmentCapability(
             target.environmentId,
             WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-            'Update the remote runtime to link Jira'
+            'Update the remote runtime to link Jira or Volo'
           )
         }
         const workspace =
@@ -127,12 +129,14 @@ export function createFolderWorkspaceMutationActions(
       if (
         target.kind === 'environment' &&
         (updates.linkedTask?.provider === 'jira' ||
-          updates.linkedTaskSourceContext?.provider === 'jira')
+          updates.linkedTask?.provider === 'volo' ||
+          updates.linkedTaskSourceContext?.provider === 'jira' ||
+          updates.linkedTaskSourceContext?.provider === 'volo')
       ) {
         await assertRuntimeEnvironmentCapability(
           target.environmentId,
           WORKTREE_LINKED_WORK_ITEM_CONTEXT_RUNTIME_CAPABILITY,
-          'Update the remote runtime to link Jira'
+          'Update the remote runtime to link Jira or Volo'
         )
       }
       const updateTicket = folderWorkspaceUpdates.begin(

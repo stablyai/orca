@@ -2,6 +2,7 @@ import { getLinkedWorkItemSuggestedName, getLinkedWorkItemWorkspaceName } from '
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { JiraIssue } from '../../../../shared/jira-types'
+import type { VoloTask } from '../../../../shared/volo-types'
 
 export function getGitHubWorkItemWorkspaceSeed(item: GitHubWorkItem): string {
   return getLinkedWorkItemWorkspaceName(item)?.seedName ?? getLinkedWorkItemSuggestedName(item)
@@ -27,5 +28,17 @@ export function getJiraIssueWorkspaceSeed(issue: JiraIssue): string {
       title: `${issue.key} ${issue.title}`,
       jiraIdentifier: issue.key
     })?.seedName ?? getLinkedWorkItemSuggestedName(issue)
+  )
+}
+
+export function getVoloTaskWorkspaceSeed(task: VoloTask): string {
+  return (
+    getLinkedWorkItemWorkspaceName({
+      type: 'issue',
+      provider: 'volo',
+      number: 0,
+      title: `${task.taskCode} ${task.title}`,
+      voloIdentifier: task.taskCode
+    })?.seedName ?? getLinkedWorkItemSuggestedName(task)
   )
 }

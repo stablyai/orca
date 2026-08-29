@@ -29,6 +29,7 @@ import { HOSTED_REVIEW_METHODS } from './hosted-review'
 import { LINEAR_METHODS } from './linear'
 import { LINEAR_AGENT_ACCESS_METHODS } from './linear-agent-access'
 import { JIRA_METHODS } from './jira'
+import { VOLO_METHODS } from './volo'
 import { SSH_METHODS } from './ssh'
 import { SPEECH_METHODS } from './speech'
 import { CLIENT_UI_METHODS } from './client-ui'
@@ -82,6 +83,7 @@ export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
   ...LINEAR_METHODS,
   ...LINEAR_AGENT_ACCESS_METHODS,
   ...JIRA_METHODS,
+  ...VOLO_METHODS,
   ...SSH_METHODS,
   ...SPEECH_METHODS,
   ...WORKSPACE_PORT_METHODS,

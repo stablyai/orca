@@ -29,11 +29,20 @@ export type JiraTaskProviderIdentity = {
   projectKey?: string | null
 }
 
+export type VoloTaskProviderIdentity = {
+  provider: 'volo'
+  apiUrl?: string | null
+  webUrl?: string | null
+  boardId?: string | null
+  boardPrefix?: string | null
+}
+
 export type TaskProviderIdentity =
   | GitHubTaskProviderIdentity
   | GitLabTaskProviderIdentity
   | LinearTaskProviderIdentity
   | JiraTaskProviderIdentity
+  | VoloTaskProviderIdentity
 
 export function normalizeTaskProviderIdentity(
   provider: TaskProvider,
@@ -79,6 +88,14 @@ export function normalizeTaskProviderIdentity(
         siteUrl: normalizeNonEmptyString(raw.siteUrl),
         projectKey: normalizeNonEmptyString(raw.projectKey)
       }
+    case 'volo':
+      return {
+        provider,
+        apiUrl: normalizeNonEmptyString(raw.apiUrl),
+        webUrl: normalizeNonEmptyString(raw.webUrl),
+        boardId: normalizeNonEmptyString(raw.boardId),
+        boardPrefix: normalizeNonEmptyString(raw.boardPrefix)
+      }
   }
 }
 
@@ -112,6 +129,10 @@ export function isStoredTaskProviderIdentity(provider: TaskProvider, identity: u
       )
     case 'jira':
       return ['siteId', 'siteUrl', 'projectKey'].every((key) => isNullableOptionalString(raw[key]))
+    case 'volo':
+      return ['apiUrl', 'webUrl', 'boardId', 'boardPrefix'].every((key) =>
+        isNullableOptionalString(raw[key])
+      )
   }
 }
 
@@ -119,7 +140,8 @@ const TASK_PROVIDER_IDENTITY_FIELDS: Record<TaskProvider, readonly string[]> = {
   github: ['owner', 'repo', 'host'],
   gitlab: ['projectId', 'namespace', 'project', 'webUrl'],
   linear: ['workspaceId', 'workspaceName', 'teamId', 'teamKey'],
-  jira: ['siteId', 'siteUrl', 'projectKey']
+  jira: ['siteId', 'siteUrl', 'projectKey'],
+  volo: ['apiUrl', 'webUrl', 'boardId', 'boardPrefix']
 }
 
 export function areTaskProviderIdentitiesEqual(
@@ -157,6 +179,10 @@ export function taskProviderIdentityCachePart(
       return [identity.workspaceId, identity.teamId ?? identity.teamKey].filter(Boolean).join('/')
     case 'jira':
       return [identity.siteId ?? identity.siteUrl, identity.projectKey].filter(Boolean).join('/')
+    case 'volo':
+      return [identity.apiUrl ?? identity.webUrl, identity.boardId ?? identity.boardPrefix]
+        .filter(Boolean)
+        .join('/')
   }
 }
 

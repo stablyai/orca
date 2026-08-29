@@ -124,6 +124,13 @@ export function useTaskPageSourceNotices({
           sourceCount: 1,
           hostLabelById,
           hostAvailability: accountAvailability
+        }) ?? undefined,
+      volo:
+        getTaskSourceAvailabilityNotice({
+          providerLabel: labelFor('volo'),
+          sourceCount: 1,
+          hostLabelById,
+          hostAvailability: accountAvailability
         }) ?? undefined
     }
   }, [
@@ -145,7 +152,7 @@ export function useTaskPageSourceNotices({
       providerLabel,
       repoContexts: taskSourceRepoContexts,
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'volo'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       accountHostId: accountBackedTaskSourceHostId,
@@ -153,7 +160,8 @@ export function useTaskPageSourceNotices({
       selectedRepoCount: selectedRepos.length,
       linearWorkspaceName:
         selectedLinearWorkspace?.organizationName ?? selectedLinearWorkspace?.id ?? null,
-      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null
+      jiraSiteName: selectedJiraSite?.displayName ?? selectedJiraSite?.siteUrl ?? null,
+      voloAccountName: 'Volo'
     })
   }, [
     selectedJiraSite,
@@ -173,11 +181,11 @@ export function useTaskPageSourceNotices({
     return getTaskSourceAvailabilityNotice({
       providerLabel,
       sourceCount:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'volo'
           ? 1
           : Math.max(1, taskSourceRepoContexts.length),
       hostAvailability:
-        taskSource === 'linear' || taskSource === 'jira'
+        taskSource === 'linear' || taskSource === 'jira' || taskSource === 'volo'
           ? accountBackedTaskSourceHostAvailability
           : taskSourceHostAvailability,
       hostLabelById

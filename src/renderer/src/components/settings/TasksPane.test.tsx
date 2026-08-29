@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   refreshPreflightStatus: vi.fn(),
   checkLinearConnection: vi.fn(),
   checkJiraConnection: vi.fn(),
+  checkVoloConnection: vi.fn(),
   linearSetupProps: [] as {
     connected: boolean
     checking: boolean
@@ -65,7 +66,8 @@ vi.mock('./TaskSourceSimpleSetup', () => ({
   JiraSetupSteps: (props: { onOpenIntegrations: () => void }) => {
     mocks.jiraSetupProps.push(props)
     return <div data-testid="jira-setup">Jira setup</div>
-  }
+  },
+  VoloSetupSteps: () => <div data-testid="volo-setup">Volo setup</div>
 }))
 
 vi.mock('@/store', () => ({
@@ -76,6 +78,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: () => void
       checkLinearConnection: () => void
       checkJiraConnection: () => void
+      checkVoloConnection: () => void
       settingsSearchQuery: string
     }) => unknown
   ) =>
@@ -85,6 +88,7 @@ vi.mock('@/store', () => ({
       refreshPreflightStatus: mocks.refreshPreflightStatus,
       checkLinearConnection: mocks.checkLinearConnection,
       checkJiraConnection: mocks.checkJiraConnection,
+      checkVoloConnection: mocks.checkVoloConnection,
       settingsSearchQuery: ''
     })
 }))
@@ -137,7 +141,8 @@ describe('TasksPane', () => {
         skillChecking: false,
         visible: true
       },
-      jira: { connected: false, checking: false, visible: false }
+      jira: { connected: false, checking: false, visible: false },
+      volo: { connected: false, checking: false, visible: false }
     }
   })
 

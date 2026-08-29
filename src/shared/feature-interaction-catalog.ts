@@ -16,6 +16,7 @@ export type FeatureInteractionId =
   | 'gitlab-tasks'
   | 'linear-tasks'
   | 'jira-tasks'
+  | 'volo-tasks'
   | 'automations'
   | 'automation-created'
   | 'automation-run'
@@ -86,6 +87,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'gitlab-tasks', interaction: 'GitLab task item workflow used' },
   { id: 'linear-tasks', interaction: 'Linear task item workflow used' },
   { id: 'jira-tasks', interaction: 'Jira task item workflow used' },
+  { id: 'volo-tasks', interaction: 'Volo task item workflow used' },
   { id: 'automations', interaction: 'Automations page opened' },
   { id: 'automation-created', interaction: 'automation created' },
   { id: 'automation-run', interaction: 'automation run queued' },

@@ -483,7 +483,8 @@ describe('Store', () => {
       worktreeMeta: {},
       settings: {
         visibleTaskProviders: ['gitlab'],
-        visibleTaskProvidersDefaultedForJira: true
+        visibleTaskProvidersDefaultedForJira: true,
+        visibleTaskProvidersDefaultedForVolo: true
       },
       ui: {},
       githubCache: { pr: {}, issue: {} },

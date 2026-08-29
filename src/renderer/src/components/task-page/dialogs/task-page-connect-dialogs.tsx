@@ -2,6 +2,7 @@ import React from 'react'
 
 import GitLabItemDialog from '@/components/GitLabItemDialog'
 import { JiraConnectDialog } from '@/components/jira-connect-dialog'
+import { VoloConnectDialog } from '@/components/volo-connect-dialog'
 import { LinearApiKeyDialog } from '@/components/linear-api-key-dialog'
 import { translate } from '@/i18n/i18n'
 import type { GitLabWorkItem } from '../../../../../shared/gitlab-types'
@@ -21,6 +22,8 @@ export type TaskPageConnectDialogsProps = {
   handleLinearAccessConnected: () => void
   jiraConnectOpen: boolean
   setJiraConnectOpen: (open: boolean) => void
+  voloConnectOpen: boolean
+  setVoloConnectOpen: (open: boolean) => void
 }
 
 export function TaskPageConnectDialogs({
@@ -34,7 +37,9 @@ export function TaskPageConnectDialogs({
   selectedLinearWorkspace,
   handleLinearAccessConnected,
   jiraConnectOpen,
-  setJiraConnectOpen
+  setJiraConnectOpen,
+  voloConnectOpen,
+  setVoloConnectOpen
 }: TaskPageConnectDialogsProps): React.JSX.Element {
   return (
     <>
@@ -67,6 +72,7 @@ export function TaskPageConnectDialogs({
       />
 
       <JiraConnectDialog open={jiraConnectOpen} onOpenChange={setJiraConnectOpen} />
+      <VoloConnectDialog open={voloConnectOpen} onOpenChange={setVoloConnectOpen} />
     </>
   )
 }

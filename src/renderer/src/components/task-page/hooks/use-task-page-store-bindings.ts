@@ -72,6 +72,10 @@ export function useTaskPageStoreBindings() {
   const searchJiraIssues = useAppStore((s) => s.searchJiraIssues)
   const listJiraIssues = useAppStore((s) => s.listJiraIssues)
   const checkJiraConnection = useAppStore((s) => s.checkJiraConnection)
+  const voloStatus = useAppStore((s) => s.voloStatus)
+  const voloStatusChecked = useAppStore((s) => s.voloStatusChecked)
+  const voloStatusContextKey = useAppStore((s) => s.voloStatusContextKey)
+  const checkVoloConnection = useAppStore((s) => s.checkVoloConnection)
   const providerRuntimeContextKey = getProviderRuntimeContextKey(settings)
   const providerRuntimeContextKeyRef = useRef(providerRuntimeContextKey)
   useLayoutEffect(() => {
@@ -82,8 +86,11 @@ export function useTaskPageStoreBindings() {
   const preflightStatusCurrent = preflightStatusContextKey === expectedPreflightContextKey
   const linearStatusReady = linearStatusCurrent && linearStatusChecked
   const jiraStatusReady = jiraStatusCurrent && jiraStatusChecked
+  const voloStatusCurrent = voloStatusContextKey === providerRuntimeContextKey
+  const voloStatusReady = voloStatusCurrent && voloStatusChecked
   const linearConnected = linearStatusCurrent && linearStatus.connected
   const jiraConnected = jiraStatusCurrent && jiraStatus.connected
+  const voloConnected = voloStatusCurrent && voloStatus.connected
   const submitShortcutLabel = getScreenSubmitShortcutLabel()
   const eligibleRepos = useMemo(() => getTaskEligibleRepos(repos), [repos])
 
@@ -147,6 +154,10 @@ export function useTaskPageStoreBindings() {
     searchJiraIssues,
     listJiraIssues,
     checkJiraConnection,
+    voloStatus,
+    voloStatusChecked,
+    voloStatusContextKey,
+    checkVoloConnection,
     providerRuntimeContextKey,
     providerRuntimeContextKeyRef,
     linearStatusCurrent,
@@ -154,8 +165,10 @@ export function useTaskPageStoreBindings() {
     preflightStatusCurrent,
     linearStatusReady,
     jiraStatusReady,
+    voloStatusReady,
     linearConnected,
     jiraConnected,
+    voloConnected,
     submitShortcutLabel,
     eligibleRepos
   }

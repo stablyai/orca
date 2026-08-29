@@ -27,6 +27,9 @@ export function useTaskSourceProviderReadiness(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const voloStatus = useAppStore((s) => s.voloStatus)
+  const voloStatusChecked = useAppStore((s) => s.voloStatusChecked)
+  const voloStatusContextKey = useAppStore((s) => s.voloStatusContextKey)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -58,6 +61,8 @@ export function useTaskSourceProviderReadiness(
     preflightStatus.glab.authenticated === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
+  const voloChecking = voloStatusContextKey !== providerRuntimeContextKey || !voloStatusChecked
+  const voloConnected = !voloChecking && voloStatus.connected === true
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.
@@ -89,6 +94,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      volo: {
+        connected: voloConnected,
+        checking: voloChecking,
+        visible: visible.has('volo')
       }
     }
   }, [
@@ -96,6 +106,8 @@ export function useTaskSourceProviderReadiness(
     gitlabConnected,
     jiraChecking,
     jiraConnected,
+    voloChecking,
+    voloConnected,
     linearChecking,
     linearConnected,
     linearSkillInstalled,

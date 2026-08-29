@@ -16,6 +16,7 @@ import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type { TaskSourceHostAvailability } from '../task-source-context-summary'
+import { getTaskSourceProviderDisplayName } from './automation-source-display'
 
 export type AutomationTargetAvailability =
   | {
@@ -198,7 +199,7 @@ function getAutomationSourceAvailability(
   if (!availability) {
     return null
   }
-  const providerLabel = getAutomationSourceProviderLabel(sourceContext.provider)
+  const providerLabel = getTaskSourceProviderDisplayName(sourceContext.provider)
   switch (availability.reason) {
     case undefined:
       break
@@ -250,19 +251,6 @@ function getAutomationSourceAvailability(
     )
   }
   return null
-}
-
-function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
 }
 
 export function getRuntimeAutomationAvailability(
