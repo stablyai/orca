@@ -5,6 +5,7 @@ const {
   gitExecFileAsyncMock,
   gitExecFileSyncMock,
   translateWslOutputPathsMock,
+  lstatMock,
   statMock,
   readFileMock,
   resolveGitDirMock,
@@ -15,6 +16,7 @@ const {
   gitExecFileAsyncMock: vi.fn(),
   gitExecFileSyncMock: vi.fn(),
   translateWslOutputPathsMock: vi.fn((output: string) => output),
+  lstatMock: vi.fn(),
   statMock: vi.fn(),
   readFileMock: vi.fn(),
   resolveGitDirMock: vi.fn(),
@@ -42,7 +44,7 @@ vi.mock('./status', () => ({
 
 vi.mock('fs/promises', async () => {
   const actual = await vi.importActual<typeof FsPromises>('fs/promises')
-  return { ...actual, stat: statMock, readFile: readFileMock }
+  return { ...actual, lstat: lstatMock, stat: statMock, readFile: readFileMock }
 })
 
 import {
@@ -52,7 +54,7 @@ import {
   resetWorktreeRemovalState
 } from './remove-worktree-test-harness'
 
-import { listWorktrees, WORKTREE_LIST_TIMEOUT_MS } from './worktree'
+import { listWorktrees, listWorktreesStrict, WORKTREE_LIST_TIMEOUT_MS } from './worktree'
 
 const mockGitCommands = createGitCommandMocker(gitExecFileAsyncMock)
 const getGitCalls = createGitCallReader(gitExecFileAsyncMock)
@@ -75,6 +77,8 @@ describe('listWorktrees', () => {
       readFileMock,
       resolveGitDirMock
     })
+    lstatMock.mockReset()
+    lstatMock.mockResolvedValue({ isDirectory: () => true })
   })
 
   it('translates parsed path fields from line-block porcelain output', async () => {
@@ -155,25 +159,53 @@ describe('listWorktrees', () => {
   })
 
   it('returns no worktrees when the repo path is gone', async () => {
+    const missingRepo = 'C:\\workspace\\deleted-repo'
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      Object.assign(new Error('spawn git ENOENT'), {
-        code: 'ENOENT'
-      })
-    )
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32' })
+    statMock.mockRejectedValue(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
+
+    try {
+      await expect(listWorktrees(missingRepo)).resolves.toEqual([])
+
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+      expect(statMock).toHaveBeenCalledWith(missingRepo)
+      expect(warnSpy).toHaveBeenCalledWith(
+        `[git/worktree] repo path missing; skipping worktree list: ${missingRepo}`
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+      warnSpy.mockRestore()
+    }
+  })
+
+  it('rejects a strict missing-path scan before spawning git', async () => {
+    const missingRepo = 'C:\\workspace\\deleted-repo'
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { value: 'win32' })
     statMock.mockRejectedValueOnce(Object.assign(new Error('ENOENT'), { code: 'ENOENT' }))
 
-    await expect(listWorktrees('/workspace/deleted-repo')).resolves.toEqual([])
+    try {
+      await expect(listWorktreesStrict(missingRepo)).rejects.toMatchObject({
+        code: 'ENOENT'
+      })
 
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(['worktree', 'list', '--porcelain', '-z'], {
-      cwd: '/workspace/deleted-repo',
-      timeout: WORKTREE_LIST_TIMEOUT_MS
-    })
-    expect(statMock).toHaveBeenCalledWith('/workspace/deleted-repo')
-    expect(warnSpy).toHaveBeenCalledWith(
-      '[git/worktree] repo path missing; skipping worktree list: /workspace/deleted-repo'
-    )
-    warnSpy.mockRestore()
+      expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+      expect(statMock).toHaveBeenCalledWith(missingRepo)
+    } finally {
+      Object.defineProperty(process, 'platform', { value: originalPlatform })
+    }
+  })
+
+  it('does not apply native path preflight to an explicit WSL route', async () => {
+    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
+
+    await expect(
+      listWorktreesStrict('C:\\Users\\me\\repo', { wslDistro: 'Ubuntu' })
+    ).resolves.toEqual([])
+
+    expect(lstatMock).not.toHaveBeenCalled()
+    expect(gitExecFileAsyncMock).toHaveBeenCalledTimes(1)
   })
 
   it('returns no worktrees when the path exists but is not a git repo', async () => {

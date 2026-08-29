@@ -618,6 +618,15 @@ async function readWorktreeList(
   repoPath: string,
   options: GitWorktreeExecOptions = {}
 ): Promise<GitWorktreeInfo[]> {
+  if (process.platform === 'win32' && !options.wslDistro && /^[A-Za-z]:[\\/]/.test(repoPath)) {
+    // Follow directory symlinks and junctions: Git accepts those as valid cwd paths.
+    const repoStat = await stat(repoPath)
+    if (!repoStat.isDirectory()) {
+      throw Object.assign(new Error(`Repo path is not a directory: ${repoPath}`), {
+        code: 'ENOTDIR'
+      })
+    }
+  }
   const execOptions = {
     cwd: repoPath,
     ...options,
