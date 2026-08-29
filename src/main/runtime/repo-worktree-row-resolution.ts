@@ -125,6 +125,7 @@ export async function resolveRepoWorktreeRows(
   // first for `null` to mean "timed out" only. A stall never reached a verdict, so restore persisted rows
   // instead of publishing a healthy-looking empty catalog; a rejection is a real answer and keeps its
   // shipped zero-row semantics.
+  const scanStartedAt = Date.now()
   const scan: RuntimeWorktreeScanResult = (await withTimeout<RuntimeWorktreeScanResult | null>(
     deps
       .scanRepo(repo, projectRuntimeByRepoId)
@@ -134,7 +135,7 @@ export async function resolveRepoWorktreeRows(
   )) ?? { ok: false, worktrees: listStoredWorktreeRowsForRepo(store, repo, repoOwnerCount) }
   const gitWorktrees = scan.worktrees
   if (scan.ok) {
-    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+    pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanStartedAt)
   }
   const expectedHostId = getRepoExecutionHostId(repo)
   return gitWorktrees.map((gitWorktree) => {

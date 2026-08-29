@@ -25653,13 +25653,14 @@ export class OrcaRuntimeService {
       }
     }
     let scan: RuntimeWorktreeScanResult
+    const scanStartedAt = Date.now()
     try {
       scan = await this.listRepoWorktreesForResolution(repo)
     } catch {
       scan = { ok: false, worktrees: [] }
     }
     if (scan.ok) {
-      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, scan.worktrees, scanStartedAt)
     }
     const worktreeVisibilitySourceMatcher = createWorktreeVisibilitySourceMatcher(
       [repo.path, ...scan.worktrees.map((worktree) => worktree.path)],

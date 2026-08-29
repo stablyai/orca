@@ -48,6 +48,7 @@ export async function listDetectedWorktreesForCapturedRepo(
   try {
     let gitWorktrees: GitWorktreeInfo[]
     let freshScan = true
+    const scanStartedAt = Date.now()
     if (isFolderRepo(repo)) {
       if (!isCurrent()) {
         return null
@@ -116,7 +117,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     }
     if (freshScan) {
       rememberLocalWorktreeRoots(store, repo, gitWorktrees)
-      pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees)
+      pruneLineageForMissingRepoWorktrees(store, repo, gitWorktrees, scanStartedAt)
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     return {
