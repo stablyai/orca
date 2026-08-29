@@ -178,6 +178,29 @@ describe('Orca cloud profile service', () => {
     })
   })
 
+  it('names the transport reason behind a token exchange that reports only "fetch failed"', async () => {
+    configureCloudEnv()
+    beginOrcaCloudPkceFlowMock.mockResolvedValue({
+      code: 'auth-code',
+      codeVerifier: 'verifier',
+      nonce: 'nonce',
+      redirectUri: 'http://127.0.0.1:1/auth/callback',
+      state: 'state'
+    })
+    exchangeOrcaCloudAuthCodeMock.mockRejectedValue(
+      new TypeError('fetch failed', {
+        cause: Object.assign(new Error('...'), { code: 'SELF_SIGNED_CERT_IN_CHAIN' })
+      })
+    )
+
+    const result = await connectCurrentOrcaProfile(userDataPath)
+
+    expect(result).toMatchObject({
+      status: 'failed',
+      error: 'fetch failed (SELF_SIGNED_CERT_IN_CHAIN)'
+    })
+  })
+
   it('does not report a saved cloud session as connected when cloud config is unavailable', async () => {
     configureCloudEnv()
     mockSuccessfulConnect()
