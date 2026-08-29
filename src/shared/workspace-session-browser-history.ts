@@ -26,6 +26,10 @@ export function normalizeBrowserHistoryEntries(
   const normalizedEntries: BrowserHistoryEntry[] = []
   const candidates = entries
     .map((entry) => {
+      // Persisted sessions are untrusted at runtime; fail clearly for malformed URLs.
+      if (typeof entry?.url !== 'string') {
+        throw new TypeError('Browser history entry URL must be a string')
+      }
       const safeUrl = redactKagiSessionToken(entry.url)
       return {
         entry,

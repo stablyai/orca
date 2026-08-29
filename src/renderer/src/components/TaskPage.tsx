@@ -441,6 +441,31 @@ export default function TaskPage(): React.JSX.Element {
     scrollTop: number
   } | null>(null)
 
+  const hadGitHubDetailRef = useRef(false)
+
+  useLayoutEffect(() => {
+    const hasGitHubDetail = Boolean(pageData.openGitHubWorkItem)
+    if (
+      hadGitHubDetailRef.current &&
+      !hasGitHubDetail &&
+      pendingGithubScrollRestoreRef.current === null
+    ) {
+      const savedPosition = useAppStore.getState().taskListPosition
+      if (
+        savedPosition?.contextKey === githubResumeContextKey &&
+        savedPosition.page === currentPage
+      ) {
+        pendingGithubScrollRestoreRef.current = savedPosition.scrollTop
+      }
+    }
+    hadGitHubDetailRef.current = hasGitHubDetail
+  }, [
+    currentPage,
+    githubResumeContextKey,
+    pageData.openGitHubWorkItem,
+    pendingGithubScrollRestoreRef
+  ])
+
   useLayoutEffect(() => {
     if (
       taskSource !== 'github' ||

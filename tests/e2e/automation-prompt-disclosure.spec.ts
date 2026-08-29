@@ -25,7 +25,7 @@ test('automation detail keeps short prompts readable and reveals a very long pro
       }
       const base = {
         agentId: 'codex' as const,
-        projectId: repo.id,
+        repo: `id:${repo.id}`,
         workspaceMode: 'new_per_run' as const,
         reuseSession: false,
         timezone: 'UTC',
@@ -34,32 +34,41 @@ test('automation detail keeps short prompts readable and reveals a very long pro
         enabled: false,
         missedRunGraceMinutes: 720
       }
-      await window.api.automations.create({
-        ...base,
-        name: shortName,
-        prompt: 'Synthetic short prompt.'
+      await window.api.runtime.call({
+        method: 'automation.create',
+        params: {
+          ...base,
+          name: shortName,
+          prompt: 'Synthetic short prompt.'
+        }
       })
-      await window.api.automations.create({
-        ...base,
-        name: longName,
-        prompt: [
-          'Synthetic prompt preview validation only.',
-          '',
-          ...Array.from(
-            { length: 20 },
-            (_, index) =>
-              `Synthetic step ${index + 1}: inspect placeholder input and summarize placeholder output.`
-          ),
-          '',
-          `UNBROKEN_SYNTHETIC_${'X'.repeat(240)}`,
-          '',
-          endMarker
-        ].join('\n')
+      await window.api.runtime.call({
+        method: 'automation.create',
+        params: {
+          ...base,
+          name: longName,
+          prompt: [
+            'Synthetic prompt preview validation only.',
+            '',
+            ...Array.from(
+              { length: 20 },
+              (_, index) =>
+                `Synthetic step ${index + 1}: inspect placeholder input and summarize placeholder output.`
+            ),
+            '',
+            `UNBROKEN_SYNTHETIC_${'X'.repeat(240)}`,
+            '',
+            endMarker
+          ].join('\n')
+        }
       })
-      await window.api.automations.create({
-        ...base,
-        name: resizeName,
-        prompt: resizePrompt
+      await window.api.runtime.call({
+        method: 'automation.create',
+        params: {
+          ...base,
+          name: resizeName,
+          prompt: resizePrompt
+        }
       })
       store.getState().openAutomationsPage()
     },
