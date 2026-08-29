@@ -241,7 +241,7 @@ async function evaluateLocalBaseRefRefreshability(
       return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
     }
     if (!shouldInspectOwner(parsedDrift.behind)) {
-      // Why: a current local ref yields no update suggestion, so the advisory path skips OID resolution and owner inspection.
+      // Why: a current local ref has nothing to fast-forward, so skip OID resolution, owner inspection, and the no-op reset entirely.
       return undefined
     }
     const { stdout: localOidOutput } = await gitExecFileAsync(
@@ -886,7 +886,8 @@ async function refreshLocalBaseRefForWorktreeCreate(
     baseBranch,
     remoteTrackingRef,
     remoteTrackingBase,
-    options
+    options,
+    (behind) => behind > 0
   )
   if (!evaluation) {
     return undefined
@@ -947,7 +948,10 @@ async function refreshLocalBaseRefForWorktreeCreate(
  * @param baseBranch - Optional base branch to create from (defaults to HEAD)
  * @remarks Side effects (best-effort, warn-only): passes `--no-track`, writes
  * `branch.<branch>.base` for new-branch worktrees with a base ref, and may
- * write `push.autoSetupRemote=true` to the repo's shared config.
+ * write `push.autoSetupRemote=true` to the repo's shared config. When
+ * `checkoutExistingBranch` and `refreshLocalBaseRef` are both set, the base
+ * ref's local counterpart may be fast-forwarded after the add, inside whichever
+ * worktree owns it (the new one when the base is the claimed branch's remote).
  */
 export async function addWorktree(
   repoPath: string,
@@ -1030,6 +1034,23 @@ async function performAddWorktree(
   })
 
   if (options.checkoutExistingBranch) {
+    // Why (#15645): run after the add so the refresh's owner path can reset --hard the base ref's local counterpart in place — that is the branch this worktree just claimed when the base is its own remote-tracking ref, otherwise whichever worktree already holds that local branch (often the primary repo).
+    // Why !noCheckout: a sparse create's index is still empty here, so the clean-status probe would false-positive dirty.
+    if (refreshLocalBaseRef && baseBranch && !noCheckout) {
+      const effectiveExistingBase = await resolveWorktreeAddBaseRef(baseBranch, (qualifiedRef) =>
+        hasWorktreeBaseCommitRef(repoPath, qualifiedRef, options)
+      )
+      const claimedRefresh = await refreshLocalBaseRefForWorktreeCreate(
+        repoPath,
+        baseBranch,
+        effectiveExistingBase,
+        options.remoteTrackingBase,
+        options
+      )
+      // Why: the user deliberately claimed this branch, so local-only commits are expected and stay silent; a dirty owner or a git error still warns, because there the new worktree is stuck on the stale commit for a fixable reason.
+      localBaseRefRefresh =
+        claimedRefresh?.status === 'skipped_not_fast_forward' ? undefined : claimedRefresh
+    }
     return localBaseRefRefresh ? { localBaseRefRefresh } : {}
   }
 
