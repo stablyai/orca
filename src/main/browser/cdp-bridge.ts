@@ -1,5 +1,6 @@
 /* eslint-disable max-lines -- Why: the CDP bridge owns debugger lifecycle, ref map management, command serialization, and all browser interaction logic in one module so the browser automation boundary stays coherent. */
 import { webContents } from 'electron'
+import { captureHostFocus, restoreHostFocus } from './host-focus-guard'
 import type {
   BrowserCaptureStartResult,
   BrowserCaptureStopResult,
@@ -183,22 +184,29 @@ export class CdpBridge {
       const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
       const { cx, cy } = await this.getPageCoordinates(guest, node, localCenter.cx, localCenter.cy)
 
-      // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
-      await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
-      await sender('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: cx,
-        y: cy,
-        button: 'left',
-        clickCount: 1
-      })
-      await sender('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: cx,
-        y: cy,
-        button: 'left',
-        clickCount: 1
-      })
+      // Why: the synthetic press hands native focus to the guest, so remember who
+      // owned it and give it back even if a dispatch rejects (#8139).
+      const hostFocus = captureHostFocus(guest.id)
+      try {
+        // Why: mouseMoved fires mouseenter/mouseover so sites reveal hover-dependent menus/targets before the click lands.
+        await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
+        await sender('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x: cx,
+          y: cy,
+          button: 'left',
+          clickCount: 1
+        })
+        await sender('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x: cx,
+          y: cy,
+          button: 'left',
+          clickCount: 1
+        })
+      } finally {
+        restoreHostFocus(hostFocus)
+      }
 
       return { clicked: element }
     })
@@ -239,29 +247,36 @@ export class CdpBridge {
       const toLocal = await this.getElementCenter(toSender, toNode.backendDOMNodeId)
       const to = await this.getPageCoordinates(guest, toNode, toLocal.cx, toLocal.cy)
 
-      // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.
-      await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.cx, y: from.cy })
-      await sender('Input.dispatchMouseEvent', {
-        type: 'mousePressed',
-        x: from.cx,
-        y: from.cy,
-        button: 'left'
-      })
+      // Why: the synthetic press hands native focus to the guest, so remember who
+      // owned it and give it back even if a dispatch rejects (#8139).
+      const hostFocus = captureHostFocus(guest.id)
+      try {
+        // Why: interpolate the drag so intermediate elements fire dragenter/dragover, which many drag-and-drop libs require.
+        await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: from.cx, y: from.cy })
+        await sender('Input.dispatchMouseEvent', {
+          type: 'mousePressed',
+          x: from.cx,
+          y: from.cy,
+          button: 'left'
+        })
 
-      const steps = 10
-      for (let i = 1; i <= steps; i++) {
-        const x = from.cx + ((to.cx - from.cx) * i) / steps
-        const y = from.cy + ((to.cy - from.cy) * i) / steps
-        await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 1 })
-        await new Promise((r) => setTimeout(r, 10))
+        const steps = 10
+        for (let i = 1; i <= steps; i++) {
+          const x = from.cx + ((to.cx - from.cx) * i) / steps
+          const y = from.cy + ((to.cy - from.cy) * i) / steps
+          await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y, buttons: 1 })
+          await new Promise((r) => setTimeout(r, 10))
+        }
+
+        await sender('Input.dispatchMouseEvent', {
+          type: 'mouseReleased',
+          x: to.cx,
+          y: to.cy,
+          button: 'left'
+        })
+      } finally {
+        restoreHostFocus(hostFocus)
       }
-
-      await sender('Input.dispatchMouseEvent', {
-        type: 'mouseReleased',
-        x: to.cx,
-        y: to.cy,
-        button: 'left'
-      })
 
       return { dragged: { from: fromElement, to: toElement } }
     })
@@ -460,29 +475,37 @@ export class CdpBridge {
       })) as { result: { value: boolean } }
 
       if (currentState.value !== checked) {
-        await this.scrollIntoView(refSender, node.backendDOMNodeId)
-        const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
-        const { cx, cy } = await this.getPageCoordinates(
-          guest,
-          node,
-          localCenter.cx,
-          localCenter.cy
-        )
-        await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
-        await sender('Input.dispatchMouseEvent', {
-          type: 'mousePressed',
-          x: cx,
-          y: cy,
-          button: 'left',
-          clickCount: 1
-        })
-        await sender('Input.dispatchMouseEvent', {
-          type: 'mouseReleased',
-          x: cx,
-          y: cy,
-          button: 'left',
-          clickCount: 1
-        })
+        // Why: the synthetic press hands native focus to the guest, so remember who
+        // owned it and give it back (#8139).
+        const hostFocus = captureHostFocus(guest.id)
+
+        try {
+          await this.scrollIntoView(refSender, node.backendDOMNodeId)
+          const localCenter = await this.getElementCenter(refSender, node.backendDOMNodeId)
+          const { cx, cy } = await this.getPageCoordinates(
+            guest,
+            node,
+            localCenter.cx,
+            localCenter.cy
+          )
+          await sender('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cx, y: cy })
+          await sender('Input.dispatchMouseEvent', {
+            type: 'mousePressed',
+            x: cx,
+            y: cy,
+            button: 'left',
+            clickCount: 1
+          })
+          await sender('Input.dispatchMouseEvent', {
+            type: 'mouseReleased',
+            x: cx,
+            y: cy,
+            button: 'left',
+            clickCount: 1
+          })
+        } finally {
+          restoreHostFocus(hostFocus)
+        }
 
         // Why: custom checkboxes may not toggle from a coordinate click; verify state and fall back to programmatic .click().
         try {

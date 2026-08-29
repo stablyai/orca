@@ -13,7 +13,9 @@ const { webContentsFromIdMock } = vi.hoisted(() => ({
 }))
 
 vi.mock('electron', () => ({
-  webContents: { fromId: webContentsFromIdMock },
+  // Why: cdp-bridge's host focus guard (#8139) reads the focused contents around
+  // synthetic mouse presses; the integration mock needs the same surface.
+  webContents: { fromId: webContentsFromIdMock, getFocusedWebContents: vi.fn(() => null) },
   shell: { openExternal: vi.fn() },
   ipcMain: { handle: vi.fn(), removeHandler: vi.fn(), on: vi.fn() },
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false }
