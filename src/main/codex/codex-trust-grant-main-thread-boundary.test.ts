@@ -54,6 +54,8 @@ describe('codex trust grant main-thread boundary', () => {
     expect(grant).toContain('export async function grantManagedCodexHookTrust(')
     const host = readFileSync(join(CODEX_DIR, 'codex-trust-grant-host.ts'), 'utf8')
     expect(host).toContain('export async function resolveCodexTrustGrantHost(')
+    const mirrored = readFileSync(join(CODEX_DIR, 'codex-mirrored-hook-runtime-trust.ts'), 'utf8')
+    expect(mirrored).toContain('export async function resolveMirroredRuntimeUserHookTrustEntries(')
     const realHome = readFileSync(join(CODEX_DIR, 'codex-real-home-hook-install.ts'), 'utf8')
     expect(realHome).toContain('}): Promise<RealHomeCodexHookLane> {')
   })

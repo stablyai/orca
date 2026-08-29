@@ -8,6 +8,7 @@ import {
   normalizeCodexHookSourcePath
 } from './config-toml-trust'
 import { _internals as grantInternals } from './codex-hook-trust-grant'
+import { _internals as mirroredTrustInternals } from './codex-mirrored-hook-runtime-trust'
 import { _internals as rebaseInternals } from './codex-user-hook-trust-rebase'
 
 // Why (#16441): the grant/rebase sessions now run in-process instead of in a
@@ -28,12 +29,17 @@ export type CodexHookHomes = {
 /** Applies the stub above; for suites that build their own temp homes. */
 export function stubCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(stubMissingCodexBinary)
+  mirroredTrustInternals.setSessionRunner(stubMissingCodexBinary)
   rebaseInternals.setSessionRunner(stubMissingCodexBinary)
 }
 
 export function restoreCodexTrustSessionsForTests(): void {
   grantInternals.setGrantSessionRunner(null)
   grantInternals.resetDiagnostics()
+  mirroredTrustInternals.setSessionRunner(null)
+  mirroredTrustInternals.setHostResolver(null)
+  mirroredTrustInternals.setConfigRestorer(null)
+  mirroredTrustInternals.resetState()
   rebaseInternals.setSessionRunner(null)
   rebaseInternals.resetRetryState()
 }

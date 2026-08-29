@@ -1,5 +1,5 @@
 import { runCodexAppServerSession, type CodexAppServerInvocation } from './codex-app-server-session'
-import { normalizeHookTrustKeyForLookup } from './config-toml-trust'
+import { getHookTrustKeyWriteVariants, normalizeHookTrustKeyForLookup } from './config-toml-trust'
 
 type CodexHookListing = {
   key: string
@@ -52,6 +52,7 @@ export type CodexUserHookTrustMove = {
 
 export type CodexCapturedUserHookTrustMove = CodexUserHookTrustMove & {
   reportedOldKey: string
+  currentHash?: string
   wasTrusted: boolean
   enabled: boolean
 }
@@ -71,13 +72,32 @@ export type CodexUserHookTrustRepairRequest = CodexUserHookTrustRebaseRequestBas
   moves: CodexCapturedUserHookTrustMove[]
 }
 
+export type CodexMirroredHookTrustTarget = {
+  key: string
+  command: string
+  enabled: boolean
+}
+
+export type CodexMirroredHookTrustGrant = {
+  key: string
+  command: string
+  currentHash: string
+}
+
+export type CodexMirroredHookTrustGrantRequest = CodexUserHookTrustRebaseRequestBase & {
+  operation: 'grant-mirrored-runtime-hook-trust'
+  targets: CodexMirroredHookTrustTarget[]
+}
+
 export type CodexUserHookTrustRebaseRequest =
   | CodexUserHookTrustInspectRequest
   | CodexUserHookTrustRepairRequest
+  | CodexMirroredHookTrustGrantRequest
 
 export type CodexUserHookTrustRebaseResult =
   | { outcome: 'inspected'; moves: CodexCapturedUserHookTrustMove[] }
   | { outcome: 'repaired'; repaired: number }
+  | { outcome: 'mirrored-granted'; entries: CodexMirroredHookTrustGrant[] }
 
 function matchingListings(
   listings: readonly CodexHookListing[],
@@ -87,12 +107,28 @@ function matchingListings(
   const expected = new Map(
     moves.map((move) => [normalizeHookTrustKeyForLookup(move[key]), move.command])
   )
-  return new Map(
-    listings
-      .filter(
-        (listing) => expected.get(normalizeHookTrustKeyForLookup(listing.key)) === listing.command
-      )
-      .map((listing) => [normalizeHookTrustKeyForLookup(listing.key), listing])
+  const matched = new Map<string, CodexHookListing>()
+  for (const listing of listings) {
+    const normalizedKey = normalizeHookTrustKeyForLookup(listing.key)
+    if (expected.get(normalizedKey) !== listing.command) {
+      continue
+    }
+    const existing = matched.get(normalizedKey)
+    if (existing && !hookListingStatesAgree(existing, listing)) {
+      throw new Error('hooks/list reported ambiguous hook key variants')
+    }
+    if (!existing) {
+      matched.set(normalizedKey, listing)
+    }
+  }
+  return matched
+}
+
+function hookListingStatesAgree(left: CodexHookListing, right: CodexHookListing): boolean {
+  return (
+    left.currentHash === right.currentHash &&
+    left.trustStatus === right.trustStatus &&
+    left.enabled === right.enabled
   )
 }
 
@@ -119,6 +155,7 @@ async function inspectUserHookTrust(
         return {
           ...move,
           reportedOldKey: listing.key,
+          currentHash: listing.currentHash,
           wasTrusted: listing.trustStatus === 'trusted',
           enabled: listing.enabled
         }
@@ -139,10 +176,9 @@ async function repairUserHookTrust(
       )
     }
 
-    const keysToClear = new Set([
-      ...request.moves.map((move) => move.reportedOldKey),
-      ...Array.from(byNewKey.values(), (listing) => listing.key)
-    ])
+    const oldKeys = request.moves.map((move) => move.reportedOldKey)
+    const newKeys = Array.from(byNewKey.values(), (listing) => listing.key)
+    const keysToClear = new Set([...oldKeys, ...newKeys].flatMap(getHookTrustKeyWriteVariants))
     const edits: { keyPath: string; value: unknown; mergeStrategy: 'replace' }[] = Array.from(
       keysToClear,
       (key) => ({
@@ -196,10 +232,93 @@ async function repairUserHookTrust(
   })
 }
 
+function matchMirroredHookTargets(
+  listings: readonly CodexHookListing[],
+  targets: readonly CodexMirroredHookTrustTarget[]
+): Map<string, CodexHookListing> {
+  const expected = new Map(
+    targets.map((target) => [normalizeHookTrustKeyForLookup(target.key), target.command])
+  )
+  if (expected.size !== targets.length) {
+    throw new Error('mirrored hook trust request contains duplicate normalized keys')
+  }
+  const matched = new Map<string, CodexHookListing>()
+  for (const listing of listings) {
+    const normalizedKey = normalizeHookTrustKeyForLookup(listing.key)
+    if (expected.get(normalizedKey) !== listing.command) {
+      continue
+    }
+    const existing = matched.get(normalizedKey)
+    if (existing && !hookListingStatesAgree(existing, listing)) {
+      throw new Error('hooks/list reported ambiguous mirrored hook key variants')
+    }
+    if (!existing) {
+      matched.set(normalizedKey, listing)
+    }
+  }
+  if (matched.size !== targets.length) {
+    throw new Error(
+      `hooks/list matched ${matched.size} of ${targets.length} approved mirrored hooks`
+    )
+  }
+  return matched
+}
+
+async function grantMirroredRuntimeHookTrust(
+  request: CodexMirroredHookTrustGrantRequest
+): Promise<CodexUserHookTrustRebaseResult> {
+  return runCodexAppServerSession(request.invocation, async ({ request: requestRpc }) => {
+    const listed = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
+    const byKey = matchMirroredHookTargets(collectCodexHookListings(listed), request.targets)
+    const edits = request.targets.map((target) => {
+      const listing = byKey.get(normalizeHookTrustKeyForLookup(target.key))!
+      return {
+        keyPath: quotedKeyPath(listing.key),
+        value: {
+          trusted_hash: listing.currentHash,
+          ...(target.enabled ? {} : { enabled: false })
+        },
+        mergeStrategy: 'replace' as const
+      }
+    })
+    await requestRpc('config/batchWrite', { edits, reloadUserConfig: true })
+
+    const verified = await requestRpc('hooks/list', { cwds: [request.hooksListCwd] })
+    const verifiedByKey = matchMirroredHookTargets(
+      collectCodexHookListings(verified),
+      request.targets
+    )
+    const invalid = request.targets.find((target) => {
+      const normalizedKey = normalizeHookTrustKeyForLookup(target.key)
+      const before = byKey.get(normalizedKey)!
+      const after = verifiedByKey.get(normalizedKey)!
+      return (
+        after.currentHash !== before.currentHash ||
+        after.trustStatus !== 'trusted' ||
+        after.enabled !== target.enabled
+      )
+    })
+    if (invalid) {
+      throw new Error('post-write hooks/list verification failed for mirrored hook trust')
+    }
+    return {
+      outcome: 'mirrored-granted',
+      entries: request.targets.map((target) => {
+        const listing = verifiedByKey.get(normalizeHookTrustKeyForLookup(target.key))!
+        return { key: listing.key, command: target.command, currentHash: listing.currentHash }
+      })
+    }
+  })
+}
+
 export function runCodexUserHookTrustRebaseSession(
   request: CodexUserHookTrustRebaseRequest
 ): Promise<CodexUserHookTrustRebaseResult> {
-  return request.operation === 'inspect-user-hook-trust'
-    ? inspectUserHookTrust(request)
-    : repairUserHookTrust(request)
+  if (request.operation === 'inspect-user-hook-trust') {
+    return inspectUserHookTrust(request)
+  }
+  if (request.operation === 'repair-user-hook-trust') {
+    return repairUserHookTrust(request)
+  }
+  return grantMirroredRuntimeHookTrust(request)
 }

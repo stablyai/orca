@@ -40,6 +40,8 @@
     "../src/main/codex/codex-home-paths.ts",
     "../src/main/codex/codex-managed-home-resource-copy-marker.ts",
     "../src/main/codex/codex-managed-trust-grant-plan.ts",
+    "../src/main/codex/codex-mirrored-hook-runtime-trust-cache.ts",
+    "../src/main/codex/codex-mirrored-hook-runtime-trust.ts",
     "../src/main/codex/codex-path-observation.ts",
     "../src/main/codex/codex-hook-identity.ts",
     "../src/main/codex/codex-hook-trust-grant.ts",

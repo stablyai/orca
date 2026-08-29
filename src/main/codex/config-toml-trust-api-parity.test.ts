@@ -29,6 +29,7 @@ describe('config-toml-trust public API', () => {
         'computeTrustedHash',
         'escapeTomlString',
         'getCodexExplicitHomeHookSourcePath',
+        'getHookTrustKeyWriteVariants',
         'normalizeCodexHookSourcePath',
         'normalizeCodexProjectPathForLookup',
         'normalizeCodexProjectPathForRevocationLookup',

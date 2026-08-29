@@ -5,6 +5,7 @@ import { escapeRegex } from '../../shared/string-utils'
 import {
   computeTrustedHash,
   escapeTomlString,
+  getHookTrustKeyWriteVariants,
   upsertHookTrustEntries,
   type CodexTrustEntry
 } from './config-toml-trust'
@@ -611,6 +612,50 @@ describe('upsertHookTrustEntries', () => {
     const headerCount = (written.match(/\[hooks\.state\."/g) ?? []).length
     expect(headerCount).toBe(1)
     expect(written).not.toContain('sha256:OLD')
+  })
+
+  it('replaces both Windows separator variants together when writing a runtime currentHash', () => {
+    const backslashPath =
+      'C:\\Users\\Rod\\AppData\\Roaming\\orca\\codex-runtime-home\\home\\hooks.json'
+    const slashPath = 'C:/Users/Rod/AppData/Roaming/orca/codex-runtime-home/home/hooks.json'
+    const backslashKey = `${backslashPath}:pre_tool_use:1:0`
+    const slashKey = `${slashPath}:pre_tool_use:1:0`
+    writeFileSync(
+      configPath,
+      [
+        `[hooks.state.'${backslashKey}']`,
+        'enabled = true',
+        'trusted_hash = "sha256:system-source-hash"',
+        '',
+        `[hooks.state."${slashKey}"]`,
+        'enabled = true',
+        'trusted_hash = "sha256:other-separator-hash"',
+        ''
+      ].join('\n'),
+      'utf-8'
+    )
+
+    const runtimeHash = 'sha256:runtime-current-hash'
+    upsertHookTrustEntries(configPath, [
+      {
+        sourcePath: backslashPath,
+        eventLabel: 'pre_tool_use',
+        groupIndex: 1,
+        handlerIndex: 0,
+        command: 'user-pre-tool-hook',
+        trustedHash: runtimeHash
+      }
+    ])
+
+    const written = readFileSync(configPath, 'utf-8')
+    const variants = getHookTrustKeyWriteVariants(backslashKey)
+    expect(variants).toEqual(expect.arrayContaining([backslashKey, slashKey]))
+    expect((written.match(/\[hooks\.state\./g) ?? []).length).toBe(2)
+    expect(written).toContain(`[hooks.state.'${backslashKey}']`)
+    expect(written).toContain(`[hooks.state.'${slashKey}']`)
+    expect((written.match(/trusted_hash = "sha256:runtime-current-hash"/g) ?? []).length).toBe(2)
+    expect(written).not.toContain('sha256:system-source-hash')
+    expect(written).not.toContain('sha256:other-separator-hash')
   })
 
   it('finds and replaces a legacy forward-slash block when Orca upserts with native backslash key', () => {

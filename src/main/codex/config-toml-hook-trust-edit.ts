@@ -27,7 +27,7 @@ export function upsertHookTrustContent(
   for (const entry of entries) {
     updated = upsertTrustBlocks(
       updated,
-      getTrustKeyWriteVariants(computeCodexTrustKey(entry)),
+      getHookTrustKeyWriteVariants(computeCodexTrustKey(entry)),
       entry.trustedHash ?? computeCodexTrustedHash(entry),
       entry.enabled
     )
@@ -129,7 +129,7 @@ function formatHookStateTableKey(key: string): string {
   return `"${escapeTomlBasicString(key)}"`
 }
 
-function getTrustKeyWriteVariants(key: string): string[] {
+export function getHookTrustKeyWriteVariants(key: string): string[] {
   const parsed = parseCodexTrustKey(key)
   if (!parsed || !usesWindowsCodexPathSeparators(parsed.sourcePath)) {
     return [key]

@@ -17,7 +17,8 @@ import {
 import { runExclusivelyForCodexTrustConfig } from './codex-trust-config-mutation-queue'
 import { computeTrustKey, type CodexTrustEntry } from './config-toml-trust'
 import type {
-  CodexUserHookTrustRebaseRequest,
+  CodexUserHookTrustInspectRequest,
+  CodexUserHookTrustRepairRequest,
   CodexUserHookTrustRebaseResult,
   CodexUserHookTrustMove
 } from './codex-user-hook-trust-rebase-client'
@@ -25,7 +26,7 @@ import type {
 type HooksByEvent = Record<string, HookDefinition[]>
 
 type RebaseSessionRunner = (
-  request: CodexUserHookTrustRebaseRequest
+  request: CodexUserHookTrustInspectRequest | CodexUserHookTrustRepairRequest
 ) => Promise<CodexUserHookTrustRebaseResult>
 
 // Why (#16441): the session runs in-process; forking it through spawnSync

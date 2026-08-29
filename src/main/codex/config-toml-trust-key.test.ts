@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import {
   computeTrustKey,
   getCodexExplicitHomeHookSourcePath,
+  getHookTrustKeyWriteVariants,
   normalizeCodexHookSourcePath,
   parseTrustKey,
   type CodexTrustEntry
@@ -96,6 +97,23 @@ describe('computeTrustKey', () => {
     })
     expect(key).toContain('\\')
     expect(key.startsWith('C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:')).toBe(true)
+  })
+
+  it('returns both slash and backslash variants for Windows and WSL trust keys', () => {
+    expect(
+      getHookTrustKeyWriteVariants(
+        'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:pre_tool_use:1:0'
+      )
+    ).toEqual([
+      'C:\\Users\\Rod\\AppData\\Roaming\\orca\\hooks.json:pre_tool_use:1:0',
+      'C:/Users/Rod/AppData/Roaming/orca/hooks.json:pre_tool_use:1:0'
+    ])
+    expect(
+      getHookTrustKeyWriteVariants('//wsl$/Ubuntu/home/user/.orca/hooks.json:post_tool_use:1:0')
+    ).toEqual([
+      '\\\\wsl$\\Ubuntu\\home\\user\\.orca\\hooks.json:post_tool_use:1:0',
+      '//wsl$/Ubuntu/home/user/.orca/hooks.json:post_tool_use:1:0'
+    ])
   })
 
   it('preserves literal backslashes in non-Windows-style fallback paths', () => {

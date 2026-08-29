@@ -43,6 +43,7 @@ import {
   restoreCodexTrustSessionsForTests,
   stubCodexTrustSessionsForTests
 } from './hook-service-test-harness'
+import { _internals as mirroredTrustInternals } from './codex-mirrored-hook-runtime-trust'
 import { CodexHookService } from './hook-service'
 
 let tmpHome: string
@@ -265,6 +266,63 @@ describe('codex hook trust write-back promotion', () => {
     expect(systemState?.enabled).toBe(false)
     // The mirrored runtime entry reflects the disable on the next launch too.
     expect(readHookTrustEntries(runtimeTomlPath).get(approvalKey)?.enabled).toBe(false)
+  })
+
+  it('does not promote a remapped runtime currentHash over the approved system hash', async () => {
+    const systemHash = 'sha256:system-source-hash'
+    const runtimeHash = 'sha256:runtime-current-hash'
+    writeSystemUserHook()
+    writeFileSync(
+      join(systemCodexDir(), 'config.toml'),
+      upsertHookTrustEntriesInContent('', [{ ...systemUserStopEntry(), trustedHash: systemHash }])
+    )
+    mirroredTrustInternals.setSessionRunner(async (request) => {
+      if (request.operation === 'inspect-user-hook-trust') {
+        return {
+          outcome: 'inspected',
+          moves: request.moves.map((move) => ({
+            ...move,
+            reportedOldKey: move.oldKey,
+            currentHash: systemHash,
+            wasTrusted: true,
+            enabled: true
+          }))
+        }
+      }
+      if (request.operation !== 'grant-mirrored-runtime-hook-trust') {
+        throw new Error('unexpected repair operation')
+      }
+      return {
+        outcome: 'mirrored-granted',
+        entries: [
+          {
+            key: request.targets[0]!.key,
+            command: USER_HOOK_COMMAND,
+            currentHash: runtimeHash
+          }
+        ]
+      }
+    })
+
+    const service = new CodexHookService()
+    expect((await service.install()).state).toBe('installed')
+
+    const runtimeKey = computeTrustKey(runtimeUserStopEntry())
+    const systemKey = computeTrustKey(systemUserStopEntry())
+    expect(
+      readHookTrustEntries(join(runtimeHomeDir(), 'config.toml')).get(runtimeKey)?.trustedHash
+    ).toBe(runtimeHash)
+    expect(
+      readHookTrustEntries(join(systemCodexDir(), 'config.toml')).get(systemKey)?.trustedHash
+    ).toBe(systemHash)
+
+    await service.install()
+    expect(
+      readHookTrustEntries(join(runtimeHomeDir(), 'config.toml')).get(runtimeKey)?.trustedHash
+    ).toBe(runtimeHash)
+    expect(
+      readHookTrustEntries(join(systemCodexDir(), 'config.toml')).get(systemKey)?.trustedHash
+    ).toBe(systemHash)
   })
 
   it('carries a Codex-written hash verbatim when it differs from the reproduced hash', async () => {
