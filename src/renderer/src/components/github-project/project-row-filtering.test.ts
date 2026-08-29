@@ -68,7 +68,8 @@ function table(rows: GitHubProjectRow[]): GitHubProjectTable {
     },
     rows,
     totalCount: rows.length,
-    parentFieldDropped: false
+    parentFieldDropped: false,
+    projectFields: []
   }
 }
 

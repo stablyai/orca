@@ -24,6 +24,7 @@ function makeTable(title = 'Roadmap'): GitHubProjectTable {
       groupByFields: [],
       sortByFields: []
     },
+    projectFields: [],
     rows: [],
     totalCount: 0,
     parentFieldDropped: false

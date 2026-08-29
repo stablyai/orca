@@ -4,6 +4,7 @@ import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
+import ProjectViewKanban from './ProjectViewKanban'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { ProjectMissingRepoDialog } from './ProjectMissingRepoDialog'
 import { ProjectViewToolbar } from './ProjectViewToolbar'
@@ -123,7 +124,13 @@ function ProjectViewBody({
   if (!visibleTable) {
     return null
   }
-  return (
+  return visibleTable.selectedView.layout === 'BOARD_LAYOUT' ? (
+    <ProjectViewKanban
+      table={visibleTable}
+      onOpenDialog={rowActions.openDialog}
+      onEditField={(row, fieldId, value) => void rowActions.editField(row, fieldId, value)}
+    />
+  ) : (
     <ProjectViewList
       table={visibleTable}
       onOpenDialog={rowActions.openDialog}

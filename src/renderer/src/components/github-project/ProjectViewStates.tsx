@@ -42,7 +42,7 @@ function ProjectViewTab({
   active: boolean
   onPick: (viewId: string) => void
 }): React.JSX.Element {
-  const supported = view.layout === 'TABLE_LAYOUT'
+  const supported = view.layout === 'TABLE_LAYOUT' || view.layout === 'BOARD_LAYOUT'
   const layoutLabel =
     view.layout === 'BOARD_LAYOUT'
       ? 'Board'

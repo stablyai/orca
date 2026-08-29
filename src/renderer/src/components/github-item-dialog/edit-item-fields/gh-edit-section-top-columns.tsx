@@ -7,6 +7,8 @@ import { translate } from '@/i18n/i18n'
 import { GHEditSectionStatusPopover } from './gh-edit-section-status-popover'
 import { GHEditSectionAssigneesColumn } from './gh-edit-section-assignees'
 import { GHEditSectionLabelsColumn } from './gh-edit-section-labels'
+import { ProjectFieldsGrid } from '@/components/github-project/ProjectFieldsGrid'
+import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 
 export function GHEditSectionTopColumns({
   item,
@@ -17,6 +19,7 @@ export function GHEditSectionTopColumns({
   repoAssignees,
   repositoryLabelsUrl,
   attachedWorkspaceLabel,
+  projectOrigin,
   isStatePending,
   isAssigneesPending,
   isLabelsPending,
@@ -49,6 +52,7 @@ export function GHEditSectionTopColumns({
   repoAssignees: { data: GitHubAssignableUser[]; loading: boolean; error: string | null }
   repositoryLabelsUrl: string | null
   attachedWorkspaceLabel?: string | null
+  projectOrigin?: GitHubItemDialogProjectOrigin
   isStatePending: boolean
   isAssigneesPending: boolean
   isLabelsPending: boolean
@@ -134,6 +138,7 @@ export function GHEditSectionTopColumns({
           </div>
         )}
       </section>
+      {projectOrigin ? <ProjectFieldsGrid projectOrigin={projectOrigin} /> : null}
     </aside>
   )
 }

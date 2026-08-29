@@ -340,6 +340,7 @@ export function GHEditSection({
     repoAssignees,
     repositoryLabelsUrl,
     attachedWorkspaceLabel,
+    projectOrigin,
     isStatePending: isPending('state'),
     isAssigneesPending: isPending('assignees'),
     isLabelsPending: isPending('labels'),
