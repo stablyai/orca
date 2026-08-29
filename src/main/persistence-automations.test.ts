@@ -420,6 +420,7 @@ describe('Store', () => {
     delete persisted.automations[0].sourceContext
     delete persisted.automationRuns[0].runContext
     delete persisted.automationRuns[0].sourceContext
+    delete persisted.automationRuns[0].dispatchPromptPreview
     writeDataFile(persisted)
 
     const reloaded = await createStore()
@@ -449,6 +450,10 @@ describe('Store', () => {
     })
     expect(migratedRun?.runContext).toEqual(migratedAutomation?.runContext)
     expect(migratedRun?.sourceContext).toEqual(migratedAutomation?.sourceContext)
+    // The current automation prompt is not evidence of what a legacy run
+    // submitted — a derived preview would pin recovery to a prompt that never
+    // ran. Absence routes recovery through the time-based fallback instead.
+    expect(migratedRun?.dispatchPromptPreview).toBeUndefined()
   })
 
   it('shrinks an oversized automationRuns file on load without any later mutation', async () => {

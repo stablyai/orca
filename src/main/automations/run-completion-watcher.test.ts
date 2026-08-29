@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import type { Repo } from '../../shared/repo-types'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import type { AutomationsChangedPayload } from '../../shared/runtime-client-events'
+import { normalizePromptField } from '../../shared/agent-status-field-normalization'
+import { buildAutomationTurnPrompt } from '../../shared/automation-turn-prompt'
 import { AutomationService } from './service'
 import type {
   AutomationRunCompletionObservation,
@@ -50,11 +52,11 @@ const makeRepo = (overrides: Partial<Repo> = {}): Repo => ({
 
 type TestStore = Awaited<ReturnType<typeof createStore>>
 
-function createAutomation(store: TestStore): Automation {
+function createAutomation(store: TestStore, prompt = 'Check the repo'): Automation {
   store.addRepo(makeRepo())
   return store.createAutomation({
     name: 'Nightly check',
-    prompt: 'Check the repo',
+    prompt,
     agentId: 'claude',
     projectId: 'r1',
     workspaceMode: 'existing',
@@ -81,13 +83,19 @@ function readRun(store: TestStore, automationId: string, runId: string): Automat
 }
 
 function createObserver(
-  observe: (signal: AbortSignal) => Promise<AutomationRunCompletionObservation>,
+  observe: (
+    signal: AbortSignal,
+    observedAfter: number,
+    expectedPrompt?: string,
+    expectedTurnId?: string
+  ) => Promise<AutomationRunCompletionObservation>,
   resolveRunTerminal: (run: AutomationRun) => string | null = (run) =>
     run.terminalPaneKey ? 'handle-1' : null
 ): AutomationRunTerminalObserver {
   return {
     resolveRunTerminal,
-    observeCompletion: (_handle, { signal }) => observe(signal)
+    observeCompletion: (_handle, { signal, observedAfter, expectedPrompt, expectedTurnId }) =>
+      observe(signal, observedAfter, expectedPrompt, expectedTurnId)
   }
 }
 
@@ -231,6 +239,66 @@ describe('authority-owned automation run completion', () => {
     await vi.waitFor(() => {
       expect(readRun(store, automation.id, run.id).status).toBe('completed')
     })
+    service.stop()
+  })
+
+  it('re-attaches from the persisted prompt-dispatch boundary', async () => {
+    const store = await createStore()
+    const automation = createAutomation(store)
+    const run = store.createAutomationRun(automation, 1_000, 'manual')
+    const dispatchedAt = run.createdAt + 10_000
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      dispatchedAt,
+      ...LAUNCH_TARGET,
+      error: null
+    })
+    let observedAfter: number | null = null
+    const service = new AutomationService(store, {
+      terminalObserver: createObserver((signal, boundary) => {
+        observedAfter = boundary
+        return new Promise((_resolve, reject) => {
+          signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+        })
+      })
+    })
+
+    service.start()
+
+    await vi.waitFor(() => expect(observedAfter).toBe(dispatchedAt))
+    service.stop()
+  })
+
+  it('persists the canonical hook prompt preview for multiline restart recovery', async () => {
+    const store = await createStore()
+    const prompt = `line one\n${'x'.repeat(250)}`
+    const automation = createAutomation(store, prompt)
+    const run = store.createAutomationRun(automation, 1_000, 'manual')
+    store.updateAutomationRun({
+      runId: run.id,
+      status: 'dispatched',
+      ...LAUNCH_TARGET,
+      error: null
+    })
+    let expectedPrompt: string | undefined
+    let expectedTurnId: string | undefined
+    const service = new AutomationService(store, {
+      terminalObserver: createObserver((_signal, _boundary, promptPreview, turnId) => {
+        expectedPrompt = promptPreview
+        expectedTurnId = turnId
+        return new Promise(() => {})
+      })
+    })
+
+    service.start()
+
+    const turnPrompt = buildAutomationTurnPrompt(prompt, run.id)
+    await vi.waitFor(() => expect(expectedPrompt).toBe(normalizePromptField(turnPrompt)))
+    expect(expectedTurnId).toBe(run.id)
+    expect(readRun(store, automation.id, run.id).dispatchPromptPreview).toBe(
+      normalizePromptField(turnPrompt)
+    )
     service.stop()
   })
 

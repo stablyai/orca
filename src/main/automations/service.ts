@@ -47,9 +47,7 @@ export class AutomationService {
   private readonly publish: PublishAutomationsChanged | null
   private readonly runs: AutomationRunWriter
   private readonly completionWatcher: AutomationRunCompletionWatcher | null
-  /** Installed by desktop IPC registration, where external probes live; null on
-   *  runtime servers. Orca's own automation traffic parks queued external
-   *  probes behind this lease, whichever transport carried it. */
+  /** Desktop IPC lease that parks external probes behind Orca automation traffic. */
   externalProbePriority: (<T>(run: () => T) => T) | null = null
 
   constructor(
@@ -95,8 +93,7 @@ export class AutomationService {
 
   setRendererReady(): void {
     this.rendererReady = true
-    // Why: the renderer publishes the desktop window graph, so only after it
-    // attaches can an unresolvable pane mean a lost terminal rather than "not yet".
+    // Why: only after the renderer graph attaches can a missing pane prove a lost terminal.
     this.completionWatcher?.markTerminalSurfaceReady()
     void this.evaluateDueRuns()
   }
@@ -109,8 +106,7 @@ export class AutomationService {
       void this.evaluateDueRuns()
     }, this.tickMs)
     this.completionWatcher?.reconcileRetainedRuns(this.store.listAutomationRuns())
-    // Why: headless serve never gets a renderer-ready IPC, but due runs still
-    // need the same startup catch-up pass desktop gets after renderer attach.
+    // Why: headless serve needs startup catch-up despite never receiving renderer-ready IPC.
     if (this.rendererReady || this.headlessDispatcher) {
       // Serve adopts its daemon PTYs and publishes its graph before start(), so
       // its terminal surface is already as answerable as it will get.

@@ -334,8 +334,11 @@ import { registerDocPreviewGrantHandlers } from './ipc/doc-preview-grant-ipc'
 import { initializeBrowserClientHostId } from './browser/browser-client-host-id'
 import { setUnreadDockBadgeCount } from './dock/unread-badge'
 import { AutomationService } from './automations/service'
-import { createHeadlessAutomationOutputSnapshotBuffer } from './automations/headless-dispatch'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './automations/headless-workspace-create'
+import {
+  buildAutomationTurnPrompt,
+  stripAutomationTurnMarkerFromPublishedStatus
+} from '../shared/automation-turn-prompt'
 import { createRuntimeAutomationRunTerminalObserver } from './automations/runtime-terminal-run-observer'
 import { AgentAwakeService } from './agent-awake-service'
 import { normalizeComputerAwakeMode } from '../shared/computer-awake-mode'
@@ -1735,7 +1738,7 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
       if (providerSessionOnly) {
         // Why: session_start just refreshes durable resume identity while Pi is idle; forward it without titles, telemetry, or status UI.
         mainWindow?.webContents.send('agentStatus:set', {
-          ...payload,
+          ...stripAutomationTurnMarkerFromPublishedStatus(payload),
           paneKey,
           ...(launchToken ? { launchToken } : {}),
           tabId,
@@ -1763,8 +1766,10 @@ function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): Brow
               launchConfig: runtime?.getAgentStatusLaunchConfigForPaneKey(paneKey, { launchToken })
             })
           : false
+      // Why: the marker is authority-internal turn identity; every window renders this row
+      // and the desktop republishes it to mobile through syncWindowGraph.
       const statusEvent = {
-        ...payload,
+        ...stripAutomationTurnMarkerFromPublishedStatus(payload),
         paneKey,
         ...(launchToken ? { launchToken } : {}),
         ...(terminalHandle ? { terminalHandle } : {}),
@@ -2591,6 +2596,7 @@ void app.whenReady().then(async () => {
   // would keep the pane's last projection until an unrelated PTY touch came along.
   const hookStatusChangedSessionTabs = createHookStatusSessionTabsInvalidator()
   const unsubscribeHookStatusSessionTabs = agentHookServer.subscribeEnrichedStatus((enriched) => {
+    runtime?.recordAutomationAgentStatus({ ...enriched, ...enriched.payload })
     if (hookStatusChangedSessionTabs(enriched)) {
       runtime?.touchMobileSessionTabsForPane(enriched.paneKey, enriched.worktreeId ?? null)
     }
@@ -2604,6 +2610,7 @@ void app.whenReady().then(async () => {
         : hookStatusChangedSessionTabs.forgetConnection(clear.connectionId)
     for (const paneKey of clearedPaneKeys) {
       hookStatusChangedSessionTabs.forgetPane(paneKey)
+      runtime?.forgetAutomationAgentStatus(paneKey)
       runtime?.touchMobileSessionTabsForPane(paneKey)
     }
   })
@@ -2905,15 +2912,16 @@ void app.whenReady().then(async () => {
     allowRemoteHostScheduling: isServeMode,
     headlessDispatcher: isServeMode
       ? async ({ automation, run, target }) => {
-          const terminalSnapshotLimit = 2_000
           let terminalHandle: string
           let terminalSessionId: string | null = null
           let terminalPaneKey: string | null = null
           let terminalPtyId: string | null = null
+          let dispatchedAt: number
           let workspaceId: string
           let workspaceDisplayName: string | null = null
 
           if (automation.workspaceMode === 'new_per_run') {
+            dispatchedAt = Date.now()
             const created = await runtimeService.createManagedWorktree({
               ...buildHeadlessAutomationWorktreeCreateArgs({
                 automation,
@@ -2937,11 +2945,12 @@ void app.whenReady().then(async () => {
             if (!automation.workspaceId) {
               throw new Error('The target workspace is no longer available.')
             }
+            dispatchedAt = Date.now()
             const terminal = await runtimeService.launchAgentTerminal(
               `id:${automation.workspaceId}`,
               {
                 agent: automation.agentId,
-                prompt: automation.prompt,
+                prompt: buildAutomationTurnPrompt(automation.prompt, run.id),
                 title: run.title
               }
             )
@@ -2954,38 +2963,13 @@ void app.whenReady().then(async () => {
             workspaceDisplayName = worktree.displayName ?? null
           }
 
-          const completion = (async () => {
-            const wait = await runtimeService.waitForTerminal(terminalHandle, {
-              condition: 'tui-idle'
-            })
-            const read = await runtimeService.readTerminal(terminalHandle, {
-              limit: terminalSnapshotLimit
-            })
-            const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
-            snapshotBuffer.append(read.tail.join('\n'))
-            if (wait.satisfied) {
-              return {
-                status: 'completed' as const,
-                outputSnapshot: snapshotBuffer.snapshot(),
-                error: null
-              }
-            }
-            return {
-              status: 'dispatch_failed' as const,
-              outputSnapshot: snapshotBuffer.snapshot(),
-              error: wait.blockedReason
-                ? `Automation agent is blocked: ${wait.blockedReason}.`
-                : 'Automation agent did not report completion.'
-            }
-          })()
-
           return {
+            dispatchedAt,
             workspaceId,
             workspaceDisplayName,
             terminalSessionId,
             terminalPaneKey,
-            terminalPtyId,
-            completion
+            terminalPtyId
           }
         }
       : undefined

@@ -223,6 +223,9 @@ export function backfillLegacyAutomationContexts(
       next.terminalPtyId = null
       changed = true
     }
+    // No dispatchPromptPreview backfill: the automation's current prompt is not
+    // evidence of what a legacy run submitted, and a wrong preview pins recovery
+    // to a prompt that never ran. Absent preview → time-based recovery fallback.
     return next
   })
   if (!changed) {

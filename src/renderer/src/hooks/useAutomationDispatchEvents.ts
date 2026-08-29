@@ -34,6 +34,7 @@ import {
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { AgentStateHistoryEntry } from '../../../shared/agent-status-types'
 import { resolveFolderWorkspaceHost } from '../../../shared/folder-workspace-execution-host'
+import { buildAutomationTurnPrompt } from '../../../shared/automation-turn-prompt'
 
 const activeReuseDispatchTabIds = new Set<string>()
 
@@ -90,6 +91,7 @@ export function useAutomationDispatchEvents(): void {
   useEffect(() => {
     const unsubscribe = window.api.automations.onDispatchRequested(
       async ({ automation, run, dispatchToken }) => {
+        const dispatchPrompt = buildAutomationTurnPrompt(automation.prompt, run.id)
         const markDispatchResult = async (result: AutomationDispatchResult): Promise<void> => {
           // Deliberately no local emit: the write publishes its own host-scoped event
           // (automation-run-writer.ts) before this reply returns, and an unscoped one
@@ -507,7 +509,6 @@ export function useAutomationDispatchEvents(): void {
             unsubscribeAgentStatus = useAppStore.subscribe(checkCurrentStatus)
             checkCurrentStatus()
           }
-          const dispatchStartedAt = Date.now()
           if (automation.reuseSession) {
             const reusableSession = findReusableAutomationSession({
               automationId: automation.id,
@@ -524,10 +525,11 @@ export function useAutomationDispatchEvents(): void {
               if (releaseTab) {
                 releaseReuseDispatchTab = releaseTab
                 try {
+                  const reuseCompletionStartedAt = Date.now()
                   const submitted = await submitPromptToAgentPty({
                     tabId: reusableSession.tabId,
                     ptyId: reusableSession.ptyId,
-                    content: automation.prompt
+                    content: dispatchPrompt
                   })
                   if (!submitted) {
                     cleanupRunObservers()
@@ -542,7 +544,6 @@ export function useAutomationDispatchEvents(): void {
                         handleAgentDone()
                       }
                     }
-                    const reuseCompletionStartedAt = Date.now()
                     unsubscribeSessionObserver = await observeExistingAutomationSession({
                       ptyId: reusableSession.ptyId,
                       paneKey: reusableSession.paneKey,
@@ -572,6 +573,7 @@ export function useAutomationDispatchEvents(): void {
                     await markDispatchResult({
                       runId: run.id,
                       status: 'dispatched',
+                      dispatchedAt: reuseCompletionStartedAt,
                       workspaceId: worktree.id,
                       workspaceDisplayName: worktree.displayName,
                       terminalSessionId: reusableSession.tabId,
@@ -595,10 +597,12 @@ export function useAutomationDispatchEvents(): void {
               }
             }
           }
+          let freshLaunchSawWorking = false
+          const freshDispatchStartedAt = Date.now()
           const result = await launchAgentBackgroundSession({
             agent: automation.agentId,
             worktreeId: worktree.id,
-            prompt: automation.prompt,
+            prompt: dispatchPrompt,
             launchSource: 'unknown',
             title: run.title,
             onData: (chunk) => {
@@ -607,8 +611,15 @@ export function useAutomationDispatchEvents(): void {
             onAgentStatus: (payload) => {
               latestAssistantMessage =
                 payload.lastAssistantMessage?.trim() || latestAssistantMessage
-              // Why: session-boundary done = launch connect, not run completion (see observeAgentStatus).
-              if (payload.state !== 'done' || payload.sessionBoundary === true) {
+              if (payload.state === 'working') {
+                freshLaunchSawWorking = true
+              }
+              // Why: Claude marks launch boundaries done; Codex reports initial idle before its prompt turn works.
+              if (
+                payload.state !== 'done' ||
+                payload.sessionBoundary === true ||
+                (automation.agentId === 'codex' && !freshLaunchSawWorking)
+              ) {
                 return
               }
               handleAgentDone()
@@ -634,11 +645,14 @@ export function useAutomationDispatchEvents(): void {
             releaseTerminalOwnership()
           }
           const launchedTabId = result.tabId
-          observeAgentStatus(result.paneKey, dispatchStartedAt)
+          observeAgentStatus(result.paneKey, freshDispatchStartedAt, {
+            requireWorkingAfterStart: automation.agentId === 'codex'
+          })
           try {
             await markDispatchResult({
               runId: run.id,
               status: 'dispatched',
+              dispatchedAt: freshDispatchStartedAt,
               workspaceId: worktree.id,
               workspaceDisplayName: worktree.displayName,
               terminalSessionId: launchedTabId,

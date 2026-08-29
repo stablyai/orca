@@ -57,6 +57,11 @@ import {
   type AgentStatusOrchestrationContext,
   type AgentStatusEntry
 } from '../../shared/agent-status-types'
+import {
+  isAutomationTurnPrompt,
+  stripAutomationTurnMarker,
+  stripAutomationTurnMarkerFromPublishedStatus
+} from '../../shared/automation-turn-prompt'
 import { terminalStatusPayloadMatchesHook } from '../../shared/agent-terminal-status-equivalence'
 import { indexAgentStatusRowsByPaneKey } from '../agent-hooks/agent-status-pane-index'
 import type { AgentHookAuthorityAttestation } from '../agent-hooks/server'
@@ -2536,6 +2541,9 @@ type OrchestrationCompatibilitySshAttachmentAuthority = Extract<
 type TerminalWaiter = {
   handle: string
   condition: RuntimeTerminalWaitCondition
+  agentTurnStartedAfter: number | null
+  agentTurnPrompt: string | null
+  agentTurnId: string | null
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void
   timeout: NodeJS.Timeout | null
@@ -3524,7 +3532,23 @@ export class OrcaRuntimeService {
   private ptyOutputSequenceById = new Map<string, number>()
   private agentPromptLifecycleByPtyId = new Map<
     string,
-    { status: AgentStatus | null; workingSequence: number; updatedAt: number }
+    {
+      status: AgentStatus | null
+      workingSequence: number
+      lastWorkingAt: number | null
+      lastIdleAt: number | null
+      updatedAt: number
+    }
+  >()
+  private automationHookTurnEvidenceByPaneKey = new Map<
+    string,
+    {
+      authorityId: string
+      incarnation: number
+      prompt: string
+      startedAt: number | null
+      finishedAt: number | null
+    }
   >()
   private agentPromptPermissionSequenceByPtyId = new Map<string, number>()
   private agentPromptExplicitStatusFloorByPtyId = new Map<string, number>()
@@ -14135,6 +14159,8 @@ export class OrcaRuntimeService {
       this.agentPromptLifecycleByPtyId.set(ptyId, {
         status,
         workingSequence: status === 'working' ? 1 : 0,
+        lastWorkingAt: status === 'working' ? updatedAt : null,
+        lastIdleAt: status === 'idle' ? updatedAt : null,
         updatedAt
       })
       return
@@ -14143,6 +14169,9 @@ export class OrcaRuntimeService {
       status,
       workingSequence:
         current.workingSequence + (status === 'working' && current.status !== 'working' ? 1 : 0),
+      lastWorkingAt:
+        status === 'working' && current.status !== 'working' ? updatedAt : current.lastWorkingAt,
+      lastIdleAt: status === 'idle' && current.status !== 'idle' ? updatedAt : current.lastIdleAt,
       updatedAt
     })
   }
@@ -14175,11 +14204,15 @@ export class OrcaRuntimeService {
     if (!current || current.status === status) {
       return
     }
+    const updatedAt = Date.now()
     this.agentPromptLifecycleByPtyId.set(ptyId, {
       status,
       workingSequence:
         current.workingSequence + (status === 'working' && current.status !== 'working' ? 1 : 0),
-      updatedAt: Date.now()
+      lastWorkingAt:
+        status === 'working' && current.status !== 'working' ? updatedAt : current.lastWorkingAt,
+      lastIdleAt: status === 'idle' && current.status !== 'idle' ? updatedAt : current.lastIdleAt,
+      updatedAt
     })
   }
 
@@ -20829,6 +20862,187 @@ export class OrcaRuntimeService {
     return { handle, isRunningAgent, status: null }
   }
 
+  hasTerminalAgentWorkedSince(
+    handle: string,
+    observedAfter: number,
+    expectedPrompt?: string,
+    expectedTurnId?: string
+  ): boolean {
+    return this.getTerminalAgentTurnEvidence(handle, observedAfter, expectedPrompt, expectedTurnId)
+      .started
+  }
+
+  recordAutomationAgentStatus(entry: AgentStatusIpcPayload): void {
+    const observation = entry.observation
+    if (
+      entry.providerSessionOnly === true ||
+      observation?.kind === 'snapshot' ||
+      observation?.kind === 'identity-only'
+    ) {
+      return
+    }
+    const previous = this.automationHookTurnEvidenceByPaneKey.get(entry.paneKey)
+    const sameIncarnation =
+      previous?.authorityId === observation?.authorityId &&
+      previous?.incarnation === observation?.incarnation
+    if (entry.state === 'working') {
+      const startsNewTurn =
+        observation?.boundary === true ||
+        !sameIncarnation ||
+        !previous ||
+        previous.finishedAt !== null
+      this.automationHookTurnEvidenceByPaneKey.set(entry.paneKey, {
+        authorityId: observation?.authorityId ?? 'legacy',
+        incarnation: observation?.incarnation ?? 0,
+        prompt: entry.prompt,
+        startedAt: startsNewTurn ? entry.receivedAt : (previous.startedAt ?? entry.receivedAt),
+        finishedAt: startsNewTurn ? null : previous.finishedAt
+      })
+      return
+    }
+    if (entry.state !== 'done' || entry.sessionBoundary === true) {
+      return
+    }
+    const authoritativeCompletion = entry.turnCompletedAt !== undefined
+    if (!authoritativeCompletion && (!sameIncarnation || previous?.startedAt === null)) {
+      return
+    }
+    this.automationHookTurnEvidenceByPaneKey.set(entry.paneKey, {
+      authorityId: observation?.authorityId ?? previous?.authorityId ?? 'legacy',
+      incarnation: observation?.incarnation ?? previous?.incarnation ?? 0,
+      prompt: entry.prompt || previous?.prompt || '',
+      startedAt: previous?.startedAt ?? (authoritativeCompletion ? entry.receivedAt : null),
+      finishedAt: entry.receivedAt
+    })
+  }
+
+  forgetAutomationAgentStatus(paneKey: string): void {
+    this.automationHookTurnEvidenceByPaneKey.delete(paneKey)
+  }
+
+  private hasTerminalAgentFinishedSince(
+    handle: string,
+    observedAfter: number,
+    expectedPrompt?: string | null,
+    expectedTurnId?: string | null
+  ): boolean {
+    return this.getTerminalAgentTurnEvidence(handle, observedAfter, expectedPrompt, expectedTurnId)
+      .finished
+  }
+
+  private getTerminalAgentTurnEvidence(
+    handle: string,
+    observedAfter: number,
+    expectedPrompt?: string | null,
+    expectedTurnId?: string | null
+  ): { started: boolean; finished: boolean } {
+    const ptyId = this.getTerminalAgentStatusPtyId(handle)
+    const lifecycle = this.agentPromptLifecycleByPtyId.get(ptyId)
+    let startedAt =
+      !expectedPrompt &&
+      lifecycle?.lastWorkingAt !== null &&
+      lifecycle?.lastWorkingAt !== undefined &&
+      lifecycle.lastWorkingAt >= observedAfter
+        ? lifecycle.lastWorkingAt
+        : null
+    let completedFromHook = false
+    const paneKey = this.getPaneKeyForTerminalHandle(handle)
+    const hasTurnIdentity =
+      expectedPrompt && expectedTurnId
+        ? isAutomationTurnPrompt(expectedPrompt, expectedTurnId)
+        : false
+    // Turn identity is the embedded run-id marker, not body equality: a reused
+    // run's later dispatch can submit an edited prompt body under the same run id.
+    const matchesExpectedTurn = (prompt: string | null | undefined): boolean =>
+      Boolean(
+        hasTurnIdentity &&
+        expectedTurnId &&
+        typeof prompt === 'string' &&
+        isAutomationTurnPrompt(prompt, expectedTurnId)
+      )
+    const liveHookEvidence = paneKey
+      ? this.automationHookTurnEvidenceByPaneKey.get(paneKey)
+      : undefined
+    const liveEvidenceMatchesTurn = matchesExpectedTurn(liveHookEvidence?.prompt)
+    if (
+      liveHookEvidence?.startedAt !== null &&
+      liveHookEvidence?.startedAt !== undefined &&
+      (!expectedPrompt || liveHookEvidence.prompt === expectedPrompt || liveEvidenceMatchesTurn)
+    ) {
+      if (liveEvidenceMatchesTurn || liveHookEvidence.startedAt >= observedAfter) {
+        startedAt = Math.max(startedAt ?? observedAfter, liveHookEvidence.startedAt)
+      }
+      if (
+        liveHookEvidence.finishedAt !== null &&
+        (liveEvidenceMatchesTurn ||
+          (liveHookEvidence.finishedAt > observedAfter &&
+            (liveHookEvidence.startedAt >= observedAfter || liveHookEvidence.startedAt === null)))
+      ) {
+        completedFromHook = true
+      }
+    }
+    for (const entry of this.getAgentStatusSnapshotFn?.() ?? []) {
+      if (entry.providerSessionOnly === true) {
+        continue
+      }
+      if (entry.terminalHandle !== handle && (!paneKey || entry.paneKey !== paneKey)) {
+        continue
+      }
+      const replayedCompletion =
+        entry.observation?.kind === 'snapshot' &&
+        entry.observation.origin === 'hook' &&
+        entry.observation.replayedAt !== undefined &&
+        entry.observation.replayedAt > observedAfter
+      const matchesTurnIdentity = matchesExpectedTurn(entry.prompt)
+      if (
+        entry.observation?.kind === 'snapshot' &&
+        entry.state !== 'working' &&
+        !replayedCompletion &&
+        !matchesTurnIdentity
+      ) {
+        continue
+      }
+      if (
+        entry.state === 'working' &&
+        (matchesTurnIdentity || entry.stateStartedAt >= observedAfter) &&
+        (!expectedPrompt || entry.prompt === expectedPrompt || matchesTurnIdentity)
+      ) {
+        startedAt = Math.max(startedAt ?? observedAfter, entry.stateStartedAt)
+      }
+      if (
+        entry.state === 'done' &&
+        entry.sessionBoundary !== true &&
+        (entry.turnCompletedAt !== undefined || replayedCompletion || matchesTurnIdentity) &&
+        (matchesTurnIdentity || entry.receivedAt > observedAfter) &&
+        (!expectedPrompt || entry.prompt === expectedPrompt || matchesTurnIdentity)
+      ) {
+        completedFromHook = true
+      }
+    }
+    const finishedFromLifecycle = Boolean(
+      startedAt !== null &&
+      lifecycle?.status === 'idle' &&
+      lifecycle.lastIdleAt !== null &&
+      lifecycle.lastIdleAt >= startedAt
+    )
+    return {
+      started: startedAt !== null || completedFromHook,
+      finished: completedFromHook || finishedFromLifecycle
+    }
+  }
+
+  private canResolveTerminalTuiIdleWaiter(waiter: TerminalWaiter): boolean {
+    return (
+      waiter.agentTurnStartedAfter === null ||
+      this.hasTerminalAgentFinishedSince(
+        waiter.handle,
+        waiter.agentTurnStartedAfter,
+        waiter.agentTurnPrompt,
+        waiter.agentTurnId
+      )
+    )
+  }
+
   private getTerminalAgentStatusPtyId(handle: string): string {
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
@@ -21845,9 +22059,23 @@ export class OrcaRuntimeService {
       condition?: RuntimeTerminalWaitCondition
       timeoutMs?: number
       signal?: AbortSignal
+      agentTurnStartedAfter?: number
+      agentTurnPrompt?: string
+      agentTurnId?: string
     }
   ): Promise<RuntimeTerminalWait> {
     const condition = options?.condition ?? 'exit'
+    const agentTurnStartedAfter = options?.agentTurnStartedAfter ?? null
+    const agentTurnPrompt = options?.agentTurnPrompt ?? null
+    const agentTurnId = options?.agentTurnId ?? null
+    const hasOrderedAgentCompletion = (): boolean =>
+      agentTurnStartedAfter !== null &&
+      this.hasTerminalAgentFinishedSince(
+        handle,
+        agentTurnStartedAfter,
+        agentTurnPrompt,
+        agentTurnId
+      )
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (condition === 'exit' && !pty.pty.connected) {
@@ -21862,11 +22090,19 @@ export class OrcaRuntimeService {
       if (condition === 'tui-idle' && ptyBlockedReason) {
         return buildPtyTerminalWaitBlockedResult(handle, condition, pty.pty, ptyBlockedReason)
       }
-      if (condition === 'tui-idle' && pty.pty.lastAgentStatus === 'idle') {
+      if (condition === 'tui-idle' && hasOrderedAgentCompletion()) {
         return buildPtyTerminalWaitResult(handle, condition, pty.pty)
       }
       if (
         condition === 'tui-idle' &&
+        agentTurnStartedAfter === null &&
+        pty.pty.lastAgentStatus === 'idle'
+      ) {
+        return buildPtyTerminalWaitResult(handle, condition, pty.pty)
+      }
+      if (
+        condition === 'tui-idle' &&
+        agentTurnStartedAfter === null &&
         (this.getAdoptedPtyExplicitIdleStatus(pty.pty) === 'idle' ||
           isKnownReadyPromptPreview(ptyWaitText))
       ) {
@@ -21882,6 +22118,9 @@ export class OrcaRuntimeService {
         const waiter: TerminalWaiter = {
           handle,
           condition,
+          agentTurnStartedAfter,
+          agentTurnPrompt,
+          agentTurnId,
           resolve,
           reject,
           timeout: null,
@@ -21904,34 +22143,48 @@ export class OrcaRuntimeService {
           this.waitersByHandle.set(handle, waiters)
         }
         waiters.add(waiter)
-        const live = this.getLivePtyForHandle(handle)
-        if (!live) {
-          this.removeWaiter(waiter)
-          reject(new Error('terminal_handle_stale'))
-        } else if (condition === 'exit' && !live.pty.connected) {
-          this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-        } else if (condition === 'tui-idle') {
-          const livePtyWaitText = buildTerminalWaitText(
-            live.pty.tailBuffer,
-            live.pty.tailPartialLine,
-            live.pty.preview
-          )
-          const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
-          if (blockedReason) {
-            this.resolveWaiter(
-              waiter,
-              buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
+        // Why: mirror the leaf branch — an inspection throw after registration
+        // (ordered waits ask getTerminalAgentStatusPtyId, which throws
+        // terminal_gone on a disconnected PTY) must tear the waiter and its
+        // timeout down instead of stranding them until the timeout fires.
+        try {
+          const live = this.getLivePtyForHandle(handle)
+          if (!live) {
+            this.removeWaiter(waiter)
+            reject(new Error('terminal_handle_stale'))
+          } else if (condition === 'exit' && !live.pty.connected) {
+            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+          } else if (condition === 'tui-idle') {
+            const livePtyWaitText = buildTerminalWaitText(
+              live.pty.tailBuffer,
+              live.pty.tailPartialLine,
+              live.pty.preview
             )
-          } else if (live.pty.lastAgentStatus === 'idle') {
-            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-          } else if (
-            this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
-            isKnownReadyPromptPreview(livePtyWaitText)
-          ) {
-            this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
-          } else {
-            this.startPtyTuiIdleFallbackPoll(waiter, live.pty, effectiveTimeoutMs)
+            const blockedReason = detectTerminalWaitBlockedReason(livePtyWaitText)
+            if (blockedReason) {
+              this.resolveWaiter(
+                waiter,
+                buildPtyTerminalWaitBlockedResult(handle, condition, live.pty, blockedReason)
+              )
+            } else if (
+              agentTurnStartedAfter !== null
+                ? this.canResolveTerminalTuiIdleWaiter(waiter)
+                : live.pty.lastAgentStatus === 'idle'
+            ) {
+              this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+            } else if (
+              agentTurnStartedAfter === null &&
+              (this.getAdoptedPtyExplicitIdleStatus(live.pty) === 'idle' ||
+                isKnownReadyPromptPreview(livePtyWaitText))
+            ) {
+              this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, condition, live.pty))
+            } else {
+              this.startPtyTuiIdleFallbackPoll(waiter, live.pty, effectiveTimeoutMs)
+            }
           }
+        } catch (error) {
+          this.removeWaiter(waiter)
+          reject(error instanceof Error ? error : new Error(String(error)))
         }
       })
     }
@@ -21952,10 +22205,17 @@ export class OrcaRuntimeService {
     // detection that powers the renderer's "Task complete" notifications.
     // Why: only 'idle' satisfies tui-idle, not 'permission'. Permission means the
     // agent is blocked on user approval, not finished with its task.
-    if (condition === 'tui-idle' && leaf.lastAgentStatus === 'idle') {
+    if (condition === 'tui-idle' && hasOrderedAgentCompletion()) {
       return buildTerminalWaitResult(handle, condition, leaf)
     }
-    if (condition === 'tui-idle') {
+    if (
+      condition === 'tui-idle' &&
+      agentTurnStartedAfter === null &&
+      leaf.lastAgentStatus === 'idle'
+    ) {
+      return buildTerminalWaitResult(handle, condition, leaf)
+    }
+    if (condition === 'tui-idle' && agentTurnStartedAfter === null) {
       const fastPathTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
       if (
         (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
@@ -21979,6 +22239,9 @@ export class OrcaRuntimeService {
       const waiter: TerminalWaiter = {
         handle,
         condition,
+        agentTurnStartedAfter,
+        agentTurnPrompt,
+        agentTurnId,
         resolve,
         reject,
         timeout: null,
@@ -22024,7 +22287,11 @@ export class OrcaRuntimeService {
               waiter,
               buildTerminalWaitBlockedResult(handle, condition, live.leaf, blockedReason)
             )
-          } else if (live.leaf.lastAgentStatus === 'idle') {
+          } else if (
+            agentTurnStartedAfter !== null
+              ? this.canResolveTerminalTuiIdleWaiter(waiter)
+              : live.leaf.lastAgentStatus === 'idle'
+          ) {
             // Why: don't clear lastAgentStatus here. It's a factual record of the
             // last detected OSC state, not a one-shot signal. Clearing it causes
             // subsequent tui-idle waiters to hang even though the agent is idle —
@@ -22036,8 +22303,9 @@ export class OrcaRuntimeService {
             // preview/title until the waiter resolves or hits its timeout.
             const fastPathTitle = live.leaf.paneTitle ?? this.tabs.get(live.leaf.tabId)?.title
             if (
-              (fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
-              isKnownReadyPromptPreview(liveLeafWaitText)
+              agentTurnStartedAfter === null &&
+              ((fastPathTitle && detectExplicitIdleStatusFromTitle(fastPathTitle) === 'idle') ||
+                isKnownReadyPromptPreview(liveLeafWaitText))
             ) {
               this.resolveWaiter(waiter, buildTerminalWaitResult(handle, condition, live.leaf))
             } else {
@@ -22697,7 +22965,8 @@ export class OrcaRuntimeService {
         state: src.state,
         ...(src.workingMode ? { workingMode: src.workingMode } : {}),
         agentType: src.agentType,
-        prompt: src.prompt,
+        // Rule 3: worktree.ps reaches old mobile clients and `orca worktree ps --json` verbatim.
+        prompt: stripAutomationTurnMarker(src.prompt),
         taskTitle,
         displayName,
         lastAssistantMessage: src.lastAssistantMessage,
@@ -36396,7 +36665,11 @@ export class OrcaRuntimeService {
       const { turnCompletedAt: projectedTurnCompletedAt, ...clientStatusFields } =
         projectedStatusEntry ?? {}
       const clientAgentStatus = projectedStatusEntry
-        ? { agentStatus: clientStatusFields as AgentStatusEntry }
+        ? {
+            agentStatus: stripAutomationTurnMarkerFromPublishedStatus(
+              clientStatusFields as AgentStatusEntry
+            )
+          }
         : {}
       const rawTurnCompletedAt =
         hookAgentStatus?.live?.payload.turnCompletedAt ??
@@ -37981,7 +38254,7 @@ export class OrcaRuntimeService {
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      if (waiter.condition === 'tui-idle' && this.canResolveTerminalTuiIdleWaiter(waiter)) {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
       }
     }
@@ -38036,7 +38309,7 @@ export class OrcaRuntimeService {
       return
     }
     for (const waiter of [...waiters]) {
-      if (waiter.condition === 'tui-idle') {
+      if (waiter.condition === 'tui-idle' && this.canResolveTerminalTuiIdleWaiter(waiter)) {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
@@ -38055,7 +38328,10 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (leaf.lastAgentStatus === 'idle') {
+        if (
+          this.canResolveTerminalTuiIdleWaiter(waiter) &&
+          (waiter.agentTurnStartedAfter !== null || leaf.lastAgentStatus === 'idle')
+        ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -38065,7 +38341,7 @@ export class OrcaRuntimeService {
         }
         // Why: the renderer-synced title is the only path where OSC titles are visible for daemon-hosted terminals.
         const pollTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title
-        if (pollTitle) {
+        if (waiter.agentTurnStartedAfter === null && pollTitle) {
           const titleStatus = detectExplicitIdleStatusFromTitle(pollTitle)
           if (titleStatus === 'idle') {
             if (waiter.pollInterval) {
@@ -38093,7 +38369,7 @@ export class OrcaRuntimeService {
           )
           return
         }
-        if (isKnownReadyPromptPreview(leafWaitText)) {
+        if (waiter.agentTurnStartedAfter === null && isKnownReadyPromptPreview(leafWaitText)) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -38103,6 +38379,7 @@ export class OrcaRuntimeService {
         }
         // Foreground fallback: a reported non-shell process with quiet output is treated as idle.
         if (
+          waiter.agentTurnStartedAfter === null &&
           leaf.lastAgentStatus === null &&
           leaf.ptyId &&
           this.ptyController &&
@@ -38135,7 +38412,11 @@ export class OrcaRuntimeService {
       leaf.tailPartialLine,
       leaf.preview
     )
-    if (leaf.lastAgentStatus === null && retainedWaitText.length === 0) {
+    if (
+      waiter.agentTurnStartedAfter === null &&
+      leaf.lastAgentStatus === null &&
+      retainedWaitText.length === 0
+    ) {
       this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     }
   }
@@ -38152,7 +38433,10 @@ export class OrcaRuntimeService {
       }
       let startedForegroundPoll = false
       try {
-        if (pty.lastAgentStatus === 'idle') {
+        if (
+          this.canResolveTerminalTuiIdleWaiter(waiter) &&
+          (waiter.agentTurnStartedAfter !== null || pty.lastAgentStatus === 'idle')
+        ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
             waiter.pollInterval = null
@@ -38175,8 +38459,9 @@ export class OrcaRuntimeService {
         }
         // Why: adopted background PTY handles use their live xterm title as the same readiness signal as leaf handles.
         if (
-          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
-          isKnownReadyPromptPreview(ptyWaitText)
+          waiter.agentTurnStartedAfter === null &&
+          (this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
+            isKnownReadyPromptPreview(ptyWaitText))
         ) {
           if (waiter.pollInterval) {
             clearInterval(waiter.pollInterval)
@@ -38185,7 +38470,12 @@ export class OrcaRuntimeService {
           this.resolveWaiter(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
           return
         }
-        if (pty.lastAgentStatus === null && this.ptyController && !foregroundPollInFlight) {
+        if (
+          waiter.agentTurnStartedAfter === null &&
+          pty.lastAgentStatus === null &&
+          this.ptyController &&
+          !foregroundPollInFlight
+        ) {
           foregroundPollInFlight = true
           startedForegroundPoll = true
           const fg = await this.ptyController.getForegroundProcess(pty.ptyId)
@@ -38209,7 +38499,11 @@ export class OrcaRuntimeService {
       }
     }, TUI_IDLE_POLL_INTERVAL_MS)
     const retainedWaitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-    if (pty.lastAgentStatus === null && retainedWaitText.length === 0) {
+    if (
+      waiter.agentTurnStartedAfter === null &&
+      pty.lastAgentStatus === null &&
+      retainedWaitText.length === 0
+    ) {
       this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     }
   }

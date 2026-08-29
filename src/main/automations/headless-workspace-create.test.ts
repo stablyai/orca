@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import type { Automation } from '../../shared/automations-types'
+import { buildAutomationTurnPrompt } from '../../shared/automation-turn-prompt'
 import type { Repo } from '../../shared/repo-types'
 import { buildHeadlessAutomationWorktreeCreateArgs } from './headless-workspace-create'
 
@@ -72,7 +73,7 @@ describe('headless automation workspace create args', () => {
       activate: false,
       createdWithAgent: 'codex',
       startupAgent: 'codex',
-      startupPrompt: 'Review changes',
+      startupPrompt: buildAutomationTurnPrompt('Review changes', 'run-1'),
       telemetrySource: 'unknown',
       automationProvenance: {
         kind: 'created-by-automation',

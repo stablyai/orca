@@ -278,7 +278,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'wt-created',
-        prompt: 'run this'
+        prompt: '<!-- ORCA_AUTOMATION_RUN_ID:run-1 -->\nrun this'
       })
     )
     expect(order).toEqual(['agent'])
@@ -320,7 +320,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'wt-created',
-        prompt: 'run this'
+        prompt: '<!-- ORCA_AUTOMATION_RUN_ID:run-1 -->\nrun this'
       })
     )
   })
@@ -339,7 +339,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         agent: 'claude',
-        prompt: 'run this',
+        prompt: '<!-- ORCA_AUTOMATION_RUN_ID:run-1 -->\nrun this',
         worktreeId: 'wt-created'
       })
     )
@@ -358,7 +358,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'wt-created',
-        prompt: 'run this'
+        prompt: '<!-- ORCA_AUTOMATION_RUN_ID:run-1 -->\nrun this'
       })
     )
     expect(mockMarkDispatchResult).toHaveBeenCalledWith(
@@ -393,7 +393,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: 'wt-existing',
-        prompt: 'run this'
+        prompt: '<!-- ORCA_AUTOMATION_RUN_ID:run-1 -->\nrun this'
       })
     )
   })
@@ -439,7 +439,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     expect(mockLaunchAgentBackgroundSession).toHaveBeenCalledWith(
       expect.objectContaining({
         worktreeId: folderWorkspace.id,
-        prompt: 'run this'
+        prompt: '<!-- ORCA_AUTOMATION_RUN_ID:run-1 -->\nrun this'
       })
     )
     expect(mockMarkDispatchResult).toHaveBeenCalledWith(
@@ -537,7 +537,7 @@ describe('useAutomationDispatchEvents setup launch', () => {
     )
   })
 
-  it('finalizes a fresh non-reuse terminal only after completed result persistence', async () => {
+  it('finalizes fresh Codex only after working and completed result persistence', async () => {
     const order: string[] = []
     let launchArgs: { onAgentStatus?: (payload: { state: string }) => void } = {}
     mockMarkDispatchResult.mockImplementation(
@@ -569,7 +569,10 @@ describe('useAutomationDispatchEvents setup launch', () => {
       }
     })
 
-    await registerAndDispatch()
+    await registerAndDispatch(makeAutomation({ agentId: 'codex' }))
+    launchArgs.onAgentStatus?.({ state: 'done' })
+    expect(mockFinalizeTerminalOwnership).not.toHaveBeenCalled()
+    launchArgs.onAgentStatus?.({ state: 'working' })
     launchArgs.onAgentStatus?.({ state: 'done' })
     await vi.waitFor(() => expect(mockFinalizeTerminalOwnership).toHaveBeenCalledOnce())
 

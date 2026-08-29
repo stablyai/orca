@@ -53,6 +53,8 @@ export type AgentStatusObservation = {
    *  whose boundary event is named anything else — the defect PR #14626 fixed one instance of. */
   boundary?: true
   kind?: AgentStatusObservationKind
+  /** Original authority-local arrival time for a hook recovered from Orca's trusted spool. */
+  replayedAt?: number
 }
 
 /** The observation facet, mixed into every row shape that carries one. Optional and read by

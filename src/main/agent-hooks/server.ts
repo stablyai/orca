@@ -843,7 +843,7 @@ export class AgentHookServer {
       this.observations.rebind(event.paneKey)
     }
     this.recordCurrentAuthorityObservation(event)
-    this.applyNormalizedStatus(event, normalized.onAccepted)
+    this.applyNormalizedStatus(event, normalized.onAccepted, 'hook', record.receivedAt)
     if (event.payload.state !== 'done') {
       this.withdrawReplayObservation(this.resolvePaneKeyAlias(event.paneKey))
     }
@@ -1426,7 +1426,8 @@ export class AgentHookServer {
   private applyNormalizedStatus(
     payload: AgentHookEventPayload,
     onAccepted?: () => void,
-    origin: AgentStatusObservationOrigin = 'hook'
+    origin: AgentStatusObservationOrigin = 'hook',
+    replayedAt?: number
   ): EnrichedAgentHookEventPayload {
     if (payload.hookEventName === 'UserPromptSubmit') {
       // Why: the prompt boundary is authoritative even when text is unchanged; its next OSC working row must not inherit the prior cron/background turn stamp.
@@ -1453,7 +1454,10 @@ export class AgentHookServer {
       onAccepted?.()
       const enriched = {
         ...this.attachStatusTiming(payload, now),
-        observation: this.stampObservation(payload, origin, now)
+        observation: {
+          ...this.stampObservation(payload, origin, now),
+          ...(replayedAt !== undefined ? { replayedAt } : {})
+        }
       }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
@@ -1586,7 +1590,10 @@ export class AgentHookServer {
     }
     const enriched = {
       ...this.attachStatusTiming(boundaryAwarePayload, now),
-      observation: this.stampObservation(boundaryAwarePayload, origin, now)
+      observation: {
+        ...this.stampObservation(boundaryAwarePayload, origin, now),
+        ...(replayedAt !== undefined ? { replayedAt } : {})
+      }
     }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&

@@ -43,6 +43,7 @@ export async function runHeadlessAutomationDispatch(
     })
   }
   try {
+    const dispatchRequestedAt = Date.now()
     const launch = await ctx.dispatcher({ automation, run, target })
     const launchRunTarget = {
       workspaceId: launch.workspaceId,
@@ -54,6 +55,7 @@ export async function runHeadlessAutomationDispatch(
     const updated = runs.updateRun({
       runId: run.id,
       status: 'dispatched',
+      dispatchedAt: launch.dispatchedAt ?? dispatchRequestedAt,
       ...launchRunTarget,
       error: null
     })

@@ -8,6 +8,7 @@ import type { AutomationRunTargetResult } from './run-target-resolution'
 const MAX_HEADLESS_OUTPUT_SNAPSHOT_CHARS = 256 * 1024
 
 export type HeadlessAutomationDispatchLaunch = {
+  dispatchedAt?: number
   workspaceId: string
   workspaceDisplayName?: string | null
   terminalSessionId: string | null

@@ -212,4 +212,27 @@ describe('automation session reuse', () => {
 
     expect(session).toBeNull()
   })
+
+  it('does not reuse a pane reserved by a retained dispatched run after restart', () => {
+    const session = findReusableAutomationSession({
+      automationId: 'auto-1',
+      agentId: 'claude',
+      worktreeId: 'wt-1',
+      currentRunId: 'run-current',
+      runs: [
+        run({ id: 'run-completed', createdAt: 1 }),
+        run({ id: 'run-retained', status: 'dispatched', createdAt: 2 })
+      ],
+      state: {
+        agentStatusByPaneKey: { [paneKey]: status() },
+        ptyIdsByTabId: { 'tab-1': ['pty-1'] },
+        terminalLayoutsByTabId: { 'tab-1': { ptyIdsByLeafId: { [leafId]: 'pty-1' } } },
+        unifiedTabsByWorktree: {
+          'wt-1': [{ contentType: 'terminal', entityId: 'tab-1' }]
+        }
+      } as never
+    })
+
+    expect(session).toBeNull()
+  })
 })

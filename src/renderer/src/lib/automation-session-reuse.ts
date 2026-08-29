@@ -26,6 +26,16 @@ export function findReusableAutomationSession(args: {
   const terminalTabIds = new Set(
     worktreeTabs.filter((tab) => tab.contentType === 'terminal').map((tab) => tab.entityId)
   )
+  const reservedPaneKeys = new Set(
+    runs
+      .filter(
+        (run) =>
+          run.id !== currentRunId &&
+          (run.status === 'dispatching' || run.status === 'dispatched') &&
+          run.terminalPaneKey
+      )
+      .map((run) => run.terminalPaneKey)
+  )
   const candidates = runs
     .filter(
       (run) =>
@@ -39,6 +49,9 @@ export function findReusableAutomationSession(args: {
     .sort((left, right) => right.createdAt - left.createdAt)
 
   for (const run of candidates) {
+    if (run.terminalPaneKey && reservedPaneKeys.has(run.terminalPaneKey)) {
+      continue
+    }
     const exactPane = findReusableExactRunPane({ state, terminalTabIds, agentId, run })
     if (exactPane) {
       return exactPane
