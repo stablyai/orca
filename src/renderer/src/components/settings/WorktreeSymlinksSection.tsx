@@ -5,7 +5,7 @@ import { Button } from '../ui/button'
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from '../ui/command'
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover'
 import { cn } from '@/lib/utils'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileIconTheme, resolveFileTypeIcon } from '@/lib/use-file-type-icon'
 import { SearchableSetting } from './SearchableSetting'
 import {
   getWorktreeSymlinkPathFilterState,
@@ -30,6 +30,7 @@ export function WorktreeSymlinksSection({
   repo,
   updateRepo
 }: WorktreeSymlinksSectionProps): React.JSX.Element {
+  const iconTheme = useFileIconTheme()
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
 
@@ -181,7 +182,7 @@ export function WorktreeSymlinksSection({
                 ) : null}
                 {filtered.map((entry) => {
                   const alreadyAdded = paths.includes(entry.name)
-                  const FileIcon = getFileTypeIcon(entry.name)
+                  const FileIcon = resolveFileTypeIcon(entry.name, iconTheme)
                   return (
                     <CommandItem
                       key={entry.name}

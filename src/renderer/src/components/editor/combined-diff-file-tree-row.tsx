@@ -2,7 +2,7 @@ import type React from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
 import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
-import { getFileTypeIcon } from '@/lib/file-type-icons'
+import { useFileTypeIcon } from '@/lib/use-file-type-icon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'
 import { WORKSPACE_FILE_PATH_MIME } from '@/lib/workspace-file-drag'
@@ -84,7 +84,7 @@ export function CombinedDiffFileTreeRow({
   }
 
   const sectionKey = getCombinedDiffFileTreeSectionKey(mode, node.entry)
-  const FileIcon = getFileTypeIcon(node.entry.path)
+  const FileIcon = useFileTypeIcon(node.entry.path)
   const fileName = basename(node.entry.path)
   const parentDir = dirname(node.entry.path)
   const dirPath = parentDir === '.' ? '' : parentDir
