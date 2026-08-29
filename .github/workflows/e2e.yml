@@ -55,9 +55,13 @@ jobs:
         env:
           VITE_EXPOSE_STORE: 'true'
         run: |
-          npx electron-vite build --mode e2e
-          pnpm run build:web-from-renderer
-          pnpm run build:relay
+          status=0
+          pnpm run build:relay &
+          relay_pid=$!
+          npx electron-vite build --mode e2e || status=1
+          pnpm run build:web-from-renderer || status=1
+          wait "$relay_pid" || status=1
+          exit "$status"
 
       - name: Upload E2E build output
         uses: actions/upload-artifact@v7
@@ -71,9 +75,29 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # Build Electron-native dependencies once per workflow. Consumer shards restore
+  # this immutable cache instead of compiling the same ABI concurrently.
+  prepare-native-cache:
+    name: prepare Electron native cache
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install native build tools
+        run: sudo apt-get update && sudo apt-get install -y build-essential python3
+
+      - uses: ./.github/actions/install-node-dependencies
+        with:
+          native-runtime: electron
+
   e2e:
     name: e2e ${{ matrix.shard_name }}
-    needs: build
+    needs: [build, prepare-native-cache]
     if: inputs.test_files == ''
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -159,7 +183,7 @@ jobs:
 
   changed-e2e:
     name: changed e2e specs
-    needs: build
+    needs: [build, prepare-native-cache]
     if: inputs.test_files != ''
     runs-on: ubuntu-latest
     # Why 45: pr.yml now maps SSH source edits onto Docker-backed specs, so this lane can
@@ -227,8 +251,7 @@ jobs:
 
   ssh-docker-watcher-isolation:
     name: ssh docker watcher isolation
-    needs: build
-    # Why ssh_source_changed first: this lane used to trigger on SSH source only as a side
+    needs: [build, prepare-native-cache]
     # effect of one route listing a startup-readiness spec — pruning that spec would have
     # silently retired the whole lane. The signal is now derived from the SSH routes directly.
     # The two spec clauses stay for their honest purpose: changed-e2e hands these specs to this
