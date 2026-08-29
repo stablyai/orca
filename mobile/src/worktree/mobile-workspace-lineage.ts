@@ -22,11 +22,30 @@ function hasValidLineageParent(worktree: Worktree, parent: Worktree): boolean {
   )
 }
 
+/** Row identity of the row's nesting parent, or null when it must render as a lineage root. */
+export function getMobileLineageParentIdentity(
+  worktree: Worktree,
+  worktreeByIdentity: ReadonlyMap<string, Worktree>
+): string | null {
+  const parentId = worktree.parentWorktreeId
+  if (!parentId) {
+    return null
+  }
+  const parentIdentity = getWorktreeRowIdentity({ worktreeId: parentId, hostId: worktree.hostId })
+  if (parentIdentity === getWorktreeRowIdentity(worktree)) {
+    return null
+  }
+  const parent = worktreeByIdentity.get(parentIdentity)
+  if (!parent || !hasValidLineageParent(worktree, parent)) {
+    return null
+  }
+  return parentIdentity
+}
+
 export function applyMobileWorkspaceLineage(
   worktrees: readonly Worktree[],
   collapsedGroups: ReadonlySet<string> = new Set()
 ): Worktree[] {
-  const visibleIds = new Set(worktrees.map((worktree) => getWorktreeRowIdentity(worktree)))
   const worktreeById = new Map(
     worktrees.map((worktree) => [getWorktreeRowIdentity(worktree), worktree])
   )
@@ -35,18 +54,8 @@ export function applyMobileWorkspaceLineage(
 
   for (const worktree of worktrees) {
     const worktreeId = getWorktreeRowIdentity(worktree)
-    const parentId = worktree.parentWorktreeId
-    const parentIdentity = parentId
-      ? getWorktreeRowIdentity({ worktreeId: parentId, hostId: worktree.hostId })
-      : null
-    const parent = parentIdentity ? worktreeById.get(parentIdentity) : undefined
-    if (
-      !parentIdentity ||
-      parentIdentity === worktreeId ||
-      !visibleIds.has(parentIdentity) ||
-      !parent ||
-      !hasValidLineageParent(worktree, parent)
-    ) {
+    const parentIdentity = getMobileLineageParentIdentity(worktree, worktreeById)
+    if (!parentIdentity) {
       continue
     }
     childIds.add(worktreeId)

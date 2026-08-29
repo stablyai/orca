@@ -689,7 +689,7 @@ describe('buildSections', () => {
     expect(sections[0]?.data.map((worktree) => worktree.worktreeId)).toEqual(['progress'])
   })
 
-  it('keeps pinned worktrees in their canonical status group like desktop', () => {
+  it('keeps pinned worktrees out of their canonical status group by default like desktop', () => {
     const pinned = worktree({
       worktreeId: 'pinned',
       workspaceStatus: 'in-progress',
@@ -708,8 +708,7 @@ describe('buildSections', () => {
     )
 
     expect(withoutSectionListKeys(sections)).toEqual([
-      { key: 'pinned', title: 'Pinned', icon: 'pin', data: [pinned] },
-      { key: 'workspace-status:in-progress', title: 'In progress', data: [pinned] }
+      { key: 'pinned', title: 'Pinned', icon: 'pin', data: [pinned] }
     ])
   })
 

@@ -1853,6 +1853,17 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getClientTerminalQuickCommands()).toEqual(terminalQuickCommands)
   })
 
+  it('projects the pinned-duplication policy so paired clients match desktop grouping', () => {
+    const defaults = new OrcaRuntimeService(store as never)
+    expect(defaults.getClientSettings()).toMatchObject({ showPinnedWorktreesInGroups: false })
+
+    const optedIn = new OrcaRuntimeService({
+      ...store,
+      getSettings: () => ({ ...store.getSettings(), showPinnedWorktreesInGroups: true })
+    } as never)
+    expect(optedIn.getClientSettings()).toMatchObject({ showPinnedWorktreesInGroups: true })
+  })
+
   it('updates quick commands without widening general paired settings payloads', () => {
     const existing = {
       id: 'review',

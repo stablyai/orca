@@ -6,13 +6,11 @@ import type { DetectedWorktree, Worktree } from '../../../../../../shared/worktr
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 
 export type WorktreeGroupBy = 'none' | 'workspace-status' | 'repo' | 'pr-status'
-export type PinnedWorktreeDisplayPolicy = 'single-location' | 'duplicate-in-groups'
-
-export function getPinnedWorktreeDisplayPolicy(
-  settings?: { showPinnedWorktreesInGroups?: boolean } | null
-): PinnedWorktreeDisplayPolicy {
-  return settings?.showPinnedWorktreesInGroups === true ? 'duplicate-in-groups' : 'single-location'
-}
+// Re-exported so mobile shares the same default rule without importing from src/renderer.
+export {
+  getPinnedWorktreeDisplayPolicy,
+  type PinnedWorktreeDisplayPolicy
+} from '../../../../../../shared/worktree/pinned-display-policy'
 
 export type GroupHeaderRow = {
   type: 'header'
