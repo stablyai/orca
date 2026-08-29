@@ -88,6 +88,15 @@ export function isWslHookRelayConnectionId(value: string | null | undefined): bo
   return typeof value === 'string' && value.startsWith(WSL_HOOK_RELAY_CONNECTION_PREFIX)
 }
 
+/** Return the WSL distro carried by a relay connection id, or null for other connections. */
+export function wslHookRelayDistro(value: string | null | undefined): string | null {
+  if (typeof value !== 'string' || !isWslHookRelayConnectionId(value)) {
+    return null
+  }
+  const distro = value.slice(WSL_HOOK_RELAY_CONNECTION_PREFIX.length).trim()
+  return distro || null
+}
+
 export function wslHookRelayEndpointFilePath(guestHome: string, instanceKey: string): string {
   return `${wslHookRelayEndpointDir(guestHome, instanceKey)}/${WSL_HOOK_RELAY_ENDPOINT_FILE}`
 }

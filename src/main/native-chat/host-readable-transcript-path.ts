@@ -34,6 +34,8 @@ export type HostReadableTranscriptPathDeps = {
   platform?: NodeJS.Platform
   pathExists?: (path: string) => Promise<boolean>
   signal?: AbortSignal
+  /** Explicit WSL relay provenance; when set, never probe another distro. */
+  wslDistro?: string
   /** Each installed WSL distro's `$HOME` as a Windows UNC path. */
   listWslHomeDirs?: () => Promise<string[]>
 }
@@ -144,6 +146,11 @@ export async function toHostReadableTranscriptPath(
     return (await pathExists(path)) ? path : null
   }
 
+  const explicitDistro = deps.wslDistro?.trim()
+  if (explicitDistro) {
+    const uncPath = toWindowsWslPath(path, explicitDistro)
+    return (await pathExists(uncPath)) ? uncPath : null
+  }
   const homeDirs = await wslHomeDirs(deps.listWslHomeDirs ?? defaultListWslHomeDirs)
   // Sequential on purpose: the ranked order picks the owning distro, and probing
   // every distro at once would fan out 9P calls to ones the user left stopped.

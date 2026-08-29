@@ -88,6 +88,8 @@ import {
   resolveAgentWorkspaceExecutionHostId,
   sweepRestoredSubagentsWithoutLiveAgent
 } from './agent-hooks/restored-subagent-liveness-sweep'
+import { confirmRestoredWorkingClaudeTurns } from './agent-hooks/restored-claude-turn-confirmation'
+import { toHostReadableTranscriptPath } from './native-chat/host-readable-transcript-path'
 import {
   installManagedAgentHooks,
   isAgentStatusHooksEnabled,
@@ -1055,26 +1057,32 @@ ipcMain.handle(
   }
 )
 
-/** A PTY that dies while Orca is down never runs the teardown that clears pane
- *  state, so hydrate can rebuild a Claude subagent roster that no later hook can
- *  retire — pinning the pane 'working' and locking its agent out of hibernation
- *  for good. Once provider and hook hydration settle, targeted PTY liveness can
- *  retire only rows whose local owner is proven gone. */
-async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
-  const currentStore = store
-  if (!currentStore) {
-    return
+/** Runs `work`, returning its rejection reason instead of propagating it. */
+async function settled(work: Promise<unknown>): Promise<unknown> {
+  try {
+    await work
+    return null
+  } catch (error) {
+    return error
   }
+}
+
+/** Two reconciliations a restored pane needs before its rows can be trusted. A PTY that dies
+ *  while Orca is down never runs the teardown that clears pane state, so hydrate can rebuild a
+ *  Claude subagent roster no later hook can retire — pinning the pane 'working' forever. The
+ *  reverse gap is just as visible: a pane still mid turn hydrates unconfirmed, so a working
+ *  agent renders as idle for the whole of whatever tool call is in flight. */
+async function reconcileRestoredAgentPanes(): Promise<void> {
+  const currentStore = store
   const provider = getDaemonProvider()
-  if (!provider) {
+  if (!currentStore || !provider) {
     return
   }
   const persistedPtyIdByPaneKey = indexPersistedPaneKeyPtyIds(
     currentStore.getWorkspaceSession().terminalLayoutsByTabId ?? {}
   )
-  await sweepRestoredSubagentsWithoutLiveAgent({
-    probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
-    isLocalExecutionHost: (worktreeId) =>
+  const paneIdentity = {
+    isLocalExecutionHost: (worktreeId: string | undefined) =>
       isLocalExecutionHost(
         resolveAgentWorkspaceExecutionHostId(worktreeId, {
           getRepo: (repoId) => currentStore.getRepo(repoId),
@@ -1085,14 +1093,51 @@ async function reapRestoredSubagentsWithoutLiveAgent(): Promise<void> {
         })
       ),
     getBoundPtyIdForPaneKey: getPtyIdForPaneKey,
-    getPersistedPtyIdForPaneKey: (paneKey) => persistedPtyIdByPaneKey.get(paneKey),
-    reap: (isLocalHost, isLocalPaneAgentLive, isLocalPaneLivenessEvidenceCurrent) =>
-      agentHookServer.reapRestoredClaudeSubagentsWithoutLiveAgent(
-        isLocalHost,
-        isLocalPaneAgentLive,
-        isLocalPaneLivenessEvidenceCurrent
-      )
-  })
+    getPersistedPtyIdForPaneKey: (paneKey: string) => persistedPtyIdByPaneKey.get(paneKey)
+  }
+  // Why sequenced, and why each is settled on its own: the sweep clears rows whose PTY it proves
+  // dead, and a confirmation landing between that proof and its apply would shadow the reap for a
+  // pane it just disproved. Running them in order removes the interleave; settling each
+  // separately keeps a throw in one from skipping the other, which awaiting in sequence alone
+  // would not.
+  const outcomes = [
+    await settled(
+      sweepRestoredSubagentsWithoutLiveAgent({
+        ...paneIdentity,
+        probeLiveLocalPty: (ptyId) => provider.probePtyLiveness(ptyId),
+        reap: (isLocalHost, isLocalPaneAgentLive, isLocalPaneLivenessEvidenceCurrent) =>
+          agentHookServer.reapRestoredClaudeSubagentsWithoutLiveAgent(
+            isLocalHost,
+            isLocalPaneAgentLive,
+            isLocalPaneLivenessEvidenceCurrent
+          )
+      })
+    ),
+    await settled(
+      confirmRestoredWorkingClaudeTurns({
+        ...paneIdentity,
+        // Why foreground, not PTY liveness: the shell outlives the agent, so a live session
+        // proves nothing about whether Claude is still there to be mid-turn. Why the confirming
+        // read: the cheap one reports the immediate foreground, which for Claude is a wrapper
+        // named after its version ("2.1.246"); only this variant resolves through to the agent.
+        readForegroundProcess: (ptyId) => provider.confirmForegroundProcess(ptyId),
+        toReadableTranscriptPath: (path, signal, wslDistro) =>
+          toHostReadableTranscriptPath(path, {
+            signal,
+            // WSL relay ids carry the execution distro; preserve it through path translation.
+            wslDistro: wslDistro ?? undefined
+          }),
+        getStatusSnapshot: () => agentHookServer.getStatusSnapshot(),
+        confirm: (paneKey) => agentHookServer.confirmRestoredWorkingTurn(paneKey)
+      })
+    )
+  ]
+  const labels = ['restored-subagent liveness sweep', 'restored Claude turn confirmation']
+  for (const [index, outcome] of outcomes.entries()) {
+    if (outcome !== null) {
+      console.warn(`[agent-hooks] ${labels[index]} failed:`, outcome)
+    }
+  }
 }
 
 function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
@@ -1168,8 +1213,8 @@ function startTerminalRuntimeStartupServices(): WindowsDesktopStartupServices {
   })
   void startupServices.localPtyReady.then(() => {
     logStartupMilestone('local-pty-startup-ready')
-    void reapRestoredSubagentsWithoutLiveAgent().catch((error) => {
-      console.warn('[agent-hooks] restored-subagent liveness probe failed:', error)
+    void reconcileRestoredAgentPanes().catch((error) => {
+      console.warn('[agent-hooks] restored-pane reconciliation failed:', error)
     })
   })
   return startupServices
@@ -3124,8 +3169,10 @@ void app.whenReady().then(async () => {
   // v0 plugin event seams: agent status (hook pipeline tap) + worktree
   // lifecycle (runtime tap). Server-side filtered per plugin subscription.
   agentHookServer.subscribeEnrichedStatus((enriched) => {
-    // Why: plugins may automate on `working`; restored rows are historical claims, not fresh activity.
-    if (enriched.restoredUnconfirmed) {
+    // Why both: plugins may automate on `working`, and neither a restored row nor a replayed one
+    // is fresh activity — a restated turn began in an earlier runtime, so re-firing it would
+    // trigger that automation again on every restart.
+    if (enriched.restoredUnconfirmed || enriched.isReplay) {
       return
     }
     pluginService?.emitEvent('agent.status.changed', {

@@ -126,6 +126,7 @@ import {
   launchTokenHash,
   type SpoolRecord
 } from '../../shared/agent-hook-spool'
+import { isRestoredWorkingClaudeTurn } from './restored-claude-turn-confirmation'
 
 export type { AgentHookSource }
 
@@ -181,6 +182,16 @@ export type AgentHookProviderSessionIdentity = {
   sessionId: string
   transcriptPath?: string
   worktreeId?: string
+}
+
+function isConfirmableRestoredTurn(entry: EnrichedAgentHookEventPayload): boolean {
+  return isRestoredWorkingClaudeTurn({
+    restoredUnconfirmed: entry.restoredUnconfirmed,
+    providerSessionOnly: entry.providerSessionOnly,
+    connectionId: entry.connectionId,
+    state: entry.payload.state,
+    agentType: entry.payload.agentType
+  })
 }
 
 export type AgentHookAuthorityEvidence = Readonly<{
@@ -892,6 +903,58 @@ export class AgentHookServer {
   getStatusSnapshotForPane(paneKey: string): AgentStatusIpcPayload[] {
     const entry = this.state.lastStatusByPaneKey.get(paneKey)
     return entry ? [toAgentStatusIpcPayload(entry as EnrichedAgentHookEventPayload)] : []
+  }
+
+  /** Re-state a hydrated `working` Claude row as live once outside evidence proved its turn
+   *  still open. The normal accept
+   *  path then drops `restoredUnconfirmed` and re-stamps `receivedAt` (freshness gates read it)
+   *  while keeping `stateStartedAt` — what the agent's own next hook event would have done. */
+  confirmRestoredWorkingTurn(paneKey: string): boolean {
+    const existing = this.state.lastStatusByPaneKey.get(paneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    // Why the disposition gate: a retired pane — closed tab, or an agent proven gone — must not
+    // be revived by evidence it never authorized. Passing no event skips the launch-token fence
+    // branch, which needs a token to compare; that map is empty at startup, when this runs, and
+    // the caller has no token to offer because the row it is restating predates this process.
+    if (
+      !existing ||
+      !isConfirmableRestoredTurn(existing) ||
+      this.getAgentStatusDisposition(paneKey) !== 'accept'
+    ) {
+      return false
+    }
+    // Why strip only those four: they are this server's own enrichment, and a surviving
+    // `restoredUnconfirmed` would re-stamp the row unconfirmed. `claudeLeadBoundaryChildOnly`
+    // deliberately rides along — it is persisted proof, not a decision the accept path can
+    // re-make here, because the `claudeRunningNonAgentTask` both of its branches require is not
+    // persisted and reads `undefined` on every hydrated row. Dropping it would let the next OSC
+    // ping overwrite a lead row held working by a live child. Why replay: restating a known turn
+    // must not re-fire first-work branch renames or prompt telemetry for the same prompt.
+    const {
+      receivedAt: _at,
+      stateStartedAt: _started,
+      observation: _seen,
+      restoredUnconfirmed: _flag,
+      ...event
+    } = existing
+    // Why compared, not assumed: the accept path can decline an event and return the row it
+    // already held, and a caller counting confirmations must not be told one happened.
+    const confirmed =
+      this.applyNormalizedStatus({ ...event, isReplay: true }, undefined, 'process') !== existing
+    if (confirmed) {
+      // Why the observation is withdrawn: the accept path marks any row it takes as observed in
+      // this runtime, which is what holds the two-hour wake assertion. A transcript is weaker
+      // evidence than a hook — it cannot tell a live tool from a permission prompt nobody
+      // answered — so it may restore the row's visible state without claiming the machine has to
+      // stay awake for it. The agent's own next hook makes that claim properly.
+      this.runtimeObservedStatusPaneKeys.delete(paneKey)
+      // Why notified again: the accept path already published the row as observed, and the awake
+      // service caches whatever snapshot it was handed. Without this the withdrawal never
+      // reaches it and the sleep assertion is held anyway.
+      this.notifyStatusChangeListeners()
+    }
+    return confirmed
   }
 
   getHydratedAuthorityCommitments(): readonly AgentHookAuthorityEvidence[] {

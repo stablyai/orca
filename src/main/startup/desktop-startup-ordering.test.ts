@@ -65,17 +65,26 @@ describe('startup ordering', () => {
     expect(source.split('initializeBrowserClientHostId(')).toHaveLength(2)
   })
 
-  it('requires daemon authority before restored-subagent liveness runs', () => {
+  it('requires daemon authority before either restored-pane reconciliation runs', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/index.ts'), 'utf8')
-    const sweepStart = source.indexOf('function reapRestoredSubagentsWithoutLiveAgent()')
-    const sweepEnd = source.indexOf('function startTerminalRuntimeStartupServices()', sweepStart)
-    const sweep = source.slice(sweepStart, sweepEnd)
+    const start = source.indexOf('function reconcileRestoredAgentPanes()')
+    const end = source.indexOf('function startTerminalRuntimeStartupServices()', start)
+    const body = source.slice(start, end)
 
-    expect(sweepStart).toBeGreaterThanOrEqual(0)
-    expect(sweepEnd).toBeGreaterThan(sweepStart)
-    expect(sweep).toContain('const provider = getDaemonProvider()')
-    expect(sweep).toContain('if (!provider) {')
-    expect(sweep).toContain('provider.probePtyLiveness(ptyId)')
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+    expect(body).toContain('const provider = getDaemonProvider()')
+    expect(body).toContain('if (!currentStore || !provider) {')
+    // Why both: each reconciliation reads the provider, and a new one added without the guard
+    // would probe a daemon this startup has no authority over.
+    const guardIndex = body.indexOf('if (!currentStore || !provider) {')
+    for (const providerCall of [
+      'provider.probePtyLiveness(ptyId)',
+      'provider.confirmForegroundProcess(ptyId)'
+    ]) {
+      expect(body).toContain(providerCall)
+      expect(body.indexOf(providerCall)).toBeGreaterThan(guardIndex)
+    }
   })
 
   it('bounds WSL reconciliation before serve RPC while leaving desktop startup independent', () => {

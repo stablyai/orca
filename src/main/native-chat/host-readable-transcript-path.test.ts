@@ -101,6 +101,22 @@ describe('toHostReadableTranscriptPath', () => {
     expect(seen).toHaveLength(1)
   })
 
+  it('honors explicit WSL distro provenance instead of probing another distro', async () => {
+    const seen: string[] = []
+    await expect(
+      toHostReadableTranscriptPath('/home/ada/session.jsonl', {
+        platform: 'win32',
+        wslDistro: 'Ubuntu',
+        pathExists: async (candidate) => {
+          seen.push(candidate)
+          return candidate.includes('Debian')
+        },
+        listWslHomeDirs: async () => [UBUNTU_HOME, DEBIAN_HOME]
+      })
+    ).resolves.toBeNull()
+    expect(seen).toEqual(['\\\\wsl.localhost\\Ubuntu\\home\\ada\\session.jsonl'])
+  })
+
   it('returns null when no distro maps to an existing file', async () => {
     await expect(
       toHostReadableTranscriptPath(ROLLOUT_LINUX, {
