@@ -35,10 +35,7 @@ const MARKER_STATS = {
   size: 0
 }
 
-function makeSftp(options: {
-  startPath?: string | Error | unknown
-  lstat?: (path: string) => LstatOutcome
-}): {
+function makeSftp(options: { startPath?: unknown; lstat?: (path: string) => LstatOutcome }): {
   sftp: SFTPWrapper
   realpathCalls: string[]
   lstatCalls: string[]

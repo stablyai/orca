@@ -65,6 +65,54 @@ describe('openMobileNativeChatFileTap', () => {
     )
   })
 
+  it('carries the native-chat session identity into resolution and grant refresh', async () => {
+    const sendRequest = vi.fn(async () =>
+      ok({
+        worktree: 'wt-1',
+        relativePath: null,
+        absolutePath: '/Users/ada/orca-plans/result.html',
+        exists: true,
+        isDirectory: false,
+        openTarget: {
+          kind: 'absolute-file',
+          provider: 'local',
+          absolutePath: '/Users/ada/orca-plans/result.html',
+          grantId: 'grant-1',
+          readOnly: true
+        }
+      })
+    )
+    const options = baseOptions({ sendRequest })
+
+    openMobileNativeChatFileTap({
+      ...options,
+      pathText: '~/orca-plans/result.html',
+      nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
+    })
+    await Promise.resolve()
+
+    expect(sendRequest).toHaveBeenCalledWith(
+      'files.resolveTerminalPath',
+      {
+        worktree: 'id:wt-1',
+        pathText: '~/orca-plans/result.html',
+        crossWorkspace: true,
+        nativeChatContext: { tabId: 'tab-1', sessionId: 'session-1' }
+      },
+      { timeoutMs: 10_000 }
+    )
+    expect(options.pushPreviewRoute).toHaveBeenCalledWith({
+      pathname: '/h/[hostId]/files/preview/[worktreeId]',
+      params: expect.objectContaining({
+        source: 'terminalArtifact',
+        absolutePath: '/Users/ada/orca-plans/result.html',
+        grantId: 'grant-1',
+        nativeChatTab: 'tab-1',
+        nativeChatSession: 'session-1'
+      })
+    })
+  })
+
   it('parses a :line:col citation and opens the mobile preview route', async () => {
     const sendRequest = vi.fn(async () => worktreeFileResolution('src/app.ts'))
     const options = baseOptions({ sendRequest })

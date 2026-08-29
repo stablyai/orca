@@ -3,6 +3,8 @@ import { toast } from 'sonner'
 import { emitBrowserCookieImportToast } from '@/lib/browser-cookie-import-toast'
 import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
+import { BrowserCookieImportDisclosure } from '../BrowserCookieImportDisclosure'
+import { BrowserCookieImportMachineNotice } from '../BrowserCookieImportMachineNotice'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -58,7 +60,8 @@ export function BrowserUseCookieImportStep({
             value1: browser?.label ?? browserFamily,
             value2: browserProfile ? ` (${browserProfile})` : ''
           }
-        )
+        ),
+        result
       )
     } else {
       toast.error(result.reason)
@@ -74,7 +77,8 @@ export function BrowserUseCookieImportStep({
           'auto.components.settings.BrowserUsePane.8f2675c2f3',
           'Imported {{value0}} cookies from file.',
           { value0: result.summary.importedCookies }
-        )
+        ),
+        result
       )
     } else if (result.reason !== 'canceled') {
       toast.error(result.reason)
@@ -162,6 +166,7 @@ export function BrowserUseCookieImportStep({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <BrowserCookieImportMachineNotice />
             {detectedBrowsers.map((browser) =>
               browser.profiles.length > 1 ? (
                 <DropdownMenuSub key={browser.family}>
@@ -204,6 +209,7 @@ export function BrowserUseCookieImportStep({
             <DropdownMenuItem onSelect={() => void handleImportFromFile()}>
               {translate('auto.components.settings.BrowserUsePane.be6df68384', 'From File…')}
             </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

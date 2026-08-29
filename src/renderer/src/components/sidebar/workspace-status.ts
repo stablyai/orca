@@ -1,6 +1,6 @@
 import React from 'react'
 import { CircleDot } from 'lucide-react'
-import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/types'
+import type { WorkspaceStatus, WorkspaceStatusDefinition } from '../../../../shared/worktree/types'
 import {
   DEFAULT_WORKSPACE_STATUS_COLOR_ID,
   DEFAULT_WORKSPACE_STATUS_ICON_ID,

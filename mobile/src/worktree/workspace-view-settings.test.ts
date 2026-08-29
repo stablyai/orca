@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DEFAULT_MOBILE_WORKSPACE_STATUSES } from './mobile-workspace-statuses'
 import {
   applyDesktopViewSettings,
+  buildWorkspaceViewSettingsUpdate,
   groupModeFromDesktop,
   groupModeToDesktop,
   sortModeFromDesktop,
@@ -81,5 +82,53 @@ describe('applyDesktopViewSettings', () => {
   it('ignores an unrecognized groupBy rather than blanking the mode', () => {
     const next = applyDesktopViewSettings(base, { groupBy: 'mystery' as never })
     expect(next.groupMode).toBe('repo')
+  })
+})
+
+describe('buildWorkspaceViewSettingsUpdate', () => {
+  const next: MobileViewState = {
+    ...base,
+    alwaysShowDefaultBranch: true,
+    groupMode: 'workspaceStatus',
+    sortMode: 'name',
+    hideSleeping: true,
+    hideDefaultBranch: true,
+    filterRepoIds: ['repo-1'],
+    collapsedGroups: ['g1']
+  }
+
+  it('carries only the fields the patch touched (STA-5781)', () => {
+    expect(buildWorkspaceViewSettingsUpdate({ hideSleeping: true }, next)).toEqual({
+      hideSleepingWorkspaces: true
+    })
+    expect(buildWorkspaceViewSettingsUpdate({ groupMode: 'workspaceStatus' }, next)).toEqual({
+      groupBy: 'workspace-status'
+    })
+    expect(buildWorkspaceViewSettingsUpdate({ collapsedGroups: ['g1'] }, next)).toEqual({
+      collapsedGroups: ['g1']
+    })
+  })
+
+  it('maps a multi-field reset patch without dragging untouched siblings along', () => {
+    const update = buildWorkspaceViewSettingsUpdate(
+      { hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] },
+      { ...next, hideSleeping: false, hideDefaultBranch: false, filterRepoIds: [] }
+    )
+    expect(update).toEqual({
+      hideSleepingWorkspaces: false,
+      hideDefaultBranchWorkspace: false,
+      filterRepoIds: []
+    })
+  })
+
+  it('never invents alwaysShowDefaultBranchWorkspace for patches that omit it (#8873)', () => {
+    expect(
+      'alwaysShowDefaultBranchWorkspace' in
+        buildWorkspaceViewSettingsUpdate({ hideSleeping: true }, next)
+    ).toBe(false)
+  })
+
+  it('returns an empty update for an empty patch', () => {
+    expect(buildWorkspaceViewSettingsUpdate({}, next)).toEqual({})
   })
 })

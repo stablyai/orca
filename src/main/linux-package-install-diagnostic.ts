@@ -1,5 +1,5 @@
 import os from 'node:os'
-import type { LinuxPackageInstallFailureReason } from '../shared/types'
+import type { LinuxPackageInstallFailureReason } from '../shared/update-status-types'
 
 /** The redacted text shown locally, paired with the reason classified from the ORIGINAL output. */
 export type LinuxPackageInstallDiagnostic = {

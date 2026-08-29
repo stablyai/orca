@@ -3,22 +3,24 @@
    boundary so cache invalidation stays coherent. */
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
 import type {
-  LinearViewer,
-  LinearConnectionStatus,
-  LinearCollectionResult,
   LinearCustomViewModel,
   LinearCustomViewSummary,
-  LinearIssue,
   LinearProjectDetail,
-  LinearProjectSummary,
+  LinearProjectSummary
+} from '../../../../shared/linear/project-types'
+import type {
+  LinearCollectionResult,
+  LinearConnectionStatus,
   LinearTeam,
+  LinearViewer,
   LinearWorkspace,
   LinearWorkspaceError,
   LinearWorkspaceSelection
-} from '../../../../shared/types'
-import type { CacheEntry } from './github'
-import { clampLinearIssueListLimit } from '../../../../shared/linear-issue-read-limits'
+} from '../../../../shared/linear/workspace-types'
+import type { CacheEntry } from '../github/cache-model'
+import { clampLinearIssueListLimit } from '../../../../shared/linear/issue-read-limits'
 import { isIntegrationCredentialDecryptionError } from '../../../../shared/integration-credential-errors'
 import { clearLinearMetadataCache } from '../../hooks/useIssueMetadata'
 import {
@@ -26,21 +28,23 @@ import {
   linearConnect,
   linearDisconnect,
   linearDisconnectWorkspace,
-  linearGetCustomView,
-  linearGetProject,
-  linearGetIssue,
-  linearListCustomViewIssues,
-  linearListCustomViewProjects,
-  linearListCustomViews,
   linearListIssues,
-  linearListProjectIssues,
-  linearListProjects,
-  linearListTeams,
   linearSearchIssues,
   linearSelectWorkspace,
   linearStatus,
   linearTestConnection
 } from '@/runtime/runtime-linear-client'
+import { linearGetIssue } from '@/runtime/runtime-linear-issue-mutations'
+import {
+  linearGetCustomView,
+  linearGetProject,
+  linearListCustomViewIssues,
+  linearListCustomViewProjects,
+  linearListCustomViews,
+  linearListProjectIssues,
+  linearListProjects,
+  linearListTeams
+} from '@/runtime/runtime-linear-project-client'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { translate } from '@/i18n/i18n'
 import {
@@ -53,7 +57,7 @@ import {
   isEmptyLinearIssueAttributeFilter,
   linearIssueAttributeFilterSignature,
   type LinearIssueAttributeFilter
-} from '../../../../shared/linear-issue-attribute-filter'
+} from '../../../../shared/linear/issue-attribute-filter'
 
 const CACHE_TTL = 60_000 // 60s — same as GitHub work-items revalidation TTL
 const TEAM_CACHE_TTL = 10 * 60_000 // Teams change rarely and block visible Linear rows.

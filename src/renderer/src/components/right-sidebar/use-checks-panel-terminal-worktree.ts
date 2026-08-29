@@ -6,7 +6,7 @@ import { useAllWorktrees, useRepoMap } from '@/store/selectors'
 import { isRemoteRuntimePtyId } from '@/runtime/runtime-terminal-inspection'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import {
   resolveChecksPanelTerminalPtyId,
   resolveChecksPanelWorktreeFromTerminalCwd

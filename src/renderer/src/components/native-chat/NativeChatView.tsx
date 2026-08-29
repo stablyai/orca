@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
+import { isNativeChatTranscriptUnsettled } from './use-native-chat-live-session'
 import { selectNativeChatViewState } from './native-chat-view-state'
 import { NativeChatMessageList } from './NativeChatMessageList'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
@@ -12,27 +12,28 @@ import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatSessionGate } from './NativeChatSessionGate'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import { findTabAgentEntry } from './native-chat-tab-agent-entry'
 import {
   shouldClearNativeChatWorkingSuppression,
   shouldShowNativeChatWorking
 } from './native-chat-working-suppression'
 import {
-  applyCommandMarkerBoundaries,
   appendPendingSendCache,
-  commandMarkersAsMessages,
-  appendCommandMarkerCache,
   launchPromptAsMessage,
   pendingSendsAsMessages,
   nextNativeChatPendingSendId,
   prunePendingSends,
-  readCommandMarkerCache,
   readPendingSendCache,
   shouldPruneLaunchPrompt,
   writePendingSendCache,
-  type NativeChatCommandMarker,
   type NativeChatPendingSend
 } from './native-chat-pending'
+import {
+  appendCommandMarkerCache,
+  applyCommandMarkerBoundaries,
+  commandMarkersAsMessages,
+  readCommandMarkerCache,
+  type NativeChatCommandMarker
+} from './native-chat-command-marker'
 import {
   deriveNativeChatStreamingText,
   nativeChatStreamingMessage
@@ -46,16 +47,26 @@ import {
   emptyNativeChatContextMenuActions,
   useNativeChatContextMenu
 } from './use-native-chat-context-menu'
-import { resolveNativeChatFileLinkContext } from './native-chat-file-link'
 import { selectNativeChatRuntimeEnvironmentId } from './native-chat-runtime-owner'
 import { useNativeChatPasteBridge } from './use-native-chat-paste-bridge'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import type { NativeChatResolvedViewProps, NativeChatViewProps } from './native-chat-view-types'
+import { NativeChatStructuredSession } from './NativeChatStructuredSession'
+import { useNativeChatStatusEntry } from './use-native-chat-status-entry'
+import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import { NativeChatOrchestrationPausedNotice } from './NativeChatOrchestrationPausedNotice'
 
 export type { NativeChatViewProps } from './native-chat-view-types'
 
 /** Resolves an agent terminal into its native conversation and composer UI. */
-export default function NativeChatView({
+export default function NativeChatView(props: NativeChatViewProps): React.JSX.Element {
+  if (props.mode === 'structured') {
+    return <NativeChatStructuredSession {...props} />
+  }
+  return <NativeChatBridgeView {...props} />
+}
+
+function NativeChatBridgeView({
   terminalTabId,
   isVisible,
   paneKey: preferredPaneKey,
@@ -64,21 +75,13 @@ export default function NativeChatView({
   resolvedAgent,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions
-}: NativeChatViewProps): React.JSX.Element {
-  // Select only this tab's status entry (shallow-compared) so an unrelated
-  // pane's status tick doesn't re-render this view or re-run the resolution.
-  const agentStatusEntry = useAppStore(
-    useShallow((s) =>
-      preferredPaneKey
-        ? s.agentStatusByPaneKey[preferredPaneKey]
-        : findTabAgentEntry(s.agentStatusByPaneKey, terminalTabId)
-    )
+  contextMenuActions,
+  orchestrationDispatchStatus
+}: Exclude<NativeChatViewProps, { mode: 'structured' }>): React.JSX.Element {
+  const { entry: agentStatusEntry, paneKey } = useNativeChatStatusEntry(
+    terminalTabId,
+    preferredPaneKey
   )
-
-  // paneKey: prefer the live entry's key; fall back to the tab id so the hook
-  // still has a stable key to select live status by before any pane reports.
-  const paneKey = preferredPaneKey ?? agentStatusEntry?.paneKey ?? `${terminalTabId}:`
   return (
     <NativeChatSessionGate
       paneKey={paneKey}
@@ -99,6 +102,7 @@ export default function NativeChatView({
           onSwitchToTerminal={onSwitchToTerminal}
           readTerminalScreen={readTerminalScreen}
           contextMenuActions={contextMenuActions}
+          orchestrationDispatchStatus={orchestrationDispatchStatus}
         />
       )}
     </NativeChatSessionGate>
@@ -115,7 +119,8 @@ function NativeChatResolvedView({
   terminalTabId,
   onSwitchToTerminal,
   readTerminalScreen,
-  contextMenuActions
+  contextMenuActions,
+  orchestrationDispatchStatus
 }: NativeChatResolvedViewProps): React.JSX.Element {
   // Primitive owner selection (no useShallow): routes the pane's read/subscribe to
   // the remote runtime host for a runtime-owned pane; null keeps the local path.
@@ -140,7 +145,9 @@ function NativeChatResolvedView({
     terminalTabId,
     agent,
     messages: session.messages,
-    transcriptLoading: session.readPhase === 'loading'
+    // 'awaiting' counts too: adopting a prefill against a transcript that hasn't
+    // flushed would re-offer a prompt the user already submitted.
+    transcriptLoading: isNativeChatTranscriptUnsettled(session.readPhase)
   })
   // The live-session merge reconciles hooks with replayable transcript turn
   // boundaries; all working consumers must use that one lifecycle decision.
@@ -166,9 +173,7 @@ function NativeChatResolvedView({
   // The question card's free-text row; keeps Paste working while the card
   // replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
-  const fileLinkContext = useAppStore(
-    useShallow((s) => resolveNativeChatFileLinkContext(s, terminalTabId))
-  )
+  const fileLinkContext = useNativeChatFileLinkContext(terminalTabId)
   const pasteClipboardIntoComposer = useNativeChatPasteBridge({
     rootRef,
     composerRef,
@@ -176,7 +181,6 @@ function NativeChatResolvedView({
   })
   const contextMenu = useNativeChatContextMenu({
     rootRef,
-    onSwitchToTerminal,
     actions: {
       onPaste: pasteClipboardIntoComposer,
       ...(contextMenuActions ?? emptyNativeChatContextMenuActions)
@@ -362,6 +366,7 @@ function NativeChatResolvedView({
     <div
       ref={rootRef}
       data-native-chat-root="true"
+      data-native-chat-working={isWorking ? 'true' : 'false'}
       tabIndex={-1}
       onPointerDownCapture={(event) => {
         if (event.button === 2) {
@@ -395,6 +400,7 @@ function NativeChatResolvedView({
       onContextMenuCapture={contextMenu.onContextMenuCapture}
       className="flex h-full min-h-0 w-full flex-col bg-background focus:outline-none"
     >
+      <NativeChatOrchestrationPausedNotice dispatchStatus={orchestrationDispatchStatus} />
       <div className="flex min-h-0 flex-1 flex-col">
         {viewState.kind === 'loading' ? (
           <NativeChatEmptyState kind="loading" />

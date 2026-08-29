@@ -1,11 +1,13 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { Worker } from 'node:worker_threads'
 import { afterEach, describe, expect, it } from 'vitest'
 import SyncDatabase from './sync-database'
 
 const temporaryDirectories: string[] = []
 const openDatabases: SyncDatabase.Database[] = []
+const lockHolders: Worker[] = []
 
 async function createDatabase(): Promise<SyncDatabase.Database> {
   const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-'))
@@ -20,6 +22,7 @@ async function createDatabase(): Promise<SyncDatabase.Database> {
 }
 
 afterEach(async () => {
+  await Promise.all(lockHolders.splice(0).map((worker) => worker.terminate()))
   for (const db of openDatabases.splice(0)) {
     try {
       db.close()
@@ -149,5 +152,82 @@ describe('SyncDatabase statement cache', () => {
     expect(() => new SyncDatabase(join(directory, 'absent.db'), { fileMustExist: true })).toThrow(
       /does not exist/
     )
+  })
+})
+
+// Why (#15036): the OpenCode readers opened read-only with no busy timeout, so a
+// contended DB failed in ~1 ms and emptied the whole panel. These pin that the
+// wrapper really forwards `timeout` into sqlite3_busy_timeout.
+describe('SyncDatabase read-only opens under contention', () => {
+  // The lock holder must live on another thread: sqlite3_busy_timeout sleeps
+  // synchronously, so a same-thread timer could never fire to release it.
+  const WRITER_SOURCE = `
+    const { parentPort, workerData } = require('node:worker_threads')
+    const { DatabaseSync } = require('node:sqlite')
+    const db = new DatabaseSync(workerData.path)
+    db.exec('PRAGMA journal_mode=DELETE')
+    db.exec("CREATE TABLE items (id TEXT PRIMARY KEY); INSERT INTO items VALUES ('a')")
+    db.exec('BEGIN EXCLUSIVE')
+    db.exec("INSERT INTO items VALUES ('b')")
+    parentPort.postMessage('locked')
+    setTimeout(() => {
+      db.exec('COMMIT')
+      db.close()
+      parentPort.postMessage('released')
+    }, workerData.holdMs)
+  `
+
+  async function contendedDatabase(holdMs: number): Promise<{ path: string }> {
+    const directory = await mkdtemp(join(tmpdir(), 'orca-sync-database-busy-'))
+    temporaryDirectories.push(directory)
+    const path = join(directory, 'contended.db')
+    const worker = new Worker(WRITER_SOURCE, { eval: true, workerData: { path, holdMs } })
+    lockHolders.push(worker)
+    await new Promise<void>((resolve, reject) => {
+      worker.once('message', () => resolve())
+      worker.once('error', reject)
+    })
+    return { path }
+  }
+
+  it('fails immediately with SQLITE_BUSY when no timeout is given', async () => {
+    const contended = await contendedDatabase(10_000)
+    const startedAt = Date.now()
+
+    let thrown: unknown
+    try {
+      new SyncDatabase(contended.path, { readonly: true }).prepare('SELECT id FROM items').all()
+    } catch (error) {
+      thrown = error
+    }
+
+    expect((thrown as { errcode?: number }).errcode).toBe(5)
+    expect((thrown as Error).message).toContain('database is locked')
+    expect(Date.now() - startedAt).toBeLessThan(200)
+  })
+
+  it('waits for the configured busy timeout before giving up', async () => {
+    const contended = await contendedDatabase(10_000)
+    const startedAt = Date.now()
+
+    expect(() =>
+      new SyncDatabase(contended.path, { readonly: true, timeout: 400 })
+        .prepare('SELECT id FROM items')
+        .all()
+    ).toThrow(/database is locked/)
+
+    expect(Date.now() - startedAt).toBeGreaterThanOrEqual(350)
+  })
+
+  it('succeeds once the writer commits inside the busy timeout', async () => {
+    const contended = await contendedDatabase(150)
+
+    const reader = new SyncDatabase(contended.path, { readonly: true, timeout: 5_000 })
+    openDatabases.push(reader)
+
+    expect(reader.prepare('SELECT id FROM items ORDER BY id').all()).toEqual([
+      { id: 'a' },
+      { id: 'b' }
+    ])
   })
 })

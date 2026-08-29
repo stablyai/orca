@@ -96,7 +96,8 @@ const ORIGIN = {
   pendingKey: 'h\0w\0tab-1\0session-1',
   normalizedText: 'look',
   baselineOccurrences: 0,
-  baselineTailMessageId: null
+  baselineTailMessageId: null,
+  baselineResolved: true
 }
 
 describe('useMobileNativeChatController handleNativeChatSend', () => {
@@ -128,6 +129,12 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    clientStub.sendRequest.mockResolvedValue({
+      id: 'send',
+      ok: true,
+      result: { send: { accepted: true } },
+      _meta: { runtimeId: 'r' }
+    })
     resetMobileNativeChatStaleInputForTests()
     captureSendOrigin.mockReturnValue(ORIGIN)
     act(() => {
@@ -156,12 +163,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       accepted = await controller!.handleNativeChatSend('answer')
     })
     expect(accepted).toBe(true)
-    expect(clientStub.sendRequest).toHaveBeenCalledTimes(1)
-    expect(clientStub.sendRequest.mock.calls[0]?.[1]).toMatchObject({
-      terminal: 'term-1',
-      text: '\x15',
-      enter: false
-    })
+    expect(clientStub.sendRequest).toHaveBeenCalledTimes(2)
+    for (const call of clientStub.sendRequest.mock.calls) {
+      expect(call[1]).toMatchObject({ terminal: 'term-1', text: '\x15', enter: false })
+    }
     expect(isMobileNativeChatInputStale('term-1')).toBe(false)
   })
 
@@ -227,7 +232,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     expect(restoreRejectedDraft).not.toHaveBeenCalled()
   })
 
-  it('pre-clears the input line for a text-only send but never for an image send', async () => {
+  it('pre-clears separately for a text-only send but never for an image send', async () => {
     // The image path pastes the image behind its OWN leading Ctrl+U and then calls
     // this send; a second clear here wipes the image off the input line and the
     // agent receives text alone while the echo bubble still shows the thumbnail.
@@ -236,16 +241,23 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     await act(async () => {
       await controller!.handleNativeChatSend('answer')
     })
-    expect(sendWithOutcome).toHaveBeenLastCalledWith(
-      expect.objectContaining({ text: 'answer', clearInputFirst: true })
+    expect(clientStub.sendRequest).toHaveBeenCalledWith(
+      'terminal.send',
+      expect.objectContaining({ text: '\x15', enter: false }),
+      expect.any(Object)
     )
+    expect(sendWithOutcome).toHaveBeenLastCalledWith(
+      expect.not.objectContaining({ clearInputFirst: expect.anything() })
+    )
+
+    clientStub.sendRequest.mockClear()
 
     await act(async () => {
       await controller!.handleNativeChatSend('look', ['file:///a.jpg'])
     })
-    expect(sendWithOutcome).toHaveBeenLastCalledWith(
-      expect.objectContaining({ text: 'look', clearInputFirst: false })
-    )
+    expect(clientStub.sendRequest).not.toHaveBeenCalled()
+    expect(sendWithOutcome).toHaveBeenLastCalledWith(expect.objectContaining({ text: 'look' }))
+    expect(sendWithOutcome.mock.calls.at(-1)?.[0]).not.toHaveProperty('clearInputFirst')
   })
 
   it('holds an unknown-outcome send without posting the optimistic echo', async () => {
@@ -696,7 +708,9 @@ describe('useMobileNativeChatController streaming scope', () => {
     launchAgent: 'claude',
     agentStatus: {
       state: 'working',
+      workingMode: undefined as 'monitoring' | undefined,
       agentType: 'claude',
+      lastAssistantMessage: 'Partial reply',
       providerSession: { id: 'session-1' }
     },
     isActive: true
@@ -722,6 +736,7 @@ describe('useMobileNativeChatController streaming scope', () => {
 
   beforeEach(() => {
     viewMode.isTabChatView = () => true
+    workingTab.agentStatus.workingMode = undefined
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -736,6 +751,7 @@ describe('useMobileNativeChatController streaming scope', () => {
 
   it('holds the stream scope and liveness while the user peeks at the terminal', () => {
     expect(controller?.showNativeChat).toBe(true)
+    expect(controller?.nativeChatAgentWorking).toBe(true)
     const scopeKey = controller?.nativeChatStreamScopeKey
     expect(scopeKey).toContain('session-1')
     expect(controller?.nativeChatStreamLive).toBe(true)
@@ -747,6 +763,16 @@ describe('useMobileNativeChatController streaming scope', () => {
     expect(controller?.nativeChatAgentWorking).toBe(false)
     expect(controller?.nativeChatStreamScopeKey).toBe(scopeKey)
     expect(controller?.nativeChatStreamLive).toBe(true)
+  })
+
+  it('treats passive monitoring as outside the foreground turn', () => {
+    workingTab.agentStatus.workingMode = 'monitoring'
+    act(() => renderer?.update(createElement(Harness)))
+
+    expect(controller?.nativeChatAgentWorking).toBe(false)
+    expect(controller?.nativeChatStreamLive).toBe(false)
+    expect(controller?.nativeChatStreamingText).toBeUndefined()
+    expect(controller?.nativeChatSessionOptions?.isWorking).toBe(false)
   })
 
   it('keeps the delayed-send route guard view-gated, unlike the stream scope', () => {

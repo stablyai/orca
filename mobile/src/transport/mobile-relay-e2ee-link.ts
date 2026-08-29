@@ -6,6 +6,10 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 
+// Native WebSockets normally emit close immediately after error; bound the
+// missing-close case so a dead socket cannot leave recovery pending forever.
+const RELAY_ERROR_CLOSE_GRACE_MS = 250
+
 export class RelayOuterError extends Error {
   constructor(readonly code: number) {
     super(`relay_outer_${code}`)
@@ -32,6 +36,7 @@ export class MobileRelayE2eeLink {
   private readonly channel: MobileE2EEV2PhysicalChannel
   private outerReady = false
   private closed = false
+  private transportErrorTimer: ReturnType<typeof setTimeout> | null = null
   private inboundChain: Promise<void> = Promise.resolve()
 
   constructor(options: MobileRelayE2eeLinkOptions) {
@@ -70,20 +75,28 @@ export class MobileRelayE2eeLink {
       return
     }
     this.closed = true
+    if (this.transportErrorTimer) {
+      clearTimeout(this.transportErrorTimer)
+      this.transportErrorTimer = null
+    }
     this.channel.dispose()
     this.socket.close()
   }
 
   private bindSocket(): void {
     this.socket.onopen = () => {
-      this.socket.send(
-        JSON.stringify({
-          type: 'relay-auth',
-          v: 1,
-          mode: 'connect',
-          credential: this.options.credential
-        })
-      )
+      try {
+        this.socket.send(
+          JSON.stringify({
+            type: 'relay-auth',
+            v: 1,
+            mode: 'connect',
+            credential: this.options.credential
+          })
+        )
+      } catch (error) {
+        this.fail(asError(error))
+      }
     }
     this.socket.onmessage = (event) => {
       this.inboundChain = this.inboundChain
@@ -99,8 +112,21 @@ export class MobileRelayE2eeLink {
         })
         .catch((error: unknown) => this.fail(asError(error)))
     }
-    this.socket.onerror = () => this.fail(new Error('relay transport error'))
-    this.socket.onclose = (event) => this.fail(new RelayOuterError(event.code || 1006))
+    // `error` is often delivered just before `close`; wait for close so a
+    // typed relay code is not replaced by a generic transport error.
+    this.socket.onerror = () => {
+      this.transportErrorTimer ??= setTimeout(() => {
+        this.transportErrorTimer = null
+        this.fail(new RelayOuterError(1006))
+      }, RELAY_ERROR_CLOSE_GRACE_MS)
+    }
+    this.socket.onclose = (event) => {
+      if (this.transportErrorTimer) {
+        clearTimeout(this.transportErrorTimer)
+        this.transportErrorTimer = null
+      }
+      this.fail(new RelayOuterError(event.code || 1006))
+    }
   }
 
   private acceptHello(raw: unknown): void {
@@ -133,6 +159,10 @@ export class MobileRelayE2eeLink {
       return
     }
     this.closed = true
+    if (this.transportErrorTimer) {
+      clearTimeout(this.transportErrorTimer)
+      this.transportErrorTimer = null
+    }
     this.channel.dispose()
     this.options.onError(error)
     this.socket.close()

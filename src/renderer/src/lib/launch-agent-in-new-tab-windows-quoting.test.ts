@@ -238,7 +238,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command: `claude '--dangerously-skip-permissions' --prefill 'review Bob'"'"'s change'`
       })
     )
   })
@@ -293,7 +293,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     expect(mockQueueTabStartupCommand).toHaveBeenCalledWith(
       'tab-1',
       expect.objectContaining({
-        command: "claude '--dangerously-skip-permissions' --prefill 'review Bob'\\''s change'"
+        command: `claude '--dangerously-skip-permissions' --prefill 'review Bob'"'"'s change'`
       })
     )
   })
@@ -326,7 +326,7 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
     launchAgentInNewTab({ agent: 'codex', worktreeId: 'wt-1' })
 
     const queued = mockQueueTabStartupCommand.mock.calls.at(-1)?.[1] as { command: string }
-    expect(queued.command).toContain("'don'\\''t'")
+    expect(queued.command).toContain(`'don'"'"'t'`)
     expect(queued.command).not.toContain("'don''t'")
   })
 })

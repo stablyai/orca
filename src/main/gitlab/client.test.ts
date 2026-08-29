@@ -50,6 +50,9 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
         username: 'alice',
         email: 'alice@example.com'
       })
+      expect(glabExecFileAsyncMock).toHaveBeenCalledWith(['api', 'user'])
+      expect(acquireMock).toHaveBeenCalledOnce()
+      expect(releaseMock).toHaveBeenCalledOnce()
     })
 
     it('coerces a missing email to null', async () => {
@@ -65,6 +68,7 @@ describe('gitlab client — viewer & paste-URL lookup', () => {
     it('returns null when glab fails', async () => {
       glabExecFileAsyncMock.mockRejectedValueOnce(new Error('not authenticated'))
       await expect(getAuthenticatedViewer()).resolves.toBeNull()
+      expect(releaseMock).toHaveBeenCalledOnce()
     })
 
     it('returns null when username is empty', async () => {

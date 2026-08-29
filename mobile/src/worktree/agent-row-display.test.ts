@@ -28,6 +28,9 @@ function row(overrides: Partial<RuntimeWorktreeAgentRow> = {}): RuntimeWorktreeA
 describe('agentDotState', () => {
   it('maps known states through and unknown to idle', () => {
     expect(agentDotState(row({ state: 'working', updatedAt: 0 }), 0)).toBe('working')
+    expect(
+      agentDotState(row({ state: 'working', workingMode: 'monitoring', updatedAt: 0 }), 0)
+    ).toBe('monitoring')
     expect(agentDotState(row({ state: 'blocked', updatedAt: 0 }), 0)).toBe('blocked')
     expect(agentDotState(row({ state: 'waiting', updatedAt: 0 }), 0)).toBe('waiting')
     expect(agentDotState(row({ state: 'done', updatedAt: 0 }), 0)).toBe('done')
@@ -65,6 +68,12 @@ describe('agentDisplayLabel', () => {
     expect(agentDisplayLabel(row({ state: 'working', prompt: '', updatedAt: 0 }), 0)).toBe(
       'Working'
     )
+    expect(
+      agentDisplayLabel(
+        row({ state: 'working', workingMode: 'monitoring', prompt: '', updatedAt: 0 }),
+        0
+      )
+    ).toBe('Monitoring background tasks')
   })
 
   it('falls back to the decayed state label when stale', () => {

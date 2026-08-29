@@ -2,6 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
 import { AgentStateDot } from '@/components/AgentStateDot'
+import { StateIndicatorTooltip } from '@/components/StateIndicatorTooltip'
 import StatusIndicator from '@/components/sidebar/StatusIndicator'
 import { FilledBellIcon } from '@/components/sidebar/WorktreeCardHelpers'
 import {
@@ -9,6 +10,7 @@ import {
   type TabPaneInputSources
 } from '@/components/sidebar/smart-attention'
 import { cn } from '@/lib/utils'
+import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import {
   getWorktreeStatus,
@@ -26,11 +28,19 @@ import {
 } from '@/components/tab-bar/terminal-tab-activity-status'
 import { translate } from '@/i18n/i18n'
 import type { LiveAgentWorktreeStatus } from '@/lib/worktree-activity-state'
-import type { BrowserWorkspace, TerminalTab, Worktree } from '../../../../shared/types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import type { BrowserWorkspace } from '../../../../shared/browser-workspace-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
 /** Confines the app's hottest status subscriptions here so only the dots re-render on their churn. */
 type PaletteLiveStatus = {
   liveAgentStatusByWorktreeId: ReadonlyMap<string, LiveAgentWorktreeStatus>
+  agentStatusPaneIdsByTabId: Record<string, ReadonlySet<string>>
   paneSources: TabPaneInputSources
   tabsByWorktree: Record<string, TerminalTab[]>
   browserTabsByWorktree: Record<string, BrowserWorkspace[]>
@@ -83,17 +93,19 @@ export function PaletteLiveStatusProvider({
     // Why: `now` decides freshness, so both derivations must read it on the same tick — otherwise a
     // "done" dot can outlive its window while the worktree row beside it has already decayed.
     const now = Date.now()
+    const entriesByTabId = buildExplicitEntriesByTabId(
+      agentStatusByPaneKey,
+      migrationUnsupportedByPtyId
+    )
     return {
       liveAgentStatusByWorktreeId: getLiveAgentStatusByWorktreeId(
         agentStatusByPaneKey,
         tabsByWorktree,
         now
       ),
+      agentStatusPaneIdsByTabId: buildLiveAgentStatusPaneIdsByTabId(entriesByTabId, now),
       paneSources: {
-        entriesByTabId: buildExplicitEntriesByTabId(
-          agentStatusByPaneKey,
-          migrationUnsupportedByPtyId
-        ),
+        entriesByTabId,
         ptyIdsByTabId,
         runtimePaneTitlesByTabId,
         terminalLayoutsByTabId
@@ -120,6 +132,32 @@ export function PaletteLiveStatusProvider({
   return (
     <PaletteLiveStatusContext.Provider value={value}>{children}</PaletteLiveStatusContext.Provider>
   )
+}
+
+function buildLiveAgentStatusPaneIdsByTabId(
+  entriesByTabId: ReadonlyMap<string, readonly AgentStatusEntry[]>,
+  now: number
+): Record<string, ReadonlySet<string>> {
+  const paneIdsByTabId: Record<string, ReadonlySet<string>> = {}
+  for (const [tabId, entries] of entriesByTabId) {
+    const paneIds = new Set<string>()
+    for (const entry of entries) {
+      if (
+        entry.restoredUnconfirmed !== true &&
+        !isExplicitAgentStatusFresh(entry, now, AGENT_STATUS_STALE_AFTER_MS)
+      ) {
+        continue
+      }
+      const paneId = parsePaneKey(entry.paneKey)?.leafId
+      if (paneId) {
+        paneIds.add(paneId)
+      }
+    }
+    if (paneIds.size > 0) {
+      paneIdsByTabId[tabId] = paneIds
+    }
+  }
+  return paneIdsByTabId
 }
 
 const EMPTY_LIVE_INPUTS = Object.freeze({
@@ -156,7 +194,10 @@ export function PaletteWorktreeStatusDot({
     live.browserTabsByWorktree[worktree.id] ?? [],
     live.paneSources.ptyIdsByTabId,
     live.paneSources.runtimePaneTitlesByTabId,
-    { liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id) }
+    {
+      liveAgentStatus: live.liveAgentStatusByWorktreeId.get(worktree.id),
+      agentStatusPaneIdsByTabId: live.agentStatusPaneIdsByTabId
+    }
   )
   return (
     <>
@@ -204,29 +245,28 @@ export function PaletteRecentTabStatusDot({
           'Unread agent completion'
         )
       : getWorktreeStatusLabel(badge)
-  // Why: title on the outer hit target (not the pointer-events-none pip) so hover still reveals
-  // status — matches StatusIndicator's tooltip placement.
+  // Why: the outer hit target owns the tooltip because the overlaid pip ignores pointer events.
   return (
-    <span
-      className="relative inline-flex size-3.5 shrink-0 items-center justify-center"
-      title={statusLabel}
-    >
-      {fallback}
-      <span
-        className={cn(
-          // Why popover, not background: the dialog surface is --popover (#171717 in dark), while
-          // --background is the app canvas (#0a0a0a) — using it punched a dark halo through every
-          // dark-mode row. Selected rows swap to accent so the cutout stays invisible there too.
-          'pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full',
-          'bg-popover ring-2 ring-popover',
-          'group-data-[selected=true]:bg-accent group-data-[selected=true]:ring-accent'
-        )}
-        aria-hidden="true"
-      >
-        <RecentTabAttentionBadgeGlyph badge={badge} />
+    <StateIndicatorTooltip label={statusLabel}>
+      <span className="relative inline-flex size-3.5 shrink-0 items-center justify-center">
+        {fallback}
+        <span
+          className={cn(
+            // Why popover, not background: the dialog surface is --popover (#171717 in dark), while
+            // --background is the app canvas (#0a0a0a) — using it punched a dark halo through every
+            // dark-mode row. Selected rows use --jump-palette-selection-surface so the cutout tracks
+            // the stronger keyboard highlight from main.css.
+            'pointer-events-none absolute -right-0.5 -bottom-0.5 flex items-center justify-center rounded-full',
+            'bg-popover ring-2 ring-popover',
+            'group-data-[selected=true]:bg-[var(--jump-palette-selection-surface)] group-data-[selected=true]:ring-[var(--jump-palette-selection-surface)]'
+          )}
+          aria-hidden="true"
+        >
+          <RecentTabAttentionBadgeGlyph badge={badge} />
+        </span>
+        <span className="sr-only">{statusLabel}</span>
       </span>
-      <span className="sr-only">{statusLabel}</span>
-    </span>
+    </StateIndicatorTooltip>
   )
 }
 
@@ -240,5 +280,5 @@ function RecentTabAttentionBadgeGlyph({
     return <FilledBellIcon className="size-2.5 text-amber-500 drop-shadow-sm" />
   }
   // Why: AgentStateDot owns working/permission/done glyphs app-wide (spinner / ? / check).
-  return <AgentStateDot state={badge} size="sm" />
+  return <AgentStateDot state={badge} size="sm" title={null} />
 }

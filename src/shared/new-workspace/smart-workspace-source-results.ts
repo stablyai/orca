@@ -1,17 +1,23 @@
-import type {
-  BaseRefSearchResult,
-  GitHubWorkItem,
-  GitLabWorkItem,
-  JiraIssue,
-  LinearCollectionResult,
-  LinearIssue
-} from '../types'
-import { isClipboardTextByteLengthOverLimit } from '../clipboard-text'
+import type { GitHubWorkItem } from '../github/work-item-types'
+import type { GitLabWorkItem } from '../gitlab-types'
+import type { JiraIssue } from '../jira-types'
+import type { LinearIssue } from '../linear/issue-types'
+import type { LinearCollectionResult } from '../linear/workspace-types'
+import type { BaseRefSearchResult } from '../repo-types'
 import { JIRA_ISSUE_KEY_PATTERN, parseJiraIssueUrl } from '../jira-issue-url'
+import type { GitHubIssueOrPRLink } from '../github/links'
+import {
+  buildSmartWorkspaceUrlSourceRows,
+  type SmartWorkspaceGitLabUrlIntent
+} from './smart-workspace-url-source-results'
+import { isSmartWorkspaceSourceQueryWithinLimit } from './smart-workspace-source-query'
+
+export {
+  SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES,
+  isSmartWorkspaceSourceQueryWithinLimit
+} from './smart-workspace-source-query'
 
 export type SmartNameMode = 'smart' | 'github' | 'gitlab' | 'branches' | 'linear' | 'jira' | 'text'
-
-export const SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES = 2048
 
 export type SmartWorkspaceSourceRow =
   | { kind: 'use-name'; value: string; name: string }
@@ -38,13 +44,6 @@ export function getSmartWorkspaceEmptyHint(mode: SmartNameMode): string {
   return EMPTY_HINT_BY_MODE[mode]
 }
 
-export function isSmartWorkspaceSourceQueryWithinLimit(
-  query: string,
-  maxBytes = SMART_WORKSPACE_SOURCE_QUERY_MAX_BYTES
-): boolean {
-  return !isClipboardTextByteLengthOverLimit(query, maxBytes)
-}
-
 export function buildJiraIssueSearchJql(query: string): string | null {
   const trimmed = query.trim()
   if (!trimmed || !isSmartWorkspaceSourceQueryWithinLimit(trimmed)) {
@@ -61,8 +60,29 @@ export function isBlockingJiraUrlIntent(mode: SmartNameMode, value: string): boo
   return (mode === 'smart' || mode === 'jira') && parseJiraIssueUrl(value) !== null
 }
 
+export function isBlockingTaskUrlResolution({
+  sourceIntent,
+  isQueryStale,
+  githubLoading,
+  gitlabLoading
+}: {
+  sourceIntent: 'github' | 'gitlab' | null
+  isQueryStale: boolean
+  githubLoading: boolean
+  gitlabLoading: boolean
+}): boolean {
+  if (sourceIntent === null) {
+    return false
+  }
+  return isQueryStale || (sourceIntent === 'github' ? githubLoading : gitlabLoading)
+}
+
 function toJiraSourceRow(issue: JiraIssue): SmartWorkspaceSourceRow {
   return { kind: 'jira', value: `jira-${issue.siteId ?? ''}-${issue.key}`, issue }
+}
+
+function toGitHubSourceRow(item: GitHubWorkItem): SmartWorkspaceSourceRow {
+  return { kind: 'github', value: `github-${item.repoId}-${item.type}-${item.number}`, item }
 }
 
 export function getBranchSearchRequest({
@@ -188,26 +208,32 @@ export function shouldHoldSourceResultsForQuery({
 export function buildSmartWorkspaceSourceRows({
   branches,
   githubItems,
+  githubUrlIntent,
   gitlabAvailable,
   gitlabItems,
+  gitlabUrlIntent,
   jiraIntent = false,
   jiraIssue,
   jiraIssues = [],
   linearAvailable,
   linearIssues,
+  linearUrlIntentOwnsResults = false,
   mode,
   resultLimit,
   value
 }: {
   branches: BaseRefSearchResult[]
   githubItems: GitHubWorkItem[]
+  githubUrlIntent?: GitHubIssueOrPRLink | null
   gitlabAvailable: boolean
   gitlabItems: GitLabWorkItem[]
+  gitlabUrlIntent?: SmartWorkspaceGitLabUrlIntent | null
   jiraIntent?: boolean
   jiraIssue?: JiraIssue | null
   jiraIssues?: JiraIssue[]
   linearAvailable: boolean
   linearIssues: LinearIssueSourceInput
+  linearUrlIntentOwnsResults?: boolean
   mode: SmartNameMode
   resultLimit: number
   value: string
@@ -219,6 +245,28 @@ export function buildSmartWorkspaceSourceRows({
   if (!isSmartWorkspaceSourceQueryWithinLimit(value)) {
     return []
   }
+  const resolvedLinearIssues = Array.isArray(linearIssues)
+    ? linearIssues
+    : Array.isArray(linearIssues?.items)
+      ? linearIssues.items
+      : []
+  // Why: a full task URL is unambiguous, so unrelated held rows must never remain selectable.
+  const urlSourceRows = buildSmartWorkspaceUrlSourceRows({
+    githubItems,
+    githubUrlIntent,
+    gitlabAvailable,
+    gitlabItems,
+    gitlabUrlIntent,
+    linearAvailable,
+    linearIssues: resolvedLinearIssues,
+    linearUrlIntentOwnsResults,
+    mode,
+    resultLimit,
+    value
+  })
+  if (urlSourceRows !== null) {
+    return urlSourceRows
+  }
   const trimmed = value.trim()
   const nextRows: SmartWorkspaceSourceRow[] = []
   if (trimmed && mode === 'smart') {
@@ -229,13 +277,7 @@ export function buildSmartWorkspaceSourceRows({
     return nextRows
   }
   if (mode === 'smart' || mode === 'github') {
-    nextRows.push(
-      ...githubItems.map((item) => ({
-        kind: 'github' as const,
-        value: `github-${item.repoId}-${item.type}-${item.number}`,
-        item
-      }))
-    )
+    nextRows.push(...githubItems.map(toGitHubSourceRow))
   }
   if (gitlabAvailable && (mode === 'smart' || mode === 'gitlab')) {
     nextRows.push(
@@ -266,11 +308,6 @@ export function buildSmartWorkspaceSourceRows({
   if (linearAvailable && (mode === 'smart' || mode === 'linear')) {
     // Why: mixed-version runtime responses may briefly carry the paginated
     // collection shape into this render path; rendering must stay recoverable.
-    const resolvedLinearIssues = Array.isArray(linearIssues)
-      ? linearIssues
-      : Array.isArray(linearIssues?.items)
-        ? linearIssues.items
-        : []
     nextRows.push(
       ...resolvedLinearIssues.map((issue) => ({
         kind: 'linear' as const,

@@ -1,4 +1,4 @@
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 export type WorkspaceSessionFieldOwnership =
   | 'global'
@@ -20,6 +20,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   browserUrlHistory: 'global',
   // Why: SSH remains local-owned, so its connection identifiers stay in the local slice.
   activeConnectionIdsAtShutdown: 'global',
+  // Why global: keyed by runtime environment rather than by worktree, and it is this client's
+  // record of what it owes those environments — the same reason SSH connection state stays local.
+  clientHostedBrowserCloseIntentsByEnvironment: 'global',
   tabsByWorktree: 'worktreeKeyed',
   openFilesByWorktree: 'worktreeKeyed',
   activeFileIdByWorktree: 'worktreeKeyed',
@@ -27,6 +30,9 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   activeTabTypeByWorktree: 'worktreeKeyed',
   activeTabIdByWorktree: 'worktreeKeyed',
   browserTabsByWorktree: 'worktreeKeyed',
+  // Runtime-authored, never written by this renderer; classified so a merged read still routes each
+  // worktree's rows back to the host that owns them instead of dropping them.
+  clientHostedBrowserPagesByWorktree: 'worktreeKeyed',
   unifiedTabs: 'worktreeKeyed',
   tabGroups: 'worktreeKeyed',
   tabGroupLayouts: 'worktreeKeyed',
@@ -43,7 +49,10 @@ export const WORKSPACE_SESSION_FIELD_OWNERSHIP = {
   terminalPtyIncarnationsByPaneKey: 'paneKeyed',
   // Why: this host-issued fence must never collide while unified renderer state merges equal repo ids across hosts.
   terminalTopologyRevisionByRepoId: 'hostPrivate',
-  terminalSurfaceTombstonesByPaneKey: 'surfaceTombstoneKeyed'
+  terminalSurfaceTombstonesByPaneKey: 'surfaceTombstoneKeyed',
+  // Why not tabKeyed: the tab is already gone, so worktreeIdByTabId can never resolve it. Routing by
+  // the record's own worktreeId is the same problem terminalSurfaceTombstonesByPaneKey has.
+  closedTerminalTabTombstonesByTabId: 'surfaceTombstoneKeyed'
 } as const satisfies Record<keyof WorkspaceSessionState, WorkspaceSessionFieldOwnership>
 
 // Why: an unclassified persisted field would otherwise disappear from every non-local host.

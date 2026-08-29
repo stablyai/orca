@@ -196,6 +196,7 @@
         },
         "editor": {
           "dcb521ed29": "このファイルは競合状態にありますが、編集できる作業ツリーファイルがありません。",
+          "conflictPlaceholderGuidance": "Git で競合を解決するか、いずれかの側を復元してから開き直してください。",
           "51f15c37d3": "ディレクトリを開けません: {{value0}}",
           "f2e00db373": "ファイルが見つかりません: {{value0}}",
           "checkRunDetailsUnavailable": "このチェックの詳細はありません。",
@@ -262,7 +263,10 @@
           "3b57982bf6": "ワークスペース\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "81f13f48d2": "ワークツリー\"{{value1}}\"を削除した後、Git はブランチ\"{{value0}}\"を安全に削除できなかったため、Orca はローカルコミットを失わないように保持しました。",
           "runtimeScopeForbiddenTitle": "この接続は制限付き（モバイル）アクセスです",
-          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。"
+          "runtimeScopeForbiddenDescription": "モバイル向けペアリングではワークスペースを使用できません。[設定] → [リモート Orca サーバー] → [この Orca サーバーを共有する] から、ブラウザ用リンクで再接続してください。",
+          "createdWithoutParentNesting": "「{{value0}}」の配下にネストせずに作成しました",
+          "createdWithoutParentNestingUnnamed": "選択した親ワークツリーの配下にネストせずに作成しました",
+          "createdWithoutParentNestingDetail": "親ワークスペースは利用できなくなりました。ワークスペースメニューから設定できます。"
         },
         "repos": {
           "2975400634": "Orca サーバーを更新して、このランタイムで Git 以外のフォルダーを開くようにします。",
@@ -563,6 +567,14 @@
               "64555d0014": "ベースブランチが見つかりません"
             }
           }
+        },
+        "browser": {
+          "tab": {
+            "open": {
+              "urlFailed": "URLを開けませんでした。",
+              "searchFailed": "{{value0}} で検索できませんでした。"
+            }
+          }
         }
       },
       "worktree": {
@@ -778,7 +790,7 @@
         "a9fb10afca": "ターミナル",
         "5235c215ca": "「タスク」ページとサイドバーに表示するタスクプロバイダーを選択します。",
         "85f4fd7710": "タスクソース",
-        "ab4b21b58e": "ブランチの名前、基本参照、帰属、および Git AI 作成者。",
+        "ab4b21b58e": "ブランチの名前、基本参照、および Git AI 作成者。",
         "09607cb0fe": "Git とソース管理",
         "33a5e1d597": "GitHub、GitLab、Linear、およびソースホスティングサービスを接続します。",
         "2b043783ef": "連携",
@@ -895,7 +907,7 @@
         "e52bed9264": "まだチェックは報告されていません",
         "90020cc1f3": "この PR にはまだチェックが報告されていません。",
         "ecffebc251": "チェックが見つかりませんでした",
-        "5dddefdf58": "GitHub で開く",
+        "checkOpenInBrowser": "ブラウザで開く",
         "744197c84d": "このチェックではインライン出力は使用できません。",
         "08d072664d": "ジョブ",
         "96d8f36798": "注釈",
@@ -1234,6 +1246,7 @@
         "519c3587f3": "プロジェクトに追加",
         "openAttachedWorkspace": "Issue にリンクされたワークスペースを開く",
         "openWorkspace": "ワークスペースを開く",
+        "openOnLinear": "Linear で開く",
         "moreWorkspaceActions": "Issue ワークスペースのその他の操作",
         "startNewWorkspace": "新規ワークスペースを開始",
         "workspaceSection": "ワークスペース",
@@ -1430,7 +1443,6 @@
         "c57873d721": "PR がマージされました",
         "a63b3c159c": "これにより、GitHub 上の PR が更新されます。",
         "eec3706a6a": "{{value0}} PR #{{value1}}?",
-        "b8c6cbb8c4": "{{value0}} PR に失敗しました",
         "710e47aa06": "PR が再オープンされました",
         "7aa3b5f706": "PR がクローズされました",
         "3d77438c92": "これにより、GitHub で PR が再開されます。",
@@ -1529,7 +1541,13 @@
         "dd5d9a4f17": "{{value0}}に更新",
         "71a3c0f9d2": "ワークスペースを開始",
         "filesUnavailable": "変更されたファイルを読み込めませんでした。",
-        "filesRetry": "再試行"
+        "filesRetry": "再試行",
+        "77482513f8": "クローズ",
+        "2f5195c6a0": "再オープン",
+        "4b8ae7303f": "差分の読み込みに失敗しました。",
+        "closePullRequestFailed": "PR のクローズに失敗しました",
+        "reopenPullRequestFailed": "PR の再オープンに失敗しました",
+        "diffLoadTimedOut": "この差分の読み込みがタイムアウトしました。"
       },
       "QuickOpen": {
         "1dbd3f59ff": "移動",
@@ -2631,7 +2649,7 @@
               "346d409ab2": "Agent を選択",
               "0adba8fa0c": "Agent",
               "ec8f081919": "操作",
-              "ed04233b3e": "ターミナルコマンドまたは Agent プロンプトを保存して、すぐにアクセスできるようにします。",
+              "ed04233b3e": "保存した項目はタブバーのメニューに表示され、ワンクリックで実行できます。",
               "ca414324ee": "コマンドテキスト",
               "dc921c17ee": "プロンプト",
               "5b3f634a55": "クイックコマンドを追加",
@@ -2724,6 +2742,14 @@
             "a7e2fd2699": "Issue を登録",
             "5c8ce20be6": "この状態が続く場合は、",
             "cc6d997c65": "ここからターミナルデーモンを再起動して、古いデーモン状態をクリアします。"
+          },
+          "TerminalProcessExitOverlay": {
+            "capacityTitle": "Git Bash のコンソール上限に達しました",
+            "capacityDetail": "Git Bash が 128 個のコンソール上限に達しました。不要な Git Bash ターミナルを閉じてから、このターミナルを再起動してください。",
+            "failedTitle": "ターミナルが終了しました",
+            "failedDetail": "シェルプロセスが終了コード {{code}} で終了しました。出力は保持されています。",
+            "close": "閉じる",
+            "restart": "再起動"
           },
           "TerminalPane": {
             "ac112e9036": "タイトルを削除",
@@ -2991,7 +3017,9 @@
             "2c38630a01": "ワークスペースは存在しません",
             "4f0d9a71c2": "タブは存在しません",
             "d7d496a451": "ブラウザページは存在しません",
-            "7726ce9970": "モバイルエミュレータのタブは存在しません"
+            "7726ce9970": "モバイルエミュレータのタブは存在しません",
+            "chooseAction": "アクションを選択してください。",
+            "searchProvider": "{{value0}} で検索"
           },
           "TabBarQuickCommandsButton": {
             "a2c7a33831": "コマンド",
@@ -3126,7 +3154,7 @@
             "67c4ecda49": "このターミナルを強制終了します。ペイン内の保存されていない作業はすべて失われます。これを元に戻すことはできません。",
             "4bb076fa89": "強制終了",
             "996295bff2": "孤立したターミナル",
-            "92924a14e3": "非アクティブなワークスペースを確認 ({{value0}})",
+            "92924a14e3": "ワークスペースをクリーンアップ",
             "27a74f91f0": "現在何も実行されていません",
             "1b24a32d3a": "メモリ",
             "298f4be7f2": "CPU",
@@ -3200,6 +3228,14 @@
             "workspaceConflict": "ワークスペースの競合",
             "workspaceSyncError": "ワークスペースの同期エラー"
           },
+          "CaffeinateStatusSegment": {
+            "active": "アクティブ",
+            "inactive": "非アクティブ",
+            "ariaLabel": "{{title}}、{{status}}",
+            "onDescription": "このコンピュータを常にスリープさせない",
+            "autoDescription": "Agent の作業中はスリープさせない",
+            "offDescription": "通常のシステムスリープを許可する"
+          },
           "StatusBar": {
             "9659e38343": "ポート",
             "d1e1a7a6bf": "リソースマネージャー",
@@ -3259,7 +3295,9 @@
             "antigravityUsageDetails": "Antigravity の使用状況詳細を開く",
             "grokUsageAria": "Grok の使用状況詳細を開く",
             "grokUsageMenu": "Grok の使用状況",
-            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ"
+            "floatingTerminalNewActivity": "{{label}}、新規アクティビティ",
+            "codexSignInSuccess": "Codex にサインインしました",
+            "codexSignInError": "Codex のサインインに失敗しました。もう一度お試しください。"
           },
           "StatusBarUsageEmptyCta": {
             "828c764a79": "アカウントを接続する",
@@ -3466,7 +3504,8 @@
           "resource": {
             "memory": {
               "metric": {
-                "workingSetDescription": "合計ワーキングセット(WS)。共有ページが複数のプロセスに表示されることがあります。",
+                "workingSetDescription": "合計ワーキングセット(WS): 現在 RAM に常駐しているページです。共有ページが複数のプロセスに表示されることがあり、Windows がページアウトしたメモリはここには含まれません。",
+                "privateBytesDescription": "合計プライベートバイト: これらのプロセスがコミットしたメモリで、常駐中かページアウト済みかを問わず計上されます。ホストがコミット制限に対して計上する値であるため、ページングによって上のワーキングセットが縮小しても増え続けます。",
                 "rssDescription": "合計レジデントセットサイズ(RSS)。共有またはエイリアスされたページが複数のプロセスに表示されることがあります。"
               }
             },
@@ -3839,31 +3878,94 @@
       "skills": {
         "SkillsPage": {
           "cb142070b4": "更新",
-          "984405683f": "プラグイン",
-          "4d177feabd": "同梱",
-          "aa59462502": "リポジトリ",
-          "571c5818c1": "ホーム",
-          "0bc1379f4c": "すべてのソース",
-          "38e0951c3a": "Agent のスキル",
-          "fb6bf60b52": "Claude",
-          "426be2aac6": "Codex",
-          "39b6998ddb": "すべてのプロバイダー",
           "a68dee6a32": "スキルを検索",
-          "e46e162e2e": "から",
-          "b088e0785d": "ベータ",
           "f43ad6edf3": "スキル",
-          "7e828fb2c6": "戻る",
           "ea72d6185b": "スキルをスキャンできませんでした",
-          "dc4c3328ee": "ファイルを公開する",
-          "9963dff6d3": "説明が見つかりませんでした。",
-          "995fde8337": "スキルファイルを公開できませんでした",
-          "ab5b777350": "ホーム、リポジトリ、バンドル、プラグインスキルフォルダーを確認しました。",
-          "08a321a984": "検索またはフィルターを調整します。",
+          "dc4c3328ee": "ファイルを表示",
+          "9963dff6d3": "説明が見つかりません。",
+          "995fde8337": "スキルファイルを表示できませんでした",
           "4acd6d68ec": "スキルが見つかりません",
-          "6a62a0168c": "一致なし",
-          "cd7893fbc1": "スキャンスキル",
+          "6a62a0168c": "一致する項目はありません",
+          "08a321a984": "現在の検索条件とフィルターに一致するスキルはありません。",
+          "cd7893fbc1": "スキルをスキャン中",
           "35b9a724a0": "利用可能",
-          "0c74e7ff34": "インストール済み"
+          "c13b82793c": "インストールを管理",
+          "aee7b99cc6": "リンクからインストール",
+          "filterProvider": "Agent で絞り込み",
+          "filterSource": "ソースで絞り込み",
+          "allSources": "すべて",
+          "clearFilters": "フィルターをクリア",
+          "closeSkills": "スキルを閉じる",
+          "closeTooltip": "閉じる · Esc",
+          "moreActions": "その他の操作",
+          "sharedLinks": "共有リンク",
+          "emptyCopy": "スキャンしたスキルフォルダーは空です。共有バンドルをインストールするか、スキルを追加後に更新してください。",
+          "retry": "再試行",
+          "remoteShareNotice": "これらのスキルは {{host}} にあります。共有するには、そのマシンでスキルを開いてください。",
+          "viewSwitch": "表示",
+          "searchLinks": "リンクを検索",
+          "deleteSkills": "スキルを削除…"
+        },
+        "SkillShareSelectionControls": {
+          "01c5a15e02": "スキルを共有"
+        },
+        "SkillRow": {
+          "updatedUnknown": "日付なし",
+          "pathCopied": "パスをコピーしました",
+          "copyPath": "パスをコピー",
+          "detailPath": "パス",
+          "skillActions": "{{value0}} の操作",
+          "viewDetails": "詳細を表示",
+          "deleteSkill": "削除…"
+        },
+        "SkillsList": {
+          "listLabel": "スキル"
+        },
+        "sourceStatus": {
+          "missing": "フォルダーが見つかりません",
+          "remoteRepo": "リモートリポジトリ — 未スキャン",
+          "unavailable": "未スキャン"
+        },
+        "sources": {
+          "heading": "スキルフォルダー"
+        },
+        "sourceKind": {
+          "home": "ホーム",
+          "workspace": "ワークスペース",
+          "bundled": "バンドル済み",
+          "plugin": "プラグイン"
+        },
+        "count": {
+          "skillOne": "{{count}} 件のスキル",
+          "skillOther": "{{count}} 件のスキル",
+          "sourceOne": "{{count}} 件のソース",
+          "sourceOther": "{{count}} 件のソース",
+          "fileOne": "{{count}} 個のファイル",
+          "fileOther": "{{count}} 個のファイル",
+          "resultOne": "{{count}} 件の結果",
+          "resultOther": "{{count}} 件の結果",
+          "selected": "{{count}} 件を選択",
+          "shareOne": "{{count}} 件のスキルを共有",
+          "shareOther": "{{count}} 件のスキルを共有",
+          "linkOne": "{{count}} 件のリンク",
+          "linkOther": "{{count}} 件のリンク"
+        },
+        "filter": {
+          "allAgents": "すべての Agent",
+          "sharedAgent": "共有 (.agents)"
+        },
+        "SkillsSelectionHeader": {
+          "exit": "選択を終了",
+          "exitTooltip": "選択を終了 · Esc",
+          "title": "共有するスキルを選択",
+          "selectAll": "対象の {{count}} 件をすべて選択",
+          "clear": "クリア",
+          "deleteTitle": "削除するスキルを選択"
+        },
+        "SkillDetailDialog": {
+          "agents": "Agent",
+          "updated": "更新日",
+          "copy": "コピー"
         },
         "SkillFreshnessNudge": {
           "titleOne": "インストール済みの Orca スキルが古くなっています",
@@ -3961,6 +4063,10 @@
         "SkillUpdateRow": {
           "oneLocation": "1 件の場所",
           "manyLocations": "{{value0}} 件の場所"
+        },
+        "host": {
+          "local": "このマシン",
+          "remote": "接続済みランタイム"
         }
       },
       "sidebar": {
@@ -4668,14 +4774,68 @@
           "bff3bdd00c": "ワークスペースの名前を変更する",
           "8df295a78d": "ワークスペースの名前を変更できませんでした。"
         },
+        "WorktreeVisibilityHelpPopover": {
+          "c41f2d7e90": "デフォルトで非表示になるワークツリー",
+          "8db4e19a26": "この設定では、Orca で作成されたワークツリーが非表示になることはありません。",
+          "ec1e6a10fb": "その他のワークツリーは、サイドバーが意図せず煩雑にならないようデフォルトで非表示です。",
+          "1c68c9cf77": "ソースを有効にすると現在および今後のワークツリーをすべて表示できます。下から個別に表示することもできます。"
+        },
+        "HiddenWorktreeRecoveryList": {
+          "64e6f53f05": "ソースを有効にせずに個別に表示します。",
+          "showWorktree": "{{value1}} の {{value0}} を表示"
+        },
         "WorktreeVisibilityDialog": {
           "83a5ba8dd1": "Orca 以外のワークツリー",
-          "f1f71b9f02": "インポート",
+          "f1f71b9f02": "常に表示",
           "759371df43": "非表示",
-          "25ddf19920": "{{value0}} をインポートできます",
+          "25ddf19920": "{{value0}} は現在非表示",
           "8372e4bbd9": "現在表示されている{{value0}}",
           "5d02a5647f": "サイドバーから非表示",
-          "3e045d4cb8": "サイドバーに表示"
+          "3e045d4cb8": "サイドバーに表示",
+          "a3f19c07d2": "確認中…",
+          "b8d24e61f5": "このリポジトリのワークツリーを一覧できませんでした。",
+          "c5e70a93b1": "再試行",
+          "7d21c5e848": "非表示のワークツリー（{{value0}}）",
+          "2f80cd4b97": "表示中…",
+          "e64b81d3a9": "表示",
+          "d40d436fc2": "ワークツリーの表示設定を更新できませんでした。もう一度お試しください。",
+          "unsupportedHost": "このホストはソース別のワークツリー表示設定に対応していません。この設定を変更するには、ホストの Orca を更新してください。",
+          "search": "非表示のワークツリーを検索",
+          "searchPlaceholder": "{{value0}} 件のワークツリーを検索…",
+          "noMatches": "一致するワークツリーはありません",
+          "allShown": "検出されたワークツリーはすべて表示されています",
+          "noneFound": "Orca 以外のワークツリーは見つかりませんでした",
+          "tryDifferentSearch": "別の名前またはパスをお試しください。",
+          "disableSource": "ソースを無効にするとワークツリーを個別に管理できます。",
+          "appearWhenDetected": "Orca が新しいワークツリーを検出すると、ここに表示されます。",
+          "openGlobalSettings": "グローバル設定で管理",
+          "globalSettingsSources": "これらのソースにはグローバル設定があり、ここで上書きできます:"
+        },
+        "WorktreeVisibilitySourceList": {
+          "claude": "Claude Code",
+          "gsd": "GSD",
+          "other": "その他の場所",
+          "custom": "カスタムの場所",
+          "otherPath": "一覧にないソース",
+          "invalidPath": "このホストの絶対パスを入力してください。",
+          "duplicatePath": "この場所は既に一覧にあります。",
+          "limit": "別の場所を追加する前にカスタムの場所を削除してください。",
+          "sources": "ソース",
+          "sourcesDescription": "表示に設定したソースの現在および今後のワークツリーがサイドバーに表示されます。",
+          "found": "{{value0}} 件検出",
+          "remove": "{{value0}} を削除",
+          "removeLocation": "カスタムの場所を削除",
+          "addLocation": "場所を追加",
+          "worktreeRoot": "ワークツリールート",
+          "add": "追加",
+          "rootHelp": "Orca はこのフォルダー配下のワークツリーを認識します。",
+          "visibility": "{{value0}} の表示設定",
+          "show": "表示",
+          "hide": "非表示",
+          "overridingGlobal": "グローバル設定を上書き中: {{value0}}",
+          "projectOnly": "このプロジェクトにのみ追加されています。",
+          "useGlobalFor": "{{value0}} にグローバル設定を使用",
+          "useGlobal": "グローバルを使用"
         },
         "add": {
           "repo": {
@@ -5011,15 +5171,14 @@
         },
         "NewExternalWorktreesInboxLine": {
           "9f2d4c8b17": "{{value0}} の外部ワークツリーを完全に非表示にする",
-          "d9f7b2a14c": "{{value0}} の外部で作成された新規ワークツリーを折りたたむ",
-          "e2c4a8d91f": "{{value0}} の外部で作成された新規ワークツリーを展開",
-          "7c4e9b2a81": "外部で作成された新規ワークツリー",
           "5e1b8d3f62": "外部ワークツリーを完全に非表示にする",
-          "4d7a1c9e53": "これらのワークツリーは Orca の外部で作成されました。",
-          "8b3f2e1d74": "インポート",
-          "1c9e7a4b28": "非表示のままにする",
-          "6f2d8c1e95": "すべてインポート",
           "c3e8a1f4b2": "今後表示しない"
+        },
+        "NoticeHostGlyph": {
+          "hostDisconnected": "{{hostName}} が切断されました",
+          "sshHostProject": "SSH ホスト {{hostName}} 上のプロジェクト",
+          "localHostProject": "このホスト上のプロジェクト",
+          "runtimeHostProject": "{{hostName}} 上のプロジェクト"
         },
         "newExternalWorktreesInboxActions": {
           "a11c2f6d89": "外部ワークツリーを非表示のままにできませんでした。もう一度お試しください。",
@@ -5287,6 +5446,7 @@
           "codexSystemDefaultNeedsSignIn": "{{value0}} の Codex サインインが見つかりません。",
           "codexConfigSyncMissingSource": "{{value0}} が見つからないため、Codex は最後に同期した設定を使い続けています。同期を再開するには、そのファイルを復元してください。",
           "codexConfigSyncBlankSource": "{{value0}} が空のため、Codex は最後に同期した設定を使い続けています。同期フォルダーのダウンロードが完了するまでは正常な状態です。",
+          "codexConfigSyncManagedHomeUnavailable": "Orca は現在このアカウントの Codex ファイルを読み取れないため、設定が同期されていない可能性があります。ウイルス対策ソフトやバックアップツールによる一時的なロックが原因で、通常は自動的に解消されます。",
           "codexConfigSyncUnreadableSource": "{{value0}} を読み取れなかったため、Codex は最後に同期した設定を使い続けています。そのファイルの権限を確認してください。"
         },
         "AdvancedPane": {
@@ -5931,7 +6091,11 @@
           "5567191a6e": "ブラウズ",
           "0e9fc0eadc": "ワークスペースディレクトリ",
           "e2955d9ccb": "新規ワークスペースを作成する場所を構成します。",
-          "7511097c5d": "ワークスペース"
+          "7511097c5d": "ワークスペース",
+          "externalWorktrees": "外部ワークツリー",
+          "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。",
+          "show": "表示",
+          "hide": "非表示"
         },
         "GhosttyImportModal": {
           "9d3e56ca36": "変更を適用する",
@@ -5991,14 +6155,6 @@
           "808f9a726e": "プレフィックスは適用されません"
         },
         "GitPane": {
-          "d2eede4c54": "Orca の帰属をコミット、PR、Issue に追加します。",
-          "e02ea23a32": "Orca の帰属",
-          "e71ce09c42": "orca",
-          "b9b5771bb1": "帰属",
-          "b5f534717a": "共著",
-          "9838c921ed": "共著者",
-          "afada55042": "Issue",
-          "b4ef5428a7": "PR",
           "895d3f70b8": "gh",
           "32dca11189": "GitHub",
           "c4f610d057": "現在の GitLab CLI REST レート制限ヘッダー (利用可能な場合)。",
@@ -6040,10 +6196,9 @@
           "compareBaseBranchUpstream": "ブランチの upstream"
         },
         "HiddenExperimentalGroup": {
-          "d0f914a528": "プレースホルダーの切り替え",
-          "1014ddbfaf": "今日は何もしません。隠された実験的機能オプションの最初のスロットとして予約されています。",
-          "232cf83de8": "内部テスト用の非公開トグル。ここでは何もサポートされていません。",
-          "3e9e827ca5": "隠された実験的機能"
+          "7c4e18d2f6": "このマシンで太字グリッチのキャプチャジェスチャーを有効にします。{{samplingShortcut}} でサンプリングバーストを開始し、{{captureShortcut}} でペインの証拠をディスクに保存します。",
+          "b09f24a51d": "ターミナル描画診断",
+          "f2c81d904a": "隠された実験的機能の設定"
         },
         "InputPane": {
           "db15068196": "Linux および macOS ではデフォルトで有効になっています。 Linux はシステム選択クリップボードを使用します。他のプラットフォームはプライベートバッファを使用します。",
@@ -6639,7 +6794,14 @@
           "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
           "hostStateDisconnected": "切断済み",
           "hostStateUnknown": "不明",
-          "nestedHostLabel": "{{value1}} 経由の {{value0}}"
+          "nestedHostLabel": "{{value1}} 経由の {{value0}}",
+          "externalWorktrees": "外部ワークツリー",
+          "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
+          "externalWorktreesInherited": "グローバル設定を使用中: {{value0}}",
+          "show": "表示",
+          "hide": "非表示",
+          "externalWorktreesGlobal": "グローバルデフォルト: {{value0}}",
+          "useGlobal": "グローバル設定を使用"
         },
         "RepositorySourceControlAiActionRows": {
           "548a6e1281": "コマンドテンプレート",
@@ -6887,7 +7049,7 @@
           "3de4bbb841": "ターミナル",
           "dd72ed437a": "「タスク」ページとサイドバーに表示するタスクプロバイダーを選択します。",
           "11faa2f7dd": "タスクソース",
-          "cfa34f4465": "ブランチの名前、基本参照、帰属、および Git AI 作成者。",
+          "cfa34f4465": "ブランチの名前、基本参照、および Git AI 作成者。",
           "70100f94c7": "Git とソース管理",
           "b07041697f": "GitHub、GitLab、Linear、およびソースホスティングサービスを接続します。",
           "c9ca101a3b": "連携",
@@ -8260,21 +8422,15 @@
             "e61157e926": "エディターのワードラップ",
             "005be5c699": "水平スクロールを使わずに、ファイルエディターで長い行を折り返します。",
             "editorFontFamily": "エディターフォント",
-            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。"
+            "editorFontFamilyDesc": "ファイルエディターと差分ビューで使用されるフォント。空の場合はターミナルフォントに従います。",
+            "externalWorktrees": "外部ワークツリー",
+            "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。"
           }
         },
         "git": {
           "search": {
-            "61eab13403": "orca",
-            "1b93c1143c": "帰属",
-            "8461c908ae": "共著",
-            "61f9f5d1fc": "共著者",
-            "af0a144bfb": "Issue",
-            "6bdea421bb": "PR",
             "16f53f7323": "gh",
             "d088806071": "GitHub",
-            "118c23484b": "Orca の帰属をコミット、PR、Issue に追加します。",
-            "bc7d9f69ce": "Orca の帰属",
             "40f9b815fd": "APIの予算",
             "b7e52124c7": "レート制限",
             "ead733645f": "glab",
@@ -8752,6 +8908,8 @@
             "keepForkUpToDateDescription": "このフォークを upstream から安全に fast-forward します。",
             "projectRuntime": "プロジェクトのランタイム",
             "projectRuntimeDescription": "このプロジェクトを Windows と WSL のどちらで実行するかを選択します。",
+            "externalWorktrees": "外部ワークツリー",
+            "externalWorktreesDescription": "このプロジェクトで Orca 外のワークツリーを表示するかどうかを上書きします。",
             "copy": "コピー",
             "clone": "clone",
             "apfs": "apfs"
@@ -8777,6 +8935,9 @@
               "4575341c77": "ローカルデスクトップを選択するか、保存されたリモート Orca サーバーを追加するか、ペアリング URL を生成します。"
             }
           }
+        },
+        "shortcutDefinitionCatalog": {
+          "missionControlConflict": "Mission Control によってブロックされています。ここで再割り当てするか、システム設定で変更してください。"
         },
         "shortcuts": {
           "search": {
@@ -9148,7 +9309,13 @@
         "agent-awake-copy": {
           "e5995ce268": "Agent 作業中はコンピュータを起きたままにする",
           "95d3031db2": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。蓋を閉じたときの動作は、このデバイスの電源設定に従います。",
-          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。"
+          "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。",
+          "modeTitle": "コンピュータをスリープさせない"
+        },
+        "AgentAwakeSetting": {
+          "on": "オン",
+          "auto": "Agent",
+          "off": "オフ"
         },
         "agent-status-hooks-copy": {
           "7707c15abb": "Agent 状態フック",
@@ -10106,6 +10273,11 @@
           "setupRecipe": "クラウドプロバイダー用の環境レシピをセットアップします。",
           "createWorkspace": "ワークスペースを作成し、「実行先」でそのレシピを選択します。",
           "openSetup": "環境レシピをセットアップ"
+        },
+        "GlobalWorktreeVisibilitySourcesSetting": {
+          "saveFailed": "表示設定のデフォルトを保存できませんでした。",
+          "updateServer": "ソースのデフォルトを設定するには、このサーバーを更新してください。",
+          "updateServerDefaults": "表示のデフォルトを設定するには、このサーバーを更新してください。"
         }
       },
       "right": {
@@ -10149,7 +10321,7 @@
             "653c105ecc": "その他の PR 操作",
             "f316a8ca2b": "未解決のコメントが選択されていません。",
             "d00ebdc402": "{{value0}} のコメントを AI で解決",
-            "ed3f79c031": "Agent を開始する前にプロンプトを確認してください。プロンプトの送信後、Orca は選択したコメントに返信し、可能な場合はホスト上のスレッドを解決します。",
+            "5eb2163b6b": "Agent を開始する前にプロンプトを確認してください。プロンプトの送信後、Orca は選択したホスト上のスレッドを解決し、解決できないコメントには返信します。",
             "f273f2271c": "Agent を開始しました。{{value0}} 件を解決し、{{value1}} 件に返信し、{{value2}} 件をスキップし、{{value3}} 件の処理に失敗しました。{{value4}}",
             "aa95b81a3a": "Agent を開始しました。{{value0}} 件を解決し、{{value1}} 件に返信し、{{value2}} 件をスキップし、{{value3}} 件の処理に失敗しました。",
             "495b2f8c4b": "Agent を開始しましたが、選択したコメントの解決または返信ができませんでした。",
@@ -10163,7 +10335,8 @@
               "pending": "同期中…",
               "branch": "ブランチを同期"
             },
-            "7e4b2a19c0": "返信先の GitHub PR を特定できませんでした。"
+            "7e4b2a19c0": "返信先の GitHub PR を特定できませんでした。",
+            "430f1a62d4": "選択したスレッドをホスト上で解決できませんでした。"
           },
           "CreatePullRequestDialog": {
             "2bc1b4345e": "キャンセル",
@@ -10510,6 +10683,8 @@
             "7a09d7f9d2": "ベース",
             "383cf92c73": "木",
             "d7ae61269b": "コミット先のブランチ",
+            "branchFilesChangedVsBaseOne": "{{ref}} と比べて 1 ファイルが変更されています",
+            "branchFilesChangedVsBaseOther": "{{ref}} と比べて {{count}} ファイルが変更されています",
             "48a003c1b1": "ステージ済みの変更",
             "d4ef4bafc5": "変更点",
             "522f44dce5": "追跡されていないファイル",
@@ -10584,10 +10759,10 @@
             "b3c8f1a902": "ファイル名でフィルター",
             "d4f8c2a901": "フィルターをクリアして閉じる",
             "e8a1c4b203": "vs",
-            "f9b2441bb6": "{{value0}} より 1 コミット進んでいます",
-            "b715ef615b": "{{value1}}より{{value0}}コミット進んでいます",
-            "c1a8f3e204": "{{value0}} より 1 コミット遅れています",
-            "d2b9g4f315": "{{value1}}より{{value0}}コミット遅れています",
+            "compareBaseCommitsAheadOne": "{{ref}} より 1 コミット進んでいます",
+            "compareBaseCommitsAheadOther": "{{ref}}より{{count}}コミット進んでいます",
+            "compareBaseCommitsBehindOne": "{{ref}} より 1 コミット遅れています",
+            "compareBaseCommitsBehindOther": "{{ref}}より{{count}}コミット遅れています",
             "4b4a7de138": "ブラウザでレビューページを開く",
             "createPrIntentCommitBlockedSummary": "コミットがブロックされました：{{value0}} Issue を修正して、PR 作成を再試行してください。",
             "pushRecovery": {
@@ -10610,7 +10785,6 @@
             "a4e93c21d7": "現在のブランチ: {{value0}}",
             "c7d4e2f801": "ベース ref を変更: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentEmptyGeneratedBody": "生成されたレビューの詳細に説明が含まれていませんでした。PR の作成を再試行してください。",
             "createPrIntentGenerateDetailsFailed": "レビューの詳細を生成できませんでした。PR の作成を再試行してください。"
           },
           "SourceControlAgentActionDialog": {
@@ -13224,7 +13398,12 @@
           "5d2c3e7ae3": "音声が検出されませんでした。"
         },
         "DictationIndicator": {
-          "335e1bc6cb": "ディクテーションを停止する"
+          "335e1bc6cb": "ディクテーションを停止する",
+          "7f3660a7ba": "マイクを起動中…",
+          "f082d0cb9d": "処理中…",
+          "3de5a129e7": "聞き取り中",
+          "4977162383": "音量が大きすぎます",
+          "25f2b7a6a5": "発話中"
         }
       },
       "dashboard": {
@@ -13538,9 +13717,20 @@
           "3e3b2c369f": "クロン式",
           "e81a02d61b": "保存する前に、有効な 5 フィールドの cron を入力してください。",
           "968e66d686": "5 フィールドの cron を入力します。",
-          "cadb7b0bc9": "無効"
+          "cadb7b0bc9": "無効",
+          "f6ca30da23": "有効なカスタム cron",
+          "a226dbdd40": "分",
+          "ec9c1e35df": "時間",
+          "2d82246d23": "日",
+          "0e1de0358b": "月",
+          "77e96bded6": "曜日"
+        },
+        "AutomationPromptDisclosure": {
+          "showLess": "折りたたむ",
+          "showMore": "さらに表示"
         },
         "AutomationDetail": {
+          "host": "ホスト",
           "007c8ad874": "プロンプト",
           "a1d52c2189": "使用範囲",
           "449fc83bf7": "トークン",
@@ -13585,6 +13775,7 @@
           "e46c1aa9ad": "作成",
           "a9d9dccf77": "保存",
           "777548c2d6": "変更を保存",
+          "e8c2a14f70": "保存すると、一時停止するまで自動的に実行されます。",
           "ff5db28639": "既存 "
         },
         "AutomationEditorDialogHeader": {
@@ -13636,9 +13827,7 @@
           "33741dd973": "実行一覧に戻る"
         },
         "AutomationSchedulePicker": {
-          "22359b186a": "午前または午後",
           "9e677335b0": "分",
-          "6b802ecc99": "時間",
           "d90981f766": "時間",
           "6b914c5fbb": "日",
           "233b8c94b6": "ケイデンス",
@@ -13647,6 +13836,11 @@
           "57e83307d0": "平日",
           "837d902bba": "毎週",
           "ddba78647e": "カスタム cron"
+        },
+        "AutomationTimeField": {
+          "39ec1383f6": "午前または午後",
+          "32a5e4e35e": "分",
+          "aa593eb5e2": "時間"
         },
         "AutomationSessionField": {
           "f3c76dce51": "再利用",
@@ -13700,6 +13894,9 @@
           "b11170a008": "オートメーションを保存できませんでした。",
           "2a20596d6b": "オートメーションが保存されました。",
           "244727e655": "自動化が更新されました。",
+          "moved": "自動化を {host} に移動しました。",
+          "moveOriginalKept": "{host} に作成しましたが、元の自動化を削除できませんでした。元のホストで削除してください。",
+          "moveOriginalUnverified": "{host} に作成しましたが、元の自動化の削除を確認できませんでした。再試行する前に元のホストを確認してください。",
           "77b81bc4ac": "Hermes オートメーションが作成されました。",
           "08efc3ae12": "Hermes オートメーションが更新されました。",
           "e431bb85d4": "この Hermes オートメーションと同じホスト上のワークスペースを選択します。",
@@ -13743,6 +13940,7 @@
           "backToList": "すべての自動化",
           "tableName": "名前",
           "tableProject": "プロジェクト",
+          "tableHost": "ホスト",
           "tableStatus": "ステータス",
           "tableActions": "操作",
           "newAutomation": "新しい自動化",
@@ -13837,6 +14035,16 @@
               "name": "毎時保守点検",
               "prompt": "スタックした作業、古い生成ファイル、検証の失敗、および人間の対応が必要なものがないか確認してください。対応が必要な Issue のみを報告してください。"
             }
+          },
+          "schedule": {
+            "label": {
+              "a95afb7483": "毎時 :{{minute}}",
+              "280ccd2701": "毎日 {{time}}",
+              "3f1422adc1": "平日 {{time}}",
+              "cc71e252ba": "毎週{{day}} {{time}}",
+              "ba20c92073": "カスタムスケジュール",
+              "086a5a9fe2": "無効なスケジュール"
+            }
           }
         },
         "external": {
@@ -13872,6 +14080,32 @@
         },
         "AutomationListLocalRows": {
           "c92c9463c6": "自動化の操作"
+        },
+        "AutomationListFilterMenu": {
+          "926e785e4d": "Agent を検索…",
+          "491043ee45": "検索に一致する Agent はありません。",
+          "agent": "Agent",
+          "lastRun": "前回の実行",
+          "all": "すべて",
+          "failed": "失敗",
+          "succeeded": "成功",
+          "neverRan": "未実行",
+          "filters": "フィルター",
+          "clear": "フィルターをクリア",
+          "removeFilter": "{{value0}} フィルターを解除"
+        },
+        "createDestination": {
+          "label": "ホスト",
+          "placeholder": "ホストを選択",
+          "storedOn": "{authority} が保存してスケジュールします。",
+          "unselected": "この自動化を保存してスケジュールするホストを選択します。",
+          "orphan": "ホストのない自動化は新しい自動化を保持できません。この自動化を作成するホストを選択してください。",
+          "unavailable": "そのホストはまだ新しい自動化を保持できません。これを作成する別のホストを選択してください。",
+          "stale": "このフォームを開いている間に {host} が変更されました。保存する前にもう一度選択してください。",
+          "projectMismatch": "そのプロジェクトは {host} にありません。そのホスト上のプロジェクト、または別のホストを選択してください。",
+          "noProjects": "{host} にはプロジェクトが設定されていません。そこに追加するか、別のホストを選択してください。",
+          "updateRequired": "{hosts} の Orca サーバーを更新すると、そこに自動化を保存できます。",
+          "move": "保存すると、この自動化は {host} に作成され、元の自動化と実行履歴は削除されます。"
         }
       },
       "agent": {
@@ -14215,6 +14449,20 @@
         "pendingChip": "{{value0}} 件保留中",
         "needsActionChip": "{{value0}} 件の対応が必要",
         "unresolvedChip": "{{value0}} 件未解決"
+      },
+      "artifacts": {
+        "ArtifactsPage": {
+          "deleteTitle": "成果物を削除しますか？",
+          "deleteDescription": "「{{name}}」は公開リンクで利用できなくなります。",
+          "delete": "削除"
+        }
+      },
+      "ComposerParentWorktreePicker": {
+        "label": "親ワークツリー",
+        "noParent": "親なし",
+        "description": "このワークスペースをサイドバー内の別のワークスペースの配下にネストします。ベースブランチは変更されません。",
+        "searchPlaceholder": "ワークスペースを検索...",
+        "noMatches": "一致する項目がありません。"
       }
     },
     "i18n": {
@@ -14316,6 +14564,7 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
+          "ultra": "ウルトラ",
           "on": "オン",
           "off": "オフ"
         },
@@ -14454,14 +14703,12 @@
     },
     "map": {
       "host": {
-        "all": "すべてのホスト",
         "local": "ローカル",
         "ssh": "SSH",
         "wsl": "WSL",
         "remote": "リモート"
       },
       "liveContainmentMap": "ライブ包含マップ",
-      "hostFilter": "ホストフィルター",
       "empty": "現在のフィルターに一致する Agent はありません。",
       "canvasLabel": "プロジェクト、ワークスペース、Agent の入れ子マップ",
       "zoomOut": "ズームアウト",

@@ -111,7 +111,6 @@ async function installBlockedCompletedCapabilityFakes(
       directoryPath: `/tmp/orca-e2e-skills/${name}`,
       skillFilePath: `/tmp/orca-e2e-skills/${name}/SKILL.md`,
       installed: true,
-      fileCount: 1,
       updatedAt: 1
     })
 

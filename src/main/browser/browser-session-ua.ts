@@ -1,6 +1,7 @@
 import type { Session } from 'electron'
 
 import {
+  currentUserAgent,
   googleAuthUserAgent,
   isGoogleAuthUrl,
   setUserAgentHeader,
@@ -44,6 +45,18 @@ export function setupClientHintsOverride(
       // in inside the app and Google issues self-refreshing bound cookies. Strip
       // sec-ch-ua* because real Firefox sends none.
       setUserAgentHeader(headers, firefoxUa)
+      stripClientHints(headers)
+      callback({ requestHeaders: headers })
+      return
+    }
+    if (options.googleAuthOverride !== false && currentUserAgent(headers) === firefoxUa) {
+      // Why: while the auth document is on screen the WebContents UA is Firefox,
+      // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
+      // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
+      // bearing Chromium client hints. Rewriting those to Chrome pairs a Firefox
+      // UA with Chrome hints — a sharper cross-host identity tell than either
+      // alone, which can stall Google's password-submit challenge. Real Firefox
+      // sends no client hints, so strip them to keep one identity for the flow.
       stripClientHints(headers)
       callback({ requestHeaders: headers })
       return

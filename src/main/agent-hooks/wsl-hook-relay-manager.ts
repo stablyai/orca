@@ -29,6 +29,10 @@ import {
   WSL_HOOK_FS_METHODS,
   wslHookRelayEndpointFilePath
 } from '../../shared/wsl-hook-relay-contract'
+import {
+  recordManagedWslCodexHome,
+  wslRuntimeHomePathsEqual
+} from '../codex/managed-wsl-codex-home-registry'
 
 type DistroState = {
   /** Original casing for wsl.exe argv and breadcrumbs; map keys are lowercased. */
@@ -37,6 +41,7 @@ type DistroState = {
   child?: ChildProcessWithoutNullStreams
   mux?: SshChannelMultiplexer
   guestHome?: string
+  codexHomePath?: string
   guestEndpointFilePath?: string
   opencodeOverlayDir?: string
   failures: number
@@ -52,7 +57,7 @@ export class WslHookRelayManager {
   private recovery: WslRelayRecovery
   private states = new Map<string, DistroState>()
   /** Distros a hooks-off teardown stopped, so re-enabling can put them back. */
-  private stoppedByHooksOff = new Set<string>()
+  private stoppedByHooksOff = new Map<string, string | undefined>()
   private defaultDistro: string | null = null
   private disposed = false
   private warnedBundleMissing = false
@@ -64,7 +69,7 @@ export class WslHookRelayManager {
       warn: (message) => this.deps.warn(message),
       isDisposed: () => this.disposed,
       isCurrent: (state) => this.states.get(wslHookRelayStateKey(state.distro)) === state,
-      restart: (distro) => this.ensureForDistro(distro),
+      restart: (distro) => this.ensureForDistro(distro, this.stateFor(distro)?.codexHomePath),
       dropState: (state) => {
         // Why: identity-guarded — a fresh ensure() may own this key by now;
         // deleting by key alone would orphan its live relay child.
@@ -81,11 +86,11 @@ export class WslHookRelayManager {
   }
 
   /** Fire-and-forget from every WSL PTY spawn-env build; errors breadcrumb. */
-  ensureForDistro(distro: string | null): void {
+  ensureForDistro(distro: string | null, codexHomePath?: string | null): void {
     if (this.disposed || !isWslHookRelayAllowed(this.deps)) {
       return
     }
-    void this.ensureInternal(distro).catch((err) => {
+    void this.ensureInternal(distro, codexHomePath ?? undefined).catch((err) => {
       const detail = err instanceof Error ? err.message : String(err)
       this.deps.warn(`[agent-hooks] WSL hook relay ensure failed: ${detail}`)
     })
@@ -109,15 +114,6 @@ export class WslHookRelayManager {
     return this.stateFor(distro)?.opencodeOverlayDir ?? null
   }
 
-  getInstanceKey(): string | null {
-    const stableKey = sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined)
-    if (stableKey) {
-      return stableKey
-    }
-    const port = Number(this.deps.hookCoordsEnv().ORCA_AGENT_HOOK_PORT ?? '')
-    return Number.isInteger(port) && port > 0 ? `port${port}` : null
-  }
-
   /** Kills every live relay. Non-permanent (hooks switched off mid-session) leaves the
    *  manager reusable, so re-enabling hooks can start relays again without an app restart. */
   disposeAll({ permanent = true }: { permanent?: boolean } = {}): void {
@@ -127,7 +123,7 @@ export class WslHookRelayManager {
       state.mux?.dispose()
       state.child?.kill()
       if (!permanent) {
-        this.stoppedByHooksOff.add(state.distro)
+        this.stoppedByHooksOff.set(state.distro, state.codexHomePath)
       }
     }
     this.states.clear()
@@ -138,26 +134,39 @@ export class WslHookRelayManager {
   resumeStoppedRelays(): void {
     const distros = [...this.stoppedByHooksOff]
     this.stoppedByHooksOff.clear()
-    for (const distro of distros) {
+    for (const [distro, codexHomePath] of distros) {
       void this.deps
         .isDistroRunning(distro)
         .then((running) => {
           if (running) {
-            this.ensureForDistro(distro)
+            this.ensureForDistro(distro, codexHomePath)
           }
         })
         .catch(() => undefined)
     }
   }
 
-  private async ensureInternal(requestedDistro: string | null): Promise<void> {
+  private async ensureInternal(
+    requestedDistro: string | null,
+    requestedCodexHomePath?: string
+  ): Promise<void> {
     const distro = requestedDistro ?? (await this.resolveDefaultDistro())
     if (!distro || this.disposed) {
       return
     }
     const key = wslHookRelayStateKey(distro)
     const existing = this.states.get(key)
+    if (requestedCodexHomePath) {
+      recordManagedWslCodexHome(distro, requestedCodexHomePath)
+    }
     if (existing) {
+      if (
+        requestedCodexHomePath &&
+        !wslRuntimeHomePathsEqual(existing.codexHomePath, requestedCodexHomePath)
+      ) {
+        existing.codexHomePath = requestedCodexHomePath
+        existing.lastInstallAt = 0
+      }
       if (existing.phase === 'running') {
         void maybeRerunWslRelayGuestInstall(this.deps, existing)
         return
@@ -181,7 +190,8 @@ export class WslHookRelayManager {
     }
     // Why: restart-stable instance identity keeps the guest endpoint file at
     // ONE path across restarts so daemon-surviving agents re-coordinate.
-    const instanceKey = this.getInstanceKey() ?? `port${port}`
+    const instanceKey =
+      sanitizeWslHookInstanceKey(this.deps.instanceKey() ?? undefined) ?? `port${port}`
     if (existing) {
       this.recovery.clearTimers(existing)
     }
@@ -192,6 +202,7 @@ export class WslHookRelayManager {
       // Why: instance-keyed and on the distro's persistent fs, so it outlives a relay
       // crash — dropping it would blank status on panes spawned mid-relaunch.
       opencodeOverlayDir: existing?.opencodeOverlayDir,
+      codexHomePath: requestedCodexHomePath ?? existing?.codexHomePath,
       cooldownUntil: 0
     }
     this.states.set(key, state)

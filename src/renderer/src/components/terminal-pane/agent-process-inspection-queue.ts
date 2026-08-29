@@ -45,7 +45,7 @@ function pumpInspectionQueue(): void {
 
   const priorityIndex = inspectionQueue.findIndex((task) => task.priority === 'pending-title')
   const next =
-    priorityIndex >= 0 ? inspectionQueue.splice(priorityIndex, 1)[0] : inspectionQueue.shift()
+    priorityIndex !== -1 ? inspectionQueue.splice(priorityIndex, 1)[0] : inspectionQueue.shift()
   if (!next) {
     return
   }

@@ -721,7 +721,9 @@ describe('CdpWsProxy', () => {
           resolvePrint = resolve
         })
     )
-    const store = (proxy as unknown as { pdfStreams: { create: (b: Buffer) => string } }).pdfStreams
+    const store = (
+      proxy as unknown as { pageCapture: { pdfStreams: { create: (b: Buffer) => string } } }
+    ).pageCapture.pdfStreams
     const createSpy = vi.spyOn(store, 'create')
 
     const client = await connect(endpoint)

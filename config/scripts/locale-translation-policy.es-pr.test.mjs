@@ -25,10 +25,10 @@ describe('locale-translation-policy es PR glossary', () => {
   it('rewrites PR inside longer sentences', () => {
     expect(
       repairEs(
-        'Add Orca attribution to commits, PRs, and issues.',
-        'Agregue la atribución de Orca a commits, relaciones públicas y problemas.'
+        'Split a large change into smaller PRs',
+        'Dividir un cambio grande en relaciones públicas más pequeños'
       )
-    ).toBe('Agregue la atribución de Orca a commits, PR y problemas.')
+    ).toBe('Dividir un cambio grande en PR más pequeños')
     expect(
       repairEs(
         'Open the PR details to view current reviewers.',

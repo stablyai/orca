@@ -5,7 +5,7 @@ import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-t
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list-virtual-rows'
+import { getActiveStickyHeaderIndexForScroll } from '../sidebar/worktree-list/viewport/virtual-rows'
 import { VaultGroupHeader } from './AiVaultPanelControls'
 import { EmptyState, SessionLoadingState } from './AiVaultSessionListStates'
 import { VaultSessionRow } from './AiVaultSessionRow'

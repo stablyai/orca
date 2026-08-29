@@ -15,8 +15,9 @@ import type {
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentMapAgentNode, AgentMapProjectRing, AgentMapLayout } from './agent-map-layout'
+import type { AgentMapFlareStatus } from './agent-map-node-metadata'
 import { AgentMapScene } from './AgentMapScene'
 import { agentFocusZoom, clamp, MAX_ZOOM, MIN_ZOOM } from './agent-map-canvas-zoom'
 import { AgentMapViewportControls } from './AgentMapViewportControls'
@@ -35,8 +36,6 @@ import { useAgentMapViewportTransition } from './useAgentMapViewportTransition'
 
 const AGENT_FOCUS_DURATION_MS = 240
 
-type Point = { x: number; y: number }
-
 export type AgentMapCanvasHandle = {
   fit: () => void
   focusProject: (project: AgentMapProjectRing) => void
@@ -48,6 +47,7 @@ type AgentMapCanvasProps = {
   selectedPaneKey: string | null
   allowAggregation: boolean
   showOrchestrationLinks: boolean
+  recentFlareStatuses: ReadonlyMap<string, AgentMapFlareStatus>
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   workspaceContextMenusEnabled?: boolean
   onWorkspaceContextMenuOpenChange?: (open: boolean) => void
@@ -64,6 +64,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       selectedPaneKey,
       allowAggregation,
       showOrchestrationLinks,
+      recentFlareStatuses,
       launchableAgentsByWorktreeId,
       workspaceContextMenusEnabled = false,
       onWorkspaceContextMenuOpenChange,
@@ -78,8 +79,8 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
     const nodeRefs = useRef(new Map<string, SVGGElement>())
     const dragRef = useRef<{
       pointerId: number
-      point: Point
-      center: Point
+      point: AgentMapViewport['center']
+      center: AgentMapViewport['center']
       worldPerPixelX: number
       worldPerPixelY: number
     } | null>(null)
@@ -114,7 +115,6 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
       [allowAggregation, layout, selectedPaneKey, zoom]
     )
     const hasProjects = layout.projects.length > 0
-    const hasMotionProjects = motionLayout.projects.length > 0
     const aspect = size.width / Math.max(1, size.height)
     const baseWidth = Math.max(layout.width, layout.height * aspect)
     const baseHeight = baseWidth / aspect
@@ -303,7 +303,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
 
     return (
       <div ref={containerRef} className="agent-map-canvas relative min-h-0 flex-1 overflow-hidden">
-        {!hasMotionProjects ? (
+        {motionLayout.projects.length === 0 ? (
           <div className="absolute inset-0 grid place-items-center text-center text-xs text-muted-foreground">
             {translate('dashboardPopout.map.empty', 'No agents match the current filters.')}
           </div>
@@ -387,6 +387,7 @@ export const AgentMapCanvas = forwardRef<AgentMapCanvasHandle, AgentMapCanvasPro
               selectedPaneKey={selectedPaneKey}
               allowAggregation={allowAggregation}
               showOrchestrationLinks={showOrchestrationLinks}
+              recentFlareStatuses={recentFlareStatuses}
               launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
               nodeRefs={nodeRefs}
               onSelectAgent={onSelectAgent}

@@ -5,7 +5,7 @@ import {
   branchHasNoUnmergedChangesWithLazyTargetRefresh,
   getBranchCleanupTargetRefs
 } from '../../shared/git-branch-cleanup'
-import { resolveWorktreeAddBaseRef } from '../../shared/worktree-base-ref'
+import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 import { withSpan } from '../observability/tracer'
 import { withWorktreeRemoveStageSpan } from '../observability/instrumentation'
 import {
@@ -14,14 +14,15 @@ import {
   scheduleWorktreeTrashDeletion
 } from '../worktree-trash'
 import { parseWslPath } from '../wsl'
+import { windowsLongPathGitArgs } from '../../shared/windows-long-path-git-args'
 import type {
-  GitWorktreeInfo,
   LocalBaseRefRefreshResult,
-  LocalBaseRefUpdateSuggestion,
-  RemoveWorktreeResult
-} from '../../shared/types'
-import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree-removal'
-import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree-submodule-removal'
+  LocalBaseRefUpdateSuggestion
+} from '../../shared/worktree/base-ref-drift-types'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
+import { assertWorktreeUnlockedForRemoval } from '../../shared/worktree/removal'
+import { isSubmoduleWorktreeRemovalRefusal } from '../../shared/worktree/submodule-removal'
 import { decodeGitCQuotedPath } from '../../shared/git-cquoted-path'
 import { parseGitRevListAheadBehindCounts } from '../../shared/git-rev-list-output'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -33,7 +34,7 @@ import {
 import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { gitExecFileAsync, translateWslOutputPaths } from './runner'
 import { resolveGitDir, runWithGitReadCacheInvalidation } from './status'
-import { hasWorktreeBaseCommitRef } from './worktree-base-ref-probe'
+import { hasWorktreeBaseCommitRef, probeWorktreeBaseRefPresence } from './worktree-base-ref-probe'
 
 export type AddWorktreeResult = {
   localBaseRefRefresh?: LocalBaseRefRefreshResult
@@ -91,12 +92,41 @@ const SPARSE_CHECKOUT_DETECTION_CONCURRENCY = 8
 
 const PRUNABLE_EXISTENCE_PROBE_CONCURRENCY = 8
 
-// Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); generous enough for a legit large checkout (#7225).
+// Why: bound `git worktree add` so a OneDrive cloud-placeholder stall fails fast (STA-1292); ample for an ordinary large checkout, but not one behind a slow content filter (#12696).
+// Doubles as the floor for ORCA_WORKTREE_ADD_TIMEOUT_MS — lowering it to fail faster also lowers the minimum any override can request.
 export const WORKTREE_ADD_TIMEOUT_MS = 180_000
+// Why: ceiling for ORCA_WORKTREE_ADD_TIMEOUT_MS (#12696) — ~8x the slowest reported checkout (3.5 min). The cost is that a genuine stall now blocks a create for up to 30 min instead of 3.
+export const WORKTREE_ADD_TIMEOUT_MAX_MS = 30 * 60_000
 export const WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS = 30_000
 export const WORKTREE_REMOVAL_REGISTRATION_TIMEOUT_MS = 30_000
 // Why: one wedged shared scan otherwise hangs every later list, including create's post-add re-list.
 export const WORKTREE_LIST_TIMEOUT_MS = 30_000
+
+/**
+ * `ORCA_WORKTREE_ADD_TIMEOUT_MS` clamped into [{@link WORKTREE_ADD_TIMEOUT_MS},
+ * {@link WORKTREE_ADD_TIMEOUT_MAX_MS}]; unset, blank, or unparseable yields the default.
+ * Warns when a non-blank value is rejected or clamped; trimming and fractional truncation are silent.
+ * `env` is injectable for tests.
+ */
+export function resolveWorktreeAddTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  const raw = env.ORCA_WORKTREE_ADD_TIMEOUT_MS?.trim()
+  const requested = Math.floor(Number(raw))
+  // Why: `=300` reads as seconds to most operators, so clamp rather than obey.
+  const resolved = Number.isNaN(requested)
+    ? WORKTREE_ADD_TIMEOUT_MS
+    : Math.min(Math.max(requested, WORKTREE_ADD_TIMEOUT_MS), WORKTREE_ADD_TIMEOUT_MAX_MS)
+  // Why: an `isNaN` guard here would delete the unparseable-value warning — comparing against NaN is unequal, and that is what catches it.
+  if (raw && resolved !== requested) {
+    const problem = Number.isNaN(requested)
+      ? // Why: `600_000` copied out of this file is NaN, not out of range — say which.
+        'is not a number'
+      : `is outside [${WORKTREE_ADD_TIMEOUT_MS}, ${WORKTREE_ADD_TIMEOUT_MAX_MS}]ms`
+    console.warn(
+      `[git/worktree] ORCA_WORKTREE_ADD_TIMEOUT_MS="${raw}" ${problem}; using ${resolved}ms`
+    )
+  }
+  return resolved
+}
 
 function gitExecOptions(
   cwd: string,
@@ -236,6 +266,16 @@ async function evaluateLocalBaseRefRefreshability(
     )
     drift = parsedDrift
   } catch {
+    // Why (#15331): the probes above also fail when refs/heads/<branch> is simply absent; a branch that
+    // does not exist yet cannot be stale, so report nothing instead of a bogus divergence warning.
+    // Only a proven absence suppresses: an unusable repo leaves the warning alone.
+    const presence = await probeWorktreeBaseRefPresence(
+      (args) => gitExecFileAsync(args, gitExecOptions(repoPath, options)),
+      parsed.fullRef
+    )
+    if (presence === 'absent') {
+      return undefined
+    }
     return { refreshable: false, result: { ...resultBase, status: 'skipped_not_fast_forward' } }
   }
 
@@ -946,7 +986,8 @@ async function performAddWorktree(
 ): Promise<AddWorktreeResult> {
   let localBaseRefRefresh: LocalBaseRefRefreshResult | undefined
   let localBaseRefUpdateSuggestion: LocalBaseRefUpdateSuggestion | undefined
-  const args = ['worktree', 'add']
+  // Why: enable long paths for this Windows checkout without changing user Git config.
+  const args = [...windowsLongPathGitArgs(repoPath), 'worktree', 'add']
   let effectiveBase: string | undefined
   if (noCheckout) {
     args.push('--no-checkout')
@@ -984,8 +1025,8 @@ async function performAddWorktree(
   }
   await gitExecFileAsync(args, {
     ...gitExecOptions(repoPath, options),
-    // Why: bound the checkout so a OneDrive cloud-placeholder stall (STA-1292) fails fast instead of hanging.
-    timeout: WORKTREE_ADD_TIMEOUT_MS
+    // Why: resolve per call — hoisting this to a module const would freeze the override at import.
+    timeout: resolveWorktreeAddTimeoutMs()
   })
 
   if (options.checkoutExistingBranch) {
@@ -1052,22 +1093,35 @@ export async function addSparseWorktree(
       options
     )
     created = true
+    // Why: `worktree add --no-checkout` writes no files, so these are the calls that
+    // actually materialize the deep path and need the long-path escape hatch.
+    const longPathArgs = windowsLongPathGitArgs(worktreePath)
     await gitExecFileAsync(
       ['sparse-checkout', 'init', '--cone'],
       gitExecOptions(worktreePath, options)
     )
     await gitExecFileAsync(
-      ['sparse-checkout', 'set', '--', ...directories],
+      [...longPathArgs, 'sparse-checkout', 'set', '--', ...directories],
       gitExecOptions(worktreePath, options)
     )
-    await gitExecFileAsync(['checkout', branch], gitExecOptions(worktreePath, options))
+    await gitExecFileAsync(
+      [...longPathArgs, 'checkout', branch],
+      gitExecOptions(worktreePath, options)
+    )
     return addResult
   } catch (error) {
     const wrapped: SparseWorktreeCreateError =
       error instanceof Error ? (error as SparseWorktreeCreateError) : new Error(String(error))
     if (created) {
       if (!options.checkoutExistingBranch) {
-        await unsetWorktreeCreationBase(worktreePath, branch, options)
+        try {
+          await unsetWorktreeCreationBase(worktreePath, branch, options)
+        } catch (cleanupError) {
+          console.warn(
+            `addSparseWorktree: failed to clear creation base for ${worktreePath}`,
+            cleanupError
+          )
+        }
       }
       try {
         await removeWorktree(repoPath, worktreePath, true, {

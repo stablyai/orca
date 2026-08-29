@@ -76,51 +76,15 @@
       }
     },
     {
-      "files": ["src/components/mobile-rich-markdown-editor-html.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 648, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["src/components/CustomKeyModal.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 645, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["app/pair-scan.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 531, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
       "files": ["scripts/mock-server.ts"],
       "rules": {
         "max-lines": ["error", { "max": 407, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {
-      "files": ["src/terminal/terminal-accessory-keys.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 388, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
       "files": ["app/troubleshoot.tsx"],
       "rules": {
         "max-lines": ["error", { "max": 436, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["scripts/repro-worktree-startup-stream.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 326, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["scripts/repro-terminal-colors.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 319, "skipBlankLines": true, "skipComments": true }]
       }
     },
     {

@@ -1,5 +1,5 @@
 import type { DirectSshAuthority } from '../../../../shared/ssh-types'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { shouldRetryPaneSpawnOnSshReconnect } from '../../hooks/ssh-reconnect-pane-retry'
 import {
   directSshAuthoritiesEqual,

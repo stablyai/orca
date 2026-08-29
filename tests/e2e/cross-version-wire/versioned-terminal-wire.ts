@@ -1,4 +1,8 @@
-import { materializeReleaseCheckout, type ReleaseCheckout } from './release-checkout'
+import {
+  importReleaseCheckoutModule,
+  materializeReleaseCheckout,
+  type ReleaseCheckout
+} from './release-checkout'
 
 /**
  * Structural views of the three modules that make up the remote terminal wire.
@@ -112,19 +116,15 @@ async function loadWorkingTreeBuild(): Promise<TerminalWireBuild> {
   }
 }
 
-// Why @vite-ignore: the checkout is created at run time, so Vite cannot glob it at
-// transform time. Vite-node still resolves and transforms the target on demand.
-function importFromCheckout(specifier: string): Promise<Record<string, unknown>> {
-  return import(/* @vite-ignore */ specifier) as Promise<Record<string, unknown>>
-}
-
 async function loadReleaseBuild(checkout: ReleaseCheckout): Promise<TerminalWireBuild> {
-  const base = `${checkout.root}/src`
   const [codec, dispatcher, terminalMethods, client] = await Promise.all([
-    importFromCheckout(`${base}/shared/terminal-stream-protocol.ts`),
-    importFromCheckout(`${base}/main/runtime/rpc/dispatcher.ts`),
-    importFromCheckout(`${base}/main/runtime/rpc/methods/terminal.ts`),
-    importFromCheckout(`${base}/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts`)
+    importReleaseCheckoutModule(checkout, '/src/shared/terminal-stream-protocol.ts'),
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/dispatcher.ts'),
+    importReleaseCheckoutModule(checkout, '/src/main/runtime/rpc/methods/terminal.ts'),
+    importReleaseCheckoutModule(
+      checkout,
+      '/src/renderer/src/runtime/remote-runtime-terminal-multiplexer.ts'
+    )
   ])
   return {
     label: checkout.ref,
@@ -147,5 +147,5 @@ export async function loadTerminalWireBuild(ref: string): Promise<TerminalWireBu
   if (ref === WORKING_TREE) {
     return loadWorkingTreeBuild()
   }
-  return loadReleaseBuild(materializeReleaseCheckout(ref))
+  return loadReleaseBuild(await materializeReleaseCheckout(ref))
 }

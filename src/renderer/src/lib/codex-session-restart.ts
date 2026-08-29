@@ -18,7 +18,7 @@ import {
   resolveCodexPaneSelectionLane
 } from './codex-pane-selection-lane'
 import type { CodexAccountSelectionTarget } from '../../../shared/codex-selection-lane'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 
 // Why: prompt integrations such as Starship can outlast the daemon's 300ms
 // Codex fast-path timeout; account restarts must wait until the shell accepts input.
@@ -214,38 +214,39 @@ export async function markLiveCodexSessionsForRestart(args: {
     return
   }
 
-  const currentState = useAppStore.getState()
-  const restoredRouteNoticePtyIds = liveCodexSessionPtyIds.filter(
-    (ptyId) => currentState.codexRestartNoticeByPtyId[ptyId]?.homeRouteChanged === true
-  )
-  const restoredRouteNoticePtyIdSet = new Set(restoredRouteNoticePtyIds)
+  const recordedLiveScans = scans.filter((scan) => scan.eligible && scan.laneSource === 'recorded')
+  // Why: a reauth can report null -> A even though a pane's immutable launch
+  // route was already A; main's per-PTY record is the restart authority.
   const authoritativeStalePanes =
-    restoredRouteNoticePtyIds.length === 0
+    recordedLiveScans.length === 0
       ? null
       : await window.api.codexAccounts
-          .listStalePanes({ ptyIds: restoredRouteNoticePtyIds })
+          .listStalePanes({ ptyIds: recordedLiveScans.map((scan) => scan.ptyId) })
           .catch(() => null)
   const authoritativeStaleByPtyId = authoritativeStalePanes
     ? new Map(authoritativeStalePanes.map((pane) => [pane.ptyId, pane]))
     : null
   if (authoritativeStaleByPtyId) {
-    for (const ptyId of restoredRouteNoticePtyIds) {
-      if (!authoritativeStaleByPtyId.has(ptyId)) {
-        useAppStore.getState().clearCodexRestartNotice(ptyId)
+    for (const scan of recordedLiveScans) {
+      if (!authoritativeStaleByPtyId.has(scan.ptyId)) {
+        useAppStore.getState().clearCodexRestartNotice(scan.ptyId)
       }
     }
   }
 
   useAppStore.getState().markCodexRestartNotices(
-    liveCodexSessionPtyIds.flatMap((ptyId) => {
-      if (authoritativeStaleByPtyId && restoredRouteNoticePtyIdSet.has(ptyId)) {
-        const stalePane = authoritativeStaleByPtyId.get(ptyId)
+    scans.flatMap((scan) => {
+      if (!scan.eligible) {
+        return []
+      }
+      if (authoritativeStaleByPtyId && scan.laneSource === 'recorded') {
+        const stalePane = authoritativeStaleByPtyId.get(scan.ptyId)
         if (!stalePane) {
           return []
         }
         return [
           {
-            ptyId,
+            ptyId: scan.ptyId,
             previousAccountLabel: args.previousAccountLabel,
             nextAccountLabel: args.nextAccountLabel,
             previousAccountId: stalePane.launchAccountId,
@@ -256,7 +257,7 @@ export async function markLiveCodexSessionsForRestart(args: {
       }
       return [
         {
-          ptyId,
+          ptyId: scan.ptyId,
           previousAccountLabel: args.previousAccountLabel,
           nextAccountLabel: args.nextAccountLabel,
           ...(args.previousAccountId === undefined

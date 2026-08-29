@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../src/shared/constants'
 import type { RuntimeMobileSessionTabsSnapshot } from '../../src/shared/runtime-types'
-import type { WorkspaceSessionState } from '../../src/shared/types'
+import type { WorkspaceSessionState } from '../../src/shared/workspace-session-state-types'
 import {
   acceptReplayedWebSessionTabsSnapshot,
   applyWebSessionTabsSnapshot,

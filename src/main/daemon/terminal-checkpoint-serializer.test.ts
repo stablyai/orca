@@ -121,6 +121,25 @@ describe('terminal checkpoint serializer', () => {
     }
   })
 
+  it('preserves shell ownership when an oversized alternate-screen checkpoint is trimmed', async () => {
+    const input = snapshot({
+      snapshotAnsi: `\x1b[?1049h${'row\r\n'.repeat(500)}visible`,
+      rehydrateSequences: '\x1b[?1049h',
+      terminalOwner: 'shell',
+      modes: {
+        bracketedPaste: false,
+        mouseTracking: false,
+        applicationCursor: false,
+        alternateScreen: true
+      },
+      scrollbackLines: 500
+    })
+
+    const serialized = await serializeTerminalCheckpointWithinLimit(input, metadata, 2_048)
+
+    expect(JSON.parse(serialized)).toMatchObject({ terminalOwner: 'shell' })
+  })
+
   it('rejects an oversized escaped candidate without materializing it', async () => {
     const oversized = String.fromCharCode(0).repeat(100_000)
     const stringify = vi.spyOn(JSON, 'stringify')

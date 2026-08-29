@@ -1,18 +1,29 @@
+// @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import type { UpdateStatus } from './types'
+import type { UpdateStatus } from './update-status-types'
+import {
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT,
+  ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT,
+  publishShutdownCheckpointFailureReason
+} from './renderer-shutdown-events'
 import {
   createUpdaterQuitAbortRelay,
   prepareRendererForAppRestart
 } from './renderer-restart-preparation'
 
 describe('prepareRendererForAppRestart', () => {
-  it('aborts when the dispatched shutdown checkpoint prevents unload', async () => {
+  it('aborts when the dispatched shutdown checkpoint reports failure', async () => {
     const eventTarget = new EventTarget()
     const started = vi.fn()
     const aborted = vi.fn()
-    const checkpoint = vi.fn((event: Event) => event.preventDefault())
+    const independentlyAborted = vi.fn()
+    const checkpoint = vi.fn((event: Event) => {
+      event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
+      event.preventDefault()
+    })
     eventTarget.addEventListener('restart-started', started)
-    eventTarget.addEventListener('restart-aborted', aborted)
+    eventTarget.addEventListener(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_ABORTED_EVENT, aborted)
+    eventTarget.addEventListener('restart-aborted', independentlyAborted)
     eventTarget.addEventListener('beforeunload', checkpoint)
 
     await expect(
@@ -26,6 +37,41 @@ describe('prepareRendererForAppRestart', () => {
     expect(started).toHaveBeenCalledTimes(1)
     expect(checkpoint).toHaveBeenCalledTimes(1)
     expect(aborted).toHaveBeenCalledTimes(1)
+    expect(independentlyAborted).not.toHaveBeenCalled()
+  })
+
+  it('names the published failure cause in the thrown checkpoint error (STA-5505)', async () => {
+    const eventTarget = new EventTarget()
+    eventTarget.addEventListener('beforeunload', (event) => {
+      // Mirrors the checkpoint guard: publish the cause, then fail the checkpoint.
+      publishShutdownCheckpointFailureReason('sendSync payload rejected')
+      event.currentTarget?.dispatchEvent(new Event(ORCA_RENDERER_SHUTDOWN_CHECKPOINT_FAILED_EVENT))
+      event.preventDefault()
+    })
+
+    await expect(
+      prepareRendererForAppRestart(eventTarget, {
+        startedEventName: 'restart-started',
+        abortedEventName: 'restart-aborted',
+        awaitCheckpoint: () => Promise.resolve()
+      })
+    ).rejects.toThrow('Renderer shutdown checkpoint was not completed: sendSync payload rejected')
+  })
+
+  it('does not mistake an unrelated unload veto for checkpoint failure', async () => {
+    const eventTarget = new EventTarget()
+    const veto = vi.fn((event: Event) => event.preventDefault())
+    const awaitCheckpoint = vi.fn(() => Promise.resolve())
+    eventTarget.addEventListener('beforeunload', veto)
+
+    await prepareRendererForAppRestart(eventTarget, {
+      startedEventName: 'restart-started',
+      abortedEventName: 'restart-aborted',
+      awaitCheckpoint
+    })
+
+    expect(veto).toHaveBeenCalledTimes(1)
+    expect(awaitCheckpoint).toHaveBeenCalledTimes(1)
   })
 
   it('waits for the durable checkpoint write before the restart proceeds', async () => {

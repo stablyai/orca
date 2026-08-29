@@ -137,10 +137,11 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
   try {
     xvfbProcess = spawn(
       'Xvfb',
-      [VIRTUAL_DISPLAY, '-screen', '0', '1280x1024x24', '-nolisten', 'tcp'],
+      [VIRTUAL_DISPLAY, '-screen', '0', '1280x1024x24', '-nolisten', 'tcp', '-terminate'],
       {
         stdio: 'ignore',
-        detached: false
+        // Why: foreground Ctrl-C must not kill Xvfb before Electron disconnects.
+        detached: true
       }
     )
     xvfbProcess.once('error', (error) => {
@@ -163,8 +164,9 @@ export function ensureVirtualDisplayForHeadlessServe(options: { isServeMode: boo
 
   process.env.DISPLAY = VIRTUAL_DISPLAY
 
-  // Why: don't leave a stray Xvfb process behind when serve exits.
-  app.once('will-quit', stopVirtualDisplay)
+  // Why: -terminate only takes effect after Xvfb accepts its first client.
+  process.once('exit', stopVirtualDisplay)
+  app.once('ready', () => process.removeListener('exit', stopVirtualDisplay))
 
   return true
 }

@@ -2,10 +2,12 @@ import { cleanup, render } from '@testing-library/react'
 import { afterEach, beforeEach, vi } from 'vitest'
 import type {
   DashboardCard,
+  DashboardCardHostKind,
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentMap } from './AgentMap'
 import type { AgentMapState } from './agent-map-filter'
 
@@ -39,9 +41,9 @@ export function card(overrides: Partial<DashboardCard> = {}): DashboardCard {
 export type RenderMapOptions = {
   onOpenTerminal?: (card: DashboardCard) => void
   selectedPaneKey?: string | null
-  compact?: boolean
   workspaceContextMenusEnabled?: boolean
   enabledStates?: ReadonlySet<AgentMapState>
+  enabledHosts?: ReadonlySet<DashboardCardHostKind>
   showOrchestrationLinks?: boolean
   launchableAgentsByWorktreeId?: Record<string, TuiAgent[]>
   onSpawnAgent?: (args: DashboardSpawnAgentArgs) => void
@@ -53,9 +55,9 @@ export function renderMap(
   {
     onOpenTerminal = vi.fn(),
     selectedPaneKey = null,
-    compact = false,
     workspaceContextMenusEnabled = false,
     enabledStates,
+    enabledHosts,
     showOrchestrationLinks,
     launchableAgentsByWorktreeId,
     onSpawnAgent,
@@ -68,14 +70,15 @@ export function renderMap(
       now={NOW}
       onOpenTerminal={onOpenTerminal}
       selectedPaneKey={selectedPaneKey}
-      compact={compact}
       workspaceContextMenusEnabled={workspaceContextMenusEnabled}
       enabledStates={enabledStates}
+      enabledHosts={enabledHosts}
       showOrchestrationLinks={showOrchestrationLinks}
       launchableAgentsByWorktreeId={launchableAgentsByWorktreeId}
       onSpawnAgent={onSpawnAgent}
       onSleepWorkspace={onSleepWorkspace}
-    />
+    />,
+    { wrapper: TooltipProvider }
   )
 }
 

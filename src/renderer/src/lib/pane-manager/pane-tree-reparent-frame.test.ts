@@ -38,7 +38,7 @@ function createMockElement(className = ''): TestElement {
     },
     replaceChild: (nextChild: TestElement, oldChild: TestElement): TestElement => {
       const index = element.children.indexOf(oldChild)
-      if (index >= 0) {
+      if (index !== -1) {
         element.children[index] = nextChild
       } else {
         element.children.push(nextChild)

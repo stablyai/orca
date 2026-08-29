@@ -1,4 +1,4 @@
-import type { TabGroupLayoutNode } from '../../shared/types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
 
 function collectLayoutGroupIds(node: TabGroupLayoutNode | null | undefined, ids: string[]): void {
   if (!node) {

@@ -5,6 +5,7 @@ import {
   GitCompare,
   Globe,
   Loader2,
+  Search,
   Smartphone,
   TerminalSquare
 } from 'lucide-react'
@@ -12,6 +13,7 @@ import { AgentIcon } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import { FilePathCursorTooltip, splitTrailingSegment } from '@/components/file-path-cursor-tooltip'
 import { translate } from '@/i18n/i18n'
+import { SEARCH_ENGINE_LABELS } from '../../../../shared/browser-url'
 import type { ActiveOption } from './tab-create-entry-active-option'
 
 export const RESULT_LISTBOX_ID = 'tab-create-entry-results'
@@ -38,12 +40,16 @@ export function EntryStatusRow({
 }
 
 export function EntryActionRow({
+  disabled = false,
   id,
+  loading = false,
   onClick,
   option,
   selected
 }: {
+  disabled?: boolean
   id: string
+  loading?: boolean
   onClick: () => void
   option: ActiveOption
   selected: boolean
@@ -56,15 +62,22 @@ export function EntryActionRow({
       id={id}
       role="option"
       aria-selected={selected}
+      disabled={disabled}
       className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none',
+        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
         selected
           ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
-          : 'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground dark:hover:bg-white/14'
+          : // Why: CSS :hover still matches a disabled button, so a pending row would
+            // light up under the pointer despite being unactivatable.
+            'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:hover:bg-white/14 dark:disabled:hover:bg-transparent'
       )}
       onClick={onClick}
     >
-      {presentation.icon}
+      {loading ? (
+        <Loader2 className="size-3.5 shrink-0 animate-spin" aria-hidden="true" />
+      ) : (
+        presentation.icon
+      )}
       <span className={cn('min-w-0 truncate font-medium', presentation.showDetail && 'shrink-0')}>
         {presentation.label}
       </span>
@@ -107,9 +120,19 @@ function FilenameFirstPath({ path }: { path: string }): React.JSX.Element {
   )
 }
 
-function getOpenTabIcon(
-  contentType: Extract<ActiveOption, { kind: 'tab' }>['option']['contentType']
-): React.ReactNode {
+function getOpenTabIcon(option: Extract<ActiveOption, { kind: 'tab' }>['option']): React.ReactNode {
+  if (option.contentType === 'terminal' && option.source === 'workspace' && option.occupantAgent) {
+    return (
+      <span
+        className="inline-flex shrink-0"
+        data-agent-icon={option.occupantAgent}
+        aria-hidden="true"
+      >
+        <AgentIcon agent={option.occupantAgent} size={14} />
+      </span>
+    )
+  }
+  const { contentType } = option
   if (contentType === 'terminal') {
     return <TerminalSquare className="size-3.5 shrink-0" aria-hidden="true" />
   }
@@ -155,7 +178,7 @@ function getActionPresentation(option: ActiveOption): {
   if (option.kind === 'tab') {
     return {
       detail: option.option.matchedText ?? option.option.title,
-      icon: getOpenTabIcon(option.option.contentType),
+      icon: getOpenTabIcon(option.option),
       label: translate('auto.components.tab.bar.TabBarCreateEntry.8f0a1c4d92', 'Switch to tab'),
       showDetail: true
     }
@@ -169,6 +192,19 @@ function getActionPresentation(option: ActiveOption): {
     }
   }
   const { classification } = option.option
+  if (classification.kind === 'search') {
+    return {
+      detail: classification.query,
+      icon: <Search className="size-3.5 shrink-0" aria-hidden="true" />,
+      label: translate(
+        'auto.components.tab.bar.TabBarCreateEntry.searchProvider',
+        'Search {{value0}}',
+        { value0: SEARCH_ENGINE_LABELS[classification.engine] }
+      ),
+      prioritizeFilename: false,
+      showDetail: true
+    }
+  }
   if (classification.kind === 'explicit-url' || classification.kind === 'host-url') {
     return {
       detail: classification.url,

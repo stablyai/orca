@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Tab, TabGroup, Worktree } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 
@@ -107,6 +108,27 @@ describe('activateSimulatorTabPaletteResult', () => {
     expect(activateSimulatorTabPaletteResult(target).status).toBe('activated')
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
       executionHostId: 'ssh:host-1'
+    })
+  })
+
+  it('activates an SSH worktree through its paired-runtime owner alias', () => {
+    seedStore({
+      worktreesByRepo: {
+        'repo-1': [
+          makeWorktree({
+            hostId: 'ssh:private-target',
+            runtimeOwnerEnvironmentId: 'paired-host'
+          })
+        ]
+      }
+    })
+
+    expect(
+      activateSimulatorTabPaletteResult({ ...target, executionHostId: 'runtime:paired-host' })
+        .status
+    ).toBe('activated')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('wt-1', {
+      executionHostId: 'runtime:paired-host'
     })
   })
 

@@ -187,7 +187,9 @@ describe('buildNativeChatSessionOptionSnapshot', () => {
 
       const reconciled = withTrackedNativeChatModel(GROK_SESSION_OPTION_CATALOG, discovered, record)
       expect(reconciled.map(({ id }) => id)).toEqual(['grok-build', 'grok-4.5'])
-      expect(reconciled.at(-1)).toBe(GROK_SESSION_OPTION_CATALOG.models[0])
+      expect(reconciled.at(-1)).toBe(
+        GROK_SESSION_OPTION_CATALOG.models.find((model) => model.id === 'grok-4.5')
+      )
       expect(reconciled.at(-1)!.options.map(({ id }) => id)).toEqual(['effort'])
 
       const snapshot = buildNativeChatSessionOptionSnapshot({
@@ -254,7 +256,7 @@ describe('defaults on load', () => {
   it('shows the default model before anything is picked', () => {
     const model = grokDraft()[0]!
     expect(model).toMatchObject({ id: 'model', valueSource: 'default' })
-    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.5')
+    expect(model.kind.type === 'select' ? model.kind.currentValue : null).toBe('grok-4.6')
   })
 
   it('offers the effort row under that default model without naming its value', () => {
@@ -270,7 +272,7 @@ describe('defaults on load', () => {
     // default — as true of a running session as of a draft.
     const live = grokDraft(GROK_SESSION_OPTION_CATALOG.models, 'live')
     expect(live[0]).toMatchObject({ id: 'model', valueSource: 'default' })
-    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.5')
+    expect(live[0]!.kind.type === 'select' ? live[0]!.kind.currentValue : null).toBe('grok-4.6')
     expect(live.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
       valueSource: 'unknown'
     })

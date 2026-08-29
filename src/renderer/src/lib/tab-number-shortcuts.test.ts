@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Tab, TabGroup } from '../../../shared/types'
+import type { Tab, TabGroup } from '../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import { resolveTabNumberShortcutTarget } from './tab-number-shortcuts'
 

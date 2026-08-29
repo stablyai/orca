@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { FolderWorkspace, ProjectGroup, TerminalTab } from '../../../../shared/types'
+import type { FolderWorkspace } from '../../../../shared/folder-workspace-types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { buildDashboardSnapshot, type DashboardSnapshotState } from './build-dashboard-snapshot'
 
@@ -100,7 +102,9 @@ function state(): DashboardSnapshotState {
 
 describe('buildDashboardSnapshot folder workspaces', () => {
   it('places folder-workspace agents in their real project group without git assumptions', () => {
-    const snapshot = buildDashboardSnapshot(state(), NOW)
+    const sshState = state()
+    sshState.sshTargetLabels = new Map([['ssh-1', 'openclaw']])
+    const snapshot = buildDashboardSnapshot(sshState, NOW)
 
     expect(snapshot.cards).toHaveLength(1)
     expect(snapshot.cards[0]).toMatchObject({
@@ -111,7 +115,8 @@ describe('buildDashboardSnapshot folder workspaces', () => {
       worktreeName: 'Docs workspace',
       workspaceKind: 'folder',
       hostKind: 'ssh',
-      executionHostId: 'ssh:ssh-1'
+      executionHostId: 'ssh:ssh-1',
+      hostLabel: 'openclaw'
     })
     expect(snapshot.filterOptions?.projects).toEqual([
       { id: 'folder-workspace:group-1', label: 'Documentation' }
@@ -124,7 +129,8 @@ describe('buildDashboardSnapshot folder workspaces', () => {
         worktreeName: 'Docs workspace',
         workspaceKind: 'folder',
         hostKind: 'ssh',
-        executionHostId: 'ssh:ssh-1'
+        executionHostId: 'ssh:ssh-1',
+        hostLabel: 'openclaw'
       })
     ])
   })
@@ -135,10 +141,35 @@ describe('buildDashboardSnapshot folder workspaces', () => {
       { ...folderWorkspace(), connectionId: null, executionHostId: 'runtime:environment-1' }
     ]
     runtimeState.projectGroups = [{ ...projectGroup(), connectionId: null }]
+    runtimeState.runtimeEnvironments = [
+      { id: 'environment-1', name: 'Build Mac' }
+    ] as unknown as DashboardSnapshotState['runtimeEnvironments']
 
     const snapshot = buildDashboardSnapshot(runtimeState, NOW)
 
     expect(snapshot.cards[0].hostKind).toBe('remote')
     expect(snapshot.cards[0].executionHostId).toBe('runtime:environment-1')
+    expect(snapshot.cards[0].hostLabel).toBe('Build Mac')
+  })
+
+  it('uses the user-facing host label override', () => {
+    const runtimeState = state()
+    runtimeState.folderWorkspaces = [
+      { ...folderWorkspace(), connectionId: null, executionHostId: 'runtime:environment-1' }
+    ]
+    runtimeState.projectGroups = [{ ...projectGroup(), connectionId: null }]
+    runtimeState.runtimeEnvironments = [
+      { id: 'environment-1', name: 'Build Mac' }
+    ] as unknown as DashboardSnapshotState['runtimeEnvironments']
+    runtimeState.settings = {
+      hostSettingOverrides: {
+        'runtime:environment-1': { displayLabel: 'CI Builder' }
+      }
+    } as unknown as DashboardSnapshotState['settings']
+
+    const snapshot = buildDashboardSnapshot(runtimeState, NOW)
+
+    expect(snapshot.cards[0].hostLabel).toBe('CI Builder')
+    expect(snapshot.workspaces?.[0].hostLabel).toBe('CI Builder')
   })
 })
