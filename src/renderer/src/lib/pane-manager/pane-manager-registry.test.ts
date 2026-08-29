@@ -151,6 +151,81 @@ describe('pane manager registry', () => {
     )
   })
 
+  it('marks skipped hidden managers so their reveal can repaint', () => {
+    // Why: skipping the repaint is correct, but leaving no record made the
+    // reveal paint stale coordinates.
+    const visible = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => true,
+      markAtlasInvalidatedWhileHidden: vi.fn<() => void>()
+    }
+    const hidden = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => false,
+      markAtlasInvalidatedWhileHidden: vi.fn<() => void>()
+    }
+    for (const manager of [visible, hidden]) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
+    }
+
+    resetAndRefreshAllTerminalWebglAtlases()
+
+    expect(hidden.markAtlasInvalidatedWhileHidden).toHaveBeenCalledOnce()
+    expect(hidden.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    // The visible manager repaints now, so it carries no debt.
+    expect(visible.markAtlasInvalidatedWhileHidden).not.toHaveBeenCalled()
+    expect(visible.refreshAllPanes).toHaveBeenCalledOnce()
+  })
+
+  it('rebuilds hidden managers too after a context loss', () => {
+    // Why: a system resume destroys every context at once, so the visibility
+    // filter's survives-until-reveal assumption does not hold here.
+    const visible = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => true,
+      markAtlasInvalidatedWhileHidden: vi.fn<() => void>()
+    }
+    const hidden = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => false,
+      markAtlasInvalidatedWhileHidden: vi.fn<() => void>()
+    }
+    for (const manager of [visible, hidden]) {
+      registerLivePaneManager(manager)
+      registeredManagers.push(manager)
+    }
+
+    resetAndRefreshAllTerminalWebglAtlases('system-resume')
+
+    expect(hidden.resetWebglTextureAtlases).toHaveBeenCalledOnce()
+    expect(hidden.refreshAllPanes).toHaveBeenCalledOnce()
+    // Rebuilt now, so there is no debt left to settle on reveal.
+    expect(hidden.markAtlasInvalidatedWhileHidden).not.toHaveBeenCalled()
+  })
+
+  it('still skips hidden managers for ordinary visibility-driven resets', () => {
+    // The context survives a tab switch, so re-rasterizing every hidden pane
+    // there would trade a rare bug for a constant cost.
+    const hidden = {
+      resetWebglTextureAtlases: vi.fn<() => void>(),
+      refreshAllPanes: vi.fn<() => void>(),
+      isVisibleForAtlasRecovery: () => false,
+      markAtlasInvalidatedWhileHidden: vi.fn<() => void>()
+    }
+    registerLivePaneManager(hidden)
+    registeredManagers.push(hidden)
+
+    resetAndRefreshAllTerminalWebglAtlases('visibility-resume')
+
+    expect(hidden.resetWebglTextureAtlases).not.toHaveBeenCalled()
+    expect(hidden.markAtlasInvalidatedWhileHidden).toHaveBeenCalledOnce()
+  })
+
   it('continues reset-and-refresh recovery when one manager throws', () => {
     const broken = {
       resetWebglTextureAtlases: vi.fn<() => void>(() => {

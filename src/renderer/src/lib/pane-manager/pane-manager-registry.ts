@@ -13,6 +13,7 @@ type RegisteredPaneManager = {
   getPaneCount?: () => number
   isVisibleForAtlasRecovery?: () => boolean
   scheduleRevealPresent?: () => void
+  markAtlasInvalidatedWhileHidden?: () => void
 }
 
 const liveManagers = new Set<RegisteredPaneManager>()
@@ -50,17 +51,40 @@ export function resetAllTerminalWebglAtlases(): void {
   }
 }
 
+/**
+ * Reasons where the GPU context itself died, not just a surface being hidden.
+ * Skipping hidden managers assumes their texture survives until reveal, which
+ * a context loss breaks — so these rebuild every manager (#7951).
+ */
+const CONTEXT_LOSS_REASONS = new Set(['system-resume', 'render-desync'])
+
 export function resetAndRefreshAllTerminalWebglAtlases(reason?: string): void {
   // Why: the atlas wipe is the heavy recovery path; recording it lets a freeze
   // report show whether a post-wake repaint actually ran. Silent breadcrumb.
-  const recoveryManagers = Array.from(liveManagers).filter(
-    (manager) => manager.isVisibleForAtlasRecovery?.() !== false
-  )
+  const afterContextLoss = reason !== undefined && CONTEXT_LOSS_REASONS.has(reason)
+  const recoveryManagers: RegisteredPaneManager[] = []
+  const skippedManagers: RegisteredPaneManager[] = []
+  for (const manager of liveManagers) {
+    if (!afterContextLoss && manager.isVisibleForAtlasRecovery?.() === false) {
+      skippedManagers.push(manager)
+    } else {
+      recoveryManagers.push(manager)
+    }
+  }
+  // Why: the atlas is module-global, so this wipe invalidates hidden managers'
+  // glyph coordinates too. They cannot be measured while hidden, so defer the
+  // repaint to their reveal rather than skipping it outright.
+  for (const manager of skippedManagers) {
+    manager.markAtlasInvalidatedWhileHidden?.()
+  }
   recordTerminalWebglDiagnostic('webgl-atlas-reset', {
     managers: recoveryManagers.length,
     mountedManagers: liveManagers.size,
+    invalidatedHidden: skippedManagers.length,
+    afterContextLoss,
     ...(reason ? { reason } : {})
   })
+
   const resetManagers: RegisteredPaneManager[] = []
   // Why: clearTextureAtlas() is module-global. Clearing then presenting per
   // pane interleaves a present against generation N with the next pane's wipe

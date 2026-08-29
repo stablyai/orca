@@ -80,6 +80,7 @@ export class PaneManager {
   private destroyed = false
   private renderingSuspended: boolean
   private atlasRecoveryVisible: boolean
+  private atlasInvalidatedWhileHidden = false
   private identities = new PaneIdentityRegistry()
   private reparentFrames = new PaneReparentFrameTracker(() => this.destroyed)
 
@@ -291,7 +292,18 @@ export class PaneManager {
   }
 
   setAtlasRecoveryVisible(visible: boolean): void {
+    const wasHidden = !this.atlasRecoveryVisible
     this.atlasRecoveryVisible = visible
+    // Why: reveal is the first point a skipped manager can be measured, so the
+    // deferred atlas repaint is consumed here.
+    if (visible && wasHidden && this.atlasInvalidatedWhileHidden) {
+      this.atlasInvalidatedWhileHidden = false
+      this.refreshAllPanes()
+    }
+  }
+
+  markAtlasInvalidatedWhileHidden(): void {
+    this.atlasInvalidatedWhileHidden = true
   }
 
   isVisibleForAtlasRecovery(): boolean {
